@@ -591,12 +591,30 @@ class PlaybackSession extends ChangeNotifier {
       area: _settings.danmakuArea,
       speed: _settings.danmakuSpeed,
       topInset: _settings.danmakuTopMargin,
+      offset: _settings.danmakuOffset,
+      mergeDuplicates: _settings.danmakuMergeDuplicates,
+      maxOnScreen: _settings.danmakuMaxOnScreen,
+      textStyle: DanmakuTextStyle(
+        fontFamily: _settings.danmakuFont == DanmakuFontPreference.harmonyOsSans
+            ? 'HarmonyOS Sans'
+            : null,
+        bold: _settings.danmakuBold,
+        effect: switch (_settings.danmakuStyle) {
+          DanmakuStylePreference.shadow => DanmakuTextEffect.shadow,
+          DanmakuStylePreference.stroke => DanmakuTextEffect.stroke,
+          DanmakuStylePreference.plain => DanmakuTextEffect.plain,
+        },
+      ),
     );
     configureComments(
       enabled: _settings.danmakuEnabled,
       fontScale: _settings.danmakuFontScale,
     );
     _refreshCommentWindow(snapshots.value.position);
+    if (previous.danmakuOffset != _settings.danmakuOffset) {
+      _lastCommentWindow = -1;
+      _ensureComments(snapshots.value.position);
+    }
     if (media != null) {
       if (previous.defaultPlaybackRate != _settings.defaultPlaybackRate) {
         unawaited(setRate(_settings.defaultPlaybackRate));
@@ -714,7 +732,8 @@ class PlaybackSession extends ChangeNotifier {
     if (!commentsEnabled || cid == null || _resolving || media == null) {
       return;
     }
-    final current = position.inSeconds ~/ 360 + 1;
+    final displayPosition = position - _settings.danmakuOffset;
+    final current = _commentSegmentAt(position);
     final resolvedDuration = media?.duration ?? Duration.zero;
     final partDuration = part?.duration ?? Duration.zero;
     final snapshotDuration = snapshots.value.duration;
@@ -734,7 +753,11 @@ class PlaybackSession extends ChangeNotifier {
     _prefetchFailedSegments.removeWhere(
       (segment) => (segment - current).abs() > 1,
     );
-    for (final segment in [current, current + 1]) {
+    for (final segment in [
+      if (current > 1) current - 1,
+      current,
+      current + 1,
+    ]) {
       if (duration > Duration.zero &&
           Duration(seconds: (segment - 1) * 360) >= duration) {
         continue;
@@ -747,7 +770,7 @@ class PlaybackSession extends ChangeNotifier {
         unawaited(_loadComments(_generation, cid, segment));
       }
     }
-    final window = position.inSeconds ~/ 15;
+    final window = displayPosition.inSeconds ~/ 15;
     if (window != _lastCommentWindow) {
       _lastCommentWindow = window;
       _refreshCommentWindow(position);
@@ -769,7 +792,7 @@ class PlaybackSession extends ChangeNotifier {
       _refreshCommentWindow(snapshots.value.position);
     } catch (failure) {
       if (generation == _generation && !token.isCancelled) {
-        final current = snapshots.value.position.inSeconds ~/ 360 + 1;
+        final current = _commentSegmentAt(snapshots.value.position);
         if (segment == current) {
           _failedSegments.add(segment);
           auxiliaryMessage = '弹幕暂时不可用，视频播放不受影响';
@@ -787,14 +810,17 @@ class PlaybackSession extends ChangeNotifier {
 
   void _refreshCommentWindow(Duration position) {
     if (_disposed) return;
+    final displayPosition = position - _settings.danmakuOffset;
+    final events = _segments.values.expand((events) => events).toList()
+      ..sort((a, b) => a.position.compareTo(b.position));
     final density = <int, int>{};
     danmaku.replaceEvents(
-      _segments.values
-          .expand((events) => events)
+      events
           .where(
             (event) =>
-                event.position >= position - const Duration(seconds: 8) &&
-                event.position <= position + const Duration(seconds: 60),
+                event.position >=
+                    displayPosition - const Duration(seconds: 16) &&
+                event.position <= displayPosition + const Duration(seconds: 60),
           )
           .where((event) {
             final modeEnabled = switch (event.mode) {
@@ -803,6 +829,10 @@ class PlaybackSession extends ChangeNotifier {
               _ => _settings.danmakuScrollEnabled,
             };
             if (!modeEnabled ||
+                (_settings.danmakuBlockColored &&
+                    (event.color & 0xffffff) != 0xffffff) ||
+                (_settings.danmakuMinimumWeight > 0 &&
+                    event.weight < _settings.danmakuMinimumWeight) ||
                 _settings.danmakuBlockedWords.any(
                   (word) => word.isNotEmpty && event.text.contains(word),
                 )) {
@@ -811,7 +841,8 @@ class PlaybackSession extends ChangeNotifier {
             final second = event.position.inSeconds;
             final count = (density[second] ?? 0) + 1;
             density[second] = count;
-            return count <= _settings.danmakuMaxPerSecond;
+            return _settings.danmakuMaxPerSecond == 0 ||
+                count <= _settings.danmakuMaxPerSecond;
           })
           .map(
             (event) => DanmakuEvent(
@@ -828,6 +859,11 @@ class PlaybackSession extends ChangeNotifier {
             ),
           ),
     );
+  }
+
+  int _commentSegmentAt(Duration playerPosition) {
+    final seconds = (playerPosition - _settings.danmakuOffset).inSeconds;
+    return (seconds < 0 ? 0 : seconds) ~/ 360 + 1;
   }
 
   Future<void> _loadSubtitleTracks(

@@ -40,6 +40,7 @@ void main() {
     WidgetTester tester, {
     bool active = true,
     double topMargin = 0,
+    AppSettings? settings,
   }) async {
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -56,11 +57,13 @@ void main() {
                     height: 240,
                     child: LivePlayerDanmaku(
                       roomId: canonical,
-                      settings: AppSettings(
-                        danmakuBlockedWords: const ['屏蔽'],
-                        danmakuTopEnabled: false,
-                        danmakuTopMargin: topMargin,
-                      ),
+                      settings:
+                          settings ??
+                          AppSettings(
+                            danmakuBlockedWords: const ['屏蔽'],
+                            danmakuTopEnabled: false,
+                            danmakuTopMargin: topMargin,
+                          ),
                     ),
                   ),
                 ),
@@ -77,6 +80,81 @@ void main() {
   LiveDanmakuController drawing(WidgetTester tester) => tester
       .widget<LiveDanmakuOverlay>(find.byType(LiveDanmakuOverlay))
       .controller;
+
+  testWidgets(
+    'live bridge applies color blocking, duplicate merge and same-screen density',
+    (tester) async {
+      await show(
+        tester,
+        settings: AppSettings(
+          danmakuBlockColored: true,
+          danmakuMergeDuplicates: true,
+          danmakuMaxOnScreen: 2,
+          danmakuMaxPerSecond: 0,
+        ),
+      );
+      final controller = container.read(
+        liveControllerProvider(requested).notifier,
+      );
+      controller.setActive(true);
+      await tester.pump();
+      await tester.pump();
+      realtime.events.add(const [
+        LiveChatReceived(
+          LiveChatMessage(
+            userName: '甲',
+            text: 'red',
+            id: 'red',
+            color: 0xffff0000,
+          ),
+        ),
+        LiveChatReceived(
+          LiveChatMessage(userName: '甲', text: 'same', id: 'one'),
+        ),
+        LiveChatReceived(
+          LiveChatMessage(userName: '乙', text: 'same', id: 'two'),
+        ),
+        LiveChatReceived(
+          LiveChatMessage(userName: '丙', text: 'other', id: 'three'),
+        ),
+        LiveChatReceived(
+          LiveChatMessage(userName: '丁', text: 'extra', id: 'four'),
+        ),
+      ]);
+      await tester.pump();
+      await tester.pump();
+      expect(drawing(tester).frame().map((p) => p.event.text), [
+        'same',
+        'other',
+      ]);
+      await show(
+        tester,
+        settings: AppSettings(
+          danmakuBlockColored: false,
+          danmakuMergeDuplicates: false,
+          danmakuMaxOnScreen: 0,
+          danmakuMaxPerSecond: 0,
+        ),
+      );
+      expect(drawing(tester).frame(), isEmpty);
+      realtime.events.add(const [
+        LiveChatReceived(
+          LiveChatMessage(
+            userName: '甲',
+            text: 'red new',
+            id: 'red2',
+            color: 0xffff0000,
+          ),
+        ),
+      ]);
+      await tester.pump();
+      await tester.pump();
+      expect(drawing(tester).frame().single.event.text, 'red new');
+      controller.setActive(false);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
 
   testWidgets('live overlay applies top margin updates to new messages', (
     tester,

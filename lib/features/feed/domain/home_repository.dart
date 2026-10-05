@@ -27,6 +27,8 @@ final class HomeEntry {
     this.areaName = '',
     this.contentCount,
     this.viewCount,
+    this.isPrivate,
+    this.createdAt,
     this.children = const [],
   });
   final DynamicPost? dynamicPost;
@@ -50,6 +52,8 @@ final class HomeEntry {
   final String areaName;
   final int? contentCount;
   final int? viewCount;
+  final bool? isPrivate;
+  final DateTime? createdAt;
   final List<HomeEntry> children;
 }
 
@@ -73,6 +77,15 @@ abstract interface class HomeRepository {
     HomeQuery query, {
     required int page,
     String? cursor,
+    required RequestCancellation cancellation,
+  });
+}
+
+/// Optional write capability of the account's collected folders/UGC collections.
+abstract interface class HomeSubscriptionRepository {
+  Future<void> unsubscribeFavorite(
+    HomeEntry entry, {
+    required String scope,
     required RequestCancellation cancellation,
   });
 }

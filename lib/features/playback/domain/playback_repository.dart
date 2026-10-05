@@ -49,6 +49,7 @@ final class TimedComment {
     required this.mode,
     required this.color,
     required this.fontSize,
+    this.weight = 0,
   });
   final String id;
   final Duration position;
@@ -56,6 +57,7 @@ final class TimedComment {
   final int mode;
   final int color;
   final double fontSize;
+  final int weight;
 }
 
 final class SubtitleTrack {

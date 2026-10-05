@@ -52,6 +52,19 @@ void main() {
             debugPrint(
               'favorites_$label: count=${first.items.length}, hasMore=${first.hasMore}',
             );
+            if (label == 'created') {
+              expect(first.items.every((e) => e.isPrivate != null), true);
+              expect(first.items.every((e) => e.createdAt != null), true);
+              final folder = first.items.firstOrNull;
+              if (folder != null) {
+                final info = await FavoriteFolderClient(api).load(folder.id);
+                expect(info.id, folder.id);
+                expect(info.ownerMid, mid);
+                debugPrint(
+                  'favorites_created_metadata: dates/visibility/info verified',
+                );
+              }
+            }
             if (first.hasMore) {
               final next = await client.load(
                 channel: 'favorites',

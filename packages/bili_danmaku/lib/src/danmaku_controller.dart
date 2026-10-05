@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import 'danmaku_text_style.dart';
+
 enum DanmakuMode { scroll, top, bottom }
 
 @immutable
@@ -64,6 +66,10 @@ final class DanmakuController extends ChangeNotifier {
   double _area = 1;
   double _speed = 1;
   double _topInset = 0;
+  Duration _offset = Duration.zero;
+  bool _mergeDuplicates = false;
+  int _maxOnScreen = 0;
+  Duration get _displayPosition => position - _offset;
   double get _top => _topInset.clamp(0, _height - _bottomInset);
   double get _availableHeight => (_height - _bottomInset - _top) * _area;
   Duration get _scrollLifetime =>
@@ -74,23 +80,39 @@ final class DanmakuController extends ChangeNotifier {
     required double area,
     required double speed,
     double topInset = 0,
+    Duration offset = Duration.zero,
+    bool mergeDuplicates = false,
+    int maxOnScreen = 0,
+    DanmakuTextStyle textStyle = const DanmakuTextStyle(),
   }) {
     final nextArea = area.clamp(.25, 1.0);
     final nextSpeed = speed.clamp(.5, 2.0);
     final nextTopInset = topInset.isFinite
         ? topInset.clamp(0.0, double.infinity)
         : 0.0;
-    if (_area == nextArea && _speed == nextSpeed && _topInset == nextTopInset) {
+    if (_area == nextArea &&
+        _speed == nextSpeed &&
+        _topInset == nextTopInset &&
+        _offset == offset &&
+        _mergeDuplicates == mergeDuplicates &&
+        _maxOnScreen == maxOnScreen.clamp(0, maxVisible) &&
+        _layouts.style == textStyle) {
       return;
     }
     _area = nextArea;
     _speed = nextSpeed;
     _topInset = nextTopInset;
+    _offset = offset;
+    _mergeDuplicates = mergeDuplicates;
+    _maxOnScreen = maxOnScreen.clamp(0, maxVisible);
+    _layouts.clear();
+    _layouts.style = textStyle;
+    _updateLaneHeight();
     seekConfirmed(position);
   }
 
   final Duration fixedDuration;
-  final _layouts = <String, TextPainter>{};
+  late final _layouts = DanmakuTextLayouts(maxTextLayouts);
   final List<_Active> _active = [];
   List<DanmakuEvent> _events = const [];
   int _next = 0;
@@ -104,6 +126,7 @@ final class DanmakuController extends ChangeNotifier {
   double _width = 0;
   double _height = 0;
   double _bottomInset = 0;
+  double _laneHeight = 48;
   int dropped = 0;
 
   Duration get position => _estimate(_now());
@@ -140,7 +163,7 @@ final class DanmakuController extends ChangeNotifier {
     _bottomInset = bottomInset.clamp(0, _height);
     _active.clear();
     _clearLayouts();
-    _rewindTo(position);
+    _rewindTo(_displayPosition);
     notifyListeners();
   }
 
@@ -161,7 +184,7 @@ final class DanmakuController extends ChangeNotifier {
             .toList()
           ..sort((a, b) => a.at.compareTo(b.at));
     if (sorted.length > maxPending) {
-      final pivot = _lowerBound(sorted, position);
+      final pivot = _lowerBound(sorted, _displayPosition);
       final from = (pivot - maxPending ~/ 4).clamp(
         0,
         sorted.length - maxPending,
@@ -171,9 +194,18 @@ final class DanmakuController extends ChangeNotifier {
     } else {
       _events = List.unmodifiable(sorted);
     }
-    final availableIds = _events.map((event) => event.id).toSet();
-    _active.removeWhere((item) => !availableIds.contains(item.event.id));
-    _rewindTo(position);
+    final available = {for (final event in _events) event.id: event};
+    _updateLaneHeight();
+    _active.removeWhere((item) {
+      final next = available[item.event.id];
+      return next == null ||
+          next.text != item.event.text ||
+          next.color != item.event.color ||
+          next.fontSize != item.event.fontSize ||
+          next.at != item.event.at ||
+          next.mode != item.event.mode;
+    });
+    _rewindTo(_displayPosition);
     notifyListeners();
   }
 
@@ -196,7 +228,7 @@ final class DanmakuController extends ChangeNotifier {
     _rate = rate.isFinite && rate > 0 ? rate : 1;
     if ((_anchorPosition - _lastRendered).abs() > const Duration(seconds: 2)) {
       _active.clear();
-      _rewindTo(_anchorPosition);
+      _rewindTo(_anchorPosition - _offset);
     }
     notifyListeners();
   }
@@ -211,7 +243,7 @@ final class DanmakuController extends ChangeNotifier {
     _lastRendered = _anchorPosition;
     _seeking = false;
     _active.clear();
-    _rewindTo(_anchorPosition);
+    _rewindTo(_anchorPosition - _offset);
     notifyListeners();
   }
 
@@ -239,47 +271,29 @@ final class DanmakuController extends ChangeNotifier {
     return low;
   }
 
-  TextPainter _layout(DanmakuEvent event) {
-    final fontSize = event.fontSize.clamp(12.0, 54.0);
-    final key = '$fontSize|${event.color.toARGB32()}|${event.text}';
-    final cached = _layouts.remove(key);
-    if (cached != null) {
-      _layouts[key] = cached;
-      return cached;
+  TextPainter _layout(DanmakuEvent event) =>
+      _layouts.layout(event.text, event.color, event.fontSize);
+
+  void _updateLaneHeight() {
+    var laneHeight = 48.0;
+    for (final event in _events) {
+      final height = _layout(event).height + 4;
+      if (height > laneHeight) laneHeight = height;
     }
-    final painter = TextPainter(
-      text: TextSpan(
-        text: event.text,
-        style: TextStyle(
-          color: event.color,
-          fontSize: fontSize,
-          shadows: const [Shadow(color: Color(0xFF000000), blurRadius: 2)],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout();
-    _layouts[key] = painter;
-    if (_layouts.length > maxTextLayouts) {
-      _layouts.remove(_layouts.keys.first)?.dispose();
+    if (_laneHeight != laneHeight) {
+      _laneHeight = laneHeight;
+      _active.clear();
     }
-    return painter;
   }
 
-  void paintText(DanmakuEvent event, Canvas canvas, Offset offset) {
-    _layout(event).paint(canvas, offset);
-  }
+  void paintText(DanmakuEvent event, Canvas canvas, Offset offset) =>
+      _layouts.paint(event.text, event.color, event.fontSize, canvas, offset);
 
-  void _clearLayouts() {
-    for (final painter in _layouts.values) {
-      painter.dispose();
-    }
-    _layouts.clear();
-  }
+  void _clearLayouts() => _layouts.clear();
 
   List<DanmakuPlacement> frame() {
-    final at = position;
-    _lastRendered = at;
+    final at = _displayPosition;
+    _lastRendered = position;
     _active.removeWhere(
       (item) =>
           at - item.start >=
@@ -290,7 +304,7 @@ final class DanmakuController extends ChangeNotifier {
     if (_width <= 0 || _height <= 0) return const [];
     while (_next < _events.length && _events[_next].at <= at) {
       final event = _events[_next++];
-      if (_active.length >= maxVisible) {
+      if (_active.length >= (_maxOnScreen == 0 ? maxVisible : _maxOnScreen)) {
         dropped++;
         continue;
       }
@@ -300,6 +314,13 @@ final class DanmakuController extends ChangeNotifier {
           : fixedDuration;
       if (age >= lifetime) continue;
       if (_active.any((item) => item.event.id == event.id)) continue;
+      if (_mergeDuplicates &&
+          _active.any(
+            (item) =>
+                item.event.text == event.text && item.event.mode == event.mode,
+          )) {
+        continue;
+      }
       final layout = _layout(event);
       final lane = _findLane(event, layout.width, at);
       if (lane < 0) {
@@ -316,19 +337,17 @@ final class DanmakuController extends ChangeNotifier {
                 (_width + item.width) *
                     (age.inMicroseconds / _scrollLifetime.inMicroseconds)
           : (_width - item.width) / 2;
-      const laneHeight = 48.0;
       final y = item.event.mode == DanmakuMode.bottom
-          ? _top + _availableHeight - (item.lane + 1) * laneHeight
-          : _top + item.lane * laneHeight;
+          ? _top + _availableHeight - (item.lane + 1) * _laneHeight
+          : _top + item.lane * _laneHeight;
       result.add(DanmakuPlacement(event: item.event, x: x, y: y));
     }
     return result;
   }
 
   int _findLane(DanmakuEvent event, double textWidth, Duration at) {
-    const laneHeight = 48.0;
     final available = _availableHeight;
-    final laneCount = (available / laneHeight).floor().clamp(0, 24);
+    final laneCount = (available / _laneHeight).floor().clamp(0, 24);
     for (var lane = 0; lane < laneCount; lane++) {
       var free = true;
       for (final prior in _active) {

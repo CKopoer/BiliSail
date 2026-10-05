@@ -524,6 +524,82 @@ void main() {
     },
   );
 
+  test('color and weight filtering, unlimited density and offset apply without reopening media', () async {
+    final engine = _FakeEngine();
+    final repository = _FakeRepository(autoResolve: true);
+    final session = PlaybackSession(
+      engine: engine,
+      repository: repository,
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    final settings = AppSettings(
+      autoPlay: false,
+      danmakuBlockColored: true,
+      danmakuMinimumWeight: 5,
+      danmakuOffset: const Duration(seconds: 2),
+      danmakuMaxPerSecond: 0,
+    );
+    session.configureSettings(settings);
+    final owner = Object();
+    session.attach(owner);
+    await session.activate(owner, _detail('one'), _part('one'));
+    repository.pendingComments['one:1']!.complete([
+      const TimedComment(
+        id: 'color',
+        position: Duration(seconds: 1),
+        text: 'red',
+        mode: 1,
+        color: 0xff0000,
+        fontSize: 24,
+        weight: 10,
+      ),
+      const TimedComment(
+        id: 'low',
+        position: Duration(seconds: 1),
+        text: 'low',
+        mode: 1,
+        color: 0xffffff,
+        fontSize: 24,
+        weight: 4,
+      ),
+      for (var i = 0; i < 25; i++)
+        TimedComment(
+          id: '$i',
+          position: const Duration(seconds: 1),
+          text: '$i',
+          mode: 1,
+          color: 0xffffff,
+          fontSize: 24,
+          weight: 5,
+        ),
+    ]);
+    await _flush();
+    session.danmaku.setViewport(width: 800, height: 450);
+    expect(session.danmaku.pendingCount, 25);
+    await session.seek(const Duration(seconds: 2));
+    expect(session.danmaku.frame(), isEmpty);
+    await session.seek(const Duration(seconds: 3));
+    expect(
+      session.danmaku.frame().map((p) => p.event.id),
+      isNot(contains('color')),
+    );
+    expect(
+      session.danmaku.frame().map((p) => p.event.id),
+      isNot(contains('low')),
+    );
+    session.configureSettings(
+      settings.copyWith(
+        danmakuBlockColored: false,
+        danmakuMinimumWeight: 0,
+        danmakuOffset: Duration.zero,
+      ),
+    );
+    expect(session.danmaku.pendingCount, 27);
+    expect(engine.openedUris, hasLength(1));
+  });
+
   test('pause before deferred automatic skip prevents seek', () async {
     final engine = _FakeEngine();
     final sponsor = _FakeSponsor();

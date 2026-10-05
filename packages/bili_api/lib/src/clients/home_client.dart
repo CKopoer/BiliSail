@@ -3,11 +3,32 @@ import '../api_client.dart';
 import '../models.dart';
 import '../models/home_models.dart';
 
-/// Web read-only home endpoints. Credentials/retry/deadline stay in the client.
+/// Web home endpoints. Credentials/retry/deadline stay in the client.
 final class HomeClient {
   HomeClient(this.api);
   final BiliApiClient api;
   static const _liveAreaPageSize = 36;
+
+  /// Explicit user action; the shared CSRF form pipeline sends only one attempt.
+  Future<void> unsubscribeFavorite(
+    String id, {
+    required bool collection,
+    ApiRequestContext? context,
+  }) async {
+    _validateId(id);
+    await api.submitForm(
+      collection ? '/x/v3/fav/season/unfav' : '/x/v3/fav/folder/unfav',
+      'favorite_unsubscribe',
+      {
+        if (collection) ...{
+          'season_id': id,
+          'platform': 'web',
+        } else
+          'media_id': id,
+      },
+      context: context,
+    );
+  }
 
   Future<ApiPage<ApiHomeEntry>> load({
     required String channel,
@@ -423,6 +444,7 @@ final class HomeClient {
     final m = _map(item);
     final collection = _number(m['type']) == 21;
     final id = _favoriteId(m['id']);
+    final attr = _number(m['attr']);
     return ApiHomeEntry(
       id: id,
       title: _required(m['title']),
@@ -430,6 +452,8 @@ final class HomeClient {
       coverUrl: _uri(m['cover']),
       contentCount: _number(m['media_count']),
       viewCount: _number(m['view_count']),
+      isPrivate: attr == null ? null : (attr & 2) != 0,
+      createdAt: _date(m['ctime']),
       authorName: _text(_optionalMap(m['upper'])?['name']) ?? '',
     );
   }

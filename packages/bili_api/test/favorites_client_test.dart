@@ -138,7 +138,13 @@ void main() {
             'has_more': uri.queryParameters['pn'] == '1',
             'list': [
               {'id': _defaultId, 'title': '改名后的默认夹'},
-              {'id': 42, 'title': '默认收藏夹', 'media_count': 2},
+              {
+                'id': 42,
+                'title': '默认收藏夹',
+                'media_count': 2,
+                'attr': 6,
+                'ctime': 1617724800,
+              },
             ],
           },
         };
@@ -152,6 +158,11 @@ void main() {
       );
       expect(first.items.single.id, '42');
       expect(first.items.single.contentCount, 2);
+      expect(first.items.single.isPrivate, true);
+      expect(
+        first.items.single.createdAt?.millisecondsSinceEpoch,
+        1617724800000,
+      );
       expect(first.hasMore, isTrue);
       final next = await client.load(
         channel: 'favorites',

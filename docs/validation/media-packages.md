@@ -25,7 +25,7 @@
 
 `MediaKitEngine.inspectDiagnostics()` 返回公开的 `PlayerDiagnostics`，只含 generation、确认 position、已解码视频尺寸、音频声道/采样率及经字符白名单过滤的 codec（若后端有报告）。`hasDecodedVideo` 和 `hasDecodedAudio` 分别由解码后参数判断；未取得参数时为 false，不能用 URL 已打开替代。诊断不暴露可能是签名 URL 的 track ID、headers、标题或 native log。`media_kit` 的公开 `PlayerState` 没有 dropped frames 字段，因此首版不伪造该指标。
 
-`DanmakuController` 使用后端确认位置作锚，两个样本间最多插值 700 ms；暂停、缓冲、seek 冻结。确认 seek 后二分定位窗口，倒退可重播。每次最多保留 500 条待调度、120 条可见、256 个 `TextPainter` 布局；超额丢弃。主应用每 15 秒按当前播放位置提供前 8 秒至后 60 秒的滑动窗口，包保留仍位于新窗口的活动项。Canvas painter 由独立 Ticker 的局部 `Listenable` 驱动，不让全页逐帧重建。密集弹幕的性能目标仍需 profile 实测。
+`DanmakuController` 使用后端确认位置作锚，两个样本间最多插值 700 ms；暂停、缓冲、seek 冻结。确认 seek 后二分定位窗口，倒退可重播。每次最多保留 500 条待调度、120 条可见、256 组文本布局；描边的每组包含填充/轮廓两个 `TextPainter`，其他效果一个，超额丢弃。主应用每 15 秒按偏移后的弹幕位置提供前 16 秒至后 60 秒的滑动窗口，包保留仍位于新窗口的活动项。样式与过滤边界见 [弹幕配置验证](danmaku-style-settings.md)。Canvas painter 由独立 Ticker 的局部 `Listenable` 驱动，不让全页逐帧重建。密集弹幕的性能目标仍需 profile 实测。
 
 ## 本机检查
 

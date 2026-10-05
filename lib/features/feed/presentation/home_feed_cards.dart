@@ -60,9 +60,17 @@ final class FavoriteFolderCard extends StatelessWidget {
     super.key,
     required this.entry,
     required this.onTap,
+    this.onUnsubscribe,
+    this.unsubscribing = false,
+    this.showCreatedMetadata = false,
+    this.onEdit,
   });
   final HomeEntry entry;
   final VoidCallback onTap;
+  final VoidCallback? onUnsubscribe;
+  final bool unsubscribing;
+  final bool showCreatedMetadata;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -110,10 +118,18 @@ final class FavoriteFolderCard extends StatelessWidget {
                       aspectRatio: 16 / 9,
                       child: _Cover(
                         url: entry.coverUrl,
-                        left: entry.contentCount == null
+                        left: [
+                          if (entry.contentCount != null)
+                            '${entry.contentCount}个内容',
+                          if (showCreatedMetadata)
+                            if (entry.isPrivate == true)
+                              '私密'
+                            else if (entry.isPrivate == false)
+                              '公开',
+                        ].join(' '),
+                        right: showCreatedMetadata
                             ? ''
-                            : '${entry.contentCount}个内容',
-                        right: entry.kind == HomeEntryKind.collection
+                            : entry.kind == HomeEntryKind.collection
                             ? '合集'
                             : '收藏夹',
                       ),
@@ -123,13 +139,97 @@ final class FavoriteFolderCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 9),
-            Text(
-              entry.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (showCreatedMetadata && entry.isPrivate == true) ...[
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Tooltip(
+                      message: '私密收藏夹',
+                      child: Icon(Icons.lock, size: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                Expanded(
+                  child: Text(
+                    entry.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                if (onUnsubscribe != null || onEdit != null)
+                  PopupMenuButton<String>(
+                    tooltip: unsubscribing ? '取消订阅中' : '更多操作',
+                    enabled: !unsubscribing,
+                    padding: EdgeInsets.zero,
+                    iconSize: 20,
+                    iconColor: scheme.onSurfaceVariant,
+                    style: IconButton.styleFrom(
+                      fixedSize: const Size(32, 28),
+                      minimumSize: const Size(32, 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 140,
+                      maxWidth: 240,
+                    ),
+                    position: PopupMenuPosition.under,
+                    color: scheme.surface,
+                    surfaceTintColor: Colors.transparent,
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: scheme.outlineVariant.withValues(alpha: .6),
+                      ),
+                    ),
+                    icon: unsubscribing
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.more_vert),
+                    onSelected: (action) {
+                      if (action == 'edit') onEdit?.call();
+                      if (action == 'unsubscribe') onUnsubscribe?.call();
+                    },
+                    itemBuilder: (_) => [
+                      if (onEdit != null)
+                        PopupMenuItem(
+                          value: 'edit',
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            '编辑信息',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      if (onUnsubscribe != null)
+                        PopupMenuItem(
+                          value: 'unsubscribe',
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            '取消订阅',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                    ],
+                  ),
+              ],
             ),
-            if (entry.viewCount != null) ...[
+            if (showCreatedMetadata) ...[
+              const SizedBox(height: 12),
+              Text(
+                switch (entry.createdAt) {
+                  final date? => '创建于${_date(date.toLocal())}',
+                  null => '创建时间未知',
+                },
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ] else if (entry.viewCount != null) ...[
               const SizedBox(height: 12),
               Text(
                 '${compactCount(entry.viewCount)}播放',
@@ -142,6 +242,11 @@ final class FavoriteFolderCard extends StatelessWidget {
     );
   }
 }
+
+String _date(DateTime date) =>
+    '${date.year.toString().padLeft(4, '0')}-'
+    '${date.month.toString().padLeft(2, '0')}-'
+    '${date.day.toString().padLeft(2, '0')}';
 
 final class LiveRoomCard extends StatelessWidget {
   const LiveRoomCard({super.key, required this.entry, required this.onTap});
@@ -236,15 +341,16 @@ final class _Cover extends StatelessWidget {
                   style: const TextStyle(color: Colors.white, fontSize: 12),
                 ),
               ),
-              Expanded(
-                child: Text(
-                  right,
-                  textAlign: TextAlign.end,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+              if (right.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    right,
+                    textAlign: TextAlign.end,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
                 ),
-              ),
             ],
           ),
         ),

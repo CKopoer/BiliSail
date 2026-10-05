@@ -25,6 +25,8 @@ final class ApiHomeEntry {
     this.areaName = '',
     this.contentCount,
     this.viewCount,
+    this.isPrivate,
+    this.createdAt,
     this.children = const [],
   });
   final ApiDynamicPost? dynamicPost;
@@ -48,5 +50,7 @@ final class ApiHomeEntry {
   final String areaName;
   final int? contentCount;
   final int? viewCount;
+  final bool? isPrivate;
+  final DateTime? createdAt;
   final List<ApiHomeEntry> children;
 }

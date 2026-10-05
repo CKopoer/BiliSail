@@ -111,6 +111,7 @@ class ApiPlaybackRepository
             mode: item.mode,
             color: item.color,
             fontSize: item.fontSize.toDouble(),
+            weight: item.weight,
           ),
         )
         .toList(growable: false);

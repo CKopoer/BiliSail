@@ -2,9 +2,13 @@
 
 日期：2026-10-06。工具链沿用 Flutter 3.47.6 / Dart 3.13.5。
 
+本日后续已为“我的收藏与订阅”增加卡片菜单与取消前确认，写接口及竞态验证另见 [收藏与订阅取消操作](favorites-unsubscribe.md)。下文端点和测试数量保留五类收藏只读接入时的验证快照。
+
 ## 页面行为
 
-“我的收藏”按用户提供的已安装哔哩哔哩截图分为“默认收藏夹”“我创建的收藏夹”“我的收藏与订阅”“我的追番”“我的追剧”。默认收藏夹直接显示内容；创建列表按服务端默认收藏夹 ID 排除它，不依赖名称或位置。“我的收藏与订阅”保留普通收藏夹与 UGC 合集的不同类型，封面显示叠层、内容数量和收藏夹/合集标识；播放数仅在服务端提供时显示。
+“我的收藏”按用户提供的已安装哔哩哔哩截图分为“默认收藏夹”“我创建的收藏夹”“我的收藏与订阅”“我的追番”“我的追剧”。默认收藏夹直接显示内容；创建列表按服务端默认收藏夹 ID 排除它，不依赖名称或位置。“我的收藏与订阅”保留普通收藏夹与 UGC 合集的不同类型，封面显示叠层、内容数量和收藏夹/合集标识；播放数仅在该订阅列表且服务端提供时显示。
+
+“我创建的收藏夹”按补充截图显示内容数量、公开/私密状态，私密收藏夹名称前加锁图标，下方显示本地日期 `创建于YYYY-MM-DD`，不显示播放量。`attr` 的 bit 1 标识私密，`ctime` 按秒解析；可选字段缺失时不猜测状态或日期。右侧菜单“编辑信息”可修改名称、简介和公开/私密状态。打开编辑框先读取完整信息和所属账号，关键字段缺失或账号非拥有者时不能保存；取消不会提交，成功后刷新创建列表。
 
 我的收藏中的有效视频和个人主页收藏夹内的视频共用 [VideoCard](../../lib/shared/ui/video_card.dart)，统一 16:9 封面、播放/弹幕数量、时长、标题、作者和发布时间。收藏资源的 `upper`、`duration`、`cnt_info`、`pubtime` 在 API/Repository 边界映射；失效资源保留提示并禁止播放，不因一个失效视频使整页失败。个人主页投稿继续沿用现有投稿卡片。
 
@@ -12,7 +16,7 @@
 
 ## 端点登记
 
-所有端点为 `api.bilibili.com`、Web profile、HTTPS GET、JSON，使用已有 Web Cookie 和收藏夹权限，无 App token、签名或 CSRF。共享总 deadline 与读请求最多额外两次网络/5xx 重试；权限/风控/协议错误不切换备用接口。没有新增账户写操作。
+以下读端点为 `api.bilibili.com`、Web profile、HTTPS GET、JSON，使用已有 Web Cookie 和收藏夹权限，无 App token、签名或 CSRF。共享总 deadline 与读请求最多额外两次网络/5xx 重试；权限/风控/协议错误不切换备用接口。
 
 | 能力 | Path | 参数、分页与解析 |
 | --- | --- | --- |
@@ -25,11 +29,21 @@
 
 个人主页收藏夹沿用原 `ProfileClient` 每页 30 条读取，补齐统计/发布时间映射及失效判断。缺失关键字段为协议错误；明确零总数下的 null 列表为空状态。
 
+编辑元信息复用 `/x/v3/fav/resource/list` 的 `info`（`media_id`、`pn=1`、`ps=1`、`platform=web`），读取 `id`、`upper.mid`、`title`、`intro`、`attr`，与当前账号核对。写接口为 `api.bilibili.com`、HTTPS POST `/x/v3/fav/folder/edit`，Web Cookie/CSRF、JSON，表单 `media_id`、`title`、`intro`、`privacy=1/0`（私密/公开），`csrf` 从当前 Cookie 提取；无 WBI/App 签名。字符串只在传输层编码一次，写操作不自动重试。控制器绑定 scope、session epoch 和 generation，关闭/账号切换取消请求，提交中禁止重复提交。网络/超时/HTTP/协议异常使结果进入待核对状态；用户“重新读取”后，若服务器值与此次提交一致则视为已保存，否则展示服务端信息，允许用户再次明确保存。原草稿在失败时保留。
+
+最后验证：2026-10-06，列表与 `info` 已用本机已有 Web 会话只读验证；POST 仅做脱敏 fake transport 验证，未对真实账号提交修改。服务端权限、认证和风控错误按类别反馈；仍未在线验证所有业务失败码及写入结果。
+
 ## 来源与采用范围
 
 视觉依据为用户本轮截图。只读查看相邻 UWP 的 [FavoriteAPI.cs](../../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/User/FavoriteAPI.cs)、[FollowAPI.cs](../../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/User/FollowAPI.cs)、[FavoriteDetailViewModel.cs](../../../biliuwp-lite/src/BiliLite.UWP/ViewModels/Favourites/FavoriteDetailViewModel.cs)，以及 kernel 的 [MyClient.cs](../../../bili-kernel/src/Services/Services.User/Core/MyClient.cs)、[VideoFavoriteGalleryResponse.cs](../../../bili-kernel/src/Services/Services.User/Core/Models/VideoFavoriteGalleryResponse.cs)、[FavoriteAdapter.cs](../../../bili-kernel/src/Services/Services.User/Core/Adapters/FavoriteAdapter.cs)。快照及许可边界见 [参考文档](../references.md)。仅借鉴协议、类型和交互职责，独立编写 Dart/Flutter；未复制新增源码/schema/资源，未修改相邻仓库。参考 App 追番/追剧方法未迁入，使用已有 Web 追番端点的两种类型。
 
 ## 验证与边界
+
+补充编辑验证：协议测试覆盖大 ID、完整简介、私密 bit 与 `privacy` 参数、Cookie/CSRF、错误和取消后不重放；Repository/控制器测试覆盖所属账号、scope/epoch、重复提交、未知结果核对、关闭和账号切换；Widget 覆盖菜单与打开收藏夹的独立点击、完整预填、空名称、取消、保存刷新、360 像素与双倍字体。Windows 已有会话只读确认 7 个自建收藏夹均提供状态和日期，样本 `info` 可解析且拥有者正确，未提交真实修改。
+
+编辑补充后的 `tool/check.ps1 -SkipPub` 通过根应用与三个包的格式、静态分析和测试：根应用 588、API 206、播放器 16、弹幕 19，共 829 项（同时包含工作区其他并行改动的当前快照）。Windows 只读集成测试与最终 `flutter build windows --release --no-pub` 通过。无新增依赖和原生播放改动。新增日志为 `build/folder-edit-check.log`、`build/folder-edit-windows-read.log` 和 `build/folder-edit-windows-build-final.log`；普通检查脚本仍不运行真实账号写操作。
+
+界面补充渲染为 1735 像素五列和 360 像素双倍字体自建收藏夹列表，使用占位封面；视检状态标记、锁图标、日期和菜单。实际 Android/macOS 视觉操作和真实收藏夹修改仍未验收。
 
 - 离线协议测试覆盖默认 ID/改名与创建列表过滤、跨页游标、同 ID 不同类型、合集整页响应、追番/追剧分类、视频元数据、失效资源、权限错误、取消后不继续链式请求与无账号拒绝。
 - Widget 回归覆盖五个标签、合集进入/返回和切换保留、公共卡片、作者/视频点击、窄窗口/双倍字体、宽屏铺满与个人主页懒加载；收藏容量测试覆盖去重和停止分页。

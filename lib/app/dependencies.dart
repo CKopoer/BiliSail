@@ -28,6 +28,8 @@ import '../features/feed/application/feed_controller.dart';
 import '../features/feed/data/api_feed_repository.dart';
 import '../features/feed/application/home_controller.dart';
 import '../features/feed/data/api_home_repository.dart';
+import '../features/feed/application/favorite_folder_controller.dart';
+import '../features/feed/data/api_favorite_folder_repository.dart';
 import '../features/search/application/search_controller.dart';
 import '../features/search/data/api_search_repository.dart';
 import '../features/video/application/video_controller.dart';
@@ -219,6 +221,13 @@ class AppDependencies {
         homeRepositoryProvider.overrideWithValue(
           ApiHomeRepository(
             HomeClient(api),
+            requests,
+            accountScope: () => session.accountScope,
+          ),
+        ),
+        favoriteFolderRepositoryProvider.overrideWithValue(
+          ApiFavoriteFolderRepository(
+            FavoriteFolderClient(api),
             requests,
             accountScope: () => session.accountScope,
           ),

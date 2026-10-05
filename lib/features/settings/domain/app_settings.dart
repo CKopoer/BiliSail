@@ -8,6 +8,10 @@ enum AppThemePreference { system, light, dark }
 
 enum AppFontPreference { harmonyOsSans, system }
 
+enum DanmakuFontPreference { system, harmonyOsSans }
+
+enum DanmakuStylePreference { shadow, stroke, plain }
+
 enum SponsorBlockMode { disabled, manual, automatic }
 
 final class AppSettings {
@@ -31,9 +35,17 @@ final class AppSettings {
     this.danmakuTopMargin = 0,
     this.danmakuSpeed = 1.0,
     this.danmakuMaxPerSecond = 20,
+    this.danmakuMaxOnScreen = 0,
     this.danmakuScrollEnabled = true,
     this.danmakuTopEnabled = true,
     this.danmakuBottomEnabled = true,
+    this.danmakuFont = DanmakuFontPreference.system,
+    this.danmakuBold = false,
+    this.danmakuStyle = DanmakuStylePreference.shadow,
+    this.danmakuMergeDuplicates = false,
+    this.danmakuBlockColored = false,
+    this.danmakuMinimumWeight = 0,
+    this.danmakuOffset = Duration.zero,
     List<String> danmakuBlockedWords = const [],
     this.subtitlesEnabled = false,
     this.subtitleFontScale = 1.0,
@@ -65,9 +77,17 @@ final class AppSettings {
       danmakuTopMargin = 0,
       danmakuSpeed = 1.0,
       danmakuMaxPerSecond = 20,
+      danmakuMaxOnScreen = 0,
       danmakuScrollEnabled = true,
       danmakuTopEnabled = true,
       danmakuBottomEnabled = true,
+      danmakuFont = DanmakuFontPreference.system,
+      danmakuBold = false,
+      danmakuStyle = DanmakuStylePreference.shadow,
+      danmakuMergeDuplicates = false,
+      danmakuBlockColored = false,
+      danmakuMinimumWeight = 0,
+      danmakuOffset = Duration.zero,
       subtitlesEnabled = false,
       subtitleFontScale = 1.0,
       subtitleBackgroundOpacity = 0.45,
@@ -97,9 +117,23 @@ final class AppSettings {
   final double danmakuTopMargin;
   final double danmakuSpeed;
   final int danmakuMaxPerSecond;
+
+  /// Zero keeps the renderer's fixed safety cap of 120 comments.
+  final int danmakuMaxOnScreen;
   final bool danmakuScrollEnabled;
   final bool danmakuTopEnabled;
   final bool danmakuBottomEnabled;
+  final DanmakuFontPreference danmakuFont;
+  final bool danmakuBold;
+  final DanmakuStylePreference danmakuStyle;
+  final bool danmakuMergeDuplicates;
+  final bool danmakuBlockColored;
+
+  /// Zero disables the server weight filter; missing weights are zero.
+  final int danmakuMinimumWeight;
+
+  /// Positive values delay comments; negative values show them earlier.
+  final Duration danmakuOffset;
   final List<String> _danmakuBlockedWords;
   List<String> get danmakuBlockedWords => _danmakuBlockedWords;
   final bool subtitlesEnabled;
@@ -130,9 +164,17 @@ final class AppSettings {
     double? danmakuTopMargin,
     double? danmakuSpeed,
     int? danmakuMaxPerSecond,
+    int? danmakuMaxOnScreen,
     bool? danmakuScrollEnabled,
     bool? danmakuTopEnabled,
     bool? danmakuBottomEnabled,
+    DanmakuFontPreference? danmakuFont,
+    bool? danmakuBold,
+    DanmakuStylePreference? danmakuStyle,
+    bool? danmakuMergeDuplicates,
+    bool? danmakuBlockColored,
+    int? danmakuMinimumWeight,
+    Duration? danmakuOffset,
     List<String>? danmakuBlockedWords,
     bool? subtitlesEnabled,
     double? subtitleFontScale,
@@ -160,9 +202,18 @@ final class AppSettings {
     danmakuTopMargin: danmakuTopMargin ?? this.danmakuTopMargin,
     danmakuSpeed: danmakuSpeed ?? this.danmakuSpeed,
     danmakuMaxPerSecond: danmakuMaxPerSecond ?? this.danmakuMaxPerSecond,
+    danmakuMaxOnScreen: danmakuMaxOnScreen ?? this.danmakuMaxOnScreen,
     danmakuScrollEnabled: danmakuScrollEnabled ?? this.danmakuScrollEnabled,
     danmakuTopEnabled: danmakuTopEnabled ?? this.danmakuTopEnabled,
     danmakuBottomEnabled: danmakuBottomEnabled ?? this.danmakuBottomEnabled,
+    danmakuFont: danmakuFont ?? this.danmakuFont,
+    danmakuBold: danmakuBold ?? this.danmakuBold,
+    danmakuStyle: danmakuStyle ?? this.danmakuStyle,
+    danmakuMergeDuplicates:
+        danmakuMergeDuplicates ?? this.danmakuMergeDuplicates,
+    danmakuBlockColored: danmakuBlockColored ?? this.danmakuBlockColored,
+    danmakuMinimumWeight: danmakuMinimumWeight ?? this.danmakuMinimumWeight,
+    danmakuOffset: danmakuOffset ?? this.danmakuOffset,
     danmakuBlockedWords: List.unmodifiable(
       danmakuBlockedWords ?? this.danmakuBlockedWords,
     ),
@@ -211,7 +262,12 @@ final class AppSettings {
       danmakuArea: bounded(danmakuArea, .25, 1, .75),
       danmakuTopMargin: bounded(danmakuTopMargin, 0, 200, 0),
       danmakuSpeed: bounded(danmakuSpeed, .5, 2, 1),
-      danmakuMaxPerSecond: danmakuMaxPerSecond.clamp(1, 100),
+      danmakuMaxPerSecond: danmakuMaxPerSecond.clamp(0, 100),
+      danmakuMaxOnScreen: danmakuMaxOnScreen.clamp(0, 120),
+      danmakuMinimumWeight: danmakuMinimumWeight.clamp(0, 10),
+      danmakuOffset: Duration(
+        milliseconds: danmakuOffset.inMilliseconds.clamp(-60000, 60000),
+      ),
       danmakuBlockedWords: danmakuBlockedWords
           .map((word) => word.trim())
           .where((word) => word.isNotEmpty)

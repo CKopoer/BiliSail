@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/playback_rates.dart';
+import '../../../shared/ui/danmaku_settings_controls.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../settings/domain/app_settings.dart';
 
@@ -208,76 +209,15 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                       ],
                     ),
                     ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
-                        _switch(
-                          '显示弹幕',
-                          s.danmakuEnabled,
-                          (c, v) => c.copyWith(danmakuEnabled: v),
-                        ),
-                        _slider(
-                          '透明度',
-                          s.danmakuOpacity,
-                          .2,
-                          1,
-                          (c, v) => c.copyWith(danmakuOpacity: v),
-                        ),
-                        _slider(
-                          '字号',
-                          s.danmakuFontScale,
-                          .7,
-                          1.5,
-                          (c, v) => c.copyWith(danmakuFontScale: v),
-                        ),
-                        _slider(
-                          '显示区域',
-                          s.danmakuArea,
-                          .25,
-                          1,
-                          (c, v) => c.copyWith(danmakuArea: v),
-                        ),
-                        _slider(
-                          '顶部距离',
-                          s.danmakuTopMargin,
-                          0,
-                          200,
-                          (c, v) => c.copyWith(danmakuTopMargin: v),
-                          suffix: '${s.danmakuTopMargin.round()} px',
-                          key: const ValueKey('danmaku-top-margin'),
-                          divisions: 50,
-                        ),
-                        _slider(
-                          '滚动速度',
-                          s.danmakuSpeed,
-                          .5,
-                          2,
-                          (c, v) => c.copyWith(danmakuSpeed: v),
-                        ),
-                        _slider(
-                          '每秒上限',
-                          s.danmakuMaxPerSecond.toDouble(),
-                          1,
-                          100,
-                          (c, v) => c.copyWith(danmakuMaxPerSecond: v.round()),
-                          suffix: '${s.danmakuMaxPerSecond} 条',
-                        ),
-                        _switch(
-                          '滚动弹幕',
-                          s.danmakuScrollEnabled,
-                          (c, v) => c.copyWith(danmakuScrollEnabled: v),
-                        ),
-                        _switch(
-                          '顶部弹幕',
-                          s.danmakuTopEnabled,
-                          (c, v) => c.copyWith(danmakuTopEnabled: v),
-                        ),
-                        _switch(
-                          '底部弹幕',
-                          s.danmakuBottomEnabled,
-                          (c, v) => c.copyWith(danmakuBottomEnabled: v),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: _BlockedWordsField(),
+                        DanmakuSettingsControls(
+                          settings: s,
+                          save: (change) async {
+                            await ref
+                                .read(settingsControllerProvider.notifier)
+                                .update(change);
+                          },
                         ),
                       ],
                     ),
@@ -409,100 +349,3 @@ String qualityLabel(int q) => switch (q) {
   127 => '8K',
   _ => '$q',
 };
-
-class _BlockedWordsField extends ConsumerStatefulWidget {
-  const _BlockedWordsField();
-  @override
-  ConsumerState<_BlockedWordsField> createState() => _BlockedWordsFieldState();
-}
-
-class _BlockedWordsFieldState extends ConsumerState<_BlockedWordsField> {
-  late final TextEditingController _text;
-  final FocusNode _focus = FocusNode();
-  bool _saving = false;
-  String? _error;
-  @override
-  void initState() {
-    super.initState();
-    _text = TextEditingController(
-      text:
-          ref
-              .read(settingsControllerProvider)
-              .asData
-              ?.value
-              .danmakuBlockedWords
-              .join('\n') ??
-          '',
-    );
-  }
-
-  @override
-  void dispose() {
-    _text.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    _focus.unfocus();
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    try {
-      final words = _text.text
-          .split('\n')
-          .map((word) => word.trim())
-          .where((word) => word.isNotEmpty)
-          .toList();
-      await ref
-          .read(settingsControllerProvider.notifier)
-          .update((c) => c.copyWith(danmakuBlockedWords: words));
-    } catch (_) {
-      if (mounted) {
-        _text.text =
-            ref
-                .read(settingsControllerProvider)
-                .asData
-                ?.value
-                .danmakuBlockedWords
-                .join('\n') ??
-            '';
-        setState(() => _error = '关键词保存失败，已恢复原设置');
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    ref.listen(settingsControllerProvider, (previous, next) {
-      final value = next.asData?.value;
-      if (!_focus.hasFocus && !_saving && value != null) {
-        final words = value.danmakuBlockedWords.join('\n');
-        if (_text.text != words) _text.text = words;
-      }
-    });
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        TextField(
-          controller: _text,
-          focusNode: _focus,
-          maxLines: 3,
-          decoration: InputDecoration(
-            labelText: '屏蔽关键词（每行一个，字面匹配）',
-            border: const OutlineInputBorder(),
-            errorText: _error,
-          ),
-        ),
-        const SizedBox(height: 8),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: Text(_saving ? '正在保存…' : '保存关键词'),
-        ),
-      ],
-    );
-  }
-}

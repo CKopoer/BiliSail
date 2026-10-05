@@ -16,6 +16,7 @@ import '../../../domain/app_failure.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/app_notice.dart';
 import 'home_feed_cards.dart';
+import 'favorite_folder_edit_dialog.dart';
 import '../application/home_controller.dart';
 import '../domain/home_channel.dart';
 import '../domain/home_repository.dart';
@@ -228,8 +229,28 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                                 else if (item.kind == HomeEntryKind.folder ||
                                     item.kind == HomeEntryKind.collection)
                                   FavoriteFolderCard(
+                                    key: ValueKey((item.kind, item.id)),
                                     entry: item,
                                     onTap: () => _open(item),
+                                    showCreatedMetadata:
+                                        widget.section == '我创建的收藏夹' &&
+                                        item.kind == HomeEntryKind.folder,
+                                    onEdit:
+                                        widget.section == '我创建的收藏夹' &&
+                                            item.kind == HomeEntryKind.folder
+                                        ? () => _editFolder(item, scope)
+                                        : null,
+                                    unsubscribing: feed.unsubscribing.contains((
+                                      item.kind,
+                                      item.id,
+                                    )),
+                                    onUnsubscribe:
+                                        widget.section == '我的收藏与订阅' &&
+                                            query.folderId == null &&
+                                            ref.read(homeRepositoryProvider)
+                                                is HomeSubscriptionRepository
+                                        ? () => _unsubscribe(controller, item)
+                                        : null,
                                   )
                                 else
                                   _EntryCard(
@@ -375,6 +396,78 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
 
   String _message(Object? error) =>
       error is AppFailure ? error.message : '内容加载失败，请重试';
+
+  Future<void> _unsubscribe(HomeController controller, HomeEntry entry) async {
+    final scope = ref.read(homeRepositoryProvider).accountScope;
+    bool current() =>
+        mounted &&
+        widget.active &&
+        widget.isSignedIn &&
+        ref.read(homeRepositoryProvider).accountScope == scope;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        scrollable: true,
+        title: const Text('取消订阅'),
+        content: Text('确定取消订阅“${entry.title}”吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('确认取消'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || !current()) return;
+    try {
+      final removed = await controller.unsubscribeFavorite(entry);
+      if (removed && mounted && current()) showAppNotice(context, '已取消订阅');
+    } catch (error) {
+      if (!mounted ||
+          !current() ||
+          error is AppFailure && error.kind == AppFailureKind.cancelled) {
+        return;
+      }
+      showAppNotice(
+        context,
+        error is AppFailure &&
+                error.kind != AppFailureKind.network &&
+                error.kind != AppFailureKind.timeout
+            ? error.message
+            : '取消订阅结果未确认，请刷新列表查看',
+      );
+    }
+  }
+
+  Future<void> _editFolder(HomeEntry entry, String scope) async {
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          FavoriteFolderEditDialog(target: (id: entry.id, scope: scope)),
+    );
+    if (!mounted ||
+        saved != true ||
+        ref.read(homeRepositoryProvider).accountScope != scope) {
+      return;
+    }
+    showAppNotice(context, '收藏夹已修改');
+    await ref
+        .read(
+          homeControllerProvider((
+            channel: HomeChannel.favorites,
+            section: '我创建的收藏夹',
+            scope: scope,
+            folderId: null,
+          )).notifier,
+        )
+        .refresh();
+  }
+
   Future<void> _open(HomeEntry entry) async {
     if (entry.kind == HomeEntryKind.folder ||
         entry.kind == HomeEntryKind.collection) {

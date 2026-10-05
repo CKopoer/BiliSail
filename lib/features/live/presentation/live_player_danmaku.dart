@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_danmaku/bili_danmaku.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -60,6 +61,21 @@ final class _LivePlayerDanmakuState extends ConsumerState<LivePlayerDanmaku>
     speed: widget.settings.danmakuSpeed,
     maxPerSecond: widget.settings.danmakuMaxPerSecond,
     topInset: widget.settings.danmakuTopMargin,
+    offset: widget.settings.danmakuOffset,
+    mergeDuplicates: widget.settings.danmakuMergeDuplicates,
+    maxOnScreen: widget.settings.danmakuMaxOnScreen,
+    textStyle: DanmakuTextStyle(
+      fontFamily:
+          widget.settings.danmakuFont == DanmakuFontPreference.harmonyOsSans
+          ? 'HarmonyOS Sans'
+          : null,
+      bold: widget.settings.danmakuBold,
+      effect: switch (widget.settings.danmakuStyle) {
+        DanmakuStylePreference.shadow => DanmakuTextEffect.shadow,
+        DanmakuStylePreference.stroke => DanmakuTextEffect.stroke,
+        DanmakuStylePreference.plain => DanmakuTextEffect.plain,
+      },
+    ),
   );
   static bool _isForeground(AppLifecycleState? state) =>
       state != AppLifecycleState.hidden &&
@@ -76,6 +92,22 @@ final class _LivePlayerDanmakuState extends ConsumerState<LivePlayerDanmaku>
   void didUpdateWidget(covariant LivePlayerDanmaku oldWidget) {
     super.didUpdateWidget(oldWidget);
     _configure();
+    if (oldWidget.settings.danmakuBlockColored !=
+            widget.settings.danmakuBlockColored ||
+        oldWidget.settings.danmakuScrollEnabled !=
+            widget.settings.danmakuScrollEnabled ||
+        oldWidget.settings.danmakuTopEnabled !=
+            widget.settings.danmakuTopEnabled ||
+        oldWidget.settings.danmakuBottomEnabled !=
+            widget.settings.danmakuBottomEnabled ||
+        oldWidget.settings.danmakuFontScale !=
+            widget.settings.danmakuFontScale ||
+        !listEquals(
+          oldWidget.settings.danmakuBlockedWords,
+          widget.settings.danmakuBlockedWords,
+        )) {
+      _danmaku.clear();
+    }
     if (oldWidget.roomId != widget.roomId) {
       _danmaku.clear();
       _liveController = null;
@@ -88,6 +120,8 @@ final class _LivePlayerDanmakuState extends ConsumerState<LivePlayerDanmaku>
       batch
           .where(
             (message) =>
+                (!settings.danmakuBlockColored ||
+                    (message.color & 0xffffff) == 0xffffff) &&
                 !settings.danmakuBlockedWords.any(message.text.contains),
           )
           .map((message) {

@@ -2,6 +2,46 @@ import 'package:bili_lite/features/settings/domain/app_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'danmaku style defaults preserve existing behavior and clamp limits',
+    () {
+      final defaults = const AppSettings.defaults();
+      expect(defaults.danmakuFont, DanmakuFontPreference.system);
+      expect(defaults.danmakuStyle, DanmakuStylePreference.shadow);
+      expect(defaults.danmakuBold, isFalse);
+      expect(defaults.danmakuMergeDuplicates, isFalse);
+      expect(defaults.danmakuBlockColored, isFalse);
+      expect(defaults.danmakuMinimumWeight, 0);
+      expect(defaults.danmakuOffset, Duration.zero);
+      final copy = defaults
+          .copyWith(
+            danmakuFont: DanmakuFontPreference.harmonyOsSans,
+            danmakuStyle: DanmakuStylePreference.plain,
+            danmakuBold: true,
+            danmakuMergeDuplicates: true,
+            danmakuBlockColored: true,
+            danmakuMinimumWeight: 20,
+            danmakuMaxPerSecond: 0,
+            danmakuOffset: const Duration(seconds: -90),
+          )
+          .normalized();
+      expect(copy.danmakuFont, DanmakuFontPreference.harmonyOsSans);
+      expect(copy.danmakuStyle, DanmakuStylePreference.plain);
+      expect(copy.danmakuBold, isTrue);
+      expect(copy.danmakuMergeDuplicates, isTrue);
+      expect(copy.danmakuBlockColored, isTrue);
+      expect(copy.danmakuMinimumWeight, 10);
+      expect(copy.danmakuMaxPerSecond, 0);
+      expect(copy.danmakuOffset, const Duration(seconds: -60));
+      expect(
+        AppSettings(
+          danmakuMaxPerSecond: -1,
+          danmakuMinimumWeight: -1,
+        ).normalized().danmakuMaxPerSecond,
+        0,
+      );
+    },
+  );
   test('danmaku top margin defaults to zero and normalizes its bounds', () {
     expect(const AppSettings.defaults().danmakuTopMargin, 0);
     expect(AppSettings().danmakuTopMargin, 0);

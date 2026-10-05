@@ -285,6 +285,7 @@ final class ApiDanmakuItem {
     required this.fontSize,
     required this.color,
     required this.content,
+    this.weight = 0,
   });
   final String id;
   final Duration progress;
@@ -292,6 +293,7 @@ final class ApiDanmakuItem {
   final int fontSize;
   final int color;
   final String content;
+  final int weight;
 }
 
 final class ApiQrCode {

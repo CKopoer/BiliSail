@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 import 'danmaku_controller.dart' show DanmakuMode;
+import 'danmaku_text_style.dart';
 
 @immutable
 final class LiveDanmakuEvent {
@@ -60,11 +61,14 @@ final class LiveDanmakuController extends ChangeNotifier {
   final Duration scrollDuration, fixedDuration, maxPendingAge;
   final Queue<_Received> _pending = Queue();
   final List<_Visible> _visible = [];
-  final Map<String, TextPainter> _layouts = {};
+  late final _layouts = DanmakuTextLayouts(maxTextLayouts);
   final Map<String, Duration> _recentIds = {};
   bool _enabled = true;
   double _width = 0, _height = 0, _bottomInset = 0, _area = .75, _speed = 1;
   double _topInset = 0;
+  Duration _offset = Duration.zero;
+  bool _mergeDuplicates = false;
+  int _maxOnScreen = 0;
   double get _top => _topInset.clamp(0, _height - _bottomInset);
   double get _availableHeight => (_height - _bottomInset - _top) * _area;
   double _laneHeight = 48;
@@ -85,16 +89,34 @@ final class LiveDanmakuController extends ChangeNotifier {
     required double speed,
     required int maxPerSecond,
     double topInset = 0,
+    Duration offset = Duration.zero,
+    bool mergeDuplicates = false,
+    int maxOnScreen = 0,
+    DanmakuTextStyle textStyle = const DanmakuTextStyle(),
   }) {
     final nextArea = area.clamp(.25, 1.0), nextSpeed = speed.clamp(.5, 2.0);
     final nextTopInset = topInset.isFinite
         ? topInset.clamp(0.0, double.infinity)
         : 0.0;
-    _maxPerSecond = maxPerSecond.clamp(1, 100);
-    if (_area != nextArea || _speed != nextSpeed || _topInset != nextTopInset) {
+    final nextMaxPerSecond = maxPerSecond.clamp(0, 100);
+    if (_area != nextArea ||
+        _speed != nextSpeed ||
+        _topInset != nextTopInset ||
+        _offset != offset ||
+        _mergeDuplicates != mergeDuplicates ||
+        _maxOnScreen != maxOnScreen.clamp(0, maxVisible) ||
+        _layouts.style != textStyle ||
+        _maxPerSecond != nextMaxPerSecond) {
       _area = nextArea;
       _speed = nextSpeed;
       _topInset = nextTopInset;
+      _offset = offset;
+      _mergeDuplicates = mergeDuplicates;
+      _maxOnScreen = maxOnScreen.clamp(0, maxVisible);
+      _maxPerSecond = nextMaxPerSecond;
+      _laneHeight = 48;
+      _clearLayouts();
+      _layouts.style = textStyle;
       clear();
     }
   }
@@ -109,6 +131,8 @@ final class LiveDanmakuController extends ChangeNotifier {
     _pending.clear();
     _visible.clear();
     _recentIds.clear();
+    _windowCount = 0;
+    _windowAt = _now();
     notifyListeners();
   }
 
@@ -127,7 +151,7 @@ final class LiveDanmakuController extends ChangeNotifier {
           _recentIds.containsKey(event.id)) {
         continue;
       }
-      if (_windowCount >= _maxPerSecond) {
+      if (_maxPerSecond > 0 && _windowCount >= _maxPerSecond) {
         dropped++;
         continue;
       }
@@ -137,7 +161,13 @@ final class LiveDanmakuController extends ChangeNotifier {
         _pending.removeFirst();
         dropped++;
       }
-      _pending.add(_Received(event, now));
+      // Live messages have no past media clock: negative offsets are immediate.
+      _pending.add(
+        _Received(
+          event,
+          now + (_offset > Duration.zero ? _offset : Duration.zero),
+        ),
+      );
     }
     _recentIds.removeWhere((_, at) => now - at > const Duration(seconds: 30));
     while (_recentIds.length > maxPending) {
@@ -162,35 +192,13 @@ final class LiveDanmakuController extends ChangeNotifier {
     notifyListeners();
   }
 
-  TextPainter _layout(LiveDanmakuEvent event) {
-    final size = event.fontSize.clamp(12.0, 54.0);
-    final key = '$size|${event.color.toARGB32()}|${event.text}';
-    final cached = _layouts.remove(key);
-    if (cached != null) {
-      _layouts[key] = cached;
-      return cached;
-    }
-    final painter = TextPainter(
-      text: TextSpan(
-        text: event.text,
-        style: TextStyle(
-          color: event.color,
-          fontSize: size,
-          shadows: const [Shadow(color: Color(0xff000000), blurRadius: 2)],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout();
-    _layouts[key] = painter;
-    if (_layouts.length > maxTextLayouts) {
-      _layouts.remove(_layouts.keys.first)?.dispose();
-    }
-    return painter;
-  }
+  TextPainter _layout(LiveDanmakuEvent event) =>
+      _layouts.layout(event.text, event.color, event.fontSize);
 
   void paintText(LiveDanmakuEvent event, Canvas canvas, Offset offset) =>
-      _layout(event).paint(canvas, offset);
+      _layouts.paint(event.text, event.color, event.fontSize, canvas, offset);
+
+  void _clearLayouts() => _layouts.clear();
 
   List<LiveDanmakuPlacement> frame() {
     if (!_enabled) return const [];
@@ -204,14 +212,23 @@ final class LiveDanmakuController extends ChangeNotifier {
     );
     if (_width <= 0 || _height <= 0) return const [];
     final priorLaneHeight = _laneHeight;
-    for (final received in _pending) {
+    for (final received in _pending.takeWhile((item) => item.at <= now)) {
       _laneHeight = max(_laneHeight, _layout(received.event).height + 4);
     }
     if (_laneHeight != priorLaneHeight) _visible.clear();
-    while (_pending.isNotEmpty) {
+    while (_pending.isNotEmpty && _pending.first.at <= now) {
       final received = _pending.removeFirst();
-      if (now - received.at > maxPendingAge || _visible.length >= maxVisible) {
+      if (now - received.at > maxPendingAge ||
+          _visible.length >= (_maxOnScreen == 0 ? maxVisible : _maxOnScreen)) {
         dropped++;
+        continue;
+      }
+      if (_mergeDuplicates &&
+          _visible.any(
+            (item) =>
+                item.event.text == received.event.text &&
+                item.event.mode == received.event.mode,
+          )) {
         continue;
       }
       final layout = _layout(received.event);
@@ -269,13 +286,6 @@ final class LiveDanmakuController extends ChangeNotifier {
       if (free) return lane;
     }
     return -1;
-  }
-
-  void _clearLayouts() {
-    for (final layout in _layouts.values) {
-      layout.dispose();
-    }
-    _layouts.clear();
   }
 
   @override

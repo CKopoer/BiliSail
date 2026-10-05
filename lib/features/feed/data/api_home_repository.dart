@@ -7,7 +7,8 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../domain/home_repository.dart';
 
-final class ApiHomeRepository implements HomeRepository {
+final class ApiHomeRepository
+    implements HomeRepository, HomeSubscriptionRepository {
   ApiHomeRepository(
     this.client,
     this.requests, {
@@ -20,6 +21,31 @@ final class ApiHomeRepository implements HomeRepository {
   final String Function() _accountScope;
   @override
   String get accountScope => _accountScope();
+  @override
+  Future<void> unsubscribeFavorite(
+    HomeEntry entry, {
+    required String scope,
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    if (scope != accountScope) {
+      throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
+    }
+    if (!scope.startsWith('user:')) {
+      throw const AppFailure(AppFailureKind.authentication, '请先登录');
+    }
+    if (entry.kind != HomeEntryKind.folder &&
+        entry.kind != HomeEntryKind.collection) {
+      throw ArgumentError('Only subscribed folders/collections can be removed');
+    }
+    await client.unsubscribeFavorite(
+      entry.id,
+      collection: entry.kind == HomeEntryKind.collection,
+      context: context,
+    );
+    if (scope != accountScope) {
+      throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
+    }
+  }, cancellation: cancellation);
   @override
   Future<HomePage> load(
     HomeQuery query, {
@@ -72,6 +98,8 @@ final class ApiHomeRepository implements HomeRepository {
     areaName: item.areaName,
     contentCount: item.contentCount,
     viewCount: item.viewCount,
+    isPrivate: item.isPrivate,
+    createdAt: item.createdAt,
     children: List.unmodifiable(item.children.map(_entry)),
   );
 }

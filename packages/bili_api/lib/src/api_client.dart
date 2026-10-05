@@ -152,6 +152,9 @@ final class BiliApiClient {
       '/x/web-interface/archive/like',
       '/x/web-interface/coin/add',
       '/x/v3/fav/resource/deal',
+      '/x/v3/fav/folder/unfav',
+      '/x/v3/fav/season/unfav',
+      '/x/v3/fav/folder/edit',
       '/x/v2/history/toview/add',
       '/x/v2/dm/post',
       '/x/v2/reply/action',
@@ -1574,6 +1577,7 @@ List<ApiDanmakuItem> decodeDanmakuSegment(Uint8List bytes) {
       final element = _ProtoReader(reader.bytes(4096));
       String id = '';
       var progress = 0, mode = 1, fontSize = 25, color = 0xffffff;
+      var weight = 0;
       String content = '';
       while (!element.done) {
         final field = element.varint();
@@ -1592,6 +1596,8 @@ List<ApiDanmakuItem> decodeDanmakuSegment(Uint8List bytes) {
               fontSize = value;
             case 5:
               color = value;
+            case 9:
+              weight = value.clamp(0, 10);
           }
         } else if (wire == 2) {
           final value = element.bytes(1024);
@@ -1618,6 +1624,7 @@ List<ApiDanmakuItem> decodeDanmakuSegment(Uint8List bytes) {
             fontSize: fontSize,
             color: color,
             content: content,
+            weight: weight,
           ),
         );
       }

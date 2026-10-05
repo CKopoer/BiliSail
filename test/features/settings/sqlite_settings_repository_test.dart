@@ -47,7 +47,7 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 8);
+      expect(snapshot['schemaVersion'], 9);
       expect(snapshot['theme'], 'dark');
       expect(database.schemaVersion, 2);
     },
@@ -76,7 +76,15 @@ void main() {
       danmakuArea: .5,
       danmakuTopMargin: 48,
       danmakuSpeed: 1.5,
+      danmakuFont: DanmakuFontPreference.harmonyOsSans,
+      danmakuBold: true,
+      danmakuStyle: DanmakuStylePreference.stroke,
+      danmakuMergeDuplicates: true,
+      danmakuBlockColored: true,
+      danmakuMinimumWeight: 5,
+      danmakuOffset: const Duration(milliseconds: -1500),
       danmakuMaxPerSecond: 5,
+      danmakuMaxOnScreen: 12,
       danmakuScrollEnabled: false,
       danmakuTopEnabled: false,
       danmakuBottomEnabled: false,
@@ -95,6 +103,14 @@ void main() {
     expect(await database.readSetting('preferences.v1'), first);
     expect(reloaded.defaultVolume, 35);
     expect(reloaded.danmakuTopMargin, 48);
+    expect(reloaded.danmakuFont, DanmakuFontPreference.harmonyOsSans);
+    expect(reloaded.danmakuBold, isTrue);
+    expect(reloaded.danmakuStyle, DanmakuStylePreference.stroke);
+    expect(reloaded.danmakuMergeDuplicates, isTrue);
+    expect(reloaded.danmakuBlockColored, isTrue);
+    expect(reloaded.danmakuMinimumWeight, 5);
+    expect(reloaded.danmakuOffset, const Duration(milliseconds: -1500));
+    expect(reloaded.danmakuMaxOnScreen, 12);
     expect(reloaded.preferredVideoCodec, VideoCodecPreference.av1);
     expect(reloaded.videoDecoding, VideoDecodingPreference.software);
     expect(reloaded.font, AppFontPreference.system);
@@ -130,6 +146,11 @@ void main() {
         'danmakuArea': -1,
         'danmakuTopMargin': -4,
         'danmakuMaxPerSecond': 0,
+        'danmakuFont': 'unknown',
+        'danmakuBold': 'yes',
+        'danmakuStyle': 'unknown',
+        'danmakuMinimumWeight': 15,
+        'danmakuOffsetMs': -90000,
         'danmakuBlockedWords': [' x ', 'x', '', 7],
         'subtitleBottomPadding': 999,
         'sponsorBlockMode': 'future',
@@ -147,7 +168,12 @@ void main() {
     expect(s.defaultVolume, 100);
     expect(s.danmakuArea, .25);
     expect(s.danmakuTopMargin, 0);
-    expect(s.danmakuMaxPerSecond, 1);
+    expect(s.danmakuMaxPerSecond, 0);
+    expect(s.danmakuFont, DanmakuFontPreference.system);
+    expect(s.danmakuBold, isFalse);
+    expect(s.danmakuStyle, DanmakuStylePreference.shadow);
+    expect(s.danmakuMinimumWeight, 10);
+    expect(s.danmakuOffset, const Duration(seconds: -60));
     expect(s.danmakuBlockedWords, ['x']);
     expect(s.subtitleBottomPadding, 120);
     expect(s.sponsorBlockMode, SponsorBlockMode.disabled);

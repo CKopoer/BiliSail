@@ -69,8 +69,32 @@ class SqliteSettingsRepository implements SettingsRepository {
           ? number('danmakuMaxPerSecond', 20.0).toInt()
           : 20,
       danmakuScrollEnabled: boolean('danmakuScrollEnabled', true),
+      danmakuMaxOnScreen: number('danmakuMaxOnScreen', 0).isFinite
+          ? number('danmakuMaxOnScreen', 0).clamp(0, 120).toInt()
+          : 0,
       danmakuTopEnabled: boolean('danmakuTopEnabled', true),
       danmakuBottomEnabled: boolean('danmakuBottomEnabled', true),
+      danmakuFont:
+          DanmakuFontPreference.values
+              .where((v) => v.name == decoded['danmakuFont'])
+              .firstOrNull ??
+          DanmakuFontPreference.system,
+      danmakuBold: boolean('danmakuBold', false),
+      danmakuStyle:
+          DanmakuStylePreference.values
+              .where((v) => v.name == decoded['danmakuStyle'])
+              .firstOrNull ??
+          DanmakuStylePreference.shadow,
+      danmakuMergeDuplicates: boolean('danmakuMergeDuplicates', false),
+      danmakuBlockColored: boolean('danmakuBlockColored', false),
+      danmakuMinimumWeight: number('danmakuMinimumWeight', 0).isFinite
+          ? number('danmakuMinimumWeight', 0).toInt()
+          : 0,
+      danmakuOffset: Duration(
+        milliseconds: number('danmakuOffsetMs', 0).isFinite
+            ? number('danmakuOffsetMs', 0).clamp(-60000, 60000).toInt()
+            : 0,
+      ),
       danmakuBlockedWords: strings('danmakuBlockedWords', const []),
       subtitlesEnabled: boolean('subtitlesEnabled', false),
       subtitleFontScale: number('subtitleFontScale', 1.0),
@@ -93,7 +117,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 8,
+        'schemaVersion': 9,
         'cacheImages': value.cacheImages,
         'shortcuts': value.shortcuts.toJson(),
         'theme': value.theme.name,
@@ -113,9 +137,17 @@ class SqliteSettingsRepository implements SettingsRepository {
         'danmakuTopMargin': value.danmakuTopMargin,
         'danmakuSpeed': value.danmakuSpeed,
         'danmakuMaxPerSecond': value.danmakuMaxPerSecond,
+        'danmakuMaxOnScreen': value.danmakuMaxOnScreen,
         'danmakuScrollEnabled': value.danmakuScrollEnabled,
         'danmakuTopEnabled': value.danmakuTopEnabled,
         'danmakuBottomEnabled': value.danmakuBottomEnabled,
+        'danmakuFont': value.danmakuFont.name,
+        'danmakuBold': value.danmakuBold,
+        'danmakuStyle': value.danmakuStyle.name,
+        'danmakuMergeDuplicates': value.danmakuMergeDuplicates,
+        'danmakuBlockColored': value.danmakuBlockColored,
+        'danmakuMinimumWeight': value.danmakuMinimumWeight,
+        'danmakuOffsetMs': value.danmakuOffset.inMilliseconds,
         'danmakuBlockedWords': value.danmakuBlockedWords,
         'subtitlesEnabled': value.subtitlesEnabled,
         'subtitleFontScale': value.subtitleFontScale,

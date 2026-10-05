@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/ui/state_view.dart';
+import '../../../shared/ui/danmaku_settings_controls.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../domain/playback_rates.dart';
 import '../application/settings_controller.dart';
@@ -20,13 +21,6 @@ final class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  final _word = TextEditingController();
-  @override
-  void dispose() {
-    _word.dispose();
-    super.dispose();
-  }
-
   Future<void> _save(Future<void> Function() action) async {
     try {
       await action();
@@ -244,116 +238,11 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ]),
                       if (widget.category == SettingsCategory.danmaku)
                         _section('弹幕', [
-                          _toggle(
-                            '显示弹幕',
-                            s.danmakuEnabled,
-                            controller.setDanmakuEnabled,
-                          ),
-                          _slider(
-                            '不透明度',
-                            s.danmakuOpacity,
-                            .2,
-                            1,
-                            controller.setDanmakuOpacity,
-                          ),
-                          _slider(
-                            '字体大小',
-                            s.danmakuFontScale,
-                            .7,
-                            1.5,
-                            controller.setDanmakuFontScale,
-                            '×',
-                          ),
-                          _slider(
-                            '显示区域',
-                            s.danmakuArea,
-                            .25,
-                            1,
-                            controller.setDanmakuArea,
-                          ),
-                          _SettingSlider(
-                            key: const ValueKey('danmaku-top-margin'),
-                            title: '顶部距离',
-                            value: s.danmakuTopMargin,
-                            min: 0,
-                            max: 200,
-                            divisions: 50,
-                            suffix: ' px',
-                            save: (v) =>
-                                _save(() => controller.setDanmakuTopMargin(v)),
-                          ),
-                          _slider(
-                            '移动速度',
-                            s.danmakuSpeed,
-                            .5,
-                            2,
-                            controller.setDanmakuSpeed,
-                            '×',
-                          ),
-                          _slider(
-                            '每秒最大数量',
-                            s.danmakuMaxPerSecond.toDouble(),
-                            1,
-                            100,
-                            (v) => controller.setDanmakuMaxPerSecond(v.round()),
-                          ),
-                          _toggle(
-                            '滚动弹幕',
-                            s.danmakuScrollEnabled,
-                            controller.setDanmakuScrollEnabled,
-                          ),
-                          _toggle(
-                            '顶部弹幕',
-                            s.danmakuTopEnabled,
-                            controller.setDanmakuTopEnabled,
-                          ),
-                          _toggle(
-                            '底部弹幕',
-                            s.danmakuBottomEnabled,
-                            controller.setDanmakuBottomEnabled,
-                          ),
-                          const Text('关键词屏蔽（最多 200 项，每项 100 字）'),
-                          TextField(
-                            controller: _word,
-                            maxLength: 100,
-                            decoration: const InputDecoration(
-                              hintText: '输入要屏蔽的关键词',
-                            ),
-                          ),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton.icon(
-                              icon: const Icon(Icons.add),
-                              label: const Text('添加关键词'),
-                              onPressed: () async {
-                                final word = _word.text.trim();
-                                if (word.isEmpty) return;
-                                await _save(
-                                  () => controller.setDanmakuBlockedWords([
-                                    ...s.danmakuBlockedWords,
-                                    word,
-                                  ]),
-                                );
-                                if (mounted) _word.clear();
-                              },
-                            ),
-                          ),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              for (final word in s.danmakuBlockedWords)
-                                InputChip(
-                                  label: Text(word),
-                                  onDeleted: () => _save(
-                                    () => controller.setDanmakuBlockedWords(
-                                      s.danmakuBlockedWords
-                                          .where((v) => v != word)
-                                          .toList(),
-                                    ),
-                                  ),
-                                ),
-                            ],
+                          DanmakuSettingsControls(
+                            settings: s,
+                            save: (change) async {
+                              await controller.update(change);
+                            },
                           ),
                         ]),
                       if (widget.category == SettingsCategory.subtitles)
@@ -459,7 +348,6 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
 final class _SettingSlider extends StatefulWidget {
   const _SettingSlider({
-    super.key,
     required this.title,
     required this.value,
     required this.min,
@@ -467,13 +355,11 @@ final class _SettingSlider extends StatefulWidget {
     required this.suffix,
     required this.save,
     this.continuous = false,
-    this.divisions,
   });
   final String title, suffix;
   final double value, min, max;
   final Future<void> Function(double) save;
   final bool continuous;
-  final int? divisions;
   @override
   State<_SettingSlider> createState() => _SettingSliderState();
 }
@@ -495,9 +381,8 @@ final class _SettingSliderState extends State<_SettingSlider> {
           max: widget.max,
           divisions: widget.continuous
               ? null
-              : widget.divisions ??
-                    ((widget.max - widget.min) * (widget.max <= 3 ? 20 : 1))
-                        .round(),
+              : ((widget.max - widget.min) * (widget.max <= 3 ? 20 : 1))
+                    .round(),
           onChanged: (v) => setState(() => _draft = v),
           onChangeEnd: (v) async {
             await widget.save(v);

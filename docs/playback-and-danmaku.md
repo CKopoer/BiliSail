@@ -156,6 +156,8 @@ estimatedPosition = anchorPosition + (monotonicNow - anchorTime) × playbackRate
 
 ### 渲染与轨道
 
+现有播放器与全局设置已共用弹幕配置入口，支持独立字体、加粗、阴影/描边/无效果、时间偏移、重复合并、同屏密度、权重/颜色/本地关键词过滤。点播按偏移后的时间调度，直播只允许消息延后；权重过滤仅适用于点播。具体默认值、范围、持久化与未测项见 [弹幕配置验证](validation/danmaku-style-settings.md)。
+
 - 基础实现使用 `CustomPainter`、`TextPainter`、`RepaintBoundary`，单一 Ticker；不为每条弹幕创建动画 Widget。
 - 支持右到左滚动、顶部固定、底部固定；轨道高度受字号/行高影响，字幕安全区和控制区预留。
 - 滚动轨道考虑前项的尾部、后项速度及追尾时间，不能只检查初始间距；固定弹幕按显示区间占位。
