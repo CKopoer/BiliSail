@@ -2,6 +2,45 @@ import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('top inset offsets all modes inside the remaining display area', () {
+    final controller = DanmakuController(monotonicNow: () => Duration.zero);
+    addTearDown(controller.dispose);
+    controller.setViewport(width: 600, height: 384, bottomInset: 64);
+    controller.configure(area: .5, speed: 1, topInset: 40);
+    controller.replaceEvents(const [
+      DanmakuEvent(id: 'scroll', at: Duration.zero, text: 'scroll'),
+      DanmakuEvent(
+        id: 'top',
+        at: Duration.zero,
+        text: 'top',
+        mode: DanmakuMode.top,
+      ),
+      DanmakuEvent(
+        id: 'bottom',
+        at: Duration.zero,
+        text: 'bottom',
+        mode: DanmakuMode.bottom,
+      ),
+    ]);
+    final frame = controller.frame();
+    expect(frame.map((item) => item.y), [40, 40, 132]);
+    controller.configure(area: .5, speed: 1);
+    expect(controller.frame().map((item) => item.y), [0, 0, 112]);
+  });
+  test('top inset clamps to the viewport without negative lanes', () {
+    final controller = DanmakuController(monotonicNow: () => Duration.zero);
+    addTearDown(controller.dispose);
+    controller.configure(area: 1, speed: 1, topInset: 200);
+    controller.setViewport(width: 320, height: 160, bottomInset: 40);
+    controller.replaceEvents(const [
+      DanmakuEvent(id: 'one', at: Duration.zero, text: 'one'),
+    ]);
+    expect(controller.frame(), isEmpty);
+    controller.setViewport(width: 600, height: 384, bottomInset: 40);
+    expect(controller.frame().single.y, 200);
+    controller.configure(area: 1, speed: 1, topInset: double.nan);
+    expect(controller.frame().single.y, 0);
+  });
   test(
     'configured area limits lanes and faster speed shortens scroll lifetime',
     () {

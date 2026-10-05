@@ -64,6 +64,9 @@ final class LiveDanmakuController extends ChangeNotifier {
   final Map<String, Duration> _recentIds = {};
   bool _enabled = true;
   double _width = 0, _height = 0, _bottomInset = 0, _area = .75, _speed = 1;
+  double _topInset = 0;
+  double get _top => _topInset.clamp(0, _height - _bottomInset);
+  double get _availableHeight => (_height - _bottomInset - _top) * _area;
   double _laneHeight = 48;
   int _maxPerSecond = 20, _windowCount = 0;
   Duration _windowAt = Duration.zero;
@@ -76,16 +79,22 @@ final class LiveDanmakuController extends ChangeNotifier {
   Duration get _scrollLifetime =>
       Duration(microseconds: (scrollDuration.inMicroseconds / _speed).round());
 
+  /// [topInset] reserves logical pixels before applying [area].
   void configure({
     required double area,
     required double speed,
     required int maxPerSecond,
+    double topInset = 0,
   }) {
     final nextArea = area.clamp(.25, 1.0), nextSpeed = speed.clamp(.5, 2.0);
+    final nextTopInset = topInset.isFinite
+        ? topInset.clamp(0.0, double.infinity)
+        : 0.0;
     _maxPerSecond = maxPerSecond.clamp(1, 100);
-    if (_area != nextArea || _speed != nextSpeed) {
+    if (_area != nextArea || _speed != nextSpeed || _topInset != nextTopInset) {
       _area = nextArea;
       _speed = nextSpeed;
+      _topInset = nextTopInset;
       clear();
     }
   }
@@ -224,16 +233,14 @@ final class LiveDanmakuController extends ChangeNotifier {
                             _scrollLifetime.inMicroseconds)
               : (_width - item.width) / 2,
           item.event.mode == DanmakuMode.bottom
-              ? (_height - _bottomInset) * _area - (item.lane + 1) * _laneHeight
-              : item.lane * _laneHeight,
+              ? _top + _availableHeight - (item.lane + 1) * _laneHeight
+              : _top + item.lane * _laneHeight,
         ),
     ];
   }
 
   int _findLane(LiveDanmakuEvent event, double textWidth, Duration now) {
-    final count = (((_height - _bottomInset) * _area) / _laneHeight)
-        .floor()
-        .clamp(0, 24);
+    final count = (_availableHeight / _laneHeight).floor().clamp(0, 24);
     for (var lane = 0; lane < count; lane++) {
       var free = true;
       for (final prior in _visible) {

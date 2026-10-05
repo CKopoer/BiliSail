@@ -74,11 +74,7 @@ final class _VideoCardState extends State<VideoCard> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: _focused
-              ? scheme.primary
-              : _hovered
-              ? scheme.primary.withValues(alpha: 0.5)
-              : Colors.transparent,
+          color: _focused ? scheme.primary : Colors.transparent,
         ),
       ),
       child: Material(
@@ -87,6 +83,7 @@ final class _VideoCardState extends State<VideoCard> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: widget.onTap,
+          hoverColor: Colors.transparent,
           onHover: (value) => setState(() => _hovered = value),
           onFocusChange: (value) => setState(() => _focused = value),
           child: Column(

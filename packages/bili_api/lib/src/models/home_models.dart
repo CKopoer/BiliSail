@@ -1,6 +1,6 @@
 import 'dynamic_models.dart';
 
-enum ApiHomeEntryKind { video, season, live, dynamic, folder }
+enum ApiHomeEntryKind { video, season, live, dynamic, folder, collection }
 
 final class ApiHomeEntry {
   const ApiHomeEntry({
@@ -23,6 +23,8 @@ final class ApiHomeEntry {
     this.danmakuCountText = '',
     this.popularityText = '',
     this.areaName = '',
+    this.contentCount,
+    this.viewCount,
     this.children = const [],
   });
   final ApiDynamicPost? dynamicPost;
@@ -44,5 +46,7 @@ final class ApiHomeEntry {
   final String danmakuCountText;
   final String popularityText;
   final String areaName;
+  final int? contentCount;
+  final int? viewCount;
   final List<ApiHomeEntry> children;
 }

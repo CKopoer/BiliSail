@@ -30,6 +30,7 @@ final class HomeController extends Notifier<HomeState> {
   HomeController(this.query);
   // Rich posts retain images, spans and originals; bound each dynamic tab.
   static const maxDynamicEntries = 200;
+  static const maxFavoriteEntries = 500;
   // The image/text tab filters an all-types feed. Advancing empty pages are
   // valid, but a bounded scan avoids an endless layout-driven request loop.
   static const _maxPagesWithoutNewItems = 3;
@@ -37,6 +38,16 @@ final class HomeController extends Notifier<HomeState> {
   bool get _isDynamic =>
       query.channel == HomeChannel.dynamic ||
       query.channel == HomeChannel.videoDynamic;
+  int? get _entryLimit => _isDynamic
+      ? maxDynamicEntries
+      : query.channel == HomeChannel.favorites
+      ? maxFavoriteEntries
+      : null;
+  bool _reachedLimit(List<HomeEntry> items) {
+    final limit = _entryLimit;
+    return limit != null && items.length >= limit;
+  }
+
   RequestCancellation? _cancellation;
   int _generation = 0;
   int _page = 0;
@@ -74,7 +85,7 @@ final class HomeController extends Notifier<HomeState> {
       );
       if (!_isCurrent(generation, cancellation, repository)) return;
       final items = _mergeItems(const [], result.items);
-      final limitReached = _isDynamic && items.length >= maxDynamicEntries;
+      final limitReached = _reachedLimit(items);
       if (_isDynamic &&
           result.hasMore &&
           !limitReached &&
@@ -127,7 +138,7 @@ final class HomeController extends Notifier<HomeState> {
       );
       if (!_isCurrent(generation, cancellation, repository)) return;
       final items = _mergeItems(current, result.items);
-      final limitReached = _isDynamic && items.length >= maxDynamicEntries;
+      final limitReached = _reachedLimit(items);
       final cursorStalled =
           _isDynamic &&
           result.hasMore &&
@@ -191,9 +202,8 @@ final class HomeController extends Notifier<HomeState> {
     final unique = {for (final entry in current) (entry.kind, entry.id): entry};
     for (final entry in incoming) {
       final key = (entry.kind, entry.id);
-      if (_isDynamic &&
-          unique.length >= maxDynamicEntries &&
-          !unique.containsKey(key)) {
+      final limit = _entryLimit;
+      if (limit != null && unique.length >= limit && !unique.containsKey(key)) {
         continue;
       }
       unique[key] = entry;

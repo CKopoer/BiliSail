@@ -590,6 +590,7 @@ class PlaybackSession extends ChangeNotifier {
     danmaku.configure(
       area: _settings.danmakuArea,
       speed: _settings.danmakuSpeed,
+      topInset: _settings.danmakuTopMargin,
     );
     configureComments(
       enabled: _settings.danmakuEnabled,

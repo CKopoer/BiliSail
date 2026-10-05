@@ -214,7 +214,7 @@ void main() {
     expect(dialog.width, lessThanOrEqualTo(375));
     expect(find.byTooltip('关闭图片'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.byTooltip('关闭图片'));
+    await tester.tapAt(dialog.topLeft + const Offset(12, 12));
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
   });

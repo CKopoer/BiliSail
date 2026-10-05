@@ -28,6 +28,7 @@ final class AppSettings {
     this.defaultPlaybackRate = 1.0,
     this.defaultVolume = 100.0,
     this.danmakuArea = 0.75,
+    this.danmakuTopMargin = 0,
     this.danmakuSpeed = 1.0,
     this.danmakuMaxPerSecond = 20,
     this.danmakuScrollEnabled = true,
@@ -61,6 +62,7 @@ final class AppSettings {
       defaultPlaybackRate = 1.0,
       defaultVolume = 100.0,
       danmakuArea = 0.75,
+      danmakuTopMargin = 0,
       danmakuSpeed = 1.0,
       danmakuMaxPerSecond = 20,
       danmakuScrollEnabled = true,
@@ -90,6 +92,9 @@ final class AppSettings {
   final double defaultPlaybackRate;
   final double defaultVolume;
   final double danmakuArea;
+
+  /// Distance from the video surface top, in Flutter logical pixels.
+  final double danmakuTopMargin;
   final double danmakuSpeed;
   final int danmakuMaxPerSecond;
   final bool danmakuScrollEnabled;
@@ -122,6 +127,7 @@ final class AppSettings {
     double? defaultPlaybackRate,
     double? defaultVolume,
     double? danmakuArea,
+    double? danmakuTopMargin,
     double? danmakuSpeed,
     int? danmakuMaxPerSecond,
     bool? danmakuScrollEnabled,
@@ -151,6 +157,7 @@ final class AppSettings {
     defaultPlaybackRate: defaultPlaybackRate ?? this.defaultPlaybackRate,
     defaultVolume: defaultVolume ?? this.defaultVolume,
     danmakuArea: danmakuArea ?? this.danmakuArea,
+    danmakuTopMargin: danmakuTopMargin ?? this.danmakuTopMargin,
     danmakuSpeed: danmakuSpeed ?? this.danmakuSpeed,
     danmakuMaxPerSecond: danmakuMaxPerSecond ?? this.danmakuMaxPerSecond,
     danmakuScrollEnabled: danmakuScrollEnabled ?? this.danmakuScrollEnabled,
@@ -202,6 +209,7 @@ final class AppSettings {
       danmakuOpacity: bounded(danmakuOpacity, .2, 1, .8),
       danmakuFontScale: bounded(danmakuFontScale, .7, 1.5, 1),
       danmakuArea: bounded(danmakuArea, .25, 1, .75),
+      danmakuTopMargin: bounded(danmakuTopMargin, 0, 200, 0),
       danmakuSpeed: bounded(danmakuSpeed, .5, 2, 1),
       danmakuMaxPerSecond: danmakuMaxPerSecond.clamp(1, 100),
       danmakuBlockedWords: danmakuBlockedWords

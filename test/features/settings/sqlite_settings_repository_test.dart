@@ -34,6 +34,7 @@ void main() {
       expect(settings.danmakuEnabled, isFalse);
       expect(settings.danmakuOpacity, .7);
       expect(settings.danmakuFontScale, 1.2);
+      expect(settings.danmakuTopMargin, 0);
       expect(settings.autoPlay, isTrue);
       expect(settings.resumePlayback, isTrue);
       expect(settings.showCollapsedProgress, isTrue);
@@ -46,7 +47,7 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 7);
+      expect(snapshot['schemaVersion'], 8);
       expect(snapshot['theme'], 'dark');
       expect(database.schemaVersion, 2);
     },
@@ -73,6 +74,7 @@ void main() {
       danmakuOpacity: .6,
       danmakuFontScale: 1.3,
       danmakuArea: .5,
+      danmakuTopMargin: 48,
       danmakuSpeed: 1.5,
       danmakuMaxPerSecond: 5,
       danmakuScrollEnabled: false,
@@ -92,6 +94,7 @@ void main() {
     await repository.save(reloaded);
     expect(await database.readSetting('preferences.v1'), first);
     expect(reloaded.defaultVolume, 35);
+    expect(reloaded.danmakuTopMargin, 48);
     expect(reloaded.preferredVideoCodec, VideoCodecPreference.av1);
     expect(reloaded.videoDecoding, VideoDecodingPreference.software);
     expect(reloaded.font, AppFontPreference.system);
@@ -125,6 +128,7 @@ void main() {
         'defaultPlaybackRate': -2,
         'defaultVolume': 200,
         'danmakuArea': -1,
+        'danmakuTopMargin': -4,
         'danmakuMaxPerSecond': 0,
         'danmakuBlockedWords': [' x ', 'x', '', 7],
         'subtitleBottomPadding': 999,
@@ -142,6 +146,7 @@ void main() {
     expect(s.defaultPlaybackRate, .5);
     expect(s.defaultVolume, 100);
     expect(s.danmakuArea, .25);
+    expect(s.danmakuTopMargin, 0);
     expect(s.danmakuMaxPerSecond, 1);
     expect(s.danmakuBlockedWords, ['x']);
     expect(s.subtitleBottomPadding, 120);
@@ -158,4 +163,27 @@ void main() {
     await database.writeSetting('preferences.v1', '[]');
     await expectLater(repository.load(), throwsFormatException);
   });
+  test(
+    'version seven snapshot adds zero top margin without losing values',
+    () async {
+      await database.writeSetting(
+        'preferences.v1',
+        jsonEncode({
+          'schemaVersion': 7,
+          'danmakuArea': .5,
+          'defaultVolume': 35.5,
+          'danmakuBlockedWords': ['spoiler'],
+        }),
+      );
+      final settings = await repository.load();
+      expect(settings.danmakuTopMargin, 0);
+      await repository.save(settings.copyWith(danmakuTopMargin: 80));
+      final reloaded = await repository.load();
+      expect(reloaded.danmakuTopMargin, 80);
+      expect(reloaded.danmakuArea, .5);
+      expect(reloaded.defaultVolume, 35.5);
+      expect(reloaded.danmakuBlockedWords, ['spoiler']);
+      expect(database.schemaVersion, 2);
+    },
+  );
 }

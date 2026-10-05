@@ -90,7 +90,9 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
       channel: widget.channel,
       section: liveBrowse ? '推荐' : widget.section,
       scope: scope,
-      folderId: _folder?.id,
+      folderId: _folder?.kind == HomeEntryKind.collection
+          ? 'ugc:${_folder?.id}'
+          : _folder?.id,
     );
     _visitedQueries.add(query);
     if (_visitedQueries.length > 20) {
@@ -120,7 +122,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
         onRefresh: controller.refresh,
         child: ListView(
           key: PageStorageKey(
-            'home-${widget.channel.name}-${widget.section}-$scope-${_folder?.id}',
+            'home-${widget.channel.name}-${widget.section}-$scope-${query.folderId}',
           ),
           controller: scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
@@ -211,6 +213,32 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                             ),
                           );
                         }
+                        if (widget.channel == HomeChannel.favorites) {
+                          return ResponsiveCardGrid(
+                            children: [
+                              for (final item in items)
+                                if (item.kind == HomeEntryKind.video &&
+                                    item.bvid != null)
+                                  HomeVideoCard(
+                                    entry: item,
+                                    onOpenUser: (id) =>
+                                        context.go('/user/${id.value}'),
+                                    onTap: () => _open(item),
+                                  )
+                                else if (item.kind == HomeEntryKind.folder ||
+                                    item.kind == HomeEntryKind.collection)
+                                  FavoriteFolderCard(
+                                    entry: item,
+                                    onTap: () => _open(item),
+                                  )
+                                else
+                                  _EntryCard(
+                                    entry: item,
+                                    onTap: () => _open(item),
+                                  ),
+                            ],
+                          );
+                        }
                         if (widget.channel == HomeChannel.videoDynamic) {
                           return ResponsiveCardGrid(
                             children: [
@@ -266,9 +294,11 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
             ),
             const SizedBox(height: 16),
             if (feed.limitReached)
-              const Center(
+              Center(
                 child: Text(
-                  '已显示 ${HomeController.maxDynamicEntries} 条动态，可刷新查看最新内容',
+                  widget.channel == HomeChannel.favorites
+                      ? '已显示 ${HomeController.maxFavoriteEntries} 条内容，可刷新重新加载'
+                      : '已显示 ${HomeController.maxDynamicEntries} 条动态，可刷新查看最新内容',
                 ),
               ),
             if (feed.loadingMore)
@@ -346,7 +376,8 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   String _message(Object? error) =>
       error is AppFailure ? error.message : '内容加载失败，请重试';
   Future<void> _open(HomeEntry entry) async {
-    if (entry.kind == HomeEntryKind.folder) {
+    if (entry.kind == HomeEntryKind.folder ||
+        entry.kind == HomeEntryKind.collection) {
       setState(() => _folder = entry);
       return;
     }

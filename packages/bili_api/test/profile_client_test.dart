@@ -23,6 +23,46 @@ ProfileClient client(Object Function(Uri) handler) =>
     ProfileClient(BiliApiClient(transport: FakeTransport(handler)));
 void main() {
   test(
+    'favorite videos retain statistics and unavailable media is disabled',
+    () async {
+      final page = await client(
+        (_) => {
+          'code': 0,
+          'data': {
+            'info': {'media_count': 3},
+            'medias': [
+              {
+                'id': 12,
+                'bvid': 'BV1234567890',
+                'type': 2,
+                'title': '收藏视频',
+                'duration': 125,
+                'pubtime': 1700000000,
+                'upper': {'mid': '9007199254740993', 'name': '作者'},
+                'cnt_info': {'play': 12345, 'danmaku': 67},
+              },
+              {'id': 13, 'bvid': 'BV1234567891', 'type': 2, 'title': '已失效视频'},
+              {
+                'id': 14,
+                'bvid': 'BV1234567892',
+                'type': 2,
+                'title': '失效资源',
+                'attr': 1,
+              },
+            ],
+          },
+        },
+      ).loadFolderVideos('42', page: 1);
+      final video = page.items.first.video;
+      expect(video?.ownerMid, '9007199254740993');
+      expect(video?.duration, const Duration(seconds: 125));
+      expect(video?.playCount, 12345);
+      expect(video?.danmakuCount, 67);
+      expect(video?.publishedAt?.millisecondsSinceEpoch, 1700000000000);
+      expect(page.items.skip(1).every((e) => e.video == null), isTrue);
+    },
+  );
+  test(
     'profile preserves a large decimal string ID and optional metadata',
     () async {
       const mid = '9007199254740993123';

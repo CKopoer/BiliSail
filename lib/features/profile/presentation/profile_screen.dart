@@ -7,6 +7,8 @@ import '../../../domain/video.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/dynamic_post_card.dart';
+import '../../../shared/ui/responsive_card_grid.dart';
+import '../../../shared/ui/video_card.dart';
 import 'profile_header.dart';
 import 'profile_video_card.dart';
 import '../application/profile_controller.dart';
@@ -150,6 +152,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 sliver: SliverLayoutBuilder(
                   builder: (context, constraints) {
                     final entries = state.current.items;
+                    if (state.section == ProfileSection.folders &&
+                        state.folderId != null) {
+                      return SliverResponsiveCardGrid(
+                        itemCount: entries.length,
+                        itemBuilder: (context, index) => _entry(
+                          entries[index],
+                          controller,
+                          sharedVideoCard: true,
+                        ),
+                      );
+                    }
                     final isVideoList =
                         entries.isNotEmpty &&
                         entries.every(
@@ -242,7 +255,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _entry(ProfileEntry entry, ProfileController controller) {
+  Widget _entry(
+    ProfileEntry entry,
+    ProfileController controller, {
+    bool sharedVideoCard = false,
+  }) {
     final post = entry.dynamicPost;
     if (post != null && entry.kind == ProfileEntryKind.dynamic) {
       return DynamicPostCard(
@@ -254,6 +271,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
     final video = entry.video;
     if (video != null && entry.kind == ProfileEntryKind.video) {
+      if (sharedVideoCard) {
+        return VideoCard(
+          video: video,
+          onTap: () => widget.onOpenVideo?.call(video),
+          onOpenUser: widget.onOpenUser,
+        );
+      }
       return _video(video);
     }
     if (entry.kind == ProfileEntryKind.video) {

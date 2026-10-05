@@ -63,15 +63,29 @@ final class DanmakuController extends ChangeNotifier {
   final Duration scrollDuration;
   double _area = 1;
   double _speed = 1;
+  double _topInset = 0;
+  double get _top => _topInset.clamp(0, _height - _bottomInset);
+  double get _availableHeight => (_height - _bottomInset - _top) * _area;
   Duration get _scrollLifetime =>
       Duration(microseconds: (scrollDuration.inMicroseconds / _speed).round());
 
-  void configure({required double area, required double speed}) {
+  /// [topInset] reserves logical pixels before applying [area].
+  void configure({
+    required double area,
+    required double speed,
+    double topInset = 0,
+  }) {
     final nextArea = area.clamp(.25, 1.0);
     final nextSpeed = speed.clamp(.5, 2.0);
-    if (_area == nextArea && _speed == nextSpeed) return;
+    final nextTopInset = topInset.isFinite
+        ? topInset.clamp(0.0, double.infinity)
+        : 0.0;
+    if (_area == nextArea && _speed == nextSpeed && _topInset == nextTopInset) {
+      return;
+    }
     _area = nextArea;
     _speed = nextSpeed;
+    _topInset = nextTopInset;
     seekConfirmed(position);
   }
 
@@ -304,8 +318,8 @@ final class DanmakuController extends ChangeNotifier {
           : (_width - item.width) / 2;
       const laneHeight = 48.0;
       final y = item.event.mode == DanmakuMode.bottom
-          ? (_height - _bottomInset) * _area - (item.lane + 1) * laneHeight
-          : item.lane * laneHeight;
+          ? _top + _availableHeight - (item.lane + 1) * laneHeight
+          : _top + item.lane * laneHeight;
       result.add(DanmakuPlacement(event: item.event, x: x, y: y));
     }
     return result;
@@ -313,7 +327,7 @@ final class DanmakuController extends ChangeNotifier {
 
   int _findLane(DanmakuEvent event, double textWidth, Duration at) {
     const laneHeight = 48.0;
-    final available = (_height - _bottomInset) * _area;
+    final available = _availableHeight;
     final laneCount = (available / laneHeight).floor().clamp(0, 24);
     for (var lane = 0; lane < laneCount; lane++) {
       var free = true;

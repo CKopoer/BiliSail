@@ -271,6 +271,17 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             1,
                             controller.setDanmakuArea,
                           ),
+                          _SettingSlider(
+                            key: const ValueKey('danmaku-top-margin'),
+                            title: '顶部距离',
+                            value: s.danmakuTopMargin,
+                            min: 0,
+                            max: 200,
+                            divisions: 50,
+                            suffix: ' px',
+                            save: (v) =>
+                                _save(() => controller.setDanmakuTopMargin(v)),
+                          ),
                           _slider(
                             '移动速度',
                             s.danmakuSpeed,
@@ -448,6 +459,7 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
 final class _SettingSlider extends StatefulWidget {
   const _SettingSlider({
+    super.key,
     required this.title,
     required this.value,
     required this.min,
@@ -455,11 +467,13 @@ final class _SettingSlider extends StatefulWidget {
     required this.suffix,
     required this.save,
     this.continuous = false,
+    this.divisions,
   });
   final String title, suffix;
   final double value, min, max;
   final Future<void> Function(double) save;
   final bool continuous;
+  final int? divisions;
   @override
   State<_SettingSlider> createState() => _SettingSliderState();
 }
@@ -481,8 +495,9 @@ final class _SettingSliderState extends State<_SettingSlider> {
           max: widget.max,
           divisions: widget.continuous
               ? null
-              : ((widget.max - widget.min) * (widget.max <= 3 ? 20 : 1))
-                    .round(),
+              : widget.divisions ??
+                    ((widget.max - widget.min) * (widget.max <= 3 ? 20 : 1))
+                        .round(),
           onChanged: (v) => setState(() => _draft = v),
           onChangeEnd: (v) async {
             await widget.save(v);

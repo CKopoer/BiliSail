@@ -52,6 +52,42 @@ void main() {
     });
   }
   for (final width in [320.0, 800.0, 1920.0]) {
+    testWidgets(
+      'favorite videos use common cards at $width with enlarged text',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 1200);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              homeRepositoryProvider.overrideWithValue(_Repository()),
+            ],
+            child: MaterialApp(
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: const TextScaler.linear(2)),
+                child: child!,
+              ),
+              home: const Scaffold(
+                body: HomeContent(
+                  channel: HomeChannel.favorites,
+                  section: '默认收藏夹',
+                  isSignedIn: true,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(VideoCard), findsNWidgets(6));
+        expect(find.text('2万'), findsNWidgets(6));
+        final first = tester.getRect(find.byType(VideoCard).first);
+        expect(first.width, lessThanOrEqualTo(width - 40));
+        expect(tester.takeException(), isNull);
+      },
+    );
     for (final channel in [HomeChannel.videoDynamic, HomeChannel.live]) {
       testWidgets('${channel.name} fits $width and preserves metadata', (
         tester,
@@ -145,6 +181,9 @@ final class _Repository implements HomeRepository {
               : HomeEntryKind.video,
           authorName: '测试UP',
           duration: const Duration(seconds: 125),
+          bvid: query.channel == HomeChannel.live
+              ? null
+              : 'BV${i.toString().padLeft(10, '0')}',
           publishText: '今天投稿',
           playCountText: '2万',
           danmakuCountText: '100',

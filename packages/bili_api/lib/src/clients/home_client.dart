@@ -46,18 +46,21 @@ final class HomeClient {
     }
     if (channel == 'favorites') {
       if (folderId != null) {
-        final data = await get('/x/v3/fav/resource/list', {
-          'media_id': folderId,
-          'pn': '$page',
-          'ps': '20',
-          'platform': 'web',
-        });
-        return ApiPage(
-          List.unmodifiable(
-            _list(data['medias'], nullable: true).map(_favoriteResource),
-          ),
-          hasMore: _yes(data['has_more']),
+        // Keep UGC collections distinct from favorite media IDs in queries.
+        final collection = folderId.startsWith('ugc:');
+        final id = collection ? folderId.substring(4) : folderId;
+        _validateId(id);
+        final data = await get(
+          collection ? '/x/space/fav/season/list' : '/x/v3/fav/resource/list',
+          {
+            if (collection) 'season_id': id else 'media_id': id,
+            if (collection && mid != null) 'mid': mid,
+            'pn': '$page',
+            'ps': '20',
+            'platform': 'web',
+          },
         );
+        return _favoritePage(data, page);
       }
       if (mid == null) {
         throw const ApiFailure(
@@ -65,24 +68,50 @@ final class HomeClient {
           'home_favorites',
         );
       }
-      final subscribed = section == '订阅收藏夹';
+      _validateId(mid);
+      if (section == '我的追番' || section == '我的追剧') {
+        return _follow(mid, section == '我的追剧', page, context);
+      }
+      final subscribed = section == '我的收藏与订阅';
+      String? defaultId;
+      if (!subscribed) {
+        // The server identifies the default folder; titles/order can change.
+        defaultId = cursor;
+        if (defaultId == null) {
+          final gallery = await get('/x/v3/fav/folder/space/v2', {
+            'up_mid': mid,
+          });
+          final folder = _map(gallery['default_folder']);
+          defaultId = _favoriteId(
+            (_optionalMap(folder['folder_detail']) ??
+                _map(folder['info']))['id'],
+          );
+        }
+        _validateId(defaultId);
+        if (section == '默认收藏夹') {
+          final data = await get('/x/v3/fav/resource/list', {
+            'media_id': defaultId,
+            'pn': '$page',
+            'ps': '20',
+            'platform': 'web',
+          });
+          return _favoritePage(data, page, nextCursor: defaultId);
+        }
+      }
       final data = await get(
         subscribed
             ? '/x/v3/fav/folder/collected/list'
             : '/x/v3/fav/folder/created/list',
-        {'up_mid': mid, 'pn': '$page', 'ps': '20'},
+        {'up_mid': mid, 'pn': '$page', 'ps': '20', 'platform': 'web'},
       );
-      final items = _list(data['list'], nullable: true).map((item) {
-        final m = _map(item);
-        return ApiHomeEntry(
-          id: _id(m['id']),
-          title: _required(m['title']),
-          kind: ApiHomeEntryKind.folder,
-          coverUrl: _uri(m['cover']),
-          subtitle: '${m['media_count'] ?? 0} 个内容',
-        );
-      });
-      return ApiPage(List.unmodifiable(items), hasMore: _yes(data['has_more']));
+      final items = _list(data['list'], nullable: data['count'] == 0)
+          .where((item) => _id(_map(item)['id']) != defaultId)
+          .map(_favoriteFolder);
+      return ApiPage(
+        List.unmodifiable(items),
+        hasMore: _hasMore(data, page, _number(data['count'])),
+        nextCursor: defaultId,
+      );
     }
     if (channel == 'dynamic' || channel == 'videoDynamic') {
       final data = await get('/x/polymer/web-dynamic/v1/feed/all', {
@@ -281,23 +310,14 @@ final class HomeClient {
               '综艺' => 7,
               _ => 5,
             };
-    if (section == '我的追番') {
+    if (section == '我的追番' || section == '我的追剧') {
       if (mid == null) {
         throw const ApiFailure(
           ApiFailureCategory.authentication,
           'home_follow',
         );
       }
-      final data = await get('/x/space/bangumi/follow/list', {
-        'vmid': mid,
-        'type': '1',
-        'pn': '$page',
-        'ps': '20',
-      });
-      return ApiPage(
-        List.unmodifiable(_list(data['list'], nullable: true).map(_season)),
-        hasMore: page * 20 < (_number(data['total']) ?? 0),
-      );
+      return _follow(mid, section == '我的追剧', page, context);
     }
     if (section == '时间表') {
       final data = await get('/pgc/web/timeline', {
@@ -341,13 +361,90 @@ final class HomeClient {
     );
   }
 
+  Future<ApiPage<ApiHomeEntry>> _follow(
+    String mid,
+    bool cinema,
+    int page,
+    ApiRequestContext? context,
+  ) async {
+    _validateId(mid);
+    final data = await api.requestJson(
+      Uri.https('api.bilibili.com', '/x/space/bangumi/follow/list', {
+        'vmid': mid,
+        'type': cinema ? '2' : '1',
+        'pn': '$page',
+        'ps': '20',
+      }),
+      'home_follow',
+      context: context,
+    );
+    final total = _number(data['total']);
+    if (total == null || total < 0) {
+      throw const ApiFailure(ApiFailureCategory.protocol, 'home_follow');
+    }
+    return ApiPage(
+      List.unmodifiable(_list(data['list'], nullable: total == 0).map(_season)),
+      hasMore: page * 20 < total,
+      totalCount: total,
+    );
+  }
+
+  static ApiPage<ApiHomeEntry> _favoritePage(
+    Map<String, Object?> data,
+    int page, {
+    String? nextCursor,
+  }) {
+    final total = _number(_optionalMap(data['info'])?['media_count']);
+    final items = _list(
+      data['medias'],
+      nullable: total == 0,
+    ).map(_favoriteResource).toList(growable: false);
+    return ApiPage(
+      List.unmodifiable(items),
+      // The collection endpoint may return the whole collection, ignoring ps.
+      // Stop after all advertised media have arrived, even on an oversized page.
+      hasMore:
+          _hasMore(data, page, total) &&
+          items.isNotEmpty &&
+          (total == null || items.length < total),
+      totalCount: total,
+      nextCursor: nextCursor,
+    );
+  }
+
+  static bool _hasMore(Map<String, Object?> data, int page, int? total) {
+    final more = data['has_more'];
+    if (more is bool || more == 0 || more == 1) return _yes(more);
+    if (more == null && total != null && total >= 0) return page * 20 < total;
+    throw const ApiFailure(ApiFailureCategory.protocol, 'home_favorites');
+  }
+
+  static ApiHomeEntry _favoriteFolder(Object? item) {
+    final m = _map(item);
+    final collection = _number(m['type']) == 21;
+    final id = _favoriteId(m['id']);
+    return ApiHomeEntry(
+      id: id,
+      title: _required(m['title']),
+      kind: collection ? ApiHomeEntryKind.collection : ApiHomeEntryKind.folder,
+      coverUrl: _uri(m['cover']),
+      contentCount: _number(m['media_count']),
+      viewCount: _number(m['view_count']),
+      authorName: _text(_optionalMap(m['upper'])?['name']) ?? '',
+    );
+  }
+
   static ApiHomeEntry _favoriteResource(Object? item) {
     final m = _map(item);
-    if (_text(m['bvid']) == null || m['title'] == '已失效视频') {
+    if (_text(m['bvid']) == null ||
+        m['title'] == '已失效视频' ||
+        (_number(m['attr']) ?? 0) & 1 != 0 ||
+        m['type'] != null && _number(m['type']) != 2) {
       return ApiHomeEntry(
         id: _id(m['id']),
         title: _text(m['title']) ?? '已失效内容',
         kind: ApiHomeEntryKind.video,
+        coverUrl: _uri(m['cover']),
         subtitle: '内容已失效或不支持在此播放',
       );
     }
@@ -357,13 +454,23 @@ final class HomeClient {
   static ApiHomeEntry _video(Object? item) {
     final m = _map(item);
     final bvid = _required(m['bvid']);
+    if (!RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid)) {
+      throw const ApiFailure(ApiFailureCategory.protocol, 'home_video');
+    }
     final owner = _optionalMap(m['owner']) ?? _optionalMap(m['upper']);
+    final stat = _optionalMap(m['cnt_info']) ?? _optionalMap(m['stat']);
     return ApiHomeEntry(
       id: bvid,
       title: _required(m['title']),
       kind: ApiHomeEntryKind.video,
       coverUrl: _uri(m['pic'] ?? m['cover']),
       subtitle: _text(owner?['name']) ?? '',
+      authorName: _text(owner?['name']) ?? '',
+      authorMid: _userMid(owner?['mid']),
+      duration: Duration(seconds: _number(m['duration']) ?? 0),
+      playCountText: _display(stat?['play']),
+      danmakuCountText: _display(stat?['danmaku']),
+      publishedAt: _date(m['pubtime'] ?? m['pubdate']),
       bvid: bvid,
     );
   }
@@ -459,6 +566,27 @@ final class HomeClient {
   static String _id(Object? value) =>
       value is int && value > 0 ? '$value' : _required(value);
   static int? _number(Object? value) => value is int ? value : null;
+  static void _validateId(String value) {
+    if (!RegExp(r'^[1-9][0-9]*$').hasMatch(value)) {
+      throw ArgumentError.value(value, 'id', 'Invalid favorite identity');
+    }
+  }
+
+  static String _favoriteId(Object? value) {
+    final id = _id(value);
+    if (!RegExp(r'^[1-9][0-9]*$').hasMatch(id)) {
+      throw const ApiFailure(ApiFailureCategory.protocol, 'home_favorites');
+    }
+    return id;
+  }
+
+  static DateTime? _date(Object? value) {
+    final seconds = _number(value);
+    return seconds != null && seconds > 0 && seconds < 8640000000000
+        ? DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true)
+        : null;
+  }
+
   static bool _yes(Object? value) => value == true || value == 1;
   static Uri? _uri(Object? value) {
     final text = _text(value);

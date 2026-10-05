@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bili_lite/shared/ui/video_card.dart';
 import 'package:bili_lite/shared/ui/bili_badges.dart';
+import 'package:bili_lite/features/feed/presentation/home_feed_cards.dart';
 
 void main() {
   testWidgets(
@@ -36,18 +37,73 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('home-section-我创建的收藏夹')));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('收藏夹A'));
       await tester.pumpAndSettle();
       expect(find.text('夹内视频'), findsOneWidget);
+      expect(find.byType(VideoCard), findsOneWidget);
       await tester.tap(find.byTooltip('返回列表'));
       await tester.pumpAndSettle();
       expect(find.text('收藏夹A'), findsOneWidget);
       await tester.tap(find.text('收藏夹A'));
       await tester.pumpAndSettle();
       expect(find.text('夹内视频'), findsOneWidget);
-      expect(repository.calls, ['favorites:我的收藏夹', 'favorites:我的收藏夹:A']);
+      expect(repository.calls, [
+        'favorites:默认收藏夹',
+        'favorites:我创建的收藏夹',
+        'favorites:我创建的收藏夹:A',
+      ]);
     },
   );
+  testWidgets('five favorite tabs keep collection paths and loaded contents', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1920, 1080));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _HomeRepository(folders: true);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+          homeRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: FeedScreen(channel: HomeChannel.favorites, isSignedIn: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (final tab in ['默认收藏夹', '我创建的收藏夹', '我的收藏与订阅', '我的追番', '我的追剧']) {
+      expect(find.byKey(ValueKey('home-section-$tab')), findsOneWidget);
+    }
+    expect(find.byType(VideoCard), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('home-section-我的收藏与订阅')));
+    await tester.pumpAndSettle();
+    expect(find.byType(FavoriteFolderCard), findsOneWidget);
+    expect(find.text('38个内容'), findsOneWidget);
+    expect(find.text('合集'), findsOneWidget);
+    await tester.tap(find.text('订阅合集'));
+    await tester.pumpAndSettle();
+    expect(repository.calls.last, 'favorites:我的收藏与订阅:ugc:42');
+    expect(find.byType(VideoCard), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('home-section-我的追剧')));
+    await tester.pumpAndSettle();
+    expect(find.text('追剧内容'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('home-section-我的追番')));
+    await tester.pumpAndSettle();
+    expect(find.text('追番内容'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('home-section-我的收藏与订阅')));
+    await tester.pumpAndSettle();
+    expect(find.text('夹内视频'), findsOneWidget);
+    await tester.tap(find.byTooltip('返回列表'));
+    await tester.pumpAndSettle();
+    expect(find.text('订阅合集'), findsOneWidget);
+    expect(repository.calls.where((e) => e.contains('ugc:42')), hasLength(1));
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('subchannels preserve loaded lists on round-trip', (
     tester,
   ) async {
@@ -282,13 +338,30 @@ final class _HomeRepository implements HomeRepository {
       '${query.channel.name}:${query.section}${query.folderId == null ? '' : ':${query.folderId}'}',
     );
     if (folders) {
+      if (query.section == '我的追番' || query.section == '我的追剧') {
+        return HomePage([
+          HomeEntry(
+            id: '12',
+            title: query.section == '我的追番' ? '追番内容' : '追剧内容',
+            kind: HomeEntryKind.season,
+          ),
+        ], hasMore: false);
+      }
       return HomePage([
-        query.folderId == null
-            ? const HomeEntry(
-                id: 'A',
-                title: '收藏夹A',
-                kind: HomeEntryKind.folder,
-              )
+        query.folderId == null && query.section != '默认收藏夹'
+            ? query.section == '我的收藏与订阅'
+                  ? const HomeEntry(
+                      id: '42',
+                      title: '订阅合集',
+                      kind: HomeEntryKind.collection,
+                      contentCount: 38,
+                      viewCount: 1635000,
+                    )
+                  : const HomeEntry(
+                      id: 'A',
+                      title: '收藏夹A',
+                      kind: HomeEntryKind.folder,
+                    )
             : const HomeEntry(
                 id: 'BV1234567890',
                 title: '夹内视频',

@@ -24,6 +24,7 @@
 | [BasePlayerController](../../biliuwp-lite/src/BiliLite.UWP/Player/Controllers/BasePlayerController.cs)、[States](../../biliuwp-lite/src/BiliLite.UWP/Player/States) | 播放/暂停/屏幕状态分离 | 明确播放状态机和正交字段，统一管理资源 |
 | [ISubPlayer](../../biliuwp-lite/src/BiliLite.UWP/Player/SubPlayers/ISubPlayer.cs)、[WebPlayer](../../biliuwp-lite/src/BiliLite.UWP/Player/WebPlayer) | 后端差异隔离、多种直播格式 | `MediaKitEngine`；WebView 不是本项目默认播放路径 |
 | [IDanmakuController](../../biliuwp-lite/src/BiliLite.UWP/Services/Interfaces/IDanmakuController.cs) | 弹幕设置、显示模式、独立控制器 | 与播放器无库级耦合的 DanmakuController |
+| [弹幕设置](../../biliuwp-lite/src/BiliLite.UWP/Controls/Settings/VideoDanmakuSettingsControl.xaml)、[播放器滑条](../../biliuwp-lite/src/BiliLite.UWP/Controls/PlayerControl.xaml) | 顶部距离默认 0、播放器范围 0–200／步长 4、顶部边距语义 | 独立实现设置保存与点播／直播轨道区域计算；未复制源码或资源，见 [顶部距离验证](validation/danmaku-top-margin.md) |
 | [FrostMasterDanmakuController](../../biliuwp-lite/src/BiliLite.UWP/Services/FrostMasterDanmakuController.cs) | Canvas 动画与弹幕绘制适配 | Flutter Canvas/TextPainter，不依赖 Win2D/Windows.UI 类型 |
 | [IDownloadService](../../biliuwp-lite/src/BiliLite.UWP/Services/Interfaces/IDownloadService.cs)、[DownloadService](../../biliuwp-lite/src/BiliLite.UWP/Services/DownloadService.cs) | 下载、暂停恢复、索引和文件 | 独立任务状态机与存储，下载服务不直接维护页面 ViewModel |
 | [WbiKeyService](../../biliuwp-lite/src/BiliLite.UWP/Services/WbiKeyService.cs) | WBI key 获取与缓存 | API 层 WbiKeyProvider，新增单飞与重签预算 |

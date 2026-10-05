@@ -1,4 +1,5 @@
 import 'package:bili_lite/app/theme.dart';
+import 'package:bili_lite/features/playback/presentation/player_settings_dialog.dart';
 import 'package:bili_lite/features/settings/application/settings_controller.dart';
 import 'package:bili_lite/features/settings/domain/app_settings.dart';
 import 'package:bili_lite/features/settings/domain/settings_category.dart';
@@ -10,6 +11,68 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final inPlayer in [false, true]) {
+    testWidgets('top margin slider saves 4-pixel steps (player: $inPlayer)', (
+      tester,
+    ) async {
+      final repository = _SettingsRepository();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+          child: MaterialApp(
+            home: Scaffold(
+              body: inPlayer
+                  ? Builder(
+                      builder: (context) => ElevatedButton(
+                        onPressed: () => showPlayerSettings(context, tab: 1),
+                        child: const Text('弹幕配置'),
+                      ),
+                    )
+                  : const SettingsScreen(category: SettingsCategory.danmaku),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      if (inPlayer) {
+        await tester.tap(find.text('弹幕配置'));
+        await tester.pumpAndSettle();
+      }
+      final slider = find.byWidgetPredicate(
+        (widget) => widget is Slider && widget.min == 0 && widget.max == 200,
+      );
+      await tester.ensureVisible(slider);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Slider>(slider).value, 0);
+      expect(tester.widget<Slider>(slider).divisions, 50);
+      final rect = tester.getRect(slider);
+      final gesture = await tester.startGesture(
+        Offset(rect.left + 24, rect.center.dy),
+      );
+      await gesture.moveTo(Offset(rect.left + rect.width * .4, rect.center.dy));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(repository.settings.danmakuTopMargin, inExclusiveRange(0, 200));
+      expect(repository.settings.danmakuTopMargin % 4, 0);
+      expect(
+        tester.widget<Slider>(slider).value,
+        repository.settings.danmakuTopMargin,
+      );
+      if (inPlayer) {
+        await tester.tap(find.byTooltip('关闭'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('弹幕配置'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(slider);
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<Slider>(slider).value,
+          repository.settings.danmakuTopMargin,
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets('codec and decoding choices save in a narrow playback page', (
     tester,
   ) async {

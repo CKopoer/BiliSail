@@ -36,7 +36,11 @@ void main() {
     await realtime.events.close();
   });
 
-  Future<void> show(WidgetTester tester, {bool active = true}) async {
+  Future<void> show(
+    WidgetTester tester, {
+    bool active = true,
+    double topMargin = 0,
+  }) async {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -55,6 +59,7 @@ void main() {
                       settings: AppSettings(
                         danmakuBlockedWords: const ['屏蔽'],
                         danmakuTopEnabled: false,
+                        danmakuTopMargin: topMargin,
                       ),
                     ),
                   ),
@@ -73,6 +78,31 @@ void main() {
       .widget<LiveDanmakuOverlay>(find.byType(LiveDanmakuOverlay))
       .controller;
 
+  testWidgets('live overlay applies top margin updates to new messages', (
+    tester,
+  ) async {
+    await show(tester, topMargin: 40);
+    final controller = container.read(
+      liveControllerProvider(requested).notifier,
+    );
+    controller.setActive(true);
+    await tester.pump();
+    await tester.pump();
+    for (final margin in [40.0, 80.0, 0.0]) {
+      await show(tester, topMargin: margin);
+      realtime.events.add([
+        LiveChatReceived(
+          LiveChatMessage(userName: '甲', text: '顶部距离', id: '$margin'),
+        ),
+      ]);
+      await tester.pump();
+      await tester.pump();
+      expect(drawing(tester).frame().single.y, margin);
+    }
+    controller.setActive(false);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
   testWidgets(
     'short-room bridge paints new messages and filters history/modes',
     (tester) async {

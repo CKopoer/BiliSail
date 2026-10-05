@@ -2,6 +2,28 @@ import 'package:bili_lite/features/settings/domain/app_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('danmaku top margin defaults to zero and normalizes its bounds', () {
+    expect(const AppSettings.defaults().danmakuTopMargin, 0);
+    expect(AppSettings().danmakuTopMargin, 0);
+    expect(
+      const AppSettings.defaults()
+          .copyWith(danmakuTopMargin: 48)
+          .normalized()
+          .danmakuTopMargin,
+      48,
+    );
+    for (final entry in <double, double>{
+      -4: 0,
+      300: 200,
+      double.nan: 0,
+      double.infinity: 0,
+    }.entries) {
+      expect(
+        AppSettings(danmakuTopMargin: entry.key).normalized().danmakuTopMargin,
+        entry.value,
+      );
+    }
+  });
   test('image cache defaults on and survives copy normalization', () {
     expect(const AppSettings.defaults().cacheImages, isTrue);
     expect(AppSettings().cacheImages, isTrue);

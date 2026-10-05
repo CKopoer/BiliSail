@@ -96,6 +96,8 @@ ApiPage<T> { items, nextCursor, hasMore }
 
 每个实际接入的端点必须记录：host/method、参数、profile、鉴权/签名、脱敏响应 fixture、最后验证期期、失败码、降级策略。文件名中出现 Web 或 BiliApis 常量存在都不足以证明某种登录态能使用它。
 
+我的收藏现有五类子标签和主页收藏视频读取，仍由现有 HomeRepository/ProfileRepository 编排。默认收藏夹 ID、收藏/订阅合集类型、Web 追番/追剧与真实会话的只读验证见 [收藏子标签与视频卡片](validation/favorites-tabs.md)。
+
 影视与直播已按用户本轮要求提前接入 Web 详情/播放/历史聊天；上述 M3/M4 定位仍是整体路线。实际已实现端点、取消与权限语义、游客烟测见 [影视与直播内置播放](validation/content-playback.md)。官方影视侧栏及 SC 快照端点、容量和前序验证见 [影视侧栏与直播 SC](validation/pgc-live-sidebar.md)。后续剧集弹幕/发送、直播实时连接与消息、SC 合并及当前分区列表协议见 [影视与直播弹幕修复](validation/pgc-live-danmaku.md)。
 
 搜索现已接入七类 Web 搜索；综合接口用于混合模块与分类总数，视频排序/筛选/分页固定使用 `search/type`，不依赖综合接口对 `order` 的忽略行为。各类参数与实测见 [搜索分类与排序](validation/search-categories.md)。

@@ -50,6 +50,46 @@ final class Repository implements HomeRepository {
 }
 
 void main() {
+  test(
+    'favorite paging retains distinct folder types and caps loaded media',
+    () async {
+      const value = (
+        channel: HomeChannel.favorites,
+        section: '我的收藏与订阅',
+        scope: 'user:1',
+        folderId: null,
+      );
+      final (container, repository, controller) = await _setup(value);
+      repository.calls.single.result.complete(
+        const HomePage([
+          HomeEntry(id: '42', title: '收藏夹', kind: HomeEntryKind.folder),
+          HomeEntry(id: '42', title: '合集', kind: HomeEntryKind.collection),
+        ], hasMore: true),
+      );
+      await _settle();
+      expect(
+        container.read(homeControllerProvider(value)).items.requireValue,
+        hasLength(2),
+      );
+      await _more(
+        controller,
+        repository,
+        HomePage([
+          for (var i = 0; i < 510; i++)
+            HomeEntry(id: '$i', title: '视频$i', kind: HomeEntryKind.video),
+        ], hasMore: true),
+      );
+      final state = container.read(homeControllerProvider(value));
+      expect(
+        state.items.requireValue,
+        hasLength(HomeController.maxFavoriteEntries),
+      );
+      expect(state.limitReached, isTrue);
+      expect(state.hasMore, isFalse);
+      await controller.loadMore();
+      expect(repository.calls, hasLength(2));
+    },
+  );
   for (final (channel, firstPageSize) in [
     for (final channel in [HomeChannel.dynamic, HomeChannel.videoDynamic])
       for (final size in [190, 250]) (channel, size),

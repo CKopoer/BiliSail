@@ -138,7 +138,10 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 12,
                                     ),
-                                    textStyle: const TextStyle(fontSize: 13),
+                                    textStyle: Theme.of(context)
+                                        .textTheme
+                                        .labelLarge
+                                        ?.copyWith(fontSize: 13),
                                   ),
                                   onPressed: () {
                                     if (categories != null) {

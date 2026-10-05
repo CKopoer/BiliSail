@@ -45,40 +45,45 @@ void main() {
     }
   });
 
-  testWidgets('card supports pointer feedback and keyboard activation', (
-    tester,
-  ) async {
-    var opened = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: BiliTheme.light(),
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 250,
-              child: VideoCard(video: _videos.first, onTap: () => opened++),
+  testWidgets(
+    'card highlights title on hover and supports keyboard activation',
+    (tester) async {
+      var opened = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: BiliTheme.light(),
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 250,
+                child: VideoCard(video: _videos.first, onTap: () => opened++),
+              ),
             ),
           ),
         ),
-      ),
-    );
-    final pointer = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await pointer.addPointer(location: const Offset(500, 500));
-    addTearDown(pointer.removePointer);
-    await pointer.moveTo(tester.getCenter(find.byType(VideoCard)));
-    await tester.pumpAndSettle();
-    expect(_borderColor(tester), BiliTheme.accent.withValues(alpha: 0.5));
+      );
+      final pointer = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await pointer.addPointer(location: const Offset(500, 500));
+      addTearDown(pointer.removePointer);
+      await pointer.moveTo(tester.getCenter(find.byType(VideoCard)));
+      await tester.pumpAndSettle();
+      expect(_borderColor(tester), Colors.transparent);
+      expect(
+        tester.widget<Text>(find.text(_videos.first.title)).style?.color,
+        BiliTheme.accent,
+      );
 
-    await pointer.moveTo(const Offset(500, 500));
-    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-    await tester.pumpAndSettle();
-    expect(_borderColor(tester), BiliTheme.accent);
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pumpAndSettle();
-    expect(opened, 1);
-    expect(tester.takeException(), isNull);
-  });
+      await pointer.moveTo(const Offset(500, 500));
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(_borderColor(tester), BiliTheme.accent);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(opened, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('failed cover keeps the card available to open', (tester) async {
     var opened = false;

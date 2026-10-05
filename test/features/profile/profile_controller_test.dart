@@ -13,6 +13,8 @@ import 'package:bili_lite/features/profile/presentation/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:bili_lite/shared/ui/video_card.dart';
+import 'package:bili_lite/features/profile/presentation/profile_video_card.dart';
 
 const id = UserId('7');
 const entry = ProfileEntry(
@@ -275,6 +277,80 @@ void main() {
     expect(state().section, ProfileSection.videos);
     expect(find.byKey(const ValueKey('profile-video-search')), findsOneWidget);
   });
+  for (final (width, scale) in [(1920.0, 1.0), (375.0, 2.0)]) {
+    testWidgets(
+      'profile favorite videos share the grid at $width, scale $scale',
+      (tester) async {
+        const video = VideoSummary(
+          id: VideoId('BV1234567890'),
+          title: '收藏视频',
+          coverUrl: '',
+          author: '收藏作者',
+          authorId: UserId('9'),
+          duration: Duration(seconds: 125),
+          playCount: 12345,
+          danmakuCount: 67,
+        );
+        repo.items = [
+          for (var i = 0; i < 30; i++)
+            ProfileEntry(
+              id: '$i',
+              kind: ProfileEntryKind.video,
+              title: video.title,
+              video: video,
+            ),
+          const ProfileEntry(
+            id: 'unavailable',
+            kind: ProfileEntryKind.video,
+            title: '已失效视频',
+          ),
+        ];
+        controller.openFolder(
+          const ProfileEntry(
+            id: '42',
+            kind: ProfileEntryKind.folder,
+            title: '收藏夹',
+          ),
+        );
+        await tester.pump();
+        await tester.binding.setSurfaceSize(Size(width, 1080));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        VideoSummary? opened;
+        UserId? author;
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: Scaffold(
+                body: ProfileScreen(
+                  id: id,
+                  initialSection: ProfileSection.folders,
+                  onOpenVideo: (value) => opened = value,
+                  onOpenUser: (value) => author = value,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(VideoCard), findsWidgets);
+        expect(find.byType(ProfileVideoCard), findsNothing);
+        expect(find.byType(VideoCard).evaluate().length, lessThan(30));
+        final rect = tester.getRect(find.byType(VideoCard).first);
+        expect(rect.width, closeTo(width == 1920 ? 361.6 : 343, .1));
+        await tester.tap(find.text('收藏作者').first);
+        expect(author, const UserId('9'));
+        await tester.tap(find.text('收藏视频').first);
+        expect(opened, video);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   testWidgets('empty state remains visible and refresh available', (
     tester,
   ) async {

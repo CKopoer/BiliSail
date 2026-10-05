@@ -59,6 +59,7 @@ final class _LivePlayerDanmakuState extends ConsumerState<LivePlayerDanmaku>
     area: widget.settings.danmakuArea,
     speed: widget.settings.danmakuSpeed,
     maxPerSecond: widget.settings.danmakuMaxPerSecond,
+    topInset: widget.settings.danmakuTopMargin,
   );
   static bool _isForeground(AppLifecycleState? state) =>
       state != AppLifecycleState.hidden &&

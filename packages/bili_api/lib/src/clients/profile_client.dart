@@ -190,6 +190,8 @@ final class ProfileClient {
         _list(data['medias'] ?? (total == 0 ? const [] : null), e).map((v) {
           final item = _map(v, e);
           if (item['type'] != null && item['type'] != 2 ||
+              item['title'] == '已失效视频' ||
+              (_number(item['attr']) ?? 0) & 1 != 0 ||
               item['bvid'] is! String ||
               (item['bvid'] as String).isEmpty) {
             return ApiProfileEntry(
@@ -205,6 +207,10 @@ final class ProfileClient {
             'pic': item['cover'],
             'author': _optionalMap(item['upper'])['name'],
             'mid': _optionalMap(item['upper'])['mid'],
+            'play': _optionalMap(item['cnt_info'])['play'] ?? item['play'],
+            'danmaku':
+                _optionalMap(item['cnt_info'])['danmaku'] ?? item['danmaku'],
+            'pubdate': item['pubtime'] ?? item['pubdate'],
           }, e);
         }).toList();
     return _paged(items, page, total);

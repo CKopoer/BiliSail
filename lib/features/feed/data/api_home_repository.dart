@@ -70,6 +70,8 @@ final class ApiHomeRepository implements HomeRepository {
     danmakuCountText: item.danmakuCountText,
     popularityText: item.popularityText,
     areaName: item.areaName,
+    contentCount: item.contentCount,
+    viewCount: item.viewCount,
     children: List.unmodifiable(item.children.map(_entry)),
   );
 }

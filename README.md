@@ -9,6 +9,7 @@ Flutter 原生哔哩哔哩客户端，当前版本 **0.1.0 Windows 预览版**�
 - 推荐、视频动态和搜索复用 16:9 视频卡片及自适应大卡网格；推荐显示接口提供的推荐理由，搜索保留 UP 图标与关键词高亮，视频动态去掉投稿标签。验证见 [共享视频卡片](docs/validation/shared-video-cards.md)。
 - UWP 风格顶部多标签工作区、横向频道、紧凑视频网格；首页固定，搜索/视频/历史/设置独立打开，支持关闭、切换和页面状态保留。
 - 首页提供动态/视频动态、稍后再看、收藏夹、番剧/国创/放映厅和直播的只读列表及子导航；私有列表需登录，影视和直播卡片进入应用内播放页。
+- 我的收藏分为默认收藏夹、我创建的收藏夹、我的收藏与订阅、我的追番、我的追剧；收藏夹与个人主页夹内视频复用公共视频卡，订阅合集使用独立资源接口。Windows 已有会话的五类读取已验证，见 [收藏子标签与视频卡片](docs/validation/favorites-tabs.md)。
 - 视频、影视、直播三类播放页共用一个原生播放器；影视支持分章节选集、简介和评论，直播支持房间/主播资料、开播状态、HLS/FLV、清晰度、实时聊天和画面弹幕。验证与未测项见 [影视与直播内置播放](docs/validation/content-playback.md)。
 - 视频／影视隐藏控件时可显示底部细进度条，默认开启，应用／播放器设置均可关闭。直播播放器和右侧聊天／SC 下方提供同步草稿的文字及表情包发送栏；真实账号发送尚未在线验收，见 [验证记录](docs/validation/collapsed-progress-live-send.md)。
 - 直播侧栏不显示简介，通过头像/主播名打开主页，右上显示平台报告的观看人数；历史与实时聊天支持行内/大表情，弹幕和 SC 用户名可按有效 UID 打开主页，见 [验证记录](docs/validation/live-chat-profiles.md)。
@@ -30,7 +31,7 @@ Flutter 原生哔哩哔哩客户端，当前版本 **0.1.0 Windows 预览版**�
 - 视频点赞/取消赞、投币、收藏夹选择、稍后再看、复制分享链接与弹幕发送；写请求仅由用户点击触发，不自动重试。
 - 空降助手默认关闭，启用后向独立第三方查询当前视频片段，支持提示/自动跳过，不携带账号、不自动上报。
 
-各频道按自己的端点请求，失败显示错误和重试。动态、云收藏、稍后再看、追番和直播关注等私有数据尚未用真实登录账号实测；下载、UGC 云历史、后台音频和 PiP 仍未实现。影视和直播已验证 Windows 游客原生播放；影视发送栏、直播 WebSocket/画面弹幕、SC 新卡片与分区协议见 [影视与直播弹幕修复](docs/validation/pgc-live-danmaku.md)。该预览版不代表设计文档的完整 M2 或三端 M0 验收完成。首版记录见 [M0 验证](docs/validation/m0-results.md)，界面背景见 [界面与多标签验证](docs/validation/uwp-workspace.md)，播放器前序结果见 [播放器与标签保留](docs/validation/player-workspace.md)，本轮布局、配置和互动验证见 [界面控件与设置](docs/validation/ui-controls.md)。新增账号写接口已通过 fake/fixture 检查，未用真实账号执行投币、收藏或发送验收。
+各频道按自己的端点请求，失败显示错误和重试。收藏、订阅合集、追番和追剧已用本机已有会话只读验证；动态、稍后再看和直播关注列表的完整在线分页仍未验收。下载、UGC 云历史、后台音频和 PiP 仍未实现。影视和直播已验证 Windows 游客原生播放；影视发送栏、直播 WebSocket/画面弹幕、SC 新卡片与分区协议见 [影视与直播弹幕修复](docs/validation/pgc-live-danmaku.md)。该预览版不代表设计文档的完整 M2 或三端 M0 验收完成。首版记录见 [M0 验证](docs/validation/m0-results.md)，界面背景见 [界面与多标签验证](docs/validation/uwp-workspace.md)，播放器前序结果见 [播放器与标签保留](docs/validation/player-workspace.md)，本轮布局、配置和互动验证见 [界面控件与设置](docs/validation/ui-controls.md)。新增账号写接口已通过 fake/fixture 检查，未用真实账号执行投币、收藏或发送验收。
 
 双标签播放页、楼中楼与评论互动的前序检查见 [播放页与评论交互](docs/validation/video-comments.md)，本轮快捷键、悬浮控制栏、富评论及图标检查见 [快捷键与富评论](docs/validation/shortcuts-rich-comments.md)。
 

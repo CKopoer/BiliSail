@@ -3,6 +3,46 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('top inset offsets live modes and shrinks their available lanes', () {
+    final controller = LiveDanmakuController(monotonicNow: () => Duration.zero);
+    addTearDown(controller.dispose);
+    controller.setViewport(width: 600, height: 384, bottomInset: 64);
+    controller.configure(area: .5, speed: 1, maxPerSecond: 20, topInset: 40);
+    const events = [
+      LiveDanmakuEvent(id: 'scroll', text: 'scroll'),
+      LiveDanmakuEvent(id: 'top', text: 'top', mode: DanmakuMode.top),
+      LiveDanmakuEvent(id: 'bottom', text: 'bottom', mode: DanmakuMode.bottom),
+    ];
+    controller.add(events);
+    expect(controller.frame().map((item) => item.y), [40, 40, 132]);
+    controller.configure(area: .5, speed: 1, maxPerSecond: 20);
+    controller.add(events);
+    expect(controller.frame().map((item) => item.y), [0, 0, 112]);
+  });
+  test(
+    'live top inset clamps to short viewports and rejects nonfinite values',
+    () {
+      final controller = LiveDanmakuController(
+        monotonicNow: () => Duration.zero,
+      );
+      addTearDown(controller.dispose);
+      controller.configure(area: 1, speed: 1, maxPerSecond: 20, topInset: 200);
+      controller.setViewport(width: 320, height: 160, bottomInset: 40);
+      controller.add(const [LiveDanmakuEvent(id: 'small', text: 'small')]);
+      expect(controller.frame(), isEmpty);
+      controller.setViewport(width: 600, height: 384, bottomInset: 40);
+      controller.add(const [LiveDanmakuEvent(id: 'large', text: 'large')]);
+      expect(controller.frame().single.y, 200);
+      controller.configure(
+        area: 1,
+        speed: 1,
+        maxPerSecond: 20,
+        topInset: double.nan,
+      );
+      controller.add(const [LiveDanmakuEvent(id: 'zero', text: 'zero')]);
+      expect(controller.frame().single.y, 0);
+    },
+  );
   test('receipt clock moves without any video position samples', () {
     var now = Duration.zero;
     final controller = LiveDanmakuController(monotonicNow: () => now);

@@ -49,6 +49,8 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
     double max,
     AppSettings Function(AppSettings, double) change, {
     String? suffix,
+    Key? key,
+    int? divisions,
   }) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -57,9 +59,11 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
         child: Text('$label  ${suffix ?? value.toStringAsFixed(2)}'),
       ),
       Slider(
+        key: key,
         value: value.clamp(min, max),
         min: min,
         max: max,
+        divisions: divisions,
         onChanged: (value) =>
             unawaited(_update((current) => change(current, value))),
       ),
@@ -230,6 +234,16 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                           .25,
                           1,
                           (c, v) => c.copyWith(danmakuArea: v),
+                        ),
+                        _slider(
+                          '顶部距离',
+                          s.danmakuTopMargin,
+                          0,
+                          200,
+                          (c, v) => c.copyWith(danmakuTopMargin: v),
+                          suffix: '${s.danmakuTopMargin.round()} px',
+                          key: const ValueKey('danmaku-top-margin'),
+                          divisions: 50,
                         ),
                         _slider(
                           '滚动速度',

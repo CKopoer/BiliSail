@@ -2,7 +2,7 @@ import '../../../domain/dynamic_post.dart';
 import '../../../domain/request_cancellation.dart';
 import 'home_channel.dart';
 
-enum HomeEntryKind { video, season, live, dynamic, folder }
+enum HomeEntryKind { video, season, live, dynamic, folder, collection }
 
 final class HomeEntry {
   const HomeEntry({
@@ -25,6 +25,8 @@ final class HomeEntry {
     this.danmakuCountText = '',
     this.popularityText = '',
     this.areaName = '',
+    this.contentCount,
+    this.viewCount,
     this.children = const [],
   });
   final DynamicPost? dynamicPost;
@@ -46,6 +48,8 @@ final class HomeEntry {
   final String danmakuCountText;
   final String popularityText;
   final String areaName;
+  final int? contentCount;
+  final int? viewCount;
   final List<HomeEntry> children;
 }
 

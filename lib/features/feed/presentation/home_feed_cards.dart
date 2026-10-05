@@ -18,6 +18,23 @@ final class VideoDynamicCard extends StatelessWidget {
   final HomeEntry entry;
   final VoidCallback onTap;
   @override
+  Widget build(BuildContext context) =>
+      HomeVideoCard(entry: entry, onTap: onTap, onOpenUser: onOpenUser);
+}
+
+/// Home videos share the same visual contract as feed/search/history videos.
+final class HomeVideoCard extends StatelessWidget {
+  const HomeVideoCard({
+    super.key,
+    required this.entry,
+    required this.onTap,
+    this.onOpenUser,
+  });
+  final HomeEntry entry;
+  final VoidCallback onTap;
+  final ValueChanged<UserId>? onOpenUser;
+
+  @override
   Widget build(BuildContext context) => VideoCard(
     video:
         entry.dynamicPost?.video ??
@@ -36,6 +53,94 @@ final class VideoDynamicCard extends StatelessWidget {
     onOpenUser: onOpenUser,
     onTap: onTap,
   );
+}
+
+final class FavoriteFolderCard extends StatelessWidget {
+  const FavoriteFolderCard({
+    super.key,
+    required this.entry,
+    required this.onTap,
+  });
+  final HomeEntry entry;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                Positioned(
+                  top: 0,
+                  left: 28,
+                  right: 28,
+                  height: 22,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: scheme.onSurface.withValues(alpha: .10),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  left: 16,
+                  right: 16,
+                  height: 22,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: scheme.onSurface.withValues(alpha: .18),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 18),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: _Cover(
+                        url: entry.coverUrl,
+                        left: entry.contentCount == null
+                            ? ''
+                            : '${entry.contentCount}个内容',
+                        right: entry.kind == HomeEntryKind.collection
+                            ? '合集'
+                            : '收藏夹',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 9),
+            Text(
+              entry.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            if (entry.viewCount != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                '${compactCount(entry.viewCount)}播放',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 final class LiveRoomCard extends StatelessWidget {

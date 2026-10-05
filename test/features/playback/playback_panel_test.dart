@@ -3,6 +3,7 @@ import 'package:bili_lite/core/presentation/workspace_activity.dart';
 import 'dart:async';
 import 'dart:ui' show PointerDeviceKind, Tristate;
 
+import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:bili_lite/app/router.dart';
 import 'package:bili_lite/app/theme.dart';
 import 'package:bili_lite/core/platform/window_service.dart';
@@ -29,6 +30,36 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  testWidgets('top margin settings reach the shared playback overlay', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    final window = _FakeWindowService();
+    for (final margin in [40.0, 80.0, 0.0]) {
+      await tester.pumpWidget(
+        _app(
+          session,
+          window,
+          AppSettings(danmakuTopMargin: margin),
+          width: 800,
+        ),
+      );
+      await _pumpFrames(tester);
+      await session.pause();
+      session.danmaku.replaceEvents(const [
+        DanmakuEvent(id: 'one', at: Duration.zero, text: 'one'),
+      ]);
+      session.danmaku.seekConfirmed(const Duration(seconds: 1));
+      await tester.pump();
+      expect(session.danmaku.frame().single.y, margin);
+      expect(engine.opens, 1);
+      expect(engine.maxSurfaces, 1);
+    }
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
   for (final width in [320.0, 1200.0]) {
     testWidgets('volume drags continuously at width $width and fullscreen', (
       tester,

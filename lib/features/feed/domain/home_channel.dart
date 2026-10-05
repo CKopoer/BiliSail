@@ -35,7 +35,7 @@ enum HomeChannel {
     live => const ['推荐直播', '全部分区', '我的关注', '观看记录'],
     cinema => const ['推荐', '电影', '电视剧', '纪录片', '综艺'],
     watchLater => const ['全部', '未看完'],
-    favorites => const ['我的收藏夹', '订阅收藏夹'],
+    favorites => const ['默认收藏夹', '我创建的收藏夹', '我的收藏与订阅', '我的追番', '我的追剧'],
     _ => const [],
   };
 }

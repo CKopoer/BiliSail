@@ -42,7 +42,9 @@
 | [API 端点验证](validation/api-endpoints.md) | 首版端点、协议与在线只读烟测 |
 | [搜索分类与排序](validation/search-categories.md) | 七类搜索、综合页 UP 主、分类排序、筛选与旧响应隔离 |
 | [共享视频卡片](validation/shared-video-cards.md) | 推荐理由、搜索/视频动态显示差异、16:9 封面与宽屏网格 |
+| [收藏子标签与视频卡片](validation/favorites-tabs.md) | 五类收藏入口、订阅合集协议、公共视频卡与 Windows 只读验证 |
 | [媒体包验证](validation/media-packages.md) | 包契约、限制、原生资产来源 |
+| [弹幕顶部距离](validation/danmaku-top-margin.md) | 默认 0、两处配置入口、点播／直播区域计算和旧设置兼容 |
 | [播放错误排查](validation/native-playback-errors.md) | 原生日志误判、错误态控制栏与本地脱敏日志 |
 | [开发协作约定](../AGENTS.md) | 后续开发与自动化代理必须遵守的仓库规则 |
 
