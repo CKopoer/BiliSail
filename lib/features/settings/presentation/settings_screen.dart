@@ -145,7 +145,7 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             AppFontPreference.harmonyOsSans: 'HarmonyOS Sans',
                             AppFontPreference.system: '系统默认',
                           }, controller.setFont),
-                          const Text('字体预览：哔哩哔哩 Bili Lite · Aa 0123456789'),
+                          const Text('字体预览：哔哩哔哩 BiliSail（哔帆） · Aa 0123456789'),
                         ]),
                       if (widget.category == SettingsCategory.shortcuts)
                         _section('快捷键', [
@@ -322,17 +322,21 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ]),
                       if (widget.category == SettingsCategory.about)
                         _section('关于', [
+                          const Text('一个专注观看体验的跨平台 Bilibili 第三方客户端'),
                           const Text(
                             '本应用使用 HarmonyOS Sans 字体，Copyright 2021 Huawei Device Co., Ltd.',
                           ),
                           ListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: const Text('Bili Lite'),
+                            title: const Text('BiliSail（哔帆）'),
                             subtitle: const Text('0.1.0 · Windows 预览版'),
                             onTap: () => showAboutDialog(
                               context: context,
-                              applicationName: 'Bili Lite',
+                              applicationName: 'BiliSail（哔帆）',
                               applicationVersion: '0.1.0',
+                              children: const [
+                                Text('一个专注观看体验的跨平台 Bilibili 第三方客户端'),
+                              ],
                             ),
                           ),
                         ]),

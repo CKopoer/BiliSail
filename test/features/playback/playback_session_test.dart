@@ -1,13 +1,13 @@
 import 'dart:async';
 
-import 'package:bili_lite/domain/app_failure.dart';
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/features/playback/application/playback_session.dart';
-import 'package:bili_lite/features/playback/domain/playback_repository.dart';
-import 'package:bili_lite/features/playback/domain/content_playback.dart';
-import 'package:bili_lite/features/playback/domain/sponsor_repository.dart';
-import 'package:bili_lite/features/settings/domain/app_settings.dart';
+import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/playback/domain/content_playback.dart';
+import 'package:bilisail/features/playback/domain/sponsor_repository.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter_test/flutter_test.dart';
 

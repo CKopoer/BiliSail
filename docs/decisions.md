@@ -176,3 +176,11 @@ FRB 支持跨平台是可行性依据，但平台构建、取消、错误和流�
 **所有权与写入**：协议放入纯 Dart `bili_api`，`auth` 的账号摘要与 `messages` 的收件箱各自使用 Repository/应用控制器；未读指示由组合根通过端口注入。账号 scope/session epoch 与请求代次隔离旧结果；账号变化或页面销毁取消任务，登出清除草稿。文本发送和已读确认仅由显式点击触发，单次 POST，结果不明保留草稿并提示核对，不自动重放。私信不落普通数据库或公开图片缓存。
 
 **容量与边界**：收件箱、线程和草稿均设 500 项上限；线程保留最新消息。撤回不暴露原内容，未知富消息提供可见降级。未读在菜单打开、消息刷新和显式写入后更新；本轮不增加消息 WS、后台轮询或通知推送。系统通知只读取最近 20 条，其余历史通过官方消息页查看。协议、测试、Windows 已有账号只读结果与真实写入/其他平台未测项见 [验证记录](validation/account-messages.md)。
+
+## D21：BiliSail 品牌与统一安装、存储标识
+
+**决定（2026-10-06）**：项目英文名改为 **BiliSail**，中文昵称 **哔帆**，Dart 工程名为 `bilisail`。统一描述为“一个专注观看体验的跨平台 Bilibili 第三方客户端”。应用标题、设置／关于、启动错误提示、Android 显示名、Windows `bilisail.exe`、macOS `BiliSail.app` 和项目请求标识采用新名称；三个独立包保留按职责命名的公共入口。
+
+**安装与存储**：按用户明确要求，应用尚未发布，本次直接统一内部标识。Android application ID／namespace 和 macOS bundle ID 为 `dev.bilisail.bilisail`；Windows `CompanyName`／`ProductName` 为 `dev.bilisail`／`BiliSail`；SQLite 文件名为 `bilisail.sqlite`，安全存储 key prefix 为 `bilisail.web_session.v1`。新名称使用独立的应用数据空间，既有开发版登录、设置与历史不迁移。Android Activity 包名与目录同步重构；数据库结构保持 v2。参考仓库与上游来源名称、历史验收文档中的真实产物路径和哈希保留；当前构建命令更新为新入口，本地检出目录保持原路径。
+
+**验证边界**：工程检查、原生回归、平台构建及未测项见 [项目更名记录](validation/project-renaming.md)。

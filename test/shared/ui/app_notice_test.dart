@@ -1,4 +1,4 @@
-import 'package:bili_lite/shared/ui/app_notice.dart';
+import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

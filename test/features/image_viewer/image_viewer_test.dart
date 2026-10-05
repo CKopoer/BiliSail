@@ -1,10 +1,10 @@
 import 'dart:ui' as ui;
 
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/features/image_viewer/application/image_viewer_controller.dart';
-import 'package:bili_lite/features/image_viewer/data/network_original_image_repository.dart';
-import 'package:bili_lite/features/image_viewer/domain/original_image.dart';
-import 'package:bili_lite/shared/ui/image_viewer.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/features/image_viewer/application/image_viewer_controller.dart';
+import 'package:bilisail/features/image_viewer/data/network_original_image_repository.dart';
+import 'package:bilisail/features/image_viewer/domain/original_image.dart';
+import 'package:bilisail/shared/ui/image_viewer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

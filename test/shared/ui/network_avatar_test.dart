@@ -1,4 +1,4 @@
-import 'package:bili_lite/shared/ui/network_avatar.dart';
+import 'package:bilisail/shared/ui/network_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

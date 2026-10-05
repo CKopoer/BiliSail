@@ -1,7 +1,8 @@
-import 'package:bili_lite/app/theme.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/shared/ui/video_card.dart';
-import 'package:bili_lite/shared/ui/video_grid.dart';
+import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/shared/ui/video_card.dart';
+import 'package:bilisail/shared/ui/video_grid.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -46,9 +47,10 @@ void main() {
   });
 
   testWidgets(
-    'card highlights title on hover and supports keyboard activation',
+    'card highlights title and author independently and supports keyboard activation',
     (tester) async {
       var opened = 0;
+      UserId? openedUser;
       await tester.pumpWidget(
         MaterialApp(
           theme: BiliTheme.light(),
@@ -57,7 +59,11 @@ void main() {
               alignment: Alignment.topLeft,
               child: SizedBox(
                 width: 250,
-                child: VideoCard(video: _videos.first, onTap: () => opened++),
+                child: VideoCard(
+                  video: _videos.first,
+                  onTap: () => opened++,
+                  onOpenUser: (id) => openedUser = id,
+                ),
               ),
             ),
           ),
@@ -72,6 +78,32 @@ void main() {
       expect(
         tester.widget<Text>(find.text(_videos.first.title)).style?.color,
         BiliTheme.accent,
+      );
+
+      await pointer.moveTo(tester.getCenter(find.text(_videos.first.author)));
+      await tester.pumpAndSettle();
+      final context = tester.element(find.byType(VideoCard));
+      expect(
+        tester.widget<Text>(find.text(_videos.first.author)).style?.color,
+        BiliTheme.accent,
+      );
+      expect(
+        tester.widget<Text>(find.text(_videos.first.title)).style?.color,
+        Theme.of(context).colorScheme.onSurface,
+      );
+      await tester.tap(find.text(_videos.first.author));
+      expect(openedUser, const UserId('123'));
+      expect(opened, 0);
+
+      await pointer.moveTo(tester.getCenter(find.text(_videos.first.title)));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.text(_videos.first.title)).style?.color,
+        BiliTheme.accent,
+      );
+      expect(
+        tester.widget<Text>(find.text(_videos.first.author)).style?.color,
+        Theme.of(context).textTheme.bodySmall?.color,
       );
 
       await pointer.moveTo(const Offset(500, 500));
@@ -160,6 +192,7 @@ final _videos = List.generate(
     title: '这是一段需要换行并且在较大文字比例下仍然显示两行的视频标题 $index',
     coverUrl: '',
     author: '长名称的测试 UP 主',
+    authorId: const UserId('123'),
     duration: const Duration(hours: 100, minutes: 28, seconds: 32),
     playCount: 192800000,
     danmakuCount: 32000,

@@ -1,5 +1,5 @@
-import 'package:bili_lite/core/presentation/keyboard_shortcuts.dart';
-import 'package:bili_lite/features/settings/domain/shortcut_settings.dart';
+import 'package:bilisail/core/presentation/keyboard_shortcuts.dart';
+import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';

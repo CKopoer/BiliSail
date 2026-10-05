@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 
-import 'package:bili_lite/app/dependencies.dart';
+import 'package:bilisail/app/dependencies.dart';
 
 // Explicit Windows developer probe; never used by normal startup or CI.
 // Reuses the application's secure-session boundary and prints schema only.

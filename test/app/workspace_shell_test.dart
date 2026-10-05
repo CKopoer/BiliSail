@@ -1,9 +1,9 @@
-import 'package:bili_lite/app/shell.dart';
-import 'package:bili_lite/shared/ui/app_notice.dart';
-import 'package:bili_lite/app/workspace_tabs.dart';
+import 'package:bilisail/app/shell.dart';
+import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bilisail/app/workspace_tabs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
-import 'package:bili_lite/features/settings/domain/shortcut_settings.dart';
+import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

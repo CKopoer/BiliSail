@@ -1,6 +1,6 @@
 import 'package:bili_api/bili_api.dart';
-import 'package:bili_lite/domain/dynamic_post.dart';
-import 'package:bili_lite/shared/data/dynamic_post_mapper.dart';
+import 'package:bilisail/domain/dynamic_post.dart';
+import 'package:bilisail/shared/data/dynamic_post_mapper.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

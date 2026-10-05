@@ -3,13 +3,13 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:bili_lite/core/presentation/app_image_provider.dart';
-import 'package:bili_lite/core/presentation/workspace_activity.dart';
-import 'package:bili_lite/core/storage/image_byte_cache.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/shared/ui/app_network_image.dart';
-import 'package:bili_lite/shared/ui/video_card.dart';
-import 'package:bili_lite/shared/ui/video_grid.dart';
+import 'package:bilisail/core/presentation/app_image_provider.dart';
+import 'package:bilisail/core/presentation/workspace_activity.dart';
+import 'package:bilisail/core/storage/image_byte_cache.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/shared/ui/app_network_image.dart';
+import 'package:bilisail/shared/ui/video_card.dart';
+import 'package:bilisail/shared/ui/video_grid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,7 +1,7 @@
 import 'package:bili_api/bili_api.dart';
-import 'package:bili_lite/domain/app_failure.dart';
-import 'package:bili_lite/features/playback/data/dash_media_selection.dart';
-import 'package:bili_lite/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/features/playback/data/dash_media_selection.dart';
+import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

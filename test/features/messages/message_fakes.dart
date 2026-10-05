@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/user.dart';
-import 'package:bili_lite/features/auth/domain/auth_repository.dart';
-import 'package:bili_lite/features/messages/domain/message_repository.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
+import 'package:bilisail/features/messages/domain/message_repository.dart';
 
 const conversation = InboxEntry(
   id: '1:2',

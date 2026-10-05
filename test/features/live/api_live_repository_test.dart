@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bili_api/bili_api.dart';
-import 'package:bili_lite/core/network/api_requests.dart';
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/user.dart';
-import 'package:bili_lite/features/live/data/api_live_repository.dart';
-import 'package:bili_lite/features/live/domain/live_room.dart';
+import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/features/live/data/api_live_repository.dart';
+import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

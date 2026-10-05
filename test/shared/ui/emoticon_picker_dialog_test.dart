@@ -1,4 +1,4 @@
-import 'package:bili_lite/shared/ui/emoticon_picker_dialog.dart';
+import 'package:bilisail/shared/ui/emoticon_picker_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,5 +1,5 @@
 name: bili_player
-description: Generic playback contracts and media_kit adapter for Bili Lite.
+description: Generic playback contracts and media_kit adapter for BiliSail.
 version: 0.1.0
 publish_to: none
 environment:

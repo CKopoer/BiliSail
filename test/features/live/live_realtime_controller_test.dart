@@ -1,14 +1,14 @@
 import 'dart:async';
 
-import 'package:bili_lite/core/network/api_requests.dart';
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/user.dart';
-import 'package:bili_lite/features/auth/application/auth_controller.dart';
-import 'package:bili_lite/features/auth/domain/auth_repository.dart';
-import 'package:bili_lite/features/live/application/live_controller.dart';
-import 'package:bili_lite/features/live/domain/live_chat_repository.dart';
-import 'package:bili_lite/features/live/domain/live_repository.dart';
-import 'package:bili_lite/features/live/domain/live_room.dart';
+import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
+import 'package:bilisail/features/live/application/live_controller.dart';
+import 'package:bilisail/features/live/domain/live_chat_repository.dart';
+import 'package:bilisail/features/live/domain/live_repository.dart';
+import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

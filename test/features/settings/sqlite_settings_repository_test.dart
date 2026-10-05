@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import 'package:bili_lite/core/storage/app_database.dart';
-import 'package:bili_lite/features/settings/data/sqlite_settings_repository.dart';
-import 'package:bili_lite/features/settings/domain/app_settings.dart';
-import 'package:bili_lite/features/settings/domain/shortcut_settings.dart';
+import 'package:bilisail/core/storage/app_database.dart';
+import 'package:bilisail/features/settings/data/sqlite_settings_repository.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
+import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 

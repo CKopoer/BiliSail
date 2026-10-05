@@ -1,17 +1,17 @@
 import 'dart:ui' as ui;
 
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/features/image_viewer/application/image_viewer_controller.dart';
-import 'package:bili_lite/features/image_viewer/domain/original_image.dart';
-import 'package:bili_lite/shared/ui/app_network_image.dart';
-import 'package:bili_lite/shared/ui/bili_badges.dart';
-import 'package:bili_lite/shared/ui/image_viewer.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/features/image_viewer/application/image_viewer_controller.dart';
+import 'package:bilisail/features/image_viewer/domain/original_image.dart';
+import 'package:bilisail/shared/ui/app_network_image.dart';
+import 'package:bilisail/shared/ui/bili_badges.dart';
+import 'package:bilisail/shared/ui/image_viewer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:bili_lite/features/video/presentation/comment_rich_content.dart';
-import 'package:bili_lite/features/video/domain/video_comments_repository.dart';
+import 'package:bilisail/features/video/presentation/comment_rich_content.dart';
+import 'package:bilisail/features/video/domain/video_comments_repository.dart';
 
 void main() {
   for (final width in [180.0, 320.0]) {

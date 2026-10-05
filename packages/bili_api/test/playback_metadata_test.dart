@@ -29,7 +29,7 @@ void main() {
     );
     expect(result.chapterFailure, isNull);
     expect(result.subtitleFailure, isNull);
-    expect(transport.headers.last['User-Agent'], 'BiliLite/0.1');
+    expect(transport.headers.last['User-Agent'], 'BiliSail/0.1');
   });
 
   test('absent optional metadata is a supported empty capability', () async {

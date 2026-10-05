@@ -1,7 +1,7 @@
-import 'package:bili_lite/app/theme.dart';
-import 'package:bili_lite/domain/user.dart';
-import 'package:bili_lite/features/profile/domain/profile_repository.dart';
-import 'package:bili_lite/features/profile/presentation/profile_header.dart';
+import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/features/profile/domain/profile_repository.dart';
+import 'package:bilisail/features/profile/presentation/profile_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

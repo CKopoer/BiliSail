@@ -1,4 +1,4 @@
-import 'package:bili_lite/core/presentation/public_image_variant.dart';
+import 'package:bilisail/core/presentation/public_image_variant.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -15,7 +15,7 @@ class WindowService {
   Future<void> initialize() async {
     if (!hasDesktopWindow) return;
     await windowManager.ensureInitialized();
-    await windowManager.setTitle('Bili Lite');
+    await windowManager.setTitle('BiliSail');
     await windowManager.setMinimumSize(const Size(420, 560));
     if (hasCustomTitleBar) {
       await windowManager.setTitleBarStyle(TitleBarStyle.hidden);

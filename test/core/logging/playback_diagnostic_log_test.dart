@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:bili_lite/core/logging/playback_diagnostic_log.dart';
+import 'package:bilisail/core/logging/playback_diagnostic_log.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter_test/flutter_test.dart';
 

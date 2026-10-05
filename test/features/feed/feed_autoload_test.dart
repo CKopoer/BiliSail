@@ -1,14 +1,14 @@
 import 'dart:async';
 
-import 'package:bili_lite/core/presentation/workspace_activity.dart';
-import 'package:bili_lite/domain/app_failure.dart';
-import 'package:bili_lite/domain/page_result.dart';
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/features/feed/application/feed_controller.dart';
-import 'package:bili_lite/features/feed/domain/feed_repository.dart';
-import 'package:bili_lite/features/feed/domain/home_channel.dart';
-import 'package:bili_lite/features/feed/presentation/feed_screen.dart';
+import 'package:bilisail/core/presentation/workspace_activity.dart';
+import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/page_result.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/feed/application/feed_controller.dart';
+import 'package:bilisail/features/feed/domain/feed_repository.dart';
+import 'package:bilisail/features/feed/domain/home_channel.dart';
+import 'package:bilisail/features/feed/presentation/feed_screen.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

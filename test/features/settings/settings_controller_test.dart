@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:bili_lite/features/settings/application/settings_controller.dart';
-import 'package:bili_lite/features/settings/domain/app_settings.dart';
-import 'package:bili_lite/features/settings/domain/settings_repository.dart';
+import 'package:bilisail/features/settings/application/settings_controller.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
+import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

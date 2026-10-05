@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:bili_lite/features/auth/application/auth_controller.dart';
-import 'package:bili_lite/app/theme.dart';
-import 'package:bili_lite/features/auth/application/account_overview_controller.dart';
-import 'package:bili_lite/features/auth/domain/account_overview.dart';
-import 'package:bili_lite/features/auth/presentation/account_button.dart';
-import 'package:bili_lite/features/auth/presentation/account_menu.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/features/auth/application/account_overview_controller.dart';
+import 'package:bilisail/features/auth/domain/account_overview.dart';
+import 'package:bilisail/features/auth/presentation/account_button.dart';
+import 'package:bilisail/features/auth/presentation/account_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';

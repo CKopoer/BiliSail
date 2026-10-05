@@ -1,5 +1,5 @@
 name: bili_api
-description: Pure Dart Bilibili web API adapter for Bili Lite.
+description: Pure Dart Bilibili web API adapter for BiliSail.
 version: 0.1.0
 publish_to: none
 environment:

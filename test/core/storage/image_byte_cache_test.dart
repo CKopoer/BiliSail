@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:bili_lite/core/storage/image_byte_cache.dart';
+import 'package:bilisail/core/storage/image_byte_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -6,7 +6,7 @@
 
 | 项目 | 本地提交 | 观察 |
 | --- | --- | --- |
-| bili-lite | 本次交付时尚无提交 | 已从设计阶段初始化为 Flutter 0.1.0 Windows 预览工程；源码版本以本地交付文件为准 |
+| bili-lite（现名 BiliSail） | 本次交付时尚无提交 | 已从设计阶段初始化为 Flutter 0.1.0 Windows 预览工程；源码版本以本地交付文件为准 |
 | biliuwp-lite | `baf7e7591e8dc2fe012cf1e7ba54a056dec7f3b0` | C#/UWP 客户端，Views/ViewModels/Services 与播放器等模块 |
 | bili-kernel | `e26f6dbd071e20d4220806fcff7bd675f3c29fc5` | C#/.NET API 包装，抽象、服务、鉴权、解析器、Protobuf |
 

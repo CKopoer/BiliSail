@@ -1,6 +1,8 @@
-# Bili Lite
+# BiliSail（哔帆）
 
-Flutter 原生哔哩哔哩客户端，当前版本 **0.1.0 Windows 预览版**。界面参考相邻 `biliuwp-lite` 和本机哔哩哔哩 UWP 的轻量白底、粉色强调、封面网格及播放详情分栏；Dart 实现独立编写，按用户要求选取的 UWP 图标来源与许可边界见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+一个专注观看体验的跨平台 Bilibili 第三方客户端，使用 Flutter + Dart 构建。当前版本 **0.1.0 Windows 预览版**。界面参考相邻 `biliuwp-lite` 和本机哔哩哔哩 UWP 的轻量白底、粉色强调、封面网格及播放详情分栏；Dart 实现独立编写，按用户要求选取的 UWP 图标来源与许可边界见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+
+英文名称 **BiliSail**，中文昵称 **哔帆**，Dart 工程名 **`bilisail`**；项目原名 Bili Lite。安装标识、平台命名空间、数据目录和凭据键统一使用新名称，改名版本从新的本地数据空间开始。当前本地检出目录仍为 `bili-lite`，后续检出可使用 `bilisail`。命名范围与验证见 [项目更名记录](docs/validation/project-renaming.md)。
 
 ## 已实现
 
@@ -52,7 +54,7 @@ flutter run -d windows
 
 ```powershell
 flutter build windows --release
-.\build\windows\x64\runner\Release\bili_lite.exe
+.\build\windows\x64\runner\Release\bilisail.exe
 ```
 
 分发／移动时必须保留整个 `Release` 目录，不能只复制 EXE。播放器原生库在构建时按插件固定来源下载，首次构建需要访问 GitHub。应用没有自动遥测，也不会自动点赞、投币或发送内容。
@@ -86,7 +88,7 @@ dart run tool\live_smoke.dart
 
 正常测试使用 fake transport/repository/player 和人工生成的媒体，不需要真实账号。二维码 key、Cookie、签名媒体 URL 不写入日志或测试素材。测试媒体由已安装的 FFmpeg 生成；**应用不要求用户安装 FFmpeg**，原生解码来自 `media_kit` 的固定二进制。
 
-播放诊断默认保存在应用数据目录的 `logs` 子目录；Windows 为 `%APPDATA%\dev.bililite\bili_lite\logs\playback-*.log`。记录 UTC 时间、源代次、播放位置/阶段、原生错误分类和可识别的 HTTP 状态，不保存原始错误文本、媒体 URL、请求头或账户信息，不自动上传。单文件最多 256 KiB、每次运行至多两份，创建/轮转时最多保留六份；写入队列最多 64 条，超量计数丢弃。旧版本未启用此日志，无法补录既往异常。误判原因与验证见 [播放错误排查](docs/validation/native-playback-errors.md)。
+播放诊断默认保存在应用数据目录的 `logs` 子目录；Windows 为 `%APPDATA%\dev.bilisail\BiliSail\logs\playback-*.log`。记录 UTC 时间、源代次、播放位置/阶段、原生错误分类和可识别的 HTTP 状态，不保存原始错误文本、媒体 URL、请求头或账户信息，不自动上传。单文件最多 256 KiB、每次运行至多两份，创建/轮转时最多保留六份；写入队列最多 64 条，超量计数丢弃。旧版本未启用此日志，无法补录既往异常。误判原因与验证见 [播放错误排查](docs/validation/native-playback-errors.md)。
 
 Android 工程的最低 API 为 24，macOS 工程最低版本为 12.0。这两个平台已创建入口、网络权限与依赖配置；本机 Windows 的成功不能证明两端运行正常。Windows、Android 和 macOS 的实际构建状态分别记录在验收文档。
 

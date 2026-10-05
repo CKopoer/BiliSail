@@ -1,16 +1,16 @@
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/dynamic_post.dart';
-import 'package:bili_lite/shared/ui/dynamic_post_card.dart';
-import 'package:bili_lite/features/feed/application/home_controller.dart';
-import 'package:bili_lite/features/feed/domain/home_channel.dart';
-import 'package:bili_lite/features/feed/domain/home_repository.dart';
-import 'package:bili_lite/features/feed/presentation/home_content.dart';
-import 'package:bili_lite/features/feed/presentation/home_feed_cards.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/dynamic_post.dart';
+import 'package:bilisail/shared/ui/dynamic_post_card.dart';
+import 'package:bilisail/features/feed/application/home_controller.dart';
+import 'package:bilisail/features/feed/domain/home_channel.dart';
+import 'package:bilisail/features/feed/domain/home_repository.dart';
+import 'package:bilisail/features/feed/presentation/home_content.dart';
+import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:bili_lite/shared/ui/video_card.dart';
-import 'package:bili_lite/shared/ui/bili_badges.dart';
+import 'package:bilisail/shared/ui/video_card.dart';
+import 'package:bilisail/shared/ui/bili_badges.dart';
 
 void main() {
   for (final width in [375.0, 1920.0]) {

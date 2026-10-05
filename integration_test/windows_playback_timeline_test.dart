@@ -2,19 +2,19 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:bili_api/bili_api.dart';
-import 'package:bili_lite/core/network/api_requests.dart';
-import 'package:bili_lite/core/platform/window_service.dart';
-import 'package:bili_lite/core/presentation/app_image_provider.dart';
-import 'package:bili_lite/core/storage/image_byte_cache.dart';
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/features/playback/application/playback_session.dart';
-import 'package:bili_lite/features/playback/data/api_playback_repository.dart';
-import 'package:bili_lite/features/playback/domain/playback_repository.dart';
-import 'package:bili_lite/features/playback/presentation/playback_panel.dart';
-import 'package:bili_lite/features/settings/domain/app_settings.dart';
-import 'package:bili_lite/features/video/data/api_video_repository.dart';
-import 'package:bili_lite/shared/ui/app_network_image.dart';
+import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/core/platform/window_service.dart';
+import 'package:bilisail/core/presentation/app_image_provider.dart';
+import 'package:bilisail/core/storage/image_byte_cache.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/data/api_playback_repository.dart';
+import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/playback/presentation/playback_panel.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
+import 'package:bilisail/features/video/data/api_video_repository.dart';
+import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -49,7 +49,7 @@ void main() {
       );
       // Count actual CDN loads independently of metadata; repeated hover must reuse.
       final directory = await Directory.systemTemp.createTemp(
-        'bili-lite-timeline-',
+        'bilisail-timeline-',
       );
       var imageLoads = 0;
       final cache = AppImageCache(

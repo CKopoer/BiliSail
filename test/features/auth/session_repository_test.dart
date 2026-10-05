@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bili_api/bili_api.dart';
-import 'package:bili_lite/core/network/api_requests.dart';
-import 'package:bili_lite/core/storage/credential_store.dart';
-import 'package:bili_lite/features/auth/data/session_repository.dart';
-import 'package:bili_lite/features/auth/domain/auth_repository.dart';
+import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/core/storage/credential_store.dart';
+import 'package:bilisail/features/auth/data/session_repository.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final class _FakeTransport implements ApiTransport {

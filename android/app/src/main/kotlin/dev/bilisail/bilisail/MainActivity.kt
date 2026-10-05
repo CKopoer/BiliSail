@@ -1,4 +1,4 @@
-package dev.bililite.bili_lite
+package dev.bilisail.bilisail
 
 import io.flutter.embedding.android.FlutterActivity
 

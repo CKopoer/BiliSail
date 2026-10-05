@@ -1,6 +1,6 @@
-import 'package:bili_lite/core/presentation/workspace_activity.dart';
-import 'package:bili_lite/shared/ui/paged_scroll_viewport.dart';
-import 'package:bili_lite/shared/ui/smooth_scroll_behavior.dart';
+import 'package:bilisail/core/presentation/workspace_activity.dart';
+import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
+import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -45,6 +45,48 @@ void main() {
       expect(controller.offset, closeTo(beforeReverse - 120, .01));
     },
   );
+
+  testWidgets('another wheel input preserves the current scroll velocity', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(_list(controller)));
+    await _wheel(tester, find.byType(ListView), 120);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 48));
+    final before = controller.position.activity?.velocity ?? 0;
+    expect(before, greaterThan(0));
+    await _wheel(tester, find.byType(ListView), 120);
+    expect(controller.position.activity?.velocity, closeTo(before, .001));
+    await tester.pumpAndSettle();
+    expect(controller.offset, closeTo(240, .01));
+  });
+
+  for (final frame in [
+    const Duration(milliseconds: 16),
+    const Duration(milliseconds: 8),
+  ]) {
+    testWidgets(
+      'continuous wheel input has no stalled ${frame.inMilliseconds}ms frames',
+      (tester) async {
+        final controller = ScrollController();
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(_app(_list(controller)));
+        await _wheel(tester, find.byType(ListView), 120);
+        await tester.pump();
+        await tester.pump(frame);
+        for (var i = 0; i < 6; i++) {
+          final before = controller.offset;
+          await _wheel(tester, find.byType(ListView), 120);
+          await tester.pump(frame);
+          expect(controller.offset, greaterThan(before));
+        }
+        await tester.pumpAndSettle();
+        expect(controller.offset, closeTo(840, .01));
+      },
+    );
+  }
 
   testWidgets('inner lists claim the wheel and pass it outward at their edge', (
     tester,
@@ -193,13 +235,23 @@ void main() {
     final controller = ScrollController();
     addTearDown(controller.dispose);
     await tester.pumpWidget(_app(_list(controller)));
+    await _wheel(tester, find.byType(ListView), 120);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+    final beforeDrag = controller.offset;
     await tester.drag(find.byType(ListView), const Offset(0, -150));
     await tester.pumpAndSettle();
-    expect(controller.offset, greaterThan(100));
+    expect(controller.offset, greaterThan(beforeDrag + 100));
     final previous = controller.offset;
     final rect = tester.getRect(find.byType(ListView));
+    final position = controller.position;
+    final thumbCenter =
+        rect.top +
+        rect.height *
+            (previous + position.viewportDimension / 2) /
+            (position.maxScrollExtent + position.viewportDimension);
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await mouse.down(Offset(rect.right - 3, rect.top + 40));
+    await mouse.down(Offset(rect.right - 3, thumbCenter));
     await mouse.moveBy(const Offset(0, 100));
     await mouse.up();
     await tester.pumpAndSettle();
@@ -303,6 +355,155 @@ void main() {
     await _wheel(tester, find.byType(ListView), 120);
     await tester.pumpAndSettle();
     expect(controller.offset, closeTo(stopped + 120, .01));
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final reducedMotion in [false, true]) {
+    testWidgets(
+      '${reducedMotion ? 'reduced motion' : 'TickerMode'} stops an active transition',
+      (tester) async {
+        final controller = ScrollController();
+        addTearDown(controller.dispose);
+        var enabled = true;
+        late StateSetter update;
+        await tester.pumpWidget(
+          _app(
+            StatefulBuilder(
+              builder: (context, setState) {
+                update = setState;
+                return MediaQuery(
+                  data: MediaQuery.of(context)
+                      .copyWith(disableAnimations: reducedMotion && !enabled),
+                  child: TickerMode(
+                    enabled: reducedMotion || enabled,
+                    child: _list(controller),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+        await _wheel(tester, find.byType(ListView), 400);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 40));
+        update(() => enabled = false);
+        await tester.pump();
+        final stopped = controller.offset;
+        expect(controller.position.isScrollingNotifier.value, isFalse);
+        await tester.pump(const Duration(seconds: 1));
+        expect(controller.offset, stopped);
+        update(() => enabled = true);
+        await tester.pump();
+        await _wheel(tester, find.byType(ListView), 120);
+        await tester.pumpAndSettle();
+        expect(controller.offset, closeTo(stopped + 120, .01));
+      },
+    );
+  }
+
+  testWidgets('trackpad input cancels pending mouse motion', (tester) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(_list(controller)));
+    await _wheel(tester, find.byType(ListView), 400);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    final before = controller.offset;
+    await _wheel(
+      tester,
+      find.byType(ListView),
+      20,
+      kind: PointerDeviceKind.trackpad,
+    );
+    expect(controller.offset, closeTo(before + 20, .01));
+    await tester.pumpAndSettle();
+    expect(controller.offset, closeTo(before + 20, .01));
+    await _wheel(tester, find.byType(ListView), 120);
+    await tester.pumpAndSettle();
+    expect(controller.offset, closeTo(before + 140, .01));
+  });
+
+  testWidgets('shrinking content clamps the active target without bouncing', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    var height = 2400.0;
+    late StateSetter update;
+    await tester.pumpWidget(
+      _app(
+        StatefulBuilder(
+          builder: (_, setState) {
+            update = setState;
+            return ListView(
+              controller: controller,
+              children: [SizedBox(height: height)],
+            );
+          },
+        ),
+      ),
+    );
+    await _wheel(tester, find.byType(ListView), 1500);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    update(() => height = 1200);
+    await tester.pump();
+    for (var i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        controller.offset,
+        inInclusiveRange(
+          controller.position.minScrollExtent,
+          controller.position.maxScrollExtent,
+        ),
+      );
+    }
+    expect(controller.offset, controller.position.maxScrollExtent);
+    expect(controller.position.isScrollingNotifier.value, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('return-to-top animation takes ownership of wheel motion', (
+    tester,
+  ) async {
+    final controller = ScrollController(initialScrollOffset: 500);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(_list(controller)));
+    await _wheel(tester, find.byType(ListView), 400);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    final animation = controller.animateTo(
+      0,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+    );
+    await tester.pumpAndSettle();
+    await animation;
+    expect(controller.offset, 0);
+    await _wheel(tester, find.byType(ListView), 120);
+    await tester.pumpAndSettle();
+    expect(controller.offset, closeTo(120, .01));
+  });
+
+  testWidgets('removing the smooth behavior stops its ticker and scrolling', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(_list(controller)));
+    await _wheel(tester, find.byType(ListView), 400);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.windows),
+        home: Scaffold(body: _list(controller)),
+      ),
+    );
+    final stopped = controller.offset;
+    await tester.pumpAndSettle();
+    expect(controller.offset, stopped);
+    expect(controller.position.isScrollingNotifier.value, isFalse);
     expect(tester.takeException(), isNull);
   });
 

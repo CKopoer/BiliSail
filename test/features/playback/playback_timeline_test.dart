@@ -1,4 +1,4 @@
-import 'package:bili_lite/features/playback/domain/playback_timeline.dart';
+import 'package:bilisail/features/playback/domain/playback_timeline.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

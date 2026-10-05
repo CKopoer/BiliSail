@@ -11,7 +11,7 @@ abstract interface class CredentialStore {
 class SystemCredentialStore implements CredentialStore {
   SystemCredentialStore({
     FlutterSecureStorage? storage,
-    String keyPrefix = 'bili_lite.web_session.v1',
+    String keyPrefix = 'bilisail.web_session.v1',
   }) : _storage = storage ?? const FlutterSecureStorage(),
        _prefix = keyPrefix;
 

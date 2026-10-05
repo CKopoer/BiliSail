@@ -397,7 +397,7 @@ Future<LiveSocket> connectLiveSocket(
       ..set('Sec-WebSocket-Key', nonce)
       ..set('Sec-WebSocket-Version', '13')
       ..set('Origin', 'https://live.bilibili.com')
-      ..set(HttpHeaders.userAgentHeader, 'Mozilla/5.0 BiliLite/0.1.0');
+      ..set(HttpHeaders.userAgentHeader, 'Mozilla/5.0 BiliSail/0.1.0');
     final response = await request.close().timeout(const Duration(seconds: 12));
     final expected = base64Encode(
       sha1

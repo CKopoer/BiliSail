@@ -1,14 +1,14 @@
-import 'package:bili_lite/domain/user.dart';
+import 'package:bilisail/domain/user.dart';
 
 import 'dart:async';
 
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/features/auth/application/auth_controller.dart';
-import 'package:bili_lite/features/auth/domain/auth_repository.dart';
-import 'package:bili_lite/features/video/application/video_comments_controller.dart';
-import 'package:bili_lite/features/video/domain/video_comments_repository.dart';
-import 'package:bili_lite/features/video/presentation/video_comments_panel.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
+import 'package:bilisail/features/video/application/video_comments_controller.dart';
+import 'package:bilisail/features/video/domain/video_comments_repository.dart';
+import 'package:bilisail/features/video/presentation/video_comments_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

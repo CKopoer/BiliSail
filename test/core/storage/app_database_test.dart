@@ -1,11 +1,11 @@
 import 'dart:io';
 
-import 'package:bili_lite/core/storage/app_database.dart';
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/features/library/data/sqlite_library_repository.dart';
-import 'package:bili_lite/features/settings/data/sqlite_settings_repository.dart';
-import 'package:bili_lite/features/settings/domain/app_settings.dart';
+import 'package:bilisail/core/storage/app_database.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/library/data/sqlite_library_repository.dart';
+import 'package:bilisail/features/settings/data/sqlite_settings_repository.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,7 +14,7 @@ void main() {
     'v1 migration retains video history and stores PGC episode routes',
     () async {
       final directory = await Directory.systemTemp.createTemp(
-        'bili_lite_migration_test',
+        'bilisail_migration_test',
       );
       final file = File('${directory.path}/client.sqlite');
       final database = AppDatabase(
@@ -85,7 +85,7 @@ void main() {
     'schema initializes and reopening retains settings and progress',
     () async {
       final directory = await Directory.systemTemp.createTemp(
-        'bili_lite_storage_test',
+        'bilisail_storage_test',
       );
       final file = File('${directory.path}/client.sqlite');
       var database = AppDatabase(NativeDatabase(file));

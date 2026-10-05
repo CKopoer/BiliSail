@@ -1,16 +1,16 @@
 import 'dart:async';
 
 import 'package:bili_danmaku/bili_danmaku.dart';
-import 'package:bili_lite/core/presentation/workspace_activity.dart';
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/features/auth/application/auth_controller.dart';
-import 'package:bili_lite/features/auth/domain/auth_repository.dart';
-import 'package:bili_lite/features/live/application/live_controller.dart';
-import 'package:bili_lite/features/live/domain/live_chat_repository.dart';
-import 'package:bili_lite/features/live/domain/live_repository.dart';
-import 'package:bili_lite/features/live/domain/live_room.dart';
-import 'package:bili_lite/features/live/presentation/live_player_danmaku.dart';
-import 'package:bili_lite/features/settings/domain/app_settings.dart';
+import 'package:bilisail/core/presentation/workspace_activity.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
+import 'package:bilisail/features/live/application/live_controller.dart';
+import 'package:bilisail/features/live/domain/live_chat_repository.dart';
+import 'package:bilisail/features/live/domain/live_repository.dart';
+import 'package:bilisail/features/live/domain/live_room.dart';
+import 'package:bilisail/features/live/presentation/live_player_danmaku.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

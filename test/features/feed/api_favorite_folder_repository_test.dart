@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bili_api/bili_api.dart';
-import 'package:bili_lite/core/network/api_requests.dart';
-import 'package:bili_lite/domain/app_failure.dart';
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/features/feed/data/api_favorite_folder_repository.dart';
-import 'package:bili_lite/features/feed/domain/favorite_folder_repository.dart';
+import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/features/feed/data/api_favorite_folder_repository.dart';
+import 'package:bilisail/features/feed/domain/favorite_folder_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _target = (id: '42', scope: 'user:1');

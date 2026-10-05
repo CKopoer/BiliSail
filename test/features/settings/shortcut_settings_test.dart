@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:bili_lite/features/settings/domain/shortcut_settings.dart';
+import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

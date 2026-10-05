@@ -27,7 +27,7 @@ Future<void> main() async {
             child: Padding(
               padding: EdgeInsets.all(32),
               child: Text(
-                'Bili Lite 启动失败。请确认应用目录完整、本地数据目录可写，随后重新启动。',
+                'BiliSail 启动失败。请确认应用目录完整、本地数据目录可写，随后重新启动。',
                 textAlign: TextAlign.center,
               ),
             ),

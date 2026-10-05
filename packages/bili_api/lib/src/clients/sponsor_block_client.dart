@@ -24,7 +24,7 @@ final class SponsorBlockClient {
         'cid': cid,
         'categories': jsonEncode(categories.take(16).toList()),
       }),
-      headers: const {'origin': 'bili-lite', 'x-ext-version': '0.1.0'},
+      headers: const {'origin': 'bilisail', 'x-ext-version': '0.1.0'},
       timeout: const Duration(seconds: 8),
       cancellation: cancellation,
     );

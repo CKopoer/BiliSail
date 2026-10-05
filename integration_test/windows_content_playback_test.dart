@@ -2,15 +2,15 @@ import 'dart:io';
 
 import 'package:bili_api/bili_api.dart';
 import 'package:bili_danmaku/bili_danmaku.dart';
-import 'package:bili_lite/core/network/api_requests.dart';
-import 'package:bili_lite/features/playback/data/api_content_playback_repository.dart';
-import 'package:bili_lite/features/playback/data/api_playback_repository.dart';
+import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/features/playback/data/api_content_playback_repository.dart';
+import 'package:bilisail/features/playback/data/api_playback_repository.dart';
 
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/features/playback/application/playback_session.dart';
-import 'package:bili_lite/features/playback/domain/content_playback.dart';
-import 'package:bili_lite/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/domain/content_playback.dart';
+import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,7 +32,7 @@ void main() {
         paths.add(request.uri.path);
         if (request.headers.value('referer') != 'https://live.bilibili.com/' ||
             request.headers.value('user-agent') !=
-                'BiliLite-Content-Validation') {
+                'BiliSail-Content-Validation') {
           rejectedHeaders++;
           request.response.statusCode = 403;
         } else {
@@ -236,7 +236,7 @@ final class _ContentRepository implements ContentPlaybackRepository {
     duration: Duration.zero,
     headers: const {
       'Referer': 'https://live.bilibili.com/',
-      'User-Agent': 'BiliLite-Content-Validation',
+      'User-Agent': 'BiliSail-Content-Validation',
     },
     kind: flv ? PlaybackMediaKind.liveFlv : PlaybackMediaKind.liveHls,
   );

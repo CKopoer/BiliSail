@@ -1,4 +1,4 @@
-import 'package:bili_lite/shared/ui/paged_scroll_viewport.dart';
+import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

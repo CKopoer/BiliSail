@@ -1,5 +1,5 @@
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/features/profile/presentation/profile_video_card.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/profile/presentation/profile_video_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

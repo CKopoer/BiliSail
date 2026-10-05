@@ -1,4 +1,4 @@
-import 'package:bili_lite/features/settings/domain/app_settings.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

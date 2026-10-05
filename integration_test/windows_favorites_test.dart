@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:bili_api/bili_api.dart';
-import 'package:bili_lite/core/storage/credential_store.dart';
+import 'package:bilisail/core/storage/credential_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';

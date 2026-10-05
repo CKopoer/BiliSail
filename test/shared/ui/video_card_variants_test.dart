@@ -1,7 +1,7 @@
-import 'package:bili_lite/app/theme.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/shared/ui/bili_badges.dart';
-import 'package:bili_lite/shared/ui/video_card.dart';
+import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/shared/ui/bili_badges.dart';
+import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

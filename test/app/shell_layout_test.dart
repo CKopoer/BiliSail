@@ -1,4 +1,4 @@
-import 'package:bili_lite/app/shell.dart';
+import 'package:bilisail/app/shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

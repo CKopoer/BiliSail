@@ -1,8 +1,8 @@
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/features/library/application/library_controller.dart';
-import 'package:bili_lite/features/library/domain/library_repository.dart';
-import 'package:bili_lite/features/library/presentation/history_screen.dart';
-import 'package:bili_lite/shared/ui/video_card.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/library/application/library_controller.dart';
+import 'package:bilisail/features/library/domain/library_repository.dart';
+import 'package:bilisail/features/library/presentation/history_screen.dart';
+import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

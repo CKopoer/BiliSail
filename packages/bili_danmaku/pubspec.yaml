@@ -1,5 +1,5 @@
 name: bili_danmaku
-description: Bounded video danmaku scheduling and Canvas rendering for Bili Lite.
+description: Bounded video danmaku scheduling and Canvas rendering for BiliSail.
 version: 0.1.0
 publish_to: none
 environment:

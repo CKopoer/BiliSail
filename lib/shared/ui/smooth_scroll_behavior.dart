@@ -1,8 +1,9 @@
-import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/presentation/workspace_activity.dart';
@@ -51,12 +52,7 @@ final class _SmoothWheelScroll extends StatefulWidget {
 }
 
 final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
-  static const _duration = Duration(milliseconds: 160);
-  ScrollPosition? _position;
-  double? _target;
-  double _lastDelta = 0;
-  int _generation = 0;
-  bool _startingAnimation = false;
+  _WheelScrollActivity? _motion;
   bool _enabled = true;
 
   @override
@@ -70,30 +66,17 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
     _enabled = enabled;
   }
 
-  void _forgetTarget() {
-    _generation++;
-    _position = null;
-    _target = null;
-    _lastDelta = 0;
-  }
-
   void _stopMotion() {
-    final position = _position;
-    _forgetTarget();
-    if (position != null &&
-        widget.scrollable.mounted &&
-        identical(position, widget.scrollable.position) &&
-        position.hasPixels) {
-      position.jumpTo(position.pixels);
-    }
+    final motion = _motion;
+    _motion = null;
+    motion?.stop();
   }
 
   void _onEvent(PointerEvent event) {
     if (event is PointerDownEvent ||
         event is PointerPanZoomStartEvent ||
         event is PointerScrollInertiaCancelEvent) {
-      // The normal scrollable handles the drag/hold or inertia cancellation.
-      _forgetTarget();
+      _stopMotion();
       return;
     }
     if (!_enabled ||
@@ -109,7 +92,8 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
       return;
     }
     final position = widget.scrollable.position;
-    if (!position.hasContentDimensions ||
+    if (position is! ScrollActivityDelegate ||
+        !position.hasContentDimensions ||
         !position.physics.shouldAcceptUserOffset(position)) {
       return;
     }
@@ -127,64 +111,171 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
     // At an edge, let an enclosing scrollable claim the event instead.
     if (next == position.pixels) return;
     GestureBinding.instance.pointerSignalResolver.register(event, (_) {
-      if (!mounted || !_enabled || !widget.scrollable.mounted) return;
+      if (!mounted ||
+          !_enabled ||
+          !widget.scrollable.mounted ||
+          !identical(position, widget.scrollable.position)) {
+        return;
+      }
       _scrollBy(position, delta);
       event.respond(allowPlatformDefault: false);
     });
   }
 
   void _scrollBy(ScrollPosition position, double delta) {
-    final continuing =
-        identical(position, _position) &&
-        _target != null &&
-        delta * _lastDelta > 0;
-    final start = continuing ? _target ?? position.pixels : position.pixels;
-    final target = (start + delta)
-        .clamp(position.minScrollExtent, position.maxScrollExtent)
-        .toDouble();
-    _position = position;
-    _target = target;
-    _lastDelta = delta;
-    final generation = ++_generation;
-    _startingAnimation = true;
-    final Future<void> motion;
-    try {
-      motion = position.animateTo(
-        target,
-        duration: _duration,
-        curve: Curves.easeOutCubic,
+    final motion = _motion;
+    if (motion != null &&
+        !motion.disposed &&
+        identical(position, motion.position)) {
+      motion.addDelta(delta);
+      return;
+    }
+    if (position case final ScrollActivityDelegate delegate) {
+      final activity = _WheelScrollActivity(
+        position,
+        delegate,
+        widget.scrollable.vsync,
+        delta,
       );
-    } finally {
-      _startingAnimation = false;
+      _motion = activity;
+      position.beginActivity(activity);
     }
-    unawaited(
-      motion.then((_) {
-        if (mounted && generation == _generation) _forgetTarget();
-      }),
-    );
-  }
-
-  bool _onScroll(ScrollNotification notification) {
-    if (notification.depth == 0 &&
-        !_startingAnimation &&
-        (notification is ScrollStartNotification ||
-            notification is ScrollEndNotification)) {
-      // Refresh, return-to-top, scrollbar drag and touch take ownership.
-      _forgetTarget();
-    }
-    return false;
   }
 
   @override
   Widget build(BuildContext context) =>
-      NotificationListener<ScrollNotification>(
-        onNotification: _onScroll,
-        child: _WheelSignalListener(onEvent: _onEvent, child: widget.child),
-      );
+      _WheelSignalListener(onEvent: _onEvent, child: widget.child);
 
   @override
   void dispose() {
-    _forgetTarget();
+    final motion = _motion;
+    _motion = null;
+    if (motion != null && !motion.disposed) {
+      // The list's notification context may already be unmounted. Its position
+      // will dispose the activity too; stop the ticker without dispatching then.
+      if (motion.position.context.notificationContext?.mounted ?? false) {
+        motion.stop();
+      } else {
+        motion.dispose();
+      }
+    }
+    super.dispose();
+  }
+}
+
+/// A single frame clock follows a retargetable, critically damped spring.
+/// Retargeting preserves velocity and never inserts a new animation's zero frame.
+final class _WheelScrollActivity extends ScrollActivity {
+  _WheelScrollActivity(
+    ScrollPosition position,
+    super.delegate,
+    TickerProvider vsync,
+    double delta,
+  ) : _position = position,
+      _target = position.pixels {
+    addDelta(delta);
+    _ticker = vsync.createTicker(_tick)..start();
+  }
+
+  // Critical damping avoids bounce. A 120px notch reaches ~99% in 210ms.
+  static const _spring = SpringDescription(
+    mass: 1,
+    stiffness: 1024,
+    damping: 64,
+  );
+  static const _tolerance = Tolerance(distance: .1, velocity: 5);
+  ScrollPosition _position;
+  ScrollPosition get position => _position;
+  late final Ticker _ticker;
+  late ScrollSpringSimulation _simulation;
+  Duration _lastElapsed = Duration.zero;
+  Duration _simulationStart = Duration.zero;
+  double _target;
+  double _lastDelta = 0;
+  double _velocity = 0;
+  bool disposed = false;
+
+  void addDelta(double delta) {
+    final reversing = delta * _lastDelta < 0;
+    if (reversing) _velocity = 0;
+    final start = reversing ? position.pixels : _target;
+    _target = (start + delta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    _lastDelta = delta;
+    _retarget();
+  }
+
+  void _retarget() {
+    _simulationStart = _lastElapsed;
+    _simulation = ScrollSpringSimulation(
+      _spring,
+      position.pixels,
+      _target,
+      _velocity,
+      tolerance: _tolerance,
+    );
+  }
+
+  void _tick(Duration elapsed) {
+    if (disposed || elapsed == _lastElapsed) return;
+    _lastElapsed = elapsed;
+    if (!position.hasContentDimensions ||
+        !position.physics.shouldAcceptUserOffset(position)) {
+      stop();
+      return;
+    }
+    final seconds = (elapsed - _simulationStart).inMicroseconds / 1000000;
+    final pixels = position.pixels;
+    var next = _simulation.x(seconds);
+    _velocity = _simulation.dx(seconds);
+    // A resized viewport can move the target behind the remaining momentum.
+    // Clamp between the displayed offset and target rather than overshooting.
+    next = next.clamp(math.min(pixels, _target), math.max(pixels, _target));
+    final settled = _simulation.isDone(seconds);
+    final reached = next == _target;
+    final overscroll = delegate.setPixels(settled ? _target : next);
+    // A scroll listener can take ownership while setPixels dispatches updates.
+    if (!disposed && (settled || reached || overscroll != 0)) stop();
+  }
+
+  void stop() {
+    if (!disposed) delegate.goIdle();
+  }
+
+  @override
+  void applyNewDimensions() {
+    _target = _target
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    if (_velocity * (_target - position.pixels) < 0) _velocity = 0;
+    _retarget();
+  }
+
+  @override
+  void updateDelegate(ScrollActivityDelegate value) {
+    super.updateDelegate(value);
+    if (value case final ScrollPosition position) {
+      _position = position;
+    } else {
+      stop();
+    }
+  }
+
+  @override
+  bool get shouldIgnorePointer => false;
+
+  @override
+  bool get isScrolling => true;
+
+  @override
+  double get velocity => _velocity;
+
+  @override
+  void dispose() {
+    if (disposed) return;
+    disposed = true;
+    _ticker.dispose();
     super.dispose();
   }
 }

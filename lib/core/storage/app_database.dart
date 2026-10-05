@@ -14,7 +14,7 @@ class AppDatabase extends GeneratedDatabase {
     await directory.create(recursive: true);
     return AppDatabase(
       NativeDatabase.createInBackground(
-        File(p.join(directory.path, 'bili_lite.sqlite')),
+        File(p.join(directory.path, 'bilisail.sqlite')),
       ),
     );
   }

@@ -1,20 +1,20 @@
 import 'dart:async';
 
-import 'package:bili_lite/domain/app_failure.dart';
+import 'package:bilisail/domain/app_failure.dart';
 
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/user.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/features/auth/application/auth_controller.dart';
-import 'package:bili_lite/features/auth/domain/auth_repository.dart';
-import 'package:bili_lite/features/profile/application/profile_controller.dart';
-import 'package:bili_lite/features/profile/domain/profile_repository.dart';
-import 'package:bili_lite/features/profile/presentation/profile_screen.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
+import 'package:bilisail/features/profile/application/profile_controller.dart';
+import 'package:bilisail/features/profile/domain/profile_repository.dart';
+import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:bili_lite/shared/ui/video_card.dart';
-import 'package:bili_lite/features/profile/presentation/profile_video_card.dart';
+import 'package:bilisail/shared/ui/video_card.dart';
+import 'package:bilisail/features/profile/presentation/profile_video_card.dart';
 
 const id = UserId('7');
 const entry = ProfileEntry(

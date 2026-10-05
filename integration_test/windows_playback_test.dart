@@ -1,20 +1,20 @@
 import 'dart:io';
 
 import 'package:bili_api/bili_api.dart';
-import 'package:bili_lite/app/shell.dart';
-import 'package:bili_lite/app/theme.dart';
-import 'package:bili_lite/core/platform/desktop_window_chrome.dart';
-import 'package:bili_lite/core/network/api_requests.dart';
-import 'package:bili_lite/core/platform/window_service.dart';
-import 'package:bili_lite/core/storage/credential_store.dart';
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/features/playback/data/api_playback_repository.dart';
-import 'package:bili_lite/features/playback/application/playback_session.dart';
-import 'package:bili_lite/features/playback/domain/playback_repository.dart';
-import 'package:bili_lite/features/playback/presentation/playback_panel.dart';
-import 'package:bili_lite/features/settings/domain/app_settings.dart';
-import 'package:bili_lite/features/video/data/api_video_repository.dart';
+import 'package:bilisail/app/shell.dart';
+import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/core/platform/desktop_window_chrome.dart';
+import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/core/platform/window_service.dart';
+import 'package:bilisail/core/storage/credential_store.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/playback/data/api_playback_repository.dart';
+import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/playback/presentation/playback_panel.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
+import 'package:bilisail/features/video/data/api_video_repository.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -44,7 +44,7 @@ void main() {
             .add(request.headers.value('range'));
         if (request.headers.value('referer') != 'https://www.bilibili.com/' ||
             request.headers.value('user-agent') !=
-                'BiliLite-Native-Validation') {
+                'BiliSail-Native-Validation') {
           request.response.statusCode = 403;
         } else if (path.startsWith('/redirect-')) {
           request.response.statusCode = 302;
@@ -95,7 +95,7 @@ void main() {
       final policy = MediaRequestPolicy(
         headers: {
           'Referer': 'https://www.bilibili.com/',
-          'User-Agent': 'BiliLite-Native-Validation',
+          'User-Agent': 'BiliSail-Native-Validation',
         },
       );
       final root = 'http://127.0.0.1:${server.port}';
@@ -176,7 +176,7 @@ void main() {
   testWidgets('Windows secure store writes and deletes an isolated probe', (
     tester,
   ) async {
-    final key = 'bili_lite.validation.${DateTime.now().microsecondsSinceEpoch}';
+    final key = 'bilisail.validation.${DateTime.now().microsecondsSinceEpoch}';
     final storage = SystemCredentialStore(keyPrefix: key);
     try {
       await storage.write('synthetic-validation-value');

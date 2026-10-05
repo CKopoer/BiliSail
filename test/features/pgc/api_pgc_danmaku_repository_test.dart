@@ -2,12 +2,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bili_api/bili_api.dart';
-import 'package:bili_lite/core/network/api_requests.dart';
-import 'package:bili_lite/domain/app_failure.dart';
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/domain/video.dart';
-import 'package:bili_lite/features/pgc/data/api_pgc_danmaku_repository.dart';
-import 'package:bili_lite/features/pgc/domain/pgc_danmaku_repository.dart';
+import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/pgc/data/api_pgc_danmaku_repository.dart';
+import 'package:bilisail/features/pgc/domain/pgc_danmaku_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

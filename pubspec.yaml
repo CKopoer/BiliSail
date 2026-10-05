@@ -1,5 +1,5 @@
-name: bili_lite
-description: A lightweight native Bilibili client built with Flutter.
+name: bilisail
+description: BiliSail, a cross-platform third-party Bilibili client focused on the viewing experience, built with Flutter.
 publish_to: none
 version: 0.1.0+1
 

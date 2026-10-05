@@ -259,7 +259,7 @@ final class BiliApiClient {
             },
             headers: {
               'Accept': 'application/json',
-              'User-Agent': 'BiliLite/0.1',
+              'User-Agent': 'BiliSail/0.1',
               'Referer':
                   message
                       ? 'https://message.bilibili.com/'
@@ -1212,7 +1212,7 @@ final class BiliApiClient {
               ? 'application/octet-stream'
               : 'application/json',
       'User-Agent':
-          endpoint == 'video_storyboard' ? 'Mozilla/5.0' : 'BiliLite/0.1',
+          endpoint == 'video_storyboard' ? 'Mozilla/5.0' : 'BiliSail/0.1',
       'Referer': 'https://www.bilibili.com/',
     };
     final cookie = cookieJar.headerFor(uri, now: _clock());

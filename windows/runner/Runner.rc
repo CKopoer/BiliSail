@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "dev.bililite" "\0"
-            VALUE "FileDescription", "bili_lite" "\0"
+            VALUE "CompanyName", "dev.bilisail" "\0"
+            VALUE "FileDescription", "BiliSail" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "bili_lite" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 dev.bililite. All rights reserved." "\0"
-            VALUE "OriginalFilename", "bili_lite.exe" "\0"
-            VALUE "ProductName", "bili_lite" "\0"
+            VALUE "InternalName", "bilisail" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 BiliSail. All rights reserved." "\0"
+            VALUE "OriginalFilename", "bilisail.exe" "\0"
+            VALUE "ProductName", "BiliSail" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

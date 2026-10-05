@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:bili_lite/domain/app_failure.dart';
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/features/auth/application/auth_controller.dart';
-import 'package:bili_lite/features/auth/domain/auth_repository.dart';
-import 'package:bili_lite/features/feed/application/favorite_folder_controller.dart';
-import 'package:bili_lite/features/feed/domain/favorite_folder_repository.dart';
+import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
+import 'package:bilisail/features/feed/application/favorite_folder_controller.dart';
+import 'package:bilisail/features/feed/domain/favorite_folder_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

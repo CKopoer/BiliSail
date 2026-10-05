@@ -54,8 +54,11 @@ final class VideoCard extends StatefulWidget {
 }
 
 final class _VideoCardState extends State<VideoCard> {
+  static const _titleFontSize = 15.0;
+
   bool _hovered = false;
   bool _focused = false;
+  bool _authorHovered = false;
 
   @override
   Widget build(BuildContext context) {
@@ -64,10 +67,10 @@ final class _VideoCardState extends State<VideoCard> {
     final video = widget.video;
     final textScaler = MediaQuery.textScalerOf(context);
     final titleStyle = theme.textTheme.bodyMedium?.copyWith(
-      fontSize: 14,
+      fontSize: _titleFontSize,
       height: 1.4,
     );
-    final highlighted = _hovered || _focused;
+    final highlighted = (_hovered || _focused) && !_authorHovered;
     final progress = widget.progress;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 120),
@@ -161,7 +164,7 @@ final class _VideoCardState extends State<VideoCard> {
                   children: [
                     // Reserve two scaled lines so author rows align across cards.
                     SizedBox(
-                      height: textScaler.scale(14) * 1.4 * 2 + 2,
+                      height: textScaler.scale(_titleFontSize) * 1.4 * 2 + 2,
                       child: HighlightedText(
                         video.title,
                         query: widget.highlightQuery,
@@ -177,6 +180,9 @@ final class _VideoCardState extends State<VideoCard> {
                     _AuthorMetadata(
                       video: video,
                       onOpenUser: widget.onOpenUser,
+                      hovered: _authorHovered,
+                      onHover: (value) =>
+                          setState(() => _authorHovered = value),
                       showUpBadge: widget.showUpBadge,
                       reason: widget.showRecommendationReason
                           ? video.recommendationReason
@@ -296,12 +302,16 @@ final class _AuthorMetadata extends StatelessWidget {
   const _AuthorMetadata({
     required this.video,
     required this.onOpenUser,
+    required this.hovered,
+    required this.onHover,
     required this.showUpBadge,
     required this.reason,
     required this.publishText,
   });
   final VideoSummary video;
   final ValueChanged<UserId>? onOpenUser;
+  final bool hovered;
+  final ValueChanged<bool> onHover;
   final bool showUpBadge;
   final String? reason;
   final String publishText;
@@ -318,26 +328,33 @@ final class _AuthorMetadata extends StatelessWidget {
         ? '${date.month}-${date.day}'
         : '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     final reasonText = reason?.trim() ?? '';
-    final author = InkWell(
-      onTap: id != null && id.isValid && openUser != null
-          ? () => openUser(id)
-          : null,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showUpBadge) ...[
-            const BiliUpBadge(size: 16),
-            const SizedBox(width: 4),
-          ],
-          Flexible(
-            child: Text(
-              video.author,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall,
+    final author = MouseRegion(
+      onEnter: (_) => onHover(true),
+      onExit: (_) => onHover(false),
+      child: InkWell(
+        onTap: id != null && id.isValid && openUser != null
+            ? () => openUser(id)
+            : null,
+        hoverColor: Colors.transparent,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showUpBadge) ...[
+              const BiliUpBadge(size: 16),
+              const SizedBox(width: 4),
+            ],
+            Flexible(
+              child: Text(
+                video.author,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: hovered ? theme.colorScheme.primary : null,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
     final badge = DecoratedBox(

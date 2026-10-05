@@ -4,7 +4,7 @@
 
 ## 1. 目标与范围
 
-Bili Lite 是以观看视频和直播为中心的 Bilibili 第三方客户端。首要目标是播放稳定、弹幕流畅、移动与桌面交互自然，以及 API 变化时可以局部修复。
+BiliSail（哔帆）是一个专注观看体验的跨平台 Bilibili 第三方客户端，以视频和直播为中心。首要目标是播放稳定、弹幕流畅、移动与桌面交互自然，以及 API 变化时可以局部修复。
 
 首批交付 Android arm64、Windows x64、macOS arm64。Windows 先作为本地调试入口，但 Android 和 macOS 从 M0 就必须进入验证矩阵。Android x64 用于模拟器；Windows arm64、macOS Intel、Linux、iOS 属于后续扩展。Web 不列入本轮范围，其 CORS、Cookie、解码器和后台能力需要单独方案。
 
@@ -81,7 +81,7 @@ flowchart TB
 当前使用一个 Flutter 应用和三个可独立测试的包；不为每个业务页面创建 package。下面的树仍包括未实施阶段的目标目录，实际目录以仓库文件为准。
 
 ```text
-bili-lite/
+bilisail/                         # 工程名；本地检出目录目前仍为 bili-lite
 ├── AGENTS.md
 ├── docs/
 ├── pubspec.yaml                   # 根 Flutter 应用；初始化时创建

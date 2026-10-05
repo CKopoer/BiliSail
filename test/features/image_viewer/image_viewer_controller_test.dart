@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:bili_lite/domain/request_cancellation.dart';
-import 'package:bili_lite/features/image_viewer/application/image_viewer_controller.dart';
-import 'package:bili_lite/features/image_viewer/domain/original_image.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/features/image_viewer/application/image_viewer_controller.dart';
+import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

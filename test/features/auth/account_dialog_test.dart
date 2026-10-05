@@ -1,13 +1,13 @@
-import 'package:bili_lite/domain/user.dart';
+import 'package:bilisail/domain/user.dart';
 
 import 'dart:async';
 
-import 'package:bili_lite/features/auth/application/auth_controller.dart';
-import 'package:bili_lite/features/auth/domain/auth_repository.dart';
-import 'package:bili_lite/features/auth/presentation/account_button.dart';
-import 'package:bili_lite/features/auth/presentation/account_menu.dart';
-import 'package:bili_lite/features/auth/application/account_overview_controller.dart';
-import 'package:bili_lite/features/auth/domain/account_overview.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
+import 'package:bilisail/features/auth/presentation/account_button.dart';
+import 'package:bilisail/features/auth/presentation/account_menu.dart';
+import 'package:bilisail/features/auth/application/account_overview_controller.dart';
+import 'package:bilisail/features/auth/domain/account_overview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
