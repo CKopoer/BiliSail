@@ -1,0 +1,65 @@
+import '../models.dart';
+
+enum ApiDynamicTextKind { plain, emoji, mention, topic, link }
+
+final class ApiDynamicTextSpan {
+  const ApiDynamicTextSpan({
+    this.kind = ApiDynamicTextKind.plain,
+    required this.text,
+    this.imageUrl,
+    this.linkUrl,
+    this.userId,
+    this.emojiSize = 1,
+  });
+  final ApiDynamicTextKind kind;
+  final String text;
+  final Uri? imageUrl, linkUrl;
+  final String? userId;
+  final double emojiSize;
+}
+
+final class ApiDynamicPost {
+  ApiDynamicPost({
+    required this.id,
+    this.title = '',
+    this.authorName = '',
+    this.authorId,
+    this.authorAvatarUrl,
+    this.publishedAt,
+    this.publishText = '',
+    this.actionText = '',
+    this.text = '',
+    List<ApiDynamicTextSpan> spans = const [],
+    List<Uri> imageUrls = const [],
+    this.video,
+    this.original,
+    this.repostCount,
+    this.commentCount,
+    this.likeCount,
+    this.typeLabel = '',
+    this.linkTitle = '',
+    this.linkDescription = '',
+    this.linkCoverUrl,
+    this.linkUrl,
+    this.unavailable = false,
+  }) : spans = List.unmodifiable(spans),
+       imageUrls = List.unmodifiable(imageUrls);
+  final String id,
+      title,
+      authorName,
+      publishText,
+      actionText,
+      text,
+      typeLabel,
+      linkTitle,
+      linkDescription;
+  final String? authorId;
+  final Uri? authorAvatarUrl, linkCoverUrl, linkUrl;
+  final DateTime? publishedAt;
+  final List<ApiDynamicTextSpan> spans;
+  final List<Uri> imageUrls;
+  final ApiVideoSummary? video;
+  final ApiDynamicPost? original;
+  final int? repostCount, commentCount, likeCount;
+  final bool unavailable;
+}

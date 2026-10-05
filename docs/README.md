@@ -1,0 +1,59 @@
+# Bili Lite 设计文档
+
+设计与实现日期：2026-10-05。状态：已创建 0.1.0 Windows 预览工程；完整设计仍是后续路线，当前能力与验证边界见 [M0 实测记录](validation/m0-results.md) 和 [根 README](../README.md)。
+
+本项目采用 **Flutter + Dart 构建客户端，独立 API 包承接 Bilibili 协议，播放器与弹幕各自封装，Rust 按证据引入**。首批目标为 Android、Windows、macOS；参考 `biliuwp-lite` 的客户端能力和 `bili-kernel` 的 API 分层。
+
+## 阅读顺序
+
+| 文档 | 内容 |
+| --- | --- |
+| [整体架构](architecture.md) | 产品范围、技术栈、模块依赖、目录、状态管理、存储和平台适配 |
+| [API 与会话](api-design.md) | 协议边界、接口映射、鉴权、错误、缓存和降级 |
+| [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |
+| [实施与验收](implementation-plan.md) | 技术验证、开发里程碑、测试、构建与发布要求 |
+| [架构决策](decisions.md) | 已选方向、备选方案及重新评估条件 |
+| [参考项目与资料](references.md) | 本地源码定位、借鉴边界、官方资料和待确认事项 |
+| [首版实测记录](validation/m0-results.md) | Windows 原生播放、工程检查、构建结果和未测项 |
+| [界面与多标签验证](validation/uwp-workspace.md) | UWP 风格布局、首页频道、多标签状态与本轮验证边界 |
+| [首页子频道协议](validation/home-subtabs.md) | 各首页列表的端点、游标与前序接入记录 |
+| [影视与直播内置播放](validation/content-playback.md) | 四频道内置入口、三类播放页、影视选集、直播线路与原生验证 |
+| [影视侧栏与直播 SC](validation/pgc-live-sidebar.md) | 官方桌面式影视简介/选集/系列、直播聊天与 SC 气泡、读取边界 |
+| [影视与直播弹幕修复](validation/pgc-live-danmaku.md) | 剧集弹幕/发送、直播实时消息与绘制、SC 卡片和分区列表协议 |
+| [直播表情与主页入口](validation/live-chat-profiles.md) | 精简房间信息、右上观看人数、行内/大表情、弹幕及 SC 用户主页跳转 |
+| [隐藏控件进度条与直播发送](validation/collapsed-progress-live-send.md) | 视频／影视底部细进度、直播双发送栏／表情权限和单次写验证 |
+| [评论与直播表情选择](validation/emoticon-picker-tabs.md) | 居中弹窗、系列子标签、草稿插入与权限验证 |
+| [播放器与标签保留](validation/player-workspace.md) | UWP 播放页、只读子标签和未关闭页面的生命周期修正 |
+| [界面控件与设置](validation/ui-controls.md) | 播放配置、头像、动态/直播卡、空降助手和账户交互验证 |
+| [播放页与评论交互](validation/video-comments.md) | 官方桌面风格双标签、折叠合集、评论与楼中楼验证 |
+| [评论图片与作者装扮](validation/comment-images-decorations.md) | 共用动态原图预览、右侧装扮图片与粉丝编号、验证边界 |
+| [播放页简介侧栏](validation/video-sidebar.md) | UP 统计与关注、合集卡片、常驻推荐与分隔线 |
+| [快捷键与富评论](validation/shortcuts-rich-comments.md) | UWP 默认键位、悬浮控制栏、评论标识/表情/图片和资源来源 |
+| [设置分类、侧键与字体](validation/settings-tabs-fonts.md) | 设置专属分类、关闭标签快捷键、鼠标侧键录制和默认 HarmonyOS Sans |
+| [视频编解码设置](validation/video-codec-settings.md) | H.264/HEVC/AV1 偏好、自动/软件解码、SDK 差异与验证边界 |
+| [播放控件与小窗布局](validation/responsive-player.md) | 单行工具栏、弹幕输入自适应、窄窗口布局和播放状态保留 |
+| [视频章节与悬停缩略图](validation/playback-timeline.md) | 自适应分段、雪碧图裁剪、预览生命周期与真实视频验证 |
+| [用户主页](validation/user-profile.md) | 个人/UP 主空间、头像入口、投稿与动态/收藏/关注列表、会话隔离和实测边界 |
+| [账号菜单与消息](validation/account-messages.md) | 头像资料/入口、五类收件箱、私信分页/发送/已读、账号隔离与 Windows 只读实测 |
+| [主页卡片与富动态](validation/profile-dynamic-style.md) | UWP 横向投稿卡、居中动态列表、行内表情与转发内容、验证边界 |
+| [用户页、倍速与标签播放](validation/profile-playback-rates.md) | 紧凑资料/工具条、固定倍速档位和普通标签继续播放 |
+| [首页刷新、自动分页与图片缓存](validation/feed-scroll-image-cache.md) | 悬浮刷新/回顶部、首屏补页、隐藏列表隔离和图片缓存设置 |
+| [全局桌面滚轮平滑过渡](validation/smooth-scrolling.md) | 统一滚轮动画、连续/反向输入、嵌套仲裁及验证边界 |
+| [API 端点验证](validation/api-endpoints.md) | 首版端点、协议与在线只读烟测 |
+| [搜索分类与排序](validation/search-categories.md) | 七类搜索、综合页 UP 主、分类排序、筛选与旧响应隔离 |
+| [共享视频卡片](validation/shared-video-cards.md) | 推荐理由、搜索/视频动态显示差异、16:9 封面与宽屏网格 |
+| [媒体包验证](validation/media-packages.md) | 包契约、限制、原生资产来源 |
+| [播放错误排查](validation/native-playback-errors.md) | 原生日志误判、错误态控制栏与本地脱敏日志 |
+| [开发协作约定](../AGENTS.md) | 后续开发与自动化代理必须遵守的仓库规则 |
+
+## 如何理解方案中的结论
+
+- **方案决定**：本项目接下来采用的组织方式，不代表代码已实现。
+- **源码事实**：已查看两个本地参考仓库；提交快照见参考文档。
+- **外部能力说明**：已查阅框架和包维护方文档；不等于项目中的三端验收结果。
+- **实测边界**：Windows 游客点播和部分公开 API 已实测；登录后的完整流程、其他平台运行与性能预算仍待验证，逐项结果以首版实测记录为准。
+
+架构文档中的完整目录树和性能预算仍是目标设计；当前仅创建实际用到的功能。已实现 API/播放器契约以各包公共入口为准，重要差异记录在架构决策和实测记录中。
+
+后续从 [M0 技术验证](implementation-plan.md#m0技术验证) 的未验项目继续，特别是 Android/macOS 原生播放与真实登录；首版已经提供 Windows 观看闭环。
+

@@ -1,0 +1,495 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../shared/ui/state_view.dart';
+import '../../../shared/ui/app_notice.dart';
+import '../../../domain/playback_rates.dart';
+import '../application/settings_controller.dart';
+import '../domain/app_settings.dart';
+import '../domain/settings_category.dart';
+import 'shortcut_settings_section.dart';
+
+final class SettingsScreen extends ConsumerStatefulWidget {
+  const SettingsScreen({
+    super.key,
+    this.category = SettingsCategory.appearance,
+  });
+  final SettingsCategory category;
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  final _word = TextEditingController();
+  @override
+  void dispose() {
+    _word.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (_) {
+      if (mounted) {
+        showAppNotice(context, '设置保存失败，请重试');
+      }
+    }
+  }
+
+  Widget _toggle(
+    String title,
+    bool value,
+    Future<void> Function(bool) save, [
+    String? description,
+  ]) => SwitchListTile.adaptive(
+    contentPadding: EdgeInsets.zero,
+    title: Text(title),
+    subtitle: description == null ? null : Text(description),
+    value: value,
+    onChanged: (v) => _save(() => save(v)),
+  );
+  Widget _choices<T>(
+    String title,
+    T value,
+    Map<T, String> choices,
+    Future<void> Function(T) save,
+  ) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final entry in choices.entries)
+              ChoiceChip(
+                label: Text(entry.value),
+                selected: value == entry.key,
+                onSelected: (_) => _save(() => save(entry.key)),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+  Widget _slider(
+    String title,
+    double value,
+    double min,
+    double max,
+    Future<void> Function(double) save, [
+    String suffix = '',
+    bool continuous = false,
+  ]) => _SettingSlider(
+    title: title,
+    value: value,
+    min: min,
+    max: max,
+    suffix: suffix,
+    continuous: continuous,
+    save: (v) => _save(() => save(v)),
+  );
+  Widget _section(String title, List<Widget> children) => Padding(
+    padding: const EdgeInsets.only(bottom: 18),
+    child: Material(
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: Theme.of(context).dividerColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            ...children,
+          ],
+        ),
+      ),
+    ),
+  );
+  @override
+  Widget build(BuildContext context) {
+    final controller = ref.read(settingsControllerProvider.notifier);
+    return ListView(
+      key: PageStorageKey('settings-${widget.category.name}'),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      children: [
+        Text('设置', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        Text(widget.category.label),
+        const SizedBox(height: 18),
+        ref
+            .watch(settingsControllerProvider)
+            .when(
+              loading: () => const StateView.loading(),
+              error: (_, _) => StateView.error(
+                message: '设置加载失败',
+                onAction: () => ref.invalidate(settingsControllerProvider),
+              ),
+              data: (s) => Align(
+                alignment: Alignment.topLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 760),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (widget.category == SettingsCategory.appearance)
+                        _section('外观', [
+                          _choices('应用主题', s.theme, const {
+                            AppThemePreference.system: '跟随系统',
+                            AppThemePreference.light: '浅色',
+                            AppThemePreference.dark: '深色',
+                          }, controller.setTheme),
+                          _choices('界面字体', s.font, const {
+                            AppFontPreference.harmonyOsSans: 'HarmonyOS Sans',
+                            AppFontPreference.system: '系统默认',
+                          }, controller.setFont),
+                          const Text('字体预览：哔哩哔哩 Bili Lite · Aa 0123456789'),
+                        ]),
+                      if (widget.category == SettingsCategory.shortcuts)
+                        _section('快捷键', [
+                          ShortcutSettingsSection(
+                            settings: s.shortcuts,
+                            save: (value) =>
+                                _save(() => controller.setShortcuts(value)),
+                          ),
+                        ]),
+                      if (widget.category == SettingsCategory.cache)
+                        _section('缓存', [
+                          _toggle(
+                            '缓存图片',
+                            s.cacheImages,
+                            controller.setCacheImages,
+                            '共享封面和头像缓存，减少切换页面时的重复加载。关闭后停止读取和写入图片缓存，当前已显示的图片保留。',
+                          ),
+                        ]),
+                      if (widget.category == SettingsCategory.playback)
+                        _section('播放', [
+                          _toggle(
+                            '隐藏控件时显示底部进度条',
+                            s.showCollapsedProgress,
+                            controller.setShowCollapsedProgress,
+                            '视频和影视播放时，在画面底部显示细进度条',
+                          ),
+                          _toggle(
+                            '自动播放',
+                            s.autoPlay,
+                            controller.setAutoPlay,
+                            '打开视频后开始播放',
+                          ),
+                          _toggle(
+                            '记住播放进度',
+                            s.resumePlayback,
+                            controller.setResumePlayback,
+                            '从本地记录继续观看',
+                          ),
+                          _choices('优先清晰度', s.preferredQuality, const {
+                            16: '360P',
+                            32: '480P',
+                            64: '720P',
+                            80: '1080P',
+                            112: '1080P+',
+                            116: '1080P 60',
+                            120: '4K',
+                            125: 'HDR',
+                            126: '杜比视界',
+                            127: '8K',
+                          }, controller.setPreferredQuality),
+                          const Text(
+                            '按接口返回的可用清晰度选择；权限和片源限制仍适用',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          _choices('默认播放倍速', s.defaultPlaybackRate, {
+                            for (final rate in PlaybackRates.values)
+                              rate: '${rate}x',
+                          }, controller.setDefaultPlaybackRate),
+                          _slider(
+                            '默认音量',
+                            s.defaultVolume,
+                            0,
+                            100,
+                            controller.setDefaultVolume,
+                            '%',
+                            true,
+                          ),
+                        ]),
+                      if (widget.category == SettingsCategory.playback)
+                        _section('视频编解码', [
+                          _choices('优先视频编码', s.preferredVideoCodec, const {
+                            VideoCodecPreference.h264: 'H.264 / AVC（默认）',
+                            VideoCodecPreference.hevc: 'H.265 / HEVC',
+                            VideoCodecPreference.av1: 'AV1',
+                          }, controller.setPreferredVideoCodec),
+                          const Text(
+                            '用于视频和影视：先选择可用清晰度，再优先使用所选编码。片源缺少首选编码时回退到其他可用编码；直播继续使用 H.264 线路。',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          _choices('视频解码方式', s.videoDecoding, const {
+                            VideoDecodingPreference.automatic: '自动（优先硬解）',
+                            VideoDecodingPreference.software: '软件解码',
+                          }, controller.setVideoDecoding),
+                          const Text(
+                            '自动模式在设备支持时使用硬件解码，不可用时使用软件解码。软件解码可能增加 CPU 占用和耗电。解码方式适用于视频、影视和直播。',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text('下次打开或重新加载播放源时生效。'),
+                        ]),
+                      if (widget.category == SettingsCategory.danmaku)
+                        _section('弹幕', [
+                          _toggle(
+                            '显示弹幕',
+                            s.danmakuEnabled,
+                            controller.setDanmakuEnabled,
+                          ),
+                          _slider(
+                            '不透明度',
+                            s.danmakuOpacity,
+                            .2,
+                            1,
+                            controller.setDanmakuOpacity,
+                          ),
+                          _slider(
+                            '字体大小',
+                            s.danmakuFontScale,
+                            .7,
+                            1.5,
+                            controller.setDanmakuFontScale,
+                            '×',
+                          ),
+                          _slider(
+                            '显示区域',
+                            s.danmakuArea,
+                            .25,
+                            1,
+                            controller.setDanmakuArea,
+                          ),
+                          _slider(
+                            '移动速度',
+                            s.danmakuSpeed,
+                            .5,
+                            2,
+                            controller.setDanmakuSpeed,
+                            '×',
+                          ),
+                          _slider(
+                            '每秒最大数量',
+                            s.danmakuMaxPerSecond.toDouble(),
+                            1,
+                            100,
+                            (v) => controller.setDanmakuMaxPerSecond(v.round()),
+                          ),
+                          _toggle(
+                            '滚动弹幕',
+                            s.danmakuScrollEnabled,
+                            controller.setDanmakuScrollEnabled,
+                          ),
+                          _toggle(
+                            '顶部弹幕',
+                            s.danmakuTopEnabled,
+                            controller.setDanmakuTopEnabled,
+                          ),
+                          _toggle(
+                            '底部弹幕',
+                            s.danmakuBottomEnabled,
+                            controller.setDanmakuBottomEnabled,
+                          ),
+                          const Text('关键词屏蔽（最多 200 项，每项 100 字）'),
+                          TextField(
+                            controller: _word,
+                            maxLength: 100,
+                            decoration: const InputDecoration(
+                              hintText: '输入要屏蔽的关键词',
+                            ),
+                          ),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              icon: const Icon(Icons.add),
+                              label: const Text('添加关键词'),
+                              onPressed: () async {
+                                final word = _word.text.trim();
+                                if (word.isEmpty) return;
+                                await _save(
+                                  () => controller.setDanmakuBlockedWords([
+                                    ...s.danmakuBlockedWords,
+                                    word,
+                                  ]),
+                                );
+                                if (mounted) _word.clear();
+                              },
+                            ),
+                          ),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (final word in s.danmakuBlockedWords)
+                                InputChip(
+                                  label: Text(word),
+                                  onDeleted: () => _save(
+                                    () => controller.setDanmakuBlockedWords(
+                                      s.danmakuBlockedWords
+                                          .where((v) => v != word)
+                                          .toList(),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ]),
+                      if (widget.category == SettingsCategory.subtitles)
+                        _section('字幕', [
+                          _toggle(
+                            '默认显示字幕',
+                            s.subtitlesEnabled,
+                            controller.setSubtitlesEnabled,
+                            '存在可用字幕时自动选择',
+                          ),
+                          _slider(
+                            '字幕字号',
+                            s.subtitleFontScale,
+                            .5,
+                            2,
+                            controller.setSubtitleFontScale,
+                            '×',
+                          ),
+                          _slider(
+                            '字幕背景不透明度',
+                            s.subtitleBackgroundOpacity,
+                            0,
+                            1,
+                            controller.setSubtitleBackgroundOpacity,
+                          ),
+                          _slider(
+                            '字幕底部距离',
+                            s.subtitleBottomPadding,
+                            0,
+                            120,
+                            controller.setSubtitleBottomPadding,
+                            ' px',
+                          ),
+                        ]),
+                      if (widget.category == SettingsCategory.sponsorBlock)
+                        _section('空降助手', [
+                          const Text(
+                            '开启后向第三方 bsbsb.top 查询当前视频片段，不传账号。可手动提示或自动跳过所选类别。默认关闭。',
+                          ),
+                          _choices('工作模式', s.sponsorBlockMode, const {
+                            SponsorBlockMode.disabled: '关闭',
+                            SponsorBlockMode.manual: '手动提示',
+                            SponsorBlockMode.automatic: '自动跳过',
+                          }, controller.setSponsorBlockMode),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final entry in const {
+                                'sponsor': '赞助广告',
+                                'intro': '片头',
+                                'outro': '片尾',
+                                'selfpromo': '自我推广',
+                                'interaction': '互动提醒',
+                                'preview': '预告',
+                              }.entries)
+                                FilterChip(
+                                  label: Text(entry.value),
+                                  selected: s.sponsorBlockCategories.contains(
+                                    entry.key,
+                                  ),
+                                  onSelected: (selected) => _save(
+                                    () => controller.setSponsorBlockCategories(
+                                      selected
+                                          ? [
+                                              ...s.sponsorBlockCategories,
+                                              entry.key,
+                                            ]
+                                          : s.sponsorBlockCategories
+                                                .where((v) => v != entry.key)
+                                                .toList(),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ]),
+                      if (widget.category == SettingsCategory.about)
+                        _section('关于', [
+                          const Text(
+                            '本应用使用 HarmonyOS Sans 字体，Copyright 2021 Huawei Device Co., Ltd.',
+                          ),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Bili Lite'),
+                            subtitle: const Text('0.1.0 · Windows 预览版'),
+                            onTap: () => showAboutDialog(
+                              context: context,
+                              applicationName: 'Bili Lite',
+                              applicationVersion: '0.1.0',
+                            ),
+                          ),
+                        ]),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+final class _SettingSlider extends StatefulWidget {
+  const _SettingSlider({
+    required this.title,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.suffix,
+    required this.save,
+    this.continuous = false,
+  });
+  final String title, suffix;
+  final double value, min, max;
+  final Future<void> Function(double) save;
+  final bool continuous;
+  @override
+  State<_SettingSlider> createState() => _SettingSliderState();
+}
+
+final class _SettingSliderState extends State<_SettingSlider> {
+  double? _draft;
+  @override
+  Widget build(BuildContext context) {
+    final value = (_draft ?? widget.value).clamp(widget.min, widget.max);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${widget.title} · ${value.toStringAsFixed(value < 4 ? 2 : 0)}${widget.suffix}',
+        ),
+        Slider(
+          value: value,
+          min: widget.min,
+          max: widget.max,
+          divisions: widget.continuous
+              ? null
+              : ((widget.max - widget.min) * (widget.max <= 3 ? 20 : 1))
+                    .round(),
+          onChanged: (v) => setState(() => _draft = v),
+          onChangeEnd: (v) async {
+            await widget.save(v);
+            if (mounted) setState(() => _draft = null);
+          },
+        ),
+      ],
+    );
+  }
+}

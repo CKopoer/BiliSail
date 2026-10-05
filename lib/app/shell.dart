@@ -1,0 +1,580 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+
+import '../features/feed/domain/home_channel.dart';
+import '../core/presentation/workspace_activity.dart';
+import 'workspace_tabs.dart';
+import '../core/presentation/keyboard_shortcuts.dart';
+import '../features/settings/domain/shortcut_settings.dart';
+import '../features/settings/domain/settings_category.dart';
+import '../shared/ui/bili_icons.dart';
+import '../shared/ui/app_notice.dart';
+
+typedef WorkspacePageBuilder = Widget Function(
+  BuildContext context,
+  WorkspaceTab tab,
+);
+typedef DragRegionBuilder = Widget Function(BuildContext context, Widget child);
+
+final class BiliAppShell extends StatefulWidget {
+  const BiliAppShell({
+    super.key,
+    required this.location,
+    required this.child,
+    this.accountBuilder,
+    this.pageBuilder,
+    this.windowControlsBuilder,
+    this.dragRegionBuilder,
+    this.shortcuts = const ShortcutSettings.defaults(),
+  });
+  final ShortcutSettings shortcuts;
+  final String location;
+  final Widget child;
+  final WidgetBuilder? accountBuilder;
+  final WorkspacePageBuilder? pageBuilder;
+  final WidgetBuilder? windowControlsBuilder;
+  final DragRegionBuilder? dragRegionBuilder;
+  @override
+  State<BiliAppShell> createState() => _BiliAppShellState();
+}
+
+final class _BiliAppShellState extends State<BiliAppShell> {
+  final _workspace = WorkspaceTabs();
+  final _searchController = TextEditingController();
+  final _tabKeys = <String, GlobalKey>{};
+  final _searchDrafts = <String, String>{};
+  final _pageStorage = <String, PageStorageBucket>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _workspace.acceptRoute(Uri.parse(widget.location));
+    _restoreSearch();
+    _searchController.addListener(_saveSearch);
+    // Unfocusing search can return focus to the route scope outside this
+    // shell. Workspace commands must not depend on a focused descendant.
+    FocusManager.instance.addEarlyKeyEventHandler(_key);
+  }
+
+  @override
+  void didUpdateWidget(covariant BiliAppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.location != oldWidget.location) {
+      if (!_workspace.acceptRoute(Uri.parse(widget.location))) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          showAppNotice(context, '最多打开 16 个标签页，请先关闭不用的标签');
+          context.go(_workspace.active.route.toString());
+        });
+        return;
+      }
+      final liveIds = _workspace.tabs.map((tab) => tab.id).toSet();
+      _tabKeys.removeWhere((id, _) => !liveIds.contains(id));
+      _searchDrafts.removeWhere((id, _) => !liveIds.contains(id));
+      _pageStorage.removeWhere((id, _) => !liveIds.contains(id));
+      _restoreSearch();
+      _revealActiveTab();
+    }
+  }
+
+  void _saveSearch() =>
+      _searchDrafts[_workspace.activeId] = _searchController.text;
+  void _restoreSearch() {
+    _searchController.text =
+        _searchDrafts[_workspace.activeId] ??
+        _workspace.active.location.queryParameters['q'] ??
+        '';
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeEarlyKeyEventHandler(_key);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _revealActiveTab() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final tabContext = _tabKeys[_workspace.activeId]?.currentContext;
+      if (tabContext != null) {
+        Scrollable.ensureVisible(tabContext, alignment: 0.5);
+      }
+    });
+  }
+
+  void _commitWorkspace() {
+    _restoreSearch();
+    context.go(_workspace.active.route.toString());
+    _revealActiveTab();
+  }
+
+  void _newTab() {
+    if (_workspace.tabs.length >= WorkspaceTabs.maximumTabs) {
+      showAppNotice(context, '最多打开 16 个标签页，请先关闭不用的标签');
+      return;
+    }
+    setState(_workspace.addBrowseTab);
+    _commitWorkspace();
+  }
+
+  void _selectTab(String id) {
+    setState(() => _workspace.select(id));
+    _commitWorkspace();
+  }
+
+  void _closeTab(String id) {
+    final wasActive = id == _workspace.activeId;
+    if (!_workspace.close(id)) return;
+    _tabKeys.remove(id);
+    _searchDrafts.remove(id);
+    _pageStorage.remove(id);
+    setState(() {});
+    if (wasActive) _commitWorkspace();
+  }
+
+  void _cycleTabs({bool backwards = false}) {
+    setState(() => _workspace.cycle(backwards: backwards));
+    _commitWorkspace();
+  }
+
+  void _search(String input) {
+    final query = input.trim();
+    if (query.isEmpty) return;
+    context.go(Uri(path: '/search', queryParameters: {'q': query}).toString());
+  }
+
+  void _selectChannel(HomeChannel channel) {
+    final tab = _workspace.active.isBrowse
+        ? _workspace.active
+        : _workspace.tabs.first;
+    context.go(
+      Uri(
+        path: '/',
+        queryParameters: {'channel': channel.name, 'tab': tab.id},
+      ).toString(),
+    );
+  }
+
+  bool _shortcut(String key) {
+    if (shortcutsBlocked(context)) return false;
+    switch (widget.shortcuts.actionFor(key)) {
+      case ShortcutAction.newTab:
+        _newTab();
+      case ShortcutAction.closeTab:
+        _closeTab(_workspace.activeId);
+      default:
+        return false;
+    }
+    return true;
+  }
+
+  KeyEventResult _key(KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final key = shortcutKey(event);
+    return key != null && _shortcut(key)
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) => CallbackShortcuts(
+    bindings: {
+      const SingleActivator(LogicalKeyboardKey.tab, control: true): _cycleTabs,
+      const SingleActivator(
+        LogicalKeyboardKey.tab,
+        control: true,
+        shift: true,
+      ): () =>
+          _cycleTabs(backwards: true),
+    },
+    child: Focus(
+      autofocus: true,
+      child: MouseShortcutListener(
+        onShortcut: _shortcut,
+        child: Scaffold(
+          body: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 760;
+                return Column(
+                  children: [
+                    _tabStrip(context),
+                    if (!_workspace.active.isPlayback &&
+                        !_workspace.active.isProfile &&
+                        compact) ...[
+                      _channelBar(context),
+                      _tools(context, compact: true),
+                    ] else if (!_workspace.active.isPlayback &&
+                        !_workspace.active.isProfile)
+                      SizedBox(
+                        height: 58,
+                        child: Row(
+                          children: [
+                            Expanded(child: _channelBar(context)),
+                            SizedBox(
+                              width: constraints.maxWidth >= 1300 ? 470 : 380,
+                              child: _tools(context, compact: false),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Expanded(child: _pages(context)),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _pages(BuildContext context) {
+    final builder = widget.pageBuilder;
+    if (builder == null) return widget.child;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (final tab in _workspace.tabs)
+          Offstage(
+            key: ValueKey(tab.id),
+            offstage: tab.id != _workspace.activeId,
+            // Keep account listeners active for cached pages. Riverpod pauses
+            // listeners below a disabled TickerMode, delaying logout cleanup.
+            child: FocusScope(
+              canRequestFocus: tab.id == _workspace.activeId,
+              skipTraversal: tab.id != _workspace.activeId,
+              child: WorkspaceActivity(
+                active: tab.id == _workspace.activeId,
+                child: PageStorage(
+                  bucket: _pageStorage.putIfAbsent(
+                    tab.id,
+                    PageStorageBucket.new,
+                  ),
+                  child: builder(context, tab),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _tabStrip(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: colors.surfaceContainerHighest,
+      child: SizedBox(
+        height: 42,
+        child: Row(
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) => Row(
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: (constraints.maxWidth - 66).clamp(
+                          0,
+                          double.infinity,
+                        ),
+                      ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final tab in _workspace.tabs)
+                              _tab(context, tab),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 42,
+                      child: IconButton(
+                        key: const ValueKey('new-workspace-tab'),
+                        tooltip: '新建标签页 (Ctrl+T)',
+                        onPressed: _newTab,
+                        icon: const Icon(Icons.add, size: 18),
+                      ),
+                    ),
+                    Expanded(
+                      child:
+                          widget.dragRegionBuilder?.call(
+                            context,
+                            const SizedBox.expand(),
+                          ) ??
+                          const SizedBox.expand(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (widget.windowControlsBuilder case final builder?)
+              builder(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tab(BuildContext context, WorkspaceTab tab) {
+    final selected = tab.id == _workspace.activeId;
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      key: _tabKeys.putIfAbsent(tab.id, GlobalKey.new),
+      padding: const EdgeInsets.only(left: 3, top: 4),
+      child: Material(
+        color: selected ? colors.surface : Colors.transparent,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+        child: InkWell(
+          key: ValueKey('workspace-tab-${tab.id}'),
+          onTap: () => _selectTab(tab.id),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+          child: Semantics(
+            selected: selected,
+            button: true,
+            child: SizedBox(
+              width: tab.pinned ? 116 : 176,
+              height: 38,
+              child: Row(
+                children: [
+                  const SizedBox(width: 12),
+                  Icon(tab.pinned ? BiliIcons.home : _tabIcon(tab), size: 15),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      tab.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  if (!tab.pinned)
+                    IconButton(
+                      key: ValueKey('close-workspace-tab-${tab.id}'),
+                      tooltip: '关闭${tab.title}',
+                      onPressed: () => _closeTab(tab.id),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 30,
+                        height: 30,
+                      ),
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(Icons.close, size: 13),
+                    )
+                  else
+                    const SizedBox(width: 12),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _tabIcon(WorkspaceTab tab) => switch (tab.location.path) {
+    '/search' => BiliIcons.search,
+    '/history' => BiliIcons.history,
+    '/settings' => BiliIcons.settings,
+    _ =>
+      tab.isProfile
+          ? Icons.person_outline
+          : tab.isPlayback
+          ? BiliIcons.playCount
+          : BiliIcons.home,
+  };
+
+  Widget _channelBar(BuildContext context) {
+    final active = _workspace.active;
+    if (active.location.path == '/settings') return _settingsBar(context);
+    final selected = active.isBrowse
+        ? active.location.queryParameters['channel'] ?? 'recommended'
+        : '';
+    return SizedBox(
+      height: 58,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          children: [
+            for (final channel in HomeChannel.values)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: TextButton(
+                  key: ValueKey('channel-${channel.name}'),
+                  onPressed: () => _selectChannel(channel),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(48, 42),
+                    padding: const EdgeInsets.symmetric(horizontal: 7),
+                    foregroundColor: selected == channel.name
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurface,
+                    textStyle: TextStyle(
+                      fontSize: 14,
+                      fontWeight: selected == channel.name
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(_channelIcon(channel), size: 16),
+                          const SizedBox(width: 5),
+                          Text(channel.label),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        width: 20,
+                        height: 2,
+                        color: selected == channel.name
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.transparent,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _settingsBar(BuildContext context) {
+    final selected = SettingsCategory.fromName(
+      _workspace.active.location.queryParameters['section'],
+    );
+    final colors = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 58,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          children: [
+            for (final category in SettingsCategory.values)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: TextButton(
+                  key: ValueKey('settings-category-${category.name}'),
+                  onPressed: () => context.go(
+                    Uri(
+                      path: '/settings',
+                      queryParameters: {
+                        'tab': _workspace.activeId,
+                        'section': category.name,
+                      },
+                    ).toString(),
+                  ),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(48, 42),
+                    foregroundColor: selected == category
+                        ? colors.primary
+                        : colors.onSurface,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(category.label),
+                      const SizedBox(height: 4),
+                      Container(
+                        width: 20,
+                        height: 2,
+                        color: selected == category
+                            ? colors.primary
+                            : Colors.transparent,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _channelIcon(HomeChannel channel) => switch (channel) {
+    HomeChannel.recommended => BiliIcons.home,
+    HomeChannel.popular => Icons.local_fire_department_outlined,
+    HomeChannel.dynamic => BiliIcons.dynamic,
+    HomeChannel.videoDynamic => Icons.video_library_outlined,
+    HomeChannel.bangumi => Icons.live_tv_outlined,
+    HomeChannel.guochuang => Icons.animation_outlined,
+    HomeChannel.live => Icons.live_tv,
+    HomeChannel.cinema => Icons.movie_outlined,
+    HomeChannel.categories => BiliIcons.categories,
+    HomeChannel.ranking => BiliIcons.ranking,
+    HomeChannel.watchLater => BiliIcons.watchLater,
+    HomeChannel.favorites => BiliIcons.favorite,
+  };
+
+  Widget _tools(BuildContext context, {required bool compact}) => SizedBox(
+    height: 52,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 34,
+              child: TextField(
+                key: const ValueKey('workspace-search'),
+                controller: _searchController,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(fontSize: 12),
+                onSubmitted: _search,
+                decoration: InputDecoration(
+                  hintText: '搜索视频',
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                  suffixIcon: IconButton(
+                    tooltip: '搜索',
+                    onPressed: () => _search(_searchController.text),
+                    icon: const Icon(BiliIcons.search, size: 17),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 5),
+          if (widget.accountBuilder case final builder?)
+            compact
+                ? IconButton(
+                    tooltip: '账号',
+                    onPressed: () => showModalBottomSheet<void>(
+                      context: context,
+                      builder: (context) => SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: builder(context),
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(BiliIcons.account, size: 22),
+                  )
+                : builder(context),
+          _tool('观看历史', BiliIcons.history, '/history'),
+          _tool('下载', Icons.download_outlined, '/downloads'),
+          _tool('设置', BiliIcons.settings, '/settings'),
+        ],
+      ),
+    ),
+  );
+  Widget _tool(String tooltip, IconData icon, String route) => IconButton(
+    tooltip: tooltip,
+    onPressed: () => context.go(route),
+    constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+    padding: EdgeInsets.zero,
+    icon: Icon(icon, size: 18),
+  );
+}

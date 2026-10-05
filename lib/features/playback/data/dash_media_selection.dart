@@ -1,0 +1,63 @@
+import 'package:bili_api/bili_api.dart';
+
+import '../../../domain/app_failure.dart';
+import '../domain/playback_repository.dart';
+
+/// Quality takes priority; a missing preferred codec does not downgrade it.
+PlaybackMedia selectDashMedia(
+  ApiPlayInfo info, {
+  required int quality,
+  required VideoCodecPreference preferredCodec,
+  required Map<String, String> headers,
+}) {
+  final videos =
+      info.dashVideo
+          .where(
+            (track) => VideoCodecPreference.fromCodec(track.codecs) != null,
+          )
+          .toList()
+        ..sort((a, b) => b.id.compareTo(a.id));
+  final audios =
+      info.dashAudio
+          .where((track) => track.codecs.toLowerCase().startsWith('mp4a'))
+          .toList()
+        ..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
+  if (videos.isEmpty || audios.isEmpty) {
+    throw const AppFailure(
+      AppFailureKind.playback,
+      '未取得可用的 H.264、HEVC 或 AV1 视频和 AAC 音频轨道',
+    );
+  }
+  final selectedQuality =
+      (videos.where((track) => track.id <= quality).firstOrNull ?? videos.last)
+          .id;
+  final candidates = videos
+      .where((track) => track.id == selectedQuality)
+      .toList();
+  final order = {preferredCodec, ...VideoCodecPreference.values}.toList();
+  candidates.sort((a, b) {
+    final codecOrder = order
+        .indexWhere(
+          (codec) => codec == VideoCodecPreference.fromCodec(a.codecs),
+        )
+        .compareTo(
+          order.indexWhere(
+            (codec) => codec == VideoCodecPreference.fromCodec(b.codecs),
+          ),
+        );
+    return codecOrder != 0 ? codecOrder : b.bandwidth.compareTo(a.bandwidth);
+  });
+  PlaybackTrack map(ApiMediaTrack track) => PlaybackTrack(
+    urls: [track.url, ...track.backupUrls],
+    codec: track.codecs,
+    bandwidth: track.bandwidth,
+  );
+  return PlaybackMedia(
+    video: map(candidates.first),
+    audio: map(audios.first),
+    quality: selectedQuality,
+    qualities: videos.map((track) => track.id).toSet().toList()..sort(),
+    duration: info.duration,
+    headers: headers,
+  );
+}

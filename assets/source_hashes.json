@@ -1,0 +1,54 @@
+[
+  {
+    "File": "assets/fonts/biliicon.ttf",
+    "SHA256": "dfb483675348632e4ea8b3d001b026e65fb16197a493190ed3810b45266a3c48"
+  },
+  {
+    "File": "assets/fonts/iconfont.json",
+    "SHA256": "188f9b3c5db63bb1b9437787651cbc3b38e60ab6645718cbcaeda785893e5cdd"
+  },
+  {
+    "File": "assets/icons/lv0.png",
+    "SHA256": "d25369d5f9e02e3767cf34e88042af89a6381a0a954d7984331d3c432d6cce10"
+  },
+  {
+    "File": "assets/icons/lv1.png",
+    "SHA256": "771bbd005cb47f6d18959d109277f623af2bee47cf054bc8b37ed2e3b179a842"
+  },
+  {
+    "File": "assets/icons/lv2.png",
+    "SHA256": "bbbd2a3f18db88cf4c586089952c556f2ca2525a4cdf97deed11c18e7aae4ef3"
+  },
+  {
+    "File": "assets/icons/lv3.png",
+    "SHA256": "de2ba04b5160bef09b30d9a3cd043e9a2ec5b84cb240cfb886ca7388e4289510"
+  },
+  {
+    "File": "assets/icons/lv4.png",
+    "SHA256": "554728d7fefabdbd17d36d1499a2161c72f46ef2b1cdb102e8bb9a1d98747ba6"
+  },
+  {
+    "File": "assets/icons/lv5.png",
+    "SHA256": "cbffd86189f3123ffc0133eb2c8a3b9eb88e1ef7ab2c3d7571cf16d31be4dc85"
+  },
+  {
+    "File": "assets/icons/lv6.png",
+    "SHA256": "b5fadebc1ea51b1b3c03d189fc19ed989e0133ce700304afc8d528998a3236c3"
+  },
+  {
+    "File": "assets/icons/up.png",
+    "SHA256": "c0d2955995fcbaf69d08c884be778e34603d8a364ccf8293c76d005e68469387"
+  },
+  {
+    "File": "assets/icons/verify0.png",
+    "SHA256": "fd003fba7a23919f4494c3b4f79b0a0bb8ee5ec735eb1c7c24cbf3b826a4450d"
+  },
+  {
+    "File": "assets/icons/verify1.png",
+    "SHA256": "74c10524ee7306f9536c7dd39e181c21ea48d024018cf901177d8716d42c0d6e"
+  },
+  {
+    "File": "assets/branding/app_icon.png",
+    "SHA256": "4d7686c24520164a0203d0675ead5e65480cd5696aea1390b823867d06497e9b"
+  }
+]
