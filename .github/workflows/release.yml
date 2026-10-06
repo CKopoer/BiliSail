@@ -1,0 +1,88 @@
+name: Release preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本 x.y.z+N（留空使用 pubspec.yaml，例如 0.1.0+1）'
+        type: string
+        required: false
+        default: ''
+      enable_android:
+        description: Android arm64 APK
+        type: boolean
+        default: true
+      enable_windows:
+        description: Windows x64 MSIX 安装包
+        type: boolean
+        default: true
+      enable_macos:
+        description: macOS arm64 应用 ZIP
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-preview
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/ci.yml
+    with:
+      version: ${{ inputs.version }}
+      enable_android: ${{ inputs.enable_android }}
+      enable_windows: ${{ inputs.enable_windows }}
+      enable_macos: ${{ inputs.enable_macos }}
+    secrets:
+      MSIX_CERTIFICATE_BASE64: ${{ secrets.MSIX_CERTIFICATE_BASE64 }}
+      MSIX_CERTIFICATE_PASSWORD: ${{ secrets.MSIX_CERTIFICATE_PASSWORD }}
+
+  draft:
+    name: Create release draft
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: BiliSail-*-packages
+          path: release-assets
+          merge-multiple: true
+      - name: Create preview draft with all selected packages
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = "v$env:RELEASE_VERSION"
+          # Never attach a new build to a pre-existing tag pointing at another revision.
+          $refs = gh api "repos/$env:GITHUB_REPOSITORY/git/matching-refs/tags/$tag"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not check existing release tags.' }
+          if (@($refs | ConvertFrom-Json | Where-Object { $_.ref -eq "refs/tags/$tag" }).Count) {
+            throw "Tag $tag already exists. Use a new version."
+          }
+          $assets = @(Get-ChildItem release-assets -File | ForEach-Object { $_.FullName })
+          if (!$assets.Count) { throw 'No build assets were downloaded.' }
+          $notes = @"
+          BiliSail（哔帆）$env:RELEASE_VERSION 预览构建。
+
+          - 源码提交：$env:GITHUB_SHA
+          - Flutter 3.47.6；各平台 SDK 信息见 build-info.json。
+          - 仅包含本次选中的平台；包旁附 SHA-256 校验文件。
+          - Windows 提供 MSIX 安装包；测试签名需先信任包旁的 .cer；签名种类见 build-info.json。
+          - Android 使用临时 debug key；macOS 仅 ad-hoc 签名，未 notarize。
+          - macOS ZIP 保留 .app 结构和权限。
+          - 构建成功不等于三端播放验收；正式分发前仍需完成签名、资源许可和设备验证。
+          "@
+          $notes | Set-Content release-notes.md -Encoding utf8
+          gh release create $tag @assets THIRD_PARTY_NOTICES.md --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "BiliSail $env:RELEASE_VERSION preview" --notes-file release-notes.md --draft --prerelease
+          if ($LASTEXITCODE -ne 0) { throw 'Creating the release draft failed.' }

@@ -184,3 +184,9 @@ FRB 支持跨平台是可行性依据，但平台构建、取消、错误和流�
 **安装与存储**：按用户明确要求，应用尚未发布，本次直接统一内部标识。Android application ID／namespace 和 macOS bundle ID 为 `dev.bilisail.bilisail`；Windows `CompanyName`／`ProductName` 为 `dev.bilisail`／`BiliSail`；SQLite 文件名为 `bilisail.sqlite`，安全存储 key prefix 为 `bilisail.web_session.v1`。新名称使用独立的应用数据空间，既有开发版登录、设置与历史不迁移。Android Activity 包名与目录同步重构；数据库结构保持 v2。参考仓库与上游来源名称、历史验收文档中的真实产物路径和哈希保留；当前构建命令更新为新入口，本地检出目录保持原路径。
 
 **验证边界**：工程检查、原生回归、平台构建及未测项见 [项目更名记录](validation/project-renaming.md)。
+
+## D22：Linux 编排 CI/CD，Windows 以 MSIX 交付
+
+**决定（2026-10-06）**：GitHub Actions 在 Ubuntu 复用检查脚本并上传 Release，在对应主机构建 Android arm64、Windows x64、macOS arm64。Windows 按用户要求提供 MSIX，使用 Windows SDK MakeAppx/SignTool 和现有图标，不引入额外 Dart 包；默认临时测试签名，可通过 Secrets 提供固定 PFX。MSIX 安装下限为 Windows 10 1809，版本由 Flutter `x.y.z+N` 映射为 `x.y.z.N`。
+
+**发布边界**：借鉴 UWP 的手动选平台和 Release 草稿职责，独立编写 Flutter 工作流；只创建 draft + prerelease，不自动公开。固定 SDK 与锁文件、附源码/SDK metadata 和 SHA-256；构建成功不能替代三端媒体、安装/升级、签名与许可验收。配置、证书信任和实测状态见 [CI/CD 与 MSIX](validation/ci-cd.md)。

@@ -1,0 +1,160 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本 x.y.z+N（留空使用 pubspec.yaml）'
+        type: string
+        default: ''
+      enable_android:
+        type: boolean
+        default: true
+      enable_windows:
+        type: boolean
+        default: true
+      enable_macos:
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      version:
+        description: Flutter version (build name plus build number); empty uses pubspec.yaml.
+        type: string
+        default: ''
+      enable_android:
+        type: boolean
+        default: true
+      enable_windows:
+        type: boolean
+        default: true
+      enable_macos:
+        type: boolean
+        default: true
+    secrets:
+      MSIX_CERTIFICATE_BASE64:
+        required: false
+      MSIX_CERTIFICATE_PASSWORD:
+        required: false
+    outputs:
+      version:
+        description: Version used by every selected build.
+        value: ${{ jobs.prepare.outputs.version }}
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Resolve version and platforms
+        id: plan
+        shell: pwsh
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          # Push/PR has no inputs; a reusable caller can explicitly pass false.
+          ENABLE_ANDROID: ${{ !contains(toJSON(inputs), '"enable_android"') || inputs.enable_android }}
+          ENABLE_WINDOWS: ${{ !contains(toJSON(inputs), '"enable_windows"') || inputs.enable_windows }}
+          ENABLE_MACOS: ${{ !contains(toJSON(inputs), '"enable_macos"') || inputs.enable_macos }}
+        run: |
+          $version = $env:REQUESTED_VERSION.Trim()
+          if (!$version) {
+            $match = [regex]::Match((Get-Content pubspec.yaml -Raw), '(?m)^version:\s*(\S+)\s*$')
+            if (!$match.Success) { throw 'pubspec.yaml has no version.' }
+            $version = $match.Groups[1].Value
+          }
+          if ($version -cnotmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\+[1-9]\d*$') {
+            throw 'Version must be x.y.z+N, for example 0.1.0+1.'
+          }
+          if ([long]($version.Split('+')[1]) -gt 2100000000) { throw 'Android build number is too large.' }
+          if ($env:ENABLE_ANDROID -eq 'true' -and [long]($version.Split('+')[1]) -gt 2099998000) {
+            throw 'Android arm64 split APK reserves 2000 in its version code.'
+          }
+          $platforms = @(
+            if ($env:ENABLE_ANDROID -eq 'true') { @{ target = 'android-arm64'; runner = 'ubuntu-24.04'; arch = 'x64' } }
+            if ($env:ENABLE_WINDOWS -eq 'true') { @{ target = 'windows-x64'; runner = 'windows-2022'; arch = 'x64' } }
+            if ($env:ENABLE_MACOS -eq 'true') { @{ target = 'macos-arm64'; runner = 'macos-15'; arch = 'arm64' } }
+          )
+          if (!$platforms.Count) { throw 'Select at least one platform.' }
+          if ($env:ENABLE_WINDOWS -eq 'true' -and @(($version -split '[.+]') | Where-Object { [long]$_ -gt 65535 }).Count) {
+            throw 'MSIX version components must be at most 65535.'
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "matrix=$(@{ include = @($platforms) } | ConvertTo-Json -Depth 3 -Compress)" >> $env:GITHUB_OUTPUT
+
+  check:
+    name: Analyze and test
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.6'
+          channel: stable
+          cache: true
+          pub-cache-key: flutter-pub-:os:-:arch:-:version:-${{ hashFiles('**/pubspec.lock') }}
+      - name: Check root app and all packages
+        shell: pwsh
+        run: ./tool/check.ps1 -EnforceLockfile
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: [prepare, check]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Java for Android
+        if: matrix.target == 'android-arm64'
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: |
+            android/**/*.gradle.kts
+            android/gradle/wrapper/gradle-wrapper.properties
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.6'
+          channel: stable
+          architecture: ${{ matrix.arch }}
+          cache: true
+          pub-cache-key: flutter-pub-:os:-:arch:-:version:-${{ hashFiles('**/pubspec.lock') }}
+      - name: Build and package preview
+        shell: pwsh
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+          BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER || 'CN=BiliSail' }}
+          MSIX_CERTIFICATE_BASE64: ${{ matrix.target == 'windows-x64' && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_BASE64 || '' }}
+          MSIX_CERTIFICATE_PASSWORD: ${{ matrix.target == 'windows-x64' && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_PASSWORD || '' }}
+        run: ./tool/build-release.ps1 -Target $env:BUILD_TARGET -Version $env:BUILD_VERSION
+      - name: Upload packages and checksums
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: BiliSail-${{ matrix.target }}-packages
+          path: artifacts/${{ matrix.target }}/release/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

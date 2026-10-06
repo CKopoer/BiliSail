@@ -78,6 +78,10 @@
 
 初始实现参考职责、协议入口和 UWP 实际界面，自行编写 Dart，没有复制 C# 或 Protobuf 文件。本轮按用户明确要求采用 `biliuwp-lite` 的业务图标字体、等级/认证图片和启动图标；具体来源、哈希和生成方法见 [资源清单](../assets/README.md)。本地参考仓库未找到明确覆盖这些资源的 LICENSE，本机预览采用不代表上游已授权开源或再分发。弹幕使用按公开 wire 字段编写的最小有界解析器，来源见 [API 验证记录](validation/api-endpoints.md)。测试媒体由本机 FFmpeg 的合成信号生成。依赖与原生来源见 [第三方说明](../THIRD_PARTY_NOTICES.md)；项目自己的最终开源许可证留待采用范围明确后决定。
 
+### CI/CD 补充参考（2026-10-06）
+
+本轮只读查看 `biliuwp-lite` 提交 `baf7e7591e8dc2fe012cf1e7ba54a056dec7f3b0` 的 [release.yml](../../biliuwp-lite/.github/workflows/release.yml)、[choco.yml](../../biliuwp-lite/.github/workflows/choco.yml) 和 [release-drafter.yml](../../biliuwp-lite/.github/release-drafter.yml)。仅借鉴手动选平台、打包、Release 草稿与产物上传职责，独立编写 Flutter/Dart 构建配置；未复制上游工作流代码、私有下载地址或凭据，未修改相邻仓库。采用范围沿用本节许可限制；新的 MSIX manifest 按 Microsoft 公开 schema 独立编写，工具与验证见 [CI/CD 与 MSIX](validation/ci-cd.md)。
+
 ### 快捷键和富评论补充参考
 
 实际查看已安装的哔哩哔哩 UWP **4.8.18.0** 快捷键设置和评论区。对应源码为 [默认快捷键](../../biliuwp-lite/src/BiliLite.UWP/Models/Functions/BaseShortcutFunction.cs)、[快捷键设置](../../biliuwp-lite/src/BiliLite.UWP/Controls/Settings/ShortcutKeySettingsControl.xaml)、[评论成员模型](../../biliuwp-lite/src/BiliLite.UWP/Models/Common/Comment/CommentMemberModel.cs)、[表情 API](../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/EmoteApi.cs) 和 [表情模型](../../biliuwp-lite/src/BiliLite.UWP/ViewModels/EmoteViewModel.cs)。前文中“未复制图标/图片”的描述属于各历史阶段；当前采用范围以资源清单为准。功能验证见 [快捷键与富评论](validation/shortcuts-rich-comments.md)。

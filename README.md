@@ -92,6 +92,12 @@ dart run tool\live_smoke.dart
 
 Android 工程的最低 API 为 24，macOS 工程最低版本为 12.0。这两个平台已创建入口、网络权限与依赖配置；本机 Windows 的成功不能证明两端运行正常。Windows、Android 和 macOS 的实际构建状态分别记录在验收文档。
 
+## GitHub Actions
+
+分支 push、PR 和手动 CI 会在 Ubuntu 检查根应用与三个包，再分别构建 Android arm64 APK、Windows x64 **MSIX 安装包**和 macOS arm64 应用 ZIP。Windows 构建使用 Windows runner，macOS 使用 Apple Silicon runner；检查和 Release 上传使用 Ubuntu。
+
+Actions 中手动运行 **Release preview**，可选平台并输入 `x.y.z+N`（留空使用 `pubspec.yaml`），成功后创建预览 Release 草稿。Windows 默认测试签名并附 `.cer`；配置固定 PFX Secrets 后改用该证书。触发方式、签名与安装、产物校验及未测项见 [CI/CD 说明](docs/validation/ci-cd.md)。
+
 ## 工程结构
 
 - `lib/app`：组合根、路由、主题和响应式导航。
