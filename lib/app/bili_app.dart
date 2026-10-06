@@ -26,6 +26,7 @@ import '../features/video/application/video_extras_controller.dart';
 import '../features/library/application/library_controller.dart';
 import '../features/playback/presentation/playback_panel.dart';
 import '../features/settings/application/settings_controller.dart';
+import '../features/settings/presentation/app_update_host.dart';
 import '../features/settings/domain/app_settings.dart';
 import '../shared/ui/app_notice.dart';
 import '../shared/ui/smooth_scroll_behavior.dart';
@@ -249,7 +250,10 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         title: 'BiliSail',
         debugShowCheckedModeBanner: false,
         scrollBehavior: const SmoothScrollBehavior(),
-        builder: AppNoticeHost.builder,
+        builder: (context, child) => AppUpdateHost(
+          navigatorKey: _router.routerDelegate.navigatorKey,
+          child: AppNoticeHost.builder(context, child),
+        ),
         locale: const Locale('zh', 'CN'),
         supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,

@@ -22,6 +22,7 @@ dependencies:
   qr_flutter: 4.1.0
   window_manager: 0.5.2
   url_launcher: 6.3.2
+  package_info_plus: 10.2.2
   bili_api:
     path: packages/bili_api
   bili_player:

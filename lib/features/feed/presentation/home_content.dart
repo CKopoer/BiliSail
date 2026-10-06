@@ -214,7 +214,8 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                             ),
                           );
                         }
-                        if (widget.channel == HomeChannel.favorites) {
+                        if (widget.channel == HomeChannel.favorites ||
+                            widget.channel == HomeChannel.watchLater) {
                           return ResponsiveCardGrid(
                             children: [
                               for (final item in items)

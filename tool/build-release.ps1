@@ -134,7 +134,7 @@ try {
   Invoke-BuildCommand flutter @('pub', 'get', '--enforce-lockfile')
   # Release builds must regenerate native registrants without dev-only plugins.
   # In Flutter 3.47.6 --no-pub skips that regeneration (not just dependency fetching).
-  $versionArgs = @('--release', '--build-name', $buildName, '--build-number', $buildNumber)
+  $versionArgs = @('--release', '--build-name', $buildName, '--build-number', $buildNumber, "--dart-define=BILISAIL_RELEASE_VERSION=$Version")
   $name = "BiliSail-$Version-$Target"
   $outputRoot = Join-Path $repoRoot "artifacts/$Target"
   $releaseDir = Join-Path $outputRoot 'release'

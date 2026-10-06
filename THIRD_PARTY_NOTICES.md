@@ -19,6 +19,8 @@
 
 依赖维护方入口：[Flutter](https://github.com/flutter/flutter)、[Riverpod](https://github.com/rrousselGit/riverpod)、[go_router](https://pub.dev/packages/go_router/versions/18.0.2)、[Dio](https://github.com/cfug/dio)、[Drift](https://github.com/simolus3/drift)、[flutter_secure_storage](https://github.com/juliansteenbakker/flutter_secure_storage)、[media_kit](https://github.com/media-kit/media-kit)。
 
+关于页与更新检查使用 [package_info_plus 10.2.2](https://pub.dev/packages/package_info_plus/versions/10.2.2) 读取平台包版本，BSD-3-Clause；本轮将已有锁定的传递依赖提升为直接依赖，没有改变包版本或新增下载的二进制来源。GitHub 更新请求自行实现，只参考 UWP 交互职责，未复制源码或版本 schema，见 [更新验证](docs/validation/app-updates.md)。系统浏览器入口沿用 url_launcher，仅开放本项目 GitHub 仓库与 Release 路径，不传账号凭据。
+
 ## Windows 原生播放器资产
 
 图片缓存直接使用现有锁定的 [crypto 3.0.7](https://pub.dev/packages/crypto/versions/3.0.7) 计算 SHA-256 文件键和内容校验，BSD-3-Clause；它此前已由 API 包引入，本次没有增加新的解析版本或原生二进制。

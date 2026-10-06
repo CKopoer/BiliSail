@@ -190,3 +190,9 @@ FRB 支持跨平台是可行性依据，但平台构建、取消、错误和流�
 **决定（2026-10-06）**：GitHub Actions 在 Ubuntu 复用检查脚本并上传 Release，在对应主机构建 Android arm64、Windows x64、macOS arm64。Windows 按用户要求提供 MSIX，使用 Windows SDK MakeAppx/SignTool 和现有图标，不引入额外 Dart 包；默认临时测试签名，可通过 Secrets 提供固定 PFX。MSIX 安装下限为 Windows 10 1809，版本由 Flutter `x.y.z+N` 映射为 `x.y.z.N`。
 
 **发布边界**：借鉴 UWP 的手动选平台和 Release 草稿职责，独立编写 Flutter 工作流；只创建 draft + prerelease，不自动公开。固定 SDK 与锁文件、附源码/SDK metadata 和 SHA-256；构建成功不能替代三端媒体、安装/升级、签名与许可验收。配置、证书信任和实测状态见 [CI/CD 与 MSIX](validation/ci-cd.md)。
+
+## D23：关于页与每日首次启动更新提示
+
+**决定（2026-10-06）**：关于页增加本项目 GitHub 地址与手动检查，应用按本地日历日首次启动自动查询自己的公开 Release（含预览版），新版本提示后由用户点击前往该版本页面。不自动下载或安装；自动检查无更新或失败时保持安静，手动检查显示结果。
+
+**边界**：settings feature 持有纯 Dart 版本模型、Repository/日期端口和应用控制器，app 注入无凭据 GitHub 读取、SQLite 日期存储、包版本与受限外部链接。提示宿主独立于工作区页面；读请求单飞、超时取消、有界响应与旧结果隔离。原始 Flutter 数字构建号由 Release 脚本传入，避免 Android 分包 ABI 版本码偏移；日期沿用现有 settings 表，不改变数据库版本。参考 UWP 的交互职责而不复制实现或版本 schema；来源、行为测试与平台边界见 [更新验证](validation/app-updates.md)。

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +9,8 @@ import '../../../shared/ui/danmaku_settings_controls.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../domain/playback_rates.dart';
 import '../application/settings_controller.dart';
+import '../application/app_update_controller.dart';
+import '../domain/app_update.dart';
 import '../domain/app_settings.dart';
 import '../domain/settings_category.dart';
 import 'shortcut_settings_section.dart';
@@ -342,22 +346,7 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ]),
                       if (widget.category == SettingsCategory.about)
                         _section('关于', [
-                          const Text('一个专注观看体验的跨平台 Bilibili 第三方客户端'),
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('BiliSail（哔帆）'),
-                            subtitle: const Text('0.1.0 · Windows 预览版'),
-                            onTap: () => showAboutDialog(
-                              context: context,
-                              applicationName: 'BiliSail（哔帆）',
-                              applicationVersion: '0.1.0',
-                              children: const [
-                                Text('一个专注观看体验的跨平台 Bilibili 第三方客户端'),
-                                SizedBox(height: 12),
-                                ..._usageNotice,
-                              ],
-                            ),
-                          ),
+                          const _AboutSettingsContent(),
                           const SizedBox(height: 12),
                           ..._usageNotice,
                         ]),
@@ -366,6 +355,71 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
             ),
+      ],
+    );
+  }
+}
+
+final class _AboutSettingsContent extends ConsumerWidget {
+  const _AboutSettingsContent();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final version = ref.watch(installedAppVersionProvider);
+    final update = ref.watch(appUpdateControllerProvider);
+    final controller = ref.read(appUpdateControllerProvider.notifier);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('一个专注观看体验的跨平台 Bilibili 第三方客户端'),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('BiliSail（哔帆）'),
+          subtitle: Text(
+            version.value?.label ?? (version.hasError ? '版本信息暂不可用' : '正在读取版本…'),
+          ),
+          onTap: () => showAboutDialog(
+            context: context,
+            applicationName: 'BiliSail（哔帆）',
+            applicationVersion: version.value?.label ?? '',
+            children: const [
+              Text('一个专注观看体验的跨平台 Bilibili 第三方客户端'),
+              SizedBox(height: 12),
+              ..._usageNotice,
+            ],
+          ),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('GitHub'),
+          subtitle: Text(AppUpdateLinks.repository.toString()),
+          trailing: const Icon(Icons.open_in_new),
+          onTap: () async {
+            final opened = await controller.openRepository();
+            if (!opened && context.mounted) {
+              showAppNotice(context, '无法打开浏览器，请复制 GitHub 地址访问');
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        FilledButton.icon(
+          onPressed: update.checking
+              ? null
+              : () => unawaited(controller.checkManually()),
+          icon: update.checking
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.system_update_alt),
+          label: Text(update.checking ? '正在检查更新…' : '检查更新'),
+        ),
+        const SizedBox(height: 8),
+        const Text('每天首次打开应用时会自动检查更新。'),
+        if (update.message case final message?) ...[
+          const SizedBox(height: 8),
+          Text(message),
+        ],
       ],
     );
   }
