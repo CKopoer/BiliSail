@@ -1095,6 +1095,81 @@ void main() {
     },
   );
 
+  for (final kind in [PointerDeviceKind.mouse, PointerDeviceKind.touch]) {
+    for (final visible in [true, false]) {
+      testWidgets(
+        '${kind.name} double tap preserves ${visible ? 'visible' : 'hidden'} controls across fullscreen',
+        (tester) async {
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          final window = _FakeWindowService();
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(session, window, const AppSettings.defaults()),
+          );
+          await _pumpFrames(tester);
+          await session.pause();
+          await session.seek(const Duration(seconds: 12));
+          final generation = session.sourceGeneration;
+          final opens = engine.opens;
+          final target = find.byKey(
+            const ValueKey('player-surface-tap-target'),
+          );
+          final controls = find.byKey(const ValueKey('player-controls'));
+          Offset surfacePoint() =>
+              tester.getTopLeft(target) + const Offset(30, 50);
+
+          Future<void> singleTap() async {
+            await tester.tapAt(surfacePoint(), kind: kind);
+            await tester.pump(const Duration(milliseconds: 350));
+          }
+
+          Future<void> doubleTap() async {
+            final point = surfacePoint();
+            await tester.tapAt(point, kind: kind);
+            await tester.pump(const Duration(milliseconds: 50));
+            await tester.tapAt(point, kind: kind);
+            await _pumpFrames(tester);
+            await tester.pump(const Duration(milliseconds: 350));
+          }
+
+          void expectControls(bool shown) =>
+              expect(controls, shown ? findsOneWidget : findsNothing);
+
+          if (!visible) await singleTap();
+          expectControls(visible);
+          await doubleTap();
+          expect(window.fullScreen, isTrue);
+          expectControls(visible);
+          await doubleTap();
+          expect(window.fullScreen, isFalse);
+          expectControls(visible);
+
+          // A single tap in fullscreen changes the state that returns inline.
+          await doubleTap();
+          expect(window.fullScreen, isTrue);
+          await singleTap();
+          expectControls(!visible);
+          await doubleTap();
+          expect(window.fullScreen, isFalse);
+          expectControls(!visible);
+          await singleTap();
+          expectControls(visible);
+
+          expect(engine.opens, opens);
+          expect(session.sourceGeneration, generation);
+          expect(engine.currentSnapshot.position, const Duration(seconds: 12));
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(find.byType(VideoSurface), findsOneWidget);
+          expect(engine.maxSurfaces, 1);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
   testWidgets('only surface clicks toggle controls, not hover, keys or time', (
     tester,
   ) async {

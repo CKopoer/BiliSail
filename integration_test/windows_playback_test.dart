@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/app/shell.dart';
@@ -731,6 +732,43 @@ void main() {
           expect(find.byTooltip('全屏（F）'), findsOneWidget);
           expect(engine.currentSnapshot.generation, generation);
           expect(engine.inspectDiagnostics().generation, generation);
+          expect(tester.takeException(), isNull);
+        }
+        Future<void> doubleClickSurface() async {
+          final point = tester.getTopLeft(surfaceTarget) + const Offset(30, 50);
+          await tester.tapAt(point, kind: PointerDeviceKind.mouse);
+          await tester.pump(const Duration(milliseconds: 50));
+          await tester.tapAt(point, kind: PointerDeviceKind.mouse);
+        }
+
+        for (final visible in [true, false]) {
+          if (!visible) {
+            await tester.tapAt(
+              tester.getTopLeft(surfaceTarget) + const Offset(30, 50),
+              kind: PointerDeviceKind.mouse,
+            );
+            await tester.pump(const Duration(milliseconds: 400));
+          }
+          final controls = find.byKey(const ValueKey('player-controls'));
+          final expectedControls = visible ? findsOneWidget : findsNothing;
+          expect(controls, expectedControls);
+          await doubleClickSurface();
+          await _until(
+            tester,
+            () => window.isFullScreen && surfaceTarget.evaluate().length == 1,
+          );
+          await tester.pump(const Duration(milliseconds: 400));
+          expect(controls, expectedControls);
+          await doubleClickSurface();
+          await _until(
+            tester,
+            () => !window.isFullScreen && surfaceTarget.evaluate().length == 1,
+          );
+          await tester.pump(const Duration(milliseconds: 400));
+          expect(controls, expectedControls);
+          expect(find.byType(VideoSurface), findsOneWidget);
+          expect(engine.currentSnapshot.generation, generation);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
           expect(tester.takeException(), isNull);
         }
         expect(window.isFullScreen, isFalse);

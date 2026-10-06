@@ -54,6 +54,8 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     with WidgetsBindingObserver {
   late final PlaybackSession _session;
   late final ValueNotifier<AppSettings> _settings;
+  // Inline and fullscreen views are recreated, but share the page's intent.
+  final _controlsVisible = ValueNotifier(true);
   bool _fullScreen = false;
   bool _active = false;
   bool _surfaceReady = false;
@@ -159,6 +161,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _dismissFullScreen();
     _session.detach(this);
     _settings.dispose();
+    _controlsVisible.dispose();
     super.dispose();
   }
 
@@ -222,6 +225,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             child: _PlayerView(
               session: _session,
               settings: _settings,
+              controlsVisible: _controlsVisible,
               onToggleComments: () => widget.onToggleComments(),
               danmakuComposerBuilder: widget.danmakuComposerBuilder == null
                   ? null
@@ -263,6 +267,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       : _PlayerView(
           session: _session,
           settings: _settings,
+          controlsVisible: _controlsVisible,
           onToggleComments: widget.onToggleComments,
           danmakuComposerBuilder: widget.danmakuComposerBuilder,
           danmakuOverlayBuilder: widget.danmakuOverlayBuilder,
@@ -277,6 +282,7 @@ class _PlayerView extends StatefulWidget {
   const _PlayerView({
     required this.session,
     required this.settings,
+    required this.controlsVisible,
     required this.onToggleComments,
     required this.onFullScreen,
     required this.fullScreen,
@@ -287,6 +293,7 @@ class _PlayerView extends StatefulWidget {
   });
   final PlaybackSession session;
   final ValueListenable<AppSettings> settings;
+  final ValueNotifier<bool> controlsVisible;
   final VoidCallback onToggleComments;
   final VoidCallback onFullScreen;
   final bool fullScreen;
@@ -301,7 +308,6 @@ class _PlayerView extends StatefulWidget {
 class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   final FocusNode _focusNode = FocusNode(debugLabel: 'video player');
   final GlobalKey _playerBoundsKey = GlobalKey();
-  bool _showControls = true;
   bool _exitingFullScreen = false;
   bool _settingsOpen = false;
   bool _composeExpanded = false;
@@ -464,7 +470,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   void _toggleControls() {
     if (!widget.active) return;
     _focusNode.requestFocus();
-    setState(() => _showControls = !_showControls);
+    widget.controlsVisible.value = !widget.controlsVisible.value;
   }
 
   Future<void> _openSettings(int tab) async {
@@ -690,7 +696,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
           focused: _focusNode.hasPrimaryFocus,
           onFocus: _focusNode.requestFocus,
           child: ListenableBuilder(
-            listenable: session,
+            listenable: Listenable.merge([session, widget.controlsVisible]),
             builder: (context, _) => ValueListenableBuilder<PlaybackSnapshot>(
               valueListenable: session.snapshots,
               builder: (context, snapshot, _) {
@@ -704,7 +710,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                           snapshot.position < cue.end,
                     )
                     .firstOrNull;
-                final controls = _showControls || session.error != null;
+                final controls =
+                    widget.controlsVisible.value || session.error != null;
                 return LayoutBuilder(
                   builder: (context, constraints) {
                     final layout = _ControlsLayout(

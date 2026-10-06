@@ -224,7 +224,7 @@ final class _CoverMetadata extends StatelessWidget {
 
   static const _style = TextStyle(
     color: Colors.white,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: FontWeight.w400,
     shadows: [Shadow(blurRadius: 2, color: Colors.black)],
   );
@@ -233,7 +233,7 @@ final class _CoverMetadata extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final stacked =
-          MediaQuery.textScalerOf(context).scale(11) > 16 ||
+          MediaQuery.textScalerOf(context).scale(12) > 16 ||
           constraints.maxWidth < 210;
       final counts = Row(
         children: [
