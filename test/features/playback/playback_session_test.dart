@@ -5,6 +5,7 @@ import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/application/playback_manager.dart';
+import 'package:bilisail/features/playback/application/playback_rate_memory.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/domain/sponsor_repository.dart';
@@ -15,6 +16,186 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  for (final concurrent in [false, true]) {
+    test(
+      'new videos inherit the latest rate with concurrent playback: $concurrent',
+      () async {
+        final manager = _manager();
+        addTearDown(manager.close);
+        final first = manager.acquire('first');
+        // An already-created page must read the rate when its video is opened.
+        final second = manager.acquire('second');
+        final owner = Object();
+        first.attach(owner);
+        first.configureSettings(AppSettings(defaultPlaybackRate: 1.25));
+        second.configureSettings(AppSettings(defaultPlaybackRate: 1.25));
+        await manager.updateWorkspace(
+          allowConcurrent: concurrent,
+          activeTabId: 'first',
+        );
+        await first.activate(owner, _detail('1'), _part('1'));
+        expect(first.snapshots.value.rate, 1.25);
+        await first.setRate(2);
+        await manager.updateWorkspace(
+          allowConcurrent: concurrent,
+          activeTabId: 'second',
+        );
+        await second.open(_detail('2'), _part('2'));
+        expect(second.snapshots.value.rate, 2);
+        await second.setRate(.75);
+        expect(first.snapshots.value.rate, 2);
+        await first.changeQuality(64);
+        expect(first.snapshots.value.rate, 2);
+        await first.activate(owner, _detail('1'), _part('next-part'));
+        expect(first.snapshots.value.rate, .75);
+        manager.release('first', first);
+        manager.release('second', second);
+        await _flush();
+        final third = manager.acquire('third');
+        third.configureSettings(AppSettings(defaultPlaybackRate: 1.25));
+        await third.open(_detail('3'), _part('3'));
+        expect(third.snapshots.value.rate, .75);
+      },
+    );
+  }
+
+  test('a fresh application run uses the saved default instead of the previous run rate', () async {
+    final settings = AppSettings(defaultPlaybackRate: 1.25);
+    final previousRun = _manager();
+    addTearDown(previousRun.close);
+    final previous = previousRun.acquire('video');
+    previous.configureSettings(settings);
+    await previous.open(_detail('1'), _part('1'));
+    await previous.setRate(2);
+    await previousRun.close();
+
+    final newRun = _manager();
+    addTearDown(newRun.close);
+    final current = newRun.acquire('video');
+    current.configureSettings(settings);
+    await current.open(_detail('2'), _part('2'));
+    expect(current.snapshots.value.rate, 1.25);
+    expect(settings.defaultPlaybackRate, 1.25);
+  });
+
+  test(
+    'temporary speed and its restoration do not replace the shared rate',
+    () async {
+      final manager = _manager();
+      addTearDown(manager.close);
+      final first = manager.acquire('first');
+      await first.open(_detail('1'), _part('1'));
+      await first.setRate(1.5);
+      await first.beginTemporaryRate(3);
+      final second = manager.acquire('second');
+      await second.open(_detail('2'), _part('2'));
+      expect(second.snapshots.value.rate, 1.5);
+      await second.setRate(2);
+      await first.endTemporaryRate();
+      expect(first.snapshots.value.rate, 1.5);
+      final third = manager.acquire('third');
+      await third.open(_detail('3'), _part('3'));
+      expect(third.snapshots.value.rate, 2);
+    },
+  );
+
+  test(
+    'late rate completion in another tab cannot replace a newer choice',
+    () async {
+      final manager = _manager();
+      addTearDown(manager.close);
+      final first = manager.acquire('first');
+      final second = manager.acquire('second');
+      await first.open(_detail('1'), _part('1'));
+      await second.open(_detail('2'), _part('2'));
+      final gate = Completer<void>();
+      (first.engine as _FakeEngine).nextRate = gate;
+      final slowChange = first.setRate(1.5);
+      await second.setRate(2);
+      gate.complete();
+      await slowChange;
+      final third = manager.acquire('third');
+      await third.open(_detail('3'), _part('3'));
+      expect(first.snapshots.value.rate, 1.5);
+      expect(third.snapshots.value.rate, 2);
+    },
+  );
+
+  test(
+    'failed or stale rate commands leave the last successful shared rate',
+    () async {
+      final manager = _manager();
+      addTearDown(manager.close);
+      final first = manager.acquire('first');
+      await first.open(_detail('1'), _part('1'));
+      await first.setRate(1.5);
+      final engine = first.engine as _FakeEngine;
+      final failure = Completer<void>();
+      engine.nextRate = failure;
+      final failedChange = first.setRate(3);
+      failure.completeError(
+        PlayerFailure(
+          PlayerFailureKind.nativePlayback,
+          'rate failed',
+          engine.currentSnapshot.generation,
+        ),
+      );
+      await failedChange;
+      final stale = Completer<void>();
+      engine.nextRate = stale;
+      final staleChange = first.setRate(2);
+      await first.open(_detail('next'), _part('next'));
+      stale.complete();
+      await staleChange;
+      final second = manager.acquire('second');
+      await second.open(_detail('2'), _part('2'));
+      expect(second.snapshots.value.rate, 1.5);
+    },
+  );
+
+  test('PGC inherits the shared rate while live and changed defaults cannot replace it', () async {
+    final rates = PlaybackRateMemory();
+    final manager = _manager(rateMemory: rates);
+    addTearDown(manager.close);
+    final video = manager.acquire('video');
+    await video.open(_detail('video'), _part('video'));
+    await video.setRate(2);
+    final content = PlaybackSession(
+      engine: _FakeEngine(),
+      repository: _FakeRepository(autoResolve: true),
+      contentRepository: _FakeContentRepository(),
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+      rateMemory: rates,
+    );
+    addTearDown(content.close);
+    await content.open(null, null, target: const PgcPlaybackTarget('1'));
+    expect(content.snapshots.value.rate, 2);
+    await content.open(null, null, target: const LivePlaybackTarget('42'));
+    await content.setRate(.5);
+    expect(content.snapshots.value.rate, 1);
+    content.configureSettings(AppSettings(defaultPlaybackRate: 1.25));
+    await content.open(null, null, target: const PgcPlaybackTarget('2'));
+    expect(content.snapshots.value.rate, 2);
+    content.configureSettings(AppSettings(defaultPlaybackRate: 1.5));
+    await _flush();
+    expect(content.snapshots.value.rate, 2);
+  });
+
+  test('changing defaults before a manual rate choice does not become a session override', () async {
+    final manager = _manager();
+    addTearDown(manager.close);
+    final first = manager.acquire('first');
+    await first.open(_detail('1'), _part('1'));
+    first.configureSettings(AppSettings(defaultPlaybackRate: 1.5));
+    await _flush();
+    expect(first.snapshots.value.rate, 1.5);
+    final second = manager.acquire('second');
+    second.configureSettings(AppSettings(defaultPlaybackRate: 2));
+    await second.open(_detail('2'), _part('2'));
+    expect(second.snapshots.value.rate, 2);
+  });
 
   test(
     'multiple tabs keep independent sources and release only the closed tab',
@@ -905,7 +1086,7 @@ void main() {
       expect(session.snapshots.value.rate, 1.5);
       await session.beginTemporaryRate(3);
       await session.activate(second, _detail('two'), _part('two'));
-      expect(session.snapshots.value.rate, 1);
+      expect(session.snapshots.value.rate, 1.5);
       await session.activate(first, _detail('one'), _part('one'));
       expect(session.snapshots.value.rate, 1.5);
       await session.beginTemporaryRate(3);
@@ -1569,7 +1750,7 @@ void main() {
       expect(progress.writes, isEmpty);
       expect(session.ownsPlayback(second), isTrue);
       expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
-      expect(engine.currentSnapshot.rate, 1);
+      expect(engine.currentSnapshot.rate, 1.5);
       await session.activate(first, _detail('one'), _part('one'));
       expect(engine.currentSnapshot.rate, 1.5);
       expect(engine.maxSimultaneousPlayers, 1);
@@ -2014,14 +2195,21 @@ Future<void> _flush() async {
   await Future<void>.delayed(Duration.zero);
 }
 
-PlaybackManager _manager({PlaybackRepository? repository}) => PlaybackManager(
-  createSession: () => PlaybackSession(
-    engine: _FakeEngine(),
-    repository: repository ?? _FakeRepository(autoResolve: true),
-    progress: _FakeProgress(),
-    accountScope: () => 'guest',
-  ),
-);
+PlaybackManager _manager({
+  PlaybackRepository? repository,
+  PlaybackRateMemory? rateMemory,
+}) {
+  final rates = rateMemory ?? PlaybackRateMemory();
+  return PlaybackManager(
+    createSession: () => PlaybackSession(
+      engine: _FakeEngine(),
+      repository: repository ?? _FakeRepository(autoResolve: true),
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+      rateMemory: rates,
+    ),
+  );
+}
 
 const _timelineMetadata = PlaybackMetadata(
   subtitles: [],

@@ -128,6 +128,10 @@
 
 搜索页面按用户提供的官方 B 站截图调整分类栏、排序工具条、UP 主预览与视频卡片。协议只读参考 [SearchAPI.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/SearchAPI.cs)、[SearchVideoViewModel.cs](../../biliuwp-lite/src/BiliLite.UWP/ViewModels/Search/SearchVideoViewModel.cs)、[SearchArticleViewModel.cs](../../biliuwp-lite/src/BiliLite.UWP/ViewModels/Search/SearchArticleViewModel.cs)、[SearchUserViewModel.cs](../../biliuwp-lite/src/BiliLite.UWP/ViewModels/Search/SearchUserViewModel.cs)、[SearchClient.cs](../../bili-kernel/src/Services/Services.Search/Core/SearchClient.cs) 和 [BiliApis.cs](../../bili-kernel/src/BiliKernel.Abstractions/Bili/BiliApis.cs)。只采用端点、字段和交互职责，独立编写 Dart/Flutter；未新增复制上游源码、schema 或资源，未修改相邻仓库。现有等级/UP 图标沿用已登记资源。接口返回与综合排序差异通过游客只读烟测验证，见 [搜索分类与排序](validation/search-categories.md)。
 
+### 视频卡菜单与稍后再看计数补充参考（2026-10-06）
+
+标题右侧竖三点与入口范围按用户截图实现。只读参考 [RecommendPageViewModel.cs](../../biliuwp-lite/src/BiliLite.UWP/ViewModels/Home/RecommendPageViewModel.cs)、[WatchLaterAPI.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/User/WatchLaterAPI.cs) 和 [ViewLaterClient.cs](../../bili-kernel/src/Services/Services.User/Core/ViewLaterClient.cs) 的操作职责、删除 `aid` 参数与响应统计模型。UWP 推荐反馈使用 App 鉴权，因此实际 Web 反馈另核对 [官网首页脚本](https://s1.hdslb.com/bfs/static/shanks/laputa-home/assets/index-12fc55c2.js) 中的 `feedback/dislike` 表单和内容不感兴趣 `reason_id=1`，删除仍使用 `toview/del` 的 `aid`。独立编写 Dart/Flutter，没有复制上游源码、schema 或资源，也未修改相邻仓库；查阅公开脚本不等于真实账号写入成功。协议与验证边界见 [视频卡操作菜单](validation/video-card-menus.md) 和 [共享视频卡片](validation/shared-video-cards.md)。
+
 下列资料在 2026-10-05 查阅，支撑选型与接口可能性；依赖与平台范围可能改变，以 M0 锁定版本及实测为准。
 
 | 来源 | 本次用途 |

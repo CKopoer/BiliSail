@@ -10,6 +10,7 @@ import '../core/platform/desktop_window_chrome.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/presentation/account_button.dart';
 import '../features/feed/application/feed_controller.dart';
+import '../features/feed/application/watch_later_removal_controller.dart';
 import '../features/search/application/search_controller.dart';
 import '../features/video/application/video_controller.dart';
 import '../features/video/application/video_card_controller.dart';
@@ -245,6 +246,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
           ),
         );
         ref.invalidate(feedControllerProvider);
+        ref.invalidate(watchLaterRemovalProvider);
         ref.invalidate(searchControllerProvider);
         ref.invalidate(videoDetailProvider);
         ref.invalidate(videoActionsControllerProvider);

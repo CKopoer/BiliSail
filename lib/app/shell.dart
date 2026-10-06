@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/feed/domain/home_channel.dart';
+import '../features/search/presentation/search_category_bar.dart';
 import '../core/presentation/workspace_activity.dart';
 import 'workspace_tabs.dart';
 import 'platform_defaults.dart';
@@ -19,6 +20,34 @@ typedef WorkspacePageBuilder = Widget Function(
   WorkspaceTab tab,
 );
 typedef DragRegionBuilder = Widget Function(BuildContext context, Widget child);
+
+/// Builds shell navigation inside a page's own provider scope.
+final class WorkspacePageHeader extends InheritedWidget {
+  const WorkspacePageHeader({
+    super.key,
+    required this.builder,
+    required super.child,
+  });
+
+  final WidgetBuilder builder;
+
+  static Widget wrap(BuildContext context, Widget page) {
+    final header = context
+        .dependOnInheritedWidgetOfExactType<WorkspacePageHeader>();
+    return header == null
+        ? page
+        : Column(
+            children: [
+              header.builder(context),
+              Expanded(child: page),
+            ],
+          );
+  }
+
+  @override
+  bool updateShouldNotify(WorkspacePageHeader oldWidget) =>
+      builder != oldWidget.builder;
+}
 
 final class BiliAppShell extends StatefulWidget {
   const BiliAppShell({
@@ -260,12 +289,14 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                         _singlePageHeader(context)
                       else
                         _tabStrip(context),
-                      if (!_workspace.active.isPlayback &&
+                      if (_workspace.active.location.path != '/search' &&
+                          !_workspace.active.isPlayback &&
                           !_workspace.active.isProfile &&
                           compact) ...[
                         _channelBar(context),
                         _tools(context, compact: true),
-                      ] else if (!_workspace.active.isPlayback &&
+                      ] else if (_workspace.active.location.path != '/search' &&
+                          !_workspace.active.isPlayback &&
                           !_workspace.active.isProfile)
                         SizedBox(
                           height: 58,
@@ -316,7 +347,10 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                     tab.id,
                     PageStorageBucket.new,
                   ),
-                  child: builder(context, tab),
+                  child: WorkspacePageHeader(
+                    builder: _searchHeader,
+                    child: builder(context, tab),
+                  ),
                 ),
               ),
             ),
@@ -568,6 +602,29 @@ final class _BiliAppShellState extends State<BiliAppShell> {
       ),
     );
   }
+
+  Widget _searchHeader(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => constraints.maxWidth < 760
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SearchCategoryBar(),
+              _tools(context, compact: true),
+            ],
+          )
+        : SizedBox(
+            height: 58,
+            child: Row(
+              children: [
+                const Expanded(child: SearchCategoryBar()),
+                SizedBox(
+                  width: constraints.maxWidth >= 1300 ? 470 : 380,
+                  child: _tools(context, compact: false),
+                ),
+              ],
+            ),
+          ),
+  );
 
   Widget _settingsBar(BuildContext context) {
     final selected = SettingsCategory.fromName(

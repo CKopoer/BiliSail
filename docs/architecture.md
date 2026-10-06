@@ -165,6 +165,8 @@ bilisail/                         # 工程名；本地检出目录目前仍为 b
 
 Riverpod 负责状态订阅和注入，不承担弹幕逐帧广播。路由 provider 用销毁回调取消请求和订阅；有意跨页面存活的服务必须显式管理，不能因自动释放误停播放。[Riverpod 自动释放](https://riverpod.dev/docs/concepts2/auto_dispose)
 
+播放倍速另有一份应用运行期间的共享内存记录，由 app 创建并注入各播放会话。播放页明确调速后，后续新点播继承最近成功选择；已有播放源保持自己的速度，长按临时加速不写入，重启回到持久化设置中的默认值。状态归属和验证见 [应用会话内继承倍速](validation/session-playback-rate.md)。
+
 ### 身份与旧请求隔离
 
 `AccountScope = guest | user(mid)`，`SessionEpoch` 在登录、退出和切换账号时递增。请求和持久化写入携带发起时的 scope/epoch：返回后若不匹配则丢弃。不能把 A 账号的异步响应写入 B 账号缓存。

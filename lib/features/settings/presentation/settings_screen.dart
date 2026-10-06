@@ -245,6 +245,10 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             for (final rate in PlaybackRates.values)
                               rate: '${rate}x',
                           }, controller.setDefaultPlaybackRate),
+                          const Text(
+                            '启动时使用默认倍速；播放页修改后，本次运行中的后续视频继承修改后的倍速',
+                            style: TextStyle(fontSize: 12),
+                          ),
                           _slider(
                             '默认音量',
                             s.defaultVolume,

@@ -39,3 +39,11 @@ abstract interface class RankingFeedRepository {
     required RequestCancellation cancellation,
   });
 }
+
+abstract interface class RecommendationFeedbackRepository {
+  String get feedbackScope;
+  Future<void> rejectRecommendation(
+    RecommendationFeedback feedback, {
+    required RequestCancellation cancellation,
+  });
+}

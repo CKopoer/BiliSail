@@ -42,3 +42,15 @@
 - 最终 `flutter build windows --release --no-pub` 通过，产物为 `build/windows/x64/runner/Release/bili_lite.exe`。本轮没有原生播放器变更，没有将 fixture 布局图当作已安装客户端实机验收。
 
 未验真实账号搜索、Android/macOS 实机、所有关键词/排序/会员/地区条件及真实系统浏览器启动；内置入口由 fake 路由/浏览器端口验证，不推导为三端 M0 完成。
+
+## 搜索专属顶部分类（2026-10-06）
+
+搜索页现将综合、视频、番剧、影视、直播、专栏、用户放在工作区原首页频道栏的位置，不再显示推荐、热门等首页入口，结果区域只保留关键词说明、排序及筛选。分类沿用顶部导航的选中下划线和界面字体；计数继续使用当前关键词的服务端值，未知不显示，超过 99 显示 `99+`。宽度至少 760 时分类和搜索工具同排，较窄时分行；分类可横向拖动，并支持桌面普通鼠标滚轮。
+
+shell 通过 `WorkspacePageHeader` 提供顶部布局，router 在搜索标签已有的 `ProviderScope` 内构建该布局；顶部分类与结果页读取同一 `searchControllerProvider`，没有额外搜索控制器或进程级状态。分类只更新当前标签的控制器，保留关键词、同关键词计数，取消旧请求并按既有规则重置排序／筛选和结果滚动位置；展开筛选随分类变化收起。切换搜索标签或单标签返回保留当前分类，关闭标签或账号变化沿用既有作用域销毁和取消逻辑。
+
+- `flutter test test/features/search test/app/workspace_shell_test.dart test/app/workspace_router_test.dart --dart-define=SEARCH_PREVIEW=true`：72 项通过。新增真实 `createBiliRouter` 回归覆盖两种导航模式、顶部分类与结果作用域一致、关键词／计数／分类保留、旧请求取消、筛选重置与重复分类条消除。
+- 布局回归覆盖 1440×900、1000×800、360×640、320×568／2 倍字体；验证宽屏同排、窄屏分行，以及 Windows 模拟鼠标滚轮访问末尾用户分类。预览位于 `build/search-preview/workspace-1440-1.png`、`workspace-1000-1.png`、`workspace-360-1.png`、`workspace-320-2.png`，均为脱敏 fixture，包含真实 shell 和 router。
+- `flutter analyze lib/app/shell.dart lib/app/router.dart lib/features/search test/features/search test/app/workspace_shell_test.dart test/app/workspace_router_test.dart`：无问题；修改文件格式检查通过。
+
+本项未修改搜索协议或原生播放，没有执行在线搜索、新的原生构建或 Windows 物理滚轮及 Android/macOS 实机验收。完整工程检查由集成阶段执行；上述结果只覆盖本项定向检查。

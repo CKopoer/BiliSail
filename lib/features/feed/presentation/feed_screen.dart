@@ -3,6 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../domain/app_failure.dart';
+import '../../../domain/video.dart';
+import '../../../shared/ui/app_notice.dart';
+import '../../../shared/ui/video_card.dart';
+import '../../video/domain/video_actions_repository.dart';
+import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/video_grid.dart';
@@ -93,6 +98,36 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
       ref.invalidate(rankingCategoriesProvider);
     }
     return ref.read(feedControllerProvider.notifier).refresh();
+  }
+
+  Future<void> _rejectRecommendation(VideoSummary video) async {
+    if (!widget.isSignedIn) {
+      showAppNotice(context, '请先登录后再反馈推荐');
+      return;
+    }
+    final controller = ref.read(feedControllerProvider.notifier);
+    try {
+      final removed = await controller.rejectRecommendation(video);
+      if (removed &&
+          mounted &&
+          widget.channel == HomeChannel.recommended &&
+          WorkspaceActivity.isActive(context)) {
+        showAppNotice(context, '已反馈不感兴趣');
+      }
+    } on UnknownWriteOutcome {
+      if (mounted &&
+          widget.channel == HomeChannel.recommended &&
+          WorkspaceActivity.isActive(context)) {
+        showAppNotice(context, '反馈结果暂时无法确认，请刷新列表核对');
+      }
+    } on AppFailure catch (failure) {
+      if (mounted &&
+          widget.channel == HomeChannel.recommended &&
+          WorkspaceActivity.isActive(context) &&
+          failure.kind != AppFailureKind.cancelled) {
+        showAppNotice(context, failure.message);
+      }
+    }
   }
 
   @override
@@ -271,6 +306,29 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
                                           )
                                         else
                                           VideoGrid(
+                                            menuFor:
+                                                channel ==
+                                                    HomeChannel.recommended
+                                                ? (video) => VideoCardMenu(
+                                                    actions: const [
+                                                      VideoCardMenuAction
+                                                          .notInterested,
+                                                      VideoCardMenuAction
+                                                          .watchLater,
+                                                    ],
+                                                    busy: feed.rejecting
+                                                        .contains(video.id),
+                                                    onSelected: (action) {
+                                                      if (action ==
+                                                          VideoCardMenuAction
+                                                              .notInterested) {
+                                                        _rejectRecommendation(
+                                                          video,
+                                                        );
+                                                      }
+                                                    },
+                                                  )
+                                                : null,
                                             showRecommendationReason:
                                                 channel ==
                                                 HomeChannel.recommended,

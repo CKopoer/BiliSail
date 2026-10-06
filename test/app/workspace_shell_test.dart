@@ -2,6 +2,12 @@ import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/app/workspace_tabs.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/features/search/application/search_controller.dart'
+    hide SearchController;
+import 'package:bilisail/features/search/domain/search_repository.dart';
+import 'package:bilisail/features/search/domain/search_result.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
@@ -691,7 +697,19 @@ GoRouter _router(
         shortcuts: shortcuts,
         navigationMode: navigationMode,
         location: state.uri.toString(),
-        pageBuilder: builder,
+        pageBuilder: (context, tab) => tab.location.path == '/search'
+            ? ProviderScope(
+                overrides: [
+                  searchRepositoryProvider.overrideWithValue(
+                    _ShellSearchRepository(),
+                  ),
+                ],
+                child: Builder(
+                  builder: (context) =>
+                      WorkspacePageHeader.wrap(context, builder(context, tab)),
+                ),
+              )
+            : builder(context, tab),
         windowControlsBuilder: customCaption
             ? (_) => const SizedBox(
                 key: ValueKey('caption-controls'),
@@ -709,6 +727,19 @@ GoRouter _router(
     ),
   ],
 );
+
+final class _ShellSearchRepository implements SearchRepository {
+  @override
+  Future<SearchPage> search({
+    required String query,
+    required int page,
+    required SearchCategory category,
+    required SearchOrder order,
+    required SearchDuration duration,
+    required SearchUserType userType,
+    required RequestCancellation cancellation,
+  }) async => SearchPage(items: [], hasMore: false);
+}
 
 Future<void> _shortcut(
   WidgetTester tester,

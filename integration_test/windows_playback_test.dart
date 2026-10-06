@@ -15,6 +15,7 @@ import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/data/api_playback_repository.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/application/playback_manager.dart';
+import 'package:bilisail/features/playback/application/playback_rate_memory.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/domain/playback_history_repository.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
@@ -31,6 +32,95 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+
+  testWidgets(
+    'Windows native playback inherits the run rate and a new run restores the default',
+    (tester) async {
+      initializePlayerBackend();
+      final fixturePath = Platform.environment['BILI_TEST_MEDIA_DIR'];
+      expect(fixturePath, isNotNull, reason: 'Use tool/test-windows-media.ps1');
+      PlaybackManager createManager() {
+        final rates = PlaybackRateMemory();
+        return PlaybackManager(
+          createSession: () => PlaybackSession(
+            rateMemory: rates,
+            engine: MediaKitEngine(),
+            repository: _FakePlaybackRepository(
+              File('$fixturePath/video.mp4').uri,
+              File('$fixturePath/audio.m4a').uri,
+            ),
+            progress: _NoopProgressStore(),
+            accountScope: () => 'guest',
+          ),
+        );
+      }
+
+      final detail = VideoDetail(
+        summary: const VideoSummary(
+          id: VideoId('BV1abc123456'),
+          title: '会话倍速本地视频',
+          coverUrl: '',
+          author: 'fixture',
+          duration: Duration(seconds: 12),
+        ),
+        description: '',
+        parts: const [
+          VideoPart(
+            cid: 'run-rate',
+            page: 1,
+            title: '本地分轨',
+            duration: Duration(seconds: 12),
+          ),
+        ],
+      );
+      final settings = AppSettings(
+        autoPlay: false,
+        defaultPlaybackRate: 1.25,
+        defaultVolume: 0,
+      );
+      Future<void> open(PlaybackSession session) async {
+        session.configureSettings(settings);
+        final owner = Object();
+        session.attach(owner);
+        await session.activate(owner, detail, detail.parts.first);
+        expect(session.error, isNull);
+      }
+
+      final manager = createManager();
+      final restarted = createManager();
+      try {
+        await tester.pumpWidget(
+          const MaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        final first = manager.acquire('first');
+        await open(first);
+        await _until(tester, () => first.engine.currentSnapshot.rate == 1.25);
+        await first.setRate(2);
+        await first.beginTemporaryRate(3);
+        final second = manager.acquire('second');
+        await open(second);
+        await _until(tester, () => second.engine.currentSnapshot.rate == 2);
+        await second.setRate(1.5);
+        await first.endTemporaryRate();
+        await _until(tester, () => first.engine.currentSnapshot.rate == 2);
+        manager.release('first', first);
+        manager.release('second', second);
+        final third = manager.acquire('third');
+        await open(third);
+        await _until(tester, () => third.engine.currentSnapshot.rate == 1.5);
+        await manager.close();
+        final fresh = restarted.acquire('fresh');
+        await open(fresh);
+        await _until(tester, () => fresh.engine.currentSnapshot.rate == 1.25);
+        expect(settings.defaultPlaybackRate, 1.25);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await manager.close();
+        await restarted.close();
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
+    },
+  );
 
   testWidgets(
     'Windows independent tabs decode concurrently and single page pauses other streams',

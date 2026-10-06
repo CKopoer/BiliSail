@@ -53,6 +53,7 @@
 | [账号菜单与消息](validation/account-messages.md) | 头像资料/入口、五类收件箱、私信分页/发送/已读、账号隔离与 Windows 只读实测 |
 | [主页卡片与富动态](validation/profile-dynamic-style.md) | UWP 横向投稿卡、居中动态列表、行内表情与转发内容、验证边界 |
 | [用户页、倍速与标签播放](validation/profile-playback-rates.md) | 紧凑资料/工具条、固定倍速档位和普通标签继续播放 |
+| [应用会话内继承倍速](validation/session-playback-rate.md) | 后续视频继承调速、长按隔离、重启默认值与验证边界 |
 | [首页刷新、自动分页与图片缓存](validation/feed-scroll-image-cache.md) | 悬浮刷新/回顶部、首屏补页、隐藏列表隔离和图片缓存设置 |
 | [全局桌面滚轮平滑过渡](validation/smooth-scrolling.md) | 统一滚轮动画、连续/反向输入、嵌套仲裁及验证边界 |
 | [API 端点验证](validation/api-endpoints.md) | 首版端点、协议与在线只读烟测 |

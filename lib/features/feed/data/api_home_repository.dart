@@ -6,9 +6,13 @@ import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../domain/home_repository.dart';
+import '../../video/domain/video_actions_repository.dart';
 
 final class ApiHomeRepository
-    implements HomeRepository, HomeSubscriptionRepository {
+    implements
+        HomeRepository,
+        HomeSubscriptionRepository,
+        HomeWatchLaterRepository {
   ApiHomeRepository(
     this.client,
     this.requests, {
@@ -21,6 +25,44 @@ final class ApiHomeRepository
   final String Function() _accountScope;
   @override
   String get accountScope => _accountScope();
+  @override
+  Future<void> removeWatchLater(
+    HomeEntry entry, {
+    required String scope,
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    if (scope != accountScope) {
+      throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
+    }
+    if (!scope.startsWith('user:')) {
+      throw const AppFailure(AppFailureKind.authentication, '请先登录');
+    }
+    if (entry.kind != HomeEntryKind.video) {
+      throw const AppFailure(AppFailureKind.protocol, '无法识别稍后再看视频');
+    }
+    try {
+      final aid = entry.aid;
+      if (aid == null) {
+        throw const AppFailure(AppFailureKind.protocol, '稍后再看条目缺少视频标识，请刷新');
+      }
+      await FeedCardActionsClient(client.api)
+          .removeWatchLater(aid, context: context);
+    } on ApiFailure catch (failure) {
+      if (context.cancellation?.isCancelled != true &&
+          {
+            ApiFailureCategory.network,
+            ApiFailureCategory.timeout,
+            ApiFailureCategory.http,
+            ApiFailureCategory.protocol,
+          }.contains(failure.category)) {
+        throw const UnknownWriteOutcome();
+      }
+      rethrow;
+    }
+    if (scope != accountScope) {
+      throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
+    }
+  }, cancellation: cancellation);
   @override
   Future<void> unsubscribeFavorite(
     HomeEntry entry, {
@@ -85,6 +127,7 @@ final class ApiHomeRepository
     subtitle: item.subtitle,
     description: item.description,
     bvid: item.bvid,
+    aid: item.aid,
     url: item.url,
     authorName: item.authorName,
     authorAvatarUrl: item.authorAvatarUrl,

@@ -13,6 +13,7 @@ import '../domain/content_playback.dart';
 import '../domain/sponsor_repository.dart';
 import '../domain/playback_history_repository.dart';
 import 'playback_history_reporter.dart';
+import 'playback_rate_memory.dart';
 import '../../settings/domain/app_settings.dart';
 
 final playbackSessionProvider = Provider<PlaybackSession>(
@@ -35,7 +36,9 @@ class PlaybackSession extends ChangeNotifier {
     int Function()? sessionEpoch,
     Duration Function()? historyNow,
     Duration Function()? danmakuNow,
-  }) : sessionEpoch = sessionEpoch ?? _zeroEpoch {
+    PlaybackRateMemory? rateMemory,
+  }) : sessionEpoch = sessionEpoch ?? _zeroEpoch,
+       _rateMemory = rateMemory ?? PlaybackRateMemory() {
     _clock.start();
     final history = historyRepository;
     _historyReporter = history == null
@@ -79,6 +82,7 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   final SponsorRepository? sponsorRepository;
+  final PlaybackRateMemory _rateMemory;
   AppSettings _settings = const AppSettings.defaults();
   RequestCancellation? _sponsorCancellation;
   List<SponsorSegment> sponsorSegments = const [];
@@ -257,10 +261,7 @@ class PlaybackSession extends ChangeNotifier {
           restored?.desiredPlaying ??
           (sameOwner ? _desiredPlaying : _settings.autoPlay),
       rate:
-          restored?.rate ??
-          (sameOwner
-              ? _temporaryRateOriginal ?? snapshots.value.rate
-              : _settings.defaultPlaybackRate),
+          restored?.rate ?? _rateMemory.rateFor(_settings.defaultPlaybackRate),
       volume:
           restored?.volume ??
           (sameOwner ? snapshots.value.volume : _settings.defaultVolume),
@@ -368,7 +369,11 @@ class PlaybackSession extends ChangeNotifier {
       _desiredPlaying = true;
       _subtitlePreference = null;
     }
-    final oldRate = rate ?? _temporaryRateOriginal ?? snapshots.value.rate;
+    final oldRate =
+        rate ??
+        (samePart && media != null
+            ? _temporaryRateOriginal ?? snapshots.value.rate
+            : _rateMemory.rateFor(_settings.defaultPlaybackRate));
     _temporaryRateOriginal = null;
     _temporaryRateGeneration = null;
     _temporaryRateRevision++;
@@ -776,7 +781,9 @@ class PlaybackSession extends ChangeNotifier {
     }
     if (media != null) {
       if (previous.defaultPlaybackRate != _settings.defaultPlaybackRate) {
-        unawaited(setRate(_settings.defaultPlaybackRate));
+        unawaited(
+          _applyRate(_rateMemory.rateFor(_settings.defaultPlaybackRate)),
+        );
       }
       if (previous.defaultVolume != _settings.defaultVolume) {
         unawaited(setVolume(_settings.defaultVolume));
@@ -1287,15 +1294,28 @@ class PlaybackSession extends ChangeNotifier {
     final revision = ++_temporaryRateRevision;
     // A source switch can capture a checkpoint before this native command
     // completes. Keep its permanent rate available throughout restoration.
-    if (rate != null && sameSource) await setRate(rate);
+    if (rate != null && sameSource) await _applyRate(rate);
     if (_temporaryRateRevision == revision) {
       _temporaryRateOriginal = null;
       _temporaryRateGeneration = null;
     }
   }
 
-  Future<void> setRate(double rate) =>
+  Future<void> _applyRate(double rate) =>
       isLive ? Future.value() : _command(() => engine.setRate(rate));
+
+  Future<void> setRate(double rate) {
+    if (isLive || _disposed || _closing) return Future.value();
+    final generation = _generation;
+    final revision = _rateMemory.beginChange();
+    return _command(() async {
+      await engine.setRate(rate);
+      if (_disposed || _closing || generation != _generation) return;
+      _rateMemory.remember(rate, revision: revision);
+      if (_temporaryRateOriginal != null) _temporaryRateOriginal = rate;
+    });
+  }
+
   Future<void> setVolume(double volume) =>
       _command(() => engine.setVolume(volume));
   Future<void> _command(Future<void> Function() action) async {

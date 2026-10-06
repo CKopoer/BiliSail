@@ -576,6 +576,134 @@ void main() {
       expect(result.hasMore, isFalse);
       expect(transport.requests.single.path, '/x/v2/history/toview');
     });
+    test('watch later $section keeps decimal aid distinct from bvid', () async {
+      final identities = <(Object?, String?)>[
+        (123, '123'),
+        (9007199254740993, '9007199254740993'),
+        ('9007199254740993123', '9007199254740993123'),
+        (null, null),
+        (0, null),
+        (-1, null),
+        (123.0, null),
+        ('BV1234567890', null),
+        ('0123', null),
+      ];
+      final transport = Transport(
+        (_) => {
+          'code': 0,
+          'data': {
+            'list': [
+              for (var i = 0; i < identities.length; i++)
+                {
+                  'bvid': 'BV${i.toString().padLeft(10, '0')}',
+                  'title': '标识$i',
+                  'progress': 0,
+                  if (identities[i].$1 != null) 'aid': identities[i].$1,
+                  'stat': {'aid': 999, 'view': 12, 'danmaku': 3},
+                },
+            ],
+          },
+        },
+      );
+      final result = await HomeClient(
+        BiliApiClient(transport: transport),
+      ).load(channel: 'watchLater', section: section, page: 1);
+      expect(result.items.map((item) => item.aid), [
+        for (final identity in identities) identity.$2,
+      ]);
+      expect(result.items.map((item) => item.id), [
+        for (var i = 0; i < identities.length; i++)
+          'BV${i.toString().padLeft(10, '0')}',
+      ]);
+      expect(
+        result.items.map((item) => item.playCountText),
+        everyElement('12'),
+      );
+      expect(
+        result.items.map((item) => item.danmakuCountText),
+        everyElement('3'),
+      );
+    });
+    test(
+      'watch later $section retains unavailable archive identities',
+      () async {
+        final transport = Transport(
+          (_) => {
+            'code': 0,
+            'data': {
+              'list': [
+                {
+                  'aid': 123,
+                  'bvid': 'BV1234567890',
+                  'title': '可播放视频',
+                  'progress': 0,
+                },
+                {
+                  'aid': '9007199254740993123',
+                  'title': '已失效视频',
+                  'pic': '//i0.hdslb.com/unavailable.jpg',
+                  'owner': {'mid': 7, 'name': '原作者'},
+                  'duration': 125,
+                  'progress': 0,
+                  'stat': {'view': 12345, 'danmaku': 3},
+                },
+                {'aid': 456, 'bvid': '', 'progress': 0},
+              ],
+            },
+          },
+        );
+        final result = await HomeClient(
+          BiliApiClient(transport: transport),
+        ).load(channel: 'watchLater', section: section, page: 1);
+        expect(result.items.map((item) => item.id), [
+          'BV1234567890',
+          'aid:9007199254740993123',
+          'aid:456',
+        ]);
+        expect(result.items.map((item) => item.aid), [
+          '123',
+          '9007199254740993123',
+          '456',
+        ]);
+        final unavailable = result.items[1];
+        expect(unavailable.kind, ApiHomeEntryKind.video);
+        expect(unavailable.bvid, isNull);
+        expect(unavailable.title, '已失效视频');
+        expect(unavailable.coverUrl?.scheme, 'https');
+        expect(unavailable.authorName, '原作者');
+        expect(unavailable.authorMid, '7');
+        expect(unavailable.duration, const Duration(seconds: 125));
+        expect(unavailable.playCountText, '12345');
+        expect(unavailable.danmakuCountText, '3');
+        expect(result.items.last.title, '已失效内容');
+      },
+    );
+    test('watch later $section rejects an unidentifiable archive', () async {
+      final client = HomeClient(
+        BiliApiClient(
+          transport: Transport(
+            (_) => {
+              'code': 0,
+              'data': {
+                'list': [
+                  {'title': '缺少视频标识', 'progress': 0, 'aid': 123.0},
+                ],
+              },
+            },
+          ),
+        ),
+      );
+      await expectLater(
+        client.load(channel: 'watchLater', section: section, page: 1),
+        throwsA(
+          isA<ApiFailure>().having(
+            (failure) => failure.category,
+            'category',
+            ApiFailureCategory.protocol,
+          ),
+        ),
+      );
+    });
   }
   test(
     'watch later unfinished filter does not replace content source',

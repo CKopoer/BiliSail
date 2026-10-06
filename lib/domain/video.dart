@@ -30,6 +30,7 @@ final class VideoSummary {
     this.authorAvatarUrl,
     this.authorId,
     this.recommendationReason,
+    this.recommendationFeedback,
   });
 
   final VideoId id;
@@ -43,6 +44,18 @@ final class VideoSummary {
   final Uri? authorAvatarUrl;
   final UserId? authorId;
   final String? recommendationReason;
+  final RecommendationFeedback? recommendationFeedback;
+}
+
+/// Opaque recommendation context returned by the Web feed, kept in memory.
+final class RecommendationFeedback {
+  const RecommendationFeedback({
+    required this.aid,
+    required this.goto,
+    required this.trackId,
+    required this.ownerMid,
+  });
+  final String aid, goto, trackId, ownerMid;
 }
 
 final class VideoPart {

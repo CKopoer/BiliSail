@@ -157,6 +157,8 @@ final class BiliApiClient {
       '/x/v3/fav/season/fav',
       '/x/v3/fav/folder/edit',
       '/x/v2/history/toview/add',
+      '/x/v2/history/toview/del',
+      '/x/web-interface/feedback/dislike',
       '/x/click-interface/web/heartbeat',
       '/x/v2/dm/post',
       '/x/v2/reply/action',
@@ -1390,6 +1392,28 @@ final class BiliApiClient {
       danmakuCount: _count(stat?['danmaku'] ?? data['video_review']),
       publishedAt: _publishedAt(data['pubdate']),
       recommendationReason: _recommendationReason(data['rcmd_reason']),
+      recommendationFeedback:
+          endpoint == 'recommended'
+              ? _recommendationFeedback(data, owner)
+              : null,
+    );
+  }
+
+  static ApiRecommendationFeedback? _recommendationFeedback(
+    Map<String, Object?> data,
+    Map<String, Object?>? owner,
+  ) {
+    final rawId = data['id'];
+    final aid = rawId is int || rawId is String ? '$rawId' : '';
+    final trackId = _string(data['track_id']) ?? '';
+    if (!RegExp(r'^[1-9]\d*$').hasMatch(aid) || data['goto'] != 'av') {
+      return null;
+    }
+    return ApiRecommendationFeedback(
+      aid: aid,
+      goto: 'av',
+      trackId: trackId,
+      ownerMid: _userMid(owner?['mid']) ?? '0',
     );
   }
 

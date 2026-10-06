@@ -80,6 +80,7 @@ final class ApiVideoSummary {
     this.ownerAvatarUrl,
     this.ownerMid,
     this.recommendationReason,
+    this.recommendationFeedback,
   });
   final String bvid;
   final String title;
@@ -92,6 +93,17 @@ final class ApiVideoSummary {
   final Uri? ownerAvatarUrl;
   final String? ownerMid;
   final String? recommendationReason;
+  final ApiRecommendationFeedback? recommendationFeedback;
+}
+
+final class ApiRecommendationFeedback {
+  const ApiRecommendationFeedback({
+    required this.aid,
+    required this.goto,
+    required this.trackId,
+    required this.ownerMid,
+  });
+  final String aid, goto, trackId, ownerMid;
 }
 
 final class ApiVideoPage {

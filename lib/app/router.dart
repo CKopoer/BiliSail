@@ -272,9 +272,12 @@ final class _WorkspacePage extends ConsumerWidget {
                           : null,
                     );
                   case '/search':
-                    return SearchScreen(
-                      key: PageStorageKey('search-${tab.id}'),
-                      query: uri.queryParameters['q'] ?? '',
+                    return WorkspacePageHeader.wrap(
+                      context,
+                      SearchScreen(
+                        key: PageStorageKey('search-${tab.id}'),
+                        query: uri.queryParameters['q'] ?? '',
+                      ),
                     );
                   case '/history':
                     return HistoryScreen(

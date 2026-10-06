@@ -61,7 +61,7 @@ final class HomeClient {
                 (item) =>
                     section != '未看完' || _number(_map(item)['progress']) != -1,
               )
-              .map(_video)
+              .map((item) => _video(item, allowUnavailable: true))
               .toList();
       return ApiPage(List.unmodifiable(entries), hasMore: false);
     }
@@ -475,28 +475,35 @@ final class HomeClient {
     return _video(item);
   }
 
-  static ApiHomeEntry _video(Object? item) {
+  static ApiHomeEntry _video(Object? item, {bool allowUnavailable = false}) {
     final m = _map(item);
-    final bvid = _required(m['bvid']);
-    if (!RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid)) {
+    final rawBvid = _text(m['bvid']);
+    final bvid =
+        rawBvid != null && RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(rawBvid)
+            ? rawBvid
+            : null;
+    final aid = _positiveId(m['aid']);
+    if (bvid == null && (!allowUnavailable || aid == null)) {
       throw const ApiFailure(ApiFailureCategory.protocol, 'home_video');
     }
     final owner = _optionalMap(m['owner']) ?? _optionalMap(m['upper']);
     final stat = _optionalMap(m['cnt_info']) ?? _optionalMap(m['stat']);
     return ApiHomeEntry(
-      id: bvid,
-      title: _required(m['title']),
+      id: bvid ?? 'aid:$aid',
+      title:
+          bvid == null ? _text(m['title']) ?? '已失效内容' : _required(m['title']),
       kind: ApiHomeEntryKind.video,
       coverUrl: _uri(m['pic'] ?? m['cover']),
-      subtitle: _text(owner?['name']) ?? '',
+      subtitle: bvid == null ? '内容已失效或不支持在此播放' : _text(owner?['name']) ?? '',
       authorName: _text(owner?['name']) ?? '',
-      authorMid: _userMid(owner?['mid']),
+      authorMid: _positiveId(owner?['mid']),
       duration: Duration(seconds: _number(m['duration']) ?? 0),
       // Watch-later uses stat.view; favorite resources use cnt_info.play.
       playCountText: _display(stat?['view'] ?? stat?['play']),
       danmakuCountText: _display(stat?['danmaku']),
       publishedAt: _date(m['pubtime'] ?? m['pubdate']),
       bvid: bvid,
+      aid: aid,
     );
   }
 
@@ -531,7 +538,7 @@ final class HomeClient {
       subtitle: _text(m['uname']) ?? '',
       authorName: _text(m['uname']) ?? '',
       authorAvatarUrl: _uri(m['face']),
-      authorMid: _userMid(m['mid']) ?? _userMid(m['uid']),
+      authorMid: _positiveId(m['mid']) ?? _positiveId(m['uid']),
       popularityText: _display(m['online']),
       areaName:
           _text(m['area_name']) ??
@@ -571,7 +578,7 @@ final class HomeClient {
           : value == null && nullable
           ? const []
           : throw const ApiFailure(ApiFailureCategory.protocol, 'home');
-  static String? _userMid(Object? value) {
+  static String? _positiveId(Object? value) {
     final text =
         value is int
             ? value.toString()

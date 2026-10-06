@@ -33,6 +33,8 @@ import 'package:bilisail/features/feed/presentation/feed_screen.dart';
 import 'package:bilisail/features/search/application/search_controller.dart';
 import 'package:bilisail/features/search/domain/search_repository.dart';
 import 'package:bilisail/features/search/domain/search_result.dart';
+import 'package:bilisail/features/search/presentation/search_screen.dart';
+import 'package:bilisail/features/search/presentation/search_category_bar.dart';
 import 'package:bilisail/features/library/application/library_controller.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/application/video_extras_controller.dart';
@@ -46,6 +48,122 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mode in WorkspaceNavigationMode.values) {
+    _workspaceTestWidgets(
+      'search header shares its tab state and preserves categories in $mode',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1440, 900);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final settings = _SettingsRepository()
+          ..settings = const AppSettings.defaults().copyWith(
+            navigationMode: mode,
+          );
+        final search = _SearchRepository(
+          countsByQuery: const {
+            'cat': {SearchCategory.video: 123, SearchCategory.user: 0},
+            'dog': {SearchCategory.video: 2},
+          },
+        );
+        final router = createBiliRouter(
+          initialLocation: '/search?q=cat',
+          playerBuilder: (_, _, _) => const SizedBox(),
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(settings),
+              searchRepositoryProvider.overrideWithValue(search),
+              feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+              homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final root = ProviderScope.containerOf(
+          tester.element(find.byType(MaterialApp)),
+          listen: false,
+        );
+        ProviderContainer tabScope() => ProviderScope.containerOf(
+          tester.element(find.byType(SearchScreen)),
+          listen: false,
+        );
+        final catScope = tabScope();
+        expect(root.read(searchControllerProvider).query, isEmpty);
+        expect(find.byKey(const ValueKey('home-channel-strip')), findsNothing);
+        expect(find.byType(SearchCategoryBar), findsOneWidget);
+        expect(find.text('99+'), findsOneWidget);
+        expect(find.text('0'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(SearchScreen),
+            matching: find.byKey(const ValueKey('search-category-video')),
+          ),
+          findsNothing,
+        );
+        await tester.tap(find.text('最多收藏'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('search-more-filters')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('60分钟以上'));
+        await tester.pumpAndSettle();
+        final priorSignal = search.cancellations.last;
+        await tester.tap(find.byKey(const ValueKey('search-category-user')));
+        await tester.pumpAndSettle();
+        expect(priorSignal.isCancelled, isTrue);
+        expect(search.calls.last, (
+          query: 'cat',
+          page: 1,
+          category: SearchCategory.user,
+          order: SearchOrder.relevance,
+          duration: SearchDuration.any,
+          userType: SearchUserType.any,
+        ));
+        expect(
+          catScope.read(searchControllerProvider).category,
+          SearchCategory.user,
+        );
+        expect(find.text('全部用户'), findsNothing);
+        expect(find.text('粉丝数由高到低'), findsOneWidget);
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters['q'],
+          'cat',
+        );
+        expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsNothing);
+        router.go('/search?q=dog');
+        await tester.pumpAndSettle();
+        expect(identical(catScope, tabScope()), isFalse);
+        expect(
+          tabScope().read(searchControllerProvider).category,
+          SearchCategory.all,
+        );
+        expect(find.text('99+'), findsNothing);
+        expect(find.text('2'), findsOneWidget);
+        final callsBeforeReturn = search.calls.length;
+        if (mode == WorkspaceNavigationMode.singlePage) {
+          await tester.tap(find.byKey(const ValueKey('workspace-back')));
+        } else {
+          await tester.tap(find.byKey(const ValueKey('workspace-tab-tab-1')));
+        }
+        await tester.pumpAndSettle();
+        expect(identical(catScope, tabScope()), isTrue);
+        expect(catScope.read(searchControllerProvider).query, 'cat');
+        expect(
+          catScope.read(searchControllerProvider).category,
+          SearchCategory.user,
+        );
+        expect(find.text('99+'), findsOneWidget);
+        expect(find.text('粉丝数由高到低'), findsOneWidget);
+        expect(search.calls.length, callsBeforeReturn);
+        expect(root.read(searchControllerProvider).query, isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final mode in WorkspaceNavigationMode.values) {
     _workspaceTestWidgets(
       'video tag opens search in $mode and retains the part',
@@ -945,8 +1063,21 @@ final class _TagTestPlayerState extends State<_TagTestPlayer> {
 }
 
 final class _SearchRepository implements SearchRepository {
+  _SearchRepository({this.countsByQuery = const {}});
+  final Map<String, Map<SearchCategory, int>> countsByQuery;
   final queries = <String>[];
   final cancellations = <RequestCancellation>[];
+  final calls =
+      <
+        ({
+          String query,
+          int page,
+          SearchCategory category,
+          SearchOrder order,
+          SearchDuration duration,
+          SearchUserType userType,
+        })
+      >[];
   @override
   Future<SearchPage> search({
     required String query,
@@ -959,7 +1090,19 @@ final class _SearchRepository implements SearchRepository {
   }) async {
     queries.add(query);
     cancellations.add(cancellation);
-    return SearchPage(items: [], hasMore: false);
+    calls.add((
+      query: query,
+      page: page,
+      category: category,
+      order: order,
+      duration: duration,
+      userType: userType,
+    ));
+    return SearchPage(
+      items: [],
+      hasMore: false,
+      counts: countsByQuery[query] ?? const {},
+    );
   }
 }
 

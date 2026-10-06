@@ -36,6 +36,14 @@ final class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(searchControllerProvider.select((state) => state.category), (
+      previous,
+      next,
+    ) {
+      if (previous != next && _showFilters) {
+        setState(() => _showFilters = false);
+      }
+    });
     final result = ref.watch(searchControllerProvider);
     final controller = ref.read(searchControllerProvider.notifier);
     final theme = Theme.of(context);
@@ -55,30 +63,6 @@ final class _SearchScreenState extends ConsumerState<SearchScreen> {
                         ? '在顶部输入关键词，寻找视频、番剧、直播和用户'
                         : '“${result.query}” 的搜索结果',
                     style: theme.textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 10),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (final category in SearchCategory.values)
-                          _CategoryTab(
-                            category: category,
-                            selected: result.category == category,
-                            count: result.counts[category],
-                            onTap: () {
-                              setState(() => _showFilters = false);
-                              controller.selectCategory(category);
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                  Divider(
-                    height: 1,
-                    color: theme.colorScheme.outlineVariant.withValues(
-                      alpha: .5,
-                    ),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -264,78 +248,6 @@ final class _SearchScreenState extends ConsumerState<SearchScreen> {
           ],
         );
       },
-    );
-  }
-}
-
-final class _CategoryTab extends StatelessWidget {
-  const _CategoryTab({
-    required this.category,
-    required this.selected,
-    required this.onTap,
-    this.count,
-  });
-  final SearchCategory category;
-  final bool selected;
-  final VoidCallback onTap;
-  final int? count;
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Semantics(
-      selected: selected,
-      button: true,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          key: ValueKey('search-category-${category.name}'),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(15, 12, 15, 14),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: selected
-                      ? theme.colorScheme.primary
-                      : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  category.label,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: selected
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                if (count case final int total) ...[
-                  const SizedBox(width: 5),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      total > 99 ? '99+' : '$total',
-                      style: theme.textTheme.labelSmall,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

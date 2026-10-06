@@ -4,6 +4,9 @@ import 'app_cover_image.dart';
 import 'bili_badges.dart';
 import 'highlighted_text.dart';
 import 'video_card_cover.dart';
+import 'video_card_interaction_scope.dart';
+import '../../features/video/domain/video_card_interactions.dart';
+import '../../core/presentation/workspace_activity.dart';
 
 import 'package:flutter/material.dart';
 
@@ -23,6 +26,19 @@ String durationLabel(Duration duration) {
   return hours > 0 ? '$hours:$minutes:$seconds' : '$minutes:$seconds';
 }
 
+enum VideoCardMenuAction { notInterested, watchLater, removeWatchLater }
+
+final class VideoCardMenu {
+  const VideoCardMenu({
+    required this.actions,
+    this.onSelected,
+    this.busy = false,
+  });
+  final List<VideoCardMenuAction> actions;
+  final ValueChanged<VideoCardMenuAction>? onSelected;
+  final bool busy;
+}
+
 final class VideoCard extends StatefulWidget {
   const VideoCard({
     super.key,
@@ -36,6 +52,7 @@ final class VideoCard extends StatefulWidget {
     this.playCountText = '',
     this.danmakuCountText = '',
     this.publishText = '',
+    this.menu,
   });
 
   final ValueChanged<UserId>? onOpenUser;
@@ -49,6 +66,7 @@ final class VideoCard extends StatefulWidget {
   final String playCountText;
   final String danmakuCountText;
   final String publishText;
+  final VideoCardMenu? menu;
 
   @override
   State<VideoCard> createState() => _VideoCardState();
@@ -60,6 +78,33 @@ final class _VideoCardState extends State<VideoCard> {
   bool _hovered = false;
   bool _focused = false;
   bool _authorHovered = false;
+  bool _menuFocused = false;
+  bool _menuOpen = false;
+  bool _addingWatchLater = false;
+  int _addGeneration = 0;
+  VideoCardInteractions? _interactions;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final interactions = VideoCardInteractionScope.maybeOf(context)
+        ?.interactions;
+    if (_interactions != interactions) {
+      _interactions = interactions;
+      _addGeneration++;
+      _addingWatchLater = false;
+    }
+  }
+
+  @override
+  void didUpdateWidget(VideoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.video.id != oldWidget.video.id) {
+      _addGeneration++;
+      _addingWatchLater = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -174,15 +219,23 @@ final class _VideoCardState extends State<VideoCard> {
                     SizedBox(
                       width: double.infinity,
                       height: textScaler.scale(_titleFontSize) * 1.4 * 2 + 2,
-                      child: HighlightedText(
-                        video.title,
-                        query: widget.highlightQuery,
-                        maxLines: 2,
-                        style: titleStyle?.copyWith(
-                          color: highlighted
-                              ? scheme.primary
-                              : scheme.onSurface,
-                        ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: HighlightedText(
+                              video.title,
+                              query: widget.highlightQuery,
+                              maxLines: 2,
+                              style: titleStyle?.copyWith(
+                                color: highlighted
+                                    ? scheme.primary
+                                    : scheme.onSurface,
+                              ),
+                            ),
+                          ),
+                          if (widget.menu case final menu?) _menuButton(menu),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -206,6 +259,124 @@ final class _VideoCardState extends State<VideoCard> {
         ),
       ),
     );
+  }
+
+  Widget _menuButton(VideoCardMenu menu) {
+    final touchPlatform = switch (Theme.of(context).platform) {
+      TargetPlatform.android || TargetPlatform.iOS => true,
+      _ => false,
+    };
+    final visible =
+        _hovered || _focused || _menuFocused || _menuOpen || touchPlatform;
+    final busy = menu.busy || _addingWatchLater;
+    return Focus(
+      skipTraversal: true,
+      onFocusChange: (focused) => setState(() => _menuFocused = focused),
+      child: Opacity(
+        opacity: visible ? 1 : 0,
+        child: IgnorePointer(
+          ignoring: !visible,
+          child: PopupMenuButton<VideoCardMenuAction>(
+            key: const ValueKey('video-card-title-menu'),
+            tooltip: busy ? '操作中' : '更多操作',
+            enabled: !busy,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 156, maxWidth: 240),
+            position: PopupMenuPosition.under,
+            color: Theme.of(context).colorScheme.surface,
+            surfaceTintColor: Colors.transparent,
+            elevation: 3,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant
+                    .withValues(alpha: .6),
+              ),
+            ),
+            onOpened: () => setState(() => _menuOpen = true),
+            onCanceled: () {
+              if (mounted) setState(() => _menuOpen = false);
+            },
+            onSelected: (action) {
+              if (!mounted) return;
+              setState(() => _menuOpen = false);
+              if (action == VideoCardMenuAction.watchLater) {
+                _addWatchLater();
+              } else {
+                menu.onSelected?.call(action);
+              }
+            },
+            icon: busy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.more_vert, size: 20),
+            iconSize: 20,
+            style: IconButton.styleFrom(
+              minimumSize: const Size(28, 28),
+              maximumSize: const Size(28, 28),
+              padding: EdgeInsets.zero,
+            ),
+            itemBuilder: (_) => [
+              for (final action in menu.actions)
+                PopupMenuItem(
+                  value: action,
+                  child: Row(
+                    children: [
+                      Icon(switch (action) {
+                        VideoCardMenuAction.notInterested =>
+                          Icons.not_interested_outlined,
+                        VideoCardMenuAction.watchLater =>
+                          Icons.watch_later_outlined,
+                        VideoCardMenuAction.removeWatchLater =>
+                          Icons.delete_outline,
+                      }, size: 19),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Text(switch (action) {
+                          VideoCardMenuAction.notInterested => '不感兴趣',
+                          VideoCardMenuAction.watchLater => '稍后再看',
+                          VideoCardMenuAction.removeWatchLater => '删除',
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addWatchLater() async {
+    if (!WorkspaceActivity.isActive(context)) return;
+    final scope = VideoCardInteractionScope.maybeOf(context);
+    if (scope == null || _addingWatchLater) return;
+    final id = widget.video.id;
+    final generation = ++_addGeneration;
+    setState(() => _addingWatchLater = true);
+    final result = await scope.interactions.addWatchLater(id);
+    if (!mounted ||
+        generation != _addGeneration ||
+        widget.video.id != id ||
+        scope.interactions !=
+            VideoCardInteractionScope.maybeOf(context)?.interactions) {
+      return;
+    }
+    setState(() => _addingWatchLater = false);
+    final message = switch (result) {
+      WatchLaterResult.added || WatchLaterResult.alreadyAdded => '已加入稍后再看',
+      WatchLaterResult.signIn => '请先登录后再添加稍后再看',
+      WatchLaterResult.uncertain => '添加结果暂时无法确认，请在稍后再看列表核对',
+      WatchLaterResult.failed => '添加失败，请稍后重试',
+      WatchLaterResult.busy || WatchLaterResult.cancelled => null,
+    };
+    if (message != null && WorkspaceActivity.isActive(context)) {
+      scope.onNotice(context, message);
+    }
   }
 
   Widget _coverFallback(BuildContext context) => ColoredBox(

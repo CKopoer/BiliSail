@@ -6,12 +6,49 @@ import '../../../core/network/api_requests.dart';
 import '../../../domain/page_result.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
+import '../../video/domain/video_actions_repository.dart';
 import '../domain/feed_repository.dart';
 
-class ApiFeedRepository implements FeedRepository, RankingFeedRepository {
+class ApiFeedRepository
+    implements
+        FeedRepository,
+        RankingFeedRepository,
+        RecommendationFeedbackRepository {
   ApiFeedRepository(this.api, this.requests);
   final BiliApiClient api;
   final ApiRequests requests;
+
+  @override
+  String get feedbackScope => 'session:${requests.sessionEpoch}';
+
+  @override
+  Future<void> rejectRecommendation(
+    RecommendationFeedback feedback, {
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    try {
+      await FeedCardActionsClient(api).rejectRecommendation(
+        ApiRecommendationFeedback(
+          aid: feedback.aid,
+          goto: feedback.goto,
+          trackId: feedback.trackId,
+          ownerMid: feedback.ownerMid,
+        ),
+        context: context,
+      );
+    } on ApiFailure catch (failure) {
+      if (context.cancellation?.isCancelled != true &&
+          {
+            ApiFailureCategory.network,
+            ApiFailureCategory.timeout,
+            ApiFailureCategory.http,
+            ApiFailureCategory.protocol,
+          }.contains(failure.category)) {
+        throw const UnknownWriteOutcome();
+      }
+      rethrow;
+    }
+  }, cancellation: cancellation);
 
   @override
   Future<List<VideoCategory>> loadCategories({
@@ -96,6 +133,15 @@ class ApiFeedRepository implements FeedRepository, RankingFeedRepository {
                 danmakuCount: item.danmakuCount,
                 publishedAt: item.publishedAt,
                 recommendationReason: item.recommendationReason,
+                recommendationFeedback: switch (item.recommendationFeedback) {
+                  final feedback? => RecommendationFeedback(
+                    aid: feedback.aid,
+                    goto: feedback.goto,
+                    trackId: feedback.trackId,
+                    ownerMid: feedback.ownerMid,
+                  ),
+                  null => null,
+                },
               ),
             )
             .toList(growable: false),

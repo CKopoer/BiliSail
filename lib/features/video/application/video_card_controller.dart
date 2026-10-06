@@ -18,6 +18,9 @@ final videoCardPlaybackRepositoryProvider = Provider<PlaybackRepository>(
 final videoCardPreviewPlaybackProvider = Provider<VideoCardPreviewPlayback>(
   (ref) => throw UnimplementedError('Video card preview playback'),
 );
+final videoCardWatchLaterAddedProvider = Provider<void Function(VideoId)?>(
+  (ref) => null,
+);
 
 final videoCardControllerProvider = Provider<VideoCardController>((ref) {
   final signedIn = ref.watch(
@@ -30,29 +33,34 @@ final videoCardControllerProvider = Provider<VideoCardController>((ref) {
     actions: ref.watch(videoActionsRepositoryProvider),
     signedIn:
         signedIn.$2 != null && ref.read(authControllerProvider).isSignedIn,
+    onWatchLaterAdded: ref.watch(videoCardWatchLaterAddedProvider),
   );
   ref.onDispose(controller.dispose);
   return controller;
 });
 
 /// One active hover read; bounded, account-owned metadata and write outcomes.
-final class VideoCardController implements VideoCardOperations {
+final class VideoCardController
+    implements VideoCardOperations, VideoCardWatchLaterRemovalSync {
   VideoCardController({
     required this.videos,
     required this.playback,
     required this.previews,
     required this.actions,
     required this.signedIn,
+    this.onWatchLaterAdded,
   });
   final VideoRepository videos;
   final PlaybackRepository playback;
   final VideoCardPreviewPlayback previews;
   final VideoActionsRepository actions;
   final bool signedIn;
+  final void Function(VideoId)? onWatchLaterAdded;
   final _parts = <VideoId, VideoPart>{};
   final _added = <VideoId>{};
   final _uncertain = <VideoId>{};
   final _writes = <VideoId, RequestCancellation>{};
+  final _removing = <VideoId>{};
   RequestCancellation? _hover;
   bool _disposed = false;
 
@@ -63,6 +71,31 @@ final class VideoCardController implements VideoCardOperations {
   bool isAdded(VideoId id) => _added.contains(id);
   @override
   bool isUncertain(VideoId id) => _uncertain.contains(id);
+
+  @override
+  bool beginWatchLaterRemoval(VideoId id) {
+    if (_disposed || _writes.containsKey(id) || _removing.contains(id)) {
+      return false;
+    }
+    _removing.add(id);
+    return true;
+  }
+
+  @override
+  void finishWatchLaterRemoval(
+    VideoId id, {
+    bool removed = false,
+    bool uncertain = false,
+  }) {
+    if (_disposed || !_removing.remove(id)) return;
+    if (removed) {
+      _added.remove(id);
+      _uncertain.remove(id);
+    } else if (uncertain) {
+      _added.remove(id);
+      _uncertain.add(id);
+    }
+  }
 
   @override
   Future<VideoCardPreviewSession?> preview(
@@ -100,6 +133,7 @@ final class VideoCardController implements VideoCardOperations {
   Future<WatchLaterResult> addWatchLater(VideoId id) async {
     if (_disposed) return WatchLaterResult.cancelled;
     if (!signedIn) return WatchLaterResult.signIn;
+    if (_removing.contains(id)) return WatchLaterResult.busy;
     if (_added.contains(id)) return WatchLaterResult.alreadyAdded;
     if (_uncertain.contains(id)) return WatchLaterResult.uncertain;
     if (_writes.containsKey(id) || _writes.length >= 8) {
@@ -118,6 +152,7 @@ final class VideoCardController implements VideoCardOperations {
       await actions.watchLater((id: id, aid: ''), token);
       if (!_current(scope, token)) return WatchLaterResult.cancelled;
       _added.add(id);
+      onWatchLaterAdded?.call(id);
       return WatchLaterResult.added;
     } on UnknownWriteOutcome {
       if (!_current(scope, token)) return WatchLaterResult.cancelled;
@@ -144,5 +179,6 @@ final class VideoCardController implements VideoCardOperations {
     _parts.clear();
     _added.clear();
     _uncertain.clear();
+    _removing.clear();
   }
 }

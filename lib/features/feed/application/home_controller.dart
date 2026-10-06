@@ -4,10 +4,10 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../domain/home_channel.dart';
 import '../domain/home_repository.dart';
+import 'watch_later_removal_controller.dart';
+import 'home_repository_provider.dart';
+export 'home_repository_provider.dart';
 
-final homeRepositoryProvider = Provider<HomeRepository>(
-  (ref) => throw UnimplementedError('HomeRepository must be provided by app'),
-);
 final homeControllerProvider = NotifierProvider.autoDispose
     .family<HomeController, HomeState, HomeQuery>(HomeController.new);
 
@@ -73,6 +73,25 @@ final class HomeController extends Notifier<HomeState> {
       Set.unmodifiable(_unsubscriptions.keys);
   @override
   HomeState build() {
+    if (query.channel == HomeChannel.watchLater) {
+      ref.listen(watchLaterRemovalProvider(query.scope), (_, next) {
+        final items = state.items.asData?.value;
+        state = HomeState(
+          items: items == null
+              ? state.items
+              : AsyncData(
+                  List.unmodifiable(
+                    items.where((entry) => !next.removed.contains(entry.id)),
+                  ),
+                ),
+          hasMore: state.hasMore,
+          loadingMore: state.loadingMore,
+          limitReached: state.limitReached,
+          pageError: state.pageError,
+          unsubscribing: state.unsubscribing,
+        );
+      });
+    }
     ref.onDispose(() {
       _generation++;
       _cancellation?.cancel();
@@ -305,10 +324,18 @@ final class HomeController extends Notifier<HomeState> {
     List<HomeEntry> current,
     List<HomeEntry> incoming,
   ) {
-    final unique = {for (final entry in current) (entry.kind, entry.id): entry};
+    final removedWatchLater = query.channel == HomeChannel.watchLater
+        ? ref.read(watchLaterRemovalProvider(query.scope)).removed
+        : const <String>{};
+    final unique = {
+      for (final entry in current)
+        if (!removedWatchLater.contains(entry.id))
+          (entry.kind, entry.id): entry,
+    };
     for (final entry in incoming) {
       final key = (entry.kind, entry.id);
       if (_removedSubscriptions.contains(key)) continue;
+      if (removedWatchLater.contains(entry.id)) continue;
       final limit = _entryLimit;
       if (limit != null && unique.length >= limit && !unique.containsKey(key)) {
         continue;

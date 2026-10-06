@@ -14,6 +14,14 @@
 
 本次播放量修复在当前工作区运行 `tool/check.ps1 -SkipPub` 通过：根应用 693、API 包 227、播放器包 16、弹幕包 21 项，共 957 项；根应用与三个包格式检查、静态分析通过。新增两项稍后再看协议回归；日志为 `build/watch-later-count-check.log`。
 
+2026-10-06 再次核查计数链路，确认上述播放量修复已经存在于当前源码。本轮没有重复改动计数映射：Web GET `/x/v2/history/toview` 的 `data.list[].stat.view`／`stat.danmaku` 经 [HomeClient](../../packages/bili_api/lib/src/clients/home_client.dart) 转成 `ApiHomeEntry.playCountText`／`danmakuCountText`，[ApiHomeRepository](../../lib/features/feed/data/api_home_repository.dart) 原样传给 `HomeEntry`，再由 [HomeVideoCard](../../lib/features/feed/presentation/home_feed_cards.dart) 传给公共 `VideoCard`。缺失值保持空文本并显示横杠，数字 0 或字符串 `"0"` 显示 0，未用缺失值伪造统计。收藏的 `cnt_info.play`／`cnt_info.danmaku` 仍按既有格式解析。
+
+字段依据来自只读核对 kernel 的 [ViewLaterResponse.cs](../../../bili-kernel/src/Services/Services.User/Core/Models/ViewLaterResponse.cs)、[VideoStatusInfo.cs](../../../bili-kernel/src/Services/Services.User/Core/Models/VideoStatusInfo.cs) 和 [VideoAdapter.cs](../../../bili-kernel/src/Services/Services.User/Core/Adapters/VideoAdapter.cs)：稍后再看 `stat.view` 明确是播放数，`stat.danmaku` 是弹幕数，适配器使用这两个统计。UWP 的 [WatchlaterItemModel.cs](../../../biliuwp-lite/src/BiliLite.UWP/Models/Common/User/WatchLater/WatchlaterItemModel.cs) 没有声明统计字段，不能据此判断端点不返回统计；只借鉴协议字段职责，没有复制 C# 代码或资源。kernel 模型还声明了 `view_text_1`／`right_text`，但其适配器未使用，本轮没有据此新增未经 Web 登录响应证实的回退路径。
+
+本轮新增两个子标签各一项协议回归，覆盖字符串计数、缺少整个 `stat` 和仅返回一种统计的情况，复查正常整数、0 次和“未看完”筛选。仅计数核查阶段的 `dart test test/home_client_test.dart test/favorites_client_test.dart` 共 27 项通过；首页布局与公共卡片定向 22 项通过；修改的协议测试格式检查和定向静态分析通过。本轮未读取真实账号稍后再看列表，不能将脱敏手写样本和 widget 验证记为登录接口或 Windows/Android/macOS 实机验收。
+
+同日[视频卡操作菜单](video-card-menus.md)扩展了稍后再看 `aid` 元数据，以十进制文本与 BVID 分别保留，不改变已有计数映射。缺少 BVID 但有合法 `aid` 的失效条目保留封面和统计，并可按 `aid` 删除；没有可识别身份仍报告协议失败。补充大整数、非法 ID 与正常／失效混合列表回归后，上述 API home/favorites 定向检查为 33 项通过。
+
 稍后再看本轮验证：`tool/check.ps1 -SkipPub` 全量通过，根应用 647、API 包 207、播放器包 16、弹幕包 21 项测试通过，共 891 项；根应用与三个包格式检查、静态分析通过。扩展已有首页布局测试，覆盖两个稍后再看子标签在 320/800/1920 像素宽、两倍字体下使用公共卡片并保留统计、时长、作者和日期，定向 17 项通过。检查日志为 `build/watch-later-cards-check.log`。本轮未进行真实账号列表或 Windows/Android/macOS 实机界面验证；云端进度结论来自现有代码核查。
 
 ## 页面行为

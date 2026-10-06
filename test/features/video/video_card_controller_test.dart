@@ -121,6 +121,53 @@ void main() {
     expect(actions.writes, 1);
   });
 
+  test('confirmed deletion clears added status and next successful add notifies its owner', () async {
+    final added = <VideoId>[];
+    final synchronized = VideoCardController(
+      videos: videos,
+      playback: playback,
+      previews: previews,
+      actions: actions,
+      signedIn: true,
+      onWatchLaterAdded: added.add,
+    );
+    addTearDown(synchronized.dispose);
+    expect(await synchronized.addWatchLater(id), WatchLaterResult.added);
+    expect(synchronized.beginWatchLaterRemoval(id), true);
+    expect(await synchronized.addWatchLater(id), WatchLaterResult.busy);
+    synchronized.finishWatchLaterRemoval(id, removed: true);
+    expect(synchronized.isAdded(id), false);
+    expect(synchronized.isUncertain(id), false);
+    expect(await synchronized.addWatchLater(id), WatchLaterResult.added);
+    expect(added, [id, id]);
+    expect(actions.writes, 2);
+  });
+
+  test(
+    'an unknown deletion drops stale added certainty and blocks another add',
+    () async {
+      expect(await controller.addWatchLater(id), WatchLaterResult.added);
+      expect(controller.beginWatchLaterRemoval(id), true);
+      controller.finishWatchLaterRemoval(id, uncertain: true);
+      expect(controller.isAdded(id), false);
+      expect(controller.isUncertain(id), true);
+      expect(await controller.addWatchLater(id), WatchLaterResult.uncertain);
+      expect(actions.writes, 1);
+    },
+  );
+
+  test('pending add and explicit delete cannot overlap', () async {
+    actions.pending = Completer<void>();
+    final add = controller.addWatchLater(id);
+    expect(controller.beginWatchLaterRemoval(id), false);
+    actions.pending?.complete();
+    expect(await add, WatchLaterResult.added);
+    expect(controller.beginWatchLaterRemoval(id), true);
+    expect(controller.beginWatchLaterRemoval(id), false);
+    controller.finishWatchLaterRemoval(id);
+    expect(controller.isAdded(id), true);
+  });
+
   test(
     'busy and unknown results prevent duplicate or automatic writes',
     () async {

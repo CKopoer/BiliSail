@@ -13,11 +13,18 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/platform/external_links.dart';
 import '../../../domain/app_failure.dart';
+import '../../../domain/video.dart';
+import '../../../core/presentation/workspace_activity.dart';
+import '../../../shared/ui/video_card.dart';
+import '../../../shared/ui/video_card_interaction_scope.dart';
+import '../../video/domain/video_card_interactions.dart';
+import '../../video/domain/video_actions_repository.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/app_notice.dart';
 import 'home_feed_cards.dart';
 import 'favorite_folder_edit_dialog.dart';
 import '../application/home_controller.dart';
+import '../application/watch_later_removal_controller.dart';
 import '../domain/home_channel.dart';
 import '../domain/home_repository.dart';
 
@@ -108,6 +115,9 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
     }
     final feed = ref.watch(homeControllerProvider(query));
     final controller = ref.read(homeControllerProvider(query).notifier);
+    final watchLaterActions = widget.channel == HomeChannel.watchLater
+        ? ref.watch(watchLaterRemovalProvider(scope))
+        : null;
     return PagedScrollViewport(
       key: ValueKey(query),
       active: widget.active,
@@ -220,9 +230,27 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                             children: [
                               for (final item in items)
                                 if (item.kind == HomeEntryKind.video &&
-                                    item.bvid != null)
+                                    (item.bvid != null ||
+                                        widget.channel ==
+                                            HomeChannel.watchLater))
                                   HomeVideoCard(
+                                    key: ValueKey((item.kind, item.id)),
                                     entry: item,
+                                    menu:
+                                        widget.channel == HomeChannel.watchLater
+                                        ? VideoCardMenu(
+                                            actions: const [
+                                              VideoCardMenuAction
+                                                  .removeWatchLater,
+                                            ],
+                                            busy:
+                                                watchLaterActions?.pending
+                                                    .contains(item.id) ==
+                                                true,
+                                            onSelected: (_) =>
+                                                _removeWatchLater(item, scope),
+                                          )
+                                        : null,
                                     onOpenUser: (id) =>
                                         context.go('/user/${id.value}'),
                                     onTap: () => _open(item),
@@ -397,6 +425,58 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
 
   String _message(Object? error) =>
       error is AppFailure ? error.message : '内容加载失败，请重试';
+
+  Future<void> _removeWatchLater(HomeEntry entry, String scope) async {
+    if (!mounted ||
+        !widget.active ||
+        !WorkspaceActivity.isActive(context) ||
+        ref.read(homeRepositoryProvider).accountScope != scope) {
+      return;
+    }
+    final operations = VideoCardInteractionScope.maybeOf(context)?.interactions;
+    final synchronization =
+        operations is VideoCardWatchLaterRemovalSync &&
+            VideoId(entry.bvid ?? '').isValid
+        ? operations as VideoCardWatchLaterRemovalSync
+        : null;
+    final id = VideoId(entry.bvid ?? entry.id);
+    if (synchronization?.beginWatchLaterRemoval(id) == false) return;
+    var removed = false, uncertain = false;
+    try {
+      removed = await ref
+          .read(watchLaterRemovalProvider(scope).notifier)
+          .remove(entry);
+      if (removed &&
+          mounted &&
+          widget.active &&
+          WorkspaceActivity.isActive(context) &&
+          ref.read(homeRepositoryProvider).accountScope == scope) {
+        showAppNotice(context, '已从稍后再看删除');
+      }
+    } on UnknownWriteOutcome {
+      uncertain = true;
+      if (mounted &&
+          widget.active &&
+          WorkspaceActivity.isActive(context) &&
+          ref.read(homeRepositoryProvider).accountScope == scope) {
+        showAppNotice(context, '删除结果暂时无法确认，请刷新稍后再看列表核对');
+      }
+    } on AppFailure catch (failure) {
+      if (mounted &&
+          widget.active &&
+          WorkspaceActivity.isActive(context) &&
+          failure.kind != AppFailureKind.cancelled &&
+          ref.read(homeRepositoryProvider).accountScope == scope) {
+        showAppNotice(context, failure.message);
+      }
+    } finally {
+      synchronization?.finishWatchLaterRemoval(
+        id,
+        removed: removed,
+        uncertain: uncertain,
+      );
+    }
+  }
 
   Future<void> _unsubscribe(HomeController controller, HomeEntry entry) async {
     final scope = ref.read(homeRepositoryProvider).accountScope;

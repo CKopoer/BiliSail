@@ -1,20 +1,28 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/core/platform/external_links.dart';
+import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/live/domain/live_room.dart';
+import 'package:bilisail/features/feed/application/feed_controller.dart';
+import 'package:bilisail/features/feed/application/home_controller.dart';
+import 'package:bilisail/features/feed/domain/feed_repository.dart';
+import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/pgc/domain/pgc_repository.dart';
 import 'package:bilisail/features/search/application/search_controller.dart';
 import 'package:bilisail/features/search/domain/search_repository.dart';
 import 'package:bilisail/features/search/domain/search_result.dart';
 import 'package:bilisail/features/search/presentation/search_screen.dart';
+import 'package:bilisail/features/search/presentation/search_category_bar.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,6 +41,9 @@ void main() {
     await (FontLoader(
       'MaterialIcons',
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+    await (FontLoader(
+      'BiliIcons',
+    )..addFont(rootBundle.load('assets/fonts/biliicon.ttf'))).load();
   });
 
   testWidgets(
@@ -136,6 +147,69 @@ void main() {
     );
   }
 
+  for (final (size, scale) in [
+    (const Size(1440, 900), 1.0),
+    (const Size(1000, 800), 1.0),
+    (const Size(360, 640), 1.0),
+    (const Size(320, 568), 2.0),
+  ]) {
+    testWidgets('workspace search header fits $size at scale $scale', (
+      tester,
+    ) async {
+      final repository = _Repository();
+      await _mount(
+        tester,
+        repository,
+        size: size,
+        scale: scale,
+        workspace: true,
+      );
+      final strip = find.byKey(const ValueKey('search-category-strip'));
+      final search = find.byKey(const ValueKey('workspace-search'));
+      expect(find.byKey(const ValueKey('home-channel-strip')), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(SearchScreen),
+          matching: find.byType(SearchCategoryBar),
+        ),
+        findsNothing,
+      );
+      expect(strip, findsOneWidget);
+      expect(search, findsOneWidget);
+      if (size.width >= 760) {
+        expect(tester.getCenter(strip).dy, tester.getCenter(search).dy);
+      } else {
+        expect(
+          tester.getTopLeft(search).dy,
+          greaterThan(tester.getBottomLeft(strip).dy),
+        );
+      }
+      await _snapshot(
+        tester,
+        'workspace-${size.width.toInt()}-${scale.toInt()}',
+      );
+      if (size.width < 760) {
+        final scrollable = tester.state<ScrollableState>(
+          find.descendant(of: strip, matching: find.byType(Scrollable)),
+        );
+        expect(scrollable.position.maxScrollExtent, greaterThan(0));
+        await tester.sendEventToBinding(
+          PointerScrollEvent(
+            kind: PointerDeviceKind.mouse,
+            position: tester.getCenter(strip),
+            scrollDelta: const Offset(0, 2000),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(scrollable.position.pixels, scrollable.position.maxScrollExtent);
+        await tester.tap(find.byKey(const ValueKey('search-category-user')));
+        await tester.pumpAndSettle();
+        expect(repository.calls.last.category, SearchCategory.user);
+      }
+      expect(tester.takeException(), isNull);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+  }
+
   testWidgets('search uses full width and shared five-column video cards', (
     tester,
   ) async {
@@ -179,6 +253,7 @@ Future<GoRouter> _mount(
   Size size = const Size(1400, 900),
   double scale = 1,
   List<Uri>? urls,
+  bool workspace = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -186,34 +261,50 @@ Future<GoRouter> _mount(
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
-  final router = GoRouter(
-    initialLocation: '/search',
-    routes: [
-      GoRoute(
-        path: '/search',
-        builder: (_, _) => const Scaffold(
-          body: SearchScreen(
-            key: PageStorageKey('fixture-search'),
-            query: '测试',
-          ),
-        ),
-      ),
-      for (final path in [
-        '/user/:id',
-        '/video/:id',
-        '/pgc/season/:id',
-        '/live/:id',
-      ])
-        GoRoute(
-          path: path,
-          builder: (_, state) => Scaffold(body: Text(state.uri.path)),
-        ),
-    ],
-  );
+  final router = workspace
+      ? createBiliRouter(
+          initialLocation: '/search?q=测试',
+          playerBuilder: (_, _, _) => const SizedBox.shrink(),
+        )
+      : GoRouter(
+          initialLocation: '/search',
+          routes: [
+            GoRoute(
+              path: '/search',
+              builder: (_, _) => const Scaffold(
+                body: Column(
+                  children: [
+                    SearchCategoryBar(),
+                    Expanded(
+                      child: SearchScreen(
+                        key: PageStorageKey('fixture-search'),
+                        query: '测试',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            for (final path in [
+              '/user/:id',
+              '/video/:id',
+              '/pgc/season/:id',
+              '/live/:id',
+            ])
+              GoRoute(
+                path: path,
+                builder: (_, state) => Scaffold(body: Text(state.uri.path)),
+              ),
+          ],
+        );
   addTearDown(router.dispose);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        if (workspace) ...[
+          feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+          homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+        ],
         searchRepositoryProvider.overrideWithValue(repository),
         externalLinkOpenerProvider.overrideWithValue((uri) async {
           urls?.add(uri);
@@ -236,6 +327,39 @@ Future<GoRouter> _mount(
   );
   await tester.pumpAndSettle();
   return router;
+}
+
+final class _FeedRepository implements FeedRepository {
+  @override
+  Future<List<VideoCategory>> loadCategories({
+    required RequestCancellation cancellation,
+  }) async => const [];
+
+  @override
+  Future<PageResult<VideoSummary>> loadFeed({
+    required int page,
+    required String? categoryId,
+    required RequestCancellation cancellation,
+  }) async => const PageResult(items: [], hasMore: false);
+
+  @override
+  Future<PageResult<VideoSummary>> loadPopular({
+    required int page,
+    required RequestCancellation cancellation,
+  }) async => const PageResult(items: [], hasMore: false);
+}
+
+final class _HomeRepository implements HomeRepository {
+  @override
+  String get accountScope => 'guest';
+
+  @override
+  Future<HomePage> load(
+    HomeQuery query, {
+    required int page,
+    String? cursor,
+    required RequestCancellation cancellation,
+  }) async => const HomePage([], hasMore: false);
 }
 
 Future<void> _snapshot(WidgetTester tester, String name) async {

@@ -14,6 +14,7 @@ final class HomeEntry {
     this.subtitle = '',
     this.description = '',
     this.bvid,
+    this.aid,
     this.url,
     this.authorName = '',
     this.authorAvatarUrl,
@@ -39,6 +40,7 @@ final class HomeEntry {
   final String subtitle;
   final String description;
   final String? bvid;
+  final String? aid;
   final Uri? url;
   final String authorName;
   final Uri? authorAvatarUrl;
@@ -84,6 +86,14 @@ abstract interface class HomeRepository {
 /// Optional write capability of the account's collected folders/UGC collections.
 abstract interface class HomeSubscriptionRepository {
   Future<void> unsubscribeFavorite(
+    HomeEntry entry, {
+    required String scope,
+    required RequestCancellation cancellation,
+  });
+}
+
+abstract interface class HomeWatchLaterRepository {
+  Future<void> removeWatchLater(
     HomeEntry entry, {
     required String scope,
     required RequestCancellation cancellation,

@@ -30,6 +30,7 @@ import '../features/profile/data/api_profile_repository.dart';
 import '../features/feed/application/feed_controller.dart';
 import '../features/feed/data/api_feed_repository.dart';
 import '../features/feed/application/home_controller.dart';
+import '../features/feed/application/watch_later_removal_controller.dart';
 import '../features/feed/data/api_home_repository.dart';
 import '../features/feed/application/favorite_folder_controller.dart';
 import '../features/feed/data/api_favorite_folder_repository.dart';
@@ -54,6 +55,7 @@ import '../features/library/application/library_controller.dart';
 import '../features/library/data/sqlite_library_repository.dart';
 import '../features/playback/application/playback_session.dart';
 import '../features/playback/application/playback_manager.dart';
+import '../features/playback/application/playback_rate_memory.dart';
 import '../features/playback/data/api_playback_repository.dart';
 import '../features/playback/data/api_playback_history_repository.dart';
 import '../features/playback/data/api_content_playback_repository.dart';
@@ -145,8 +147,10 @@ class AppDependencies {
     final cardPreviews = VideoCardPreviewPlayback(
       createEngine: () => MediaKitEngine(onDiagnostic: playbackLog?.record),
     );
+    final playbackRateMemory = PlaybackRateMemory();
     final playback = PlaybackManager(
       createSession: () => PlaybackSession(
+        rateMemory: playbackRateMemory,
         sponsorRepository: ApiSponsorRepository(
           SponsorBlockClient(sponsorTransport),
         ),
@@ -308,6 +312,14 @@ class AppDependencies {
           ApiVideoRepository(api, requests),
         ),
         videoCardPreviewPlaybackProvider.overrideWithValue(cardPreviews),
+        videoCardWatchLaterAddedProvider.overrideWith(
+          (ref) =>
+              (id) => ref
+                  .read(
+                    watchLaterRemovalProvider(session.accountScope).notifier,
+                  )
+                  .restore(id.value),
+        ),
         videoCardPlaybackRepositoryProvider.overrideWithValue(
           ApiPlaybackRepository(
             api,
