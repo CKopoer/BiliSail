@@ -156,6 +156,7 @@ final class BiliApiClient {
       '/x/v3/fav/season/unfav',
       '/x/v3/fav/folder/edit',
       '/x/v2/history/toview/add',
+      '/x/click-interface/web/heartbeat',
       '/x/v2/dm/post',
       '/x/v2/reply/action',
       '/x/v2/reply/add',

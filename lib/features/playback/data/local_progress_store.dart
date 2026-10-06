@@ -5,7 +5,7 @@ import '../domain/playback_repository.dart';
 /// making playback import another feature's data implementation.
 class LocalProgressStore implements PlaybackProgressStore {
   LocalProgressStore({required this.readProgress, required this.writeProgress});
-  final Future<Duration> Function(String, VideoId, String) readProgress;
+  final Future<Duration?> Function(String, VideoId, String) readProgress;
   final Future<void> Function(
     String,
     VideoSummary,
@@ -17,7 +17,7 @@ class LocalProgressStore implements PlaybackProgressStore {
   writeProgress;
 
   @override
-  Future<Duration> read(String scope, VideoId video, String cid) =>
+  Future<Duration?> read(String scope, VideoId video, String cid) =>
       readProgress(scope, video, cid);
   @override
   Future<void> write(

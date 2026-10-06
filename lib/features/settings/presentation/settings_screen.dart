@@ -206,7 +206,7 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             '记住播放进度',
                             s.resumePlayback,
                             controller.setResumePlayback,
-                            '从本地记录继续观看',
+                            '优先从本地记录继续观看，没有本地记录时使用云端进度',
                           ),
                           _choices('优先清晰度', s.preferredQuality, const {
                             16: '360P',

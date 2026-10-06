@@ -11,6 +11,8 @@ import '../../../domain/video.dart';
 import '../domain/playback_repository.dart';
 import '../domain/content_playback.dart';
 import '../domain/sponsor_repository.dart';
+import '../domain/playback_history_repository.dart';
+import 'playback_history_reporter.dart';
 import '../../settings/domain/app_settings.dart';
 
 final playbackSessionProvider = Provider<PlaybackSession>(
@@ -28,8 +30,36 @@ class PlaybackSession extends ChangeNotifier {
     this.sponsorRepository,
     this.contentRepository,
     this.metadataRepository,
-  }) {
+    this.historyRepository,
+    int Function()? sessionEpoch,
+    Duration Function()? historyNow,
+  }) : sessionEpoch = sessionEpoch ?? _zeroEpoch {
     _clock.start();
+    final history = historyRepository;
+    _historyReporter = history == null
+        ? null
+        : PlaybackHistoryReporter(
+            repository: history,
+            accountScope: accountScope,
+            sessionEpoch: this.sessionEpoch,
+            now: historyNow ?? () => _clock.elapsed,
+            onResult: (generation, failure) {
+              if (_disposed ||
+                  generation != _generation ||
+                  media == null ||
+                  _scope != accountScope() ||
+                  _epoch != this.sessionEpoch()) {
+                return;
+              }
+              if (failure != null) {
+                auxiliaryMessage = '云端进度上报失败，本地进度仍会保存';
+                _notify();
+              } else if (auxiliaryMessage == '云端进度上报失败，本地进度仍会保存') {
+                auxiliaryMessage = null;
+                _notify();
+              }
+            },
+          );
     danmaku = DanmakuController(monotonicNow: () => _clock.elapsed);
     _subscriptions.add(engine.snapshots.listen(_onSnapshot));
     _subscriptions.add(
@@ -68,6 +98,11 @@ class PlaybackSession extends ChangeNotifier {
   final PlaybackMetadataRepository? metadataRepository;
   final ContentPlaybackRepository? contentRepository;
   final PlaybackProgressStore progress;
+  final PlaybackHistoryRepository? historyRepository;
+  late final PlaybackHistoryReporter? _historyReporter;
+  final int Function() sessionEpoch;
+  static int _zeroEpoch() => 0;
+  int _epoch = 0;
   final String Function() accountScope;
   final _clock = Stopwatch();
   final _subscriptions = <StreamSubscription<Object?>>[];
@@ -91,6 +126,7 @@ class PlaybackSession extends ChangeNotifier {
   RequestCancellation? _sourceCancellation;
   RequestCancellation? _subtitleCancellation;
   int _generation = 0;
+  int _mediaGeneration = 0;
   int _subtitleGeneration = 0;
   bool _disposed = false;
   bool _closing = false;
@@ -347,6 +383,7 @@ class PlaybackSession extends ChangeNotifier {
     _clearTimeline();
     selectedSubtitle = -1;
     _scope = accountScope();
+    _epoch = sessionEpoch();
     _resolving = true;
     danmaku.replaceEvents(const []);
     _notify();
@@ -383,13 +420,21 @@ class PlaybackSession extends ChangeNotifier {
           ? Duration.zero
           : position ??
                 (_settings.resumePlayback && video != null && selected != null
-                    ? await progress.read(
-                        _scope,
-                        video.summary.id,
-                        selected.cid,
+                    ? await _resumePosition(
+                        video,
+                        selected,
+                        resolved.duration,
+                        generation,
+                        cancellation,
                       )
                     : Duration.zero);
-      if (generation != _generation) return;
+      if (generation != _generation ||
+          _disposed ||
+          cancellation.isCancelled ||
+          _scope != accountScope() ||
+          _epoch != sessionEpoch()) {
+        return;
+      }
       final policy = MediaRequestPolicy(headers: resolved.headers);
       _openingPosition = resume;
       PlayerFailure? lastFailure;
@@ -466,10 +511,12 @@ class PlaybackSession extends ChangeNotifier {
       if (lastFailure != null) throw lastFailure;
       if (generation != _generation) return;
       media = resolved;
+      _mediaGeneration = generation;
       _resolving = false;
       danmaku.seekConfirmed(engine.currentSnapshot.position);
       if (_desiredPlaying) await engine.play();
       if (generation != _generation) return;
+      _reportProgress();
       _notify();
       _ensureComments(engine.currentSnapshot.position);
       if (!isLive && video != null && selected != null) {
@@ -504,6 +551,7 @@ class PlaybackSession extends ChangeNotifier {
     if (_disposed || value.generation != engine.currentSnapshot.generation) {
       return;
     }
+    final previousPhase = snapshots.value.phase;
     final enteredEnded =
         value.phase == PlaybackPhase.ended &&
         snapshots.value.phase != PlaybackPhase.ended;
@@ -519,6 +567,14 @@ class PlaybackSession extends ChangeNotifier {
       rate: value.rate,
     );
     if (!_resolving && media != null) {
+      if (value.phase == PlaybackPhase.playing ||
+          enteredEnded ||
+          value.phase == PlaybackPhase.paused &&
+              previousPhase == PlaybackPhase.playing) {
+        _reportProgress(
+          force: enteredEnded || value.phase == PlaybackPhase.paused,
+        );
+      }
       _ensureComments(value.position);
       final sponsor = currentSponsor;
       if (_settings.sponsorBlockMode == SponsorBlockMode.automatic &&
@@ -545,12 +601,14 @@ class PlaybackSession extends ChangeNotifier {
       }
       if (_clock.elapsed - _lastSaved >= const Duration(seconds: 5)) {
         _lastSaved = _clock.elapsed;
-        unawaited(_saveProgress());
+        unawaited(_saveProgress(report: false));
       }
+      if (enteredEnded) unawaited(_saveProgress(report: false));
     }
   }
 
-  Future<void> _saveProgress() async {
+  Future<void> _saveProgress({bool report = true}) async {
+    if (report) _reportProgress(force: true);
     final generation = _generation;
     final video = detail;
     final selected = part;
@@ -581,6 +639,101 @@ class PlaybackSession extends ChangeNotifier {
         _notify();
       }
     }
+  }
+
+  PlaybackHistoryTarget? get _historyTarget {
+    final video = detail;
+    final selected = part;
+    if (isLive ||
+        video == null ||
+        selected == null ||
+        !video.summary.id.isValid ||
+        !RegExp(r'^[1-9][0-9]*$').hasMatch(selected.cid)) {
+      return null;
+    }
+    return PlaybackHistoryTarget(
+      video.summary.id,
+      selected.cid,
+      episodeId: switch (contentTarget) {
+        PgcPlaybackTarget(:final episodeId) => episodeId,
+        _ => null,
+      },
+      seasonId: switch (contentTarget) {
+        PgcPlaybackTarget(:final seasonId) => seasonId,
+        _ => null,
+      },
+    );
+  }
+
+  Future<Duration> _resumePosition(
+    VideoDetail video,
+    VideoPart selected,
+    Duration duration,
+    int generation,
+    RequestCancellation cancellation,
+  ) async {
+    final scope = _scope;
+    final epoch = _epoch;
+    final local = await progress.read(scope, video.summary.id, selected.cid);
+    if (local != null) return local;
+    if (generation != _generation ||
+        cancellation.isCancelled ||
+        scope != accountScope() ||
+        epoch != sessionEpoch()) {
+      return Duration.zero;
+    }
+    final history = historyRepository;
+    final target = _historyTarget;
+    if (history == null || target == null || !scope.startsWith('user:')) {
+      return Duration.zero;
+    }
+    try {
+      final remote = await history.read(
+        target,
+        scope: scope,
+        cancellation: cancellation,
+      );
+      if (remote == null ||
+          remote < Duration.zero ||
+          duration > Duration.zero &&
+              remote >= duration - const Duration(seconds: 5)) {
+        return Duration.zero;
+      }
+      return remote;
+    } on AppFailure catch (failure) {
+      if (failure.kind == AppFailureKind.cancelled) rethrow;
+      if (generation == _generation) auxiliaryMessage = '云端进度读取失败，本次从头播放';
+      return Duration.zero;
+    }
+  }
+
+  void _reportProgress({bool force = false}) {
+    final target = _historyTarget;
+    final snapshot = snapshots.value;
+    if (target == null ||
+        media == null ||
+        snapshot.duration <= Duration.zero ||
+        _resolving ||
+        snapshot.isSeeking ||
+        _epoch != sessionEpoch() ||
+        _scope != accountScope()) {
+      if (_epoch != sessionEpoch() || _scope != accountScope()) {
+        _historyReporter?.clear();
+      }
+      return;
+    }
+    _historyReporter?.submit(
+      PlaybackHistoryRecord(
+        target: target,
+        position: snapshot.position,
+        duration: snapshot.duration,
+        completed: snapshot.phase == PlaybackPhase.ended,
+      ),
+      scope: _scope,
+      epoch: _epoch,
+      generation: _mediaGeneration,
+      force: force,
+    );
   }
 
   /// Only the visible owner applies settings to the shared engine.
@@ -1047,6 +1200,7 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> pause() async {
     _desiredPlaying = false;
     await _command(engine.pause);
+    await _saveProgress();
   }
 
   Future<void> seek(Duration target) async {
@@ -1191,6 +1345,7 @@ class PlaybackSession extends ChangeNotifier {
     }
 
     await attempt(stop);
+    await attempt(() async => _historyReporter?.close());
     _disposed = true;
     for (final subscription in _subscriptions) {
       await attempt(subscription.cancel);

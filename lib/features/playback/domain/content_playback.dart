@@ -14,8 +14,9 @@ sealed class ContentPlaybackTarget {
 }
 
 final class PgcPlaybackTarget extends ContentPlaybackTarget {
-  const PgcPlaybackTarget(this.episodeId, {this.cid});
+  const PgcPlaybackTarget(this.episodeId, {this.cid, this.seasonId});
   final String episodeId;
+  final String? seasonId;
 
   /// The selected episode's real content ID, used by the shared on-demand
   /// danmaku protocol even when no UGC detail/part is supplied.

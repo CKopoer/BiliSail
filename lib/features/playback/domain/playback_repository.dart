@@ -123,7 +123,8 @@ abstract interface class PlaybackRepository {
 }
 
 abstract interface class PlaybackProgressStore {
-  Future<Duration> read(String scope, VideoId video, String cid);
+  /// Null means no record; zero is an existing rewind/completed record.
+  Future<Duration?> read(String scope, VideoId video, String cid);
   Future<void> write(
     String scope,
     VideoSummary video,

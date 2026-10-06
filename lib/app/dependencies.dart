@@ -49,6 +49,7 @@ import '../features/library/application/library_controller.dart';
 import '../features/library/data/sqlite_library_repository.dart';
 import '../features/playback/application/playback_session.dart';
 import '../features/playback/data/api_playback_repository.dart';
+import '../features/playback/data/api_playback_history_repository.dart';
 import '../features/playback/data/api_content_playback_repository.dart';
 import '../features/pgc/application/pgc_controller.dart';
 import '../features/pgc/data/api_pgc_repository.dart';
@@ -126,6 +127,12 @@ class AppDependencies {
       ),
       engine: MediaKitEngine(onDiagnostic: playbackLog?.record),
       repository: playbackRepository,
+      historyRepository: ApiPlaybackHistoryRepository(
+        PlaybackHistoryClient(api),
+        requests,
+        accountScope: () => session.accountScope,
+      ),
+      sessionEpoch: () => requests.sessionEpoch,
       metadataRepository: playbackRepository,
       contentRepository: ApiContentPlaybackRepository(
         PgcClient(api),
@@ -312,10 +319,11 @@ class AppDependencies {
     if (_closed) return;
     _closed = true;
     updates.close();
-    requests.advanceSession();
     try {
+      // Flush the final history observation while its account epoch is valid.
       await playback.close();
     } finally {
+      requests.advanceSession();
       try {
         await session.dispose();
       } finally {

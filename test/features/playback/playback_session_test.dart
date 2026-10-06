@@ -7,12 +7,230 @@ import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/domain/sponsor_repository.dart';
+import 'package:bilisail/features/playback/domain/playback_history_repository.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  for (final (local, remote, remember, scope, expected)
+      in <(Duration?, Duration?, bool, String, Duration)>[
+        (
+          const Duration(seconds: 8),
+          const Duration(seconds: 42),
+          true,
+          'user:1',
+          const Duration(seconds: 8),
+        ),
+        (
+          Duration.zero,
+          const Duration(seconds: 42),
+          true,
+          'user:1',
+          Duration.zero,
+        ),
+        (
+          null,
+          const Duration(milliseconds: 42678),
+          true,
+          'user:1',
+          const Duration(milliseconds: 42678),
+        ),
+        (null, null, true, 'user:1', Duration.zero),
+        (null, const Duration(seconds: 118), true, 'user:1', Duration.zero),
+        (null, const Duration(seconds: 42), false, 'user:1', Duration.zero),
+        (null, const Duration(seconds: 42), true, 'guest', Duration.zero),
+      ]) {
+    test(
+      'resume precedence: local=$local remote=$remote remember=$remember scope=$scope',
+      () async {
+        final engine = _FakeEngine();
+        final history = _FakeHistory()..readValue = remote;
+        final progress = _FakeProgress()..readValue = local;
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _FakeRepository(autoResolve: true),
+          progress: progress,
+          historyRepository: history,
+          accountScope: () => scope,
+        );
+        addTearDown(session.close);
+        session.configureSettings(AppSettings(resumePlayback: remember));
+        await session.open(_detail('11'), _part('11'));
+        expect(engine.openOptions.single.startPosition, expected);
+        expect(
+          history.reads.length,
+          local == null && remember && scope == 'user:1' ? 1 : 0,
+        );
+        if (scope == 'guest') expect(history.reports, isEmpty);
+      },
+    );
+  }
+
+  test(
+    'cloud read failure starts at zero without failing media preparation',
+    () async {
+      final engine = _FakeEngine();
+      final history = _FakeHistory()
+        ..readFailure = const AppFailure(AppFailureKind.network, 'offline');
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress()..readValue = null,
+        historyRepository: history,
+        accountScope: () => 'user:1',
+      );
+      addTearDown(session.close);
+      await session.open(_detail('11'), _part('11'));
+      expect(engine.openOptions.single.startPosition, Duration.zero);
+      expect(session.media, isNotNull);
+      expect(session.error, isNull);
+      expect(session.auxiliaryMessage, '云端进度读取失败，本次从头播放');
+    },
+  );
+
+  test('old cloud progress cannot open a replacement part', () async {
+    final engine = _FakeEngine();
+    final history = _FakeHistory()..nextRead = Completer<Duration?>();
+    final gate = history.nextRead!;
+    final session = PlaybackSession(
+      engine: engine,
+      repository: _FakeRepository(autoResolve: true),
+      progress: _FakeProgress()..readValue = null,
+      historyRepository: history,
+      accountScope: () => 'user:1',
+    );
+    addTearDown(session.close);
+    final old = session.open(_detail('11'), _part('11'));
+    await _flush();
+    await session.open(_detail('12'), _part('12'));
+    expect(history.reads.first.cancellation.isCancelled, isTrue);
+    gate.complete(const Duration(seconds: 55));
+    await old;
+    expect(engine.openOptions, hasLength(1));
+    expect(engine.openOptions.single.startPosition, Duration.zero);
+    expect(session.part?.cid, '12');
+  });
+
+  test(
+    'same account with a new session epoch rejects late cloud progress',
+    () async {
+      var epoch = 1;
+      final engine = _FakeEngine();
+      final history = _FakeHistory()..nextRead = Completer<Duration?>();
+      final gate = history.nextRead!;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress()..readValue = null,
+        historyRepository: history,
+        accountScope: () => 'user:1',
+        sessionEpoch: () => epoch,
+      );
+      addTearDown(session.close);
+      final opening = session.open(_detail('11'), _part('11'));
+      await _flush();
+      epoch++;
+      gate.complete(const Duration(seconds: 55));
+      await opening;
+      expect(engine.openOptions, isEmpty);
+      expect(history.reports, isEmpty);
+    },
+  );
+
+  test(
+    'reports every 15 seconds and flushes backward seek, pause and completion',
+    () async {
+      var now = Duration.zero;
+      final engine = _FakeEngine();
+      final history = _FakeHistory();
+      final progress = _FakeProgress();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: progress,
+        historyRepository: history,
+        accountScope: () => 'user:1',
+        historyNow: () => now,
+      );
+      addTearDown(session.close);
+      session.configureSettings(AppSettings(resumePlayback: false));
+      await session.open(_detail('11'), _part('11'));
+      await _flush();
+      for (final seconds in [5, 10, 14]) {
+        now = Duration(seconds: seconds);
+        engine.emit(engine.currentSnapshot.copyWith(position: now));
+        await _flush();
+      }
+      expect(history.reports, hasLength(1));
+      now = const Duration(seconds: 15);
+      engine.emit(engine.currentSnapshot.copyWith(position: now));
+      await _flush();
+      expect(history.reports.last.position, now);
+      expect(history.reports, hasLength(2));
+      await session.seek(const Duration(seconds: 3));
+      await _flush();
+      expect(history.reports.last.position, const Duration(seconds: 3));
+      engine.emit(
+        engine.currentSnapshot.copyWith(position: const Duration(seconds: 4)),
+      );
+      await session.pause();
+      await _flush();
+      expect(history.reports.last.position, const Duration(seconds: 4));
+      engine.emit(
+        engine.currentSnapshot.copyWith(
+          position: const Duration(seconds: 120),
+          phase: PlaybackPhase.ended,
+        ),
+      );
+      await _flush();
+      expect(history.reports.last.completed, isTrue);
+      expect(progress.writes, isNotEmpty);
+    },
+  );
+
+  test(
+    'switch, stop and PGC preserve the captured old progress identity',
+    () async {
+      final engine = _FakeEngine();
+      final history = _FakeHistory();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        contentRepository: _FakeContentRepository(),
+        progress: _FakeProgress(),
+        historyRepository: history,
+        accountScope: () => 'user:1',
+      );
+      addTearDown(session.close);
+      await session.open(_detail('11'), _part('11'));
+      engine.emit(
+        engine.currentSnapshot.copyWith(position: const Duration(seconds: 9)),
+      );
+      await session.open(
+        _detail('12'),
+        _part('12'),
+        target: const PgcPlaybackTarget('7', cid: '12', seasonId: '8'),
+      );
+      await _flush();
+      expect(
+        history.reports.any(
+          (r) => r.target.cid == '11' && r.position.inSeconds == 9,
+        ),
+        isTrue,
+      );
+      engine.emit(
+        engine.currentSnapshot.copyWith(position: const Duration(seconds: 11)),
+      );
+      await session.stop();
+      await _flush();
+      expect(history.reports.last.target.episodeId, '7');
+      expect(history.reports.last.target.seasonId, '8');
+      expect(history.reports.last.position.inSeconds, 11);
+    },
+  );
 
   test('optional timeline failures preserve ready media and do not repeat on hover', () async {
     final metadata = _FakeMetadataRepository();
@@ -1735,13 +1953,44 @@ final class _ProgressWrite {
   final String? episodeId;
 }
 
+final class _FakeHistory implements PlaybackHistoryRepository {
+  Duration? readValue;
+  AppFailure? readFailure;
+  Completer<Duration?>? nextRead;
+  final reads =
+      <({PlaybackHistoryTarget target, RequestCancellation cancellation})>[];
+  final reports = <PlaybackHistoryRecord>[];
+  @override
+  Future<Duration?> read(
+    PlaybackHistoryTarget target, {
+    required String scope,
+    required RequestCancellation cancellation,
+  }) {
+    reads.add((target: target, cancellation: cancellation));
+    final pending = nextRead;
+    nextRead = null;
+    if (readFailure != null) return Future.error(readFailure!);
+    return pending?.future ?? Future.value(readValue);
+  }
+
+  @override
+  Future<void> report(
+    PlaybackHistoryRecord record, {
+    required String scope,
+    required RequestCancellation cancellation,
+  }) async {
+    reports.add(record);
+  }
+}
+
 final class _FakeProgress implements PlaybackProgressStore {
   final writes = <_ProgressWrite>[];
   Completer<void>? nextWrite;
+  Duration? readValue = Duration.zero;
 
   @override
-  Future<Duration> read(String scope, VideoId video, String cid) async =>
-      Duration.zero;
+  Future<Duration?> read(String scope, VideoId video, String cid) async =>
+      readValue;
 
   @override
   Future<void> write(

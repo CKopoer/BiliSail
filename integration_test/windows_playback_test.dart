@@ -12,6 +12,7 @@ import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/data/api_playback_repository.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/playback/domain/playback_history_repository.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/video/data/api_video_repository.dart';
@@ -260,6 +261,91 @@ void main() {
       await session.close();
     }
   });
+
+  testWidgets(
+    'Windows native progress: cloud fallback, local precedence and heartbeat',
+    (tester) async {
+      initializePlayerBackend();
+      final fixturePath = Platform.environment['BILI_TEST_MEDIA_DIR'];
+      expect(fixturePath, isNotNull, reason: 'Use tool/test-windows-media.ps1');
+      final engine = MediaKitEngine();
+      final history = _FixtureHistory();
+      final progress = _FixtureProgress();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakePlaybackRepository(
+          File('$fixturePath/video.mp4').uri,
+          File('$fixturePath/audio.m4a').uri,
+        ),
+        progress: progress,
+        historyRepository: history,
+        accountScope: () => 'user:fixture',
+      );
+      const part = VideoPart(
+        cid: '123',
+        page: 1,
+        title: 'fixture',
+        duration: Duration(seconds: 12),
+      );
+      const detail = VideoDetail(
+        summary: VideoSummary(
+          id: VideoId('BV1abc123456'),
+          title: 'fixture',
+          coverUrl: '',
+          author: 'fixture',
+          duration: Duration(seconds: 12),
+        ),
+        description: '',
+        parts: [part],
+      );
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(body: VideoSurface(engine: engine)),
+          ),
+        );
+        await session.open(detail, part, volume: 5);
+        await _until(
+          tester,
+          () =>
+              engine.inspectDiagnostics().hasDecodedVideo &&
+              engine.inspectDiagnostics().hasDecodedAudio &&
+              engine.currentSnapshot.position >= const Duration(seconds: 3),
+        );
+        await session.pause();
+        final saved = progress.position;
+        expect(saved, isNotNull);
+        expect(saved, greaterThanOrEqualTo(const Duration(seconds: 3)));
+        expect(history.reads, 1);
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(
+          history.reports.any((r) => r.position >= const Duration(seconds: 3)),
+          isTrue,
+        );
+        await session.stop();
+        await session.open(detail, part, desiredPlaying: false);
+        expect(
+          (engine.currentSnapshot.position - saved!).inMilliseconds.abs(),
+          lessThan(400),
+        );
+        expect(history.reads, 1);
+        session.configureSettings(AppSettings(resumePlayback: false));
+        await session.open(detail, part, force: true, desiredPlaying: false);
+        expect(
+          engine.currentSnapshot.position,
+          lessThan(const Duration(milliseconds: 400)),
+        );
+        expect(history.reads, 1);
+        expect(session.error, isNull);
+        debugPrint(
+          'NATIVE_PROGRESS cloudFallback=true localPrecedence=true rememberOff=true heartbeat=true',
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await session.close();
+      }
+    },
+  );
 
   testWidgets(
     'Windows native responsive controls, fullscreen and Esc preserve one playback source',
@@ -790,6 +876,45 @@ final class _FakePlaybackRepository implements PlaybackRepository {
     SubtitleTrack track, {
     required RequestCancellation cancellation,
   }) async => const [];
+}
+
+final class _FixtureHistory implements PlaybackHistoryRepository {
+  int reads = 0;
+  final reports = <PlaybackHistoryRecord>[];
+  @override
+  Future<Duration?> read(
+    PlaybackHistoryTarget target, {
+    required String scope,
+    required RequestCancellation cancellation,
+  }) async {
+    reads++;
+    return const Duration(seconds: 2);
+  }
+
+  @override
+  Future<void> report(
+    PlaybackHistoryRecord record, {
+    required String scope,
+    required RequestCancellation cancellation,
+  }) async => reports.add(record);
+}
+
+final class _FixtureProgress implements PlaybackProgressStore {
+  Duration? position;
+  @override
+  Future<Duration?> read(String scope, VideoId video, String cid) async =>
+      position;
+  @override
+  Future<void> write(
+    String scope,
+    VideoSummary video,
+    VideoPart part,
+    Duration position,
+    Duration duration, {
+    String? episodeId,
+  }) async {
+    this.position = position;
+  }
 }
 
 final class _NoopProgressStore implements PlaybackProgressStore {

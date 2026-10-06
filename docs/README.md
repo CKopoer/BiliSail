@@ -26,6 +26,7 @@
 | [隐藏控件进度条与直播发送](validation/collapsed-progress-live-send.md) | 视频／影视底部细进度、直播双发送栏／表情权限和单次写验证 |
 | [评论与直播表情选择](validation/emoticon-picker-tabs.md) | 居中弹窗、系列子标签、草稿插入与权限验证 |
 | [播放器与标签保留](validation/player-workspace.md) | UWP 播放页、只读子标签和未关闭页面的生命周期修正 |
+| [云端进度与续播](validation/cloud-playback-progress.md) | 播放进度上报、本地优先/云端补充、账号和源隔离、Windows 验证边界 |
 | [界面控件与设置](validation/ui-controls.md) | 播放配置、头像、动态/直播卡、空降助手和账户交互验证 |
 | [播放页与评论交互](validation/video-comments.md) | 官方桌面风格双标签、折叠合集、评论与楼中楼验证 |
 | [评论图片与作者装扮](validation/comment-images-decorations.md) | 共用动态原图预览、右侧装扮图片与粉丝编号、验证边界 |

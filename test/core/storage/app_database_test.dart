@@ -11,6 +11,41 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'missing local progress differs from zero and completed progress',
+    () async {
+      final database = AppDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final history = SqliteLibraryRepository(
+        database,
+        accountScope: () => 'user:1',
+      );
+      expect(
+        await history.resumePosition('user:1', video.id, part.cid),
+        isNull,
+      );
+      for (final position in [
+        Duration.zero,
+        part.duration - const Duration(seconds: 3),
+      ]) {
+        await history.saveProgress(
+          scope: 'user:1',
+          video: video,
+          part: part,
+          position: position,
+          duration: part.duration,
+        );
+        expect(
+          await history.resumePosition('user:1', video.id, part.cid),
+          Duration.zero,
+        );
+      }
+      expect(
+        await history.resumePosition('user:2', video.id, part.cid),
+        isNull,
+      );
+    },
+  );
+  test(
     'v1 migration retains video history and stores PGC episode routes',
     () async {
       final directory = await Directory.systemTemp.createTemp(
@@ -175,7 +210,7 @@ void main() {
       await database.clearPrivateHistory('user:1');
       expect(
         await history.resumePosition('user:1', video.id, part.cid),
-        Duration.zero,
+        isNull,
       );
       await database.close();
     },

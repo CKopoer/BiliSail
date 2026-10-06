@@ -79,7 +79,11 @@ class _BiliAppState extends ConsumerState<BiliApp> {
           return PlaybackPanel(
             detail: detail,
             part: detail.parts.first,
-            target: PgcPlaybackTarget(episode.episodeId, cid: episode.cid),
+            target: PgcPlaybackTarget(
+              episode.episodeId,
+              cid: episode.cid,
+              seasonId: season.id.value,
+            ),
             title: '${season.title} · ${episode.displayTitle}',
             settings: settings,
             danmakuComposerBuilder: (context) => PgcDanmakuComposer(

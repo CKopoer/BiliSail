@@ -143,7 +143,7 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                           (c, v) => c.copyWith(showCollapsedProgress: v),
                         ),
                         _switch(
-                          '从本地记录继续播放',
+                          '记住播放进度（本地优先，云端补充）',
                           s.resumePlayback,
                           (c, v) => c.copyWith(resumePlayback: v),
                         ),

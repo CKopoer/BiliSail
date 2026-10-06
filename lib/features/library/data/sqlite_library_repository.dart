@@ -49,7 +49,7 @@ class SqliteLibraryRepository implements LibraryRepository {
         .toList(growable: false);
   }
 
-  Future<Duration> resumePosition(
+  Future<Duration?> resumePosition(
     String scope,
     VideoId video,
     String cid,
@@ -64,7 +64,7 @@ class SqliteLibraryRepository implements LibraryRepository {
           ],
         )
         .getSingleOrNull();
-    if (row == null) return Duration.zero;
+    if (row == null) return null;
     final position = row.read<int>('position_ms');
     final duration = row.read<int>('duration_ms');
     // Completed videos reopen from the beginning; a deliberate rewind is saved as-is.

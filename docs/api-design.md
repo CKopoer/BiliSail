@@ -106,6 +106,8 @@ ApiPage<T> { items, nextCursor, hasMore }
 
 ## 5. 会话与凭据
 
+普通视频/影视云端进度按用户要求接入 Web GET `/x/player/wbi/v2` 与 POST `/x/click-interface/web/heartbeat`：本地优先、云端仅在本地缺失时补充，上报使用已有 Web Cookie/CSRF，单次写入不重放，不使用参考实现的 App 签名。字段单位、容量、取消和验证边界见 [云端播放进度](validation/cloud-playback-progress.md)。上表 `/x/v2/history/report` 保留参考源码定位，不是本项目的 Web 上报端点。
+
 ### 登录状态机
 
 ```mermaid
