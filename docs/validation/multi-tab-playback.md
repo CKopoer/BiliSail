@@ -31,3 +31,6 @@
 - 回归覆盖单／多标签模式和开关开／关的四种组合、真实设置页切换开关、暂停意图与媒体源保留、控件禁用、保存重载和旧配置迁移。
 - 定向设置／播放页面测试通过 123 项，日志 `artifacts/concurrent-playback-setting-targeted.log`。`tool/check.ps1 -SkipPub` 通过：根应用 723、`bili_api` 227、`bili_player` 16、`bili_danmaku` 23 项，共 **989 项**；四处格式与静态分析均通过。此计数包含工作区当时已有的其他并行修改，日志 `artifacts/concurrent-playback-setting-check.log`。
 - 五份本轮更新文档的本地链接和 `git diff --check` 通过。
+- `tool/test-windows-media.ps1` 通过，复测两路 DASH 解码与互斥暂停、返回恢复和原生错误诊断；仍不启用公网分支。日志 `artifacts/concurrent-playback-setting-native.log`。
+- Windows Release 构建通过。原发布目录中的程序正在运行，常规打包受阻，因此将当前源码与锁文件复制至忽略目录 `artifacts/playback-settings-build`，执行 `flutter pub get --enforce-lockfile` 和 `flutter build windows --release --no-pub -t lib/main.dart`；副本的 CMake 安装目录显式指向自身 `build/windows/x64/runner/Release`。独立构建下载原生依赖失败后，复用现有 MPV／ANGLE／SQLite 缓存并校验依赖声明的 MD5／SHA256，未修改依赖或 SDK。新程序为 `artifacts/playback-settings-build/build/windows/x64/runner/Release/bilisail.exe`；日志 `artifacts/concurrent-playback-setting-windows-snapshot-release.log`。
+- 本轮开关使用真实 router／设置页的组件测试验证；未进行新 Release 界面的手动操作验收，Android/macOS 未构建或实测。
