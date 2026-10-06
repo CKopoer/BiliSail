@@ -102,4 +102,15 @@ Android 仍使用 runner 上自动生成的 debug keystore，多次运行不能�
 
 macOS 命令在本机用 LLVM lipo 对真实 arm64 Mach-O fixture 验证通过，错误架构被拒绝；此项不代替 Apple lipo/Xcode 的远端执行。两份脚本通过 PowerShell parser，两个工作流通过 actionlint 1.7.12。
 
-修复后的三端远端验证以推送触发的后续 Actions 为准；本机没有 macOS/Xcode。**设备与发行未测**：macOS 启动、MSIX 安装/卸载/升级、正式 PFX 签名、Android 真机播放与签名升级。未创建或公开远端 Release；构建成功不能代替设备验收。
+### 三端远端复验通过
+
+[CI #4](https://github.com/CKopoer/BiliSail/actions/runs/37409580779) 在 2026-10-06 对修复提交 `d818c8a8603f129b704b2e2238fc54ede88bded3` 全部通过，三个平台产物均已上传：
+
+| 任务 | 验证结果 |
+| --- | --- |
+| [Ubuntu 完整检查](https://github.com/CKopoer/BiliSail/actions/runs/37409580779/job/112094826410) | 根应用及三个包的依赖强校验、格式、分析和测试通过 |
+| [Windows x64](https://github.com/CKopoer/BiliSail/actions/runs/37409580779/job/112095782197) | 冷启动版本读取、Release 编译、MSIX 打包与临时证书签名、产物上传通过 |
+| [macOS arm64](https://github.com/CKopoer/BiliSail/actions/runs/37409580779/job/112095782269) | Xcode 编译、Apple lipo 架构校验、ZIP 打包与上传通过 |
+| [Android arm64](https://github.com/CKopoer/BiliSail/actions/runs/37409580779/job/112095782290) | Release split APK、单 arm64 ABI 断言、打包与上传通过 |
+
+**设备与发行未测**：macOS 启动、MSIX 安装/卸载/升级、正式 PFX 签名、Android 真机播放与签名升级。未创建或公开远端 Release；三端构建成功不能代替播放、设备与发行验收，M0 尚未全部完成。
