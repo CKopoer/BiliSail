@@ -17,9 +17,10 @@ import '../../settings/domain/app_settings.dart';
 
 final playbackSessionProvider = Provider<PlaybackSession>(
   (ref) => throw UnimplementedError('PlaybackSession'),
+  dependencies: const [],
 );
 
-/// One process-owned native engine. Metadata and frequent position notifications
+/// One page-owned native engine. Metadata and frequent position notifications
 /// are separate so a position sample never rebuilds a whole route.
 class PlaybackSession extends ChangeNotifier {
   PlaybackSession({
@@ -132,6 +133,8 @@ class PlaybackSession extends ChangeNotifier {
   bool _closing = false;
   bool _resolving = false;
   bool _desiredPlaying = true;
+  bool _playbackAllowed = true;
+  Future<void>? _playbackCommands;
   Duration _lastSaved = const Duration(seconds: -10);
   int _lastCommentWindow = -1;
   String _scope = 'guest';
@@ -514,7 +517,7 @@ class PlaybackSession extends ChangeNotifier {
       _mediaGeneration = generation;
       _resolving = false;
       danmaku.seekConfirmed(engine.currentSnapshot.position);
-      if (_desiredPlaying) await engine.play();
+      await _syncPlayback();
       if (generation != _generation) return;
       _reportProgress();
       _notify();
@@ -589,6 +592,8 @@ class PlaybackSession extends ChangeNotifier {
         // until the current position event finishes, then recheck the source.
         scheduleMicrotask(() {
           if (!_disposed &&
+              _playbackAllowed &&
+              _desiredPlaying &&
               sourceGeneration == _generation &&
               identical(currentSponsor, sponsor) &&
               _settings.sponsorBlockMode == SponsorBlockMode.automatic &&
@@ -736,7 +741,7 @@ class PlaybackSession extends ChangeNotifier {
     );
   }
 
-  /// Only the visible owner applies settings to the shared engine.
+  /// Applies this page's settings without changing another page's engine.
   void configureSettings(AppSettings settings) {
     final previous = _settings;
     _settings = settings.normalized();
@@ -1177,7 +1182,7 @@ class PlaybackSession extends ChangeNotifier {
         danmaku.seekConfirmed(engine.currentSnapshot.position);
         _lastCommentWindow = -1;
         _ensureComments(engine.currentSnapshot.position);
-        await engine.play();
+        await _syncPlayback();
         if (_disposed || generation != _generation) return;
         await _saveProgress();
       } on PlayerFailure catch (failure) {
@@ -1193,14 +1198,57 @@ class PlaybackSession extends ChangeNotifier {
       _notify();
       return;
     }
-    await _command(_desiredPlaying ? engine.play : engine.pause);
+    await _command(_syncPlayback);
     await _saveProgress();
   }
 
   Future<void> pause() async {
     _desiredPlaying = false;
-    await _command(engine.pause);
+    await _command(() => _syncPlayback(forcePause: true));
     await _saveProgress();
+  }
+
+  /// Navigation suspension keeps the source, position and play/pause intent.
+  /// The permission changes synchronously so a late resolve cannot autoplay.
+  Future<void> setPlaybackAllowed(bool allowed) {
+    if (_disposed || _closing || _playbackAllowed == allowed) {
+      return _playbackCommands ?? Future.value();
+    }
+    _playbackAllowed = allowed;
+    return _syncPlayback();
+  }
+
+  Future<void> _syncPlayback({bool forcePause = false}) {
+    final generation = _generation;
+    final operation = (_playbackCommands ?? Future<void>.value()).then((
+      _,
+    ) async {
+      if (_disposed || generation != _generation) return;
+      if (!_playbackAllowed) {
+        if (engine.currentSnapshot.desiredPlaying ||
+            engine.currentSnapshot.phase == PlaybackPhase.playing) {
+          await engine.pause();
+        }
+      } else if (!_resolving && media != null) {
+        if (_desiredPlaying && !engine.currentSnapshot.desiredPlaying) {
+          await engine.play();
+        } else if (!_desiredPlaying &&
+            (forcePause || engine.currentSnapshot.desiredPlaying)) {
+          await engine.pause();
+        }
+      }
+    });
+    final completed = operation.then(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _playbackCommands = completed;
+    unawaited(
+      completed.then((_) {
+        if (identical(_playbackCommands, completed)) _playbackCommands = null;
+      }),
+    );
+    return operation;
   }
 
   Future<void> seek(Duration target) async {
@@ -1350,6 +1398,8 @@ class PlaybackSession extends ChangeNotifier {
     for (final subscription in _subscriptions) {
       await attempt(subscription.cancel);
     }
+    final playbackCommands = _playbackCommands;
+    if (playbackCommands != null) await attempt(() => playbackCommands);
     await attempt(engine.dispose);
     await attempt(() async => snapshots.dispose());
     await attempt(() async => danmaku.dispose());

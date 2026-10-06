@@ -154,6 +154,8 @@ flutter build windows --release
 
 设置 → 外观 → 页面导航模式可选择“单标签页、多标签页”。Windows 和 macOS 默认多标签页，Android 默认单标签页；手动选择会保存，调整窗口大小不会切换模式。顶部返回按钮按访问顺序回退，单标签页也支持系统返回；`Ctrl+W` 在单标签页中返回上一页。首页频道、子标签和设置分类超出宽度时，可触摸横向滑动或在栏内使用鼠标滚轮查看后面的入口。详见[单标签导航与顶部滚动](docs/validation/single-page-navigation.md)。
 
+多标签模式允许不同视频、影视或直播标签同时播放，打开新播放标签不会中止旧媒体流；每个标签内仍只有一个播放器。单标签模式只允许一个会话播放，进入另一播放页时暂停旧会话并保留进度和播放意图。切回多标签模式恢复被导航暂停的会话，手动暂停的会话保持暂停；关闭标签只释放该标签的播放器。详见[多标签并发播放](docs/validation/multi-tab-playback.md)。
+
 单击视频画面切换控制栏，双击切换全屏。快捷键可在设置中修改、停用或恢复默认；文本输入和模态弹窗期间不触发播放快捷键。更多操作见[快捷键与富评论](docs/validation/shortcuts-rich-comments.md)、[设置与侧键](docs/validation/settings-tabs-fonts.md)和[标签播放行为](docs/validation/profile-playback-rates.md)。
 
 ## 开发与文档

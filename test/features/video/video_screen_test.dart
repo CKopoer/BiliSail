@@ -1,4 +1,6 @@
 import 'package:bilisail/features/video/application/video_extras_controller.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/video/domain/video_extras_repository.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
@@ -24,6 +26,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            authControllerProvider.overrideWith(_GuestAuthController.new),
             videoRepositoryProvider.overrideWithValue(_VideoRepository()),
             videoExtrasRepositoryProvider.overrideWithValue(
               _ExtrasRepository(),
@@ -99,6 +102,9 @@ void main() {
       );
       await tester.pumpWidget(
         ProviderScope(
+          overrides: [
+            authControllerProvider.overrideWith(_GuestAuthController.new),
+          ],
           child: MaterialApp(
             home: Scaffold(
               body: Align(
@@ -146,6 +152,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authControllerProvider.overrideWith(_GuestAuthController.new),
           videoRepositoryProvider.overrideWithValue(_VideoRepository()),
           videoExtrasRepositoryProvider.overrideWithValue(extras),
         ],
@@ -212,6 +219,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authControllerProvider.overrideWith(_GuestAuthController.new),
           videoRepositoryProvider.overrideWithValue(_VideoRepository()),
           videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
         ],
@@ -255,6 +263,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authControllerProvider.overrideWith(_GuestAuthController.new),
           videoRepositoryProvider.overrideWithValue(_VideoRepository()),
           videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
         ],
@@ -285,6 +294,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authControllerProvider.overrideWith(_GuestAuthController.new),
           videoRepositoryProvider.overrideWithValue(_VideoRepository()),
           videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
         ],
@@ -329,6 +339,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authControllerProvider.overrideWith(_GuestAuthController.new),
           videoRepositoryProvider.overrideWithValue(_VideoRepository()),
           videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
         ],
@@ -378,6 +389,11 @@ void main() {
     expect(infoDisposed, 0);
     expect(tester.takeException(), isNull);
   });
+}
+
+final class _GuestAuthController extends AuthController {
+  @override
+  AuthState build() => const AuthState();
 }
 
 final class _TrackedPlayer extends StatefulWidget {

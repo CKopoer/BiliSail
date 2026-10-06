@@ -50,7 +50,7 @@
 
 ## 播放、弹幕与平台
 
-- 遵守 [播放设计](docs/playback-and-danmaku.md)。MVP 只有一个活动 PlaybackSession，主应用仅使用 PlayerEngine/VideoSurface 契约。
+- 遵守 [播放设计](docs/playback-and-danmaku.md)。每个播放标签只拥有一个 PlaybackSession；多标签模式允许不同标签同时播放，单标签模式由 PlaybackManager 保证互斥。主应用仅使用 PlayerEngine/VideoSurface 契约。
 - 点播必须验证 DASH 音视频分轨；不能把视频 URL 单独可播视作完成。原生播放器请求不经过 Dio，需要独立设置并验证 headers/Range/重定向。
 - seek、换清晰度、换 P、URL 刷新都要隔离旧事件并保留用户播放意图；全屏/布局改变不得产生第二路音频。
 - 点播弹幕以确认的播放位置为主时钟，暂停/缓冲冻结、seek 重建、倍速校正；直播弹幕与点播时钟语义分开。

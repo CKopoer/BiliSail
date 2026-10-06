@@ -70,12 +70,18 @@ final class _VideoCollectionPanelState
   @override
   Widget build(BuildContext context) {
     final collection = widget.video.collection;
-    final subscriptionState = collection == null
+    final subscriptionTarget =
+        collection == null || !widget.video.summary.id.isValid
+        ? null
+        : CollectionSubscriptionTarget(
+            collectionId: CollectionId(collection.id),
+            videoId: widget.video.summary.id,
+            aid: widget.video.aid,
+          );
+    final subscriptionState = subscriptionTarget == null
         ? null
         : ref.watch(
-            collectionSubscriptionControllerProvider(
-              CollectionId(collection.id),
-            ),
+            collectionSubscriptionControllerProvider(subscriptionTarget),
           );
     final theme = Theme.of(context);
     final index =
@@ -122,12 +128,9 @@ final class _VideoCollectionPanelState
                   ? '${index + 1}/${collection.entries.length}'
                   : '${collection.entries.length} 个视频',
               playCount: collection.playCount,
-              trailing: subscriptionState == null
+              trailing: subscriptionTarget == null || subscriptionState == null
                   ? null
-                  : _subscriptionButton(
-                      CollectionId(collection.id),
-                      subscriptionState,
-                    ),
+                  : _subscriptionButton(subscriptionTarget, subscriptionState),
             ),
             if (subscriptionState?.message case final String message)
               Padding(
@@ -216,7 +219,7 @@ final class _VideoCollectionPanelState
   );
 
   Widget _subscriptionButton(
-    CollectionId id,
+    CollectionSubscriptionTarget target,
     CollectionSubscriptionState state,
   ) {
     final theme = Theme.of(context);
@@ -265,15 +268,21 @@ final class _VideoCollectionPanelState
               }
             : needsRefresh
             ? () => ref
-                  .read(collectionSubscriptionControllerProvider(id).notifier)
+                  .read(
+                    collectionSubscriptionControllerProvider(target).notifier,
+                  )
                   .refresh()
             : () async {
                 final changed = await ref
-                    .read(collectionSubscriptionControllerProvider(id).notifier)
+                    .read(
+                      collectionSubscriptionControllerProvider(target).notifier,
+                    )
                     .toggle();
                 if (mounted &&
                     changed &&
-                    widget.video.collection?.id == id.value) {
+                    widget.video.collection?.id == target.collectionId.value &&
+                    widget.video.summary.id == target.videoId &&
+                    widget.video.aid == target.aid) {
                   showAppNotice(context, subscribed ? '已取消订阅' : '已订阅合集');
                 }
               },

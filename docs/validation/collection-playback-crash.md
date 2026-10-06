@@ -4,7 +4,7 @@
 
 ## 已取得证据
 
-- 合集详情 `/x/space/fav/season/list` 的公开只读正常响应没有 `info.fav_state`。此前新客户端假定该字段存在，所以把正常数据判成协议错误；`info.id` 校验不是此次原因。改从当前账号 `/x/v3/fav/folder/collected/list` 分页匹配 `type=21` 和合集 ID，完整读完后才能判断未订阅，详细边界见 [合集订阅按钮](collection-subscription.md)。
+- 合集详情 `/x/space/fav/season/list` 的公开只读正常响应没有 `info.fav_state`。此前新客户端假定该字段存在，所以把正常数据判成协议错误；`info.id` 校验不是此次原因。首轮修正曾分页扫描当前账号收藏列表；用户提出效率疑问后，进一步核对 GitHub 和官网脚本，确认 `/x/web-interface/archive/relation` 的 `season_fav` 就是官网合集按钮使用的订阅态，现已替换全列表扫描。协议依据与最新构建见 [合集订阅按钮](collection-subscription.md)。
 - Windows Application 事件记录本次 `bilisail.exe` 进程 40992 于本地 14:14:36 崩溃，模块 `flutter_windows.dll`，异常 `0xc0000005`，偏移 `0x3c1ca`。读取本机 `CrashDumps/bilisail.exe.40992.dmp`，使用当前 SDK 的 `windows-x64-release/flutter_windows.dll.pdb`，异常指令符号为 `flutter::AccessibilityBridge::CreateRemoveReparentedNodesUpdate+0xba`；异常参数是读取地址 `0x48`，寄存器 `rax=0`。只采用异常位置的匹配符号，后续自动栈展开不可靠，不作为调用链证据。
 - 固定 Flutter 3.47.6，framework `5fc346839b5d0eef006ed8404392afb4dfae428d`、engine `692136cb6582dbfc5af3fb33c2515a069f2f66d0`。本地 engine 的 `accessibility_bridge.cc` 在重挂节点时仅用 `assert(child->parent())`，Release 随后仍会访问 `child->parent()->id()`；断言不能保护空指针。
 - [Flutter issue 193410](https://github.com/flutter/flutter/issues/193410) 的 Windows `Slider`／`IndexedStack` 复现有相同异常符号和 `+0xba` 偏移。[PR 190903](https://github.com/flutter/flutter/pull/190903) 提供原生空父节点保护，截至本次查看仍未合入。结合本机转储，可确认此次故障点是 Windows 无障碍树重挂的空指针访问；无法从转储确定具体是哪一个 Flutter 控件首先产生错误更新。
@@ -26,6 +26,8 @@
 
 按用户要求不运行或新增测试流程，没有自动执行订阅／取消等账号写入。根应用和 `bili_api` 静态分析通过，受影响 Dart 目录格式检查通过。分析与转储符号记录保存在忽略目录 `build/crash-diagnostics/`，未输出凭据或原始内存内容。
 
-用户旧版 Release 仍在运行，因此从独立源码快照 `build/collection-crash-fix-source` 构建，保持锁文件和 SDK。构建与导出结果由本轮交付后补；需使用完整新目录启动，旧进程不会自动加载修正。
+用户旧版 Release 仍在运行，因此从独立源码快照 `build/collection-crash-fix-source` 构建，`flutter pub get --enforce-lockfile` 和 `flutter build windows --release --no-pub` 成功，最终构建 64.9 秒，日志为 `build/crash-diagnostics/windows-build.log`。复用原构建目录中 MD5 与锁定插件要求一致的 libmpv／ANGLE 压缩包，未更换原生库版本；构建保留插件既有 CMake CMP0175 开发警告。
+
+完整 Release 导出至 `artifacts/bilisail-collection-crash-fix-windows-x64`，共 50 个文件，入口 `bilisail.exe`。入口 SHA-256 为 `4BB397AC9E2F7CE48F28DECA6E213EADFBF36FFB123C9D5997A062807BE68CE7`，`data/app.so` 为 `2E41FE73B67280CC4F285E1BB6E1606E629FDBE4D8F160C4D2ADB1E0BB32796D`。已核对快照与当前主入口、binding、合集客户端、滚动组件及锁文件一致。需关闭旧版后从完整新目录启动，旧进程不会自动加载修正；未自动启动新版执行运行验收。
 
 此为对应已定位故障的应用侧规避，构建通过不能证明长时间播放已稳定。真实登录订阅态、持续播放、设置标签往返、评论／简介往返、窗口尺寸变化与 Windows 读屏行为交由用户验收；Android／macOS 本轮未构建或运行。

@@ -26,7 +26,7 @@ final class ApiCollectionSubscriptionRepository
 
   @override
   Future<bool> isSubscribed(
-    CollectionId id,
+    CollectionSubscriptionTarget target,
     RequestCancellation cancellation,
   ) => requests.run((context) async {
     final scope = accountScope;
@@ -34,8 +34,8 @@ final class ApiCollectionSubscriptionRepository
       throw const AppFailure(AppFailureKind.authentication, '请先登录');
     }
     final result = await client.isSubscribed(
-      id.value,
-      mid: scope.substring(5),
+      target.videoId.value,
+      aid: target.aid,
       context: context,
     );
     if (scope != accountScope) {
@@ -46,7 +46,7 @@ final class ApiCollectionSubscriptionRepository
 
   @override
   Future<void> setSubscribed(
-    CollectionId id,
+    CollectionSubscriptionTarget target,
     bool subscribed,
     RequestCancellation cancellation,
   ) => requests.run((context) async {
@@ -55,7 +55,11 @@ final class ApiCollectionSubscriptionRepository
       throw const AppFailure(AppFailureKind.authentication, '请先登录');
     }
     try {
-      await client.setSubscribed(id.value, subscribed, context: context);
+      await client.setSubscribed(
+        target.collectionId.value,
+        subscribed,
+        context: context,
+      );
     } on ApiFailure catch (error) {
       if (context.cancellation?.isCancelled == true) rethrow;
       if (const {

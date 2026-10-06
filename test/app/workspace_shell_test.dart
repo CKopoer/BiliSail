@@ -288,60 +288,71 @@ void main() {
     });
   }
 
-  testWidgets('tab keyboard commands respect editors and modal routes', (
-    tester,
-  ) async {
-    final router = _router((context, tab) => Text('page ${tab.id}'));
-    addTearDown(router.dispose);
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('workspace-search')));
-    await tester.pumpAndSettle();
-    await _shortcut(tester, LogicalKeyboardKey.keyW);
-    await _shortcut(tester, LogicalKeyboardKey.keyT);
-    expect(find.text('page tab-1'), findsOneWidget);
-    expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsNothing);
-    await tester.tap(find.text('page tab-1'), kind: PointerDeviceKind.mouse);
-    await tester.pumpAndSettle();
+  testWidgets(
+    'new tabs respect editors and workspace commands respect modal routes',
+    (tester) async {
+      final router = _router((context, tab) => Text('page ${tab.id}'));
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workspace-search')));
+      await tester.pumpAndSettle();
+      await _shortcut(tester, LogicalKeyboardKey.keyT);
+      expect(find.text('page tab-1'), findsOneWidget);
+      expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsNothing);
+      await tester.tap(find.text('page tab-1'), kind: PointerDeviceKind.mouse);
+      await tester.pumpAndSettle();
 
-    for (final requestFocus in [false, true]) {
-      final context = tester.element(find.text('page tab-1'));
-      final dialog = showDialog<void>(
-        context: context,
-        requestFocus: requestFocus,
-        builder: (_) => const AlertDialog(content: Text('modal')),
-      );
+      for (final requestFocus in [false, true]) {
+        final context = tester.element(find.text('page tab-1'));
+        final dialog = showDialog<void>(
+          context: context,
+          requestFocus: requestFocus,
+          builder: (_) => const AlertDialog(content: Text('modal')),
+        );
+        await tester.pumpAndSettle();
+        await _shortcut(tester, LogicalKeyboardKey.keyW);
+        await _shortcut(tester, LogicalKeyboardKey.keyT);
+        expect(
+          find.byKey(const ValueKey('workspace-tab-tab-1')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsNothing);
+        Navigator.of(context, rootNavigator: true).pop();
+        await dialog;
+        await tester.pumpAndSettle();
+      }
+      await _shortcut(tester, LogicalKeyboardKey.keyT);
+      expect(find.text('page tab-2'), findsOneWidget);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyW);
+      await tester.pumpAndSettle();
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.keyW);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyW);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(find.text('page tab-1'), findsOneWidget);
+      await _shortcut(tester, LogicalKeyboardKey.keyW);
+      expect(find.text('page home'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workspace-search')));
       await tester.pumpAndSettle();
       await _shortcut(tester, LogicalKeyboardKey.keyW);
-      await _shortcut(tester, LogicalKeyboardKey.keyT);
-      expect(find.byKey(const ValueKey('workspace-tab-tab-1')), findsOneWidget);
-      expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsNothing);
-      Navigator.of(context, rootNavigator: true).pop();
-      await dialog;
-      await tester.pumpAndSettle();
-    }
-    await _shortcut(tester, LogicalKeyboardKey.keyT);
-    expect(find.text('page tab-2'), findsOneWidget);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyW);
-    await tester.pumpAndSettle();
-    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.keyW);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyW);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await tester.pumpAndSettle();
-    expect(find.text('page tab-1'), findsOneWidget);
-    await _shortcut(tester, LogicalKeyboardKey.keyW);
-    expect(find.text('page home'), findsOneWidget);
+      expect(find.text('page home'), findsOneWidget);
+      expect(find.byKey(const ValueKey('workspace-tab-tab-3')), findsNothing);
 
-    await tester.pumpWidget(const MaterialApp(home: Text('replacement')));
-    await tester.pumpAndSettle();
-    await _shortcut(tester, LogicalKeyboardKey.keyT);
-    await _shortcut(tester, LogicalKeyboardKey.keyW);
-    expect(find.text('replacement'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      await tester.pumpWidget(const MaterialApp(home: Text('replacement')));
+      await tester.pumpAndSettle();
+      await _shortcut(tester, LogicalKeyboardKey.keyT);
+      await _shortcut(tester, LogicalKeyboardKey.keyW);
+      expect(find.text('replacement'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final enabled in [true, false]) {
     testWidgets('mouse side key closes the active tab when enabled=$enabled', (

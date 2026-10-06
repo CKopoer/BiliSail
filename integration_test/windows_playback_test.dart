@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/core/platform/desktop_window_chrome.dart';
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/core/platform/window_service.dart';
@@ -11,6 +12,7 @@ import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/data/api_playback_repository.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/domain/playback_history_repository.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
@@ -27,6 +29,147 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+
+  testWidgets(
+    'Windows independent tabs decode concurrently and single page pauses other streams',
+    (tester) async {
+      initializePlayerBackend();
+      final fixturePath = Platform.environment['BILI_TEST_MEDIA_DIR'];
+      expect(fixturePath, isNotNull, reason: 'Use tool/test-windows-media.ps1');
+      final manager = PlaybackManager(
+        createSession: () => PlaybackSession(
+          engine: MediaKitEngine(),
+          repository: _FakePlaybackRepository(
+            File('$fixturePath/video.mp4').uri,
+            File('$fixturePath/audio.m4a').uri,
+          ),
+          progress: _NoopProgressStore(),
+          accountScope: () => 'guest',
+        ),
+      );
+      VideoDetail detail(String id) => VideoDetail(
+        summary: VideoSummary(
+          id: VideoId(id),
+          title: '多标签本地视频',
+          coverUrl: '',
+          author: 'fixture',
+          duration: const Duration(seconds: 12),
+        ),
+        description: '',
+        parts: const [
+          VideoPart(
+            cid: 'independent-tabs',
+            page: 1,
+            title: '本地分轨',
+            duration: Duration(seconds: 12),
+          ),
+        ],
+      );
+      final first = manager.acquire('first');
+      final second = manager.acquire('second');
+      final firstEngine = first.engine as MediaKitEngine;
+      final secondEngine = second.engine as MediaKitEngine;
+      try {
+        await tester.pumpWidget(
+          const MaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        await manager.updateWorkspace(
+          allowConcurrent: true,
+          activeTabId: 'first',
+        );
+        for (final (session, id) in [
+          (first, 'BV1abc123456'),
+          (second, 'BV1abc654321'),
+        ]) {
+          session.configureSettings(AppSettings(defaultVolume: 0));
+          final video = detail(id);
+          await session.open(video, video.parts.first, volume: 0);
+        }
+        await _until(
+          tester,
+          () =>
+              firstEngine.inspectDiagnostics().hasDecodedVideo &&
+              firstEngine.inspectDiagnostics().hasDecodedAudio &&
+              secondEngine.inspectDiagnostics().hasDecodedVideo &&
+              secondEngine.inspectDiagnostics().hasDecodedAudio &&
+              firstEngine.currentSnapshot.position >
+                  const Duration(milliseconds: 300) &&
+              secondEngine.currentSnapshot.position >
+                  const Duration(milliseconds: 300),
+        );
+        final firstGeneration = firstEngine.currentSnapshot.generation;
+        final secondGeneration = secondEngine.currentSnapshot.generation;
+        final firstBefore = firstEngine.currentSnapshot.position;
+        final secondBefore = secondEngine.currentSnapshot.position;
+        await _until(
+          tester,
+          () =>
+              firstEngine.currentSnapshot.position >
+                  firstBefore + const Duration(milliseconds: 400) &&
+              secondEngine.currentSnapshot.position >
+                  secondBefore + const Duration(milliseconds: 400),
+        );
+        await manager.updateWorkspace(
+          allowConcurrent: false,
+          activeTabId: 'second',
+        );
+        await _until(
+          tester,
+          () =>
+              firstEngine.currentSnapshot.phase == PlaybackPhase.paused &&
+              secondEngine.currentSnapshot.phase == PlaybackPhase.playing,
+        );
+        final pausedPosition = firstEngine.currentSnapshot.position;
+        final secondPlayingPosition = secondEngine.currentSnapshot.position;
+        await _until(
+          tester,
+          () =>
+              secondEngine.currentSnapshot.position >
+              secondPlayingPosition + const Duration(milliseconds: 400),
+        );
+        expect(
+          firstEngine.currentSnapshot.position.inMilliseconds,
+          closeTo(pausedPosition.inMilliseconds, 100),
+        );
+        await manager.updateWorkspace(
+          allowConcurrent: false,
+          activeTabId: 'first',
+        );
+        await _until(
+          tester,
+          () =>
+              secondEngine.currentSnapshot.phase == PlaybackPhase.paused &&
+              firstEngine.currentSnapshot.position >
+                  pausedPosition + const Duration(milliseconds: 400),
+        );
+        expect(firstEngine.currentSnapshot.generation, firstGeneration);
+        expect(secondEngine.currentSnapshot.generation, secondGeneration);
+        await first.pause();
+        await manager.updateWorkspace(
+          allowConcurrent: true,
+          activeTabId: 'second',
+        );
+        await _until(
+          tester,
+          () => secondEngine.currentSnapshot.phase == PlaybackPhase.playing,
+        );
+        expect(firstEngine.currentSnapshot.phase, PlaybackPhase.paused);
+        manager.release('first', first);
+        final retained = secondEngine.currentSnapshot.position;
+        await _until(
+          tester,
+          () =>
+              secondEngine.currentSnapshot.position >
+              retained + const Duration(milliseconds: 400),
+        );
+        expect(secondEngine.currentSnapshot.generation, secondGeneration);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await manager.close();
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
+    },
+  );
 
   testWidgets(
     'Windows native DASH pair: headers, redirects, ranges, seek and lifecycle',
@@ -709,6 +852,7 @@ void main() {
           ProviderScope(
             overrides: [playbackSessionProvider.overrideWithValue(session)],
             child: MaterialApp.router(
+              builder: AppNoticeHost.builder,
               theme: BiliTheme.light(),
               routerConfig: router,
             ),

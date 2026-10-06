@@ -15,7 +15,7 @@ final collectionSubscriptionControllerProvider = NotifierProvider.autoDispose
     .family<
       CollectionSubscriptionController,
       CollectionSubscriptionState,
-      CollectionId
+      CollectionSubscriptionTarget
     >(CollectionSubscriptionController.new);
 
 final class CollectionSubscriptionState {
@@ -36,8 +36,8 @@ final class CollectionSubscriptionState {
 
 class CollectionSubscriptionController
     extends Notifier<CollectionSubscriptionState> {
-  CollectionSubscriptionController(this.id);
-  final CollectionId id;
+  CollectionSubscriptionController(this.target);
+  final CollectionSubscriptionTarget target;
   RequestCancellation _cancellation = RequestCancellation();
   int _generation = 0;
   String? _loadedScope;
@@ -89,7 +89,7 @@ class CollectionSubscriptionController
       loading: true,
     );
     try {
-      final subscribed = await repository.isSubscribed(id, _cancellation);
+      final subscribed = await repository.isSubscribed(target, _cancellation);
       if (!_current(generation, scope, epoch)) return;
       _loadedScope = scope;
       _loadedEpoch = epoch;
@@ -134,7 +134,7 @@ class CollectionSubscriptionController
       busy: true,
     );
     try {
-      await repository.setSubscribed(id, subscribed, _cancellation);
+      await repository.setSubscribed(target, subscribed, _cancellation);
       if (!_current(generation, scope, epoch)) return false;
       state = CollectionSubscriptionState(
         signedIn: true,

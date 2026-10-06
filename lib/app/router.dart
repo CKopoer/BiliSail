@@ -23,6 +23,7 @@ import '../features/library/application/library_controller.dart';
 import '../features/video/application/video_controller.dart';
 import '../features/video/application/video_extras_controller.dart';
 import '../features/playback/application/playback_session.dart';
+import '../features/playback/application/playback_manager.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/presentation/account_button.dart';
 import '../features/feed/application/feed_controller.dart';
@@ -86,6 +87,12 @@ GoRouter createBiliRouter({
             actionsBuilder: actionsBuilder,
             menuBuilder: menuBuilder,
             observeAccount: accountBuilder != null,
+            navigationMode:
+                (ref.watch(settingsControllerProvider).value ??
+                        AppSettings.defaults(
+                          navigationMode: defaultWorkspaceNavigationMode,
+                        ))
+                    .navigationMode,
           ),
           child: child,
         ),
@@ -128,6 +135,7 @@ final class _WorkspacePage extends ConsumerWidget {
     this.actionsBuilder,
     this.menuBuilder,
     required this.observeAccount,
+    required this.navigationMode,
   });
   final WorkspaceTab tab;
   final VideoPlayerBuilder playerBuilder;
@@ -138,6 +146,7 @@ final class _WorkspacePage extends ConsumerWidget {
   final VideoPlayerBuilder? actionsBuilder;
   final VideoPlayerBuilder? menuBuilder;
   final bool observeAccount;
+  final WorkspaceNavigationMode navigationMode;
 
   bool _shortcut(BuildContext context, String key) {
     if (!WorkspaceActivity.isActive(context) || shortcutsBlocked(context)) {
@@ -191,6 +200,19 @@ final class _WorkspacePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final playback = ref.watch(playbackManagerProvider);
+    if (playback != null && WorkspaceActivity.isActive(context)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted || !WorkspaceActivity.isActive(context)) return;
+        unawaited(
+          playback.updateWorkspace(
+            allowConcurrent:
+                navigationMode == WorkspaceNavigationMode.multipleTabs,
+            activeTabId: tab.id,
+          ),
+        );
+      });
+    }
     final account = observeAccount
         ? ref.watch(
             authControllerProvider.select(
@@ -203,6 +225,12 @@ final class _WorkspacePage extends ConsumerWidget {
       // rebuild its page. SearchScreen then re-runs its own preserved query.
       key: ValueKey(account),
       overrides: [
+        if (playback != null)
+          playbackSessionProvider.overrideWith((ref) {
+            final session = playback.acquire(tab.id);
+            ref.onDispose(() => playback.release(tab.id, session));
+            return session;
+          }),
         feedControllerProvider.overrideWith(FeedController.new),
         homeControllerProvider.overrideWith2(HomeController.new),
         profileControllerProvider.overrideWith2(ProfileController.new),

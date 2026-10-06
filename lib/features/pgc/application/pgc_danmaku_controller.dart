@@ -14,6 +14,7 @@ final pgcDanmakuRepositoryProvider = Provider<PgcDanmakuRepository>(
 final pgcDanmakuControllerProvider = NotifierProvider.autoDispose
     .family<PgcDanmakuController, PgcDanmakuState, PgcDanmakuTarget>(
       PgcDanmakuController.new,
+      dependencies: [playbackSessionProvider],
     );
 
 final class PgcDanmakuState {

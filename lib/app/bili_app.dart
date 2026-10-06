@@ -25,6 +25,7 @@ import '../domain/video.dart';
 import '../features/video/application/video_extras_controller.dart';
 import '../features/library/application/library_controller.dart';
 import '../features/playback/presentation/playback_panel.dart';
+import '../features/playback/application/playback_session.dart';
 import '../features/settings/application/settings_controller.dart';
 import '../features/settings/presentation/app_update_host.dart';
 import '../features/settings/domain/app_settings.dart';
@@ -163,7 +164,10 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         ),
         onReload: () {
           ref.invalidate(relatedVideosProvider(detail.summary.id));
-          final session = widget.dependencies.playback;
+          final session = ProviderScope.containerOf(
+            context,
+            listen: false,
+          ).read(playbackSessionProvider);
           if (session.detail?.summary.id == detail.summary.id &&
               session.part?.cid == part.cid) {
             unawaited(session.retry());

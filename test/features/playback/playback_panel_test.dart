@@ -6,10 +6,12 @@ import 'dart:ui' show PointerDeviceKind, Tristate;
 import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
@@ -30,6 +32,134 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final mode in WorkspaceNavigationMode.values) {
+    testWidgets('workspace scopes players and enforces ${mode.name} playback', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final sessions = <PlaybackSession>[];
+      final manager = PlaybackManager(
+        createSession: () {
+          final session = _session(_FakeEngine());
+          sessions.add(session);
+          return session;
+        },
+      );
+      addTearDown(manager.close);
+      final settings = _Settings()
+        ..value = AppSettings.defaults(navigationMode: mode);
+      final second = VideoDetail(
+        summary: const VideoSummary(
+          id: VideoId('BV2abc123456'),
+          title: '第二个视频',
+          coverUrl: '',
+          author: 'UP',
+          duration: Duration(minutes: 3),
+        ),
+        description: '',
+        parts: const [
+          VideoPart(
+            cid: '456',
+            page: 1,
+            title: '第二个视频',
+            duration: Duration(minutes: 3),
+          ),
+        ],
+      );
+      final router = createBiliRouter(
+        initialLocation: '/video/${_detail.summary.id.value}',
+        playerBuilder: (_, detail, part) => PlaybackPanel(
+          detail: detail,
+          part: part,
+          settings: const AppSettings.defaults(),
+          onToggleComments: () {},
+          window: _FakeWindowService(),
+        ),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            playbackManagerProvider.overrideWithValue(manager),
+            settingsRepositoryProvider.overrideWithValue(settings),
+            for (final video in [_detail, second]) ...[
+              videoDetailProvider(video.summary.id).overrideWith((_) => video),
+              relatedVideosProvider(video.summary.id).overrideWith((_) => []),
+            ],
+          ],
+          child: MaterialApp.router(
+            builder: AppNoticeHost.builder,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await _pumpFrames(tester);
+      expect(sessions.length, 1);
+      final firstSession = sessions.first;
+      await firstSession.seek(const Duration(milliseconds: 1234));
+      final generation = firstSession.sourceGeneration;
+      router.go('/video/${second.summary.id.value}');
+      await _pumpFrames(tester);
+      expect(sessions.length, 2);
+      final secondSession = sessions.last;
+      expect(secondSession.detail?.summary.id, second.summary.id);
+      expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
+      expect(
+        firstSession.snapshots.value.phase,
+        mode == WorkspaceNavigationMode.multipleTabs
+            ? PlaybackPhase.playing
+            : PlaybackPhase.paused,
+      );
+      expect(firstSession.sourceGeneration, generation);
+      expect((firstSession.engine as _FakeEngine).activeSurfaces, 0);
+      expect((secondSession.engine as _FakeEngine).activeSurfaces, 1);
+      // Mode changes preserve the page/provider identity and media sources.
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PlaybackPanel).last),
+        listen: false,
+      );
+      await container
+          .read(settingsControllerProvider.notifier)
+          .setNavigationMode(WorkspaceNavigationMode.singlePage);
+      await _pumpFrames(tester);
+      expect(firstSession.snapshots.value.phase, PlaybackPhase.paused);
+      expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
+      await container
+          .read(settingsControllerProvider.notifier)
+          .setNavigationMode(WorkspaceNavigationMode.multipleTabs);
+      await _pumpFrames(tester);
+      expect(firstSession.snapshots.value.phase, PlaybackPhase.playing);
+      expect(sessions.length, 2);
+      router.go('/video/${_detail.summary.id.value}');
+      await _pumpFrames(tester);
+      expect(
+        firstSession.snapshots.value.position,
+        const Duration(milliseconds: 1234),
+      );
+      expect(firstSession.sourceGeneration, generation);
+      // Closing the visible tab must leave the other tab's stream running.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await _pumpFrames(tester);
+      expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
+      expect(firstSession.media, isNull);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+      final closing = manager.close();
+      // Provider disposal and broadcast stream closure cross Riverpod's real
+      // scheduler and the widget test's fake clock; drain both before teardown.
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        await tester.pump();
+      }
+      await closing;
+    });
+  }
+
   testWidgets(
     'control visibility preserves scrolling danmaku inline and fullscreen',
     (tester) async {
@@ -903,7 +1033,10 @@ void main() {
                 .overrideWith((_) => _detail),
             relatedVideosProvider(_detail.summary.id).overrideWith((_) => []),
           ],
-          child: MaterialApp.router(routerConfig: router),
+          child: MaterialApp.router(
+            builder: AppNoticeHost.builder,
+            routerConfig: router,
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -1668,7 +1801,10 @@ Future<FocusNode> _focusRecommendation(
           ),
         ),
       ],
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(
+        builder: AppNoticeHost.builder,
+        routerConfig: router,
+      ),
     ),
   );
   await _pumpFrames(tester);
@@ -1703,12 +1839,14 @@ Widget _app(
   child: MaterialApp(
     theme: BiliTheme.light(),
     navigatorObservers: [?navigatorObserver],
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: TextScaler.linear(textScale)),
-      child: WorkspaceActivity(
-        active: active,
-        child: child ?? const SizedBox(),
+    builder: (context, child) => AppNoticeHost(
+      child: MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: WorkspaceActivity(
+          active: active,
+          child: child ?? const SizedBox(),
+        ),
       ),
     ),
     home: _pageScope(

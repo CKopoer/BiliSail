@@ -4,6 +4,7 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/domain/sponsor_repository.dart';
@@ -14,6 +15,179 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'multiple tabs keep independent sources and release only the closed tab',
+    () async {
+      final manager = _manager();
+      addTearDown(manager.close);
+      final first = manager.acquire('first');
+      await manager.updateWorkspace(
+        allowConcurrent: true,
+        activeTabId: 'first',
+      );
+      await first.open(_detail('1'), _part('1'));
+      await first.seek(const Duration(milliseconds: 1250));
+      await first.setRate(1.5);
+      final generation = first.sourceGeneration;
+      final second = manager.acquire('second');
+      await manager.updateWorkspace(
+        allowConcurrent: true,
+        activeTabId: 'second',
+      );
+      await second.open(_detail('2'), _part('2'));
+      expect(first.snapshots.value.phase, PlaybackPhase.playing);
+      expect(second.snapshots.value.phase, PlaybackPhase.playing);
+      expect(first.sourceGeneration, generation);
+      expect(
+        first.snapshots.value.position,
+        const Duration(milliseconds: 1250),
+      );
+      expect(first.snapshots.value.rate, 1.5);
+      manager.release('first', first);
+      await _flush();
+      expect((first.engine as _FakeEngine).disposed, isTrue);
+      expect(second.snapshots.value.phase, PlaybackPhase.playing);
+      await manager.stop();
+      expect(second.media, isNull);
+    },
+  );
+
+  test('single page suspends other sources and preserves manual pause and preferences', () async {
+    final manager = _manager();
+    addTearDown(manager.close);
+    final first = manager.acquire('first');
+    await manager.updateWorkspace(allowConcurrent: false, activeTabId: 'first');
+    await first.open(_detail('1'), _part('1'));
+    await first.seek(const Duration(milliseconds: 1234));
+    await first.setRate(1.5);
+    await first.setVolume(25);
+    final generation = first.sourceGeneration;
+    final second = manager.acquire('second');
+    await manager.updateWorkspace(
+      allowConcurrent: false,
+      activeTabId: 'second',
+    );
+    await second.open(_detail('2'), _part('2'));
+    expect(first.snapshots.value.phase, PlaybackPhase.paused);
+    expect(second.snapshots.value.phase, PlaybackPhase.playing);
+    await manager.updateWorkspace(allowConcurrent: false, activeTabId: 'first');
+    expect(second.snapshots.value.phase, PlaybackPhase.paused);
+    expect(first.snapshots.value.phase, PlaybackPhase.playing);
+    expect(first.sourceGeneration, generation);
+    expect(first.snapshots.value.position, const Duration(milliseconds: 1234));
+    expect(first.snapshots.value.rate, 1.5);
+    expect(first.snapshots.value.volume, 25);
+    await first.pause();
+    await manager.updateWorkspace(
+      allowConcurrent: false,
+      activeTabId: 'second',
+    );
+    await manager.updateWorkspace(allowConcurrent: false, activeTabId: 'first');
+    expect(first.snapshots.value.phase, PlaybackPhase.paused);
+    await manager.updateWorkspace(allowConcurrent: true, activeTabId: 'first');
+    expect(first.snapshots.value.phase, PlaybackPhase.paused);
+    expect(second.snapshots.value.phase, PlaybackPhase.playing);
+  });
+
+  test('single page blocks late resolution and keeps one source behind ordinary pages', () async {
+    final repository = _FakeRepository();
+    final manager = _manager(repository: repository);
+    addTearDown(manager.close);
+    final first = manager.acquire('first');
+    await manager.updateWorkspace(allowConcurrent: false, activeTabId: 'first');
+    final firstOpen = first.open(_detail('1'), _part('1'));
+    await _flush();
+    final second = manager.acquire('second');
+    await manager.updateWorkspace(
+      allowConcurrent: false,
+      activeTabId: 'second',
+    );
+    final secondOpen = second.open(_detail('2'), _part('2'));
+    await _flush();
+    repository.pendingResolves['2']!.complete(
+      _media('2', 80, const Duration(minutes: 2)),
+    );
+    await secondOpen;
+    repository.pendingResolves['1']!.complete(
+      _media('1', 80, const Duration(minutes: 2)),
+    );
+    await firstOpen;
+    expect((first.engine as _FakeEngine).playCount, 0);
+    expect(first.snapshots.value.phase, PlaybackPhase.paused);
+    expect(second.snapshots.value.phase, PlaybackPhase.playing);
+    await manager.updateWorkspace(
+      allowConcurrent: false,
+      activeTabId: 'settings',
+    );
+    expect(first.snapshots.value.phase, PlaybackPhase.paused);
+    expect(second.snapshots.value.phase, PlaybackPhase.playing);
+  });
+
+  test('single page waits for an outgoing native pause and rejects a stale selection', () async {
+    final manager = _manager();
+    addTearDown(manager.close);
+    final first = manager.acquire('first');
+    await first.open(_detail('1'), _part('1'));
+    final second = manager.acquire('second');
+    await second.open(_detail('2'), _part('2'));
+    await second.pause();
+    final third = manager.acquire('third');
+    await third.open(_detail('3'), _part('3'));
+    await third.pause();
+    final engine = first.engine as _FakeEngine;
+    final pause = Completer<void>();
+    engine.nextPause = pause;
+    final selectSecond = manager.updateWorkspace(
+      allowConcurrent: false,
+      activeTabId: 'second',
+    );
+    await _flush();
+    final secondPlayCount = (second.engine as _FakeEngine).playCount;
+    final selectThird = manager.updateWorkspace(
+      allowConcurrent: false,
+      activeTabId: 'third',
+    );
+    // Preserve play intent while permission is blocked.
+    await second.togglePlaying();
+    await third.togglePlaying();
+    expect((second.engine as _FakeEngine).playCount, secondPlayCount);
+    expect(third.snapshots.value.phase, PlaybackPhase.paused);
+    pause.complete();
+    await Future.wait([selectSecond, selectThird]);
+    expect(first.snapshots.value.phase, PlaybackPhase.paused);
+    expect(second.snapshots.value.phase, PlaybackPhase.paused);
+    expect(third.snapshots.value.phase, PlaybackPhase.playing);
+  });
+
+  test(
+    'account stop cancels every pending source and close disposes every engine',
+    () async {
+      final repository = _FakeRepository();
+      final manager = _manager(repository: repository);
+      final first = manager.acquire('first');
+      final second = manager.acquire('second');
+      final opens = [
+        first.open(_detail('1'), _part('1')),
+        second.open(_detail('2'), _part('2')),
+      ];
+      await _flush();
+      await manager.stop();
+      for (final id in ['1', '2']) {
+        repository.pendingResolves[id]!.complete(
+          _media(id, 80, const Duration(minutes: 2)),
+        );
+      }
+      await Future.wait(opens);
+      expect(first.media, isNull);
+      expect(second.media, isNull);
+      expect((first.engine as _FakeEngine).playCount, 0);
+      expect((second.engine as _FakeEngine).playCount, 0);
+      await manager.close();
+      expect((first.engine as _FakeEngine).disposed, isTrue);
+      expect((second.engine as _FakeEngine).disposed, isTrue);
+    },
+  );
 
   for (final (local, remote, remember, scope, expected)
       in <(Duration?, Duration?, bool, String, Duration)>[
@@ -1793,6 +1967,15 @@ Future<void> _flush() async {
   await Future<void>.delayed(Duration.zero);
 }
 
+PlaybackManager _manager({PlaybackRepository? repository}) => PlaybackManager(
+  createSession: () => PlaybackSession(
+    engine: _FakeEngine(),
+    repository: repository ?? _FakeRepository(autoResolve: true),
+    progress: _FakeProgress(),
+    accountScope: () => 'guest',
+  ),
+);
+
 const _timelineMetadata = PlaybackMetadata(
   subtitles: [],
   chapters: [
@@ -2030,6 +2213,7 @@ final class _FakeEngine implements PlayerEngine {
   final sources = <ResolvedMediaSource>[];
   final seekTargets = <Duration>[];
   Completer<void>? nextRate;
+  Completer<void>? nextPause;
 
   @override
   PlaybackSnapshot get currentSnapshot => _current;
@@ -2083,6 +2267,9 @@ final class _FakeEngine implements PlayerEngine {
   @override
   Future<void> pause() async {
     pauseCount++;
+    final pending = nextPause;
+    nextPause = null;
+    if (pending != null) await pending.future;
     emit(_current.copyWith(phase: PlaybackPhase.paused, desiredPlaying: false));
   }
 

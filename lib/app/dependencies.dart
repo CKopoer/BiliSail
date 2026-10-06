@@ -50,6 +50,7 @@ import '../features/video/data/api_video_extras_repository.dart';
 import '../features/library/application/library_controller.dart';
 import '../features/library/data/sqlite_library_repository.dart';
 import '../features/playback/application/playback_session.dart';
+import '../features/playback/application/playback_manager.dart';
 import '../features/playback/data/api_playback_repository.dart';
 import '../features/playback/data/api_playback_history_repository.dart';
 import '../features/playback/data/api_content_playback_repository.dart';
@@ -91,7 +92,7 @@ class AppDependencies {
   final BiliApiClient api;
   final SessionRepository session;
   final SqliteLibraryRepository library;
-  final PlaybackSession playback;
+  final PlaybackManager playback;
   final WindowService window;
   final DioApiTransport sponsorTransport;
   final PlaybackDiagnosticLog? playbackLog;
@@ -124,36 +125,39 @@ class AppDependencies {
     final sponsorTransport = DioApiTransport();
     final playbackLog = await PlaybackDiagnosticLog.create();
     final playbackRepository = ApiPlaybackRepository(api, requests);
-    final playback = PlaybackSession(
-      sponsorRepository: ApiSponsorRepository(
-        SponsorBlockClient(sponsorTransport),
-      ),
-      engine: MediaKitEngine(onDiagnostic: playbackLog?.record),
-      repository: playbackRepository,
-      historyRepository: ApiPlaybackHistoryRepository(
-        PlaybackHistoryClient(api),
-        requests,
+    final playback = PlaybackManager(
+      createSession: () => PlaybackSession(
+        sponsorRepository: ApiSponsorRepository(
+          SponsorBlockClient(sponsorTransport),
+        ),
+        engine: MediaKitEngine(onDiagnostic: playbackLog?.record),
+        repository: playbackRepository,
+        historyRepository: ApiPlaybackHistoryRepository(
+          PlaybackHistoryClient(api),
+          requests,
+          accountScope: () => session.accountScope,
+        ),
+        sessionEpoch: () => requests.sessionEpoch,
+        metadataRepository: playbackRepository,
+        contentRepository: ApiContentPlaybackRepository(
+          PgcClient(api),
+          LiveClient(api),
+          requests,
+        ),
         accountScope: () => session.accountScope,
-      ),
-      sessionEpoch: () => requests.sessionEpoch,
-      metadataRepository: playbackRepository,
-      contentRepository: ApiContentPlaybackRepository(
-        PgcClient(api),
-        LiveClient(api),
-        requests,
-      ),
-      accountScope: () => session.accountScope,
-      progress: LocalProgressStore(
-        readProgress: library.resumePosition,
-        writeProgress: (scope, video, part, position, duration, {episodeId}) =>
-            library.saveProgress(
-              scope: scope,
-              video: video,
-              part: part,
-              position: position,
-              duration: duration,
-              episodeId: episodeId,
-            ),
+        progress: LocalProgressStore(
+          readProgress: library.resumePosition,
+          writeProgress:
+              (scope, video, part, position, duration, {episodeId}) =>
+                  library.saveProgress(
+                    scope: scope,
+                    video: video,
+                    part: part,
+                    position: position,
+                    duration: duration,
+                    episodeId: episodeId,
+                  ),
+        ),
       ),
     );
     session = SessionRepository(
@@ -323,7 +327,7 @@ class AppDependencies {
             authControllerProvider.select((state) => (state.status, state.mid)),
           ),
         ),
-        playbackSessionProvider.overrideWithValue(playback),
+        playbackManagerProvider.overrideWithValue(playback),
       ],
       child: child,
     );
