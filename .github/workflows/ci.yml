@@ -47,6 +47,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Match the hosted source recorded in the root and package lockfiles.
+  PUB_HOSTED_URL: https://pub.flutter-io.cn
+
 jobs:
   prepare:
     runs-on: ubuntu-24.04

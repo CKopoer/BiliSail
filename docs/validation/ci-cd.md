@@ -21,6 +21,8 @@ PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Wi
 
 Flutter 固定 **3.47.6 stable / Dart 3.13.5**；升级需同时调整工作流、检查/构建脚本并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Xcode/系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
 
+CI 在工作流顶层固定 `PUB_HOSTED_URL=https://pub.flutter-io.cn`，与根应用及三个包锁文件中的 hosted URL 一致；检查、三端构建和 Release 复用流程均使用此包源。切换包源时须在同一包源下重新生成并验证四份锁文件，继续保留 `--enforce-lockfile`。
+
 ## 版本与产物
 
 手动输入版本使用 Flutter 的 `x.y.z+N`，例如 `0.1.0+1`；留空取根 `pubspec.yaml`。脚本通过 `--build-name` 和 `--build-number` 传入，不改源码版本或锁文件。Windows MSIX 映射为 `x.y.z.N`，四段均不超过 65535。Android 使用 arm64 split APK，Flutter 自动将 versionCode 设为 `N + 2000`，因此 `N` 不超过 2099998000；实际 versionCode 同时写入 metadata。MSIX 升级要求递增包版本并保持 identity/publisher。当前草稿 tag 为 `v0.1.0+1`；已有同名 tag 时拒绝附加新构建，重跑草稿遇到冲突时也需使用新版本或显式处理旧草稿。
@@ -71,4 +73,12 @@ Android 仍使用 runner 上自动生成的 debug keystore，多次运行不能�
 
 本地产物位于 `artifacts/windows-x64/release/` 和 `artifacts/android-arm64/release/`，由 Git 忽略；前序尝试另行保留，工作流只上传最终 `release/` 文件。没有执行在线账号操作，没有修改相邻参考仓库或新增 Dart 依赖。
 
-**未测**：GitHub Actions 的实际远端运行、Ubuntu runner 检查/构建、macOS 构建/启动、MSIX 安装/卸载/升级、正式 PFX 签名、Android 真机播放与签名升级。未创建或公开远端 Release；需将配置提交并推送到 GitHub 后运行 Actions。本机 Windows 成功不能代替这些结果。
+### 首次远端运行的包源修复
+
+[CI #1](https://github.com/CKopoer/BiliSail/actions/runs/37405976185) 使用提交 `415b054698f3a0357b90c4498ef4d4c8d70a2e3c`，版本与平台解析通过；Ubuntu 的 `Analyze and test` 在根应用 `flutter pub get --enforce-lockfile` 阶段以退出码 65 失败，分析、测试及三端构建尚未执行。
+
+根锁文件的 119 个 hosted 依赖均来自 `pub.flutter-io.cn`，三个包锁文件也使用此镜像；本机设置了 `PUB_HOSTED_URL`，初版 CI 未设置，因而使用默认 `pub.dev`。包源身份变化使 pub 重新解析依赖，日志出现 `Would change 119 dependencies` 和 `Unable to satisfy pubspec.yaml using pubspec.lock`。修复在 CI 工作流顶层显式设置相同包源，覆盖检查与构建任务；沿用已验证的锁定版本和内容哈希。
+
+本轮修复在 Windows / Flutter 3.47.6 下运行 `tool/check.ps1 -EnforceLockfile`：根应用 597、`bili_api` 206、`bili_player` 16、`bili_danmaku` 19 项测试全部通过，各目录格式及静态分析通过，四份锁文件 SHA-256 均未变化。两个工作流通过 actionlint 1.7.12；本文件 6 条本地链接及 `git diff --check` 通过。此结果不代表修复后的远端运行或三端构建已通过。
+
+**未测**：修复后的 GitHub Actions 运行、Ubuntu runner 完整检查/构建、macOS 构建/启动、MSIX 安装/卸载/升级、正式 PFX 签名、Android 真机播放与签名升级。未创建或公开远端 Release；需将修复提交并推送到 GitHub 后运行 Actions。本机 Windows 成功不能代替这些结果。
