@@ -15,6 +15,53 @@ void main() {
     repository = SqliteSettingsRepository(database);
   });
   tearDown(() => database.close());
+  test('empty settings use the injected platform default', () async {
+    for (final mode in WorkspaceNavigationMode.values) {
+      final settings = await SqliteSettingsRepository(
+        database,
+        defaultNavigationMode: mode,
+      ).load();
+      expect(settings.navigationMode, mode);
+    }
+  });
+  for (final mode in WorkspaceNavigationMode.values) {
+    test(
+      'missing, automatic and invalid navigation values migrate to $mode',
+      () async {
+        final platformRepository = SqliteSettingsRepository(
+          database,
+          defaultNavigationMode: mode,
+        );
+        for (final oldMode in [null, 'automatic', 'unknown', 42]) {
+          await database.writeSetting(
+            'preferences.v1',
+            jsonEncode({
+              'schemaVersion': 11,
+              'navigationMode': ?oldMode,
+              'theme': 'dark',
+            }),
+          );
+          final loaded = await platformRepository.load();
+          expect(loaded.navigationMode, mode);
+          expect(loaded.theme, AppThemePreference.dark);
+          await platformRepository.save(loaded);
+          final snapshot = jsonDecode(
+            (await database.readSetting('preferences.v1')) ?? '{}',
+          ) as Map<String, Object?>;
+          expect(snapshot['schemaVersion'], 12);
+          expect(snapshot['navigationMode'], mode.name);
+        }
+        for (final selected in WorkspaceNavigationMode.values) {
+          await platformRepository.save(AppSettings(navigationMode: selected));
+          final loaded = await SqliteSettingsRepository(
+            database,
+            defaultNavigationMode: mode,
+          ).load();
+          expect(loaded.navigationMode, selected);
+        }
+      },
+    );
+  }
   test(
     'legacy snapshot retains preferences and supplies new defaults',
     () async {
@@ -29,6 +76,7 @@ void main() {
       );
       final settings = await repository.load();
       expect(settings.theme, AppThemePreference.dark);
+      expect(settings.navigationMode, WorkspaceNavigationMode.multipleTabs);
       expect(settings.font, AppFontPreference.harmonyOsSans);
       expect(settings.cacheImages, isTrue);
       expect(settings.danmakuEnabled, isFalse);
@@ -47,11 +95,28 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 10);
+      expect(snapshot['schemaVersion'], 12);
       expect(snapshot['theme'], 'dark');
       expect(database.schemaVersion, 2);
     },
   );
+  test('navigation modes survive reload and unknown values use the injected default', () async {
+    for (final mode in WorkspaceNavigationMode.values) {
+      await repository.save(
+        AppSettings(navigationMode: mode, theme: AppThemePreference.dark),
+      );
+      final reloaded = await repository.load();
+      expect(reloaded.navigationMode, mode);
+      expect(reloaded.copyWith(cacheImages: false).navigationMode, mode);
+    }
+    await database.writeSetting(
+      'preferences.v1',
+      jsonEncode({'navigationMode': 'unknown', 'theme': 'dark'}),
+    );
+    final reloaded = await repository.load();
+    expect(reloaded.navigationMode, WorkspaceNavigationMode.multipleTabs);
+    expect(reloaded.theme, AppThemePreference.dark);
+  });
   test(
     'bundled and installed font choices survive reload independently',
     () async {

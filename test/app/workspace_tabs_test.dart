@@ -2,6 +2,110 @@ import 'package:bilisail/app/workspace_tabs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'back follows visits, reuses pages and does not record route commits',
+    () {
+      final workspace = WorkspaceTabs();
+      workspace.acceptRoute(Uri.parse('/search?q=test'));
+      final search = workspace.active;
+      workspace.acceptRoute(Uri.parse('/video/BV1234567890'));
+      final video = workspace.active;
+      workspace.select(search.id);
+      workspace.acceptRoute(search.route);
+      expect(workspace.goBack(), isTrue);
+      expect(workspace.activeId, video.id);
+      workspace.acceptRoute(video.route);
+      expect(workspace.goBack(), isTrue);
+      expect(workspace.activeId, search.id);
+      expect(workspace.goBack(), isTrue);
+      expect(workspace.activeId, 'home');
+      expect(workspace.canGoBack, isFalse);
+      expect(workspace.tabs, hasLength(3));
+    },
+  );
+
+  test('section updates stay on a page and back restores the home channel', () {
+    final workspace = WorkspaceTabs();
+    workspace.acceptRoute(Uri.parse('/?channel=bangumi&tab=home'));
+    workspace.acceptRoute(Uri.parse('/settings'));
+    workspace.acceptRoute(
+      Uri.parse('/settings?section=playback&tab=${workspace.activeId}'),
+    );
+    workspace.goBack(closeCurrent: true);
+    expect(workspace.active.location.queryParameters['channel'], 'bangumi');
+    expect(workspace.canGoBack, isFalse);
+    expect(workspace.tabs, hasLength(1));
+  });
+
+  test(
+    'single-page back keeps repeated destinations until their final pop',
+    () {
+      final workspace = WorkspaceTabs();
+      workspace.acceptRoute(Uri.parse('/search?q=test'));
+      final search = workspace.active;
+      workspace.acceptRoute(Uri.parse('/video/BV1234567890'));
+      final video = workspace.active;
+      workspace.acceptRoute(Uri.parse('/search?q=test'));
+      workspace.goBack(closeCurrent: true);
+      expect(workspace.activeId, video.id);
+      expect(workspace.tabs.map((tab) => tab.id), contains(search.id));
+      workspace.goBack(closeCurrent: true);
+      expect(workspace.activeId, search.id);
+      expect(workspace.tabs.map((tab) => tab.id), isNot(contains(video.id)));
+      workspace.goBack(closeCurrent: true);
+      expect(workspace.tabs, hasLength(1));
+      expect(workspace.goBack(closeCurrent: true), isFalse);
+    },
+  );
+
+  test('closing a page removes stale visits from back history', () {
+    final workspace = WorkspaceTabs();
+    workspace.acceptRoute(Uri.parse('/search?q=test'));
+    final search = workspace.activeId;
+    workspace.acceptRoute(Uri.parse('/settings'));
+    workspace.select(search);
+    workspace.close(search);
+    expect(workspace.activeId, 'home');
+    workspace.goBack();
+    expect(workspace.active.location.path, '/settings');
+    workspace.goBack();
+    expect(workspace.activeId, 'home');
+    expect(workspace.canGoBack, isFalse);
+  });
+
+  test('single-page browsing evicts old pages and remains bounded past 16', () {
+    final workspace = WorkspaceTabs();
+    for (var i = 0; i < 40; i++) {
+      expect(
+        workspace.acceptRoute(Uri.parse('/search?q=$i'), singlePage: true),
+        isTrue,
+      );
+    }
+    expect(workspace.tabs, hasLength(WorkspaceTabs.maximumTabs));
+    expect(workspace.active.location.queryParameters['q'], '39');
+    expect(workspace.tabs.first.id, 'home');
+    var backCount = 0;
+    while (workspace.goBack(closeCurrent: true)) {
+      backCount++;
+    }
+    expect(backCount, WorkspaceTabs.maximumTabs - 1);
+    expect(workspace.activeId, 'home');
+    expect(workspace.tabs, hasLength(1));
+  });
+
+  test('repeated tab selection has a bounded navigation history', () {
+    final workspace = WorkspaceTabs();
+    final browse = workspace.addBrowseTab();
+    for (var i = 0; i < 100; i++) {
+      workspace.select(i.isEven ? 'home' : browse.id);
+    }
+    var backCount = 0;
+    while (workspace.goBack()) {
+      backCount++;
+    }
+    expect(backCount, WorkspaceTabs.maximumHistory);
+  });
+
   test('messages open and reuse their own tab while keeping the video tab', () {
     final workspace = WorkspaceTabs();
     workspace.acceptRoute(Uri.parse('/video/BV1234567890'));

@@ -11,6 +11,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('appearance saves each navigation mode', (tester) async {
+    final repository = _SettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: Scaffold(body: SettingsScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ChoiceChip, '自动'), findsNothing);
+    for (final (label, mode) in [
+      ('单标签页', WorkspaceNavigationMode.singlePage),
+      ('多标签页', WorkspaceNavigationMode.multipleTabs),
+    ]) {
+      await tester.tap(find.widgetWithText(ChoiceChip, label));
+      await tester.pumpAndSettle();
+      expect(repository.settings.navigationMode, mode);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, label))
+            .selected,
+        isTrue,
+      );
+    }
+  });
   for (final inPlayer in [false, true]) {
     testWidgets('top margin slider saves 4-pixel steps (player: $inPlayer)', (
       tester,

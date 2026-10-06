@@ -6,12 +6,18 @@ import '../domain/shortcut_settings.dart';
 import '../domain/settings_repository.dart';
 
 class SqliteSettingsRepository implements SettingsRepository {
-  SqliteSettingsRepository(this.database);
+  SqliteSettingsRepository(
+    this.database, {
+    this.defaultNavigationMode = WorkspaceNavigationMode.multipleTabs,
+  });
   final AppDatabase database;
+  final WorkspaceNavigationMode defaultNavigationMode;
   @override
   Future<AppSettings> load() async {
     final value = await database.readSetting('preferences.v1');
-    if (value == null) return const AppSettings.defaults();
+    if (value == null) {
+      return AppSettings.defaults(navigationMode: defaultNavigationMode);
+    }
     final Object? decoded = jsonDecode(value);
     if (decoded is! Map<String, Object?>) {
       throw const FormatException('Invalid settings snapshot');
@@ -29,6 +35,11 @@ class SqliteSettingsRepository implements SettingsRepository {
     }
 
     return AppSettings(
+      navigationMode:
+          WorkspaceNavigationMode.values
+              .where((item) => item.name == decoded['navigationMode'])
+              .firstOrNull ??
+          defaultNavigationMode,
       shortcuts: ShortcutSettings.fromJson(decoded['shortcuts']),
       cacheImages: boolean('cacheImages', true),
       systemFontFamily: decoded['systemFontFamily'] is String
@@ -123,7 +134,8 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 10,
+        'schemaVersion': 12,
+        'navigationMode': value.navigationMode.name,
         'cacheImages': value.cacheImages,
         'shortcuts': value.shortcuts.toJson(),
         'theme': value.theme.name,

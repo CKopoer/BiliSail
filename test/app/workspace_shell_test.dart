@@ -1,6 +1,7 @@
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/app/workspace_tabs.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
@@ -9,6 +10,208 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets(
+    'single page back restores state, releases popped pages and handles system back',
+    (tester) async {
+      final disposed = <String>[];
+      final router = _router(
+        (context, tab) => _CounterPage(tab: tab, onDispose: disposed.add),
+        navigationMode: WorkspaceNavigationMode.singlePage,
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('single-page-header')), findsOneWidget);
+      expect(find.byKey(const ValueKey('new-workspace-tab')), findsNothing);
+      await tester.tap(find.text('count 0'));
+      router.go('/search?q=test');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('count 0'));
+      await tester.pump();
+      await tester.tap(find.text('count 1'));
+      router.go('/video/BV1234567890');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workspace-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('count 2'), findsOneWidget);
+      expect(disposed, ['tab-2']);
+      expect(router.routeInformationProvider.value.uri.path, '/search');
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('count 1'), findsOneWidget);
+      expect(disposed, ['tab-2', 'tab-1']);
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const ValueKey('workspace-back')))
+            .onPressed,
+        isNull,
+      );
+      expect(await router.routerDelegate.popRoute(), isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a single-page deep link can return home and modal back stays in the page',
+    (tester) async {
+      final router = _router(
+        (_, tab) => Text('page ${tab.id}'),
+        navigationMode: WorkspaceNavigationMode.singlePage,
+        initialLocation: '/video/BV1234567890',
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      final context = tester.element(find.text('page tab-1'));
+      final dialog = showDialog<void>(
+        context: context,
+        builder: (_) => const AlertDialog(content: Text('modal')),
+      );
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await dialog;
+      expect(find.text('page tab-1'), findsOneWidget);
+      await _shortcut(tester, LogicalKeyboardKey.keyT);
+      await _shortcut(tester, LogicalKeyboardKey.tab);
+      expect(find.text('page tab-1'), findsOneWidget);
+      await _shortcut(tester, LogicalKeyboardKey.keyW);
+      expect(find.text('page home'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final platform in [
+    TargetPlatform.windows,
+    TargetPlatform.macOS,
+    TargetPlatform.android,
+  ]) {
+    testWidgets('$platform default mode is stable across window resizing', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(420, 850);
+      final singlePage = platform == TargetPlatform.android;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final disposed = <String>[];
+      final router = _router(
+        (context, tab) => _CounterPage(tab: tab, onDispose: disposed.add),
+        navigationMode: null,
+        customCaption: true,
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('count 0'));
+      router.go('/search?q=test');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('count 0'));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('single-page-header')),
+        singlePage ? findsOneWidget : findsNothing,
+      );
+      tester.view.physicalSize = const Size(1280, 850);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('single-page-header')),
+        singlePage ? findsOneWidget : findsNothing,
+      );
+      expect(find.text('count 1'), findsOneWidget);
+      tester.view.physicalSize = const Size(420, 850);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('single-page-header')),
+        singlePage ? findsOneWidget : findsNothing,
+      );
+      expect(find.text('count 1'), findsOneWidget);
+      expect(disposed, isEmpty);
+      await tester.tap(find.byKey(const ValueKey('workspace-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('count 1'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }, variant: TargetPlatformVariant.only(platform));
+  }
+
+  testWidgets(
+    'multiple tabs can go back through visits without closing pages',
+    (tester) async {
+      final router = _router((_, tab) => Text('page ${tab.id}'));
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      router.go('/search?q=test');
+      await tester.pumpAndSettle();
+      router.go('/video/BV1234567890');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workspace-tab-home')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workspace-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('page tab-2'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('workspace-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('page tab-1'), findsOneWidget);
+      expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final width in [420.0, 1000.0]) {
+    testWidgets(
+      'home channel strip scrolls to its final tab using a mouse wheel at width $width',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 850);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final router = _router(
+          (_, tab) =>
+              Text('channel ${tab.location.queryParameters['channel']}'),
+          navigationMode: WorkspaceNavigationMode.multipleTabs,
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          MaterialApp.router(
+            theme: ThemeData(platform: TargetPlatform.windows),
+            routerConfig: router,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final strip = find.byKey(const ValueKey('home-channel-strip'));
+        final scrollable = tester.state<ScrollableState>(
+          find.descendant(of: strip, matching: find.byType(Scrollable)),
+        );
+        expect(scrollable.position.maxScrollExtent, greaterThan(0));
+        await tester.sendEventToBinding(
+          PointerScrollEvent(
+            kind: PointerDeviceKind.mouse,
+            position: tester.getCenter(strip),
+            scrollDelta: const Offset(0, 2000),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(scrollable.position.pixels, scrollable.position.maxScrollExtent);
+        final favorites = find.byKey(const ValueKey('channel-favorites'));
+        expect(favorites.hitTestable(), findsOneWidget);
+        await tester.tap(favorites);
+        await tester.pumpAndSettle();
+        expect(find.text('channel favorites'), findsOneWidget);
+        await tester.sendEventToBinding(
+          PointerScrollEvent(
+            kind: PointerDeviceKind.mouse,
+            position: tester.getCenter(strip),
+            scrollDelta: const Offset(0, -2000),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(scrollable.position.pixels, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('keyboard closes tabs after a mouse click unfocuses search', (
     tester,
   ) async {
@@ -335,11 +538,16 @@ GoRouter _router(
   WorkspacePageBuilder builder, {
   bool customCaption = false,
   ShortcutSettings shortcuts = const ShortcutSettings.defaults(),
+  WorkspaceNavigationMode? navigationMode =
+      WorkspaceNavigationMode.multipleTabs,
+  String initialLocation = '/',
 }) => GoRouter(
+  initialLocation: initialLocation,
   routes: [
     ShellRoute(
       builder: (context, state, child) => BiliAppShell(
         shortcuts: shortcuts,
+        navigationMode: navigationMode,
         location: state.uri.toString(),
         pageBuilder: builder,
         windowControlsBuilder: customCaption

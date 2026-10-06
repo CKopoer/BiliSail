@@ -484,6 +484,51 @@ void main() {
       expect(transport.requests.single.queryParameters['pn'], '2');
     },
   );
+  for (final section in ['全部', '未看完']) {
+    test('watch later $section reads view counts including zero', () async {
+      final transport = Transport(
+        (_) => {
+          'code': 0,
+          'data': {
+            'list': [
+              {
+                'bvid': 'BV1234567890',
+                'title': '有播放量',
+                'progress': 30,
+                'stat': {'view': 12345, 'danmaku': 178},
+              },
+              {
+                'bvid': 'BV1234567891',
+                'title': '零播放量',
+                'progress': 0,
+                'stat': {'view': 0, 'play': 999, 'danmaku': 0},
+              },
+              {
+                'bvid': 'BV1234567892',
+                'title': '缺少播放量',
+                'progress': 0,
+                'stat': {'danmaku': 3},
+              },
+            ],
+          },
+        },
+      );
+      final result = await HomeClient(
+        BiliApiClient(transport: transport),
+      ).load(channel: 'watchLater', section: section, page: 1);
+      expect(result.items.map((item) => item.playCountText), [
+        '12345',
+        '0',
+        '',
+      ]);
+      expect(result.items.map((item) => item.danmakuCountText), [
+        '178',
+        '0',
+        '3',
+      ]);
+      expect(transport.requests.single.path, '/x/v2/history/toview');
+    });
+  }
   test(
     'watch later unfinished filter does not replace content source',
     () async {

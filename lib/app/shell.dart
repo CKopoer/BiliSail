@@ -5,9 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../features/feed/domain/home_channel.dart';
 import '../core/presentation/workspace_activity.dart';
 import 'workspace_tabs.dart';
+import 'platform_defaults.dart';
 import '../core/presentation/keyboard_shortcuts.dart';
 import '../features/settings/domain/shortcut_settings.dart';
 import '../features/settings/domain/settings_category.dart';
+import '../features/settings/domain/app_settings.dart';
+import '../shared/ui/smooth_scroll_behavior.dart';
 import '../shared/ui/bili_icons.dart';
 import '../shared/ui/app_notice.dart';
 
@@ -27,8 +30,10 @@ final class BiliAppShell extends StatefulWidget {
     this.windowControlsBuilder,
     this.dragRegionBuilder,
     this.shortcuts = const ShortcutSettings.defaults(),
+    this.navigationMode,
   });
   final ShortcutSettings shortcuts;
+  final WorkspaceNavigationMode? navigationMode;
   final String location;
   final Widget child;
   final WidgetBuilder? accountBuilder;
@@ -46,6 +51,10 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   final _searchDrafts = <String, String>{};
   final _pageStorage = <String, PageStorageBucket>{};
 
+  bool get _singlePage =>
+      (widget.navigationMode ?? defaultWorkspaceNavigationMode) ==
+      WorkspaceNavigationMode.singlePage;
+
   @override
   void initState() {
     super.initState();
@@ -60,8 +69,12 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   @override
   void didUpdateWidget(covariant BiliAppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.navigationMode != oldWidget.navigationMode) _revealActiveTab();
     if (widget.location != oldWidget.location) {
-      if (!_workspace.acceptRoute(Uri.parse(widget.location))) {
+      if (!_workspace.acceptRoute(
+        Uri.parse(widget.location),
+        singlePage: _singlePage,
+      )) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           showAppNotice(context, '最多打开 16 个标签页，请先关闭不用的标签');
@@ -69,13 +82,23 @@ final class _BiliAppShellState extends State<BiliAppShell> {
         });
         return;
       }
-      final liveIds = _workspace.tabs.map((tab) => tab.id).toSet();
-      _tabKeys.removeWhere((id, _) => !liveIds.contains(id));
-      _searchDrafts.removeWhere((id, _) => !liveIds.contains(id));
-      _pageStorage.removeWhere((id, _) => !liveIds.contains(id));
+      _prunePages();
       _restoreSearch();
       _revealActiveTab();
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _revealActiveTab();
+  }
+
+  void _prunePages() {
+    final liveIds = _workspace.tabs.map((tab) => tab.id).toSet();
+    _tabKeys.removeWhere((id, _) => !liveIds.contains(id));
+    _searchDrafts.removeWhere((id, _) => !liveIds.contains(id));
+    _pageStorage.removeWhere((id, _) => !liveIds.contains(id));
   }
 
   void _saveSearch() =>
@@ -111,6 +134,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   }
 
   void _newTab() {
+    if (_singlePage) return;
     if (_workspace.tabs.length >= WorkspaceTabs.maximumTabs) {
       showAppNotice(context, '最多打开 16 个标签页，请先关闭不用的标签');
       return;
@@ -134,7 +158,15 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     if (wasActive) _commitWorkspace();
   }
 
+  void _goBack() {
+    if (!_workspace.goBack(closeCurrent: _singlePage)) return;
+    _prunePages();
+    setState(() {});
+    _commitWorkspace();
+  }
+
   void _cycleTabs({bool backwards = false}) {
+    if (_singlePage) return;
     setState(() => _workspace.cycle(backwards: backwards));
     _commitWorkspace();
   }
@@ -163,7 +195,11 @@ final class _BiliAppShellState extends State<BiliAppShell> {
       case ShortcutAction.newTab:
         _newTab();
       case ShortcutAction.closeTab:
-        _closeTab(_workspace.activeId);
+        if (_singlePage) {
+          _goBack();
+        } else {
+          _closeTab(_workspace.activeId);
+        }
       default:
         return false;
     }
@@ -179,51 +215,61 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   }
 
   @override
-  Widget build(BuildContext context) => CallbackShortcuts(
-    bindings: {
-      const SingleActivator(LogicalKeyboardKey.tab, control: true): _cycleTabs,
-      const SingleActivator(
-        LogicalKeyboardKey.tab,
-        control: true,
-        shift: true,
-      ): () =>
-          _cycleTabs(backwards: true),
+  Widget build(BuildContext context) => PopScope<Object?>(
+    canPop: !_workspace.canGoBack,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _goBack();
     },
-    child: Focus(
-      autofocus: true,
-      child: MouseShortcutListener(
-        onShortcut: _shortcut,
-        child: Scaffold(
-          body: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 760;
-                return Column(
-                  children: [
-                    _tabStrip(context),
-                    if (!_workspace.active.isPlayback &&
-                        !_workspace.active.isProfile &&
-                        compact) ...[
-                      _channelBar(context),
-                      _tools(context, compact: true),
-                    ] else if (!_workspace.active.isPlayback &&
-                        !_workspace.active.isProfile)
-                      SizedBox(
-                        height: 58,
-                        child: Row(
-                          children: [
-                            Expanded(child: _channelBar(context)),
-                            SizedBox(
-                              width: constraints.maxWidth >= 1300 ? 470 : 380,
-                              child: _tools(context, compact: false),
-                            ),
-                          ],
+    child: CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.tab, control: true):
+            _cycleTabs,
+        const SingleActivator(
+          LogicalKeyboardKey.tab,
+          control: true,
+          shift: true,
+        ): () =>
+            _cycleTabs(backwards: true),
+      },
+      child: Focus(
+        autofocus: true,
+        child: MouseShortcutListener(
+          onShortcut: _shortcut,
+          child: Scaffold(
+            body: SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 760;
+                  return Column(
+                    children: [
+                      if (_singlePage)
+                        _singlePageHeader(context)
+                      else
+                        _tabStrip(context),
+                      if (!_workspace.active.isPlayback &&
+                          !_workspace.active.isProfile &&
+                          compact) ...[
+                        _channelBar(context),
+                        _tools(context, compact: true),
+                      ] else if (!_workspace.active.isPlayback &&
+                          !_workspace.active.isProfile)
+                        SizedBox(
+                          height: 58,
+                          child: Row(
+                            children: [
+                              Expanded(child: _channelBar(context)),
+                              SizedBox(
+                                width: constraints.maxWidth >= 1300 ? 470 : 380,
+                                child: _tools(context, compact: false),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    Expanded(child: _pages(context)),
-                  ],
-                );
-              },
+                      Expanded(child: _pages(context)),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -237,6 +283,9 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     return Stack(
       fit: StackFit.expand,
       children: [
+        // go_router needs its shell Navigator mounted to dispatch system back
+        // and dismiss dialogs. Its feature routes only build placeholders.
+        Offstage(child: widget.child),
         for (final tab in _workspace.tabs)
           Offstage(
             key: ValueKey(tab.id),
@@ -270,6 +319,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
         height: 42,
         child: Row(
           children: [
+            _backButton(),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) => Row(
@@ -281,8 +331,8 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                           double.infinity,
                         ),
                       ),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
+                      child: _horizontalTabs(
+                        key: const ValueKey('workspace-tab-strip'),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -320,6 +370,64 @@ final class _BiliAppShellState extends State<BiliAppShell> {
       ),
     );
   }
+
+  Widget _backButton() => IconButton(
+    key: const ValueKey('workspace-back'),
+    tooltip: '返回上一页',
+    onPressed: _workspace.canGoBack ? _goBack : null,
+    icon: const Icon(Icons.arrow_back, size: 20),
+  );
+
+  Widget _singlePageHeader(BuildContext context) => ColoredBox(
+    key: const ValueKey('single-page-header'),
+    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+    child: SizedBox(
+      height: 42,
+      child: Row(
+        children: [
+          _backButton(),
+          Expanded(
+            child:
+                widget.dragRegionBuilder?.call(context, _pageTitle()) ??
+                _pageTitle(),
+          ),
+          if (!_workspace.active.pinned)
+            IconButton(
+              key: const ValueKey('workspace-home'),
+              tooltip: '首页',
+              onPressed: () => _selectTab('home'),
+              icon: const Icon(BiliIcons.home, size: 20),
+            ),
+          if (widget.windowControlsBuilder case final builder?)
+            builder(context),
+        ],
+      ),
+    ),
+  );
+
+  Widget _pageTitle() => Align(
+    alignment: Alignment.centerLeft,
+    child: Text(
+      _workspace.active.title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(fontSize: 14),
+    ),
+  );
+
+  Widget _horizontalTabs({
+    required Key key,
+    required Widget child,
+    EdgeInsetsGeometry padding = EdgeInsets.zero,
+  }) => ScrollConfiguration(
+    behavior: const SmoothScrollBehavior(horizontalMouseWheel: true),
+    child: SingleChildScrollView(
+      key: key,
+      scrollDirection: Axis.horizontal,
+      padding: padding,
+      child: child,
+    ),
+  );
 
   Widget _tab(BuildContext context, WorkspaceTab tab) {
     final selected = tab.id == _workspace.activeId;
@@ -396,8 +504,8 @@ final class _BiliAppShellState extends State<BiliAppShell> {
         : '';
     return SizedBox(
       height: 58,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
+      child: _horizontalTabs(
+        key: const ValueKey('home-channel-strip'),
         padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Row(
           children: [
@@ -456,8 +564,8 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     final colors = Theme.of(context).colorScheme;
     return SizedBox(
       height: 58,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
+      child: _horizontalTabs(
+        key: const ValueKey('settings-category-strip'),
         padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Row(
           children: [

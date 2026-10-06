@@ -18,6 +18,7 @@
 | [参考项目与资料](references.md) | 本地源码定位、借鉴边界、官方资料和待确认事项 |
 | [首版实测记录](validation/m0-results.md) | Windows 原生播放、工程检查、构建结果和未测项 |
 | [界面与多标签验证](validation/uwp-workspace.md) | UWP 风格布局、首页频道、多标签状态与本轮验证边界 |
+| [单标签导航与顶部滚动](validation/single-page-navigation.md) | 平台默认／手动导航模式、页面回退、状态保留、横向滚轮与平台验证 |
 | [首页子频道协议](validation/home-subtabs.md) | 各首页列表的端点、游标与前序接入记录 |
 | [影视与直播内置播放](validation/content-playback.md) | 四频道内置入口、三类播放页、影视选集、直播线路与原生验证 |
 | [影视侧栏与直播 SC](validation/pgc-live-sidebar.md) | 官方桌面式影视简介/选集/系列、直播聊天与 SC 气泡、读取边界 |

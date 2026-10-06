@@ -42,6 +42,7 @@ import '../features/live/domain/live_room.dart';
 import '../shared/ui/state_view.dart';
 import 'shell.dart';
 import 'workspace_tabs.dart';
+import 'platform_defaults.dart';
 
 GoRouter createBiliRouter({
   required VideoPlayerBuilder playerBuilder,
@@ -61,6 +62,12 @@ GoRouter createBiliRouter({
     ShellRoute(
       builder: (context, state, child) => Consumer(
         builder: (context, ref, _) => BiliAppShell(
+          navigationMode:
+              (ref.watch(settingsControllerProvider).value ??
+                      AppSettings.defaults(
+                        navigationMode: defaultWorkspaceNavigationMode,
+                      ))
+                  .navigationMode,
           shortcuts:
               (ref.watch(settingsControllerProvider).value ??
                       const AppSettings.defaults())

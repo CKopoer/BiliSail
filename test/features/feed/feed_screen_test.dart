@@ -9,6 +9,7 @@ import 'package:bilisail/features/feed/domain/feed_repository.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/presentation/feed_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
@@ -16,6 +17,63 @@ import 'package:bilisail/shared/ui/bili_badges.dart';
 import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
 
 void main() {
+  testWidgets(
+    'mouse wheel exposes and selects the final home subtab in a narrow viewport',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(400, 850);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final repository = _HomeRepository(folders: true);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+            homeRepositoryProvider.overrideWithValue(repository),
+          ],
+          child: MaterialApp(
+            theme: ThemeData(platform: TargetPlatform.windows),
+            home: const Scaffold(
+              body: FeedScreen(
+                channel: HomeChannel.favorites,
+                isSignedIn: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final strip = find.byKey(const ValueKey('home-section-strip-favorites'));
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(of: strip, matching: find.byType(Scrollable)),
+      );
+      expect(scrollable.position.maxScrollExtent, greaterThan(0));
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: tester.getCenter(strip),
+          scrollDelta: const Offset(0, 1200),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final lastTab = find.byKey(const ValueKey('home-section-我的追剧'));
+      expect(lastTab.hitTestable(), findsOneWidget);
+      await tester.tap(lastTab);
+      await tester.pumpAndSettle();
+      expect(find.text('追剧内容'), findsOneWidget);
+      expect(repository.calls.last, 'favorites:我的追剧');
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: tester.getCenter(strip),
+          scrollDelta: const Offset(-1200, 0),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(scrollable.position.pixels, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'entering and returning to a favorite folder retains both lists',
     (tester) async {

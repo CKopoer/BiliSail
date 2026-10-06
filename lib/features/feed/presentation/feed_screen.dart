@@ -6,6 +6,7 @@ import '../../../domain/app_failure.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/video_grid.dart';
+import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../application/feed_controller.dart';
 import '../domain/home_channel.dart';
 import 'home_content.dart';
@@ -117,45 +118,53 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            for (final entry in entries)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 4),
-                                child: TextButton(
-                                  key: ValueKey('home-section-${entry.$1}'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor:
-                                        (categories != null
-                                            ? feed.categoryId == entry.$1
-                                            : section == entry.$1)
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
+                      child: ScrollConfiguration(
+                        behavior: const SmoothScrollBehavior(
+                          horizontalMouseWheel: true,
+                        ),
+                        child: SingleChildScrollView(
+                          key: ValueKey('home-section-strip-${channel.name}'),
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final entry in entries)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: TextButton(
+                                    key: ValueKey('home-section-${entry.$1}'),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor:
+                                          (categories != null
+                                              ? feed.categoryId == entry.$1
+                                              : section == entry.$1)
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                      ),
+                                      textStyle: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(fontSize: 13),
                                     ),
-                                    textStyle: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(fontSize: 13),
+                                    onPressed: () {
+                                      if (categories != null) {
+                                        controller.selectCategory(entry.$1);
+                                      } else {
+                                        setState(
+                                          () => _sections[channel] = entry.$1,
+                                        );
+                                      }
+                                    },
+                                    child: Text(entry.$2),
                                   ),
-                                  onPressed: () {
-                                    if (categories != null) {
-                                      controller.selectCategory(entry.$1);
-                                    } else {
-                                      setState(
-                                        () => _sections[channel] = entry.$1,
-                                      );
-                                    }
-                                  },
-                                  child: Text(entry.$2),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),

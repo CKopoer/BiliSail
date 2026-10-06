@@ -67,6 +67,7 @@ import '../features/settings/data/installed_app_version.dart';
 import '../features/settings/data/sqlite_update_check_store.dart';
 import '../features/settings/application/system_fonts_controller.dart';
 import '../features/settings/data/sqlite_settings_repository.dart';
+import 'platform_defaults.dart';
 
 class AppDependencies {
   AppDependencies._(
@@ -295,7 +296,10 @@ class AppDependencies {
         ),
         libraryRepositoryProvider.overrideWithValue(library),
         settingsRepositoryProvider.overrideWithValue(
-          SqliteSettingsRepository(database),
+          SqliteSettingsRepository(
+            database,
+            defaultNavigationMode: defaultWorkspaceNavigationMode,
+          ),
         ),
         systemFontCatalogProvider.overrideWithValue(
           const NativeSystemFontCatalog(),

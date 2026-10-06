@@ -492,7 +492,8 @@ final class HomeClient {
       authorName: _text(owner?['name']) ?? '',
       authorMid: _userMid(owner?['mid']),
       duration: Duration(seconds: _number(m['duration']) ?? 0),
-      playCountText: _display(stat?['play']),
+      // Watch-later uses stat.view; favorite resources use cnt_info.play.
+      playCountText: _display(stat?['view'] ?? stat?['play']),
       danmakuCountText: _display(stat?['danmaku']),
       publishedAt: _date(m['pubtime'] ?? m['pubdate']),
       bvid: bvid,

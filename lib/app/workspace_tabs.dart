@@ -44,6 +44,7 @@ final class WorkspaceTab {
 
 final class WorkspaceTabs {
   static const maximumTabs = 16;
+  static const maximumHistory = 64;
   final List<WorkspaceTab> _tabs = [
     WorkspaceTab(
       id: 'home',
@@ -53,11 +54,37 @@ final class WorkspaceTabs {
   ];
   String _activeId = 'home';
   int _nextId = 1;
+  final List<String> _backHistory = [];
 
   List<WorkspaceTab> get tabs => List.unmodifiable(_tabs);
   String get activeId => _activeId;
   int get activeIndex => _tabs.indexWhere((tab) => tab.id == _activeId);
   WorkspaceTab get active => _tabs[activeIndex];
+  bool get canGoBack => _backHistory.isNotEmpty;
+
+  void _activate(String id) {
+    if (id == _activeId) return;
+    _backHistory.add(_activeId);
+    if (_backHistory.length > maximumHistory) _backHistory.removeAt(0);
+    _activeId = id;
+  }
+
+  /// Back traverses visits, rather than the visual order of the tab strip.
+  /// In single-page mode a popped page is released once no earlier visit uses it.
+  bool goBack({bool closeCurrent = false}) {
+    if (!canGoBack) return false;
+    final previousId = _activeId;
+    _activeId = _backHistory.removeLast();
+    if (closeCurrent && !_backHistory.contains(previousId)) close(previousId);
+    _trimHistory();
+    return true;
+  }
+
+  void _trimHistory() {
+    while (_backHistory.isNotEmpty && _backHistory.last == _activeId) {
+      _backHistory.removeLast();
+    }
+  }
 
   WorkspaceTab addBrowseTab() {
     if (_tabs.length >= maximumTabs) return active;
@@ -66,12 +93,12 @@ final class WorkspaceTabs {
       location: Uri(path: '/'),
     );
     _tabs.add(tab);
-    _activeId = tab.id;
+    _activate(tab.id);
     return tab;
   }
 
   /// A route with a tab ID updates that tab; a plain feature route opens one.
-  bool acceptRoute(Uri route) {
+  bool acceptRoute(Uri route, {bool singlePage = false}) {
     final requestedId = route.queryParameters['tab'];
     final parameters = {...route.queryParameters}..remove('tab');
     final location = route.replace(queryParameters: parameters);
@@ -83,34 +110,38 @@ final class WorkspaceTabs {
         location: location,
         pinned: previous.pinned,
       );
-      _activeId = previous.id;
+      _activate(previous.id);
       return true;
     }
     if (location.path == '/') {
       _tabs[0] = WorkspaceTab(id: 'home', location: location, pinned: true);
-      _activeId = 'home';
+      _activate('home');
       return true;
     }
     final existing = _tabs.where((tab) => tab.location == location).firstOrNull;
     if (existing != null) {
-      _activeId = existing.id;
+      _activate(existing.id);
       return true;
     }
-    // Existing tabs remain alive until the user explicitly closes them.
-    if (_tabs.length >= maximumTabs) return false;
+    if (_tabs.length >= maximumTabs) {
+      if (!singlePage) return false;
+      // A phone has no tab-close UI. Bound the page cache by releasing the
+      // oldest non-home, inactive page instead of blocking further browsing.
+      close(_tabs.firstWhere((tab) => !tab.pinned && tab.id != _activeId).id);
+    }
     final tab = WorkspaceTab(id: 'tab-${_nextId++}', location: location);
     _tabs.add(tab);
-    _activeId = tab.id;
+    _activate(tab.id);
     return true;
   }
 
   void select(String id) {
-    if (_tabs.any((tab) => tab.id == id)) _activeId = id;
+    if (_tabs.any((tab) => tab.id == id)) _activate(id);
   }
 
   void cycle({bool backwards = false}) {
     final offset = backwards ? -1 : 1;
-    _activeId = _tabs[(activeIndex + offset) % _tabs.length].id;
+    _activate(_tabs[(activeIndex + offset) % _tabs.length].id);
   }
 
   bool close(String id) {
@@ -118,7 +149,9 @@ final class WorkspaceTabs {
     if (index < 0 || _tabs[index].pinned) return false;
     final wasActive = _activeId == id;
     _tabs.removeAt(index);
+    _backHistory.removeWhere((previous) => previous == id);
     if (wasActive) _activeId = _tabs[index > 0 ? index - 1 : 0].id;
+    _trimHistory();
     return true;
   }
 }

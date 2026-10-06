@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bilisail/app/router.dart';
+import 'package:bilisail/app/platform_defaults.dart';
 import 'package:bilisail/features/messages/application/messages_controller.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
 
@@ -44,7 +45,109 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets(
+  for (final platform in [
+    TargetPlatform.windows,
+    TargetPlatform.macOS,
+    TargetPlatform.android,
+  ]) {
+    _workspaceTestWidgets(
+      '$platform uses its default while loading and preserves a saved override',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(420, 850);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final settings = _PendingSettingsRepository();
+        final router = createBiliRouter(
+          playerBuilder: (_, _, _) => const SizedBox(),
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(settings),
+              feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+              homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pump();
+        final singlePage =
+            workspaceNavigationModeForPlatform(platform) ==
+            WorkspaceNavigationMode.singlePage;
+        expect(
+          find.byKey(const ValueKey('single-page-header')),
+          singlePage ? findsOneWidget : findsNothing,
+        );
+        settings.loaded.complete(
+          AppSettings(
+            navigationMode: singlePage
+                ? WorkspaceNavigationMode.multipleTabs
+                : WorkspaceNavigationMode.singlePage,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('single-page-header')),
+          singlePage ? findsNothing : findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+      platform: platform,
+    );
+  }
+  _workspaceTestWidgets(
+    'saved navigation mode applies live and single-page back retains real search state',
+    (tester) async {
+      final settings = _SettingsRepository();
+      final search = _SearchRepository();
+      final router = createBiliRouter(
+        initialLocation: '/search?q=cat',
+        playerBuilder: (_, _, _) => const SizedBox(),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsRepositoryProvider.overrideWithValue(settings),
+            searchRepositoryProvider.overrideWithValue(search),
+            feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+            homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(search.queries, ['cat']);
+      router.go('/settings');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, '单标签页'));
+      await tester.pumpAndSettle();
+      expect(
+        settings.settings.navigationMode,
+        WorkspaceNavigationMode.singlePage,
+      );
+      expect(find.byKey(const ValueKey('single-page-header')), findsOneWidget);
+      expect(find.byKey(const ValueKey('new-workspace-tab')), findsNothing);
+      await tester.tap(find.widgetWithText(ChoiceChip, '多标签页'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('workspace-tab-tab-1')), findsOneWidget);
+      await tester.tap(find.widgetWithText(ChoiceChip, '单标签页'));
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('“cat” 的搜索结果'), findsOneWidget);
+      expect(search.queries, ['cat']);
+      final signals = search.cancellations.toList();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(signals.every((signal) => signal.isCancelled), isTrue);
+      expect(find.byType(FeedScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  _workspaceTestWidgets(
     'account destinations mount and preserve messages and select profile/live sections',
     (tester) async {
       final auth = AuthFake();
@@ -100,7 +203,7 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
-  testWidgets(
+  _workspaceTestWidgets(
     'close shortcut works on every real workspace page after unfocus',
     (tester) async {
       final auth = _AuthRepository();
@@ -175,7 +278,7 @@ void main() {
     },
   );
 
-  testWidgets('PGC related season opens its own workspace player', (
+  _workspaceTestWidgets('PGC related season opens its own workspace player', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(1280, 900));
@@ -216,64 +319,68 @@ void main() {
     HomeChannel.cinema,
     HomeChannel.live,
   ]) {
-    testWidgets('${channel.label} card opens the in-app content player', (
-      tester,
-    ) async {
-      final auth = _AuthRepository();
-      final isLive = channel == HomeChannel.live;
-      final router = createBiliRouter(
-        initialLocation: '/?channel=${channel.name}',
-        playerBuilder: (_, _, _) => const Text('视频播放器'),
-        pgcPlayerBuilder: (_, _, episode) => Text('影视播放器 ${episode.episodeId}'),
-        livePlayerBuilder: (_, room) => Text('直播播放器 ${room.id.value}'),
-      );
-      addTearDown(() async {
-        router.dispose();
-        await auth.dispose();
-      });
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            authRepositoryProvider.overrideWithValue(auth),
-            feedRepositoryProvider.overrideWithValue(_FeedRepository()),
-            homeRepositoryProvider.overrideWithValue(
-              _HomeRepository(
-                entries: [
-                  HomeEntry(
-                    id: isLive ? '42' : '28747:123',
-                    title: '频道播放样本',
-                    kind: isLive ? HomeEntryKind.live : HomeEntryKind.season,
-                  ),
-                ],
-              ),
-            ),
-            pgcRepositoryProvider.overrideWithValue(_ContentPgcRepository()),
-            liveRepositoryProvider.overrideWithValue(_ContentLiveRepository()),
-          ],
-          child: MaterialApp.router(routerConfig: router),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('频道播放样本').last);
-      await tester.pumpAndSettle();
-      if (isLive) {
-        expect(find.byType(LiveScreen), findsOneWidget);
-        expect(find.text('直播播放器 42'), findsOneWidget);
-      } else {
-        expect(find.byType(PgcScreen), findsOneWidget);
-        expect(find.text('影视播放器 123'), findsOneWidget);
-        expect(
-          router.routeInformationProvider.value.uri.queryParameters['ep'],
-          '123',
+    _workspaceTestWidgets(
+      '${channel.label} card opens the in-app content player',
+      (tester) async {
+        final auth = _AuthRepository();
+        final isLive = channel == HomeChannel.live;
+        final router = createBiliRouter(
+          initialLocation: '/?channel=${channel.name}',
+          playerBuilder: (_, _, _) => const Text('视频播放器'),
+          pgcPlayerBuilder: (_, _, episode) =>
+              Text('影视播放器 ${episode.episodeId}'),
+          livePlayerBuilder: (_, room) => Text('直播播放器 ${room.id.value}'),
         );
-      }
-      expect(find.text('外部打开 ↗'), findsNothing);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
-    });
+        addTearDown(() async {
+          router.dispose();
+          await auth.dispose();
+        });
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authRepositoryProvider.overrideWithValue(auth),
+              feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+              homeRepositoryProvider.overrideWithValue(
+                _HomeRepository(
+                  entries: [
+                    HomeEntry(
+                      id: isLive ? '42' : '28747:123',
+                      title: '频道播放样本',
+                      kind: isLive ? HomeEntryKind.live : HomeEntryKind.season,
+                    ),
+                  ],
+                ),
+              ),
+              pgcRepositoryProvider.overrideWithValue(_ContentPgcRepository()),
+              liveRepositoryProvider.overrideWithValue(
+                _ContentLiveRepository(),
+              ),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('频道播放样本').last);
+        await tester.pumpAndSettle();
+        if (isLive) {
+          expect(find.byType(LiveScreen), findsOneWidget);
+          expect(find.text('直播播放器 42'), findsOneWidget);
+        } else {
+          expect(find.byType(PgcScreen), findsOneWidget);
+          expect(find.text('影视播放器 123'), findsOneWidget);
+          expect(
+            router.routeInformationProvider.value.uri.queryParameters['ep'],
+            '123',
+          );
+        }
+        expect(find.text('外部打开 ↗'), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+      },
+    );
   }
-  testWidgets(
+  _workspaceTestWidgets(
     'PGC refresh key reloads current detail without another owner session',
     (tester) async {
       final auth = _AuthRepository();
@@ -308,7 +415,7 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
-  testWidgets(
+  _workspaceTestWidgets(
     'settings deep links and category changes show only their matching controls',
     (tester) async {
       final router = createBiliRouter(
@@ -345,7 +452,7 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
-  testWidgets(
+  _workspaceTestWidgets(
     'user routes isolate and retain profiles until their tab closes',
     (tester) async {
       final profiles = _ProfileRepository();
@@ -395,7 +502,7 @@ void main() {
     },
   );
 
-  testWidgets('invalid user deep links do not request a profile', (
+  _workspaceTestWidgets('invalid user deep links do not request a profile', (
     tester,
   ) async {
     final profiles = _ProfileRepository();
@@ -422,7 +529,7 @@ void main() {
     expect(profiles.loaded, isEmpty);
   });
 
-  testWidgets(
+  _workspaceTestWidgets(
     'workspace shortcuts work after focusing a real channel section',
     (tester) async {
       final router = createBiliRouter(
@@ -476,47 +583,48 @@ void main() {
     },
   );
 
-  testWidgets('selected video part survives switching to another tab', (
-    tester,
-  ) async {
-    final router = createBiliRouter(
-      initialLocation: '/video/BV1abc123456',
-      playerBuilder: (_, detail, part) => Text('正在播放 ${part.cid}'),
-    );
-    addTearDown(router.dispose);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          feedRepositoryProvider.overrideWithValue(_FeedRepository()),
-          homeRepositoryProvider.overrideWithValue(_HomeRepository()),
-          videoRepositoryProvider.overrideWithValue(_VideoRepository()),
-        ],
-        child: MaterialApp.router(
-          builder: AppNoticeHost.builder,
-          routerConfig: router,
+  _workspaceTestWidgets(
+    'selected video part survives switching to another tab',
+    (tester) async {
+      final router = createBiliRouter(
+        initialLocation: '/video/BV1abc123456',
+        playerBuilder: (_, detail, part) => Text('正在播放 ${part.cid}'),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+            homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+          ],
+          child: MaterialApp.router(
+            builder: AppNoticeHost.builder,
+            routerConfig: router,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('第二集'));
-    await tester.tap(find.text('第二集'));
-    await tester.pumpAndSettle();
-    expect(
-      router.routeInformationProvider.value.uri.queryParameters['cid'],
-      '2',
-    );
-    expect(find.text('正在播放 2'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('workspace-tab-home')));
-    await tester.pumpAndSettle();
-    expect(find.text('正在播放 2'), findsNothing);
-    expect(find.text('正在播放 2', skipOffstage: false), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('workspace-tab-tab-1')));
-    await tester.pumpAndSettle();
-    expect(find.text('正在播放 2'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('第二集'));
+      await tester.tap(find.text('第二集'));
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.queryParameters['cid'],
+        '2',
+      );
+      expect(find.text('正在播放 2'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('workspace-tab-home')));
+      await tester.pumpAndSettle();
+      expect(find.text('正在播放 2'), findsNothing);
+      expect(find.text('正在播放 2', skipOffstage: false), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('workspace-tab-tab-1')));
+      await tester.pumpAndSettle();
+      expect(find.text('正在播放 2'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('browse tabs isolate their selected feed channel', (
+  _workspaceTestWidgets('browse tabs isolate their selected feed channel', (
     tester,
   ) async {
     final router = createBiliRouter(
@@ -562,51 +670,55 @@ void main() {
     );
   });
 
-  testWidgets('at capacity new navigation preserves all existing tabs', (
-    tester,
-  ) async {
-    final search = _SearchRepository();
-    final router = createBiliRouter(
-      playerBuilder: (_, detail, part) => const SizedBox(),
-    );
-    addTearDown(router.dispose);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          feedRepositoryProvider.overrideWithValue(_FeedRepository()),
-          homeRepositoryProvider.overrideWithValue(_HomeRepository()),
-          searchRepositoryProvider.overrideWithValue(search),
-        ],
-        child: MaterialApp.router(
-          builder: AppNoticeHost.builder,
-          routerConfig: router,
+  _workspaceTestWidgets(
+    'at capacity new navigation preserves all existing tabs',
+    (tester) async {
+      final search = _SearchRepository();
+      final router = createBiliRouter(
+        playerBuilder: (_, detail, part) => const SizedBox(),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+            homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            searchRepositoryProvider.overrideWithValue(search),
+          ],
+          child: MaterialApp.router(
+            builder: AppNoticeHost.builder,
+            routerConfig: router,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    for (var index = 0; index < 15; index++) {
-      router.go('/search?q=query$index');
+      );
       await tester.pumpAndSettle();
-    }
-    final previousSignal = search.cancellations.last;
-    await tester.enterText(
-      find.byKey(const ValueKey('workspace-search')),
-      'old draft',
-    );
-    router.go('/search?q=replacement');
-    await tester.pumpAndSettle();
-    expect(previousSignal.isCancelled, isFalse);
-    expect(find.byKey(const ValueKey('workspace-tab-tab-15')), findsOneWidget);
-    expect(find.byKey(const ValueKey('workspace-tab-tab-16')), findsNothing);
-    expect(find.text('“query14” 的搜索结果'), findsOneWidget);
-    final field = tester.widget<TextField>(
-      find.byKey(const ValueKey('workspace-search')),
-    );
-    expect(field.controller?.text, 'old draft');
-    expect(search.cancellations.last.isCancelled, isFalse);
-  });
+      for (var index = 0; index < 15; index++) {
+        router.go('/search?q=query$index');
+        await tester.pumpAndSettle();
+      }
+      final previousSignal = search.cancellations.last;
+      await tester.enterText(
+        find.byKey(const ValueKey('workspace-search')),
+        'old draft',
+      );
+      router.go('/search?q=replacement');
+      await tester.pumpAndSettle();
+      expect(previousSignal.isCancelled, isFalse);
+      expect(
+        find.byKey(const ValueKey('workspace-tab-tab-15')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('workspace-tab-tab-16')), findsNothing);
+      expect(find.text('“query14” 的搜索结果'), findsOneWidget);
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('workspace-search')),
+      );
+      expect(field.controller?.text, 'old draft');
+      expect(search.cancellations.last.isCancelled, isFalse);
+    },
+  );
 
-  testWidgets(
+  _workspaceTestWidgets(
     'deep links isolate cached search queries and close cancels their controller',
     (tester) async {
       final search = _SearchRepository();
@@ -656,7 +768,7 @@ void main() {
     },
   );
 
-  testWidgets(
+  _workspaceTestWidgets(
     'account transition discards all cached tab scopes and reloads their queries',
     (tester) async {
       final search = _SearchRepository();
@@ -711,6 +823,24 @@ final class _SettingsRepository implements SettingsRepository {
     settings = value;
   }
 }
+
+final class _PendingSettingsRepository implements SettingsRepository {
+  final loaded = Completer<AppSettings>();
+  @override
+  Future<AppSettings> load() => loaded.future;
+  @override
+  Future<void> save(AppSettings value) async {}
+}
+
+void _workspaceTestWidgets(
+  String description,
+  WidgetTesterCallback callback, {
+  TargetPlatform platform = TargetPlatform.windows,
+}) => testWidgets(
+  description,
+  callback,
+  variant: TargetPlatformVariant.only(platform),
+);
 
 final class _VideoRepository implements VideoRepository {
   @override

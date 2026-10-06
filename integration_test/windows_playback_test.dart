@@ -636,53 +636,63 @@ void main() {
         description: '',
         parts: [part],
       );
+      final navigationMode = ValueNotifier(
+        WorkspaceNavigationMode.multipleTabs,
+      );
       final router = GoRouter(
         routes: [
           ShellRoute(
-            builder: (context, state, child) => BiliAppShell(
-              location: state.uri.toString(),
-              windowControlsBuilder: (_) => const DesktopWindowControls(),
-              dragRegionBuilder: (_, child) => DesktopDragRegion(child: child),
-              pageBuilder: (context, tab) => tab.isVideo
-                  ? Row(
-                      children: [
-                        Expanded(
-                          child: Center(
-                            child: SizedBox(
-                              width: 640,
-                              child: AspectRatio(
-                                aspectRatio: 16 / 9,
-                                child: PlaybackPanel(
-                                  detail: VideoDetail(
-                                    summary: VideoSummary(
-                                      id: VideoId(
-                                        tab.location.pathSegments.last,
+            builder: (context, state, child) => ValueListenableBuilder(
+              valueListenable: navigationMode,
+              builder: (context, mode, _) => BiliAppShell(
+                navigationMode: mode,
+                location: state.uri.toString(),
+                windowControlsBuilder: (_) => const DesktopWindowControls(),
+                dragRegionBuilder: (_, child) =>
+                    DesktopDragRegion(child: child),
+                pageBuilder: (context, tab) => tab.isVideo
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: Center(
+                              child: SizedBox(
+                                width: 640,
+                                child: AspectRatio(
+                                  aspectRatio: 16 / 9,
+                                  child: PlaybackPanel(
+                                    detail: VideoDetail(
+                                      summary: VideoSummary(
+                                        id: VideoId(
+                                          tab.location.pathSegments.last,
+                                        ),
+                                        title: detail.summary.title,
+                                        coverUrl: '',
+                                        author: 'fixture',
+                                        duration: part.duration,
                                       ),
-                                      title: detail.summary.title,
-                                      coverUrl: '',
-                                      author: 'fixture',
-                                      duration: part.duration,
+                                      description: '',
+                                      parts: [part],
                                     ),
-                                    description: '',
-                                    parts: [part],
+                                    part: part,
+                                    settings: AppSettings(
+                                      danmakuEnabled: false,
+                                    ),
+                                    onToggleComments: () {},
+                                    window: window,
                                   ),
-                                  part: part,
-                                  settings: AppSettings(danmakuEnabled: false),
-                                  onToggleComments: () {},
-                                  window: window,
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () {},
-                          child: const Text('推荐视频测试'),
-                        ),
-                      ],
-                    )
-                  : const Center(child: Text('本地工作区首页')),
-              child: child,
+                          TextButton(
+                            onPressed: () {},
+                            child: const Text('推荐视频测试'),
+                          ),
+                        ],
+                      )
+                    : const Center(child: Text('本地工作区首页')),
+                child: child,
+              ),
             ),
             routes: [
               GoRoute(path: '/', builder: (_, _) => const SizedBox()),
@@ -826,11 +836,58 @@ void main() {
         );
         expect(find.byType(PlaybackPanel, skipOffstage: false), findsNothing);
         expect(find.text('本地工作区首页'), findsOneWidget);
+
+        navigationMode.value = WorkspaceNavigationMode.singlePage;
+        router.go('/video/BV1abc123456');
+        await _until(
+          tester,
+          () => engine.currentSnapshot.phase == PlaybackPhase.playing,
+        );
+        await session.setVolume(0);
+        await session.seek(const Duration(milliseconds: 1700));
+        await session.setRate(1.5);
+        await session.pause();
+        router.go('/video/BV1abc654321');
+        await _until(
+          tester,
+          () =>
+              session.detail?.summary.id.value == 'BV1abc654321' &&
+              engine.currentSnapshot.phase == PlaybackPhase.playing,
+        );
+        await session.seek(const Duration(milliseconds: 4000));
+        expect(
+          find.byKey(const ValueKey('single-page-header')),
+          findsOneWidget,
+        );
+        expect(find.byType(VideoSurface, skipOffstage: false), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('workspace-back')));
+        await _until(
+          tester,
+          () =>
+              session.detail?.summary.id.value == 'BV1abc123456' &&
+              engine.currentSnapshot.phase == PlaybackPhase.paused &&
+              !session.isResolving,
+        );
+        expect(
+          engine.currentSnapshot.position.inMilliseconds,
+          closeTo(1700, 150),
+        );
+        expect(engine.currentSnapshot.rate, 1.5);
+        expect(find.byType(PlaybackPanel, skipOffstage: false), findsOneWidget);
+        expect(find.byType(VideoSurface, skipOffstage: false), findsOneWidget);
+        expect(await router.routerDelegate.popRoute(), isTrue);
+        await _until(
+          tester,
+          () => engine.currentSnapshot.phase == PlaybackPhase.idle,
+        );
+        expect(find.byType(PlaybackPanel, skipOffstage: false), findsNothing);
+        expect(find.text('本地工作区首页'), findsOneWidget);
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
         await session.close();
         router.dispose();
+        navigationMode.dispose();
       }
     },
   );

@@ -6,6 +6,8 @@ export '../../../domain/video_codec.dart';
 
 enum AppThemePreference { system, light, dark }
 
+enum WorkspaceNavigationMode { singlePage, multipleTabs }
+
 enum AppFontPreference { harmonyOsSans, system, alibabaPuHuiTi, installed }
 
 enum DanmakuFontPreference { system, harmonyOsSans, alibabaPuHuiTi, installed }
@@ -38,6 +40,7 @@ final class AppSettings {
   AppSettings({
     this.shortcuts = const ShortcutSettings.defaults(),
     this.theme = AppThemePreference.system,
+    this.navigationMode = WorkspaceNavigationMode.multipleTabs,
     this.font = AppFontPreference.harmonyOsSans,
     this.systemFontFamily = '',
     this.cacheImages = true,
@@ -79,49 +82,51 @@ final class AppSettings {
        _sponsorBlockCategories = List.unmodifiable(sponsorBlockCategories);
 
   /// Constant defaults have no caller-owned collection inputs.
-  const AppSettings.defaults()
-    : shortcuts = const ShortcutSettings.defaults(),
-      theme = AppThemePreference.system,
-      font = AppFontPreference.harmonyOsSans,
-      systemFontFamily = '',
-      cacheImages = true,
-      danmakuEnabled = true,
-      danmakuOpacity = 0.8,
-      danmakuFontScale = 1.0,
-      autoPlay = true,
-      resumePlayback = true,
-      showCollapsedProgress = true,
-      preferredQuality = 80,
-      preferredVideoCodec = VideoCodecPreference.h264,
-      videoDecoding = VideoDecodingPreference.automatic,
-      defaultPlaybackRate = 1.0,
-      defaultVolume = 100.0,
-      danmakuArea = 0.75,
-      danmakuTopMargin = 0,
-      danmakuSpeed = 1.0,
-      danmakuMaxPerSecond = 20,
-      danmakuMaxOnScreen = 0,
-      danmakuScrollEnabled = true,
-      danmakuTopEnabled = true,
-      danmakuBottomEnabled = true,
-      danmakuFont = DanmakuFontPreference.system,
-      danmakuSystemFontFamily = '',
-      danmakuBold = false,
-      danmakuStyle = DanmakuStylePreference.shadow,
-      danmakuMergeDuplicates = false,
-      danmakuBlockColored = false,
-      danmakuMinimumWeight = 0,
-      danmakuOffset = Duration.zero,
-      subtitlesEnabled = false,
-      subtitleFontScale = 1.0,
-      subtitleBackgroundOpacity = 0.45,
-      subtitleBottomPadding = 24.0,
-      sponsorBlockMode = SponsorBlockMode.disabled,
-      _danmakuBlockedWords = const [],
-      _sponsorBlockCategories = const ['sponsor'];
+  const AppSettings.defaults({
+    this.navigationMode = WorkspaceNavigationMode.multipleTabs,
+  }) : shortcuts = const ShortcutSettings.defaults(),
+       theme = AppThemePreference.system,
+       font = AppFontPreference.harmonyOsSans,
+       systemFontFamily = '',
+       cacheImages = true,
+       danmakuEnabled = true,
+       danmakuOpacity = 0.8,
+       danmakuFontScale = 1.0,
+       autoPlay = true,
+       resumePlayback = true,
+       showCollapsedProgress = true,
+       preferredQuality = 80,
+       preferredVideoCodec = VideoCodecPreference.h264,
+       videoDecoding = VideoDecodingPreference.automatic,
+       defaultPlaybackRate = 1.0,
+       defaultVolume = 100.0,
+       danmakuArea = 0.75,
+       danmakuTopMargin = 0,
+       danmakuSpeed = 1.0,
+       danmakuMaxPerSecond = 20,
+       danmakuMaxOnScreen = 0,
+       danmakuScrollEnabled = true,
+       danmakuTopEnabled = true,
+       danmakuBottomEnabled = true,
+       danmakuFont = DanmakuFontPreference.system,
+       danmakuSystemFontFamily = '',
+       danmakuBold = false,
+       danmakuStyle = DanmakuStylePreference.shadow,
+       danmakuMergeDuplicates = false,
+       danmakuBlockColored = false,
+       danmakuMinimumWeight = 0,
+       danmakuOffset = Duration.zero,
+       subtitlesEnabled = false,
+       subtitleFontScale = 1.0,
+       subtitleBackgroundOpacity = 0.45,
+       subtitleBottomPadding = 24.0,
+       sponsorBlockMode = SponsorBlockMode.disabled,
+       _danmakuBlockedWords = const [],
+       _sponsorBlockCategories = const ['sponsor'];
 
   final ShortcutSettings shortcuts;
   final AppThemePreference theme;
+  final WorkspaceNavigationMode navigationMode;
   final AppFontPreference font;
   final String systemFontFamily;
   String? get fontFamily => font.resolveFamily(systemFontFamily);
@@ -176,6 +181,7 @@ final class AppSettings {
   AppSettings copyWith({
     ShortcutSettings? shortcuts,
     AppThemePreference? theme,
+    WorkspaceNavigationMode? navigationMode,
     AppFontPreference? font,
     String? systemFontFamily,
     bool? cacheImages,
@@ -216,6 +222,7 @@ final class AppSettings {
   }) => AppSettings(
     shortcuts: shortcuts ?? this.shortcuts,
     theme: theme ?? this.theme,
+    navigationMode: navigationMode ?? this.navigationMode,
     font: font ?? this.font,
     systemFontFamily: systemFontFamily ?? this.systemFontFamily,
     cacheImages: cacheImages ?? this.cacheImages,

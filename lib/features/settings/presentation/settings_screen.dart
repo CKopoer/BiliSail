@@ -149,6 +149,14 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     children: [
                       if (widget.category == SettingsCategory.appearance)
                         _section('外观', [
+                          _choices('页面导航模式', s.navigationMode, const {
+                            WorkspaceNavigationMode.singlePage: '单标签页',
+                            WorkspaceNavigationMode.multipleTabs: '多标签页',
+                          }, controller.setNavigationMode),
+                          const Text(
+                            'Windows 和 macOS 默认多标签页，Android 默认单标签页。可手动切换；单标签页支持顶部返回按钮和系统返回。',
+                            style: TextStyle(fontSize: 12),
+                          ),
                           _choices('应用主题', s.theme, const {
                             AppThemePreference.system: '跟随系统',
                             AppThemePreference.light: '浅色',
