@@ -25,17 +25,32 @@ class ApiFeedRepository
   Future<void> rejectRecommendation(
     RecommendationFeedback feedback, {
     required RequestCancellation cancellation,
+  }) => _submitFeedback(feedback, undo: false, cancellation: cancellation);
+
+  @override
+  Future<void> undoRecommendationFeedback(
+    RecommendationFeedback feedback, {
+    required RequestCancellation cancellation,
+  }) => _submitFeedback(feedback, undo: true, cancellation: cancellation);
+
+  Future<void> _submitFeedback(
+    RecommendationFeedback feedback, {
+    required bool undo,
+    required RequestCancellation cancellation,
   }) => requests.run((context) async {
     try {
-      await FeedCardActionsClient(api).rejectRecommendation(
-        ApiRecommendationFeedback(
-          aid: feedback.aid,
-          goto: feedback.goto,
-          trackId: feedback.trackId,
-          ownerMid: feedback.ownerMid,
-        ),
-        context: context,
+      final client = FeedCardActionsClient(api);
+      final value = ApiRecommendationFeedback(
+        aid: feedback.aid,
+        goto: feedback.goto,
+        trackId: feedback.trackId,
+        ownerMid: feedback.ownerMid,
       );
+      if (undo) {
+        await client.undoRecommendationFeedback(value, context: context);
+      } else {
+        await client.rejectRecommendation(value, context: context);
+      }
     } on ApiFailure catch (failure) {
       if (context.cancellation?.isCancelled != true &&
           {

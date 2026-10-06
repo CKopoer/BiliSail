@@ -19,6 +19,17 @@ final class FeedCardActionsClient {
   Future<void> rejectRecommendation(
     ApiRecommendationFeedback feedback, {
     ApiRequestContext? context,
+  }) => _submitFeedback(feedback, undo: false, context: context);
+
+  Future<void> undoRecommendationFeedback(
+    ApiRecommendationFeedback feedback, {
+    ApiRequestContext? context,
+  }) => _submitFeedback(feedback, undo: true, context: context);
+
+  Future<void> _submitFeedback(
+    ApiRecommendationFeedback feedback, {
+    required bool undo,
+    ApiRequestContext? context,
   }) async {
     _id(feedback.aid);
     if (feedback.goto != 'av' ||
@@ -27,8 +38,10 @@ final class FeedCardActionsClient {
       throw ArgumentError('Invalid recommendation feedback');
     }
     await api.submitForm(
-      '/x/web-interface/feedback/dislike',
-      'recommendation_reject',
+      undo
+          ? '/x/web-interface/feedback/dislike/cancel'
+          : '/x/web-interface/feedback/dislike',
+      undo ? 'recommendation_feedback_undo' : 'recommendation_reject',
       {
         'app_id': '100',
         'platform': '5',

@@ -77,6 +77,20 @@ void main() {
     expect(transport.posts, 1);
   });
   test(
+    'undo repository preserves the original recommendation context',
+    () async {
+      await feed.undoRecommendationFeedback(
+        _feedback,
+        cancellation: RequestCancellation(),
+      );
+      expect(transport.uri?.path, '/x/web-interface/feedback/dislike/cancel');
+      expect(transport.fields['id'], '42');
+      expect(transport.fields['track_id'], '');
+      expect(transport.fields['reason_id'], '1');
+      expect(transport.posts, 1);
+    },
+  );
+  test(
     'unknown transport outcomes stay unknown for both card mutations',
     () async {
       transport.failure = const ApiFailure(
@@ -98,7 +112,14 @@ void main() {
         ),
         throwsA(isA<UnknownWriteOutcome>()),
       );
-      expect(transport.posts, 2);
+      await expectLater(
+        feed.undoRecommendationFeedback(
+          _feedback,
+          cancellation: RequestCancellation(),
+        ),
+        throwsA(isA<UnknownWriteOutcome>()),
+      );
+      expect(transport.posts, 3);
     },
   );
   test('account transition cancels late deletion instead of classifying it as unknown', () async {
@@ -134,6 +155,7 @@ final class _Transport implements ApiTransport, ApiFormTransport {
   );
   Map<String, String> fields = {};
   int posts = 0;
+  Uri? uri;
   ApiFailure? failure;
   Completer<ApiHttpResponse>? pending;
   @override
@@ -151,6 +173,7 @@ final class _Transport implements ApiTransport, ApiFormTransport {
     required Duration timeout,
     ApiCancellation? cancellation,
   }) async {
+    this.uri = uri;
     this.fields = fields;
     posts++;
     if (failure case final error?) throw error;

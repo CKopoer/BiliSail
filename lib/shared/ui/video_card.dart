@@ -5,6 +5,8 @@ import 'bili_badges.dart';
 import 'highlighted_text.dart';
 import 'video_card_cover.dart';
 import 'video_card_interaction_scope.dart';
+import 'video_card_feedback.dart';
+export 'video_card_feedback.dart' show VideoCardFeedback;
 import '../../features/video/domain/video_card_interactions.dart';
 import '../../core/presentation/workspace_activity.dart';
 
@@ -53,6 +55,7 @@ final class VideoCard extends StatefulWidget {
     this.danmakuCountText = '',
     this.publishText = '',
     this.menu,
+    this.feedback,
   });
 
   final ValueChanged<UserId>? onOpenUser;
@@ -67,6 +70,7 @@ final class VideoCard extends StatefulWidget {
   final String danmakuCountText;
   final String publishText;
   final VideoCardMenu? menu;
+  final VideoCardFeedback? feedback;
 
   @override
   State<VideoCard> createState() => _VideoCardState();
@@ -131,7 +135,7 @@ final class _VideoCardState extends State<VideoCard> {
         borderRadius: BorderRadius.circular(7),
         clipBehavior: Clip.none,
         child: InkWell(
-          onTap: widget.onTap,
+          onTap: widget.feedback == null ? widget.onTap : null,
           hoverColor: Colors.transparent,
           onHover: (value) => setState(() => _hovered = value),
           onFocusChange: (value) => setState(() => _focused = value),
@@ -140,75 +144,90 @@ final class _VideoCardState extends State<VideoCard> {
             children: [
               AspectRatio(
                 aspectRatio: 16 / 9,
-                child: VideoCardCover(
-                  video: video,
-                  focused: _focused,
-                  hovered: _hovered,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (video.coverUrl.isNotEmpty)
-                          AppCoverImage(
+                child: switch (widget.feedback) {
+                  final feedback? => VideoCardFeedbackCover(
+                    feedback: feedback,
+                    background: video.coverUrl.isEmpty
+                        ? _coverFallback(context)
+                        : AppCoverImage(
                             url: video.coverUrl,
                             fit: BoxFit.cover,
-                            excludeFromSemantics: true,
                             errorBuilder: (_, _, _) => _coverFallback(context),
-                            frameBuilder: (_, child, frame, _) =>
-                                frame != null ? child : _coverFallback(context),
-                          )
-                        else
-                          _coverFallback(context),
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: SizedBox(
-                            width: double.infinity,
-                            height: textScaler.scale(36) + 20,
-                            child: const DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.transparent,
-                                    Color(0xC4000000),
-                                  ],
+                          ),
+                  ),
+                  null => VideoCardCover(
+                    video: video,
+                    focused: _focused,
+                    hovered: _hovered,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (video.coverUrl.isNotEmpty)
+                            AppCoverImage(
+                              url: video.coverUrl,
+                              fit: BoxFit.cover,
+                              excludeFromSemantics: true,
+                              errorBuilder: (_, _, _) =>
+                                  _coverFallback(context),
+                              frameBuilder: (_, child, frame, _) =>
+                                  frame != null
+                                  ? child
+                                  : _coverFallback(context),
+                            )
+                          else
+                            _coverFallback(context),
+                          Align(
+                            alignment: Alignment.bottomCenter,
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: textScaler.scale(36) + 20,
+                              child: const DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Color(0xC4000000),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        Positioned(
-                          left: 7,
-                          right: 7,
-                          bottom: 7,
-                          child: Semantics(
-                            label:
-                                '观看 ${widget.playCountText.isEmpty ? compactCount(video.playCount) : widget.playCountText}，'
-                                '弹幕 ${widget.danmakuCountText.isEmpty ? compactCount(video.danmakuCount) : widget.danmakuCountText}，'
-                                '时长 ${durationLabel(video.duration)}',
-                            excludeSemantics: true,
-                            child: _CoverMetadata(
-                              video: video,
-                              playCountText: widget.playCountText,
-                              danmakuCountText: widget.danmakuCountText,
+                          Positioned(
+                            left: 7,
+                            right: 7,
+                            bottom: 7,
+                            child: Semantics(
+                              label:
+                                  '观看 ${widget.playCountText.isEmpty ? compactCount(video.playCount) : widget.playCountText}，'
+                                  '弹幕 ${widget.danmakuCountText.isEmpty ? compactCount(video.danmakuCount) : widget.danmakuCountText}，'
+                                  '时长 ${durationLabel(video.duration)}',
+                              excludeSemantics: true,
+                              child: _CoverMetadata(
+                                video: video,
+                                playCountText: widget.playCountText,
+                                danmakuCountText: widget.danmakuCountText,
+                              ),
                             ),
                           ),
-                        ),
-                        if (progress != null)
-                          Align(
-                            alignment: Alignment.bottomLeft,
-                            child: LinearProgressIndicator(
-                              value: progress.clamp(0.0, 1.0),
-                              minHeight: 3,
-                              backgroundColor: Colors.transparent,
+                          if (progress != null)
+                            Align(
+                              alignment: Alignment.bottomLeft,
+                              child: LinearProgressIndicator(
+                                value: progress.clamp(0.0, 1.0),
+                                minHeight: 3,
+                                backgroundColor: Colors.transparent,
+                              ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
+                },
               ),
               Padding(
                 padding: const EdgeInsets.only(top: 9, bottom: 1),
@@ -234,14 +253,17 @@ final class _VideoCardState extends State<VideoCard> {
                               ),
                             ),
                           ),
-                          if (widget.menu case final menu?) _menuButton(menu),
+                          if (widget.feedback == null)
+                            if (widget.menu case final menu?) _menuButton(menu),
                         ],
                       ),
                     ),
                     const SizedBox(height: 6),
                     _AuthorMetadata(
                       video: video,
-                      onOpenUser: widget.onOpenUser,
+                      onOpenUser: widget.feedback == null
+                          ? widget.onOpenUser
+                          : null,
                       hovered: _authorHovered,
                       onHover: (value) =>
                           setState(() => _authorHovered = value),

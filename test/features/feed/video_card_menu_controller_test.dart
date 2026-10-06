@@ -73,25 +73,41 @@ void main() {
       },
     );
   }
-  test('recommendation rejection waits for success and cannot be appended by stale paging or refresh', () async {
-    final (container, repo, controller) = await _feed();
-    final more = controller.loadMore();
-    final latePage = repo.pages.last;
-    final write = controller.rejectRecommendation(_video);
-    expect(await controller.rejectRecommendation(_video), false);
-    expect(container.read(feedControllerProvider).items.requireValue, [_video]);
-    expect(container.read(feedControllerProvider).rejecting, {_video.id});
-    repo.writes.single.complete();
-    expect(await write, true);
-    expect(container.read(feedControllerProvider).items.requireValue, isEmpty);
-    latePage.complete(const PageResult(items: [_video], hasMore: false));
-    await more;
-    expect(container.read(feedControllerProvider).items.requireValue, isEmpty);
-    final refresh = controller.refresh();
-    repo.pages.last.complete(const PageResult(items: [_video], hasMore: false));
-    await refresh;
-    expect(container.read(feedControllerProvider).items.requireValue, isEmpty);
-  });
+  test(
+    'recommendation feedback keeps its slot through late paging and refresh',
+    () async {
+      final (container, repo, controller) = await _feed();
+      final more = controller.loadMore();
+      final latePage = repo.pages.last;
+      final write = controller.rejectRecommendation(_video);
+      expect(await controller.rejectRecommendation(_video), false);
+      expect(container.read(feedControllerProvider).items.requireValue, [
+        _video,
+      ]);
+      expect(container.read(feedControllerProvider).rejecting, {_video.id});
+      repo.writes.single.complete();
+      expect(await write, true);
+      expect(container.read(feedControllerProvider).items.requireValue, [
+        _video,
+      ]);
+      expect(container.read(feedControllerProvider).rejected, {_video.id});
+      latePage.complete(const PageResult(items: [_video], hasMore: false));
+      await more;
+      expect(container.read(feedControllerProvider).items.requireValue, [
+        _video,
+      ]);
+      expect(container.read(feedControllerProvider).rejected, {_video.id});
+      final refresh = controller.refresh();
+      repo.pages.last.complete(
+        const PageResult(items: [_video], hasMore: false),
+      );
+      await refresh;
+      expect(container.read(feedControllerProvider).items.requireValue, [
+        _video,
+      ]);
+      expect(container.read(feedControllerProvider).rejected, {_video.id});
+    },
+  );
   test(
     'recommendation known failure keeps video and explicit retry may succeed',
     () async {
@@ -105,6 +121,7 @@ void main() {
       expect(container.read(feedControllerProvider).items.requireValue, [
         _video,
       ]);
+      expect(container.read(feedControllerProvider).rejected, isEmpty);
       final retry = controller.rejectRecommendation(_video);
       repo.writes.last.complete();
       expect(await retry, true);
@@ -127,6 +144,7 @@ void main() {
       expect(container.read(feedControllerProvider).items.requireValue, [
         _video,
       ]);
+      expect(container.read(feedControllerProvider).rejected, isEmpty);
     },
   );
   test(
@@ -140,11 +158,146 @@ void main() {
       expect(container.read(feedControllerProvider).items.requireValue, [
         _video,
       ]);
+      expect(container.read(feedControllerProvider).rejected, isEmpty);
+      expect(controller.stateForChannel(HomeChannel.recommended).rejected, {
+        _video.id,
+      });
       await controller.selectRecommended();
+      expect(container.read(feedControllerProvider).items.requireValue, [
+        _video,
+      ]);
+      expect(container.read(feedControllerProvider).rejected, {_video.id});
+    },
+  );
+  test(
+    'undo is single flight and clears feedback only after confirmation',
+    () async {
+      final (container, repo, controller) = await _feed();
+      final reject = controller.rejectRecommendation(_video);
+      repo.writes.single.complete();
+      await reject;
+      final undo = controller.undoRecommendationFeedback(_video.id);
+      expect(await controller.undoRecommendationFeedback(_video.id), false);
+      expect(await controller.rejectRecommendation(_video), false);
+      expect(container.read(feedControllerProvider).rejecting, {_video.id});
+      expect(container.read(feedControllerProvider).rejected, {_video.id});
+      repo.writes.last.complete();
+      expect(await undo, true);
+      expect(container.read(feedControllerProvider).rejected, isEmpty);
+      expect(container.read(feedControllerProvider).items.requireValue, [
+        _video,
+      ]);
+      final next = controller.rejectRecommendation(_video);
+      repo.writes.last.complete();
+      expect(await next, true);
+      expect(repo.writes, hasLength(3));
+    },
+  );
+  test(
+    'undo uses accepted feedback context after refreshed metadata changes',
+    () async {
+      final (_, repo, controller) = await _feed();
+      final reject = controller.rejectRecommendation(_video);
+      repo.writes.single.complete();
+      await reject;
+      final refresh = controller.refresh();
+      repo.pages.last.complete(
+        const PageResult(
+          items: [
+            VideoSummary(
+              id: VideoId('BV1234567890'),
+              title: '新推荐上下文',
+              coverUrl: '',
+              author: 'UP',
+              duration: Duration(seconds: 60),
+              recommendationFeedback: RecommendationFeedback(
+                aid: '42',
+                goto: 'av',
+                trackId: 'new-track',
+                ownerMid: '7',
+              ),
+            ),
+          ],
+          hasMore: false,
+        ),
+      );
+      await refresh;
+      final undo = controller.undoRecommendationFeedback(_video.id);
+      expect(repo.undoFeedback?.trackId, '');
+      repo.writes.last.complete();
+      expect(await undo, true);
+    },
+  );
+  for (final unknown in [false, true]) {
+    test(
+      'undo failure keeps feedback and unknown outcome prevents replay: $unknown',
+      () async {
+        final (container, repo, controller) = await _feed();
+        final reject = controller.rejectRecommendation(_video);
+        repo.writes.single.complete();
+        await reject;
+        final undo = controller.undoRecommendationFeedback(_video.id);
+        final error = unknown
+            ? const UnknownWriteOutcome()
+            : const AppFailure(AppFailureKind.rateLimited, 'fixture');
+        final check = expectLater(undo, throwsA(same(error)));
+        repo.writes.last.completeError(error);
+        await check;
+        expect(container.read(feedControllerProvider).rejected, {_video.id});
+        expect(container.read(feedControllerProvider).rejecting, isEmpty);
+        if (unknown) {
+          expect(container.read(feedControllerProvider).uncertainRestorations, {
+            _video.id,
+          });
+          await expectLater(
+            controller.undoRecommendationFeedback(_video.id),
+            throwsA(isA<UnknownWriteOutcome>()),
+          );
+          expect(repo.writes, hasLength(2));
+        } else {
+          final retry = controller.undoRecommendationFeedback(_video.id);
+          repo.writes.last.complete();
+          expect(await retry, true);
+        }
+      },
+    );
+  }
+  test(
+    'hidden channel undo restores the cached card without affecting popular',
+    () async {
+      final (container, repo, controller) = await _feed();
+      final reject = controller.rejectRecommendation(_video);
+      repo.writes.single.complete();
+      await reject;
+      final undo = controller.undoRecommendationFeedback(_video.id);
+      await controller.selectPopular();
+      repo.writes.last.complete();
+      expect(await undo, true);
+      expect(container.read(feedControllerProvider).rejected, isEmpty);
       expect(
-        container.read(feedControllerProvider).items.requireValue,
+        controller.stateForChannel(HomeChannel.recommended).rejected,
         isEmpty,
       );
+      await controller.selectRecommended();
+      expect(container.read(feedControllerProvider).items.requireValue, [
+        _video,
+      ]);
+    },
+  );
+  test(
+    'late undo reply cannot restore feedback after account epoch changes',
+    () async {
+      final (container, repo, controller) = await _feed();
+      final reject = controller.rejectRecommendation(_video);
+      repo.writes.single.complete();
+      await reject;
+      final undo = controller.undoRecommendationFeedback(_video.id);
+      repo.feedbackScope = 'session:2';
+      repo.writes.last.complete();
+      expect(await undo, false);
+      expect(container.read(feedControllerProvider).rejected, {_video.id});
+      container.invalidate(feedControllerProvider);
+      expect(container.read(feedControllerProvider).rejected, isEmpty);
     },
   );
   test(
@@ -291,6 +444,7 @@ final class _Feed extends Fake
   final pages = <Completer<PageResult<VideoSummary>>>[];
   final writes = <Completer<void>>[];
   final tokens = <RequestCancellation>[];
+  RecommendationFeedback? undoFeedback;
   @override
   Future<PageResult<VideoSummary>> loadFeed({
     required int page,
@@ -312,6 +466,18 @@ final class _Feed extends Fake
     RecommendationFeedback feedback, {
     required RequestCancellation cancellation,
   }) {
+    tokens.add(cancellation);
+    final result = Completer<void>();
+    writes.add(result);
+    return result.future;
+  }
+
+  @override
+  Future<void> undoRecommendationFeedback(
+    RecommendationFeedback feedback, {
+    required RequestCancellation cancellation,
+  }) {
+    undoFeedback = feedback;
     tokens.add(cancellation);
     final result = Completer<void>();
     writes.add(result);

@@ -17,6 +17,7 @@ final class VideoGrid extends StatelessWidget {
     this.showRecommendationReason = false,
     this.highlightQuery = '',
     this.menuFor,
+    this.feedbackFor,
   }) : assert(onOpen != null),
        _onOpenIndex = null,
        progressAt = null;
@@ -32,6 +33,7 @@ final class VideoGrid extends StatelessWidget {
     this.showRecommendationReason = false,
     this.highlightQuery = '',
     this.menuFor,
+    this.feedbackFor,
   }) : onOpen = null,
        progressFor = null,
        _onOpenIndex = onOpen;
@@ -46,6 +48,7 @@ final class VideoGrid extends StatelessWidget {
   final bool showRecommendationReason;
   final String highlightQuery;
   final VideoCardMenu? Function(VideoSummary)? menuFor;
+  final VideoCardFeedback? Function(VideoSummary)? feedbackFor;
 
   @override
   Widget build(BuildContext context) => ResponsiveCardGrid(
@@ -62,6 +65,7 @@ final class VideoGrid extends StatelessWidget {
           showRecommendationReason: showRecommendationReason,
           highlightQuery: highlightQuery,
           menu: menuFor?.call(items[index]),
+          feedback: feedbackFor?.call(items[index]),
           progress:
               progressAt?.call(index) ?? progressFor?.call(items[index].id),
         ),

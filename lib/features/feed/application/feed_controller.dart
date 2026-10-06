@@ -45,6 +45,8 @@ final class FeedState {
     this.loadingMore = false,
     this.pageError,
     this.rejecting = const {},
+    this.rejected = const {},
+    this.uncertainRestorations = const {},
   });
 
   final AsyncValue<List<VideoSummary>> items;
@@ -55,6 +57,8 @@ final class FeedState {
   final bool loadingMore;
   final Object? pageError;
   final Set<VideoId> rejecting;
+  final Set<VideoId> rejected;
+  final Set<VideoId> uncertainRestorations;
 
   FeedState copyWith({
     AsyncValue<List<VideoSummary>>? items,
@@ -66,6 +70,8 @@ final class FeedState {
     Object? pageError,
     bool clearPageError = false,
     Set<VideoId>? rejecting,
+    Set<VideoId>? rejected,
+    Set<VideoId>? uncertainRestorations,
   }) => FeedState(
     items: items ?? this.items,
     categoryId: clearCategory ? null : categoryId ?? this.categoryId,
@@ -74,6 +80,8 @@ final class FeedState {
     loadingMore: loadingMore ?? this.loadingMore,
     pageError: clearPageError ? null : pageError ?? this.pageError,
     rejecting: rejecting ?? this.rejecting,
+    rejected: rejected ?? this.rejected,
+    uncertainRestorations: uncertainRestorations ?? this.uncertainRestorations,
   );
 }
 
@@ -86,17 +94,28 @@ final class FeedController extends Notifier<FeedState> {
   RequestCancellation? _cancellation;
   final Map<HomeChannel, (FeedState, int, int)> _savedChannels = {};
   final _rejectWrites = <VideoId, RequestCancellation>{};
-  final _rejected = <VideoId>{};
+  // Undo uses the exact context that was accepted, even after a refresh.
+  final _rejected = <VideoId, RecommendationFeedback>{};
   final _uncertainRejections = <VideoId>{};
+  final _uncertainRestorations = <VideoId>{};
 
   /// Keep cached content visible during the widget's deferred channel change.
   /// A temporary short loading page would clamp the restored scroll offset.
-  FeedState stateForChannel(HomeChannel channel) => state.channel == channel
-      ? state
-      : _savedChannels[channel]?.$1.copyWith(
-              rejecting: Set.unmodifiable(_rejectWrites.keys),
-            ) ??
-            FeedState(channel: channel);
+  FeedState stateForChannel(HomeChannel channel) => _withFeedback(
+    state.channel == channel
+        ? state
+        : _savedChannels[channel]?.$1 ?? FeedState(channel: channel),
+  );
+
+  FeedState _withFeedback(FeedState value) => value.copyWith(
+    rejecting: Set.unmodifiable(_rejectWrites.keys),
+    rejected: value.channel == HomeChannel.recommended
+        ? Set.unmodifiable(_rejected.keys)
+        : const {},
+    uncertainRestorations: value.channel == HomeChannel.recommended
+        ? Set.unmodifiable(_uncertainRestorations)
+        : const {},
+  );
 
   @override
   FeedState build() {
@@ -119,7 +138,7 @@ final class FeedController extends Notifier<FeedState> {
         state.channel != HomeChannel.recommended ||
         state.items.asData?.value.any((item) => item.id == video.id) != true ||
         _rejectWrites.containsKey(video.id) ||
-        _rejected.contains(video.id)) {
+        _rejected.containsKey(video.id)) {
       return false;
     }
     if (_uncertainRejections.contains(video.id)) {
@@ -130,57 +149,73 @@ final class FeedController extends Notifier<FeedState> {
     if (repository is! RecommendationFeedbackRepository || feedback == null) {
       throw const AppFailure(AppFailureKind.protocol, '此推荐暂不支持反馈，请刷新后重试');
     }
-    if (_rejectWrites.length >= 8 ||
-        _rejected.length + _uncertainRejections.length >= 500) {
+    if (_rejected.length + _uncertainRejections.length >= 500) {
       throw const AppFailure(AppFailureKind.protocol, '本次浏览的反馈操作已达上限');
+    }
+    return _submitFeedback(video.id, feedback, undo: false);
+  }
+
+  Future<bool> undoRecommendationFeedback(VideoId id) async {
+    if (!ref.mounted ||
+        state.channel != HomeChannel.recommended ||
+        _rejectWrites.containsKey(id)) {
+      return false;
+    }
+    final feedback = _rejected[id];
+    if (feedback == null) return false;
+    if (_uncertainRestorations.contains(id)) {
+      throw const UnknownWriteOutcome();
+    }
+    return _submitFeedback(id, feedback, undo: true);
+  }
+
+  Future<bool> _submitFeedback(
+    VideoId id,
+    RecommendationFeedback feedback, {
+    required bool undo,
+  }) async {
+    final repository = ref.read(feedRepositoryProvider);
+    if (repository is! RecommendationFeedbackRepository) {
+      throw const AppFailure(AppFailureKind.protocol, '当前无法提交推荐反馈');
+    }
+    if (_rejectWrites.length >= 8) {
+      throw const AppFailure(AppFailureKind.protocol, '推荐反馈操作较多，请稍后重试');
     }
     final capability = repository as RecommendationFeedbackRepository;
     final scope = capability.feedbackScope;
     final token = RequestCancellation();
     bool current() =>
         ref.mounted && !token.isCancelled && capability.feedbackScope == scope;
-    _rejectWrites[video.id] = token;
-    state = state.copyWith(rejecting: Set.unmodifiable(_rejectWrites.keys));
+    _rejectWrites[id] = token;
+    state = _withFeedback(state);
     try {
-      await capability.rejectRecommendation(feedback, cancellation: token);
-      if (!current()) return false;
-      _rejected.add(video.id);
-      if (state.channel == HomeChannel.recommended) {
-        final items = state.items.asData?.value;
-        if (items != null) {
-          state = state.copyWith(
-            items: AsyncData(_mergeItems(items, const [])),
-          );
-        }
+      if (undo) {
+        await capability.undoRecommendationFeedback(
+          feedback,
+          cancellation: token,
+        );
       } else {
-        final saved = _savedChannels[HomeChannel.recommended];
-        if (saved != null) {
-          _savedChannels[HomeChannel.recommended] = (
-            saved.$1.copyWith(
-              items: AsyncData(
-                List.unmodifiable(
-                  (saved.$1.items.asData?.value ?? const <VideoSummary>[])
-                      .where((item) => !_rejected.contains(item.id)),
-                ),
-              ),
-            ),
-            saved.$2,
-            saved.$3,
-          );
-        }
+        await capability.rejectRecommendation(feedback, cancellation: token);
       }
+      if (!current()) return false;
+      if (undo) {
+        _rejected.remove(id);
+      } else {
+        _rejected[id] = feedback;
+      }
+      state = _withFeedback(state);
       return true;
     } on UnknownWriteOutcome {
       if (!current()) return false;
-      _uncertainRejections.add(video.id);
+      (undo ? _uncertainRestorations : _uncertainRejections).add(id);
       rethrow;
     } on AppFailure catch (failure) {
       if (!current() || failure.kind == AppFailureKind.cancelled) return false;
       rethrow;
     } finally {
-      _rejectWrites.remove(video.id);
+      _rejectWrites.remove(id);
       if (ref.mounted) {
-        state = state.copyWith(rejecting: Set.unmodifiable(_rejectWrites.keys));
+        state = _withFeedback(state);
       }
     }
   }
@@ -204,20 +239,20 @@ final class FeedController extends Notifier<FeedState> {
     _cancellation = RequestCancellation();
     final saved = _savedChannels[channel];
     if (saved != null && !saved.$1.items.isLoading) {
-      state = saved.$1.copyWith(
-        rejecting: Set.unmodifiable(_rejectWrites.keys),
-      );
+      state = _withFeedback(saved.$1);
       _page = saved.$2;
       _pagesWithoutNewItems = saved.$3;
       return;
     }
-    state = FeedState(
-      channel: channel,
-      categoryId: channel == HomeChannel.categories
-          ? '1'
-          : channel == HomeChannel.ranking
-          ? '0'
-          : null,
+    state = _withFeedback(
+      FeedState(
+        channel: channel,
+        categoryId: channel == HomeChannel.categories
+            ? '1'
+            : channel == HomeChannel.ranking
+            ? '0'
+            : null,
+      ),
     );
     await refresh();
   }
@@ -314,17 +349,8 @@ final class FeedController extends Notifier<FeedState> {
     List<VideoSummary> current,
     List<VideoSummary> incoming,
   ) {
-    final unique = {
-      for (final item in current)
-        if (state.channel != HomeChannel.recommended ||
-            !_rejected.contains(item.id))
-          item.id: item,
-    };
+    final unique = {for (final item in current) item.id: item};
     for (final item in incoming) {
-      if (state.channel == HomeChannel.recommended &&
-          _rejected.contains(item.id)) {
-        continue;
-      }
       unique[item.id] = item;
     }
     return List.unmodifiable(unique.values);

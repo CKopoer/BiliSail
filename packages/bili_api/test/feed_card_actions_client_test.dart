@@ -85,6 +85,26 @@ void main() {
     },
   );
   test(
+    'undo sends the original feedback fields and CSRF once to cancel',
+    () async {
+      await FeedCardActionsClient(api).rejectRecommendation(_feedback);
+      final original = Map<String, String>.of(transport.fields);
+      await FeedCardActionsClient(api).undoRecommendationFeedback(_feedback);
+      expect(transport.uri?.path, '/x/web-interface/feedback/dislike/cancel');
+      expect(transport.fields, original);
+      expect(transport.headers['Cookie'], contains('SESSDATA=fixture'));
+      expect(transport.posts, 2);
+    },
+  );
+  test('failed undo is not retried automatically', () async {
+    transport.result = _response(null, status: 503);
+    await expectLater(
+      FeedCardActionsClient(api).undoRecommendationFeedback(_feedback),
+      throwsA(isA<ApiFailure>()),
+    );
+    expect(transport.posts, 1);
+  });
+  test(
     'recommendation reads carry real aid/goto/owner/tracking with empty defaults',
     () async {
       transport.entries = [
@@ -160,6 +180,12 @@ void main() {
       ]) {
         await expectLater(
           FeedCardActionsClient(api).removeWatchLater('42', context: context),
+          throwsA(isA<ApiFailure>()),
+        );
+        await expectLater(
+          FeedCardActionsClient(
+            api,
+          ).undoRecommendationFeedback(_feedback, context: context),
           throwsA(isA<ApiFailure>()),
         );
       }

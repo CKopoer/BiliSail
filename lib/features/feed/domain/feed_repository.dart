@@ -46,4 +46,8 @@ abstract interface class RecommendationFeedbackRepository {
     RecommendationFeedback feedback, {
     required RequestCancellation cancellation,
   });
+  Future<void> undoRecommendationFeedback(
+    RecommendationFeedback feedback, {
+    required RequestCancellation cancellation,
+  });
 }

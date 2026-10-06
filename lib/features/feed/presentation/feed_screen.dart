@@ -107,18 +107,32 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
     }
     final controller = ref.read(feedControllerProvider.notifier);
     try {
-      final removed = await controller.rejectRecommendation(video);
-      if (removed &&
-          mounted &&
-          widget.channel == HomeChannel.recommended &&
-          WorkspaceActivity.isActive(context)) {
-        showAppNotice(context, '已反馈不感兴趣');
-      }
+      await controller.rejectRecommendation(video);
     } on UnknownWriteOutcome {
       if (mounted &&
           widget.channel == HomeChannel.recommended &&
           WorkspaceActivity.isActive(context)) {
         showAppNotice(context, '反馈结果暂时无法确认，请刷新列表核对');
+      }
+    } on AppFailure catch (failure) {
+      if (mounted &&
+          widget.channel == HomeChannel.recommended &&
+          WorkspaceActivity.isActive(context) &&
+          failure.kind != AppFailureKind.cancelled) {
+        showAppNotice(context, failure.message);
+      }
+    }
+  }
+
+  Future<void> _undoRecommendationFeedback(VideoId id) async {
+    final controller = ref.read(feedControllerProvider.notifier);
+    try {
+      await controller.undoRecommendationFeedback(id);
+    } on UnknownWriteOutcome {
+      if (mounted &&
+          widget.channel == HomeChannel.recommended &&
+          WorkspaceActivity.isActive(context)) {
+        showAppNotice(context, '撤销结果暂时无法确认，请稍后刷新核对');
       }
     } on AppFailure catch (failure) {
       if (mounted &&
@@ -306,6 +320,31 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
                                           )
                                         else
                                           VideoGrid(
+                                            feedbackFor:
+                                                channel ==
+                                                    HomeChannel.recommended
+                                                ? (video) =>
+                                                      feed.rejected.contains(
+                                                        video.id,
+                                                      )
+                                                      ? VideoCardFeedback(
+                                                          busy: feed.rejecting
+                                                              .contains(
+                                                                video.id,
+                                                              ),
+                                                          onUndo:
+                                                              feed.uncertainRestorations
+                                                                  .contains(
+                                                                    video.id,
+                                                                  )
+                                                              ? null
+                                                              : () =>
+                                                                    _undoRecommendationFeedback(
+                                                                      video.id,
+                                                                    ),
+                                                        )
+                                                      : null
+                                                : null,
                                             menuFor:
                                                 channel ==
                                                     HomeChannel.recommended
