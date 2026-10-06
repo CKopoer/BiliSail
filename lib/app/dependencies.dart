@@ -53,6 +53,7 @@ import '../features/video/application/video_extras_controller.dart';
 import '../features/video/data/api_video_extras_repository.dart';
 import '../features/library/application/library_controller.dart';
 import '../features/library/data/sqlite_library_repository.dart';
+import '../features/library/data/api_library_repository.dart';
 import '../features/playback/application/playback_session.dart';
 import '../features/playback/application/playback_manager.dart';
 import '../features/playback/application/playback_rate_memory.dart';
@@ -354,7 +355,13 @@ class AppDependencies {
             accountScope: () => session.accountScope,
           ),
         ),
-        libraryRepositoryProvider.overrideWithValue(library),
+        libraryRepositoryProvider.overrideWithValue(
+          ApiLibraryRepository(
+            WatchHistoryClient(api),
+            requests,
+            accountScope: () => session.accountScope,
+          ),
+        ),
         settingsRepositoryProvider.overrideWithValue(settings),
         systemFontCatalogProvider.overrideWithValue(
           const NativeSystemFontCatalog(),

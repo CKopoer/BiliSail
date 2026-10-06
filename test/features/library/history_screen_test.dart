@@ -1,4 +1,5 @@
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/library/application/library_controller.dart';
 import 'package:bilisail/features/library/domain/library_repository.dart';
 import 'package:bilisail/features/library/presentation/history_screen.dart';
@@ -19,6 +20,8 @@ void main() {
         coverUrl: '',
         author: '作者',
         duration: Duration(seconds: 100),
+        playCount: 12345,
+        danmakuCount: 0,
       );
       final entries = [
         for (var index = 1; index <= 2; index++)
@@ -46,7 +49,11 @@ void main() {
       addTearDown(router.dispose);
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [historyProvider.overrideWith((_) async => entries)],
+          overrides: [
+            libraryRepositoryProvider.overrideWithValue(
+              _HistoryRepository(entries),
+            ),
+          ],
           child: MaterialApp.router(routerConfig: router),
         ),
       );
@@ -54,6 +61,17 @@ void main() {
       final cards = find.byType(VideoCard);
       expect(tester.widget<VideoCard>(cards.at(0)).progress, 0.2);
       expect(tester.widget<VideoCard>(cards.at(1)).progress, 0.4);
+      expect(find.text('当前账号的云端观看记录'), findsOneWidget);
+      expect(
+        tester.widget<VideoCard>(cards.at(0)).publishTooltip,
+        '观看于 2026-10-05 00:00',
+      );
+      expect(
+        tester.widget<VideoCard>(cards.at(0)).publishText,
+        DateTime.now().year == 2026 ? '10-05' : '2026-10-05',
+      );
+      expect(find.text('1.2万'), findsNWidgets(2));
+      expect(find.text('0'), findsNWidgets(2));
       await tester.tap(cards.at(1));
       await tester.pumpAndSettle();
       expect(router.routeInformationProvider.value.uri, entries[1].location);
@@ -61,4 +79,16 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
   }
+}
+
+final class _HistoryRepository implements LibraryRepository {
+  _HistoryRepository(this.entries);
+  final List<WatchHistoryEntry> entries;
+  @override
+  String get accountScope => 'user:1';
+  @override
+  Future<WatchHistoryPage> loadHistory({
+    String? cursor,
+    required RequestCancellation cancellation,
+  }) async => WatchHistoryPage(entries, hasMore: false);
 }

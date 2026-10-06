@@ -18,13 +18,22 @@ final class WatchHistoryEntry {
   Uri get location => episodeId == null
       ? Uri(
           path: '/video/${video.id.value}',
-          queryParameters: {'cid': part.cid},
+          queryParameters: part.cid.isEmpty ? null : {'cid': part.cid},
         )
       : Uri(path: '/pgc/episode/$episodeId');
 }
 
 abstract interface class LibraryRepository {
-  Future<List<WatchHistoryEntry>> loadHistory({
+  String get accountScope;
+  Future<WatchHistoryPage> loadHistory({
+    String? cursor,
     required RequestCancellation cancellation,
   });
+}
+
+final class WatchHistoryPage {
+  const WatchHistoryPage(this.items, {required this.hasMore, this.nextCursor});
+  final List<WatchHistoryEntry> items;
+  final bool hasMore;
+  final String? nextCursor;
 }

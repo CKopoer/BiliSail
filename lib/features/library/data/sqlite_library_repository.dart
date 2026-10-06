@@ -5,12 +5,11 @@ import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../domain/library_repository.dart';
 
-class SqliteLibraryRepository implements LibraryRepository {
+class SqliteLibraryRepository {
   SqliteLibraryRepository(this.database, {required this.accountScope});
   final AppDatabase database;
   final String Function() accountScope;
 
-  @override
   Future<List<WatchHistoryEntry>> loadHistory({
     required RequestCancellation cancellation,
   }) async {

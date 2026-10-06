@@ -20,7 +20,9 @@ final class VideoGrid extends StatelessWidget {
     this.feedbackFor,
   }) : assert(onOpen != null),
        _onOpenIndex = null,
-       progressAt = null;
+       progressAt = null,
+       publishTextAt = null,
+       publishTooltipAt = null;
 
   /// Entries such as history can share a BVID while identifying different parts.
   const VideoGrid.indexed({
@@ -28,6 +30,8 @@ final class VideoGrid extends StatelessWidget {
     required this.items,
     required ValueChanged<int> onOpen,
     this.progressAt,
+    this.publishTextAt,
+    this.publishTooltipAt,
     this.onOpenUser,
     this.showUpBadge = false,
     this.showRecommendationReason = false,
@@ -44,6 +48,8 @@ final class VideoGrid extends StatelessWidget {
   final double? Function(VideoId id)? progressFor;
   final ValueChanged<int>? _onOpenIndex;
   final double? Function(int index)? progressAt;
+  final String Function(int index)? publishTextAt;
+  final String Function(int index)? publishTooltipAt;
   final bool showUpBadge;
   final bool showRecommendationReason;
   final String highlightQuery;
@@ -64,6 +70,8 @@ final class VideoGrid extends StatelessWidget {
           showUpBadge: showUpBadge,
           showRecommendationReason: showRecommendationReason,
           highlightQuery: highlightQuery,
+          publishText: publishTextAt?.call(index) ?? '',
+          publishTooltip: publishTooltipAt?.call(index),
           menu: menuFor?.call(items[index]),
           feedback: feedbackFor?.call(items[index]),
           progress:

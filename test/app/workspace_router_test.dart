@@ -36,6 +36,7 @@ import 'package:bilisail/features/search/domain/search_result.dart';
 import 'package:bilisail/features/search/presentation/search_screen.dart';
 import 'package:bilisail/features/search/presentation/search_category_bar.dart';
 import 'package:bilisail/features/library/application/library_controller.dart';
+import 'package:bilisail/features/library/domain/library_repository.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/application/video_extras_controller.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
@@ -392,7 +393,7 @@ void main() {
             feedRepositoryProvider.overrideWithValue(_FeedRepository()),
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
             searchRepositoryProvider.overrideWithValue(_SearchRepository()),
-            historyProvider.overrideWith((ref) async => []),
+            libraryRepositoryProvider.overrideWithValue(_HistoryRepository()),
             profileRepositoryProvider.overrideWithValue(_ProfileRepository()),
             videoRepositoryProvider.overrideWithValue(_VideoRepository()),
             pgcRepositoryProvider.overrideWithValue(_ContentPgcRepository()),
@@ -982,6 +983,16 @@ void main() {
       expect(search.queries.length, 4);
     },
   );
+}
+
+final class _HistoryRepository implements LibraryRepository {
+  @override
+  String get accountScope => 'user:1';
+  @override
+  Future<WatchHistoryPage> loadHistory({
+    String? cursor,
+    required RequestCancellation cancellation,
+  }) async => const WatchHistoryPage([], hasMore: false);
 }
 
 final class _SettingsRepository implements SettingsRepository {

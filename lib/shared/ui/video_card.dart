@@ -62,6 +62,7 @@ final class VideoCard extends StatefulWidget {
     this.playCountText = '',
     this.danmakuCountText = '',
     this.publishText = '',
+    this.publishTooltip,
     this.menu,
     this.feedback,
     this.showWatchLaterButton = true,
@@ -78,6 +79,7 @@ final class VideoCard extends StatefulWidget {
   final String playCountText;
   final String danmakuCountText;
   final String publishText;
+  final String? publishTooltip;
   final VideoCardMenu? menu;
   final VideoCardFeedback? feedback;
   final bool showWatchLaterButton;
@@ -288,6 +290,7 @@ final class _VideoCardState extends State<VideoCard> {
                           ? video.recommendationReason
                           : null,
                       publishText: widget.publishText,
+                      publishTooltip: widget.publishTooltip,
                     ),
                   ],
                 ),
@@ -542,6 +545,7 @@ final class _AuthorMetadata extends StatelessWidget {
     required this.showUpBadge,
     required this.reason,
     required this.publishText,
+    required this.publishTooltip,
   });
   final VideoSummary video;
   final ValueChanged<UserId>? onOpenUser;
@@ -550,6 +554,7 @@ final class _AuthorMetadata extends StatelessWidget {
   final bool showUpBadge;
   final String? reason;
   final String publishText;
+  final String? publishTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -636,7 +641,9 @@ final class _AuthorMetadata extends StatelessWidget {
                 constraints: BoxConstraints(
                   maxWidth: constraints.maxWidth * .4,
                 ),
-                child: published,
+                child: publishTooltip == null
+                    ? published
+                    : Tooltip(message: publishTooltip, child: published),
               ),
             ],
           ],
