@@ -1,12 +1,15 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/user.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
+import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/state_view.dart';
 import '../application/live_controller.dart';
 import '../domain/live_chat_repository.dart';
@@ -47,11 +50,16 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
   // Keep the same player element when the sidebar is resized or hidden.
   final GlobalKey _playerKey = GlobalKey(debugLabel: 'live-player');
   final ScrollController _chatScrollController = ScrollController();
+  final ScrollController _superChatScrollController = ScrollController();
   LiveController? _controller;
   bool? _lastActive;
   bool _infoVisible = true;
   int _tab = 0;
   String? _selectedSuperChatId;
+  bool _followChat = true;
+  bool _chatUserScrolling = false;
+  bool _adjustingChatScroll = false;
+  bool _chatFollowScheduled = false;
 
   bool get _foreground => !const {
     AppLifecycleState.hidden,
@@ -76,6 +84,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
     if (oldWidget.roomId != widget.roomId) {
       _tab = 0;
       _selectedSuperChatId = null;
+      _followChat = true;
+      _chatUserScrolling = false;
     }
   }
 
@@ -89,7 +99,83 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       if (controller?.isMounted ?? false) controller?.setActive(false);
     });
     _chatScrollController.dispose();
+    _superChatScrollController.dispose();
     super.dispose();
+  }
+
+  void _jumpChatTo(double offset) {
+    _chatUserScrolling = false;
+    _adjustingChatScroll = true;
+    try {
+      _chatScrollController.jumpTo(offset);
+    } finally {
+      _adjustingChatScroll = false;
+    }
+  }
+
+  void _scheduleChatFollow() {
+    if (!_followChat ||
+        _chatFollowScheduled ||
+        _tab != 0 ||
+        !_infoVisible ||
+        _lastActive != true) {
+      return;
+    }
+    _chatFollowScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _chatFollowScheduled = false;
+      if (!mounted ||
+          !_followChat ||
+          _tab != 0 ||
+          !_infoVisible ||
+          _lastActive != true ||
+          !_chatScrollController.hasClients) {
+        return;
+      }
+      final state = ref.read(liveControllerProvider(RoomId(widget.roomId)));
+      if (state.superChats.any((item) => item.id == _selectedSuperChatId)) {
+        return;
+      }
+      final position = _chatScrollController.position;
+      if (position.hasContentDimensions &&
+          position.pixels != position.maxScrollExtent) {
+        _jumpChatTo(position.maxScrollExtent);
+      }
+    });
+    // Metrics may arrive after layout. Request a frame for their correction too.
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  void _onChatPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !_chatScrollController.hasClients) {
+      return;
+    }
+    final position = _chatScrollController.position;
+    final delta = event.scrollDelta.dy;
+    if ((delta < 0 && position.pixels > position.minScrollExtent) ||
+        (delta > 0 && position.pixels < position.maxScrollExtent)) {
+      _chatUserScrolling = true;
+      // A smooth wheel can receive new messages before its first moving frame.
+      if (delta < 0) _followChat = false;
+    }
+  }
+
+  bool _onChatScroll(ScrollNotification notification) {
+    if (notification.depth != 0 || _adjustingChatScroll) return false;
+    if ((notification is ScrollStartNotification &&
+            notification.dragDetails != null) ||
+        (notification is UserScrollNotification &&
+            notification.direction != ScrollDirection.idle)) {
+      _chatUserScrolling = true;
+    }
+    if (_chatUserScrolling && notification is ScrollUpdateNotification) {
+      _followChat = notification.metrics.extentAfter <= 1;
+    }
+    if (notification is ScrollEndNotification && _chatUserScrolling) {
+      _chatUserScrolling = false;
+      _scheduleChatFollow();
+    }
+    return false;
   }
 
   @override
@@ -102,30 +188,6 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       );
     }
     final state = ref.watch(liveControllerProvider(id));
-    ref.listen(liveControllerProvider(id), (previous, next) {
-      if (previous?.messages == next.messages || _tab != 0) return;
-      final selected = next.superChats.any(
-        (message) => message.id == _selectedSuperChatId,
-      );
-      if (selected) return;
-      final follow =
-          !_chatScrollController.hasClients ||
-          _chatScrollController.position.extentAfter < 48 ||
-          (previous?.messages.isEmpty ?? true);
-      if (!follow) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted &&
-            _chatScrollController.hasClients &&
-            _tab == 0 &&
-            !next.superChats.any(
-              (message) => message.id == _selectedSuperChatId,
-            )) {
-          _chatScrollController.jumpTo(
-            _chatScrollController.position.maxScrollExtent,
-          );
-        }
-      });
-    });
     final controller = ref.read(liveControllerProvider(id).notifier);
     final active = WorkspaceActivity.isActive(context) && _foreground;
     if (_controller != controller || _lastActive != active) {
@@ -347,14 +409,31 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
               const SizedBox(width: 8),
               Flexible(
                 fit: FlexFit.tight,
-                child: Text(
-                  state.viewerCountText == null
-                      ? '观看人数暂无数据'
-                      : '当前${state.viewerCountText}人在看',
-                  key: const ValueKey('live-viewer-count'),
+                child: DefaultTextStyle(
+                  style:
+                      theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ) ??
+                      TextStyle(color: colors.onSurfaceVariant),
                   textAlign: TextAlign.right,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        state.viewerCountText == null
+                            ? '在看人数暂无数据'
+                            : '当前${state.viewerCountText}人在看',
+                        key: const ValueKey('live-viewer-count'),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        state.watchedCountText == null
+                            ? '看过人数暂无数据'
+                            : '${state.watchedCountText}人看过',
+                        key: const ValueKey('live-watched-count'),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -430,6 +509,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
     final selected = state.superChats
         .where((message) => message.id == _selectedSuperChatId)
         .firstOrNull;
+    if (selected == null) _scheduleChatFollow();
     final bodyCount = state.messages.isEmpty ? 1 : state.messages.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -466,14 +546,29 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
         ),
         if (state.superChats.isNotEmpty)
           SizedBox(
-            height: 48,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              scrollDirection: Axis.horizontal,
-              itemCount: state.superChats.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 7),
-              itemBuilder: (context, index) =>
-                  _superChatBubble(state.superChats[index]),
+            height: 54,
+            child: ScrollConfiguration(
+              behavior: const SmoothScrollBehavior(horizontalMouseWheel: true)
+                  .copyWith(scrollbars: false),
+              child: Scrollbar(
+                key: const ValueKey('live-sc-scrollbar'),
+                controller: _superChatScrollController,
+                thumbVisibility: true,
+                interactive: true,
+                thickness: 3,
+                radius: const Radius.circular(2),
+                scrollbarOrientation: ScrollbarOrientation.bottom,
+                child: ListView.separated(
+                  controller: _superChatScrollController,
+                  primary: false,
+                  padding: const EdgeInsets.fromLTRB(10, 3, 10, 10),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: state.superChats.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 7),
+                  itemBuilder: (context, index) =>
+                      _superChatBubble(state.superChats[index]),
+                ),
+              ),
             ),
           ),
         if (state.superChatMessage case final message?)
@@ -485,54 +580,52 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
             _errorBanner(context, message, controller.refreshChat),
         const Divider(height: 1),
         Expanded(
-          child: ListView.builder(
-            key: const ValueKey('live-chat-list'),
-            controller: _chatScrollController,
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-            itemCount: (selected == null ? 0 : 1) + bodyCount,
-            itemBuilder: (context, index) {
-              if (selected != null && index == 0) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () =>
-                              setState(() => _selectedSuperChatId = null),
-                          icon: const Icon(Icons.close, size: 17),
-                          label: const Text('关闭 SC 详情'),
+          child: Listener(
+            onPointerSignal: _onChatPointerSignal,
+            child: NotificationListener<ScrollMetricsNotification>(
+              onNotification: (notification) {
+                if (notification.depth == 0) _scheduleChatFollow();
+                return false;
+              },
+              child: NotificationListener<ScrollNotification>(
+                onNotification: _onChatScroll,
+                child: ListView.builder(
+                  key: const ValueKey('live-chat-list'),
+                  controller: _chatScrollController,
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  itemCount: (selected == null ? 0 : 1) + bodyCount,
+                  itemBuilder: (context, index) {
+                    if (selected != null && index == 0) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _superChatCard(selected),
+                      );
+                    }
+                    final bodyIndex = index - (selected == null ? 0 : 1);
+                    if (state.messages.isEmpty) {
+                      return switch (state.chatMessage) {
+                        final String message => StateView.error(
+                          message: message,
+                          onAction: controller.refreshChat,
                         ),
-                      ),
-                      _superChatCard(selected),
-                    ],
-                  ),
-                );
-              }
-              final bodyIndex = index - (selected == null ? 0 : 1);
-              if (state.messages.isEmpty) {
-                return switch (state.chatMessage) {
-                  final String message => StateView.error(
-                    message: message,
-                    onAction: controller.refreshChat,
-                  ),
-                  null when state.chatLoading => const StateView.loading(
-                    message: '正在读取最近消息…',
-                  ),
-                  null => const StateView.empty(
-                    message: '暂无聊天消息',
-                    icon: Icons.chat_bubble_outline,
-                  ),
-                };
-              }
-              final message = state.messages[bodyIndex];
-              return LiveChatBubble(
-                message: message,
-                onOpenUser: widget.onOpenUser,
-              );
-            },
+                        null when state.chatLoading => const StateView.loading(
+                          message: '正在读取最近消息…',
+                        ),
+                        null => const StateView.empty(
+                          message: '暂无聊天消息',
+                          icon: Icons.chat_bubble_outline,
+                        ),
+                      };
+                    }
+                    final message = state.messages[bodyIndex];
+                    return LiveChatBubble(
+                      message: message,
+                      onOpenUser: widget.onOpenUser,
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
         ),
       ],
@@ -613,7 +706,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       onPressed: () {
         if (!selected && _chatScrollController.hasClients) {
           // Reset the old list anchor before inserting a full SC card at index 0.
-          _chatScrollController.jumpTo(0);
+          _jumpChatTo(0);
         }
         setState(() {
           _tab = 0;
@@ -624,7 +717,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
             if (mounted &&
                 _selectedSuperChatId == message.id &&
                 _chatScrollController.hasClients) {
-              _chatScrollController.jumpTo(0);
+              _jumpChatTo(0);
             }
           });
         }

@@ -103,6 +103,9 @@ class ApiLiveRepository implements LiveRepository, LiveChatRepository {
     ApiLiveViewerCountChanged(:final countText) => LiveViewerCountChanged(
       countText,
     ),
+    ApiLiveWatchedCountChanged(:final countText) => LiveWatchedCountChanged(
+      countText,
+    ),
   };
 
   static LiveChatImage _mapImage(ApiLiveChatImage image) =>

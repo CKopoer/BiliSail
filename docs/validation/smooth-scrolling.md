@@ -6,6 +6,8 @@
 
 根应用的 `MaterialApp.router.scrollBehavior` 使用共享 `SmoothScrollBehavior`，为普通桌面滚动区域增加连续的滚轮过渡。复用 Flutter 内置 `ScrollSpringSimulation` 与 `ScrollActivity`，没有新增设置项、依赖或持久化字段。首页、搜索、动态、用户空间、评论、设置、选集以及继承应用滚动行为的弹窗使用同一实现，列表保留自己的控制器、滚动物理模型和 PageStorage 位置。
 
+2026-10-06 直播聊天顶部的 SC 气泡列表单独开启 `horizontalMouseWheel`：普通鼠标滚轮的纵向输入在横向 delta 为零时映射为左右滚动，原生横向输入和 Shift 轴切换仍沿用原语义。该选项默认关闭，仅在 SC 气泡区域启用；减少动画模式仍可横向滚动，但立即更新位置。底部 3 逻辑像素的滚动条在内容溢出时常显，可用鼠标拖动；列表与滚动条共用独立控制器，由页面释放，关闭自动滚动条避免重复绘制。再次点击已展开的 SC 气泡收起详情，移除原来的关闭按钮。
+
 同方向连续输入累积目标并保留当前速度，使用同一个帧时钟，不重新启动 Ticker。反向输入清除原方向动量，从当前已显示的位置计算目标；目标始终限制在列表边界内，内容/视口变化后重新校正。内层列表先处理滚轮，到达边界后允许外层接管；子控件已经认领的滚轮信号不交给平滑层。Shift 的轴切换及反向列表保持 Flutter 的原有语义。Ctrl/Alt/Meta 组合键、触摸拖动、trackpad 类型的滚轮信号和原生 PanZoom 手势沿用原有处理；不根据滚轮 delta 猜测设备。操作系统若将触控板报告成 mouse 类型信号，会按鼠标滚轮处理，真实设备表现仍需用户确认。
 
 刷新、回到顶部、滚动条拖动和手势操作通过 ScrollPosition 的活动生命周期取消原来的滚轮目标。工作区隐藏、TickerMode 禁用或系统请求减少动画时停止当前平滑过渡；恢复页面不继续旧目标。每个活动滚动区域只有一个本地 Ticker，使用 Scrollable 自身的 vsync，活动结束或页面关闭时释放。不添加全局逐帧状态，也不替换播放和网络会话。
@@ -24,6 +26,7 @@ PageView、文本输入区域等自行覆盖滚动装饰的控件，以及不实
 
 ## 验证
 
+- 2026-10-06 SC 交互修正：旧实现的普通鼠标滚轮测试复现横向位置停在 0；修正后直播页面与共享滚动的 33 项定向测试通过，覆盖正反向滚轮、原生横向输入、末尾气泡展开／再次点击收起、底部拖动条、减少动画及侧栏隐藏后位置／播放器保留。`tool/check.ps1 -SkipPub` 完整通过：根应用 599、bili_api 206、bili_player 16、bili_danmaku 19，共 840 项测试，四处格式与静态分析通过；日志 `artifacts/sc-scroll-check.log`。Windows Release 构建通过，输出 `build/windows/x64/runner/Release/bilisail.exe`，日志 `artifacts/sc-scroll-windows-build.log`。该轮未进行真实直播窗口的鼠标操作验收，Android/macOS 实机未测。
 - 22 项定向 Widget 回归通过：保留初版全部覆盖，新增速度连续、8ms/16ms 连续输入无停帧、活动中减少动画/TickerMode 禁用、trackpad 接管、内容缩短、回顶部动画接管和移除滚动装饰的生命周期验证；触摸拖动在活动中的滚轮动画上验证。
 - 2026-10-06 `tool/check.ps1 -SkipPub` 通过：根应用 597、bili_api 206、bili_player 16、bili_danmaku 19 项测试，共 838 项；四处格式检查和静态分析通过。
 - 2026-10-06 `flutter build windows --release --no-pub` 通过，输出 `build/windows/x64/runner/Release/bilisail.exe`；已启动此构建供用户确认鼠标手感。仅构建/启动和 Widget 行为验证，不将其计为真实设备帧耗时采样。

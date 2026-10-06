@@ -46,6 +46,7 @@ final class LiveState {
     this.connectionPhase = LiveConnectionPhase.idle,
     this.connectionMessage,
     this.viewerCountText,
+    this.watchedCountText,
   });
 
   final LiveRoom? room;
@@ -59,6 +60,7 @@ final class LiveState {
   final LiveConnectionPhase connectionPhase;
   final String? connectionMessage;
   final String? viewerCountText;
+  final String? watchedCountText;
 
   LiveState copyWith({
     LiveRoom? room,
@@ -78,6 +80,7 @@ final class LiveState {
     String? connectionMessage,
     bool clearConnectionMessage = false,
     String? viewerCountText,
+    String? watchedCountText,
   }) => LiveState(
     room: room ?? this.room,
     loading: loading ?? this.loading,
@@ -96,6 +99,7 @@ final class LiveState {
         ? null
         : connectionMessage ?? this.connectionMessage,
     viewerCountText: viewerCountText ?? this.viewerCountText,
+    watchedCountText: watchedCountText ?? this.watchedCountText,
   );
 }
 
@@ -511,6 +515,8 @@ class LiveController extends Notifier<LiveState> {
           }
         case LiveViewerCountChanged(:final countText):
           next = next.copyWith(viewerCountText: countText);
+        case LiveWatchedCountChanged(:final countText):
+          next = next.copyWith(watchedCountText: countText);
       }
     }
     final allChats = chats.values.toList();

@@ -114,27 +114,50 @@ void main() {
       expect(message.sticker, image);
     },
   );
-  test(
-    'viewer count is isolated from popularity and stale connection events',
-    () async {
-      repository.events.add(const [
-        LiveViewerCountChanged('123'),
-        LivePopularityChanged(9999),
-      ]);
-      expect(state().viewerCountText, '123');
-      expect(state().room?.popularity, 9999);
-      controller.setActive(false);
-      repository.events.add(const [LiveViewerCountChanged('456')]);
-      expect(state().viewerCountText, '123');
-      controller.setActive(true);
-      repository.epoch++;
-      repository.events.add(const [LiveViewerCountChanged('789')]);
-      expect(state().viewerCountText, '123');
-      auth.events.add(const AuthState(status: AuthStatus.signedIn));
-      await Future<void>.delayed(Duration.zero);
-      expect(state().viewerCountText, isNull);
-    },
-  );
+  test('watched and viewer counts stay independent and reject stale connection events', () async {
+    repository.events.add(const [
+      LiveViewerCountChanged('123'),
+      LiveWatchedCountChanged('1.2万'),
+      LivePopularityChanged(9999),
+    ]);
+    expect(state().viewerCountText, '123');
+    expect(state().watchedCountText, '1.2万');
+    expect(state().room?.popularity, 9999);
+    repository.events.add(const [LiveWatchedCountChanged('1.3万')]);
+    expect(state().viewerCountText, '123');
+    expect(state().watchedCountText, '1.3万');
+    repository.events.add(const [LiveViewerCountChanged('0')]);
+    expect(state().viewerCountText, '0');
+    expect(state().watchedCountText, '1.3万');
+    controller.setActive(false);
+    repository.events.add(const [
+      LiveViewerCountChanged('456'),
+      LiveWatchedCountChanged('2万'),
+    ]);
+    expect(state().viewerCountText, '0');
+    expect(state().watchedCountText, '1.3万');
+    controller.setActive(true);
+    repository.epoch++;
+    repository.events.add(const [
+      LiveViewerCountChanged('789'),
+      LiveWatchedCountChanged('3万'),
+    ]);
+    expect(state().viewerCountText, '0');
+    expect(state().watchedCountText, '1.3万');
+    auth.events.add(const AuthState(status: AuthStatus.signedIn));
+    await Future<void>.delayed(Duration.zero);
+    expect(state().viewerCountText, isNull);
+    expect(state().watchedCountText, isNull);
+  });
+  test('reloading a room clears both audience counts', () async {
+    repository.events.add(const [
+      LiveViewerCountChanged('123'),
+      LiveWatchedCountChanged('1.2万'),
+    ]);
+    await controller.load();
+    expect(state().viewerCountText, isNull);
+    expect(state().watchedCountText, isNull);
+  });
   test('merging rich snapshots keeps the per-message image limit', () {
     final image = LiveChatImage(
       url: Uri.parse('https://i0.hdslb.com/fixture.png'),

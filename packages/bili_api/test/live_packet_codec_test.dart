@@ -114,13 +114,13 @@ void main() {
     },
   );
   test(
-    'viewer messages use online display and never the ranked or popularity count',
+    'watched and online messages produce independent counts with valid fallbacks',
     () {
       final result = LivePacketCodec.decode(
         Uint8List.fromList([
           ...command({
             'cmd': 'WATCHED_CHANGE',
-            'data': {'num': 1200},
+            'data': {'num': 12000, 'text_small': '1.2万'},
           }),
           ...command({
             'cmd': 'ONLINE_RANK_COUNT',
@@ -133,6 +133,26 @@ void main() {
           ...command({
             'cmd': 'ONLINE_RANK_COUNT',
             'data': {'online_count': 0},
+          }),
+          ...command({
+            'cmd': 'WATCHED_CHANGE',
+            'data': {'num': 13000},
+          }),
+          ...command({
+            'cmd': 'WATCHED_CHANGE',
+            'data': {'text_small': '1.4万'},
+          }),
+          ...command({
+            'cmd': 'WATCHED_CHANGE',
+            'data': {'num': 0},
+          }),
+          ...command({
+            'cmd': 'ONLINE_RANK_COUNT',
+            'data': {'online_count': '42', 'online_count_text': 'bad'},
+          }),
+          ...command({
+            'cmd': 'WATCHED_CHANGE',
+            'data': {'num': '43', 'text_small': 'bad'},
           }),
           ...command({
             'cmd': 'ONLINE_RANK_COUNT',
@@ -152,8 +172,44 @@ void main() {
         result.events.whereType<ApiLiveViewerCountChanged>().map(
           (e) => e.countText,
         ),
-        ['1200', '2.3万', '0'],
+        ['2.3万', '0', '42'],
       );
+      expect(
+        result.events.whereType<ApiLiveWatchedCountChanged>().map(
+          (e) => e.countText,
+        ),
+        ['1.2万', '13000', '1.4万', '0', '43'],
+      );
+      expect(result.events, hasLength(8));
+    },
+  );
+  test(
+    'malformed counts never turn ranked audience or popularity into viewers',
+    () {
+      final result = LivePacketCodec.decode(
+        Uint8List.fromList([
+          ...LivePacketCodec.encode(3, [0, 0, 0, 99]),
+          for (final data in [
+            {'count': 8},
+            {'online_count': -1},
+            {'online_count': 1.2},
+            {'online_count_text': '-1'},
+            {'online_count_text': '2.3万人在看'},
+            {'online_count_text': '9' * 21},
+          ])
+            ...command({'cmd': 'ONLINE_RANK_COUNT', 'data': data}),
+          for (final data in [
+            {'num': -1},
+            {'num': 1.2},
+            {'text_small': '-1'},
+            {'text_small': '2.3万人看过'},
+            {'text_small': '9' * 21},
+          ])
+            ...command({'cmd': 'WATCHED_CHANGE', 'data': data}),
+        ]),
+      );
+      expect(result.events.single, isA<ApiLivePopularityChanged>());
+      expect((result.events.single as ApiLivePopularityChanged).popularity, 99);
     },
   );
   test('zlib nested merged packets are decoded by their framing', () {

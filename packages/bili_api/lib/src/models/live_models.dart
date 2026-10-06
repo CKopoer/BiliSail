@@ -181,9 +181,15 @@ final class ApiLivePopularityChanged extends ApiLiveEvent {
   final int popularity;
 }
 
-/// Server-reported viewer display, distinct from heartbeat popularity.
+/// Current room audience from ONLINE_RANK_COUNT, not heartbeat popularity.
 final class ApiLiveViewerCountChanged extends ApiLiveEvent {
   const ApiLiveViewerCountChanged(this.countText);
+  final String countText;
+}
+
+/// Cumulative viewers from WATCHED_CHANGE, distinct from the current audience.
+final class ApiLiveWatchedCountChanged extends ApiLiveEvent {
+  const ApiLiveWatchedCountChanged(this.countText);
   final String countText;
 }
 

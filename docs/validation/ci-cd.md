@@ -42,7 +42,7 @@ CI 的 artifacts 保留 14 天；Release 从同一运行下载，所选平台失
 
 ## Windows MSIX 签名与安装
 
-[AppxManifest.xml](../../windows/packaging/AppxManifest.xml) 的 identity 为 `dev.bilisail.bilisail`，默认 publisher 为 `CN=BiliSail`；Windows 安装下限为 Windows 10 1809（build 17763）。`MakeAppx` 打包完整 Flutter Release 目录，`SignTool` 使用 SHA-256 签名。MSIX 图标在构建时从已有品牌 PNG 派生，不引入新资源或 Dart 依赖。
+[AppxManifest.xml](../../windows/packaging/AppxManifest.xml) 的 identity 为 `dev.bilisail.bilisail`，默认 publisher 为 `CN=BiliSail`；Windows 安装下限为 Windows 10 1809（build 17763）。`MakeAppx` 打包完整 Flutter Release 目录，`SignTool` 使用 SHA-256 签名。MSIX 图标在构建时从已有品牌 PNG 派生；生成普通、深色 `unplated`、浅色 `lightunplated` 的多尺寸图标，并使用同一 Windows SDK 的 `MakePri` 与 [PRI 配置](../../windows/packaging/priconfig.xml) 生成 `resources.pri`，供任务栏和开始菜单选择无底板图标。不引入新品牌资源或 Dart 依赖。
 
 无签名 Secrets 时生成一年有效的临时自签证书，产物标记 `self-signed-preview`。安装前需要在测试机器上把对应 `.cer` 信任到 **本地计算机 → 受信任人**，再打开 `.msix`；这一步需要管理员权限。工作流只导出公钥，不上传 PFX、私钥或密码，打包结束后清理本次临时证书/私钥。每次运行的测试证书不同，不能视为长期可升级的正式发行链路。
 
@@ -114,3 +114,20 @@ macOS 命令在本机用 LLVM lipo 对真实 arm64 Mach-O fixture 验证通过�
 | [Android arm64](https://github.com/CKopoer/BiliSail/actions/runs/37409580779/job/112095782290) | Release split APK、单 arm64 ABI 断言、打包与上传通过 |
 
 **设备与发行未测**：macOS 启动、MSIX 安装/卸载/升级、正式 PFX 签名、Android 真机播放与签名升级。未创建或公开远端 Release；三端构建成功不能代替播放、设备与发行验收，M0 尚未全部完成。
+
+### Windows MSIX 任务栏图标透明背景修复
+
+2026-10-06 检查本机从 Release 安装的 `0.1.0+2` 包：品牌 PNG、EXE 的 ICO 和包内 `Logo44.png` 均保留透明通道，manifest 也已有 `BackgroundColor="transparent"`；但包内只有 `Logo44.png`、`Logo50.png`、`Logo150.png`，没有带 `targetsize` / `altform` 限定的图标或 `resources.pri`。
+
+本地直接运行 Release EXE 使用内嵌 ICO；安装 MSIX 后，Windows shell 使用 manifest 图标及其资源变体。缺少浅色或深色主题的无底板变体时，系统会缩小图标并添加底板，不能只靠 PNG alpha 或 manifest 的透明背景避免。依据：[Microsoft 图标变体要求](https://learn.microsoft.com/en-us/windows/apps/design/iconography/app-icon-construction)、[MSIX 无底板资源与 PRI](https://learn.microsoft.com/en-us/windows/msix/desktop/desktop-to-uwp-manual-conversion)。
+
+修复位于本地与 CI 共用的 `tool/build-release.ps1`：从原品牌 PNG 生成 15 个目标尺寸（16–256 像素）的普通、`unplated` 和 `lightunplated` 图标，显式使用透明的 32 位 ARGB；在 MakeAppx 打包前生成 PRI。索引只列出 MSIX 图标，保留 `Files/Assets/Logo44.png` 与 manifest 路径的对应关系；临时 `.resfiles` 清单不进入安装包。
+
+本轮在 Windows / Flutter 3.47.6 / Windows SDK 10.0.26100.0 下验证：
+
+- `tool/check.ps1 -EnforceLockfile` 的全部格式、分析及 840 项离线测试通过（根应用 599、API 206、播放器 16、弹幕 19）；四份锁文件无差异。
+- 实际运行 `tool/build-release.ps1 -Target windows-x64 -Version 0.1.0+3`，Release 编译、MakePri、MakeAppx 验证/打包、测试证书签名通过；产物在 `artifacts/windows-x64/release/`。此前输出保存在 `artifacts/windows-x64-before-taskbar-icon-*/`。
+- 从最终 MSIX 提取并用 MakePri 详细导出 PRI，验证 manifest 的 `Assets/Logo44.png` 对应正确的资源 URI、15 个尺寸的三类候选共 45 个，且每个候选指向包内实际 PNG。逐个验证图片尺寸、32 位 ARGB、四角 alpha 为 0 及中心非空；包内共 48 张 MSIX 图标，PRI 仅包含 3 个图标资源，不索引 Flutter 数据。
+- 完整原生运行文件、SHA-256、CMS 数学签名、导出公钥证书匹配及临时签名证书清理通过；临时资源清单与 PFX 未进入包。PowerShell parser、7 条本地文档链接和 `git diff --check` 通过。
+
+本地验证包基于 `19caedd` 加检出目录的未提交修改，metadata 标记 `sourceDirty=true`。本轮未替换已安装的 `0.1.0+2`，未安装新版做任务栏浅/深主题及不同 DPI 的显示复验，也未推送代码或重发远端 Release；此处的验证不代表新版安装、升级或受信任发行证书链已通过。

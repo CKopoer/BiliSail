@@ -55,8 +55,15 @@ final class LivePopularityChanged extends LiveRealtimeEvent {
   final int popularity;
 }
 
+/// Current room audience; never sourced from cumulative viewers or popularity.
 final class LiveViewerCountChanged extends LiveRealtimeEvent {
   const LiveViewerCountChanged(this.countText);
+  final String countText;
+}
+
+/// Cumulative viewers, independent of the current room audience.
+final class LiveWatchedCountChanged extends LiveRealtimeEvent {
+  const LiveWatchedCountChanged(this.countText);
   final String countText;
 }
 

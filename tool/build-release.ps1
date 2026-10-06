@@ -16,28 +16,52 @@ function New-MsixPackage([string]$Staging, [string]$Destination, [string]$Packag
     Sort-Object FullName -Descending | Select-Object -First 1
   if (!$sdkTool) { throw 'Windows SDK MakeAppx.exe was not found.' }
   $signTool = Join-Path $sdkTool.DirectoryName 'signtool.exe'
+  $makePri = Join-Path $sdkTool.DirectoryName 'makepri.exe'
+  if (!(Test-Path -LiteralPath $makePri)) { throw 'Windows SDK MakePri.exe was not found.' }
   $publisher = if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { 'CN=BiliSail' }
   [xml]$manifest = Get-Content 'windows/packaging/AppxManifest.xml' -Raw
   $manifest.Package.Identity.Version = $PackageVersion
   $manifest.Package.Identity.Publisher = $publisher
   $manifest.Save((Join-Path $Staging 'AppxManifest.xml'))
 
-  # Derive the required tile sizes from the project's existing icon at build time.
+  # MSIX taskbar icons use manifest resources rather than the EXE's ICO.
+  # Both shell themes need unplated variants, even when they share the same image.
   Add-Type -AssemblyName System.Drawing
   $assetDir = Join-Path $Staging 'Assets'
   New-Item -ItemType Directory -Path $assetDir -Force | Out-Null
   $icon = [System.Drawing.Image]::FromFile((Join-Path $repoRoot 'assets/branding/app_icon.png'))
   try {
-    foreach ($size in @(44, 50, 150)) {
-      $bitmap = [System.Drawing.Bitmap]::new($size, $size)
+    $targetSizes = @(16, 20, 24, 30, 32, 36, 40, 44, 48, 60, 64, 72, 80, 96, 256)
+    foreach ($size in @(@(44, 50, 150) + $targetSizes | Sort-Object -Unique)) {
+      $bitmap = [System.Drawing.Bitmap]::new($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
       $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
       try {
+        $graphics.Clear([System.Drawing.Color]::Transparent)
+        $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
         $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
         $graphics.DrawImage($icon, 0, 0, $size, $size)
-        $bitmap.Save((Join-Path $assetDir "Logo$size.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+        $filenames = @(
+          if ($size -in @(44, 50, 150)) { "Logo$size.png" }
+          if ($size -in $targetSizes) {
+            "Logo44.targetsize-$size.png"
+            "Logo44.targetsize-${size}_altform-unplated.png"
+            "Logo44.targetsize-${size}_altform-lightunplated.png"
+          }
+        )
+        foreach ($filename in $filenames) {
+          $bitmap.Save((Join-Path $assetDir $filename), [System.Drawing.Imaging.ImageFormat]::Png)
+        }
       } finally { $graphics.Dispose(); $bitmap.Dispose() }
     }
   } finally { $icon.Dispose() }
+  # Qualified filenames alone are insufficient: the shell resolves them through PRI.
+  # An explicit file list preserves the Assets/ prefix and excludes Flutter data.
+  $resourceList = Join-Path $Staging 'msix-icons.resfiles'
+  Get-ChildItem -LiteralPath $assetDir -File | ForEach-Object { "Assets\$($_.Name)" } |
+    Set-Content -LiteralPath $resourceList -Encoding ascii
+  try {
+    Invoke-BuildCommand $makePri @('new', '/pr', $Staging, '/cf', (Join-Path $repoRoot 'windows/packaging/priconfig.xml'), '/mn', (Join-Path $Staging 'AppxManifest.xml'), '/of', (Join-Path $Staging 'resources.pri'), '/o') | Out-Host
+  } finally { Remove-Item -LiteralPath $resourceList }
   Invoke-BuildCommand $sdkTool.FullName @('pack', '/d', $Staging, '/p', $Destination, '/o') | Out-Host
 
   $certificate = $null

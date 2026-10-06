@@ -48,6 +48,7 @@ Future<void> main(List<String> args) async {
   }
   var connected = false, chats = 0, superChats = 0, heartbeats = 0;
   var linkedChats = 0, emoteChats = 0, stickerChats = 0, viewerUpdates = 0;
+  var watchedUpdates = 0;
   final session = LiveChatSession(
     maxAttempts: 1,
     isCurrent: () => true,
@@ -85,6 +86,8 @@ Future<void> main(List<String> args) async {
             if (message.sticker != null) stickerChats++;
           case ApiLiveViewerCountChanged():
             viewerUpdates++;
+          case ApiLiveWatchedCountChanged():
+            watchedUpdates++;
           case ApiLiveSuperChatReceived():
             superChats++;
           case ApiLivePopularityChanged():
@@ -105,7 +108,7 @@ Future<void> main(List<String> args) async {
     await done.future;
     deadline.cancel();
     print(
-      'live_chat: connected=$connected chat_messages=$chats super_chats=$superChats heartbeats=$heartbeats linked_chats=$linkedChats emote_chats=$emoteChats sticker_chats=$stickerChats viewer_updates=$viewerUpdates',
+      'live_chat: connected=$connected chat_messages=$chats super_chats=$superChats heartbeats=$heartbeats linked_chats=$linkedChats emote_chats=$emoteChats sticker_chats=$stickerChats viewer_updates=$viewerUpdates watched_updates=$watchedUpdates',
     );
   } finally {
     await session.close();

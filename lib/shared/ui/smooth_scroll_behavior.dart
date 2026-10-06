@@ -10,7 +10,10 @@ import '../../core/presentation/workspace_activity.dart';
 
 /// Adds short wheel transitions without replacing a list's controller/physics.
 final class SmoothScrollBehavior extends MaterialScrollBehavior {
-  const SmoothScrollBehavior();
+  const SmoothScrollBehavior({this.horizontalMouseWheel = false});
+
+  /// Lets a horizontal strip use ordinary mouse wheel input when dx is zero.
+  final bool horizontalMouseWheel;
 
   @override
   Widget buildOverscrollIndicator(
@@ -31,6 +34,7 @@ final class SmoothScrollBehavior extends MaterialScrollBehavior {
     return _SmoothWheelScroll(
       scrollable: scrollable,
       axisModifiers: pointerAxisModifiers,
+      horizontalMouseWheel: horizontalMouseWheel,
       child: decorated,
     );
   }
@@ -40,11 +44,13 @@ final class _SmoothWheelScroll extends StatefulWidget {
   const _SmoothWheelScroll({
     required this.scrollable,
     required this.axisModifiers,
+    required this.horizontalMouseWheel,
     required this.child,
   });
 
   final ScrollableState scrollable;
   final Set<LogicalKeyboardKey> axisModifiers;
+  final bool horizontalMouseWheel;
   final Widget child;
 
   @override
@@ -54,14 +60,15 @@ final class _SmoothWheelScroll extends StatefulWidget {
 final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
   _WheelScrollActivity? _motion;
   bool _enabled = true;
+  bool _active = true;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final enabled =
+    _active =
         WorkspaceActivity.isActive(context) &&
-        TickerMode.valuesOf(context).enabled &&
-        !MediaQuery.disableAnimationsOf(context);
+        TickerMode.valuesOf(context).enabled;
+    final enabled = _active && !MediaQuery.disableAnimationsOf(context);
     if (_enabled && !enabled) _stopMotion();
     _enabled = enabled;
   }
@@ -79,7 +86,8 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
       _stopMotion();
       return;
     }
-    if (!_enabled ||
+    if (!_active ||
+        (!_enabled && !widget.horizontalMouseWheel) ||
         event is! PointerScrollEvent ||
         event.kind != PointerDeviceKind.mouse ||
         !widget.scrollable.mounted) {
@@ -102,6 +110,12 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
     var delta = axis == Axis.vertical
         ? event.scrollDelta.dy
         : event.scrollDelta.dx;
+    if (widget.horizontalMouseWheel &&
+        position.axis == Axis.horizontal &&
+        !flip &&
+        delta == 0) {
+      delta = event.scrollDelta.dy;
+    }
     if (axisDirectionIsReversed(position.axisDirection)) delta = -delta;
     if (!delta.isFinite || delta == 0) return;
     final next = (position.pixels + delta).clamp(
@@ -112,12 +126,16 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
     if (next == position.pixels) return;
     GestureBinding.instance.pointerSignalResolver.register(event, (_) {
       if (!mounted ||
-          !_enabled ||
+          !_active ||
           !widget.scrollable.mounted ||
           !identical(position, widget.scrollable.position)) {
         return;
       }
-      _scrollBy(position, delta);
+      if (_enabled) {
+        _scrollBy(position, delta);
+      } else {
+        position.pointerScroll(delta);
+      }
       event.respond(allowPlatformDefault: false);
     });
   }

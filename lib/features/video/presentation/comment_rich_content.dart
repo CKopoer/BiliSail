@@ -266,39 +266,47 @@ class CommentAuthorDecoration extends StatelessWidget {
       child: SizedBox(
         width: 112,
         height: 40,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: AppNetworkImage(
-                url: publicImageThumbnail(
-                  url,
-                  width: 336,
-                  height: 120,
-                ).toString(),
-                cacheWidth: 336,
-                cacheHeight: 120,
-                fit: BoxFit.cover,
-                alignment: Alignment.centerRight,
-                errorBuilder: (_, _, _) => const SizedBox.shrink(),
-              ),
-            ),
-            if (number != null && number.isNotEmpty)
+        child: ClipRect(
+          child: Stack(
+            children: [
+              // 装扮画布右侧带留白；平移画布并裁剪，让可见图案靠右。
               Positioned(
-                left: 0,
+                left: 40,
+                right: -40,
                 top: 0,
                 bottom: 0,
-                width: 60,
-                child: Center(
-                  child: Text(
-                    'NO.\n$number',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textScaler: TextScaler.noScaling,
-                    style: TextStyle(fontSize: 10, height: 1.1, color: color),
-                  ),
+                child: AppNetworkImage(
+                  url: publicImageThumbnail(
+                    url,
+                    width: 336,
+                    height: 120,
+                  ).toString(),
+                  cacheWidth: 336,
+                  cacheHeight: 120,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.centerRight,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
-          ],
+              if (number != null && number.isNotEmpty)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 60,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'NO.\n$number',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(fontSize: 10, height: 1.1, color: color),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

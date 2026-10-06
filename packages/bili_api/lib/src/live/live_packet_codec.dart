@@ -210,22 +210,17 @@ ApiLiveEvent? _parseCommand(Map<String, Object?> data) {
     );
   }
   final payload = _map(data['data']);
-  if (command == 'WATCHED_CHANGE' || command == 'ONLINE_RANK_COUNT') {
+  if (command == 'WATCHED_CHANGE') {
+    final display = _countText(payload['text_small'], payload['num']);
+    return display == null ? null : ApiLiveWatchedCountChanged(display);
+  }
+  if (command == 'ONLINE_RANK_COUNT') {
     // ONLINE_RANK_COUNT.count is the ranked audience, not the room's viewers.
-    final count = _int(
-      payload[command == 'WATCHED_CHANGE' ? 'num' : 'online_count'],
+    final display = _countText(
+      payload['online_count_text'],
+      payload['online_count'],
     );
-    final display =
-        command == 'ONLINE_RANK_COUNT'
-            ? _text(payload['online_count_text'], 20) ??
-                (count != null && count >= 0 ? '$count' : null)
-            : count != null && count >= 0
-            ? '$count'
-            : _text(payload['text_small'], 20);
-    if (display != null && RegExp(r'^\d+(\.\d+)?[万亿]?$').hasMatch(display)) {
-      return ApiLiveViewerCountChanged(display);
-    }
-    return null;
+    return display == null ? null : ApiLiveViewerCountChanged(display);
   }
   if (command == 'SUPER_CHAT_MESSAGE') {
     final user = _map(payload['user_info']);
@@ -268,6 +263,16 @@ ApiLiveEvent? _parseCommand(Map<String, Object?> data) {
 
 Map<String, Object?> _map(Object? value) =>
     value is Map<String, Object?> ? value : const {};
+String? _countText(Object? display, Object? value) {
+  if (display is String &&
+      display.length <= 20 &&
+      RegExp(r'^\d+(\.\d+)?[万亿]?$').hasMatch(display)) {
+    return display;
+  }
+  final count = _int(value);
+  return count != null && count >= 0 ? '$count' : null;
+}
+
 List<Object?> _list(Object? value) => value is List<Object?> ? value : const [];
 int? _int(Object? value) =>
     value is int
