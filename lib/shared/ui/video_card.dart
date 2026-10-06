@@ -21,6 +21,14 @@ String compactCount(int? count) {
   return '$count';
 }
 
+String _videoCountLabel(int? count, String text) {
+  final value = text.trim();
+  if (value.isEmpty) return compactCount(count);
+  // Keep server-provided abbreviations; format decimal count text locally.
+  final numericCount = int.tryParse(value, radix: 10);
+  return numericCount == null ? text : compactCount(numericCount);
+}
+
 String durationLabel(Duration duration) {
   final hours = duration.inHours;
   final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -65,7 +73,7 @@ final class VideoCard extends StatefulWidget {
   final bool showUpBadge;
   final bool showRecommendationReason;
   final String highlightQuery;
-  // Dynamic feeds may supply abbreviated counts rather than exact numbers.
+  // Counts may arrive as decimal text or server-provided abbreviations.
   final String playCountText;
   final String danmakuCountText;
   final String publishText;
@@ -114,6 +122,11 @@ final class _VideoCardState extends State<VideoCard> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final video = widget.video;
+    final playLabel = _videoCountLabel(video.playCount, widget.playCountText);
+    final danmakuLabel = _videoCountLabel(
+      video.danmakuCount,
+      widget.danmakuCountText,
+    );
     final textScaler = MediaQuery.textScalerOf(context);
     final titleStyle = theme.textTheme.bodyMedium?.copyWith(
       fontSize: _titleFontSize,
@@ -203,14 +216,14 @@ final class _VideoCardState extends State<VideoCard> {
                             bottom: 7,
                             child: Semantics(
                               label:
-                                  '观看 ${widget.playCountText.isEmpty ? compactCount(video.playCount) : widget.playCountText}，'
-                                  '弹幕 ${widget.danmakuCountText.isEmpty ? compactCount(video.danmakuCount) : widget.danmakuCountText}，'
+                                  '观看 $playLabel，'
+                                  '弹幕 $danmakuLabel，'
                                   '时长 ${durationLabel(video.duration)}',
                               excludeSemantics: true,
                               child: _CoverMetadata(
                                 video: video,
-                                playCountText: widget.playCountText,
-                                danmakuCountText: widget.danmakuCountText,
+                                playLabel: playLabel,
+                                danmakuLabel: danmakuLabel,
                               ),
                             ),
                           ),
@@ -415,13 +428,13 @@ final class _VideoCardState extends State<VideoCard> {
 final class _CoverMetadata extends StatelessWidget {
   const _CoverMetadata({
     required this.video,
-    required this.playCountText,
-    required this.danmakuCountText,
+    required this.playLabel,
+    required this.danmakuLabel,
   });
 
   final VideoSummary video;
-  final String playCountText;
-  final String danmakuCountText;
+  final String playLabel;
+  final String danmakuLabel;
 
   static const _style = TextStyle(
     color: Colors.white,
@@ -437,12 +450,6 @@ final class _CoverMetadata extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final playLabel = playCountText.isEmpty
-          ? compactCount(video.playCount)
-          : playCountText;
-      final danmakuLabel = danmakuCountText.isEmpty
-          ? compactCount(video.danmakuCount)
-          : danmakuCountText;
       final timeLabel = durationLabel(video.duration);
       double textWidth(String label) {
         final painter = TextPainter(

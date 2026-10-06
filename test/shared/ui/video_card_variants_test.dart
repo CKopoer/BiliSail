@@ -17,6 +17,112 @@ void main() {
         .load();
   });
 
+  testWidgets('numeric and decimal text counts share units and semantics', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    const cases = <({int? count, String label})>[
+      (count: null, label: '—'),
+      (count: 0, label: '0'),
+      (count: 9999, label: '9999'),
+      (count: 10000, label: '1.0万'),
+      (count: 12345, label: '1.2万'),
+      (count: 100000000, label: '1.0亿'),
+      (count: 123456789, label: '1.2亿'),
+    ];
+    try {
+      for (final asText in [false, true]) {
+        for (final item in cases) {
+          await tester.pumpWidget(
+            _app(
+              video: VideoSummary(
+                id: const VideoId('BV1234567890'),
+                title: '测试视频',
+                coverUrl: '',
+                author: '测试UP',
+                duration: const Duration(minutes: 3),
+                playCount: asText ? null : item.count,
+                danmakuCount: asText ? null : item.count,
+              ),
+              playCountText: asText ? item.count?.toString() ?? '' : '',
+              danmakuCountText: asText ? item.count?.toString() ?? '' : '',
+            ),
+          );
+          expect(find.text(item.label), findsNWidgets(2));
+          expect(
+            find.bySemanticsLabel(
+              RegExp(
+                RegExp.escape('观看 ${item.label}，弹幕 ${item.label}，时长 03:00'),
+              ),
+            ),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        }
+      }
+    } finally {
+      semantics.dispose();
+    }
+  });
+
+  testWidgets(
+    'server count text takes precedence and preserves abbreviations',
+    (tester) async {
+      const video = VideoSummary(
+        id: VideoId('BV1234567890'),
+        title: '测试视频',
+        coverUrl: '',
+        author: '测试UP',
+        duration: Duration(minutes: 3),
+        playCount: 9,
+        danmakuCount: 8,
+      );
+      for (final labels in [
+        ('12345', '100000000', '1.2万', '1.0亿'),
+        ('1.23万', '2.34亿', '1.23万', '2.34亿'),
+        ('—', '未知', '—', '未知'),
+      ]) {
+        await tester.pumpWidget(
+          _app(
+            video: video,
+            playCountText: labels.$1,
+            danmakuCountText: labels.$2,
+          ),
+        );
+        expect(find.text(labels.$3), findsOneWidget);
+        expect(find.text(labels.$4), findsOneWidget);
+        expect(find.text('9'), findsNothing);
+        expect(find.text('8'), findsNothing);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
+  testWidgets('blank count text falls back without replacing zero or missing', (
+    tester,
+  ) async {
+    const video = VideoSummary(
+      id: VideoId('BV1234567890'),
+      title: '测试视频',
+      coverUrl: '',
+      author: '测试UP',
+      duration: Duration(minutes: 3),
+      playCount: 12345,
+    );
+    await tester.pumpWidget(
+      _app(video: video, playCountText: ' ', danmakuCountText: ''),
+    );
+    expect(find.text('1.2万'), findsOneWidget);
+    expect(find.text('—'), findsOneWidget);
+    await tester.pumpWidget(
+      _app(video: video, playCountText: '0', danmakuCountText: '0'),
+    );
+    expect(find.text('0'), findsNWidgets(2));
+    expect(find.text('1.2万'), findsNothing);
+    expect(find.text('—'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'compact cards keep fitting cover and author metadata on one row',
     (tester) async {
@@ -201,6 +307,8 @@ Widget _app({
   String query = '',
   String? reason = '3万点赞',
   VideoSummary? video,
+  String playCountText = '',
+  String danmakuCountText = '',
   String publishText = '今天投稿',
 }) => MaterialApp(
   theme: dark ? BiliTheme.dark() : BiliTheme.light(),
@@ -226,6 +334,8 @@ Widget _app({
             showRecommendationReason: showReason,
             highlightQuery: query,
             publishText: publishText,
+            playCountText: playCountText,
+            danmakuCountText: danmakuCountText,
             progress: .4,
             onTap: () {},
           ),
