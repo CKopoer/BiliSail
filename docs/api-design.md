@@ -74,12 +74,14 @@ ApiPage<T> { items, nextCursor, hasMore }
 | 能力/阶段 | 参考端点或方法 | 源码入口 | Flutter 归属及验证点 |
 | --- | --- | --- | --- |
 | 扫码登录 M0/M2 | `/x/passport-login/web/qrcode/generate`、`/poll` | U `Models/Requests/Api/AccountApi.cs` | AuthClient；Web 二维码与 Set-Cookie，取消/过期/确认 |
+| 密码/短信登录（提前实现） | 内嵌 `https://passport.bilibili.com/login`；应用调用 `/x/web-interface/nav` 验证 | U AccountApi、LoginVM、LoginDialog；dart_simple_live Web 登录页 | Platform WebView → 会话控制器；保留 Cookie 作用域、账号校验和安全存储；不在 API 包维护官网表单 POST；见 [登录验证](validation/password-sms-login.md) |
 | TV 登录（后续） | `/x/passport-tv-login/qrcode/auth_code`、`/poll` | K `Authorizers/Authorizers.Tv/Core/TvAuthorizeClient.cs` | 独立 TV profile，不作为 Web 登录的隐式副作用 |
 | 会话与 WBI M0/M2 | `/x/web-interface/nav`、cookie info/refresh/confirm | K `BiliKernel.Abstractions/Bili/BiliApis.cs`、Core Authenticator；U AccountApi | SessionStore；刷新要取得所需 refresh 数据，缺失则重新登录 |
 | 推荐 M2 | `/x/web-interface/index/top/feed/rcmd`；App `/x/v2/feed/index` | K `Services/Services.Media/Core/VideoDiscoveryClient.cs` | CatalogClient；优先验证 Web，不能把 App token 参数搬过来 |
 | 热门/排行 M2 | `GetHotVideoListAsync`、`/x/web-interface/ranking/v2` | K VideoDiscoveryClient | 区分 gRPC 热门与 REST 排行；MVP 首页可先用已验证推荐/排行 |
 | 搜索 M2 | `/x/web-interface/wbi/search/type`、`/all/v2` | K `Services/Services.Search/Core/SearchClient.cs` | SearchClient；WBI、Cookie、排序及分页 |
 | 视频详情 M0/M2 | `/x/web-interface/view/detail`、`GetVideoPageDetailWithRestAsync` | K `Services/Services.Media/Core/PlayerClient.cs` | VideoRepository；bvid/aid 解析、cid、分 P、合集 |
+| 视频标签 M2 | `/x/tag/archive/tags` | U `Models/Requests/Api/VideoAPI.cs`、VideoDetailPageViewModel | VideoExtrasRepository；独立只读、BV 身份隔离和点击关键词搜索，见 [视频标签与搜索](validation/video-tags.md) |
 | 视频播放 M0/M2 | `/x/player/playurl`、`GetVideoPlayDetailWithRestAsync` | K PlayerClient | PlaybackResolver；参考调用混有 App 参数，须独立验证 Web profile |
 | 字幕/章节附加信息 M2 | `/x/player/wbi/v2` | K `Services/Services.Media/Core/SubtitleClient.cs` 与 PlayerClient；PiliPlus `view_points` 字段 | PlaybackMetadataRepository；合并一次 WBI 读取，字幕/章节故障独立；见 [实现验证](validation/playback-timeline.md) |
 | 视频悬停缩略图 M2 | `/x/player/videoshot` | PiliPlus 雪碧图协议；来源/许可见 [实现验证](validation/playback-timeline.md) | PlaybackMetadataRepository；Web 只读，按播放源懒加载、索引/网格校验与公开图片缓存 |
@@ -100,6 +102,8 @@ ApiPage<T> { items, nextCursor, hasMore }
 
 “我的收藏与订阅”的卡片支持用户确认后取消普通收藏夹收藏或 UGC 合集订阅，分别使用 `/x/v3/fav/folder/unfav` 与 `/x/v3/fav/season/unfav` 的 Web Cookie/CSRF 单次 POST。写操作不自动重试，成功后隔离迟到列表响应并重新协调分页；协议、确认交互及未实测边界见 [收藏与订阅取消操作](validation/favorites-unsubscribe.md)。
 
+推荐与稍后再看的视频卡标题菜单分别接入 Web POST `/x/web-interface/feedback/dislike`（内容不感兴趣，`reason_id=1`）与 `/x/v2/history/toview/del`（按 `aid` 删除），添加沿用 `/x/v2/history/toview/add`。反馈使用本次推荐响应的内容身份和 `track_id`，没有对应上下文时明确提示不可反馈。三项操作只由明确点击触发，沿用 Cookie/CSRF、账号 scope/session epoch、取消与单次写入；成功后才移除卡片，未知结果不重放。端点参数、来源及实际验证边界见 [视频卡操作菜单](validation/video-card-menus.md)。
+
 视频播放页合集标题接入订阅状态与显式订阅/取消，按当前视频 `aid`／`bvid` 读取 `/x/web-interface/archive/relation` 的布尔字段 `season_fav`，不扫描账号收藏列表；写操作仍为 `/x/v3/fav/season/fav`、`/x/v3/fav/season/unfav` 单次 POST。合集详情的公开响应没有 `fav_state`，但这不能证明其他接口没有订阅状态，官网关系接口与按钮逻辑的核对依据见 [合集订阅按钮](validation/collection-subscription.md)。已关注 UP 菜单增加设置分组，读取 `/x/relation/tags`、`/x/relation/tag/user`，保存至 `/x/relation/tags/addUsers`；见 [关注用户分组](validation/follow-groups.md)。两者沿用 Web Cookie/CSRF、取消与账号 scope/session epoch 隔离，真实账号写入待用户验收。
 
 影视与直播已按用户本轮要求提前接入 Web 详情/播放/历史聊天；上述 M3/M4 定位仍是整体路线。实际已实现端点、取消与权限语义、游客烟测见 [影视与直播内置播放](validation/content-playback.md)。官方影视侧栏及 SC 快照端点、容量和前序验证见 [影视侧栏与直播 SC](validation/pgc-live-sidebar.md)。后续剧集弹幕/发送、直播实时连接与消息、SC 合并及当前分区列表协议见 [影视与直播弹幕修复](validation/pgc-live-danmaku.md)。
@@ -115,7 +119,10 @@ ApiPage<T> { items, nextCursor, hasMore }
 ```mermaid
 stateDiagram-v2
   [*] --> Guest
-  Guest --> CreatingQr: 用户打开登录
+  Guest --> CreatingQr: 用户获取二维码
+  Guest --> WaitingWeb: 用户打开内嵌官网登录页
+  WaitingWeb --> Validating: 官网完成登录并取得可用 Cookie
+  WaitingWeb --> Guest: 关闭或超时
   CreatingQr --> WaitingScan: 获取成功
   WaitingScan --> WaitingConfirm: 已扫描
   WaitingConfirm --> Validating: 已确认
@@ -126,7 +133,7 @@ stateDiagram-v2
   CreatingQr --> Guest: 取消或失败
   WaitingScan --> Guest: 取消
   WaitingConfirm --> Guest: 取消
-  Validating --> Guest: 验证失败
+  Validating --> Guest: 取消或验证失败并回滚凭据
   SignedIn --> Refreshing: 需要续期
   Refreshing --> SignedIn: 成功
   Refreshing --> ReauthRequired: 确认凭据失效
@@ -138,7 +145,7 @@ QR 轮询按服务端状态和间隔执行，只有一个活跃轮询；关闭�
 
 Cookie 由 domain/path/secure/expiry 规则的 CookieStore 维护，持久化整个必要的作用域信息，不能只保存 `name=value` 字符串。接收 Set-Cookie 时检查来源域，限制跳转后的凭据发送；账号 Cookie 不发送到任意 CDN、字幕外链或外部浏览器。
 
-会话刷新使用单飞：同一账号并发请求共享一次刷新，成功后仅按策略重放可安全重试的读请求。禁止每个 401 单独刷新；Bilibili 的业务码也可能表示失效，应经端点映射识别。密码登录与自动代填不在 MVP 范围。
+会话刷新使用单飞：同一账号并发请求共享一次刷新，成功后仅按策略重放可安全重试的读请求。禁止每个 401 单独刷新；Bilibili 的业务码也可能表示失效，应经端点映射识别。密码／短信及验证码由内嵌官网完成，应用不持有表单字段、不保存密码、不自动提交登录写请求；只导入适用于 API 根路径的 Cookie，经 nav 校验后安全保存。账号验证有 25 秒 deadline，网页登录等待最多 10 分钟；网页等待允许用户切换应用查看短信，返回前暂停 Cookie 提取。协议与平台边界见 [登录验证](validation/password-sms-login.md)。
 
 退出流程：递增 epoch → 取消账号请求/QR/WS/上报 → 停止依赖该账号的播放和下载 → 清理内存凭据与安全存储 → 清理私有缓存 → 进入 guest。离线文件单独询问用户是否删除，不能让普通退出自动破坏文件。
 

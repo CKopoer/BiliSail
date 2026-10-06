@@ -1,6 +1,7 @@
 import 'package:bili_api/bili_api.dart';
 
 import '../../../domain/app_failure.dart';
+import '../../../domain/media_cdn.dart';
 import '../domain/playback_repository.dart';
 
 /// Quality takes priority; a missing preferred codec does not downgrade it.
@@ -9,6 +10,7 @@ PlaybackMedia selectDashMedia(
   required int quality,
   required VideoCodecPreference preferredCodec,
   required Map<String, String> headers,
+  MediaCdnPreference cdnPreference = MediaCdnPreference.automatic,
 }) {
   final videos =
       info.dashVideo
@@ -48,7 +50,7 @@ PlaybackMedia selectDashMedia(
     return codecOrder != 0 ? codecOrder : b.bandwidth.compareTo(a.bandwidth);
   });
   PlaybackTrack map(ApiMediaTrack track) => PlaybackTrack(
-    urls: [track.url, ...track.backupUrls],
+    urls: orderMediaCdnUrls([track.url, ...track.backupUrls], cdnPreference),
     codec: track.codecs,
     bandwidth: track.bandwidth,
   );

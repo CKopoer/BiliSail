@@ -26,6 +26,102 @@ class _Transport implements ApiTransport {
 }
 
 void main() {
+  test(
+    'video tags preserve names, deduplicate and use the video bvid',
+    () async {
+      final transport = _Transport(
+        (_) => {
+          'code': 0,
+          'data': [
+            {'tag_name': ' Flutter & Dart/中文+测试 ', 'tag_type': 'topic'},
+            {'tag_name': 'Flutter & Dart/中文+测试'},
+            {'tag_name': '编程'},
+            {'tag_name': '  '},
+          ],
+        },
+      );
+      final tags = await BiliApiClient(
+        transport: transport,
+      ).getVideoTags('BV1234567890');
+      expect(tags, ['Flutter & Dart/中文+测试', '编程']);
+      expect(transport.requests.single.path, '/x/tag/archive/tags');
+      expect(transport.requests.single.queryParameters, {
+        'bvid': 'BV1234567890',
+      });
+      expect(() => tags.add('other'), throwsUnsupportedError);
+    },
+  );
+
+  test('video tags accept empty lists and bound the response', () async {
+    final empty = BiliApiClient(
+      transport: _Transport((_) => {'code': 0, 'data': <Object?>[]}),
+    );
+    expect(await empty.getVideoTags('BV1234567890'), isEmpty);
+    final bounded = BiliApiClient(
+      transport: _Transport(
+        (_) => {
+          'code': 0,
+          'data': List.generate(120, (index) => {'tag_name': '标签$index'}),
+        },
+      ),
+    );
+    expect(await bounded.getVideoTags('BV1234567890'), hasLength(100));
+  });
+
+  test('malformed video tags fail explicitly', () async {
+    for (final data in <Object?>[
+      null,
+      <String, Object?>{},
+      [null],
+      [<String, Object?>{}],
+      [
+        {'tag_name': 12},
+      ],
+    ]) {
+      final api = BiliApiClient(
+        transport: _Transport((_) => {'code': 0, 'data': data}),
+      );
+      await expectLater(
+        api.getVideoTags('BV1234567890'),
+        throwsA(
+          isA<ApiFailure>().having(
+            (error) => error.category,
+            'category',
+            ApiFailureCategory.protocol,
+          ),
+        ),
+      );
+    }
+  });
+
+  test('cancelled video tags discard a late transport response', () async {
+    final reply = Completer<Object>();
+    final signal = ApiCancellation();
+    final api = BiliApiClient(transport: _Transport((_) => reply.future));
+    final result = api.getVideoTags(
+      'BV1234567890',
+      context: ApiRequestContext(cancellation: signal),
+    );
+    final expectation = expectLater(
+      result,
+      throwsA(
+        isA<ApiFailure>().having(
+          (error) => error.category,
+          'category',
+          ApiFailureCategory.cancelled,
+        ),
+      ),
+    );
+    signal.cancel();
+    reply.complete({
+      'code': 0,
+      'data': [
+        {'tag_name': '旧标签'},
+      ],
+    });
+    await expectation;
+  });
+
   test('legacy latest guest empty page is an explicit empty success', () async {
     final transport = _Transport(
       (_) => {

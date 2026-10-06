@@ -3,11 +3,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../domain/video.dart';
+import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/bili_icons.dart';
 import '../../../shared/ui/video_card.dart';
+import '../../../shared/ui/video_card_cover.dart';
 
 /// Space submissions keep their cover and metadata side by side.
-class ProfileVideoCard extends StatelessWidget {
+class ProfileVideoCard extends StatefulWidget {
   const ProfileVideoCard({super.key, required this.video, required this.onTap});
 
   final VideoSummary video;
@@ -22,30 +24,40 @@ class ProfileVideoCard extends StatelessWidget {
   }
 
   @override
+  State<ProfileVideoCard> createState() => _ProfileVideoCardState();
+}
+
+class _ProfileVideoCardState extends State<ProfileVideoCard> {
+  bool _hovered = false;
+  @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final theme = Theme.of(context);
+      final video = widget.video;
       final coverWidth = math.min(200.0, constraints.maxWidth * .4);
       final date = video.publishedAt;
       return Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
-          onTap: onTap,
+          onTap: widget.onTap,
+          onHover: (hovered) => setState(() => _hovered = hovered),
           borderRadius: BorderRadius.circular(8),
           child: SizedBox(
-            height: heightFor(
+            height: ProfileVideoCard.heightFor(
               constraints.maxWidth,
               MediaQuery.textScalerOf(context),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
-                    width: coverWidth,
-                    height: coverWidth * .6,
+                SizedBox(
+                  width: coverWidth,
+                  height: coverWidth * .6,
+                  child: VideoCardCover(
+                    video: video,
+                    hovered: _hovered,
+                    borderRadius: 8,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -53,13 +65,10 @@ class ProfileVideoCard extends StatelessWidget {
                           color: theme.colorScheme.surfaceContainerHighest,
                           child: video.coverUrl.isEmpty
                               ? const Icon(Icons.play_circle_outline)
-                              : Image.network(
-                                  video.coverUrl,
+                              : AppCoverImage(
+                                  url: video.coverUrl,
                                   fit: BoxFit.cover,
                                   excludeFromSemantics: true,
-                                  headers: const {
-                                    'Referer': 'https://www.bilibili.com/',
-                                  },
                                   errorBuilder: (_, _, _) =>
                                       const Icon(Icons.broken_image_outlined),
                                 ),

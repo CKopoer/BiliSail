@@ -29,6 +29,11 @@ abstract interface class FeedRepository {
 
 /// Rankings are an optional capability, separate from recommendation pagination.
 abstract interface class RankingFeedRepository {
+  /// Ranking region IDs are independent of the legacy newlist categories.
+  Future<List<VideoCategory>> loadRankingCategories({
+    required RequestCancellation cancellation,
+  });
+
   Future<PageResult<VideoSummary>> loadRanking({
     required String categoryId,
     required RequestCancellation cancellation,

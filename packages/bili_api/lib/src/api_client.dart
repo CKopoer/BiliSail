@@ -311,6 +311,29 @@ final class BiliApiClient {
     return result;
   }
 
+  Future<List<String>> getVideoTags(
+    String bvid, {
+    ApiRequestContext? context,
+  }) async {
+    _validateBvid(bvid);
+    const endpoint = 'video_tags';
+    final data = await _jsonValue(
+      _api.replace(
+        path: '/x/tag/archive/tags',
+        queryParameters: {'bvid': bvid},
+      ),
+      endpoint,
+      context,
+    );
+    final tags = <String>{};
+    for (final value in _list(data, endpoint).take(100)) {
+      final name =
+          _requiredString(_map(value, endpoint)['tag_name'], endpoint).trim();
+      if (name.isNotEmpty) tags.add(name);
+    }
+    return List.unmodifiable(tags);
+  }
+
   Future<List<ApiVideoSummary>> getRelatedVideos(
     String bvid, {
     ApiRequestContext? context,
@@ -1569,14 +1592,32 @@ List<ApiDanmakuItem> decodeDanmakuSegment(Uint8List bytes) {
   if (bytes.length > 2 * 1024 * 1024) {
     throw const ApiFailure(ApiFailureCategory.protocol, 'danmaku_segment');
   }
+  const maxItems = 6000;
+  // Signed-in pools can contain more than 6000 valid elements. Count framing
+  // first, then sample across the entire reply while still validating every
+  // element. The byte budget bounds both passes; retained objects stay bounded.
+  final framing = _ProtoReader(bytes);
+  var elementCount = 0;
+  while (!framing.done) {
+    final tag = framing.varint();
+    if (tag >> 3 == 1 && tag & 7 == 2) elementCount++;
+    framing.skip(tag & 7);
+  }
   final reader = _ProtoReader(bytes);
   final items = <ApiDanmakuItem>[];
+  var elementIndex = 0, previousBucket = -1;
   while (!reader.done) {
     final tag = reader.varint();
     if (tag >> 3 == 1 && tag & 7 == 2) {
-      if (items.length >= 6000) {
-        throw const ApiFailure(ApiFailureCategory.protocol, 'danmaku_segment');
-      }
+      // Include the reply's first and last elements as well as evenly spaced
+      // entries between them, so dense pools retain coverage across the reply.
+      final bucket =
+          elementCount > maxItems
+              ? elementIndex * (maxItems - 1) ~/ (elementCount - 1)
+              : elementIndex;
+      elementIndex++;
+      final retain = bucket != previousBucket;
+      previousBucket = bucket;
       final element = _ProtoReader(reader.bytes(4096));
       String id = '';
       var progress = 0, mode = 1, fontSize = 25, color = 0xffffff;
@@ -1618,7 +1659,9 @@ List<ApiDanmakuItem> decodeDanmakuSegment(Uint8List bytes) {
           element.skip(wire);
         }
       }
-      if (content.isNotEmpty && (mode == 1 || mode == 4 || mode == 5)) {
+      if (retain &&
+          content.isNotEmpty &&
+          (mode == 1 || mode == 4 || mode == 5)) {
         items.add(
           ApiDanmakuItem(
             id: id,

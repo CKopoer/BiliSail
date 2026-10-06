@@ -3,15 +3,22 @@ import 'package:bili_api/bili_api.dart';
 import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
+import '../../../domain/media_cdn.dart';
 import '../domain/content_playback.dart';
 import '../domain/playback_repository.dart';
 import 'dash_media_selection.dart';
 
 final class ApiContentPlaybackRepository implements ContentPlaybackRepository {
-  ApiContentPlaybackRepository(this.pgc, this.live, this.requests);
+  ApiContentPlaybackRepository(
+    this.pgc,
+    this.live,
+    this.requests, {
+    this.cdnPreference,
+  });
   final PgcClient pgc;
   final LiveClient live;
   final ApiRequests requests;
+  final Future<MediaCdnPreference> Function()? cdnPreference;
 
   static const _headers = {
     'Referer': 'https://www.bilibili.com/',
@@ -36,6 +43,8 @@ final class ApiContentPlaybackRepository implements ContentPlaybackRepository {
           info,
           quality: quality,
           preferredCodec: preferredCodec,
+          cdnPreference:
+              await cdnPreference?.call() ?? MediaCdnPreference.automatic,
           headers: _headers,
         );
       case LivePlaybackTarget(:final roomId):

@@ -291,7 +291,13 @@ void main() {
   testWidgets(
     'new tabs respect editors and workspace commands respect modal routes',
     (tester) async {
-      final router = _router((context, tab) => Text('page ${tab.id}'));
+      final router = _router(
+        (context, tab) => Text('page ${tab.id}'),
+        shortcuts: const ShortcutSettings.defaults().withKeys(
+          ShortcutAction.closeTab,
+          ['Ctrl+W', 'MouseBack'],
+        ),
+      );
       addTearDown(router.dispose);
       await tester.pumpWidget(MaterialApp.router(routerConfig: router));
       await tester.pumpAndSettle();
@@ -315,6 +321,13 @@ void main() {
         await tester.pumpAndSettle();
         await _shortcut(tester, LogicalKeyboardKey.keyW);
         await _shortcut(tester, LogicalKeyboardKey.keyT);
+        final pointer = await tester.createGesture(
+          kind: PointerDeviceKind.mouse,
+          buttons: kBackMouseButton,
+        );
+        await pointer.down(tester.getCenter(find.text('modal')));
+        await pointer.up();
+        await tester.pumpAndSettle();
         expect(
           find.byKey(const ValueKey('workspace-tab-tab-1')),
           findsOneWidget,
@@ -354,6 +367,121 @@ void main() {
     },
   );
 
+  for (final mode in WorkspaceNavigationMode.values) {
+    for (final (key, button) in [
+      ('MouseBack', kBackMouseButton),
+      ('MouseForward', kForwardMouseButton),
+    ]) {
+      testWidgets('$key closes pages with editor focus in $mode', (
+        tester,
+      ) async {
+        final router = _router(
+          (_, tab) => Column(
+            children: [
+              Text('page ${tab.id}'),
+              TextField(key: ValueKey('composer-${tab.id}')),
+            ],
+          ),
+          navigationMode: mode,
+          shortcuts: const ShortcutSettings.defaults().withKeys(
+            ShortcutAction.closeTab,
+            ['Ctrl+W', key],
+          ),
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
+        router.go('/search?q=retained');
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('composer-tab-1')),
+          'retained draft',
+        );
+        router.go('/settings');
+        await tester.pumpAndSettle();
+        final composer = find.byKey(const ValueKey('composer-tab-2'));
+        await tester.enterText(composer, 'current draft');
+        await tester.pump();
+        final editor = tester.widget<EditableText>(
+          find.descendant(of: composer, matching: find.byType(EditableText)),
+        );
+        expect(editor.focusNode.hasFocus, isTrue);
+
+        final pointer = await tester.createGesture(
+          kind: PointerDeviceKind.mouse,
+          buttons: button,
+        );
+        await pointer.down(tester.getCenter(composer));
+        await tester.pumpAndSettle();
+        expect(find.text('page tab-1'), findsOneWidget);
+        expect(find.text('page tab-2'), findsNothing);
+        expect(find.text('retained draft'), findsOneWidget);
+        // Holding the side button across the rebuild must not close again.
+        await pointer.moveTo(tester.getCenter(find.text('page tab-1')));
+        await tester.pumpAndSettle();
+        expect(find.text('page tab-1'), findsOneWidget);
+        await pointer.up();
+
+        final search = find.byKey(const ValueKey('workspace-search'));
+        await tester.tap(search);
+        await tester.pumpAndSettle();
+        final searchEditor = tester.widget<EditableText>(
+          find.descendant(of: search, matching: find.byType(EditableText)),
+        );
+        expect(searchEditor.focusNode.hasFocus, isTrue);
+        await pointer.down(tester.getCenter(search));
+        await pointer.up();
+        await tester.pumpAndSettle();
+        expect(find.text('page home'), findsOneWidget);
+
+        await pointer.down(tester.getCenter(find.text('page home')));
+        await pointer.up();
+        await tester.pumpAndSettle();
+        expect(find.text('page home'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  for (final (action, key) in [
+    (ShortcutAction.closeTab, 'W'),
+    (ShortcutAction.closeTab, 'F8'),
+    (ShortcutAction.newTab, 'MouseBack'),
+  ]) {
+    testWidgets('$action with $key still reserves editor input', (
+      tester,
+    ) async {
+      final router = _router(
+        (_, tab) => Text('page ${tab.id}'),
+        shortcuts: const ShortcutSettings.defaults().withKeys(action, [key]),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
+      await tester.pumpAndSettle();
+      final search = find.byKey(const ValueKey('workspace-search'));
+      await tester.enterText(search, 'draft');
+      await tester.pump();
+      if (key == 'MouseBack') {
+        final pointer = await tester.createGesture(
+          kind: PointerDeviceKind.mouse,
+          buttons: kBackMouseButton,
+        );
+        await pointer.down(tester.getCenter(search));
+        await pointer.up();
+      } else {
+        await tester.sendKeyEvent(
+          key == 'W' ? LogicalKeyboardKey.keyW : LogicalKeyboardKey.f8,
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('page tab-1'), findsOneWidget);
+      expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsNothing);
+      expect(find.text('draft'), findsOneWidget);
+    });
+  }
+
   for (final enabled in [true, false]) {
     testWidgets('mouse side key closes the active tab when enabled=$enabled', (
       tester,
@@ -369,11 +497,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
       await tester.pumpAndSettle();
+      final search = find.byKey(const ValueKey('workspace-search'));
+      await tester.tap(search);
+      await tester.pumpAndSettle();
       final pointer = await tester.createGesture(
         kind: PointerDeviceKind.mouse,
         buttons: kBackMouseButton,
       );
-      await pointer.down(tester.getCenter(find.text('page tab-1')));
+      await pointer.down(tester.getCenter(search));
       await pointer.up();
       await tester.pumpAndSettle();
       expect(find.text(enabled ? 'page home' : 'page tab-1'), findsOneWidget);

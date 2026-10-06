@@ -1,5 +1,7 @@
 # Web API 端点与首轮验证
 
+密码／短信由内嵌官网登录页处理，应用只接入 Cookie 和账号 nav 校验；协议边界、平台依赖与验证见 [登录验证](password-sms-login.md)。
+
 七类搜索的 Web 综合/分类端点、排序与游客查询“小约翰”结果见 [搜索分类与排序](search-categories.md)。下表 `searchVideos` 保留首轮仅视频搜索时的记录；当前搜索页面使用模块化 `SearchClient`。
 
 播放侧栏新增的 UP 统计与关注／取消关注端点，以及合集播放量和时长映射，见 [简介侧栏端点与验证](video-sidebar.md)。
@@ -21,7 +23,8 @@
 | 热门 `getPopular` | `api.bilibili.com` GET `/x/web-interface/popular` | Web，Cookie 可选，无签名 | JSON；`pn`、`ps=20`；只读网络/超时/指定 5xx 最多 2 次额外尝试 | 成功，列表可解析 |
 | 推荐 `getRecommended` | `api.bilibili.com` GET `/x/web-interface/index/top/feed/rcmd` | Web，Cookie 可选，WBI | JSON `data.item[]`；`ps=20`、`fresh_idx`/`fresh_idx_1h`、`fresh_type=4`、`feed_version=V8`、`y_num=5`；索引递增，非空视频页可继续读取；同上 | 本轮成功解析 20 条视频；未测登录推荐与连续分页 |
 | 分区投稿 `getRegionalVideos` | `api.bilibili.com` GET `/x/web-interface/newlist` | Web，Cookie 可选，无签名 | JSON `data.archives[]`；`rid`、`pn`、`ps=20`；以 `data.page.count` 判断结束，缺省时按页大小判断；同上 | 本轮动画分区返回 20 条；未测所有分区与真实跨页读取 |
-| 排行榜 `getRanking` | `api.bilibili.com` GET `/x/web-interface/ranking/v2` | Web，Cookie 可选，WBI | JSON `data.list[]`；`rid`（0=全站）、`type=all`；单份榜单无分页；同上 | 本轮游客请求被服务端风控拒绝：业务码 `-352`，按限流停止重试；界面显示错误，不替换成热门 |
+| 排行目录 `RankingClient.getRegions` | `api.bilibili.com` GET `/x/kv-frontend/namespace/data` | Web，Cookie 可选，无签名 | `appKey=333.1339`、`nscode=10`；JSON `data.data`；按 `channel_list.popular_page_sort` 引用各项的 name/tid，跳过 PGC；无分页；同上；[动态目录](ranking-regions.md) | 官网配置游客读取成功，当前 14 个 UGC 排行分区 |
+| 排行榜 `getRanking` | `api.bilibili.com` GET `/x/web-interface/ranking/v2` | Web，Cookie 可选，WBI | JSON `data.list[]`；`rid`（0=全站，UGC 使用上述配置返回的 ID）、`type=all`；单份榜单无分页；同上；[目录修正](ranking-regions.md) | 完整应用烟测全站与动画 `1005` 各成功解析 100 条；其他时段游客遭遇 `-352`，按限流停止重试；未验证所有榜单日期；界面显示错误，不替换成热门 |
 | 搜索 `searchVideos` | `api.bilibili.com` GET `/x/web-interface/wbi/search/type` | Web，Cookie 可选，WBI | JSON；`keyword`、`search_type=video`、`page`、`page_size=20`；同上 | 成功；视频搜索结果中出现空 bvid 的内嵌直播卡，已排除 |
 | 详情/分 P `getVideoDetail` | `api.bilibili.com` GET `/x/web-interface/view` | Web，Cookie 可选，无签名 | JSON；`bvid`；同上 | 成功，aid/cid 以十进制字符串交付 |
 | DASH `getPlayInfo` | `api.bilibili.com` GET `/x/player/wbi/playurl` | Web，Cookie 可选，WBI | JSON；`bvid`、`cid`、`qn`、`fnval=4048`、`fourk=1`；同上 | 成功取得 H.264 视频轨与 AAC 音轨元数据；未验证 CDN headers、Range 或实播 |
@@ -32,9 +35,9 @@
 | Web QR 轮询 `pollQr` | `passport.bilibili.com` GET `/x/passport-login/web/qrcode/poll` | Web，二维码 key，无 WBI | JSON；返回 waitingScan/waitingConfirm/expired/confirmed；Set-Cookie 进临时 jar；有界重试 | 未测真实扫码/确认/过期；仅 fake transport 测试 |
 | 会话与 WBI `getNav` | `api.bilibili.com` GET `/x/web-interface/nav` | Web，Cookie 可选，无签名 | JSON；不分页；有界重试 | 游客返回业务码 `-101`，但 `data.isLogin=false` 和 `data.wbi_img` 有效；包按游客状态解析 |
 
-所有端点只有 GET。请求设置总 deadline，取消与 `sessionEpoch` 检查；旧会话响应被丢弃。网络/超时以及 HTTP 500/502/503/504 只读请求最多额外尝试 2 次，带短指数退避；429、风控/限流、认证/权限与协议错误停止重试。Dio 禁止自动跳转，防止 Cookie 随重定向发送至新目标。Cookie 仅按受限 Bilibili 域、路径、HTTPS、安全标志和绝对过期时间发送。二维码必须由主应用使用独立临时 client/jar；扫码确认后仍需 nav 校验与系统安全存储成功才可提升为主会话。包提供版本化 JSON 兼容快照供**安全存储**使用，不将其写入普通配置或日志。
+上表首轮读取端点均为 GET。请求设置总 deadline，取消与 `sessionEpoch` 检查；旧会话响应被丢弃。网络/超时以及 HTTP 500/502/503/504 只读请求最多额外尝试 2 次，带短指数退避；429、风控/限流、认证/权限与协议错误停止重试。Dio 禁止自动跳转，防止 Cookie 随重定向发送至新目标。Cookie 仅按受限 Bilibili 域、路径、HTTPS、安全标志和绝对过期时间发送。二维码必须由主应用使用独立临时 client/jar；扫码确认后仍需 nav 校验与系统安全存储成功才可提升为主会话。包提供版本化 JSON 兼容快照供**安全存储**使用，不将其写入普通配置或日志。
 
-WBI 密钥由 nav 的图片 URL 提取并单飞缓存；遇到 `-403` 仅刷新并重签一次。签名参数在最终 URI 构造前保持原始字符串，仅 transport 边界编码。普通弹幕解析器是按已公开字段编号独立编写的最小有界解码器，限制单段 2 MiB、最多 6000 项、单项 4096 字节、内容 1024 字节；未复制相邻参考仓库的 Protobuf schema、代码或 fixture。字段参考 [Bilibili API Collect 的弹幕说明](https://github.com/realysy/bili-apis/blob/master/docs/danmaku/danmaku_proto.md)，端点定位参考本项目 [API 方案](../api-design.md) 与 [参考映射](../references.md)。Dio/crypto 直接依赖版本来自各自维护方 [Dio](https://pub.dev/packages/dio) 与 [crypto](https://pub.dev/packages/crypto) 页面，包内精确固定版本。
+WBI 密钥由 nav 的图片 URL 提取并单飞缓存；遇到 `-403` 仅刷新并重签一次。签名参数在最终 URI 构造前保持原始字符串，仅 transport 边界编码。普通弹幕解析器是按已公开字段编号独立编写的最小有界解码器，限制单段 2 MiB、最多保留 6000 项、单项 4096 字节、内容 1024 字节；超过条数预算时完整校验后均匀抽样，行为与登录首集验证见 [密集番剧弹幕](pgc-dense-danmaku.md)。未复制相邻参考仓库的 Protobuf schema、代码或 fixture。字段参考 [Bilibili API Collect 的弹幕说明](https://github.com/realysy/bili-apis/blob/master/docs/danmaku/danmaku_proto.md)，端点定位参考本项目 [API 方案](../api-design.md) 与 [参考映射](../references.md)。Dio/crypto 直接依赖版本来自各自维护方 [Dio](https://pub.dev/packages/dio) 与 [crypto](https://pub.dev/packages/crypto) 页面，包内精确固定版本。
 
 超过 32 KiB 的分段弹幕通过 `TransferableTypedData` 交给独立 isolate 解码；包内最多同时运行 2 个解码任务、等待 4 个。等待时可取消或超时，解码前后再次检查取消、账号 epoch 和 deadline，旧结果不会回写。小段保留同步解码。包内测试覆盖真实 isolate 解码、排队上限路径及取消后的结果丢弃；未测目标设备上的解码性能。
 

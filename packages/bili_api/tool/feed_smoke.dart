@@ -10,6 +10,18 @@ Future<void> main() async {
       () => client.getRegionalVideos(categoryId: '1'),
     );
     await check('ranking', () => client.getRanking());
+    try {
+      final regions = await RankingClient(client).getRegions();
+      print('ranking_regions: success items=${regions.length}');
+      await check(
+        'ranking_region',
+        () => client.getRanking(categoryId: regions.first.id),
+      );
+    } on ApiFailure catch (failure) {
+      print(
+        'ranking_regions: ${failure.category.name} http=${failure.httpStatus} code=${failure.businessCode}',
+      );
+    }
   } finally {
     client.close();
   }

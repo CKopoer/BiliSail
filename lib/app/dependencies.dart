@@ -8,6 +8,7 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import '../core/network/api_requests.dart';
+import '../domain/media_cdn.dart';
 import '../core/logging/playback_diagnostic_log.dart';
 import '../core/platform/window_service.dart';
 import '../core/platform/external_links.dart';
@@ -35,6 +36,8 @@ import '../features/feed/data/api_favorite_folder_repository.dart';
 import '../features/search/application/search_controller.dart';
 import '../features/search/data/api_search_repository.dart';
 import '../features/video/application/video_controller.dart';
+import '../features/video/application/video_card_controller.dart';
+import '../features/video/application/video_card_preview_playback.dart';
 import '../features/video/application/video_actions_controller.dart';
 import '../features/video/data/api_video_actions_repository.dart';
 import '../features/video/application/video_author_controller.dart';
@@ -85,6 +88,8 @@ class AppDependencies {
     this.playbackLog,
     this.images,
     this.updates,
+    this.cardPreviews,
+    this.settings,
   );
 
   final AppDatabase database;
@@ -98,6 +103,8 @@ class AppDependencies {
   final PlaybackDiagnosticLog? playbackLog;
   final AppImageCache images;
   final GitHubUpdateRepository updates;
+  final VideoCardPreviewPlayback cardPreviews;
+  final SqliteSettingsRepository settings;
   bool _closed = false;
 
   static Future<AppDependencies> create() async {
@@ -124,7 +131,20 @@ class AppDependencies {
     );
     final sponsorTransport = DioApiTransport();
     final playbackLog = await PlaybackDiagnosticLog.create();
-    final playbackRepository = ApiPlaybackRepository(api, requests);
+    final settings = SqliteSettingsRepository(
+      database,
+      defaultNavigationMode: defaultWorkspaceNavigationMode,
+    );
+    Future<MediaCdnPreference> cdnPreference() async =>
+        (await settings.load()).mediaCdn;
+    final playbackRepository = ApiPlaybackRepository(
+      api,
+      requests,
+      cdnPreference: cdnPreference,
+    );
+    final cardPreviews = VideoCardPreviewPlayback(
+      createEngine: () => MediaKitEngine(onDiagnostic: playbackLog?.record),
+    );
     final playback = PlaybackManager(
       createSession: () => PlaybackSession(
         sponsorRepository: ApiSponsorRepository(
@@ -143,6 +163,7 @@ class AppDependencies {
           PgcClient(api),
           LiveClient(api),
           requests,
+          cdnPreference: cdnPreference,
         ),
         accountScope: () => session.accountScope,
         progress: LocalProgressStore(
@@ -167,6 +188,7 @@ class AppDependencies {
       onSessionChanged: (scope) async {
         await images.clearSession(scope);
         try {
+          await cardPreviews.stop();
           await playback.stop();
         } finally {
           if (scope != 'guest') await database.clearPrivateHistory(scope);
@@ -185,6 +207,8 @@ class AppDependencies {
       playbackLog,
       images,
       GitHubUpdateRepository(versionLoader: loadInstalledAppVersion),
+      cardPreviews,
+      settings,
     );
   }
 
@@ -283,6 +307,14 @@ class AppDependencies {
         videoRepositoryProvider.overrideWithValue(
           ApiVideoRepository(api, requests),
         ),
+        videoCardPreviewPlaybackProvider.overrideWithValue(cardPreviews),
+        videoCardPlaybackRepositoryProvider.overrideWithValue(
+          ApiPlaybackRepository(
+            api,
+            requests,
+            cdnPreference: () async => (await settings.load()).mediaCdn,
+          ),
+        ),
         collectionSubscriptionRepositoryProvider.overrideWithValue(
           ApiCollectionSubscriptionRepository(
             CollectionSubscriptionClient(api),
@@ -309,12 +341,7 @@ class AppDependencies {
           ),
         ),
         libraryRepositoryProvider.overrideWithValue(library),
-        settingsRepositoryProvider.overrideWithValue(
-          SqliteSettingsRepository(
-            database,
-            defaultNavigationMode: defaultWorkspaceNavigationMode,
-          ),
-        ),
+        settingsRepositoryProvider.overrideWithValue(settings),
         systemFontCatalogProvider.overrideWithValue(
           const NativeSystemFontCatalog(),
         ),
@@ -338,6 +365,7 @@ class AppDependencies {
     _closed = true;
     updates.close();
     try {
+      await cardPreviews.close();
       // Flush the final history observation while its account epoch is valid.
       await playback.close();
     } finally {

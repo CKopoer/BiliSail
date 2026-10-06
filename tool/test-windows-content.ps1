@@ -1,4 +1,4 @@
-param([switch]$Online)
+param([switch]$Online, [string]$PgcEpisodeId, [switch]$SavedSession)
 $ErrorActionPreference = 'Stop'
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $repoRoot
@@ -12,6 +12,16 @@ try {
   $env:BILI_CONTENT_MEDIA_DIR = $mediaDirectory
   $arguments = @('test', 'integration_test/windows_content_playback_test.dart', '-d', 'windows')
   if ($Online) { $arguments += '--dart-define=BILI_CONTENT_ONLINE=true' }
+  if ($PgcEpisodeId) {
+    if (!$Online -or $PgcEpisodeId -notmatch '^[1-9][0-9]*$') {
+      throw 'PgcEpisodeId requires -Online and a positive episode ID.'
+    }
+    $arguments += "--dart-define=BILI_CONTENT_EPISODE=$PgcEpisodeId"
+  }
+  if ($SavedSession) {
+    if (!$Online) { throw 'SavedSession requires -Online.' }
+    $arguments += '--dart-define=BILI_CONTENT_SAVED_SESSION=true'
+  }
   & flutter @arguments
   if ($LASTEXITCODE -ne 0) { throw 'Windows content playback validation failed' }
 } finally {

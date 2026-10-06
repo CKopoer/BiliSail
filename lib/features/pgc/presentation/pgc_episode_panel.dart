@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../domain/pgc_repository.dart';
 
 /// A bounded episode viewport keeps long seasons cheap to lay out.
@@ -26,11 +27,13 @@ final class _PgcEpisodePanelState extends State<PgcEpisodePanel> {
   static const _gridRowHeight = 62.0;
 
   final ScrollController _scroll = ScrollController();
+  final ScrollController _groupScroll = ScrollController();
   late String _group;
   bool _descending = false;
   bool _grid = false;
   bool _focusSelected = true;
   bool _scrollToStart = false;
+  bool _groupHovered = false;
 
   @override
   void initState() {
@@ -51,6 +54,7 @@ final class _PgcEpisodePanelState extends State<PgcEpisodePanel> {
   @override
   void dispose() {
     _scroll.dispose();
+    _groupScroll.dispose();
     super.dispose();
   }
 
@@ -158,25 +162,48 @@ final class _PgcEpisodePanelState extends State<PgcEpisodePanel> {
             if (groups.isNotEmpty) ...[
               SizedBox(
                 height: groupHeight,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    for (final entry in groups.entries)
-                      TextButton(
-                        key: ValueKey('pgc-section-${entry.key}'),
-                        onPressed: () => setState(() {
-                          _group = entry.key;
-                          _scrollToStart = true;
-                          _focusSelected = false;
-                        }),
-                        style: TextButton.styleFrom(
-                          foregroundColor: _group == entry.key
-                              ? colors.primary
-                              : colors.onSurface,
-                        ),
-                        child: Text(entry.key),
+                child: MouseRegion(
+                  key: const ValueKey('pgc-section-tabs'),
+                  onEnter: (_) => setState(() => _groupHovered = true),
+                  onExit: (_) => setState(() => _groupHovered = false),
+                  child: ScrollConfiguration(
+                    behavior: const SmoothScrollBehavior(
+                      horizontalMouseWheel: true,
+                    ).copyWith(scrollbars: false),
+                    child: Scrollbar(
+                      key: const ValueKey('pgc-section-scrollbar'),
+                      controller: _groupScroll,
+                      thumbVisibility: _groupHovered,
+                      interactive: true,
+                      thickness: 3,
+                      radius: const Radius.circular(2),
+                      scrollbarOrientation: ScrollbarOrientation.bottom,
+                      child: ListView(
+                        key: const ValueKey('pgc-section-list'),
+                        controller: _groupScroll,
+                        primary: false,
+                        padding: const EdgeInsets.only(bottom: 6),
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          for (final entry in groups.entries)
+                            TextButton(
+                              key: ValueKey('pgc-section-${entry.key}'),
+                              onPressed: () => setState(() {
+                                _group = entry.key;
+                                _scrollToStart = true;
+                                _focusSelected = false;
+                              }),
+                              style: TextButton.styleFrom(
+                                foregroundColor: _group == entry.key
+                                    ? colors.primary
+                                    : colors.onSurface,
+                              ),
+                              child: Text(entry.key),
+                            ),
+                        ],
                       ),
-                  ],
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 4),

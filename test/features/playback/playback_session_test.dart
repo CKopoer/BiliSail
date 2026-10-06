@@ -662,6 +662,53 @@ void main() {
     },
   );
 
+  test(
+    'fast playback keeps visible comments across media window refreshes',
+    () async {
+      var now = Duration.zero;
+      final engine = _FakeEngine();
+      final repository = _FakeRepository(autoResolve: true);
+      final session = PlaybackSession(
+        engine: engine,
+        repository: repository,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+        danmakuNow: () => now,
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      repository.pendingComments['one:1']!.complete([
+        _comment('ongoing', 10),
+        _comment('future', 31),
+      ]);
+      await _flush();
+      session.danmaku.setViewport(width: 800, height: 450);
+      await session.pause();
+      await session.setRate(3);
+      await session.togglePlaying();
+      session.danmaku.frame();
+      for (var halfSecond = 1; halfSecond <= 20; halfSecond++) {
+        now = Duration(milliseconds: halfSecond * 500);
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            position: Duration(milliseconds: halfSecond * 1500),
+          ),
+        );
+        await _flush();
+        final frame = session.danmaku.frame();
+        expect(
+          frame.map((p) => p.event.id),
+          halfSecond < 7 ? <String>[] : ['ongoing'],
+        );
+      }
+      expect(session.danmaku.pendingCount, 1);
+      await session.pause();
+      await session.seek(const Duration(seconds: 30));
+      expect(session.danmaku.frame().single.event.id, 'ongoing');
+      expect(repository.pendingComments.keys, ['one:1']);
+    },
+  );
+
   test('PGC seek and episode switches cancel old comment windows', () async {
     final engine = _FakeEngine();
     final repository = _FakeRepository();

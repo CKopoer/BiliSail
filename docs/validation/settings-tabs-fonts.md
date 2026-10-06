@@ -40,3 +40,14 @@
 本轮最终 `tool/check.ps1 -SkipPub` 通过：根应用 447 项、bili_api 129 项、bili_player 16 项、bili_danmaku 10 项，共 602 项；根应用和三个包的格式检查、静态分析均通过。专项工作区/直播回归 75 项通过，并验证页面卸载后仍被订阅的直播控制器取消消息读取、解除实时订阅、忽略迟到事件与停止定时重开。日志为 `artifacts/workspace-close-check.log` 和 `artifacts/workspace-close-targeted.log`。
 
 上述键盘和鼠标事件由 Flutter 测试框架注入；本轮未重新构建或进行 Windows 物理键盘、Android/macOS 实机验收。
+
+## 侧键关闭与输入焦点修正（2026-10-06）
+
+搜索、评论或弹幕输入框保留焦点时，原先的工作区输入保护会拦截未带 Ctrl/Meta 的鼠标侧键关闭命令。Ctrl+W 可以关闭当前标签并改变焦点，因此表现为“侧键失效后，先用 Ctrl+W 关闭一次才能恢复”。新增回归在修复前确认后退/前进侧键在单标签和多标签模式下均无法关闭有编辑焦点的页面。
+
+绑定到“关闭当前标签页”的 MouseBack / MouseForward 及其修饰键组合现与 Ctrl/Meta 关闭命令一致，可在输入框持有焦点时执行；单标签模式继续按历史返回。普通字符和未带 Ctrl/Meta 的键盘绑定、新建标签、刷新及播放器操作继续遵守输入保护，模态弹窗仍阻止关闭底层标签。总开关、单项开关、固定首页保护和每次按压只执行一次的规则保持一致。
+
+- 专项工作区、实际页面路由、鼠标事件消费与播放器回归共 102 项通过。新增用例覆盖页面输入框和顶部搜索框持有焦点时连续关闭、两种导航模式、后退/前进侧键、保留上一页草稿、长按跨重建只关闭一次、固定首页及其他命令的输入保护；既有用例增加侧键弹窗与停用保护。
+- `tool/check.ps1 -SkipPub` 通过：根应用 788 项、bili_api 249 项、bili_player 16 项、bili_danmaku 32 项，共 1085 项；四部分的格式检查和静态分析均通过，日志为 `build/mouse-close-tab-check.log`。
+- `flutter build windows --release --no-pub` 成功，入口为 `build/windows/x64/runner/Release/bilisail.exe`，需保留同目录 DLL 与 data 资源；构建日志为 `build/mouse-close-tab-windows-build.log`。
+- 键盘和鼠标事件由 Flutter 测试框架注入；Windows 物理鼠标驱动与 Android/macOS 实机行为仍待验收。

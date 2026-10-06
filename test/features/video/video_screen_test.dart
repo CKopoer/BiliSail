@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/features/video/application/video_extras_controller.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
@@ -10,10 +14,83 @@ import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/features/video/presentation/video_collection_panel.dart';
 import 'package:bilisail/core/presentation/playback_page_commands.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  setUpAll(() async {
+    if (!const bool.fromEnvironment('VIDEO_TAGS_PREVIEW')) return;
+    await (FontLoader('HarmonyOS Sans')..addFont(
+          rootBundle.load(
+            'assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf',
+          ),
+        ))
+        .load();
+    await (FontLoader(
+      'MaterialIcons',
+    )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+  });
+  testWidgets(
+    'tags stay visible and search full names without expanding intro',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1100, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const tag = 'Flutter & Dart/中文+测试';
+      String? searched;
+      var created = 0;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authControllerProvider.overrideWith(_GuestAuthController.new),
+            videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+            videoExtrasRepositoryProvider.overrideWithValue(
+              _ExtrasRepository(tags: const [tag, '编程', '教程', '跨平台开发']),
+            ),
+          ],
+          child: MaterialApp(
+            theme: BiliTheme.light(),
+            builder: (context, child) => RepaintBoundary(
+              key: const ValueKey('video-tags-preview'),
+              child: child ?? const SizedBox.shrink(),
+            ),
+            home: Scaffold(
+              body: VideoScreen(
+                id: const VideoId('BV1abc123456'),
+                onSearchTag: (value) => searched = value,
+                playerBuilder: (_, _, _) =>
+                    _TrackedPlayer(onCreate: () => created++, onDispose: () {}),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('测试简介'), findsNothing);
+      expect(find.text('标签'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ActionChip, tag));
+      expect(searched, tag);
+      await _tagsSnapshot(tester, 'wide');
+      await tester.tap(find.text('展开'));
+      await tester.pumpAndSettle();
+      expect(find.text('测试简介'), findsOneWidget);
+      expect(find.text('标签'), findsOneWidget);
+      await tester.tap(find.text('收起'));
+      await tester.pumpAndSettle();
+      tester.view.physicalSize = const Size(360, 800);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('展开视频信息'));
+      await tester.pumpAndSettle();
+      expect(find.text('标签'), findsOneWidget);
+      await _tagsSnapshot(tester, 'narrow');
+      expect(created, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'narrow window fills the page and restores details without remounting',
     (tester) async {
@@ -396,6 +473,22 @@ final class _GuestAuthController extends AuthController {
   AuthState build() => const AuthState();
 }
 
+Future<void> _tagsSnapshot(WidgetTester tester, String name) async {
+  if (!const bool.fromEnvironment('VIDEO_TAGS_PREVIEW')) return;
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(const ValueKey('video-tags-preview')),
+  );
+  await tester.runAsync(() async {
+    final image = await boundary.toImage();
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (bytes == null) throw StateError('Preview encoding failed');
+    await Directory('build/video-tags-preview').create(recursive: true);
+    await File('build/video-tags-preview/$name.png')
+        .writeAsBytes(bytes.buffer.asUint8List());
+    image.dispose();
+  });
+}
+
 final class _TrackedPlayer extends StatefulWidget {
   const _TrackedPlayer({required this.onCreate, required this.onDispose});
 
@@ -479,8 +572,15 @@ final class _VideoRepository implements VideoRepository {
 }
 
 final class _ExtrasRepository implements VideoExtrasRepository {
+  _ExtrasRepository({this.tags = const []});
+  final List<String> tags;
   int relatedRequests = 0;
   final List<int> commentPages = [];
+  @override
+  Future<List<String>> loadTags(
+    VideoId id, {
+    required RequestCancellation cancellation,
+  }) async => tags;
   @override
   Future<List<VideoSummary>> loadRelated(
     VideoId id, {

@@ -5,6 +5,8 @@ export 'src/models/message_models.dart';
 export 'src/clients/playback_metadata_client.dart';
 export 'src/clients/playback_history_client.dart';
 export 'src/clients/home_client.dart';
+export 'src/clients/ranking_client.dart';
+export 'src/models/ranking_models.dart';
 export 'src/clients/collection_subscription_client.dart';
 export 'src/clients/favorite_folder_client.dart';
 export 'src/cookies.dart';

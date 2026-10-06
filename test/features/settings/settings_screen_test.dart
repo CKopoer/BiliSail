@@ -11,6 +11,36 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('playback CDN choices persist and default to automatic', (
+    tester,
+  ) async {
+    final repository = _SettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SettingsScreen(category: SettingsCategory.playback),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (final (label, preference) in [
+      ('优先常规 CDN', MediaCdnPreference.regular),
+      ('优先腾讯云', MediaCdnPreference.tencent),
+      ('自动（默认）', MediaCdnPreference.automatic),
+    ]) {
+      final choice = find.widgetWithText(ChoiceChip, label);
+      await tester.ensureVisible(choice);
+      await tester.pumpAndSettle();
+      await tester.tap(choice);
+      await tester.pumpAndSettle();
+      expect(repository.settings.mediaCdn, preference);
+      expect(tester.widget<ChoiceChip>(choice).selected, true);
+    }
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('appearance saves each navigation mode', (tester) async {
     final repository = _SettingsRepository();
     await tester.pumpWidget(

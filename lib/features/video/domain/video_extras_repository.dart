@@ -25,6 +25,10 @@ final class VideoCommentsPage {
 }
 
 abstract interface class VideoExtrasRepository {
+  Future<List<String>> loadTags(
+    VideoId id, {
+    required RequestCancellation cancellation,
+  });
   Future<List<VideoSummary>> loadRelated(
     VideoId id, {
     required RequestCancellation cancellation,

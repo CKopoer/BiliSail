@@ -3,14 +3,16 @@ import 'package:bili_api/bili_api.dart';
 import '../../../core/network/api_requests.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
+import '../../../domain/media_cdn.dart';
 import '../domain/playback_repository.dart';
 import 'dash_media_selection.dart';
 
 class ApiPlaybackRepository
     implements PlaybackRepository, PlaybackMetadataRepository {
-  ApiPlaybackRepository(this.api, this.requests);
+  ApiPlaybackRepository(this.api, this.requests, {this.cdnPreference});
   final BiliApiClient api;
   final ApiRequests requests;
+  final Future<MediaCdnPreference> Function()? cdnPreference;
 
   @override
   Future<PlaybackMetadata> metadata(
@@ -83,6 +85,8 @@ class ApiPlaybackRepository
       info,
       quality: quality,
       preferredCodec: preferredCodec,
+      cdnPreference:
+          await cdnPreference?.call() ?? MediaCdnPreference.automatic,
       headers: {
         'Referer': 'https://www.bilibili.com/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0.0 Safari/537.36',

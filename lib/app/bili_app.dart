@@ -12,6 +12,7 @@ import '../features/auth/presentation/account_button.dart';
 import '../features/feed/application/feed_controller.dart';
 import '../features/search/application/search_controller.dart';
 import '../features/video/application/video_controller.dart';
+import '../features/video/application/video_card_controller.dart';
 import '../features/video/application/video_actions_controller.dart';
 import '../features/video/presentation/video_actions_bar.dart';
 import '../features/video/presentation/video_danmaku_composer.dart';
@@ -30,6 +31,7 @@ import '../features/settings/application/settings_controller.dart';
 import '../features/settings/presentation/app_update_host.dart';
 import '../features/settings/domain/app_settings.dart';
 import '../shared/ui/app_notice.dart';
+import '../shared/ui/video_card_interaction_scope.dart';
 import '../shared/ui/smooth_scroll_behavior.dart';
 import 'image_cache_binding.dart';
 import 'dependencies.dart';
@@ -164,10 +166,12 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         ),
         onReload: () {
           ref.invalidate(relatedVideosProvider(detail.summary.id));
-          final session = ProviderScope.containerOf(
+          final pageContainer = ProviderScope.containerOf(
             context,
             listen: false,
-          ).read(playbackSessionProvider);
+          );
+          pageContainer.invalidate(videoTagsProvider(detail.summary.id));
+          final session = pageContainer.read(playbackSessionProvider);
           if (session.detail?.summary.id == detail.summary.id &&
               session.part?.cid == part.cid) {
             unawaited(session.retry());
@@ -245,6 +249,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         ref.invalidate(videoDetailProvider);
         ref.invalidate(videoActionsControllerProvider);
         ref.invalidate(relatedVideosProvider);
+        ref.invalidate(videoTagsProvider);
         ref.invalidate(videoCommentsProvider);
         ref.invalidate(historyProvider);
       }
@@ -252,6 +257,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
     final settings =
         ref.watch(settingsControllerProvider).value ??
         const AppSettings.defaults();
+    final cardInteractions = ref.watch(videoCardControllerProvider);
     return ImageCacheBinding(
       cache: widget.dependencies.images,
       child: MaterialApp.router(
@@ -260,7 +266,13 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         scrollBehavior: const SmoothScrollBehavior(),
         builder: (context, child) => AppUpdateHost(
           navigatorKey: _router.routerDelegate.navigatorKey,
-          child: AppNoticeHost.builder(context, child),
+          child: AppNoticeHost(
+            child: VideoCardInteractionScope(
+              interactions: cardInteractions,
+              onNotice: showAppNotice,
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
         ),
         locale: const Locale('zh', 'CN'),
         supportedLocales: const [Locale('zh', 'CN'), Locale('en')],

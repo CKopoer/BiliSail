@@ -19,6 +19,18 @@ final feedCategoriesProvider = FutureProvider<List<VideoCategory>>((ref) {
       .loadCategories(cancellation: cancellation);
 });
 
+final rankingCategoriesProvider = FutureProvider<List<VideoCategory>>((ref) {
+  final cancellation = RequestCancellation();
+  ref.onDispose(cancellation.cancel);
+  final repository = ref.read(feedRepositoryProvider);
+  if (repository is! RankingFeedRepository) {
+    throw const AppFailure(AppFailureKind.protocol, '排行榜服务暂不可用');
+  }
+  return (repository as RankingFeedRepository).loadRankingCategories(
+    cancellation: cancellation,
+  );
+});
+
 final feedControllerProvider = NotifierProvider<FeedController, FeedState>(
   FeedController.new,
 );

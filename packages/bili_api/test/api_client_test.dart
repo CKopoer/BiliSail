@@ -347,10 +347,10 @@ void main() {
         (await client.getRegionalVideos(categoryId: '3', page: 3)).hasMore,
         isFalse,
       );
-      final ranking = await client.getRanking(categoryId: '4');
+      final ranking = await client.getRanking(categoryId: '1008');
       expect(ranking.items.single.playCount, 42);
       expect(ranking.hasMore, isFalse);
-      expect(requests.last.queryParameters['rid'], '4');
+      expect(requests.last.queryParameters['rid'], '1008');
       expect(requests.last.queryParameters['type'], 'all');
       expect(requests.last.queryParameters['w_rid'], isNotNull);
       expect(requests.any((uri) => uri.path.endsWith('/popular')), isFalse);

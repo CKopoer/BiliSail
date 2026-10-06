@@ -87,6 +87,26 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     COMPONENT Runtime)
 endif()
 
+# The pinned WebView plugin imports this loader, but its bundled-libraries list
+# omits it. NuGet copies it beside the plugin DLL before the install step.
+if(TARGET flutter_inappwebview_windows_plugin)
+  install(FILES
+    "$<TARGET_FILE_DIR:flutter_inappwebview_windows_plugin>/WebView2Loader.dll"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+  set(WEBVIEW_LICENSE_DIR "${INSTALL_BUNDLE_DATA_DIR}/licenses/webview")
+  install(FILES "${CMAKE_BINARY_DIR}/packages/Microsoft.Web.WebView2/LICENSE.txt"
+    DESTINATION "${WEBVIEW_LICENSE_DIR}" RENAME WebView2-LICENSE.txt COMPONENT Runtime)
+  install(FILES "${CMAKE_BINARY_DIR}/packages/Microsoft.Windows.ImplementationLibrary/LICENSE"
+    DESTINATION "${WEBVIEW_LICENSE_DIR}" RENAME WIL-LICENSE.txt COMPONENT Runtime)
+  install(FILES "${CMAKE_BINARY_DIR}/packages/Microsoft.Windows.ImplementationLibrary/ThirdPartyNotices.txt"
+    DESTINATION "${WEBVIEW_LICENSE_DIR}" RENAME WIL-ThirdPartyNotices.txt COMPONENT Runtime)
+  install(FILES "${CMAKE_BINARY_DIR}/packages/Microsoft.Windows.CppWinRT/LICENSE"
+    DESTINATION "${WEBVIEW_LICENSE_DIR}" RENAME CppWinRT-LICENSE.txt COMPONENT Runtime)
+  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/licenses/nlohmann-json-LICENSE.txt"
+    DESTINATION "${WEBVIEW_LICENSE_DIR}" COMPONENT Runtime)
+endif()
+
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"

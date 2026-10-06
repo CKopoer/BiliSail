@@ -23,4 +23,17 @@ class AuthController extends Notifier<AuthState> {
   void signIn() => unawaited(ref.read(authRepositoryProvider).signIn());
   void cancelSignIn() => ref.read(authRepositoryProvider).cancelSignIn();
   Future<void> signOut() => ref.read(authRepositoryProvider).signOut();
+
+  WebAuthRepository? get _webAuth {
+    final repository = ref.read(authRepositoryProvider);
+    return repository is WebAuthRepository ? repository : null;
+  }
+
+  WebLoginAttempt? beginWebLogin() => _webAuth?.beginWebLogin();
+  Future<void> completeWebLogin(
+    WebLoginAttempt attempt,
+    List<LoginCookie> cookies,
+  ) async {
+    await _webAuth?.completeWebLogin(attempt, cookies);
+  }
 }

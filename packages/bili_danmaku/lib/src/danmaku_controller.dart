@@ -44,8 +44,8 @@ final class _Active {
   final int lane;
 }
 
-/// Uses confirmed player position as its only media clock. [monotonicNow]
-/// must not move backwards (e.g. Stopwatch.elapsed).
+/// Schedules by confirmed media time and animates by unscaled elapsed time.
+/// [monotonicNow] must not move backwards (e.g. Stopwatch.elapsed).
 final class DanmakuController extends ChangeNotifier {
   DanmakuController({
     required Duration Function() monotonicNow,
@@ -119,7 +119,8 @@ final class DanmakuController extends ChangeNotifier {
   int _next = 0;
   Duration _anchorPosition = Duration.zero;
   Duration _anchorTime = Duration.zero;
-  Duration _lastRendered = Duration.zero;
+  Duration _anchorAnimation = Duration.zero;
+  final Set<String> _consumedIds = {};
   bool _playing = false;
   bool _buffering = false;
   bool _seeking = false;
@@ -134,22 +135,43 @@ final class DanmakuController extends ChangeNotifier {
   int get pendingCount => _events.length - _next;
   int get visibleCount => _active.length;
   int get textLayoutCount => _layouts.length;
+
+  /// Media history needed to rebuild after seeking or refresh visible items.
+  Duration get requiredHistory {
+    final lifetime = _scrollLifetime > fixedDuration
+        ? _scrollLifetime
+        : fixedDuration;
+    var history = Duration(
+      microseconds: (lifetime.inMicroseconds * _rate).ceil(),
+    );
+    final at = _displayPosition;
+    for (final item in _active) {
+      final age = at - item.event.at;
+      if (age > history) history = age;
+    }
+    return history;
+  }
+
   bool get isAnimating =>
       _playing &&
       !_buffering &&
       !_seeking &&
       _now() - _anchorTime < maxInterpolation;
 
-  Duration _estimate(Duration now) {
-    if (!_playing || _buffering || _seeking) return _anchorPosition;
+  Duration _elapsed(Duration now) {
+    if (!_playing || _buffering || _seeking) return Duration.zero;
     final since = now - _anchorTime;
-    if (since <= Duration.zero) {
-      return _anchorPosition;
-    }
-    final advance = since < maxInterpolation ? since : maxInterpolation;
+    if (since <= Duration.zero) return Duration.zero;
+    return since < maxInterpolation ? since : maxInterpolation;
+  }
+
+  Duration _estimate(Duration now) {
+    final advance = _elapsed(now);
     return _anchorPosition +
         Duration(microseconds: (advance.inMicroseconds * _rate).round());
   }
+
+  Duration _animationAt(Duration now) => _anchorAnimation + _elapsed(now);
 
   void setViewport({
     required double width,
@@ -180,6 +202,7 @@ final class DanmakuController extends ChangeNotifier {
 
   /// Holds only a bounded, sorted window supplied by the application layer.
   void replaceEvents(Iterable<DanmakuEvent> events) {
+    final previous = {for (final event in _events) event.id: event};
     final ids = <String>{};
     final sorted =
         events
@@ -206,19 +229,28 @@ final class DanmakuController extends ChangeNotifier {
       _events = List.unmodifiable(sorted);
     }
     final available = {for (final event in _events) event.id: event};
+    _consumedIds.removeWhere((id) {
+      final oldEvent = previous[id];
+      final nextEvent = available[id];
+      return oldEvent == null ||
+          nextEvent == null ||
+          !_sameEvent(oldEvent, nextEvent);
+    });
     _updateLaneHeight();
     _active.removeWhere((item) {
       final next = available[item.event.id];
-      return next == null ||
-          next.text != item.event.text ||
-          next.color != item.event.color ||
-          next.fontSize != item.event.fontSize ||
-          next.at != item.event.at ||
-          next.mode != item.event.mode;
+      return next == null || !_sameEvent(item.event, next);
     });
     _rewindTo(_displayPosition);
     notifyListeners();
   }
+
+  bool _sameEvent(DanmakuEvent a, DanmakuEvent b) =>
+      a.text == b.text &&
+      a.color == b.color &&
+      a.fontSize == b.fontSize &&
+      a.at == b.at &&
+      a.mode == b.mode;
 
   /// Pass the latest confirmed player position when phase or rate changes.
   void sync({
@@ -229,6 +261,10 @@ final class DanmakuController extends ChangeNotifier {
     required double rate,
   }) {
     final now = _now();
+    final previousPosition = _estimate(now);
+    // Settle the previous phase before changing its anchor or rate. Existing
+    // comments retain their visual age across media corrections/rate changes.
+    _anchorAnimation = _animationAt(now);
     _anchorPosition = confirmedPosition < Duration.zero
         ? Duration.zero
         : confirmedPosition;
@@ -237,8 +273,10 @@ final class DanmakuController extends ChangeNotifier {
     _buffering = buffering;
     _seeking = seeking;
     _rate = rate.isFinite && rate > 0 ? rate : 1;
-    if ((_anchorPosition - _lastRendered).abs() > const Duration(seconds: 2)) {
+    if ((_anchorPosition - previousPosition).abs() >
+        const Duration(seconds: 2)) {
       _active.clear();
+      _consumedIds.clear();
       _rewindTo(_anchorPosition - _offset);
     }
     notifyListeners();
@@ -247,21 +285,20 @@ final class DanmakuController extends ChangeNotifier {
   /// Call only after the player confirms the new position.
   void seekConfirmed(Duration confirmedPosition) {
     final now = _now();
+    _anchorAnimation = _animationAt(now);
     _anchorPosition = confirmedPosition < Duration.zero
         ? Duration.zero
         : confirmedPosition;
     _anchorTime = now;
-    _lastRendered = _anchorPosition;
     _seeking = false;
     _active.clear();
+    _consumedIds.clear();
     _rewindTo(_anchorPosition - _offset);
     notifyListeners();
   }
 
   void _rewindTo(Duration position) {
-    final earliest =
-        position -
-        (_scrollLifetime > fixedDuration ? _scrollLifetime : fixedDuration);
+    final earliest = position - requiredHistory;
     _next = _lowerBound(
       _events,
       earliest < Duration.zero ? Duration.zero : earliest,
@@ -303,8 +340,9 @@ final class DanmakuController extends ChangeNotifier {
   void _clearLayouts() => _layouts.clear();
 
   List<DanmakuPlacement> frame() {
-    final at = _displayPosition;
-    _lastRendered = position;
+    final now = _now();
+    final mediaAt = _estimate(now) - _offset;
+    final at = _animationAt(now);
     _active.removeWhere(
       (item) =>
           at - item.start >=
@@ -313,13 +351,18 @@ final class DanmakuController extends ChangeNotifier {
               : fixedDuration),
     );
     if (_width <= 0 || _height <= 0) return const [];
-    while (_next < _events.length && _events[_next].at <= at) {
+    while (_next < _events.length && _events[_next].at <= mediaAt) {
       final event = _events[_next++];
+      if (!_consumedIds.add(event.id)) continue;
       if (_active.length >= (_maxOnScreen == 0 ? maxVisible : _maxOnScreen)) {
         dropped++;
         continue;
       }
-      final age = at - event.at;
+      // Catch up late arrivals/seek history in real seconds at the current
+      // media rate; once admitted, only the independent animation clock moves it.
+      final age = Duration(
+        microseconds: ((mediaAt - event.at).inMicroseconds / _rate).round(),
+      );
       final lifetime = event.mode == DanmakuMode.scroll
           ? _scrollLifetime
           : fixedDuration;
@@ -338,7 +381,7 @@ final class DanmakuController extends ChangeNotifier {
         dropped++;
         continue;
       }
-      _active.add(_Active(event, event.at, layout.width, lane));
+      _active.add(_Active(event, at - age, layout.width, lane));
     }
     final result = <DanmakuPlacement>[];
     for (final item in _active) {

@@ -1,8 +1,10 @@
 import '../../../domain/playback_rates.dart';
 import '../../../domain/video_codec.dart';
+import '../../../domain/media_cdn.dart';
 import 'shortcut_settings.dart';
 
 export '../../../domain/video_codec.dart';
+export '../../../domain/media_cdn.dart' show MediaCdnPreference;
 
 enum AppThemePreference { system, light, dark }
 
@@ -53,6 +55,7 @@ final class AppSettings {
     this.showCollapsedProgress = true,
     this.preferredQuality = 80,
     this.preferredVideoCodec = VideoCodecPreference.h264,
+    this.mediaCdn = MediaCdnPreference.automatic,
     this.videoDecoding = VideoDecodingPreference.automatic,
     this.defaultPlaybackRate = 1.0,
     this.defaultVolume = 100.0,
@@ -99,6 +102,7 @@ final class AppSettings {
        showCollapsedProgress = true,
        preferredQuality = 80,
        preferredVideoCodec = VideoCodecPreference.h264,
+       mediaCdn = MediaCdnPreference.automatic,
        videoDecoding = VideoDecodingPreference.automatic,
        defaultPlaybackRate = 1.0,
        defaultVolume = 100.0,
@@ -145,6 +149,7 @@ final class AppSettings {
   final bool showCollapsedProgress;
   final int preferredQuality;
   final VideoCodecPreference preferredVideoCodec;
+  final MediaCdnPreference mediaCdn;
   final VideoDecodingPreference videoDecoding;
   final double defaultPlaybackRate;
   final double defaultVolume;
@@ -200,6 +205,7 @@ final class AppSettings {
     bool? showCollapsedProgress,
     int? preferredQuality,
     VideoCodecPreference? preferredVideoCodec,
+    MediaCdnPreference? mediaCdn,
     VideoDecodingPreference? videoDecoding,
     double? defaultPlaybackRate,
     double? defaultVolume,
@@ -243,6 +249,7 @@ final class AppSettings {
     showCollapsedProgress: showCollapsedProgress ?? this.showCollapsedProgress,
     preferredQuality: preferredQuality ?? this.preferredQuality,
     preferredVideoCodec: preferredVideoCodec ?? this.preferredVideoCodec,
+    mediaCdn: mediaCdn ?? this.mediaCdn,
     videoDecoding: videoDecoding ?? this.videoDecoding,
     defaultPlaybackRate: defaultPlaybackRate ?? this.defaultPlaybackRate,
     defaultVolume: defaultVolume ?? this.defaultVolume,

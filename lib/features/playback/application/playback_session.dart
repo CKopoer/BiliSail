@@ -34,6 +34,7 @@ class PlaybackSession extends ChangeNotifier {
     this.historyRepository,
     int Function()? sessionEpoch,
     Duration Function()? historyNow,
+    Duration Function()? danmakuNow,
   }) : sessionEpoch = sessionEpoch ?? _zeroEpoch {
     _clock.start();
     final history = historyRepository;
@@ -61,7 +62,9 @@ class PlaybackSession extends ChangeNotifier {
               }
             },
           );
-    danmaku = DanmakuController(monotonicNow: () => _clock.elapsed);
+    danmaku = DanmakuController(
+      monotonicNow: danmakuNow ?? () => _clock.elapsed,
+    );
     _subscriptions.add(engine.snapshots.listen(_onSnapshot));
     _subscriptions.add(
       engine.failures.listen((failure) {
@@ -967,6 +970,10 @@ class PlaybackSession extends ChangeNotifier {
   void _refreshCommentWindow(Duration position) {
     if (_disposed) return;
     final displayPosition = position - _settings.danmakuOffset;
+    final requiredHistory = danmaku.requiredHistory;
+    final history = requiredHistory > const Duration(seconds: 16)
+        ? requiredHistory
+        : const Duration(seconds: 16);
     final events = _segments.values.expand((events) => events).toList()
       ..sort((a, b) => a.position.compareTo(b.position));
     final density = <int, int>{};
@@ -974,8 +981,7 @@ class PlaybackSession extends ChangeNotifier {
       events
           .where(
             (event) =>
-                event.position >=
-                    displayPosition - const Duration(seconds: 16) &&
+                event.position >= displayPosition - history &&
                 event.position <= displayPosition + const Duration(seconds: 60),
           )
           .where((event) {

@@ -243,6 +243,50 @@ void main() {
     expect(repository.calls.last, 'ranking:0');
   });
 
+  testWidgets('ranking uses its own regions and restores the selected region', (
+    tester,
+  ) async {
+    final repository = _FeedRepository();
+    final channel = ValueNotifier(HomeChannel.ranking);
+    addTearDown(channel.dispose);
+    await tester.pumpWidget(_app(repository, channel: channel));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-section-1')), findsNothing);
+    await tester.tap(find.text('动画'));
+    await tester.pumpAndSettle();
+    expect(repository.calls.last, 'ranking:1005');
+    expect(find.text('排行1005视频'), findsOneWidget);
+    await tester.tap(find.text('音乐'));
+    await tester.pumpAndSettle();
+    expect(repository.calls.last, 'ranking:1003');
+    channel.value = HomeChannel.categories;
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('音乐'));
+    await tester.pumpAndSettle();
+    expect(repository.calls.last, '3:1');
+    final calls = repository.calls.length;
+    channel.value = HomeChannel.ranking;
+    await tester.pumpAndSettle();
+    expect(find.text('排行1003视频'), findsOneWidget);
+    expect(repository.calls.length, calls);
+    await tester.tap(find.byTooltip('刷新视频'));
+    await tester.pumpAndSettle();
+    expect(repository.calls.last, 'ranking:1003');
+    repository.rankingCategories = const [
+      VideoCategory(id: '7777', name: '新增分区'),
+    ];
+    await tester.tap(find.byTooltip('刷新视频'));
+    await tester.pumpAndSettle();
+    expect(find.text('音乐'), findsNothing);
+    expect(repository.calls.last, 'ranking:0');
+    await tester.tap(find.text('新增分区'));
+    await tester.pumpAndSettle();
+    expect(repository.calls.last, 'ranking:7777');
+    await tester.tap(find.text('全站'));
+    await tester.pumpAndSettle();
+    expect(repository.calls.last, 'ranking:0');
+  });
+
   testWidgets('native content subnavigation and login work at narrow width', (
     tester,
   ) async {
@@ -448,6 +492,10 @@ final class _FeedRepository implements FeedRepository, RankingFeedRepository {
   final bool paginated;
   final int itemCount;
   final List<String> calls = [];
+  List<VideoCategory> rankingCategories = const [
+    VideoCategory(id: '1005', name: '动画'),
+    VideoCategory(id: '1003', name: '音乐'),
+  ];
   bool _pageFailed = false;
   @override
   Future<List<VideoCategory>> loadCategories({
@@ -456,6 +504,10 @@ final class _FeedRepository implements FeedRepository, RankingFeedRepository {
     VideoCategory(id: '1', name: '动画'),
     VideoCategory(id: '3', name: '音乐'),
   ];
+  @override
+  Future<List<VideoCategory>> loadRankingCategories({
+    required RequestCancellation cancellation,
+  }) async => rankingCategories;
   @override
   Future<PageResult<VideoSummary>> loadFeed({
     required int page,

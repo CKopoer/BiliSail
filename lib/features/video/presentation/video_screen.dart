@@ -13,6 +13,7 @@ import '../../settings/domain/app_settings.dart';
 import '../../settings/domain/shortcut_settings.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/state_view.dart';
+import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../../../shared/ui/video_card.dart';
 import 'video_author_header.dart';
@@ -20,6 +21,7 @@ import 'video_collection_panel.dart';
 import '../application/video_controller.dart';
 import '../application/video_extras_controller.dart';
 import 'video_comments_panel.dart';
+import 'video_tags_panel.dart';
 import '../../../shared/ui/bili_icons.dart';
 
 typedef VideoPlayerBuilder = Widget Function(
@@ -41,6 +43,7 @@ final class VideoScreen extends ConsumerStatefulWidget {
     this.onLogin,
     this.onOpenUser,
     this.onOpenVideoPart,
+    this.onSearchTag,
   });
   final VideoId id;
   final String? initialCid;
@@ -52,6 +55,7 @@ final class VideoScreen extends ConsumerStatefulWidget {
   final VoidCallback? onLogin;
   final ValueChanged<UserId>? onOpenUser;
   final void Function(VideoId, String?)? onOpenVideoPart;
+  final ValueChanged<String>? onSearchTag;
   @override
   ConsumerState<VideoScreen> createState() => _VideoScreenState();
 }
@@ -248,18 +252,11 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                         .bodyMedium
                                         ?.copyWith(height: 1.6),
                                   ),
-                                  if (video.tags.isNotEmpty) ...[
-                                    const SizedBox(height: 12),
-                                    Wrap(
-                                      spacing: 6,
-                                      runSpacing: 6,
-                                      children: [
-                                        for (final tag in video.tags)
-                                          Chip(label: Text(tag)),
-                                      ],
-                                    ),
-                                  ],
                                 ],
+                                VideoTagsPanel(
+                                  id: widget.id,
+                                  onSearch: widget.onSearchTag,
+                                ),
                                 _separator('intro'),
                                 if (video.parts.length > 1 ||
                                     video.collection != null) ...[
@@ -522,8 +519,8 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                         ),
                                       )
                                     else
-                                      Image.network(
-                                        video.coverUrl,
+                                      AppCoverImage(
+                                        url: video.coverUrl,
                                         fit: BoxFit.cover,
                                         errorBuilder: (_, _, _) => const Icon(
                                           Icons.video_library_outlined,

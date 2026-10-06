@@ -184,7 +184,9 @@ void main() {
         ImageByteCache(
           directory: () async => throw const FileSystemException('optional'),
           loader: (uri, _) async {
-            loaded.add(uri.path);
+            expect(uri.path, endsWith('_1280h_0e.webp'));
+            // Visibility is keyed by cover identity, independently of its size.
+            loaded.add(uri.path.split('@').first);
             return bytes;
           },
         ),

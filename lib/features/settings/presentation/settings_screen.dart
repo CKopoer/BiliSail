@@ -256,6 +256,23 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                         ]),
                       if (widget.category == SettingsCategory.playback)
+                        _section('CDN 线路', [
+                          _choices('视频 CDN', s.mediaCdn, const {
+                            MediaCdnPreference.automatic: '自动（默认）',
+                            MediaCdnPreference.regular: '优先常规 CDN',
+                            MediaCdnPreference.tencent: '优先腾讯云',
+                            MediaCdnPreference.huawei: '优先华为云',
+                            MediaCdnPreference.alibaba: '优先阿里云',
+                            MediaCdnPreference.baidu: '优先百度云',
+                          }, controller.setMediaCdn),
+                          const Text(
+                            '自动使用哔哩哔哩返回的线路，由系统或代理的 DNS 解析节点。其他选项优先选择接口提供的对应线路，连接失败时尝试备用地址。',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text('适用于视频、影视和悬停预览，下次加载播放源时生效。'),
+                        ]),
+                      if (widget.category == SettingsCategory.playback)
                         _section('视频编解码', [
                           _choices('优先视频编码', s.preferredVideoCodec, const {
                             VideoCodecPreference.h264: 'H.264 / AVC（默认）',

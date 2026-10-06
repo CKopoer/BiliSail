@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/platform/external_links.dart';
 import '../../../domain/user.dart';
-import '../../../shared/ui/app_network_image.dart';
+import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/bili_badges.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/video_card.dart';
@@ -499,10 +499,9 @@ final class _Cover extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (source != null && source.host.isNotEmpty)
-              AppNetworkImage(
+              AppCoverImage(
                 url: source.toString(),
                 fit: BoxFit.cover,
-                cacheWidth: 640,
                 excludeFromSemantics: true,
                 errorBuilder: (_, _, _) => fallback,
               )

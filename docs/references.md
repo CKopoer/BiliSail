@@ -45,6 +45,8 @@
 
 首页悬浮刷新与回顶部本轮参考用户提供的本机客户端截图；图片缓存与状态保留另外只读查看 [PerformanceSettingsControl.xaml](../../biliuwp-lite/src/BiliLite.UWP/Controls/Settings/PerformanceSettingsControl.xaml)、[RecommendPage.xaml.cs](../../biliuwp-lite/src/BiliLite.UWP/Pages/Home/RecommendPage.xaml.cs) 和 [DynamicPage.xaml.cs](../../biliuwp-lite/src/BiliLite.UWP/Pages/Home/DynamicPage.xaml.cs)。自行编写 Flutter/Dart 控件、滚动检查和有界图片缓存，不复制参考实现或新增图片资源；本轮未操作已安装客户端实机验收，详见 [首页刷新、自动分页与图片缓存](validation/feed-scroll-image-cache.md)。
 
+2026-10-06 视频封面缩略图另只读参考 [ImageCompressionConvert.cs](../../biliuwp-lite/src/BiliLite.UWP/Converters/ImageCompressionConvert.cs)、[RecommendPage.xaml](../../biliuwp-lite/src/BiliLite.UWP/Pages/Home/RecommendPage.xaml) 的 `200h` 和 [VideoListView.xaml](../../biliuwp-lite/src/BiliLite.UWP/Controls/VideoListView.xaml) 的 `140w`。仅借鉴给原地址追加 CDN 尺寸参数、保留已有处理地址的规则，复用本项目既有 WebP 缩略图生成器，独立实现随显示尺寸/屏幕缩放选择档位；没有采用参考源码或资源，不扩大许可范围。实际传输对比与验证见 [图片缓存记录](validation/feed-scroll-image-cache.md#视频封面-cdn-缩略图)。
+
 用户空间另参考本机 **哔哩哔哩 UWP 4.8.18.0** 的个人中心、关注列表和 UP 主主页，以及 [UserInfoPage.xaml](../../biliuwp-lite/src/BiliLite.UWP/Pages/UserInfoPage.xaml)、[UserDetailAPI.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/User/UserDetailAPI.cs)、[UserDetailViewModel.cs](../../biliuwp-lite/src/BiliLite.UWP/ViewModels/User/UserDetailViewModel.cs)。本轮仅参考交互和协议字段，自行编写 Flutter/Dart；不新增资源复制或相邻仓库运行时依赖。结果见 [用户主页验证](validation/user-profile.md)。
 
 | 已查看入口 | 借鉴点 | Flutter/Dart 落点 |
@@ -73,6 +75,10 @@
 以上来自当前快照的实现细节，用来约束迁移；不据此推断整个参考项目的安全性或当前维护状态。
 
 ## 4. 许可与来源记录
+
+2026-10-06 登录扩展另只读查看 K 的 BiliApis/TVAuthorizeClient，以及 U 的 AccountApi、LoginVM、LoginDialog 和 bili_gt.html。K 当前快照只有密码／App 登录常量，没有完整密码／短信客户端；U 有对应 App 协议与交互。最终采用内嵌官网登录页，独立编写 Flutter 适配和安全会话接入；未复制参考源码、22/33 图片或 gt.js，未把 App/TV token 混入 Web 会话。依赖、来源链接和验证边界见 [登录验证](validation/password-sms-login.md)。
+
+用户后续指定的 [dart_simple_live dev](https://github.com/xiaoyaocz/dart_simple_live/tree/dev)，本轮固定提交 `bccd2ba2e77bc34b3e3a0897f1cb5e0b402afd2b`，仅只读参考移动端完整网页登录与 Cookie 获取职责，未复制其 GPL-3.0 源码或资源。其网页登录入口只对 Android/iOS 开放，桌面使用扫码／手动 Cookie；不能由此推导 Windows 密码／短信已提供。源码链接与对比见 [登录验证](validation/password-sms-login.md)。
 
 本地 `bili-kernel` 根 [LICENSE](../../bili-kernel/LICENSE) 是 GPL-3.0 文本，但已查看的多个 C# 文件头写 MIT，存在需要厘清的来源信息。本地 `biliuwp-lite` 用 `rg --files` 搜索未找到 LICENSE 命名文件，这不等于可随意复制其代码或资源。
 
@@ -103,6 +109,10 @@
 ### 直播表情与主页入口补充参考
 
 本轮按用户要求只读参考 [LiveDetailPage.xaml](../../biliuwp-lite/src/BiliLite.UWP/Pages/LiveDetailPage.xaml)、[LiveDetailPage.xaml.cs](../../biliuwp-lite/src/BiliLite.UWP/Pages/LiveDetailPage.xaml.cs)、[LiveMessage.cs](../../biliuwp-lite/src/BiliLite.UWP/Modules/Live/LiveMessage.cs)、[LiveRoomHistoryDanmu.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Common/Live/LiveRoomHistoryDanmu.cs) 和 [LiveMessageHandleActionsMap.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Common/Live/LiveMessageHandleActionsMap.cs)，借鉴表情元数据、观看人数事件和基于 UID 的主页入口。独立实现 Dart/Flutter，远端表情按协议中的 URL 加载，不打包上游表情或复制源码；结果见 [直播表情与主页入口](validation/live-chat-profiles.md)。
+
+### 视频标签补充参考（2026-10-06）
+
+只读查看 `biliuwp-lite` 提交 `baf7e7591e8dc2fe012cf1e7ba54a056dec7f3b0` 的 [视频详情 XAML](../../biliuwp-lite/src/BiliLite.UWP/Pages/VideoDetailPage.xaml)、[标签点击处理](../../biliuwp-lite/src/BiliLite.UWP/Pages/VideoDetailPage.xaml.cs)、[详情 ViewModel](../../biliuwp-lite/src/BiliLite.UWP/ViewModels/Video/VideoDetailPageViewModel.cs) 和 [VideoAPI](../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/VideoAPI.cs)。借鉴标签列表与按名称搜索的交互及 Web 端点，独立编写 Dart／Flutter，没有复制新源码或资源，采用范围沿用第 4 节许可限制。协议与验证见 [视频标签与搜索](validation/video-tags.md)。
 
 ## 5. 外部一手资料
 

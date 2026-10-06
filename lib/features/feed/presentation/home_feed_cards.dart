@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/ui/video_card.dart';
 import '../../../domain/video.dart';
-import '../../../shared/ui/app_network_image.dart';
+import '../../../shared/ui/app_cover_image.dart';
 import '../domain/home_repository.dart';
 
 final class VideoDynamicCard extends StatelessWidget {
@@ -307,9 +307,8 @@ final class _Cover extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         child: url == null
             ? const Center(child: Icon(Icons.image_outlined))
-            : AppNetworkImage(
+            : AppCoverImage(
                 url: url.toString(),
-                cacheWidth: 640,
                 frameBuilder: (_, child, frame, _) => frame != null
                     ? child
                     : const Center(child: Icon(Icons.image_outlined)),

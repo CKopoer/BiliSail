@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('fullscreen resizing preserves arrivals and scroll progress', () {
-    final controller = DanmakuController(monotonicNow: () => Duration.zero);
+    var now = Duration.zero;
+    final controller = DanmakuController(monotonicNow: () => now);
     addTearDown(controller.dispose);
     controller.configure(area: 1, speed: 1, maxOnScreen: 1);
     controller.setViewport(width: 600, height: 384, bottomInset: 100);
@@ -19,10 +20,11 @@ void main() {
       DanmakuEvent(id: 'visible', at: Duration(seconds: 4), text: 'visible'),
       DanmakuEvent(id: 'future', at: Duration(seconds: 14), text: 'future'),
     ]);
-    for (var second = 0; second <= 5; second++) {
+    for (var halfSecond = 0; halfSecond <= 10; halfSecond++) {
+      now = Duration(milliseconds: halfSecond * 500);
       controller.sync(
-        confirmedPosition: Duration(seconds: second),
-        playing: false,
+        confirmedPosition: now,
+        playing: true,
         buffering: false,
         seeking: false,
         rate: 1,
@@ -55,17 +57,20 @@ void main() {
       expect(after.y, before.y);
       expect(controller.dropped, dropped);
     }
-    for (var second = 6; second <= 14; second++) {
+    for (var halfSecond = 11; halfSecond <= 28; halfSecond++) {
+      now = Duration(milliseconds: halfSecond * 500);
       controller.sync(
-        confirmedPosition: Duration(seconds: second),
-        playing: false,
+        confirmedPosition: now,
+        playing: true,
         buffering: false,
         seeking: false,
         rate: 1,
       );
       expect(
         controller.frame().map((p) => p.event.id),
-        second < 12 ? ['visible'] : (second < 14 ? <String>[] : ['future']),
+        halfSecond < 24
+            ? ['visible']
+            : (halfSecond < 28 ? <String>[] : ['future']),
       );
     }
     controller.seekConfirmed(const Duration(seconds: 1));
@@ -91,10 +96,11 @@ void main() {
         DanmakuEvent(id: 'visible', at: Duration(seconds: 4), text: 'visible'),
         DanmakuEvent(id: 'future', at: Duration(seconds: 14), text: 'future'),
       ]);
-      for (var second = 0; second <= 5; second++) {
+      for (var halfSecond = 0; halfSecond <= 10; halfSecond++) {
+        now = Duration(milliseconds: halfSecond * 500);
         controller.sync(
-          confirmedPosition: Duration(seconds: second),
-          playing: false,
+          confirmedPosition: now,
+          playing: true,
           buffering: false,
           seeking: false,
           rate: 1,
@@ -124,19 +130,22 @@ void main() {
         seeking: false,
         rate: 1,
       );
-      now = const Duration(milliseconds: 250);
+      now += const Duration(milliseconds: 250);
       expect(controller.frame().single.x, lessThan(before.x));
-      for (var second = 6; second <= 14; second++) {
+      for (var halfSecond = 11; halfSecond <= 28; halfSecond++) {
+        now = Duration(milliseconds: halfSecond * 500);
         controller.sync(
-          confirmedPosition: Duration(seconds: second),
-          playing: false,
+          confirmedPosition: now,
+          playing: true,
           buffering: false,
           seeking: false,
           rate: 1,
         );
         expect(
           controller.frame().map((p) => p.event.id),
-          second < 12 ? ['visible'] : (second < 14 ? <String>[] : ['future']),
+          halfSecond < 24
+              ? ['visible']
+              : (halfSecond < 28 ? <String>[] : ['future']),
         );
       }
       controller.seekConfirmed(const Duration(seconds: 1));

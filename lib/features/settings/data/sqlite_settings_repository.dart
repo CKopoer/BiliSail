@@ -73,6 +73,11 @@ class SqliteSettingsRepository implements SettingsRepository {
               .where((item) => item.name == decoded['preferredVideoCodec'])
               .firstOrNull ??
           VideoCodecPreference.h264,
+      mediaCdn:
+          MediaCdnPreference.values
+              .where((item) => item.name == decoded['mediaCdn'])
+              .firstOrNull ??
+          MediaCdnPreference.automatic,
       videoDecoding:
           VideoDecodingPreference.values
               .where((item) => item.name == decoded['videoDecoding'])
@@ -135,7 +140,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 13,
+        'schemaVersion': 14,
         'navigationMode': value.navigationMode.name,
         'allowConcurrentPlayback': value.allowConcurrentPlayback,
         'cacheImages': value.cacheImages,
@@ -152,6 +157,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'showCollapsedProgress': value.showCollapsedProgress,
         'preferredQuality': value.preferredQuality,
         'preferredVideoCodec': value.preferredVideoCodec.name,
+        'mediaCdn': value.mediaCdn.name,
         'videoDecoding': value.videoDecoding.name,
         'defaultPlaybackRate': value.defaultPlaybackRate,
         'defaultVolume': value.defaultVolume,

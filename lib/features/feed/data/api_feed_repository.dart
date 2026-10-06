@@ -32,6 +32,17 @@ class ApiFeedRepository implements FeedRepository, RankingFeedRepository {
   ];
 
   @override
+  Future<List<VideoCategory>> loadRankingCategories({
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    final regions = await RankingClient(api).getRegions(context: context);
+    return List.unmodifiable([
+      for (final region in regions)
+        VideoCategory(id: region.id, name: region.name),
+    ]);
+  }, cancellation: cancellation);
+
+  @override
   Future<PageResult<VideoSummary>> loadFeed({
     required int page,
     required String? categoryId,

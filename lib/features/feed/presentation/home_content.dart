@@ -3,7 +3,7 @@ import '../../../domain/dynamic_post.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/dynamic_post_card.dart';
 import '../../../shared/ui/network_avatar.dart';
-import '../../../shared/ui/app_network_image.dart';
+import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 
 import 'package:flutter/material.dart';
@@ -542,10 +542,9 @@ final class _EntryCard extends StatelessWidget {
           if (entry.coverUrl != null)
             AspectRatio(
               aspectRatio: 16 / 9,
-              child: AppNetworkImage(
+              child: AppCoverImage(
                 url: entry.coverUrl.toString(),
                 fit: BoxFit.cover,
-                cacheWidth: 640,
                 frameBuilder: (_, child, frame, _) => frame != null
                     ? child
                     : const Center(child: Icon(Icons.image_outlined)),

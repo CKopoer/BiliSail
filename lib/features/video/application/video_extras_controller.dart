@@ -8,6 +8,18 @@ final videoExtrasRepositoryProvider = Provider<VideoExtrasRepository>(
   (ref) =>
       throw UnimplementedError('VideoExtrasRepository must be provided by app'),
 );
+final videoTagsProvider = FutureProvider.autoDispose
+    .family<List<String>, VideoId>(
+      (ref, id) {
+        final cancellation = RequestCancellation();
+        ref.onDispose(cancellation.cancel);
+        return ref
+            .read(videoExtrasRepositoryProvider)
+            .loadTags(id, cancellation: cancellation);
+      },
+      // The transport already bounds read retries; UI retries are explicit.
+      retry: (_, _) => null,
+    );
 final relatedVideosProvider = FutureProvider.autoDispose
     .family<List<VideoSummary>, VideoId>((ref, id) {
       final cancellation = RequestCancellation();

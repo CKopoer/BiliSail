@@ -88,6 +88,13 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
     }
   }
 
+  Future<void> _refreshFeed() {
+    if (widget.channel == HomeChannel.ranking) {
+      ref.invalidate(rankingCategoriesProvider);
+    }
+    return ref.read(feedControllerProvider.notifier).refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentFeed = ref.watch(feedControllerProvider);
@@ -95,10 +102,25 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
     final channel = widget.channel;
     final feed = controller.stateForChannel(channel);
     final section = _sections[channel] ?? channel.sections.firstOrNull;
-    final categories =
-        channel == HomeChannel.categories || channel == HomeChannel.ranking
-        ? ref.watch(feedCategoriesProvider)
-        : null;
+    final categories = switch (channel) {
+      HomeChannel.categories => ref.watch(feedCategoriesProvider),
+      HomeChannel.ranking => ref.watch(rankingCategoriesProvider),
+      _ => null,
+    };
+    if (channel == HomeChannel.ranking) {
+      ref.listen(rankingCategoriesProvider, (_, next) {
+        final regions = next.asData?.value;
+        final current = ref.read(feedControllerProvider);
+        final id = current.categoryId;
+        if (regions != null &&
+            current.channel == HomeChannel.ranking &&
+            id != null &&
+            id != '0' &&
+            !regions.any((region) => region.id == id)) {
+          controller.selectCategory('0');
+        }
+      });
+    }
     final entries = <(String, String)>[
       if (channel == HomeChannel.ranking) ('0', '全站'),
       if (categories != null)
@@ -194,10 +216,10 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
                       await controller.loadMore();
                     }
                   },
-                  onRefresh: controller.refresh,
+                  onRefresh: _refreshFeed,
                   refreshTooltip: '刷新视频',
                   builder: (scrollController) => RefreshIndicator(
-                    onRefresh: controller.refresh,
+                    onRefresh: _refreshFeed,
                     child: CustomScrollView(
                       key: PageStorageKey('feed-${channel.name}'),
                       controller: scrollController,
@@ -207,8 +229,13 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
                           SliverToBoxAdapter(
                             child: StateView.error(
                               message: '分区列表加载失败',
-                              onAction: () =>
-                                  ref.invalidate(feedCategoriesProvider),
+                              onAction: () {
+                                if (channel == HomeChannel.ranking) {
+                                  ref.invalidate(rankingCategoriesProvider);
+                                } else {
+                                  ref.invalidate(feedCategoriesProvider);
+                                }
+                              },
                             ),
                           ),
                         SliverPadding(
@@ -230,7 +257,7 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
                                         message: error is AppFailure
                                             ? error.message
                                             : '视频加载失败，请稍后重试',
-                                        onAction: controller.refresh,
+                                        onAction: _refreshFeed,
                                       ),
                                     ),
                                     data: (items) => Column(

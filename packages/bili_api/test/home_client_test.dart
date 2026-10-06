@@ -528,6 +528,54 @@ void main() {
       ]);
       expect(transport.requests.single.path, '/x/v2/history/toview');
     });
+    test('watch later $section retains optional count fields', () async {
+      final transport = Transport(
+        (_) => {
+          'code': 0,
+          'data': {
+            'list': [
+              {
+                'bvid': 'BV1234567890',
+                'title': '字符串计数',
+                'progress': 0,
+                'stat': {'view': '12345', 'danmaku': '0'},
+              },
+              {'bvid': 'BV1234567891', 'title': '缺少全部计数', 'progress': 0},
+              {
+                'bvid': 'BV1234567892',
+                'title': '仅播放量',
+                'progress': 0,
+                'stat': {'view': 12},
+              },
+              {
+                'bvid': 'BV1234567893',
+                'title': '仅弹幕数',
+                'progress': 0,
+                'stat': {'danmaku': 3},
+              },
+            ],
+          },
+        },
+      );
+      final result = await HomeClient(
+        BiliApiClient(transport: transport),
+      ).load(channel: 'watchLater', section: section, page: 1);
+      expect(result.items.map((item) => item.playCountText), [
+        '12345',
+        '',
+        '12',
+        '',
+      ]);
+      expect(result.items.map((item) => item.danmakuCountText), [
+        '0',
+        '',
+        '',
+        '3',
+      ]);
+      expect(result.items, hasLength(4));
+      expect(result.hasMore, isFalse);
+      expect(transport.requests.single.path, '/x/v2/history/toview');
+    });
   }
   test(
     'watch later unfinished filter does not replace content source',

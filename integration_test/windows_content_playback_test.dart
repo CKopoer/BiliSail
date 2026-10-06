@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:bili_api/bili_api.dart';
 import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/core/storage/credential_store.dart';
 import 'package:bilisail/features/playback/data/api_content_playback_repository.dart';
 import 'package:bilisail/features/playback/data/api_playback_repository.dart';
 
@@ -11,6 +13,7 @@ import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -119,85 +122,125 @@ void main() {
       expect(session.error, isNull);
     },
   );
-  testWidgets(
-    'Windows guest PGC and live CDN decode through the shared resolver',
-    (tester) async {
-      if (!const bool.fromEnvironment('BILI_CONTENT_ONLINE')) return;
-      initializePlayerBackend();
-      final requests = ApiRequests();
-      final api = BiliApiClient(sessionProvider: requests);
-      final pgc = PgcClient(api), live = LiveClient(api);
-      final season = await requests.run(
-        (context) => pgc.getSeason(seasonId: '28747', context: context),
+  testWidgets('Windows PGC and live CDN decode through the shared resolver', (
+    tester,
+  ) async {
+    if (!const bool.fromEnvironment('BILI_CONTENT_ONLINE')) return;
+    initializePlayerBackend();
+    final requests = ApiRequests();
+    final api = BiliApiClient(sessionProvider: requests);
+    const savedSession = bool.fromEnvironment('BILI_CONTENT_SAVED_SESSION');
+    if (savedSession) {
+      final saved = await SystemCredentialStore().read();
+      if (saved == null) throw StateError('No saved Web session');
+      final Object? decoded = jsonDecode(saved);
+      if (decoded is! Map<String, Object?> ||
+          decoded['version'] != 1 ||
+          decoded['cookies'] is! Map<String, Object?>) {
+        throw StateError('Unsupported secure session snapshot');
+      }
+      api.cookieJar.restoreFromSecureStorage(
+        decoded['cookies'] as Map<String, Object?>,
       );
-      final episode = season.episodes.firstWhere((episode) => episode.playable);
-      final room = await requests.run(
-        (context) => live.getRoom('6', context: context),
+    }
+    final pgc = PgcClient(api), live = LiveClient(api);
+    const episodeId = String.fromEnvironment('BILI_CONTENT_EPISODE');
+    final season = await requests.run(
+      (context) => pgc.getSeason(
+        seasonId: episodeId.isEmpty ? '28747' : null,
+        episodeId: episodeId.isEmpty ? null : episodeId,
+        context: context,
+      ),
+    );
+    final episode = season.episodes.firstWhere(
+      (episode) =>
+          episode.playable &&
+          (episodeId.isEmpty || episode.episodeId == episodeId),
+    );
+    final room = await requests.run(
+      (context) => live.getRoom('6', context: context),
+    );
+    expect(
+      room.liveStatus,
+      1,
+      reason: 'The explicit online probe needs an on-air room',
+    );
+    final engine = MediaKitEngine();
+    final session = PlaybackSession(
+      engine: engine,
+      repository: ApiPlaybackRepository(api, requests),
+      contentRepository: ApiContentPlaybackRepository(pgc, live, requests),
+      progress: _Progress(),
+      accountScope: () => 'guest',
+    );
+    if (savedSession) {
+      // Exercise dense pools with filtering and a smaller on-demand viewport.
+      session.configureSettings(
+        AppSettings(
+          danmakuArea: .4,
+          danmakuFontScale: .85,
+          danmakuMinimumWeight: 3,
+          danmakuMergeDuplicates: true,
+        ),
       );
-      expect(
-        room.liveStatus,
-        1,
-        reason: 'The explicit online probe needs an on-air room',
-      );
-      final engine = MediaKitEngine();
-      final session = PlaybackSession(
-        engine: engine,
-        repository: ApiPlaybackRepository(api, requests),
-        contentRepository: ApiContentPlaybackRepository(pgc, live, requests),
-        progress: _Progress(),
-        accountScope: () => 'guest',
-      );
-      addTearDown(() async {
-        await session.close();
-        api.close();
-      });
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Stack(
-              fit: StackFit.expand,
-              children: [
-                VideoSurface(engine: engine),
-                DanmakuOverlay(controller: session.danmaku),
-              ],
+    }
+    addTearDown(() async {
+      await session.close();
+      api.close();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: savedSession ? 640 : double.infinity,
+              height: savedSession ? 360 : double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  VideoSurface(engine: engine),
+                  DanmakuOverlay(
+                    controller: session.danmaku,
+                    bottomInset: savedSession ? 100 : 0,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      );
-      final owner = Object();
-      session.attach(owner);
-      await session.activate(
-        owner,
-        null,
-        null,
-        target: PgcPlaybackTarget(episode.episodeId, cid: episode.cid),
-      );
-      expect(session.error, isNull);
-      await _decoded(tester, engine);
-      final danmakuDeadline = DateTime.now().add(const Duration(seconds: 15));
-      while (session.danmaku.visibleCount == 0 &&
-          DateTime.now().isBefore(danmakuDeadline)) {
-        await tester.pump(const Duration(milliseconds: 100));
-      }
-      expect(
-        session.danmaku.visibleCount,
-        greaterThan(0),
-        reason: 'The selected public episode must render decoded comments',
-      );
-      debugPrint(
-        'CONTENT_ONLINE_PGC: decoded video, audio and visible danmaku',
-      );
-      await session.activate(
-        owner,
-        null,
-        null,
-        target: LivePlaybackTarget(room.roomId),
-      );
-      expect(session.error, isNull);
-      await _decoded(tester, engine);
-      debugPrint('CONTENT_ONLINE_LIVE: decoded video and audio');
-    },
-  );
+      ),
+    );
+    final owner = Object();
+    session.attach(owner);
+    await session.activate(
+      owner,
+      null,
+      null,
+      target: PgcPlaybackTarget(episode.episodeId, cid: episode.cid),
+    );
+    expect(session.error, isNull);
+    await _decoded(tester, engine);
+    final danmakuDeadline = DateTime.now().add(const Duration(seconds: 15));
+    while (session.danmaku.visibleCount == 0 &&
+        DateTime.now().isBefore(danmakuDeadline)) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(
+      session.danmaku.visibleCount,
+      greaterThan(0),
+      reason: 'The selected public episode must render decoded comments',
+    );
+    debugPrint('CONTENT_ONLINE_PGC: decoded video, audio and visible danmaku');
+    await session.activate(
+      owner,
+      null,
+      null,
+      target: LivePlaybackTarget(room.roomId),
+    );
+    expect(session.error, isNull);
+    await _decoded(tester, engine);
+    debugPrint('CONTENT_ONLINE_LIVE: decoded video and audio');
+  });
 }
 
 Future<void> _decoded(WidgetTester tester, MediaKitEngine engine) async {

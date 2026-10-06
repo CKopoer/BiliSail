@@ -15,6 +15,34 @@ void main() {
     repository = SqliteSettingsRepository(database);
   });
   tearDown(() => database.close());
+  test(
+    'CDN migrates to automatic and every preference survives reload',
+    () async {
+      for (final oldValue in [null, 'future', 7]) {
+        await database.writeSetting(
+          'preferences.v1',
+          jsonEncode({
+            'schemaVersion': 13,
+            'theme': 'dark',
+            'mediaCdn': ?oldValue,
+          }),
+        );
+        final settings = await repository.load();
+        expect(settings.mediaCdn, MediaCdnPreference.automatic);
+        expect(settings.theme, AppThemePreference.dark);
+      }
+      for (final preference in MediaCdnPreference.values) {
+        await repository.save(
+          AppSettings(mediaCdn: preference, theme: AppThemePreference.dark),
+        );
+        final reloaded = await repository.load();
+        expect(reloaded.mediaCdn, preference);
+        expect(reloaded.copyWith(cacheImages: false).mediaCdn, preference);
+        expect(reloaded.theme, AppThemePreference.dark);
+      }
+      expect(database.schemaVersion, 2);
+    },
+  );
   test('empty settings use the injected platform default', () async {
     for (final mode in WorkspaceNavigationMode.values) {
       final settings = await SqliteSettingsRepository(
@@ -48,7 +76,7 @@ void main() {
           final snapshot = jsonDecode(
             (await database.readSetting('preferences.v1')) ?? '{}',
           ) as Map<String, Object?>;
-          expect(snapshot['schemaVersion'], 13);
+          expect(snapshot['schemaVersion'], 14);
           expect(snapshot['navigationMode'], mode.name);
         }
         for (final selected in WorkspaceNavigationMode.values) {
@@ -95,7 +123,7 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 13);
+      expect(snapshot['schemaVersion'], 14);
       expect(snapshot['theme'], 'dark');
       expect(database.schemaVersion, 2);
     },
@@ -137,7 +165,7 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 13);
+      expect(snapshot['schemaVersion'], 14);
       expect(snapshot['allowConcurrentPlayback'], allowed);
       expect(snapshot['navigationMode'], 'singlePage');
       final reloaded = await repository.load();

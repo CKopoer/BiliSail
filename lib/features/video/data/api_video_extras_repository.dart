@@ -12,6 +12,14 @@ class ApiVideoExtrasRepository implements VideoExtrasRepository {
   final BiliApiClient api;
   final ApiRequests requests;
   @override
+  Future<List<String>> loadTags(
+    VideoId id, {
+    required RequestCancellation cancellation,
+  }) => requests.run(
+    (context) => api.getVideoTags(id.value, context: context),
+    cancellation: cancellation,
+  );
+  @override
   Future<List<VideoSummary>> loadRelated(
     VideoId id, {
     required RequestCancellation cancellation,

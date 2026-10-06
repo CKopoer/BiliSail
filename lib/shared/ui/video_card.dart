@@ -1,8 +1,9 @@
 import '../../domain/user.dart';
 import 'bili_icons.dart';
-import 'app_network_image.dart';
+import 'app_cover_image.dart';
 import 'bili_badges.dart';
 import 'highlighted_text.dart';
+import 'video_card_cover.dart';
 
 import 'package:flutter/material.dart';
 
@@ -59,7 +60,6 @@ final class _VideoCardState extends State<VideoCard> {
   bool _hovered = false;
   bool _focused = false;
   bool _authorHovered = false;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -84,7 +84,7 @@ final class _VideoCardState extends State<VideoCard> {
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(7),
-        clipBehavior: Clip.antiAlias,
+        clipBehavior: Clip.none,
         child: InkWell(
           onTap: widget.onTap,
           hoverColor: Colors.transparent,
@@ -95,66 +95,73 @@ final class _VideoCardState extends State<VideoCard> {
             children: [
               AspectRatio(
                 aspectRatio: 16 / 9,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      if (video.coverUrl.isNotEmpty)
-                        AppNetworkImage(
-                          url: video.coverUrl,
-                          cacheWidth: 640,
-                          fit: BoxFit.cover,
-                          excludeFromSemantics: true,
-                          errorBuilder: (_, _, _) => _coverFallback(context),
-                          frameBuilder: (_, child, frame, _) =>
-                              frame != null ? child : _coverFallback(context),
-                        )
-                      else
-                        _coverFallback(context),
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: textScaler.scale(36) + 20,
-                          child: const DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Colors.transparent, Color(0xC4000000)],
+                child: VideoCardCover(
+                  video: video,
+                  focused: _focused,
+                  hovered: _hovered,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (video.coverUrl.isNotEmpty)
+                          AppCoverImage(
+                            url: video.coverUrl,
+                            fit: BoxFit.cover,
+                            excludeFromSemantics: true,
+                            errorBuilder: (_, _, _) => _coverFallback(context),
+                            frameBuilder: (_, child, frame, _) =>
+                                frame != null ? child : _coverFallback(context),
+                          )
+                        else
+                          _coverFallback(context),
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: textScaler.scale(36) + 20,
+                            child: const DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Color(0xC4000000),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      Positioned(
-                        left: 7,
-                        right: 7,
-                        bottom: 7,
-                        child: Semantics(
-                          label:
-                              '观看 ${widget.playCountText.isEmpty ? compactCount(video.playCount) : widget.playCountText}，'
-                              '弹幕 ${widget.danmakuCountText.isEmpty ? compactCount(video.danmakuCount) : widget.danmakuCountText}，'
-                              '时长 ${durationLabel(video.duration)}',
-                          excludeSemantics: true,
-                          child: _CoverMetadata(
-                            video: video,
-                            playCountText: widget.playCountText,
-                            danmakuCountText: widget.danmakuCountText,
+                        Positioned(
+                          left: 7,
+                          right: 7,
+                          bottom: 7,
+                          child: Semantics(
+                            label:
+                                '观看 ${widget.playCountText.isEmpty ? compactCount(video.playCount) : widget.playCountText}，'
+                                '弹幕 ${widget.danmakuCountText.isEmpty ? compactCount(video.danmakuCount) : widget.danmakuCountText}，'
+                                '时长 ${durationLabel(video.duration)}',
+                            excludeSemantics: true,
+                            child: _CoverMetadata(
+                              video: video,
+                              playCountText: widget.playCountText,
+                              danmakuCountText: widget.danmakuCountText,
+                            ),
                           ),
                         ),
-                      ),
-                      if (progress != null)
-                        Align(
-                          alignment: Alignment.bottomLeft,
-                          child: LinearProgressIndicator(
-                            value: progress.clamp(0.0, 1.0),
-                            minHeight: 3,
-                            backgroundColor: Colors.transparent,
+                        if (progress != null)
+                          Align(
+                            alignment: Alignment.bottomLeft,
+                            child: LinearProgressIndicator(
+                              value: progress.clamp(0.0, 1.0),
+                              minHeight: 3,
+                              backgroundColor: Colors.transparent,
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -11,7 +11,7 @@ import '../../../core/presentation/workspace_activity.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../settings/domain/app_settings.dart';
 import '../../settings/domain/shortcut_settings.dart';
-import '../../../shared/ui/app_network_image.dart';
+import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../../../shared/ui/state_view.dart';
@@ -557,7 +557,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                           child: Icon(Icons.movie_outlined),
                         ),
                       )
-                    : AppNetworkImage(
+                    : AppCoverImage(
                         url: related.coverUrl.toString(),
                         width: 96,
                         height: 54,

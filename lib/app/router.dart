@@ -180,6 +180,7 @@ final class _WorkspacePage extends ConsumerWidget {
     } else if (tab.isVideo) {
       final id = VideoId(uri.pathSegments.last);
       container.invalidate(relatedVideosProvider(id));
+      container.invalidate(videoTagsProvider(id));
       final session = container.read(playbackSessionProvider);
       if (session.detail?.summary.id == id) {
         unawaited(session.retry());
@@ -391,6 +392,12 @@ final class _WorkspacePage extends ConsumerWidget {
                               playerBuilder: playerBuilder,
                               actionsBuilder: actionsBuilder,
                               menuBuilder: menuBuilder,
+                              onSearchTag: (tag) => context.go(
+                                Uri(
+                                  path: '/search',
+                                  queryParameters: {'q': tag},
+                                ).toString(),
+                              ),
                               onOpenUser: (user) =>
                                   context.go('/user/${user.value}'),
                               onLogin: observeAccount

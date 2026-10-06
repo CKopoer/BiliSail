@@ -8,6 +8,8 @@
 
 ## 1. 四个独立职责
 
+2026-10-06 增加视频 CDN 偏好：默认保留接口调度，其他选项只排序服务端提供的 URL，不重写签名地址或 IP；普通视频、影视与临时悬停播放器共用轨道排序，直播线路独立。悬停打开采用 8 秒预算和一次备用尝试，恢复前台／工作区时重新检查悬停；边界与实测见 [CDN 与悬停恢复](validation/video-cdn.md)。
+
 | 组件 | 所属位置 | 职责 |
 | --- | --- | --- |
 | PlaybackResolver | 主应用 playback/application，依赖内容 Repository | bvid/cid/episode/roomId → 权限、可选轨道、URL 与请求上下文 |
@@ -142,19 +144,23 @@ stateDiagram-v2
 
 `DanmakuRepository → HTTP Protobuf → 有界解码任务 → 标准事件 → 过滤/排序 → 预取时间窗 → 轨道调度 → Painter`。
 
+登录后的密集分段可能包含超过 6000 项；当前解码器完整验证响应并将超量分段均匀抽样至最多 6000 条普通弹幕，不将条数超预算直接视为协议失败。字节和单项限制、取消与 isolate 预算继续生效；首集对照及选集子标签交互见 [密集番剧弹幕与选集子标签](validation/pgc-dense-danmaku.md)。
+
 `DanmakuEvent` 包含 string ID、毫秒时间、文本、模式、颜色、字号、必要的屏蔽标识。大批解码/筛选在 isolate；TextPainter 和绘制留在 Flutter UI isolate。一次传一批数据，不为每条弹幕跨 isolate/FFI 调用。
 
 分段长度、分段总数按元信息和已验证协议解释，配置中可使用经验证的 6 分钟策略，但不能把 `total` 当作秒数或假定所有内容相同。只获取当前段和有限相邻段，初始窗口为当前段、后 1 段与前 1 段；缓存容量另有总配额。快速 seek 取消远处请求并提高 generation，按 ID 去重。
 
 ### 时钟
 
-点播唯一业务时间源是 PlayerEngine 的确认位置。绘制使用 Ticker 的单调时间在两个位置样本间插值：
+点播唯一业务时间源是 PlayerEngine 的确认位置，用于加载分段和决定弹幕何时出现。Ticker 的单调时间在两个位置样本间插值媒体位置：
 
 ```text
 estimatedPosition = anchorPosition + (monotonicNow - anchorTime) × playbackRate
 ```
 
-只在确认 Playing 且未 buffering/seeking 时前推。收到新 position 校正 anchor；样本长期不更新时冻结，避免后端已停而弹幕继续跑。暂停/缓冲冻结，seek 清空活动项并从目标时间附近二分检索重建，倍速变动先更新 anchor。回退 seek 允许弹幕再次出现；去重范围是当前时间窗，不是全会话永久集合。
+弹幕滚动、固定项停留与轨道占用使用独立的动画时间，累积可播放阶段的单调时间差，不乘播放倍速。播放倍速只影响媒体位置和触发节奏；滚动速度仍由独立弹幕速度设置控制。收到新 position 或调整倍速时先结算旧动画时间，再更新媒体 anchor，保留活动弹幕的滚动进度。
+
+两个时钟都只在确认 Playing 且未 buffering/seeking 时前推；位置样本超过 700ms 未更新时冻结，避免后端已停而弹幕继续跑。暂停/缓冲冻结，seek 清空活动项并从目标时间附近二分检索重建；历史事件的媒体年龄按当前倍速换算为动画年龄，回看范围同时覆盖仍可见的项。回退 seek 允许弹幕再次出现；已调度 ID 只保留在有界当前时间窗，正常刷新不会重播已丢弃或过期的项。实现和测试边界见 [弹幕速度与播放倍速](validation/danmaku-playback-rate.md)。
 
 ### 渲染与轨道
 
@@ -177,6 +183,8 @@ estimatedPosition = anchorPosition + (monotonicNow - anchorTime) × playbackRate
 ### 5.1 章节时间轴与预览
 
 普通视频已实现章节分段进度与悬停缩略图：章节和字幕元数据合并读取，雪碧图索引首次悬停才加载；预览保留局部状态、播放源/账号隔离和有界图片缓存，不 seek 或创建第二个播放器。标题按片段可用宽度显示，完整入口保留在章节菜单。协议、生命周期、真实样本与平台边界见 [视频章节与悬停缩略图](validation/playback-timeline.md)。
+
+列表视频卡另使用真实视频悬停播放：复用 Web/WBI 点播源接口请求低清晰度，通过独立、静音的临时 PlayerEngine/VideoSurface 播放。预览不属于正式播放标签，不访问进度存储或上报；进程级管理器最多保留一个预览，切换前等待释放，离开/隐藏/后台/账号转换均取消。网页实际请求、容量与原生验证见 [视频卡悬停播放](validation/video-card-hover.md)。
 
 ## 6. 直播媒体与消息
 

@@ -2,8 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../../shared/ui/app_network_image.dart';
+import '../../../shared/ui/storyboard_thumbnail.dart';
+
 import '../domain/playback_timeline.dart';
+
+export '../../../shared/ui/storyboard_thumbnail.dart';
 
 /// Hover and drag state stay local. Preview never commands the media engine.
 class PlaybackTimelineBar extends StatefulWidget {
@@ -421,52 +424,6 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
       ),
     );
   }
-}
-
-class StoryboardThumbnail extends StatelessWidget {
-  const StoryboardThumbnail({
-    super.key,
-    required this.storyboard,
-    required this.frame,
-    required this.width,
-    required this.height,
-  });
-  final VideoStoryboard storyboard;
-  final StoryboardFrame frame;
-  final double width, height;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: width,
-    height: height,
-    child: ClipRect(
-      child: OverflowBox(
-        minWidth: width * storyboard.columns,
-        maxWidth: width * storyboard.columns,
-        minHeight: height * storyboard.rows,
-        maxHeight: height * storyboard.rows,
-        alignment: Alignment(
-          storyboard.columns == 1
-              ? 0
-              : -1 + 2 * frame.column / (storyboard.columns - 1),
-          storyboard.rows == 1 ? 0 : -1 + 2 * frame.row / (storyboard.rows - 1),
-        ),
-        child: AppNetworkImage(
-          url: frame.image.toString(),
-          width: width * storyboard.columns,
-          height: height * storyboard.rows,
-          fit: BoxFit.fill,
-          cacheWidth: 1280,
-          cacheHeight: 1280,
-          excludeFromSemantics: true,
-          errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xff303030)),
-          loadingBuilder: (_, child, progress) => progress == null
-              ? child
-              : const ColoredBox(color: Color(0xff303030)),
-        ),
-      ),
-    ),
-  );
 }
 
 class ChapterSliderTrackShape extends SliderTrackShape {

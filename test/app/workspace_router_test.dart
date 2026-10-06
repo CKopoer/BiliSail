@@ -35,6 +35,7 @@ import 'package:bilisail/features/search/domain/search_repository.dart';
 import 'package:bilisail/features/search/domain/search_result.dart';
 import 'package:bilisail/features/library/application/library_controller.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
+import 'package:bilisail/features/video/application/video_extras_controller.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
@@ -45,6 +46,57 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mode in WorkspaceNavigationMode.values) {
+    _workspaceTestWidgets(
+      'video tag opens search in $mode and retains the part',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1100, 800);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        const tag = 'Flutter & Dart/中文+测试';
+        final search = _SearchRepository();
+        final settings = _SettingsRepository();
+        settings.settings = settings.settings.copyWith(navigationMode: mode);
+        var created = 0;
+        final router = createBiliRouter(
+          initialLocation: '/video/BV1234567890?cid=2',
+          playerBuilder: (_, _, part) =>
+              _TagTestPlayer(part: part, onCreate: () => created++),
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(settings),
+              videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+              videoTagsProvider.overrideWith((ref, id) async => [tag]),
+              relatedVideosProvider.overrideWith((ref, id) async => []),
+              searchRepositoryProvider.overrideWithValue(search),
+              feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+              homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('播放 第二集'), findsOneWidget);
+        await tester.tap(find.widgetWithText(ActionChip, tag));
+        await tester.pumpAndSettle();
+        expect(search.queries, [tag]);
+        final uri = router.routeInformationProvider.value.uri;
+        expect(uri.path, '/search');
+        expect(uri.queryParameters['q'], tag);
+        expect(find.text('“$tag” 的搜索结果'), findsOneWidget);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.text('播放 第二集'), findsOneWidget);
+        expect(created, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final platform in [
     TargetPlatform.windows,
     TargetPlatform.macOS,
@@ -871,6 +923,25 @@ final class _VideoRepository implements VideoRepository {
       ),
     ],
   );
+}
+
+final class _TagTestPlayer extends StatefulWidget {
+  const _TagTestPlayer({required this.part, required this.onCreate});
+  final VideoPart part;
+  final VoidCallback onCreate;
+  @override
+  State<_TagTestPlayer> createState() => _TagTestPlayerState();
+}
+
+final class _TagTestPlayerState extends State<_TagTestPlayer> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onCreate();
+  }
+
+  @override
+  Widget build(BuildContext context) => Text('播放 ${widget.part.title}');
 }
 
 final class _SearchRepository implements SearchRepository {

@@ -197,7 +197,8 @@ void main() {
     'control visibility preserves scrolling danmaku inline and fullscreen',
     (tester) async {
       final engine = _FakeEngine();
-      final session = _session(engine);
+      var now = Duration.zero;
+      final session = _session(engine, danmakuNow: () => now);
       addTearDown(session.close);
       await tester.pumpWidget(
         _app(session, _FakeWindowService(), AppSettings(danmakuMaxOnScreen: 1)),
@@ -228,14 +229,18 @@ void main() {
           ),
         ]);
         session.danmaku.seekConfirmed(Duration.zero);
-        for (var second = 0; second <= 5; second++) {
+        for (var halfSecond = 0; halfSecond <= 10; halfSecond++) {
+          now += const Duration(milliseconds: 500);
           engine._emit(
             engine.currentSnapshot.copyWith(
-              position: Duration(seconds: second),
+              phase: PlaybackPhase.playing,
+              position: Duration(milliseconds: halfSecond * 500),
             ),
           );
           await tester.pump();
         }
+        await session.pause();
+        await tester.pump();
         final before = session.danmaku.frame().single;
         expect(before.event.id, 'visible');
         final generation = engine.currentSnapshot.generation;
@@ -279,7 +284,8 @@ void main() {
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
         final engine = _FakeEngine();
-        final session = _session(engine);
+        var now = Duration.zero;
+        final session = _session(engine, danmakuNow: () => now);
         final window = _FakeWindowService();
         addTearDown(session.close);
         await tester.pumpWidget(
@@ -312,14 +318,18 @@ void main() {
           DanmakuEvent(id: 'future', at: Duration(seconds: 14), text: 'future'),
         ]);
         session.danmaku.seekConfirmed(Duration.zero);
-        for (var second = 0; second <= 5; second++) {
+        for (var halfSecond = 0; halfSecond <= 10; halfSecond++) {
+          now += const Duration(milliseconds: 500);
           engine._emit(
             engine.currentSnapshot.copyWith(
-              position: Duration(seconds: second),
+              phase: PlaybackPhase.playing,
+              position: Duration(milliseconds: halfSecond * 500),
             ),
           );
           await tester.pump();
         }
+        await session.pause();
+        await tester.pump();
         final before = session.danmaku.frame().single;
         expect(before.event.id, 'visible');
         final generation = session.sourceGeneration;
@@ -356,6 +366,7 @@ void main() {
           expect(engine.maxSurfaces, 1);
         }
         await session.togglePlaying();
+        now += const Duration(milliseconds: 500);
         engine._emit(
           engine.currentSnapshot.copyWith(
             position: const Duration(milliseconds: 5500),
@@ -2109,11 +2120,13 @@ void _resumeApp(WidgetTester tester) {
 PlaybackSession _session(
   PlayerEngine engine, {
   PlaybackRepository? repository,
+  Duration Function()? danmakuNow,
 }) => PlaybackSession(
   engine: engine,
   repository: repository ?? _FakePlaybackRepository(),
   progress: _FakeProgressStore(),
   accountScope: () => 'guest',
+  danmakuNow: danmakuNow,
 );
 
 const _part = VideoPart(
