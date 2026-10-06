@@ -149,7 +149,7 @@ abstract final class BiliTheme {
         ),
         titleSmall: base.textTheme.titleSmall?.copyWith(
           fontSize: 14,
-          fontWeight: FontWeight.w400,
+          fontWeight: FontWeight.w500,
         ),
         bodyMedium: base.textTheme.bodyMedium?.copyWith(fontSize: 14),
         bodySmall: base.textTheme.bodySmall?.copyWith(

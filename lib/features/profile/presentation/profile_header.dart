@@ -244,9 +244,7 @@ class ProfileSectionNavigation extends StatelessWidget {
                           ? theme.colorScheme.primary
                           : theme.colorScheme.onSurfaceVariant,
                       textStyle: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: section == entry
-                            ? FontWeight.w500
-                            : FontWeight.w400,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     onPressed: () => onSelected(entry),

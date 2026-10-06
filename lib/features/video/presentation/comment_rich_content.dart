@@ -6,6 +6,7 @@ import '../domain/video_comments_repository.dart';
 import '../../../shared/ui/app_network_image.dart';
 import '../../../shared/ui/bili_badges.dart';
 import '../../../shared/ui/image_viewer.dart';
+import 'comment_text_styles.dart';
 
 TextEditingValue insertCommentEmote(TextEditingValue value, String token) {
   final selection = value.selection;
@@ -28,11 +29,14 @@ class CommentRichContent extends StatelessWidget {
     super.key,
     required this.comment,
     this.prefix = '',
+    this.compact = false,
   });
   final CommentEntry comment;
   final String prefix;
+  final bool compact;
   @override
   Widget build(BuildContext context) {
+    final styles = CommentTextStyles(Theme.of(context));
     final spans = <InlineSpan>[if (prefix.isNotEmpty) TextSpan(text: prefix)];
     final text = comment.message;
     final keys = comment.emotes.keys.where((k) => k.isNotEmpty).toList()
@@ -104,8 +108,7 @@ class CommentRichContent extends StatelessWidget {
         SelectionArea(
           child: Text.rich(
             TextSpan(children: spans),
-            style: Theme.of(context).textTheme.bodyMedium
-                ?.copyWith(height: 1.45),
+            style: compact ? styles.previewBody : styles.body,
           ),
         ),
         if (comment.pictures.isNotEmpty)
@@ -163,6 +166,7 @@ class CommentAuthorHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context), c = comment;
+    final styles = CommentTextStyles(theme);
     final time = c.publishedAt?.toLocal();
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,10 +182,10 @@ class CommentAuthorHeader extends StatelessWidget {
                   : null,
               child: Text(
                 c.author,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: styles.author.copyWith(
                   color: c.vipLabel != null
                       ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurfaceVariant,
+                      : styles.author.color,
                 ),
               ),
             ),
@@ -213,12 +217,7 @@ class CommentAuthorHeader extends StatelessWidget {
         if (time != null)
           Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              '${time.month}-${time.day}',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.outline,
-              ),
-            ),
+            child: Text('${time.month}-${time.day}', style: styles.metadata),
           ),
       ],
     );

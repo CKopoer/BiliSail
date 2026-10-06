@@ -533,9 +533,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                         : Theme.of(context).colorScheme.onSurface,
                     textStyle: TextStyle(
                       fontSize: 14,
-                      fontWeight: selected == channel.name
-                          ? FontWeight.w600
-                          : FontWeight.normal,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   child: Column(

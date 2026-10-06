@@ -68,6 +68,7 @@ final class _VideoCardState extends State<VideoCard> {
     final textScaler = MediaQuery.textScalerOf(context);
     final titleStyle = theme.textTheme.bodyMedium?.copyWith(
       fontSize: _titleFontSize,
+      fontWeight: FontWeight.w500,
       height: 1.4,
     );
     final highlighted = (_hovered || _focused) && !_authorHovered;

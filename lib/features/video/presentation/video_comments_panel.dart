@@ -11,6 +11,7 @@ import '../../../shared/ui/emoticon_picker_dialog.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/bili_icons.dart';
 import 'comment_rich_content.dart';
+import 'comment_text_styles.dart';
 import '../application/video_comments_controller.dart';
 import '../domain/video_comments_repository.dart';
 
@@ -104,6 +105,7 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
     final state = ref.watch(videoCommentsControllerProvider(aid));
     final controller = ref.read(videoCommentsControllerProvider(aid).notifier);
     final theme = Theme.of(context);
+    final styles = CommentTextStyles(theme);
     final root = state.openRoot;
     if (_shownRoot != root?.id) {
       _shownRoot = root?.id;
@@ -153,10 +155,10 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
                       : () => controller.load(sort: CommentSort.hot),
                   child: Text(
                     '最热',
-                    style: TextStyle(
+                    style: styles.sort.copyWith(
                       color: state.sort == CommentSort.hot
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant,
+                          ? styles.sort.color
+                          : styles.metadata.color,
                     ),
                   ),
                 ),
@@ -167,19 +169,16 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
                       : () => controller.load(sort: CommentSort.latest),
                   child: Text(
                     '最新',
-                    style: TextStyle(
+                    style: styles.sort.copyWith(
                       color: state.sort == CommentSort.latest
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant,
+                          ? styles.sort.color
+                          : styles.metadata.color,
                     ),
                   ),
                 ),
                 const Spacer(),
                 if (state.totalCount != null)
-                  Text(
-                    '${state.totalCount} 条',
-                    style: theme.textTheme.bodySmall,
-                  ),
+                  Text('${state.totalCount} 条', style: styles.metadata),
                 IconButton(
                   tooltip: '刷新评论',
                   onPressed: state.busy
@@ -460,6 +459,7 @@ class _CommentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context), c = comment;
+    final styles = CommentTextStyles(theme);
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Row(
@@ -491,12 +491,7 @@ class _CommentTile extends StatelessWidget {
                           : theme.colorScheme.outline,
                       icon: const Icon(BiliIcons.like),
                     ),
-                    Text(
-                      '${c.likeCount}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.outline,
-                      ),
-                    ),
+                    Text('${c.likeCount}', style: styles.action),
                     const SizedBox(width: 12),
                     IconButton(
                       tooltip: '回复评论',
@@ -540,17 +535,20 @@ class _CommentTile extends StatelessWidget {
                                             : null,
                                         child: Text(
                                           '${r.author}：',
-                                          style: theme.textTheme.bodySmall,
+                                          style: styles.previewAuthor,
                                         ),
                                       ),
-                                      CommentRichContent(comment: r),
+                                      CommentRichContent(
+                                        comment: r,
+                                        compact: true,
+                                      ),
                                     ],
                                   ),
                                 ),
                               ),
                           Text(
                             '共 ${c.replyCount} 条回复 ›',
-                            style: theme.textTheme.bodySmall?.copyWith(
+                            style: styles.metadata.copyWith(
                               color: theme.colorScheme.primary,
                             ),
                           ),

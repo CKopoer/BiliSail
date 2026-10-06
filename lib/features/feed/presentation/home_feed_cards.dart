@@ -157,7 +157,7 @@ final class FavoriteFolderCard extends StatelessWidget {
                     entry.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ),
                 if (onUnsubscribe != null || onEdit != null)

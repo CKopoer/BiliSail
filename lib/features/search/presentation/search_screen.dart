@@ -308,7 +308,7 @@ final class _CategoryTab extends StatelessWidget {
                 Text(
                   category.label,
                   style: TextStyle(
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    fontWeight: FontWeight.w500,
                     color: selected
                         ? theme.colorScheme.primary
                         : theme.colorScheme.onSurfaceVariant,
