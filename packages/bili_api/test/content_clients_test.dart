@@ -234,25 +234,24 @@ void main() {
 
   test('live room resolves short ID and anchor through Web reads', () async {
     final transport = _Transport(
-      (uri) =>
-          uri.path == '/room/v1/Room/get_info'
-              ? {
-                'code': 0,
-                'data': {
-                  'room_id': 7734200,
-                  'uid': 50329118,
-                  'title': '赛事',
-                  'live_status': 1,
-                  'online': 125,
-                  'area_name': '游戏赛事',
-                },
-              }
-              : {
-                'code': 0,
-                'data': {
-                  'info': {'uname': '主播', 'face': '//i0.hdslb.com/face.jpg'},
-                },
+      (uri) => uri.path == '/room/v1/Room/get_info'
+          ? {
+              'code': 0,
+              'data': {
+                'room_id': 7734200,
+                'uid': 50329118,
+                'title': '赛事',
+                'live_status': 1,
+                'online': 125,
+                'area_name': '游戏赛事',
               },
+            }
+          : {
+              'code': 0,
+              'data': {
+                'info': {'uname': '主播', 'face': '//i0.hdslb.com/face.jpg'},
+              },
+            },
     );
     final room = await LiveClient(
       BiliApiClient(transport: transport),

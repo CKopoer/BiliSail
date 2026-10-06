@@ -210,12 +210,12 @@ final class PlaybackMetadataClient {
   };
   static Map<String, Object?> _map(Object? value, String endpoint) =>
       value is Map<String, Object?>
-          ? value
-          : (throw ApiFailure(ApiFailureCategory.protocol, endpoint));
+      ? value
+      : (throw ApiFailure(ApiFailureCategory.protocol, endpoint));
   static List<Object?> _list(Object? value, int capacity, String endpoint) =>
       value is List<Object?> && value.length <= capacity
-          ? value
-          : (throw ApiFailure(ApiFailureCategory.protocol, endpoint));
+      ? value
+      : (throw ApiFailure(ApiFailureCategory.protocol, endpoint));
   static void _id(String value) {
     if (!RegExp(r'^[1-9]\d*$').hasMatch(value)) {
       throw ArgumentError('Invalid ID');

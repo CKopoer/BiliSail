@@ -82,12 +82,11 @@ final class FavoriteFolderClient {
   }
 
   static String? _id(Object? value) {
-    final text =
-        value is int
-            ? '$value'
-            : value is String
-            ? value
-            : null;
+    final text = value is int
+        ? '$value'
+        : value is String
+        ? value
+        : null;
     return text != null && RegExp(r'^[1-9][0-9]*$').hasMatch(text)
         ? text
         : null;

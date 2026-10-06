@@ -30,11 +30,11 @@ void main() {
     api = BiliApiClient(
       transport: transport,
       sessionProvider: session,
-      cookieJar:
-          ApiCookieJar()..receive(Uri.https('api.bilibili.com', '/'), [
-            'SESSDATA=fixture; Path=/; Secure',
-            'bili_jct=fixture-csrf; Path=/; Secure',
-          ]),
+      cookieJar: ApiCookieJar()
+        ..receive(Uri.https('api.bilibili.com', '/'), [
+          'SESSDATA=fixture; Path=/; Secure',
+          'bili_jct=fixture-csrf; Path=/; Secure',
+        ]),
     );
   });
   tearDown(() => api.close());
@@ -150,11 +150,11 @@ void main() {
     () async {
       final guest = BiliApiClient(
         transport: transport,
-        cookieJar:
-            ApiCookieJar()..receive(Uri.https('api.bilibili.com', '/private'), [
-              'SESSDATA=fixture; Path=/private; Secure',
-              'bili_jct=fixture; Path=/private; Secure',
-            ]),
+        cookieJar: ApiCookieJar()
+          ..receive(Uri.https('api.bilibili.com', '/private'), [
+            'SESSDATA=fixture; Path=/private; Secure',
+            'bili_jct=fixture; Path=/private; Secure',
+          ]),
       );
       addTearDown(guest.close);
       await expectLater(

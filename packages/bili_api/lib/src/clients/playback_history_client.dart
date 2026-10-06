@@ -17,12 +17,7 @@ final class PlaybackHistoryClient {
     const endpoint = 'playback_history_read';
     final data = await api.requestWbiJson(
       '/x/player/wbi/v2',
-      {
-        'bvid': bvid,
-        'cid': cid,
-        if (episodeId != null) 'ep_id': episodeId,
-        if (seasonId != null) 'season_id': seasonId,
-      },
+      {'bvid': bvid, 'cid': cid, 'ep_id': ?episodeId, 'season_id': ?seasonId},
       endpoint,
       context: context,
     );
@@ -62,14 +57,13 @@ final class PlaybackHistoryClient {
       {
         'bvid': bvid,
         'cid': cid,
-        'played_time':
-            completed
-                ? '-1'
-                : '${position.inSeconds.clamp(0, duration.inSeconds)}',
+        'played_time': completed
+            ? '-1'
+            : '${position.inSeconds.clamp(0, duration.inSeconds)}',
         'video_duration': '${duration.inSeconds}',
         'type': episodeId == null ? '3' : '4',
-        if (episodeId != null) 'epid': episodeId,
-        if (seasonId != null) 'sid': seasonId,
+        'epid': ?episodeId,
+        'sid': ?seasonId,
       },
       context: context,
     );
@@ -84,8 +78,8 @@ final class PlaybackHistoryClient {
     if (!RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid) ||
         [
           cid,
-          if (episode != null) episode,
-          if (season != null) season,
+          ?episode,
+          ?season,
         ].any((id) => !RegExp(r'^[1-9][0-9]*$').hasMatch(id))) {
       throw ArgumentError('Invalid playback identity');
     }

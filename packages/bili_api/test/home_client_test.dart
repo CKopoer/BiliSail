@@ -114,12 +114,11 @@ void main() {
           ),
         ),
       );
-      final entry =
-          (await client.load(
-            channel: 'videoDynamic',
-            section: '最新视频',
-            page: 1,
-          )).items.single;
+      final entry = (await client.load(
+        channel: 'videoDynamic',
+        section: '最新视频',
+        page: 1,
+      )).items.single;
       expect(entry.authorName, '作者');
       expect(entry.authorMid, '789');
       expect(entry.authorAvatarUrl.toString(), 'https://i0.hdslb.com/face.jpg');
@@ -134,35 +133,34 @@ void main() {
     'live parents retain children and selected child reaches transport',
     () async {
       final transport = Transport(
-        (uri) =>
-            uri.path == '/room/v1/Area/getList'
-                ? {
-                  'code': 0,
-                  'data': [
-                    {
-                      'id': 2,
-                      'name': '游戏',
-                      'list': [
-                        {'id': '21', 'name': '单机'},
-                      ],
-                    },
-                  ],
-                }
-                : {
-                  'code': 0,
-                  'data': {
-                    'count': 1,
+        (uri) => uri.path == '/room/v1/Area/getList'
+            ? {
+                'code': 0,
+                'data': [
+                  {
+                    'id': 2,
+                    'name': '游戏',
                     'list': [
-                      {
-                        'roomid': 123,
-                        'title': '直播',
-                        'uname': '主播',
-                        'online': 12000,
-                        'area_name': '单机',
-                      },
+                      {'id': '21', 'name': '单机'},
                     ],
                   },
+                ],
+              }
+            : {
+                'code': 0,
+                'data': {
+                  'count': 1,
+                  'list': [
+                    {
+                      'roomid': 123,
+                      'title': '直播',
+                      'uname': '主播',
+                      'online': 12000,
+                      'area_name': '单机',
+                    },
+                  ],
                 },
+              },
       );
       final client = HomeClient(BiliApiClient(transport: transport));
       final areas = await client.load(
@@ -337,34 +335,33 @@ void main() {
   });
   test('PGC index uses content types and timeline result arrays', () async {
     final transport = Transport(
-      (uri) =>
-          uri.path.endsWith('timeline')
-              ? {
-                'code': 0,
-                'result': [
-                  {
-                    'date': '10-5',
-                    'episodes': [
-                      {
-                        'season_id': 12,
-                        'episode_id': 22,
-                        'title': '剧集',
-                        'pub_time': '12:00',
-                        'pub_index': '第2话',
-                      },
-                    ],
-                  },
-                ],
-              }
-              : {
-                'code': 0,
-                'data': {
-                  'list': [
-                    {'season_id': 12, 'title': '剧集'},
+      (uri) => uri.path.endsWith('timeline')
+          ? {
+              'code': 0,
+              'result': [
+                {
+                  'date': '10-5',
+                  'episodes': [
+                    {
+                      'season_id': 12,
+                      'episode_id': 22,
+                      'title': '剧集',
+                      'pub_time': '12:00',
+                      'pub_index': '第2话',
+                    },
                   ],
-                  'has_next': 1,
                 },
+              ],
+            }
+          : {
+              'code': 0,
+              'data': {
+                'list': [
+                  {'season_id': 12, 'title': '剧集'},
+                ],
+                'has_next': 1,
               },
+            },
     );
     final client = HomeClient(BiliApiClient(transport: transport));
     final result = await client.load(

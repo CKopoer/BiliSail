@@ -266,18 +266,16 @@ final class BiliApiClient {
             headers: {
               'Accept': 'application/json',
               'User-Agent': 'BiliSail/0.1',
-              'Referer':
-                  message
-                      ? 'https://message.bilibili.com/'
-                      : live
-                      ? 'https://live.bilibili.com/'
-                      : 'https://www.bilibili.com/',
-              'Origin':
-                  message
-                      ? 'https://message.bilibili.com'
-                      : live
-                      ? 'https://live.bilibili.com'
-                      : 'https://www.bilibili.com',
+              'Referer': message
+                  ? 'https://message.bilibili.com/'
+                  : live
+                  ? 'https://live.bilibili.com/'
+                  : 'https://www.bilibili.com/',
+              'Origin': message
+                  ? 'https://message.bilibili.com'
+                  : live
+                  ? 'https://live.bilibili.com'
+                  : 'https://www.bilibili.com',
               'Cookie': cookie ?? '',
             },
             timeout: budget,
@@ -330,8 +328,10 @@ final class BiliApiClient {
     );
     final tags = <String>{};
     for (final value in _list(data, endpoint).take(100)) {
-      final name =
-          _requiredString(_map(value, endpoint)['tag_name'], endpoint).trim();
+      final name = _requiredString(
+        _map(value, endpoint)['tag_name'],
+        endpoint,
+      ).trim();
       if (name.isNotEmpty) tags.add(name);
     }
     return List.unmodifiable(tags);
@@ -390,7 +390,7 @@ final class BiliApiClient {
           'type': '1',
           'pn': '$page',
           'ps': '20',
-          if (rootId != null) 'root': rootId,
+          'root': ?rootId,
           if (rootId == null) 'sort': sort == ApiCommentSort.hot ? '1' : '0',
           if (rootId == null) 'nohot': '1',
         },
@@ -442,8 +442,8 @@ final class BiliApiClient {
     final fan = _commentMap(card['fan']);
     String? optionalId(Object? value) =>
         value == null || value == 0 || value == '0'
-            ? null
-            : _id(value, endpoint);
+        ? null
+        : _id(value, endpoint);
     return ApiVideoComment(
       id: _id(entry['rpid_str'] ?? entry['rpid'], endpoint),
       author: _requiredString(member['uname'], endpoint),
@@ -453,12 +453,10 @@ final class BiliApiClient {
       verifyType: _int(_commentMap(member['official_verify'])['type']),
       vipLabel:
           _int(_commentMap(member['vip'])['vipStatus']) == 1 ||
-                  _int(_commentMap(member['vip'])['vip_status']) == 1
-              ? _text(
-                    _commentMap(_commentMap(member['vip'])['label'])['text'],
-                  ) ??
-                  '大会员'
-              : null,
+              _int(_commentMap(member['vip'])['vip_status']) == 1
+          ? _text(_commentMap(_commentMap(member['vip'])['label'])['text']) ??
+                '大会员'
+          : null,
       medalName: _text(_commentMap(member['fans_detail'])['medal_name']),
       medalLevel: _int(_commentMap(member['fans_detail'])['level']),
       decorationImageUrl: _commentImage(card['image']),
@@ -486,20 +484,19 @@ final class BiliApiClient {
       replyCount: _count(entry['rcount'] ?? entry['count']) ?? 0,
       rootId: optionalId(entry['root_str'] ?? entry['root']),
       parentId: optionalId(entry['parent_str'] ?? entry['parent']),
-      replies:
-          depth >= 1
-              ? const []
-              : List.unmodifiable(
-                _list(entry['replies'] ?? const [], endpoint)
-                    .take(20)
-                    .map(
-                      (value) => _comment(
-                        _map(value, endpoint),
-                        endpoint,
-                        depth: depth + 1,
-                      ),
+      replies: depth >= 1
+          ? const []
+          : List.unmodifiable(
+              _list(entry['replies'] ?? const [], endpoint)
+                  .take(20)
+                  .map(
+                    (value) => _comment(
+                      _map(value, endpoint),
+                      endpoint,
+                      depth: depth + 1,
                     ),
-              ),
+                  ),
+            ),
       publishedAt: _publishedAt(entry['ctime']),
     );
   }
@@ -538,10 +535,9 @@ final class BiliApiClient {
     );
   }
 
-  static String? _text(Object? value) =>
-      value is String && value.isNotEmpty
-          ? value.substring(0, value.length.clamp(0, 200))
-          : null;
+  static String? _text(Object? value) => value is String && value.isNotEmpty
+      ? value.substring(0, value.length.clamp(0, 200))
+      : null;
   static Map<String, Object?> _commentMap(Object? value) =>
       value is Map<String, Object?> ? value : const {};
   static int? _commentColor(Object? value) {
@@ -636,10 +632,9 @@ final class BiliApiClient {
       context,
     );
     final list = _list(data['list'], 'popular');
-    final items =
-        list
-            .map((entry) => _videoSummary(_map(entry, 'popular'), 'popular'))
-            .toList();
+    final items = list
+        .map((entry) => _videoSummary(_map(entry, 'popular'), 'popular'))
+        .toList();
     return ApiPage(
       items,
       hasMore: _bool(data['no_more']) != true && items.isNotEmpty,
@@ -666,12 +661,11 @@ final class BiliApiClient {
       context,
     );
     // Feed cards can also advertise non-video destinations.
-    final items =
-        _list(data['item'], 'recommended')
-            .map((entry) => _map(entry, 'recommended'))
-            .where((entry) => entry['goto'] == null || entry['goto'] == 'av')
-            .map((entry) => _videoSummary(entry, 'recommended'))
-            .toList();
+    final items = _list(data['item'], 'recommended')
+        .map((entry) => _map(entry, 'recommended'))
+        .where((entry) => entry['goto'] == null || entry['goto'] == 'av')
+        .map((entry) => _videoSummary(entry, 'recommended'))
+        .toList();
     return ApiPage(
       items,
       hasMore: items.isNotEmpty,
@@ -695,15 +689,12 @@ final class BiliApiClient {
       'regional_videos',
       context,
     );
-    final items =
-        _list(data['archives'], 'regional_videos')
-            .map(
-              (entry) => _videoSummary(
-                _map(entry, 'regional_videos'),
-                'regional_videos',
-              ),
-            )
-            .toList();
+    final items = _list(data['archives'], 'regional_videos')
+        .map(
+          (entry) =>
+              _videoSummary(_map(entry, 'regional_videos'), 'regional_videos'),
+        )
+        .toList();
     final total = _int(_optionalMap(data['page'])?['count']);
     final hasMore =
         items.isNotEmpty &&
@@ -728,10 +719,10 @@ final class BiliApiClient {
       'ranking',
       context,
     );
-    final items =
-        _list(data['list'], 'ranking')
-            .map((entry) => _videoSummary(_map(entry, 'ranking'), 'ranking'))
-            .toList();
+    final items = _list(
+      data['list'],
+      'ranking',
+    ).map((entry) => _videoSummary(_map(entry, 'ranking'), 'ranking')).toList();
     return ApiPage(items, hasMore: false);
   }
 
@@ -754,17 +745,15 @@ final class BiliApiClient {
       'search',
       context,
     );
-    final list =
-        data['result'] == null
-            ? const <Object?>[]
-            : _list(data['result'], 'search');
+    final list = data['result'] == null
+        ? const <Object?>[]
+        : _list(data['result'], 'search');
     // Search can include inline live cards with an empty bvid even for video.
-    final items =
-        list
-            .map((entry) => _map(entry, 'search'))
-            .where((entry) => _string(entry['bvid'])?.isNotEmpty == true)
-            .map((entry) => _videoSummary(entry, 'search'))
-            .toList();
+    final items = list
+        .map((entry) => _map(entry, 'search'))
+        .where((entry) => _string(entry['bvid'])?.isNotEmpty == true)
+        .map((entry) => _videoSummary(entry, 'search'))
+        .toList();
     final pages = _int(data['numPages']);
     return ApiPage(
       items,
@@ -786,16 +775,15 @@ final class BiliApiClient {
       'video_detail',
       context,
     );
-    final pages =
-        _list(data['pages'], 'video_detail').map((value) {
-          final page = _map(value, 'video_detail');
-          return ApiVideoPage(
-            cid: _id(page['cid'], 'video_detail'),
-            page: _requiredInt(page['page'], 'video_detail'),
-            title: _string(page['part']) ?? '',
-            duration: Duration(seconds: _int(page['duration']) ?? 0),
-          );
-        }).toList();
+    final pages = _list(data['pages'], 'video_detail').map((value) {
+      final page = _map(value, 'video_detail');
+      return ApiVideoPage(
+        cid: _id(page['cid'], 'video_detail'),
+        page: _requiredInt(page['page'], 'video_detail'),
+        title: _string(page['part']) ?? '',
+        duration: Duration(seconds: _int(page['duration']) ?? 0),
+      );
+    }).toList();
     if (pages.isEmpty) {
       throw const ApiFailure(ApiFailureCategory.protocol, 'video_detail');
     }
@@ -807,10 +795,9 @@ final class BiliApiClient {
       coverUrl: _uri(data['pic']),
       ownerName: _string(_optionalMap(data['owner'])?['name']) ?? '',
       ownerAvatarUrl: _uri(_optionalMap(data['owner'])?['face']),
-      ownerMid:
-          _optionalMap(data['owner'])?['mid'] == null
-              ? null
-              : _id(_optionalMap(data['owner'])?['mid'], 'video_detail'),
+      ownerMid: _optionalMap(data['owner'])?['mid'] == null
+          ? null
+          : _id(_optionalMap(data['owner'])?['mid'], 'video_detail'),
       likeCount: _count(_optionalMap(data['stat'])?['like']),
       coinCount: _count(_optionalMap(data['stat'])?['coin']),
       favoriteCount: _count(_optionalMap(data['stat'])?['favorite']),
@@ -824,8 +811,8 @@ final class BiliApiClient {
   }
 
   static String? _recommendationReason(Object? value) {
-    final content =
-        (_string(_optionalMap(value)?['content']) ?? _string(value))?.trim();
+    final content = (_string(_optionalMap(value)?['content']) ?? _string(value))
+        ?.trim();
     return content == null || content.isEmpty ? null : content;
   }
 
@@ -931,26 +918,23 @@ final class BiliApiClient {
     if (dash == null) {
       throw const ApiFailure(ApiFailureCategory.unavailable, 'playurl');
     }
-    final videos =
-        _list(
-          dash['video'],
-          'playurl',
-        ).map((v) => _track(_map(v, 'playurl'))).toList();
-    final audios =
-        preview
-            ? const <ApiMediaTrack>[]
-            : _list(dash['audio'], 'playurl')
-                .map((v) => _track(_map(v, 'playurl')))
-                .where((v) => v.codecs.toLowerCase().startsWith('mp4a'))
-                .toList();
+    final videos = _list(
+      dash['video'],
+      'playurl',
+    ).map((v) => _track(_map(v, 'playurl'))).toList();
+    final audios = preview
+        ? const <ApiMediaTrack>[]
+        : _list(dash['audio'], 'playurl')
+              .map((v) => _track(_map(v, 'playurl')))
+              .where((v) => v.codecs.toLowerCase().startsWith('mp4a'))
+              .toList();
     if (videos.isEmpty || !preview && audios.isEmpty) {
       throw const ApiFailure(ApiFailureCategory.unavailable, 'playurl');
     }
     final dashSeconds = _num(dash['duration']);
-    final durationMs =
-        dashSeconds == null
-            ? _int(data['timelength']) ?? 0
-            : (dashSeconds * 1000).round();
+    final durationMs = dashSeconds == null
+        ? _int(data['timelength']) ?? 0
+        : (dashSeconds * 1000).round();
     return ApiPlayInfo(
       duration: Duration(milliseconds: durationMs),
       dashVideo: List.unmodifiable(videos),
@@ -1122,12 +1106,11 @@ final class BiliApiClient {
       86101 => const ApiQrPollResult(ApiQrStatus.waitingScan),
       86090 => const ApiQrPollResult(ApiQrStatus.waitingConfirm),
       86038 => const ApiQrPollResult(ApiQrStatus.expired),
-      final code =>
-        throw ApiFailure(
-          ApiFailureCategory.protocol,
-          'qr_poll',
-          businessCode: code,
-        ),
+      final code => throw ApiFailure(
+        ApiFailureCategory.protocol,
+        'qr_poll',
+        businessCode: code,
+      ),
     };
   }
 
@@ -1265,12 +1248,12 @@ final class BiliApiClient {
       throw ApiFailure(ApiFailureCategory.cancelled, endpoint);
     }
     final headers = <String, String>{
-      'Accept':
-          endpoint == 'danmaku_segment'
-              ? 'application/octet-stream'
-              : 'application/json',
-      'User-Agent':
-          endpoint == 'video_storyboard' ? 'Mozilla/5.0' : 'BiliSail/0.1',
+      'Accept': endpoint == 'danmaku_segment'
+          ? 'application/octet-stream'
+          : 'application/json',
+      'User-Agent': endpoint == 'video_storyboard'
+          ? 'Mozilla/5.0'
+          : 'BiliSail/0.1',
       'Referer': 'https://www.bilibili.com/',
     };
     final cookie = cookieJar.headerFor(uri, now: _clock());
@@ -1423,10 +1406,9 @@ final class BiliApiClient {
       danmakuCount: _count(stat?['danmaku'] ?? data['video_review']),
       publishedAt: _publishedAt(data['pubdate']),
       recommendationReason: _recommendationReason(data['rcmd_reason']),
-      recommendationFeedback:
-          endpoint == 'recommended'
-              ? _recommendationFeedback(data, owner)
-              : null,
+      recommendationFeedback: endpoint == 'recommended'
+          ? _recommendationFeedback(data, owner)
+          : null,
     );
   }
 
@@ -1479,12 +1461,11 @@ final class BiliApiClient {
   }
 
   static String? _userMid(Object? value) {
-    final text =
-        value is int
-            ? value.toString()
-            : value is String
-            ? value
-            : null;
+    final text = value is int
+        ? value.toString()
+        : value is String
+        ? value
+        : null;
     return text != null && RegExp(r'^[1-9][0-9]*$').hasMatch(text)
         ? text
         : null;
@@ -1502,12 +1483,11 @@ final class BiliApiClient {
     throw ApiFailure(ApiFailureCategory.protocol, endpoint);
   }
 
-  static int? _int(Object? value) =>
-      value is int
-          ? value
-          : value is String
-          ? int.tryParse(value)
-          : null;
+  static int? _int(Object? value) => value is int
+      ? value
+      : value is String
+      ? int.tryParse(value)
+      : null;
   static int _requiredInt(Object? value, String endpoint) =>
       _int(value) ?? (throw ApiFailure(ApiFailureCategory.protocol, endpoint));
   static num? _num(Object? value) => value is num ? value : null;
@@ -1607,11 +1587,10 @@ final class _DecodeGate {
         expired.future,
         if (cancellation != null)
           cancellation.whenCancelled.then<void>(
-            (_) =>
-                throw const ApiFailure(
-                  ApiFailureCategory.cancelled,
-                  'danmaku_segment',
-                ),
+            (_) => throw const ApiFailure(
+              ApiFailureCategory.cancelled,
+              'danmaku_segment',
+            ),
           ),
       ]);
     } catch (_) {
@@ -1666,10 +1645,9 @@ List<ApiDanmakuItem> decodeDanmakuSegment(Uint8List bytes) {
     if (tag >> 3 == 1 && tag & 7 == 2) {
       // Include the reply's first and last elements as well as evenly spaced
       // entries between them, so dense pools retain coverage across the reply.
-      final bucket =
-          elementCount > maxItems
-              ? elementIndex * (maxItems - 1) ~/ (elementCount - 1)
-              : elementIndex;
+      final bucket = elementCount > maxItems
+          ? elementIndex * (maxItems - 1) ~/ (elementCount - 1)
+          : elementIndex;
       elementIndex++;
       final retain = bucket != previousBucket;
       previousBucket = bucket;

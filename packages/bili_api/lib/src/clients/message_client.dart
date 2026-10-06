@@ -51,19 +51,17 @@ final class MessageClient {
           'sort_rule': '2',
           'build': '0',
           'mobi_app': 'web',
-          if (cursor != null) 'end_ts': cursor,
+          'end_ts': ?cursor,
         }, context);
     if (!data.containsKey('session_list')) _fail(e);
     final raw = _list(data['session_list'], e, nullable: true);
     final rows = raw.map((v) => _map(v, e)).toList();
-    final mids =
-        rows
-            .where(
-              (v) =>
-                  v['session_type'] == 1 && _count(v['system_msg_type']) == 0,
-            )
-            .map((v) => _decimal(v['talker_id'], e))
-            .toSet();
+    final mids = rows
+        .where(
+          (v) => v['session_type'] == 1 && _count(v['system_msg_type']) == 0,
+        )
+        .map((v) => _decimal(v['talker_id'], e))
+        .toSet();
     final users = <String, Map<String, Object?>>{};
     if (mids.isNotEmpty) {
       final cards = await _get(
@@ -73,10 +71,9 @@ final class MessageClient {
         {'uids': mids.join(',')},
         context,
       );
-      final values =
-          cards['list'] is List<Object?>
-              ? _list(cards['list'], 'message_users')
-              : cards.values.toList();
+      final values = cards['list'] is List<Object?>
+          ? _list(cards['list'], 'message_users')
+          : cards.values.toList();
       for (final value in values) {
         final user = _map(value, 'message_users');
         users[_decimal(user['mid'], 'message_users')] = user;
@@ -96,14 +93,13 @@ final class MessageClient {
             userMid: mid,
             sessionType: type,
             system: system,
-            title:
-                _text(user['name']).isNotEmpty
-                    ? _text(user['name'])
-                    : _text(account['uname']).isNotEmpty
-                    ? _text(account['uname'])
-                    : _text(row['group_name']).isNotEmpty
-                    ? _text(row['group_name'])
-                    : '用户 $mid',
+            title: _text(user['name']).isNotEmpty
+                ? _text(user['name'])
+                : _text(account['uname']).isNotEmpty
+                ? _text(account['uname'])
+                : _text(row['group_name']).isNotEmpty
+                ? _text(row['group_name'])
+                : '用户 $mid',
             text: message?.text ?? '暂无消息',
             avatarUrl: _uri(
               user['face'] ??
@@ -113,15 +109,15 @@ final class MessageClient {
             ),
             time: message?.time,
             unread: _count(row['unread_count']),
-            lastSequence:
-                row['max_seqno'] == null
-                    ? message?.sequence
-                    : _decimal(row['max_seqno'], e, zero: true),
+            lastSequence: row['max_seqno'] == null
+                ? message?.sequence
+                : _decimal(row['max_seqno'], e, zero: true),
           );
         })
         .toList(growable: false);
-    final next =
-        rows.isEmpty ? null : _decimal(rows.last['session_ts'], e, zero: true);
+    final next = rows.isEmpty
+        ? null
+        : _decimal(rows.last['session_ts'], e, zero: true);
     return _page(entries, _yes(data['has_more']), next, cursor);
   }
 
@@ -143,15 +139,14 @@ final class MessageClient {
           'sender_device_id': '1',
           'build': '0',
           'mobi_app': 'web',
-          if (cursor != null) 'end_seqno': cursor,
+          'end_seqno': ?cursor,
         }, context);
     if (!data.containsKey('messages')) _fail(e);
-    final messages =
-        _list(
-          data['messages'],
-          e,
-          nullable: true,
-        ).map((v) => _message(_map(v, e), e)).toList();
+    final messages = _list(
+      data['messages'],
+      e,
+      nullable: true,
+    ).map((v) => _message(_map(v, e), e)).toList();
     messages.sort(
       (a, b) => BigInt.parse(a.sequence).compareTo(BigInt.parse(b.sequence)),
     );
@@ -225,12 +220,12 @@ final class MessageClient {
       // This endpoint exposes no usable cursor in the verified Web response.
       return ApiPage(List.unmodifiable(entries), hasMore: false);
     }
-    final total =
-        section == ApiInboxSection.likes ? _map(data['total'], e) : data;
-    final latest =
-        section == ApiInboxSection.likes
-            ? _optionalMap(data['latest'] ?? data['lastest'])
-            : const <String, Object?>{};
+    final total = section == ApiInboxSection.likes
+        ? _map(data['total'], e)
+        : data;
+    final latest = section == ApiInboxSection.likes
+        ? _optionalMap(data['latest'] ?? data['lastest'])
+        : const <String, Object?>{};
     final raw = [
       if (cursor == null && latest.containsKey('items'))
         ..._list(latest['items'], e, nullable: true),
@@ -240,12 +235,11 @@ final class MessageClient {
     for (final value in raw) {
       final row = _map(value, e), item = _map(_map(value, e)['item'], e);
       final users = row['users'];
-      final user =
-          row['user'] is Map<String, Object?>
-              ? _map(row['user'], e)
-              : users is List<Object?> && users.isNotEmpty
-              ? _map(users.first, e)
-              : const <String, Object?>{};
+      final user = row['user'] is Map<String, Object?>
+          ? _map(row['user'], e)
+          : users is List<Object?> && users.isNotEmpty
+          ? _map(users.first, e)
+          : const <String, Object?>{};
       final mid = user['mid'] == null ? null : _decimal(user['mid'], e);
       final id = _decimal(row['id'], e);
       final actor = _text(user['nickname'] ?? user['name']);
@@ -340,17 +334,16 @@ final class MessageClient {
     }
     if (!revoked && type == 1 && content['content'] is! String) _fail(e);
     final image = !revoked && type == 2 ? _uri(content['url']) : null;
-    final text =
-        revoked
-            ? '消息已撤回'
-            : type == 2
-            ? '[图片]'
-            : _text(content['content']).isNotEmpty
-            ? _text(content['content'])
-            : [
-              _text(content['title']),
-              _text(content['text']),
-            ].where((s) => s.isNotEmpty).join('\n');
+    final text = revoked
+        ? '消息已撤回'
+        : type == 2
+        ? '[图片]'
+        : _text(content['content']).isNotEmpty
+        ? _text(content['content'])
+        : [
+            _text(content['title']),
+            _text(content['text']),
+          ].where((s) => s.isNotEmpty).join('\n');
     return ApiPrivateMessage(
       // Some notification messages reuse msg_key=0; sequence is unique per thread.
       id: sequence,
@@ -381,10 +374,10 @@ final class MessageClient {
       v is Map<String, Object?> ? v : const {};
   List<Object?> _list(Object? v, String e, {bool nullable = false}) =>
       v == null && nullable
-          ? const []
-          : v is List<Object?> && v.length <= 500
-          ? v
-          : _fail(e);
+      ? const []
+      : v is List<Object?> && v.length <= 500
+      ? v
+      : _fail(e);
   String _decimal(Object? v, String e, {bool zero = false}) {
     if (v is! int && v is! String) _fail(e);
     final s = '$v';

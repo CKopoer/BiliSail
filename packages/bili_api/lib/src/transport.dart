@@ -84,8 +84,9 @@ final class DioApiTransport implements ApiTransport, ApiFormTransport {
             cancelToken: token,
             options: Options(
               method: body == null ? 'GET' : 'POST',
-              contentType:
-                  body == null ? null : Headers.formUrlEncodedContentType,
+              contentType: body == null
+                  ? null
+                  : Headers.formUrlEncodedContentType,
               headers: headers,
               responseType: ResponseType.bytes,
               followRedirects: false,

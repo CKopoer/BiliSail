@@ -27,8 +27,9 @@ final class AccountClient {
       context: context,
     );
     final level = nav['level_info'];
-    final info =
-        level is Map<String, Object?> ? level : const <String, Object?>{};
+    final info = level is Map<String, Object?>
+        ? level
+        : const <String, Object?>{};
     final vip = nav['vip_label'];
     return ApiAccountOverview(
       mid: mid,
@@ -41,10 +42,10 @@ final class AccountClient {
       dynamics: _int(stats['dynamic_count']),
       vipLabel:
           nav['vipStatus'] == 1 &&
-                  vip is Map<String, Object?> &&
-                  vip['text'] is String
-              ? vip['text'] as String?
-              : null,
+              vip is Map<String, Object?> &&
+              vip['text'] is String
+          ? vip['text'] as String?
+          : null,
       coins: nav['money'] is num ? nav['money'] as num : null,
     );
   }

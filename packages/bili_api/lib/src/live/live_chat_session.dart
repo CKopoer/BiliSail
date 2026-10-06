@@ -140,11 +140,10 @@ final class LiveChatSession {
       Future.any<T>([
         operation,
         signal.whenCancelled.then<T>(
-          (_) =>
-              throw const ApiFailure(
-                ApiFailureCategory.cancelled,
-                'live_socket',
-              ),
+          (_) => throw const ApiFailure(
+            ApiFailureCategory.cancelled,
+            'live_socket',
+          ),
         ),
       ]);
 

@@ -170,10 +170,9 @@ void main() {
                       'uname': 'reader',
                       'user_sailing': {
                         'cardbg': {
-                          'image':
-                              index.isEven
-                                  ? 'file:///secret'
-                                  : 'https://user:pass@example.com/card.png',
+                          'image': index.isEven
+                              ? 'file:///secret'
+                              : 'https://user:pass@example.com/card.png',
                           'fan': {'color': values[index], 'num_desc': 123},
                         },
                       },

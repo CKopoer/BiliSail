@@ -154,10 +154,9 @@ void main() {
     final api = client(
       (uri) => {
         'code': 0,
-        'data':
-            uri.path.contains('folder')
-                ? {'count': 0, 'list': null}
-                : {'total': 0, 'list': []},
+        'data': uri.path.contains('folder')
+            ? {'count': 0, 'list': null}
+            : {'total': 0, 'list': []},
       },
     );
     expect((await api.loadFolders('1', page: 1)).items, isEmpty);

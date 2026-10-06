@@ -55,9 +55,8 @@ void main() {
         final session = LiveChatSession(
           loadConnectionInfo: (_) async => info,
           isCurrent: () => true,
-          connector:
-              (_, _) async =>
-                  throw const ApiFailure(ApiFailureCategory.network, 'fixture'),
+          connector: (_, _) async =>
+              throw const ApiFailure(ApiFailureCategory.network, 'fixture'),
           retryDelay: (_) => const Duration(seconds: 30),
         );
         final sub = session.events.listen(events.addAll);
@@ -190,9 +189,8 @@ void main() {
           return info;
         },
         isCurrent: () => true,
-        connector:
-            (_, _) async =>
-                throw const ApiFailure(ApiFailureCategory.network, 'fixture'),
+        connector: (_, _) async =>
+            throw const ApiFailure(ApiFailureCategory.network, 'fixture'),
         retryDelay: (_) => Duration.zero,
       );
       await session.events.toList();

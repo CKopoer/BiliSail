@@ -43,11 +43,11 @@ void main() {
 
   test('follow and unfollow use scoped CSRF and a single POST', () async {
     final transport = _Transport();
-    final jar =
-        ApiCookieJar()..receive(Uri.https('api.bilibili.com', '/'), [
-          'SESSDATA=fixture; Path=/; Secure',
-          'bili_jct=fixture-csrf; Path=/; Secure',
-        ]);
+    final jar = ApiCookieJar()
+      ..receive(Uri.https('api.bilibili.com', '/'), [
+        'SESSDATA=fixture; Path=/; Secure',
+        'bili_jct=fixture-csrf; Path=/; Secure',
+      ]);
     final client = VideoAuthorClient(
       BiliApiClient(transport: transport, cookieJar: jar),
     );

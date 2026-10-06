@@ -34,8 +34,10 @@ void main() {
     final result = LivePacketCodec.decode(input);
     expect(result.authenticationCode, 0);
     expect(result.heartbeatReceived, true);
-    final message =
-        result.events.whereType<ApiLiveChatReceived>().single.message;
+    final message = result.events
+        .whereType<ApiLiveChatReceived>()
+        .single
+        .message;
     expect(message.text, '测试弹幕 0');
     expect(message.color, 0xff123456);
     expect(message.fontSize, 36);

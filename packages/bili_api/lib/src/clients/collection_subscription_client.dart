@@ -19,7 +19,7 @@ final class CollectionSubscriptionClient {
     final data = await api.requestJson(
       Uri.https('api.bilibili.com', '/x/web-interface/archive/relation', {
         'bvid': bvid,
-        if (aid != null) 'aid': aid,
+        'aid': ?aid,
       }),
       endpoint,
       context: context,

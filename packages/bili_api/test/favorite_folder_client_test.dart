@@ -28,11 +28,11 @@ void main() {
     transport = _Transport();
     api = BiliApiClient(
       transport: transport,
-      cookieJar:
-          ApiCookieJar()..receive(Uri.https('api.bilibili.com', '/'), [
-            'SESSDATA=fixture; Path=/; Secure',
-            'bili_jct=fixture-csrf; Path=/; Secure',
-          ]),
+      cookieJar: ApiCookieJar()
+        ..receive(Uri.https('api.bilibili.com', '/'), [
+          'SESSDATA=fixture; Path=/; Secure',
+          'bili_jct=fixture-csrf; Path=/; Secure',
+        ]),
     );
     client = FavoriteFolderClient(api);
   });

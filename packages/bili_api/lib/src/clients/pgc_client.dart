@@ -20,8 +20,8 @@ final class PgcClient {
     const endpoint = 'pgc_season';
     final data = await api.requestJson(
       Uri.https('api.bilibili.com', '/pgc/view/web/season', {
-        if (seasonId != null) 'season_id': seasonId,
-        if (episodeId != null) 'ep_id': episodeId,
+        'season_id': ?seasonId,
+        'ep_id': ?episodeId,
       }),
       endpoint,
       context: context,
@@ -124,24 +124,21 @@ final class PgcClient {
     if (dash.isEmpty) {
       throw const ApiFailure(ApiFailureCategory.unavailable, endpoint);
     }
-    final videos =
-        _list(
-          dash['video'],
-          endpoint,
-        ).map((v) => _track(_map(v, endpoint))).toList();
-    final audios =
-        _list(dash['audio'], endpoint)
-            .map((v) => _track(_map(v, endpoint)))
-            .where((v) => v.codecs.toLowerCase().startsWith('mp4a'))
-            .toList();
+    final videos = _list(
+      dash['video'],
+      endpoint,
+    ).map((v) => _track(_map(v, endpoint))).toList();
+    final audios = _list(dash['audio'], endpoint)
+        .map((v) => _track(_map(v, endpoint)))
+        .where((v) => v.codecs.toLowerCase().startsWith('mp4a'))
+        .toList();
     if (videos.isEmpty || audios.isEmpty) {
       throw const ApiFailure(ApiFailureCategory.unavailable, endpoint);
     }
     final seconds = _double(dash['duration']);
-    final durationMs =
-        seconds == null
-            ? _int(data['timelength']) ?? 0
-            : (seconds * 1000).round();
+    final durationMs = seconds == null
+        ? _int(data['timelength']) ?? 0
+        : (seconds * 1000).round();
     return ApiPlayInfo(
       duration: Duration(milliseconds: durationMs.clamp(0, 86400000)),
       dashVideo: List.unmodifiable(videos),
@@ -179,12 +176,11 @@ final class PgcClient {
       badge: badge,
       sectionTitle: section,
       playable: listed && !areaLimited,
-      permissionText:
-          areaLimited
-              ? '地区限制'
-              : !listed
-              ? '暂不可播'
-              : badge,
+      permissionText: areaLimited
+          ? '地区限制'
+          : !listed
+          ? '暂不可播'
+          : badge,
     );
   }
 
@@ -219,14 +215,13 @@ final class PgcClient {
 
   static Map<String, Object?> _map(Object? value, String endpoint) =>
       value is Map<String, Object?>
-          ? value
-          : throw ApiFailure(ApiFailureCategory.protocol, endpoint);
+      ? value
+      : throw ApiFailure(ApiFailureCategory.protocol, endpoint);
   static Map<String, Object?> _mapOrEmpty(Object? value) =>
       value is Map<String, Object?> ? value : const {};
-  static List<Object?> _list(Object? value, String endpoint) =>
-      value is List
-          ? value
-          : throw ApiFailure(ApiFailureCategory.protocol, endpoint);
+  static List<Object?> _list(Object? value, String endpoint) => value is List
+      ? value
+      : throw ApiFailure(ApiFailureCategory.protocol, endpoint);
   static String _id(Object? value, String endpoint) {
     final id = _optionalId(value);
     if (id == null) throw ApiFailure(ApiFailureCategory.protocol, endpoint);
@@ -234,29 +229,26 @@ final class PgcClient {
   }
 
   static String? _optionalId(Object? value) {
-    final text =
-        value is int
-            ? '$value'
-            : value is String
-            ? value
-            : null;
+    final text = value is int
+        ? '$value'
+        : value is String
+        ? value
+        : null;
     return text != null && RegExp(r'^[1-9][0-9]*$').hasMatch(text)
         ? text
         : null;
   }
 
-  static int? _int(Object? value) =>
-      value is int
-          ? value
-          : value is String
-          ? int.tryParse(value)
-          : null;
-  static double? _double(Object? value) =>
-      value is num
-          ? value.toDouble()
-          : value is String
-          ? double.tryParse(value)
-          : null;
+  static int? _int(Object? value) => value is int
+      ? value
+      : value is String
+      ? int.tryParse(value)
+      : null;
+  static double? _double(Object? value) => value is num
+      ? value.toDouble()
+      : value is String
+      ? double.tryParse(value)
+      : null;
   static String? _text(Object? value) =>
       value is String && value.isNotEmpty ? value : null;
   static String _requiredText(Object? value, String endpoint) =>

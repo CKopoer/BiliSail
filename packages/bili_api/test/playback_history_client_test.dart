@@ -19,11 +19,11 @@ void main() {
     api = BiliApiClient(
       transport: transport,
       sessionProvider: session,
-      cookieJar:
-          ApiCookieJar()..receive(Uri.https('api.bilibili.com', '/'), [
-            'SESSDATA=fixture; Path=/; Secure',
-            'bili_jct=fixture-csrf; Path=/; Secure',
-          ]),
+      cookieJar: ApiCookieJar()
+        ..receive(Uri.https('api.bilibili.com', '/'), [
+          'SESSDATA=fixture; Path=/; Secure',
+          'bili_jct=fixture-csrf; Path=/; Secure',
+        ]),
     );
     client = PlaybackHistoryClient(api);
   });

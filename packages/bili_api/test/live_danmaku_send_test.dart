@@ -21,11 +21,11 @@ void main() {
     'live writes use host-scoped cookies, raw fields and one CSRF post',
     () async {
       final transport = _Transport();
-      final cookies =
-          ApiCookieJar()..receive(Uri.https('api.bilibili.com', '/'), [
-            'SESSDATA=fixture; Domain=.bilibili.com; Path=/; Secure',
-            'bili_jct=fixture-csrf; Domain=.bilibili.com; Path=/; Secure',
-          ]);
+      final cookies = ApiCookieJar()
+        ..receive(Uri.https('api.bilibili.com', '/'), [
+          'SESSDATA=fixture; Domain=.bilibili.com; Path=/; Secure',
+          'bili_jct=fixture-csrf; Domain=.bilibili.com; Path=/; Secure',
+        ]);
       final api = BiliApiClient(transport: transport, cookieJar: cookies);
       final client = LiveClient(api);
       await client.sendDanmaku('9007199254740993', '中文 &+=%/#');
@@ -51,11 +51,11 @@ void main() {
 
   test('host-only video cookies never authorize live writes', () async {
     final transport = _Transport();
-    final cookies =
-        ApiCookieJar()..receive(Uri.https('api.bilibili.com', '/'), [
-          'SESSDATA=fixture; Path=/; Secure',
-          'bili_jct=fixture-csrf; Path=/; Secure',
-        ]);
+    final cookies = ApiCookieJar()
+      ..receive(Uri.https('api.bilibili.com', '/'), [
+        'SESSDATA=fixture; Path=/; Secure',
+        'bili_jct=fixture-csrf; Path=/; Secure',
+      ]);
     await expectLater(
       LiveClient(
         BiliApiClient(transport: transport, cookieJar: cookies),
@@ -75,11 +75,11 @@ void main() {
     'timeout, rate limit and code-zero rejection never replay or succeed',
     () async {
       final transport = _Transport();
-      final cookies =
-          ApiCookieJar()..receive(Uri.https('api.live.bilibili.com', '/'), [
-            'SESSDATA=fixture; Path=/; Secure',
-            'bili_jct=fixture-csrf; Path=/; Secure',
-          ]);
+      final cookies = ApiCookieJar()
+        ..receive(Uri.https('api.live.bilibili.com', '/'), [
+          'SESSDATA=fixture; Path=/; Secure',
+          'bili_jct=fixture-csrf; Path=/; Secure',
+        ]);
       final client = LiveClient(
         BiliApiClient(transport: transport, cookieJar: cookies),
       );

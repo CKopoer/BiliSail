@@ -145,3 +145,28 @@ macOS 命令在本机用 LLVM lipo 对真实 arm64 Mach-O fixture 验证通过�
 本轮在 Windows / Flutter 3.47.6 下运行 `tool/check.ps1 -EnforceLockfile`：根应用及三个包的依赖、格式、分析和 989 项离线测试全部通过（根应用 723、API 227、播放器 16、弹幕 23），四份锁文件无差异。两个工作流通过 actionlint 1.7.12，两份 PowerShell 脚本通过语法检查；变更文档的本地链接及 `git diff --check` 通过。
 
 本机为 Windows，未执行 macOS/Xcode、`ditto` / `ln` / `hdiutil` 原生命令；实际 DMG 生成、挂载、拖拽安装、启动及 Gatekeeper 验收仍需 macOS runner 和设备复验。Developer ID 签名与公证仍未接入。
+
+### 定向依赖更新与 API 包 SDK 下限
+
+2026-10-07 按用户指定范围更新以下依赖，继续使用精确版本和 `https://pub.flutter-io.cn` 包源：
+
+| 依赖 | 位置 | 版本变化 |
+| --- | --- | --- |
+| `url_launcher` | 根应用直接依赖 | `6.3.2` → `6.3.3` |
+| `lints` | `bili_api` 开发依赖 | `6.0.0` → `6.1.0` |
+| `test` | `bili_api` 开发依赖 | `1.26.3` → `1.32.0` |
+| `jni_flutter` | `path_provider_android` 间接依赖 | `1.0.4` → `1.0.4+1` |
+
+`jni_flutter 1.0.4` 已被维护者撤回；通过根锁文件定向更新，不增加直接依赖或 `dependency_overrides`。根锁文件只更新上述两项运行时依赖。API 包锁文件同步更新新版 `test` 必需的 `analyzer`、`_fe_analyzer_shared`、`test_api`、`test_core`，移除不再需要的 `js`；其他依赖沿用已有解析版本。[JNI 版本记录](https://pub.dev/packages/jni_flutter/versions)、[测试工具版本记录](https://pub.dev/packages/test/changelog)。
+
+按用户要求，将 `bili_api` 的最低 Dart SDK 从 `3.7.0` 提高到 `3.11.0`，与新版测试工具要求对齐。保留新语言版本下的格式更新，并将 15 处条件集合元素改为等价的空值感知元素；字段为空时仍不加入请求参数或集合。主应用和其他包的 SDK 声明、CI 固定的 Flutter 3.47.6 / Dart 3.13.5 沿用原值。[新版 lint 说明](https://pub.dev/packages/lints/changelog)。
+
+本轮在 Windows 主机验证：
+
+- `tool/check.ps1 -EnforceLockfile` 通过根应用与三个包的格式、静态分析及 1191 项离线测试（根应用 868、API 269、播放器 22、弹幕 32）。
+- 对 37 个变更的 Dart 文件比较语法 token，排除格式空白和尾逗号后，只存在上述 15 处 lint 修正。
+- `flutter build apk --release --target-platform android-arm64 --split-per-abi` 通过，生成 `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`；检查 APK 的 6 个原生 `.so` 文件，ABI 仅为 `arm64-v8a`。
+- `flutter build windows --release` 通过，生成 `build/windows/x64/runner/Release/bilisail.exe` 及配套运行文件。
+- 四份锁文件在完整检查和两端构建前后的 SHA-256 一致；文档本地链接及 `git diff --check` 通过。
+
+Android 构建输出 CupertinoIcons 字体声明警告，Windows 构建输出 `flutter_inappwebview_windows` 的 CMake 开发者警告，两端均构建成功。未执行 Android 真机、macOS 构建/运行、安装升级或真实账号操作；构建和离线测试不能代替这些验收。

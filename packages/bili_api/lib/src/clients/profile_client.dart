@@ -72,11 +72,10 @@ final class ProfileClient {
       e,
       context: context,
     );
-    final items =
-        _list(
-          _map(data['list'], e)['vlist'],
-          e,
-        ).map((v) => _video({..._map(v, e), 'mid': mid}, e)).toList();
+    final items = _list(
+      _map(data['list'], e)['vlist'],
+      e,
+    ).map((v) => _video({..._map(v, e), 'mid': mid}, e)).toList();
     final total = _number(_map(data['page'], e)['count']);
     if (total == null || total < 0) _fail(e);
     return _paged(items, page, total);
@@ -92,36 +91,35 @@ final class ProfileClient {
     final data = await _get('/x/polymer/web-dynamic/v1/feed/space', e, {
       'host_mid': mid,
       'features': 'itemOpusStyle',
-      if (cursor != null) 'offset': cursor,
+      'offset': ?cursor,
     }, context);
-    final items =
-        _list(data['items'], e).take(100).map((v) {
-          final item = _map(v, e);
-          final post = parseDynamicPost(item, e);
-          return ApiProfileEntry(
-            id: post.id,
-            kind: ApiProfileEntryKind.dynamic,
-            dynamicPost: post,
-            title:
-                post.video?.title ??
-                (post.title.isNotEmpty
-                    ? post.title
-                    : post.linkTitle.isNotEmpty
-                    ? post.linkTitle
-                    : post.text.isEmpty
-                    ? '动态'
-                    : post.text),
-            subtitle: post.text,
-            video: post.video,
-            coverUrl:
-                post.video?.coverUrl ??
-                post.imageUrls.firstOrNull ??
-                post.linkCoverUrl,
-            imageUrls: post.imageUrls,
-            userMid: post.authorId ?? mid,
-            publishedAt: post.publishedAt,
-          );
-        }).toList();
+    final items = _list(data['items'], e).take(100).map((v) {
+      final item = _map(v, e);
+      final post = parseDynamicPost(item, e);
+      return ApiProfileEntry(
+        id: post.id,
+        kind: ApiProfileEntryKind.dynamic,
+        dynamicPost: post,
+        title:
+            post.video?.title ??
+            (post.title.isNotEmpty
+                ? post.title
+                : post.linkTitle.isNotEmpty
+                ? post.linkTitle
+                : post.text.isEmpty
+                ? '动态'
+                : post.text),
+        subtitle: post.text,
+        video: post.video,
+        coverUrl:
+            post.video?.coverUrl ??
+            post.imageUrls.firstOrNull ??
+            post.linkCoverUrl,
+        imageUrls: post.imageUrls,
+        userMid: post.authorId ?? mid,
+        publishedAt: post.publishedAt,
+      );
+    }).toList();
     final next = _string(data['offset']);
     final hasMoreValue = data['has_more'];
     if (hasMoreValue is! bool && hasMoreValue is! int) _fail(e);
@@ -186,8 +184,8 @@ final class ProfileClient {
     }, context);
     final total = _number(_map(data['info'], e)['media_count']);
     if (total == null || total < 0) _fail(e);
-    final items =
-        _list(data['medias'] ?? (total == 0 ? const [] : null), e).map((v) {
+    final items = _list(data['medias'] ?? (total == 0 ? const [] : null), e)
+        .map((v) {
           final item = _map(v, e);
           if (item['type'] != null && item['type'] != 2 ||
               item['title'] == '已失效视频' ||
@@ -212,7 +210,8 @@ final class ProfileClient {
                 _optionalMap(item['cnt_info'])['danmaku'] ?? item['danmaku'],
             'pubdate': item['pubtime'] ?? item['pubdate'],
           }, e);
-        }).toList();
+        })
+        .toList();
     return _paged(items, page, total);
   }
 
@@ -231,19 +230,18 @@ final class ProfileClient {
       {'vmid': mid, 'pn': '$page', 'ps': '$_size', 'order': 'desc'},
       context,
     );
-    final items =
-        _list(data['list'], e).map((v) {
-          final item = _map(v, e);
-          final id = _key(item['mid'], e);
-          return ApiProfileEntry(
-            id: id,
-            kind: ApiProfileEntryKind.user,
-            userMid: id,
-            title: _text(item['uname'], e),
-            subtitle: _string(item['sign']),
-            coverUrl: _uri(item['face']),
-          );
-        }).toList();
+    final items = _list(data['list'], e).map((v) {
+      final item = _map(v, e);
+      final id = _key(item['mid'], e);
+      return ApiProfileEntry(
+        id: id,
+        kind: ApiProfileEntryKind.user,
+        userMid: id,
+        title: _text(item['uname'], e),
+        subtitle: _string(item['sign']),
+        coverUrl: _uri(item['face']),
+      );
+    }).toList();
     final total = _number(data['total']);
     if (total == null || total < 0) _fail(e);
     return _paged(items, page, total);
@@ -310,12 +308,11 @@ final class ProfileClient {
   }
 
   static String _key(Object? value, String e) {
-    final text =
-        value is String
-            ? value
-            : value is int
-            ? '$value'
-            : '';
+    final text = value is String
+        ? value
+        : value is int
+        ? '$value'
+        : '';
     if (!RegExp(r'^[1-9]\d*$').hasMatch(text)) _fail(e);
     return text;
   }
@@ -329,12 +326,11 @@ final class ProfileClient {
   static String _text(Object? value, String e) =>
       value is String && value.isNotEmpty ? value : _fail(e);
   static String _string(Object? value) => value is String ? value : '';
-  static int? _number(Object? value) =>
-      value is int
-          ? value
-          : value is String
-          ? int.tryParse(value)
-          : null;
+  static int? _number(Object? value) => value is int
+      ? value
+      : value is String
+      ? int.tryParse(value)
+      : null;
   static DateTime? _date(Object? value) {
     final seconds = _number(value);
     return seconds != null && seconds > 0 && seconds < 8640000000000

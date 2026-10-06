@@ -29,27 +29,26 @@ final class _Transport implements ApiTransport {
       utf8.encode(
         jsonEncode({
           'code': 0,
-          'data':
-              uri.path.endsWith('/nav')
-                  ? {
-                    'isLogin': true,
-                    'mid': 1,
-                    'uname': '账户',
-                    'face': 'http://i0.hdslb.com/account.jpg',
-                  }
-                  : {
-                    'aid': 42,
-                    'bvid': 'BV1234567890',
-                    'title': '视频',
-                    'desc': '',
-                    'owner': {
-                      'name': '作者',
-                      'face': 'http://i0.hdslb.com/creator.jpg',
-                    },
-                    'pages': [
-                      {'cid': 8, 'page': 1, 'part': 'P1', 'duration': 90},
-                    ],
+          'data': uri.path.endsWith('/nav')
+              ? {
+                  'isLogin': true,
+                  'mid': 1,
+                  'uname': '账户',
+                  'face': 'http://i0.hdslb.com/account.jpg',
+                }
+              : {
+                  'aid': 42,
+                  'bvid': 'BV1234567890',
+                  'title': '视频',
+                  'desc': '',
+                  'owner': {
+                    'name': '作者',
+                    'face': 'http://i0.hdslb.com/creator.jpg',
                   },
+                  'pages': [
+                    {'cid': 8, 'page': 1, 'part': 'P1', 'duration': 90},
+                  ],
+                },
         }),
       ),
     ),

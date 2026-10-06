@@ -38,7 +38,7 @@ Map<String, Object?> post({
 }) => {
   'id_str': id,
   'type': 'DYNAMIC_TYPE_FORWARD',
-  if (original != null) 'orig': original,
+  'orig': ?original,
   'modules': {
     'module_author': {
       'mid': '900719925474099312346',
@@ -105,16 +105,15 @@ void main() {
           };
           final transport = DynamicTransport([item]);
           final api = BiliApiClient(transport: transport);
-          final value =
-              home
-                  ? (await HomeClient(api).load(
-                    channel: 'dynamic',
-                    section: '全部',
-                    page: 1,
-                  )).items.single.dynamicPost
-                  : (await ProfileClient(
-                    api,
-                  ).loadDynamics('2')).items.single.dynamicPost;
+          final value = home
+              ? (await HomeClient(api).load(
+                  channel: 'dynamic',
+                  section: '全部',
+                  page: 1,
+                )).items.single.dynamicPost
+              : (await ProfileClient(
+                  api,
+                ).loadDynamics('2')).items.single.dynamicPost;
           expect(value?.text, '图文正文\n第二行[表情]');
           expect(value?.title, '图文标题');
           expect(value?.linkTitle, isEmpty);
@@ -189,16 +188,15 @@ void main() {
         final api = BiliApiClient(
           transport: DynamicTransport([archive, draw, opus]),
         );
-        final List<ApiDynamicPost?> posts =
-            home
-                ? (await HomeClient(api).load(
-                  channel: 'dynamic',
-                  section: '全部',
-                  page: 1,
-                )).items.map((e) => e.dynamicPost).toList()
-                : (await ProfileClient(
-                  api,
-                ).loadDynamics('2')).items.map((e) => e.dynamicPost).toList();
+        final List<ApiDynamicPost?> posts = home
+            ? (await HomeClient(api).load(
+                channel: 'dynamic',
+                section: '全部',
+                page: 1,
+              )).items.map((e) => e.dynamicPost).toList()
+            : (await ProfileClient(
+                api,
+              ).loadDynamics('2')).items.map((e) => e.dynamicPost).toList();
         for (final value in posts) {
           expect(value?.unavailable, false);
           expect(value?.original, isNull);
@@ -254,16 +252,15 @@ void main() {
           ),
         ]);
         final api = BiliApiClient(transport: t);
-        final p =
-            home
-                ? (await HomeClient(api).load(
-                  channel: 'dynamic',
-                  section: '全部',
-                  page: 1,
-                )).items.single.dynamicPost!
-                : (await ProfileClient(
-                  api,
-                ).loadDynamics('2')).items.single.dynamicPost!;
+        final p = home
+            ? (await HomeClient(api).load(
+                channel: 'dynamic',
+                section: '全部',
+                page: 1,
+              )).items.single.dynamicPost!
+            : (await ProfileClient(
+                api,
+              ).loadDynamics('2')).items.single.dynamicPost!;
         expect(p.id, '900719925474099312345');
         expect(p.authorId, '900719925474099312346');
         expect(p.text, '前[大][坏]未知@用户#话题#链接');
@@ -323,18 +320,16 @@ void main() {
           },
         ),
       ]);
-      final p =
-          (await ProfileClient(
-            BiliApiClient(transport: t),
-          ).loadDynamics('2')).items.single.dynamicPost!;
+      final p = (await ProfileClient(
+        BiliApiClient(transport: t),
+      ).loadDynamics('2')).items.single.dynamicPost!;
       expect(p.video?.playCount, 12000);
       expect(p.video?.danmakuCount, 7);
       expect(p.video?.duration, Duration(seconds: 63));
       expect(p.original?.original?.original?.unavailable, true);
-      final direct =
-          (await ProfileClient(
-            BiliApiClient(transport: DynamicTransport([opus])),
-          ).loadDynamics('2')).items.single.dynamicPost!;
+      final direct = (await ProfileClient(
+        BiliApiClient(transport: DynamicTransport([opus])),
+      ).loadDynamics('2')).items.single.dynamicPost!;
       expect(direct.text, '[小]');
       expect(direct.spans.single.emojiSize, 1);
       expect(direct.imageUrls, isEmpty);
@@ -351,10 +346,9 @@ void main() {
           },
         ),
       ]);
-      final p =
-          (await ProfileClient(
-            BiliApiClient(transport: t),
-          ).loadDynamics('2')).items.single.dynamicPost!;
+      final p = (await ProfileClient(
+        BiliApiClient(transport: t),
+      ).loadDynamics('2')).items.single.dynamicPost!;
       expect(p.original?.unavailable, true);
       expect(p.original?.text, isNotEmpty);
       expect(p.linkTitle, '文章');
@@ -377,10 +371,9 @@ void main() {
         },
       ),
     ]);
-    final p =
-        (await ProfileClient(
-          BiliApiClient(transport: t),
-        ).loadDynamics('2')).items.single.dynamicPost!;
+    final p = (await ProfileClient(
+      BiliApiClient(transport: t),
+    ).loadDynamics('2')).items.single.dynamicPost!;
     expect(p.linkTitle, '直播标题');
     expect(p.linkUrl.toString(), 'https://live.bilibili.com/12');
   });
@@ -394,10 +387,9 @@ void main() {
       final api = BiliApiClient(
         transport: DynamicTransport([post(nodes: nodes)]),
       );
-      final p =
-          (await ProfileClient(
-            api,
-          ).loadDynamics('2')).items.single.dynamicPost!;
+      final p = (await ProfileClient(
+        api,
+      ).loadDynamics('2')).items.single.dynamicPost!;
       expect(p.spans.length, lessThanOrEqualTo(256));
       expect(p.text.length, 32768);
       final invalid = {...post(), 'id_str': 9007199254740992.0};

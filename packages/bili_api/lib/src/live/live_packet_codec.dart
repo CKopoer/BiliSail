@@ -117,8 +117,9 @@ final class _Decoder {
         heartbeatReceived = true;
         add(ApiLivePopularityChanged(ByteData.sublistView(body).getUint32(0)));
       } else if (operation == 8) {
-        final data =
-            body.isEmpty ? const <String, Object?>{'code': 0} : _json(body);
+        final data = body.isEmpty
+            ? const <String, Object?>{'code': 0}
+            : _json(body);
         final code = _int(data['code']);
         if (code == null) {
           throw const FormatException('Invalid live authentication reply');
@@ -187,8 +188,9 @@ ApiLiveEvent? _parseCommand(Map<String, Object?> data) {
     if (text == null || user.length < 2) return null;
     final timestamp = flags.length > 4 ? _timestamp(flags[4]) : null;
     final name = _text(user[1], 100) ?? '';
-    final metadata =
-        flags.length > 15 ? _map(flags[15]) : const <String, Object?>{};
+    final metadata = flags.length > 15
+        ? _map(flags[15])
+        : const <String, Object?>{};
     final userId = _id(_map(metadata['user'])['uid']) ?? _id(user[0]);
     final extra = liveChatExtra(metadata['extra']);
     final color = flags.length > 3 ? _int(flags[3]) : null;
@@ -274,26 +276,23 @@ String? _countText(Object? display, Object? value) {
 }
 
 List<Object?> _list(Object? value) => value is List<Object?> ? value : const [];
-int? _int(Object? value) =>
-    value is int
-        ? value
-        : value is String
-        ? int.tryParse(value)
-        : null;
+int? _int(Object? value) => value is int
+    ? value
+    : value is String
+    ? int.tryParse(value)
+    : null;
 String? _id(Object? value) {
-  final text =
-      value is int
-          ? '$value'
-          : value is String
-          ? value
-          : null;
+  final text = value is int
+      ? '$value'
+      : value is String
+      ? value
+      : null;
   return text != null && RegExp(r'^[1-9][0-9]*$').hasMatch(text) ? text : null;
 }
 
-String? _text(Object? value, int limit) =>
-    value is String && value.isNotEmpty
-        ? value.substring(0, value.length.clamp(0, limit))
-        : null;
+String? _text(Object? value, int limit) => value is String && value.isNotEmpty
+    ? value.substring(0, value.length.clamp(0, limit))
+    : null;
 DateTime? _seconds(Object? value) {
   final seconds = _int(value);
   return seconds == null || seconds <= 0 || seconds > 253402300799

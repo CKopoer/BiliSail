@@ -56,21 +56,20 @@ ApiDynamicPost parseDynamicPost(
   final archive = _map(major['archive']);
   final bvid = _text(archive['bvid']);
   final stat = _map(archive['stat']);
-  final video =
-      RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid)
-          ? ApiVideoSummary(
-            bvid: bvid,
-            title: _text(archive['title']),
-            coverUrl: _uri(archive['cover']),
-            ownerName: _text(author['name']),
-            ownerMid: _id(author['mid']),
-            ownerAvatarUrl: _uri(author['face']),
-            duration: _duration(archive['duration_text']),
-            playCount: _number(stat['play']),
-            danmakuCount: _number(stat['danmaku']),
-            publishedAt: _date(author['pub_ts']),
-          )
-          : null;
+  final video = RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid)
+      ? ApiVideoSummary(
+          bvid: bvid,
+          title: _text(archive['title']),
+          coverUrl: _uri(archive['cover']),
+          ownerName: _text(author['name']),
+          ownerMid: _id(author['mid']),
+          ownerAvatarUrl: _uri(author['face']),
+          duration: _duration(archive['duration_text']),
+          playCount: _number(stat['play']),
+          danmakuCount: _number(stat['danmaku']),
+          publishedAt: _date(author['pub_ts']),
+        )
+      : null;
   final images = <Uri>[];
   for (final raw in _list(
     _map(major['draw'])['items'] ?? opus['pics'],
@@ -89,16 +88,14 @@ ApiDynamicPost parseDynamicPost(
       none.isNotEmpty;
   final article = _map(major['article']);
   final common = _map(major['common']);
-  final live =
-      _map(major['live']).isNotEmpty
-          ? _map(major['live'])
-          : _liveRecommendation(major['live_rcmd']);
-  final link =
-      article.isNotEmpty
-          ? article
-          : common.isNotEmpty
-          ? common
-          : live;
+  final live = _map(major['live']).isNotEmpty
+      ? _map(major['live'])
+      : _liveRecommendation(major['live_rcmd']);
+  final link = article.isNotEmpty
+      ? article
+      : common.isNotEmpty
+      ? common
+      : live;
   final counts = _map(modules['module_stat']);
   final original = _map(item['orig']);
   return ApiDynamicPost(
@@ -110,35 +107,33 @@ ApiDynamicPost parseDynamicPost(
     publishedAt: _date(author['pub_ts']),
     publishText: _text(author['pub_time']),
     actionText: _text(author['pub_action']),
-    text:
-        unavailable
-            ? _text(_map(major['none'])['tips'], fallback: '该动态已删除或不可见')
-            : spans.isNotEmpty
-            ? spans.map((s) => s.text).join()
-            : _text(
-              summary['text'] ?? link['desc'],
-              fallback:
-                  video == null &&
-                          images.isEmpty &&
-                          link.isEmpty &&
-                          original.isEmpty
-                      ? '暂不支持该动态内容，请在官方页面查看'
-                      : '',
-            ),
+    text: unavailable
+        ? _text(_map(major['none'])['tips'], fallback: '该动态已删除或不可见')
+        : spans.isNotEmpty
+        ? spans.map((s) => s.text).join()
+        : _text(
+            summary['text'] ?? link['desc'],
+            fallback:
+                video == null &&
+                    images.isEmpty &&
+                    link.isEmpty &&
+                    original.isEmpty
+                ? '暂不支持该动态内容，请在官方页面查看'
+                : '',
+          ),
     spans: spans,
     imageUrls: images,
     video: video,
-    original:
-        original.isEmpty
-            ? null
-            : depth >= 2 || _id(original['id_str']) == null
-            ? ApiDynamicPost(
-              id: id,
-              text: '原动态已删除或暂不支持，请在官方动态查看',
-              unavailable: true,
-              linkUrl: Uri.https('t.bilibili.com', '/$id'),
-            )
-            : parseDynamicPost(original, endpoint, depth: depth + 1),
+    original: original.isEmpty
+        ? null
+        : depth >= 2 || _id(original['id_str']) == null
+        ? ApiDynamicPost(
+            id: id,
+            text: '原动态已删除或暂不支持，请在官方动态查看',
+            unavailable: true,
+            linkUrl: Uri.https('t.bilibili.com', '/$id'),
+          )
+        : parseDynamicPost(original, endpoint, depth: depth + 1),
     repostCount: _number(_map(counts['forward'])['count']),
     commentCount: _number(_map(counts['comment'])['count']),
     likeCount: _number(_map(counts['like'])['count']),
@@ -166,12 +161,11 @@ String _text(Object? v, {String fallback = ''}) {
 }
 
 String? _id(Object? v) {
-  final s =
-      v is int
-          ? '$v'
-          : v is String
-          ? v
-          : '';
+  final s = v is int
+      ? '$v'
+      : v is String
+      ? v
+      : '';
   return s.length <= 128 && RegExp(r'^[1-9][0-9]*$').hasMatch(s) ? s : null;
 }
 
@@ -187,12 +181,11 @@ Uri? _uri(Object? v) {
 }
 
 int? _number(Object? v) {
-  final n =
-      v is int
-          ? v
-          : v is String
-          ? int.tryParse(v)
-          : null;
+  final n = v is int
+      ? v
+      : v is String
+      ? int.tryParse(v)
+      : null;
   if (n != null) return n >= 0 ? n : null;
   if (v is String && v.length < 32) {
     final m = RegExp(r'^(\d+(?:\.\d+)?)(万|亿)$').firstMatch(v);

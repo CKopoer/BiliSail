@@ -22,9 +22,8 @@ void main() {
       jar.headerFor(Uri.http('api.bilibili.com', '/x/y'), now: now),
       isNull,
     );
-    final restored =
-        ApiCookieJar()
-          ..restoreFromSecureStorage(jar.exportForSecureStorage(), now: now);
+    final restored = ApiCookieJar()
+      ..restoreFromSecureStorage(jar.exportForSecureStorage(), now: now);
     expect(
       restored.headerFor(Uri.https('api.bilibili.com', '/x/y'), now: now),
       'SESSDATA=abc',

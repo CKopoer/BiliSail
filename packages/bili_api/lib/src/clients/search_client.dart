@@ -81,12 +81,11 @@ final class SearchClient {
         'keyword': keyword.trim(),
         'page': '$page',
         'page_size': '20',
-        'order':
-            all
-                ? 'totalrank'
-                : type == ApiSearchType.user && order == 'totalrank'
-                ? ''
-                : order,
+        'order': all
+            ? 'totalrank'
+            : type == ApiSearchType.user && order == 'totalrank'
+            ? ''
+            : order,
         if (type == ApiSearchType.user) ...{
           'order_sort': '$orderSort',
           'user_type': '$userType',
@@ -203,17 +202,16 @@ final class SearchClient {
             videoCount: _int(item['videos']),
             level: _int(item['level']),
             verifyType: _int(official['type']),
-            videos:
-                _list(item['res'] ?? const [], nullIfEmpty: true)
-                    .take(6)
-                    .map(
-                      (v) => _video({
-                        ..._map(v),
-                        'mid': mid,
-                        'author': _text(item['uname']),
-                      }),
-                    )
-                    .toList(),
+            videos: _list(item['res'] ?? const [], nullIfEmpty: true)
+                .take(6)
+                .map(
+                  (v) => _video({
+                    ..._map(v),
+                    'mid': mid,
+                    'author': _text(item['uname']),
+                  }),
+                )
+                .toList(),
           );
         case ApiSearchType.bangumi || ApiSearchType.film:
           yield ApiSearchMedia(
@@ -303,23 +301,21 @@ final class SearchClient {
       value is Map<String, Object?> ? value : const {};
   static List<Object?> _list(Object? value, {bool nullIfEmpty = false}) =>
       value is List<Object?>
-          ? value
-          : value == null && nullIfEmpty
-          ? const []
-          : _fail();
+      ? value
+      : value == null && nullIfEmpty
+      ? const []
+      : _fail();
   static String _text(Object? v) => v is String ? v : '';
-  static int? _int(Object? v) =>
-      v is int
-          ? v
-          : v is String
-          ? int.tryParse(v)
-          : null;
-  static double? _number(Object? v) =>
-      v is num
-          ? v.toDouble()
-          : v is String
-          ? double.tryParse(v)
-          : null;
+  static int? _int(Object? v) => v is int
+      ? v
+      : v is String
+      ? int.tryParse(v)
+      : null;
+  static double? _number(Object? v) => v is num
+      ? v.toDouble()
+      : v is String
+      ? double.tryParse(v)
+      : null;
   static String? _optionalId(Object? v) {
     final text = v is int ? '$v' : _text(v);
     return RegExp(r'^[1-9][0-9]*$').hasMatch(text) ? text : null;
@@ -355,12 +351,11 @@ final class SearchClient {
         RegExp(r'&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos|nbsp);'),
         (m) {
           final entity = m[1] ?? '';
-          final code =
-              entity.startsWith('#x')
-                  ? int.tryParse(entity.substring(2), radix: 16)
-                  : entity.startsWith('#')
-                  ? int.tryParse(entity.substring(1))
-                  : null;
+          final code = entity.startsWith('#x')
+              ? int.tryParse(entity.substring(2), radix: 16)
+              : entity.startsWith('#')
+              ? int.tryParse(entity.substring(1))
+              : null;
           if (code != null &&
               code > 0 &&
               code <= 0x10ffff &&

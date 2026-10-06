@@ -55,14 +55,12 @@ final class HomeClient {
     );
     if (channel == 'watchLater') {
       final data = await get('/x/v2/history/toview', {});
-      final entries =
-          _list(data['list'], nullable: true)
-              .where(
-                (item) =>
-                    section != '未看完' || _number(_map(item)['progress']) != -1,
-              )
-              .map((item) => _video(item, allowUnavailable: true))
-              .toList();
+      final entries = _list(data['list'], nullable: true)
+          .where(
+            (item) => section != '未看完' || _number(_map(item)['progress']) != -1,
+          )
+          .map((item) => _video(item, allowUnavailable: true))
+          .toList();
       return ApiPage(List.unmodifiable(entries), hasMore: false);
     }
     if (channel == 'favorites') {
@@ -140,7 +138,7 @@ final class HomeClient {
         'page': '$page',
         // Current Web responses omit draw text unless the Opus shape is requested.
         'features': 'itemOpusStyle',
-        if (cursor != null) 'offset': cursor,
+        'offset': ?cursor,
       });
       final entries = _list(data['items'])
           .take(100)
@@ -172,10 +170,9 @@ final class HomeClient {
                       : post.linkTitle.isEmpty
                       ? post.authorName
                       : post.linkTitle),
-              kind:
-                  video == null
-                      ? ApiHomeEntryKind.dynamic
-                      : ApiHomeEntryKind.video,
+              kind: video == null
+                  ? ApiHomeEntryKind.dynamic
+                  : ApiHomeEntryKind.video,
               dynamicPost: post,
               coverUrl:
                   video?.coverUrl ??
@@ -320,17 +317,16 @@ final class HomeClient {
         hasMore: page * _liveAreaPageSize < count,
       );
     }
-    final type =
-        channel == 'bangumi'
-            ? 1
-            : channel == 'guochuang'
-            ? 4
-            : switch (section) {
-              '电视剧' => 2,
-              '纪录片' => 3,
-              '综艺' => 7,
-              _ => 5,
-            };
+    final type = channel == 'bangumi'
+        ? 1
+        : channel == 'guochuang'
+        ? 4
+        : switch (section) {
+            '电视剧' => 2,
+            '纪录片' => 3,
+            '综艺' => 7,
+            _ => 5,
+          };
     if (section == '我的追番' || section == '我的追剧') {
       if (mid == null) {
         throw const ApiFailure(
@@ -480,8 +476,8 @@ final class HomeClient {
     final rawBvid = _text(m['bvid']);
     final bvid =
         rawBvid != null && RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(rawBvid)
-            ? rawBvid
-            : null;
+        ? rawBvid
+        : null;
     final aid = _positiveId(m['aid']);
     if (bvid == null && (!allowUnavailable || aid == null)) {
       throw const ApiFailure(ApiFailureCategory.protocol, 'home_video');
@@ -490,8 +486,9 @@ final class HomeClient {
     final stat = _optionalMap(m['cnt_info']) ?? _optionalMap(m['stat']);
     return ApiHomeEntry(
       id: bvid ?? 'aid:$aid',
-      title:
-          bvid == null ? _text(m['title']) ?? '已失效内容' : _required(m['title']),
+      title: bvid == null
+          ? _text(m['title']) ?? '已失效内容'
+          : _required(m['title']),
       kind: ApiHomeEntryKind.video,
       coverUrl: _uri(m['pic'] ?? m['cover']),
       subtitle: bvid == null ? '内容已失效或不支持在此播放' : _text(owner?['name']) ?? '',
@@ -561,31 +558,29 @@ final class HomeClient {
     return (parentId: _required(match[1]), areaId: match[2] ?? '0');
   }
 
-  static String _display(Object? value) =>
-      value is String
-          ? value
-          : value is int
-          ? '$value'
-          : '';
+  static String _display(Object? value) => value is String
+      ? value
+      : value is int
+      ? '$value'
+      : '';
   static Map<String, Object?> _map(Object? value) =>
       value is Map<String, Object?>
-          ? value
-          : throw const ApiFailure(ApiFailureCategory.protocol, 'home');
+      ? value
+      : throw const ApiFailure(ApiFailureCategory.protocol, 'home');
   static Map<String, Object?>? _optionalMap(Object? value) =>
       value is Map<String, Object?> ? value : null;
   static List<Object?> _list(Object? value, {bool nullable = false}) =>
       value is List<Object?>
-          ? value
-          : value == null && nullable
-          ? const []
-          : throw const ApiFailure(ApiFailureCategory.protocol, 'home');
+      ? value
+      : value == null && nullable
+      ? const []
+      : throw const ApiFailure(ApiFailureCategory.protocol, 'home');
   static String? _positiveId(Object? value) {
-    final text =
-        value is int
-            ? value.toString()
-            : value is String
-            ? value
-            : null;
+    final text = value is int
+        ? value.toString()
+        : value is String
+        ? value
+        : null;
     return text != null && RegExp(r'^[1-9][0-9]*$').hasMatch(text)
         ? text
         : null;

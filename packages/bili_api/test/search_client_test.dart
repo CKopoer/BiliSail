@@ -16,17 +16,16 @@ final class _Transport implements ApiTransport {
     ApiCancellation? cancellation,
   }) async {
     calls.add(uri);
-    final value =
-        uri.path.endsWith('/nav')
-            ? {
-              'wbi_img': {
-                'img_url':
-                    'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
-                'sub_url':
-                    'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
-              },
-            }
-            : handler(uri);
+    final value = uri.path.endsWith('/nav')
+        ? {
+            'wbi_img': {
+              'img_url':
+                  'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+              'sub_url':
+                  'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+            },
+          }
+        : handler(uri);
     return ApiHttpResponse(
       200,
       Uint8List.fromList(utf8.encode(jsonEncode({'code': 0, 'data': value}))),
@@ -242,27 +241,28 @@ void main() {
   test(
     'video sort, duration and page are signed without double encoding',
     () async {
-      final result = await _client((uri) {
-        expect(uri.queryParameters['search_type'], 'video');
-        expect(uri.queryParameters['order'], 'stow');
-        expect(uri.queryParameters['duration'], '4');
-        expect(uri.queryParameters['page'], '3');
-        expect(uri.queryParameters['keyword'], '中文 & + %');
-        return {
-          'numPages': 3,
-          'numResults': 55,
-          'result': [
-            _video,
-            {'type': 'live', 'bvid': '', 'roomid': 123},
-          ],
-        };
-      }).search(
-        '中文 & + %',
-        type: ApiSearchType.video,
-        order: 'stow',
-        duration: 4,
-        page: 3,
-      );
+      final result =
+          await _client((uri) {
+            expect(uri.queryParameters['search_type'], 'video');
+            expect(uri.queryParameters['order'], 'stow');
+            expect(uri.queryParameters['duration'], '4');
+            expect(uri.queryParameters['page'], '3');
+            expect(uri.queryParameters['keyword'], '中文 & + %');
+            return {
+              'numPages': 3,
+              'numResults': 55,
+              'result': [
+                _video,
+                {'type': 'live', 'bvid': '', 'roomid': 123},
+              ],
+            };
+          }).search(
+            '中文 & + %',
+            type: ApiSearchType.video,
+            order: 'stow',
+            duration: 4,
+            page: 3,
+          );
       expect(result.items.length, 1);
       expect(result.hasMore, isFalse);
       expect(result.counts[ApiSearchType.video], 55);

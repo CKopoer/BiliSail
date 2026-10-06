@@ -53,14 +53,14 @@ final class _Transport implements ApiTransport {
       '/xlive/web-room/v1/index/getDanmuInfo' =>
         malformed
             ? {
-              'code': 0,
-              'data': {
-                'token': 'fixture-key',
-                'host_list': [
-                  {'host': 'outside.example', 'wss_port': 443},
-                ],
-              },
-            }
+                'code': 0,
+                'data': {
+                  'token': 'fixture-key',
+                  'host_list': [
+                    {'host': 'outside.example', 'wss_port': 443},
+                  ],
+                },
+              }
             : discovery,
       '/xlive/web-room/v1/dM/gethistory' => {
         'code': 0,

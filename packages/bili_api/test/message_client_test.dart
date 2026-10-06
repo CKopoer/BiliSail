@@ -130,41 +130,37 @@ void main() {
     expect(page.items.first.sequence, '9007199254740993123');
     expect(page.items.map((item) => item.id).toSet().length, 2);
     expect(page.nextCursor, '9007199254740993123');
-    transport.handler =
-        (_) => {
-          'messages': [message()],
-          'has_more': 1,
-        };
+    transport.handler = (_) => {
+      'messages': [message()],
+      'has_more': 1,
+    };
     expect(
       (await client.thread('123', 1, cursor: '9007199254740993123')).hasMore,
       isFalse,
     );
   });
   test('recalled text and pictures are never exposed', () async {
-    transport.handler =
-        (_) => {
-          'messages': [
-            message(status: 1, type: 2, content: 'private malformed content'),
-          ],
-          'has_more': 0,
-        };
+    transport.handler = (_) => {
+      'messages': [
+        message(status: 1, type: 2, content: 'private malformed content'),
+      ],
+      'has_more': 0,
+    };
     final entry = (await client.thread('123', 1)).items.single;
     expect(entry.text, '消息已撤回');
     expect(entry.imageUrl, isNull);
     expect(entry.targetUrl, isNull);
   });
   test('unknown message types degrade visibly; malformed JSON fails', () async {
-    transport.handler =
-        (_) => {
-          'messages': [message(type: 99, content: '{}')],
-          'has_more': 0,
-        };
+    transport.handler = (_) => {
+      'messages': [message(type: 99, content: '{}')],
+      'has_more': 0,
+    };
     expect((await client.thread('123', 1)).items.single.text, contains('99'));
-    transport.handler =
-        (_) => {
-          'messages': [message(content: '{bad')],
-          'has_more': 0,
-        };
+    transport.handler = (_) => {
+      'messages': [message(content: '{bad')],
+      'has_more': 0,
+    };
     await expectLater(client.thread('123', 1), throwsA(isA<ApiFailure>()));
   });
   test('reply cursor keeps exact ID/time; empty notices are valid', () async {
@@ -196,16 +192,15 @@ void main() {
       },
       'like_time': 1700000000,
     };
-    transport.handler =
-        (_) => {
-          'latest': {
-            'items': [item],
-          },
-          'total': {
-            'items': [item],
-            'cursor': {'id': 9, 'time': 1700000000, 'is_end': true},
-          },
-        };
+    transport.handler = (_) => {
+      'latest': {
+        'items': [item],
+      },
+      'total': {
+        'items': [item],
+        'cursor': {'id': 9, 'time': 1700000000, 'is_end': true},
+      },
+    };
     final list = (await client.notifications(ApiInboxSection.likes)).items;
     expect(list.length, 1);
     expect(list.single.targetUrl?.scheme, 'https');
@@ -303,19 +298,17 @@ void main() {
     expect(transport.posts, 1);
   });
   test('overview handles full level and unavailable next experience', () async {
-    transport.handler =
-        (uri) =>
-            uri.path.endsWith('/stat')
-                ? {'following': 80, 'follower': 10, 'dynamic_count': 29}
-                : {
-                  'isLogin': true,
-                  'mid': 123,
-                  'level_info': {
-                    'current_level': 6,
-                    'current_exp': 43362,
-                    'next_exp': '--',
-                  },
-                };
+    transport.handler = (uri) => uri.path.endsWith('/stat')
+        ? {'following': 80, 'follower': 10, 'dynamic_count': 29}
+        : {
+            'isLogin': true,
+            'mid': 123,
+            'level_info': {
+              'current_level': 6,
+              'current_exp': 43362,
+              'next_exp': '--',
+            },
+          };
     final data = await AccountClient(
       BiliApiClient(transport: transport),
     ).overview('123');

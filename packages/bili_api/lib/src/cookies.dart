@@ -8,20 +8,19 @@ final class ApiCookieJar {
   /// Serialize only into a platform credential store, never ordinary settings.
   Map<String, Object?> exportForSecureStorage() => {
     'version': 1,
-    'cookies':
-        _cookies
-            .map(
-              (entry) => <String, Object?>{
-                'name': entry.cookie.name,
-                'value': entry.cookie.value,
-                'domain': entry.domain,
-                'path': entry.path,
-                'hostOnly': entry.hostOnly,
-                'secure': entry.secure,
-                'expiresUtc': entry.expiry?.toUtc().toIso8601String(),
-              },
-            )
-            .toList(),
+    'cookies': _cookies
+        .map(
+          (entry) => <String, Object?>{
+            'name': entry.cookie.name,
+            'value': entry.cookie.value,
+            'domain': entry.domain,
+            'path': entry.path,
+            'hostOnly': entry.hostOnly,
+            'secure': entry.secure,
+            'expiresUtc': entry.expiry?.toUtc().toIso8601String(),
+          },
+        )
+        .toList(),
   };
 
   void restoreFromSecureStorage(
@@ -56,8 +55,9 @@ final class ApiCookieJar {
       if (expiryRaw != null && expiryRaw is! String) {
         throw const FormatException('Invalid cookie expiry');
       }
-      final expiry =
-          expiryRaw is String ? DateTime.tryParse(expiryRaw)?.toUtc() : null;
+      final expiry = expiryRaw is String
+          ? DateTime.tryParse(expiryRaw)?.toUtc()
+          : null;
       if (expiryRaw != null && expiry == null) {
         throw const FormatException('Invalid cookie expiry');
       }
@@ -98,10 +98,9 @@ final class ApiCookieJar {
         continue;
       }
       final path = cookie.path ?? _defaultPath(origin.path);
-      final expiry =
-          cookie.maxAge == null
-              ? cookie.expires?.toUtc()
-              : clock.add(Duration(seconds: cookie.maxAge!));
+      final expiry = cookie.maxAge == null
+          ? cookie.expires?.toUtc()
+          : clock.add(Duration(seconds: cookie.maxAge!));
       _cookies.removeWhere(
         (entry) =>
             entry.cookie.name == cookie.name &&
@@ -130,23 +129,20 @@ final class ApiCookieJar {
     _cookies.removeWhere(
       (entry) => entry.expiry != null && !entry.expiry!.isAfter(clock),
     );
-    final matching =
-        _cookies.where((entry) {
-            final host = target.host.toLowerCase();
-            final domainMatches =
-                entry.hostOnly
-                    ? host == entry.domain
-                    : host == entry.domain || host.endsWith('.${entry.domain}');
-            final pathMatches =
-                target.path == entry.path ||
-                target.path.startsWith(
-                  entry.path.endsWith('/') ? entry.path : '${entry.path}/',
-                );
-            return domainMatches &&
-                pathMatches &&
-                (!entry.secure || target.scheme == 'https');
-          }).toList()
-          ..sort((a, b) => b.path.length.compareTo(a.path.length));
+    final matching = _cookies.where((entry) {
+      final host = target.host.toLowerCase();
+      final domainMatches = entry.hostOnly
+          ? host == entry.domain
+          : host == entry.domain || host.endsWith('.${entry.domain}');
+      final pathMatches =
+          target.path == entry.path ||
+          target.path.startsWith(
+            entry.path.endsWith('/') ? entry.path : '${entry.path}/',
+          );
+      return domainMatches &&
+          pathMatches &&
+          (!entry.secure || target.scheme == 'https');
+    }).toList()..sort((a, b) => b.path.length.compareTo(a.path.length));
     if (matching.isEmpty) return null;
     return matching
         .map((entry) => '${entry.cookie.name}=${entry.cookie.value}')

@@ -60,12 +60,11 @@ final class RankingClient {
       value is Map<String, Object?> ? value : _fail();
 
   static int _number(Object? value) {
-    final number =
-        value is int
-            ? value
-            : value is String && RegExp(r'^\d+$').hasMatch(value)
-            ? int.tryParse(value)
-            : null;
+    final number = value is int
+        ? value
+        : value is String && RegExp(r'^\d+$').hasMatch(value)
+        ? int.tryParse(value)
+        : null;
     if (number == null || number < 0) _fail();
     return number;
   }

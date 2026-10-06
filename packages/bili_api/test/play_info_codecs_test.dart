@@ -37,10 +37,9 @@ void main() {
         final transport = _Transport(codecs);
         final api = BiliApiClient(transport: transport);
         addTearDown(api.close);
-        final info =
-            pgc
-                ? await PgcClient(api).getPlayInfo('123')
-                : await api.getPlayInfo('BV1xx411c7mD', '123');
+        final info = pgc
+            ? await PgcClient(api).getPlayInfo('123')
+            : await api.getPlayInfo('BV1xx411c7mD', '123');
         expect(info.dashVideo.map((track) => track.codecs), codecs);
         expect(info.dashAudio.single.codecs, 'mp4a.40.2');
         expect(transport.playRequest?.queryParameters['fnval'], '4048');

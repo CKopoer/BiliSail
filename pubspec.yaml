@@ -21,7 +21,7 @@ dependencies:
   flutter_secure_storage: 11.2.0
   qr_flutter: 4.1.0
   window_manager: 0.5.2
-  url_launcher: 6.3.2
+  url_launcher: 6.3.3
   package_info_plus: 10.2.2
   bili_api:
     path: packages/bili_api

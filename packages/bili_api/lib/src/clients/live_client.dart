@@ -312,11 +312,10 @@ final class LiveClient {
           final base = _text(codec['base_url']);
           if (quality == null || base == null) continue;
           available.add(quality);
-          for (final allowed
-              in _list(
-                codec['accept_qn'] ?? const [],
-                endpoint,
-              ).map(_int).whereType<int>()) {
+          for (final allowed in _list(
+            codec['accept_qn'] ?? const [],
+            endpoint,
+          ).map(_int).whereType<int>()) {
             available.add(allowed);
           }
           final urls = <Uri>[];
@@ -448,35 +447,32 @@ final class LiveClient {
 
   static Map<String, Object?> _map(Object? value, String endpoint) =>
       value is Map<String, Object?>
-          ? value
-          : throw ApiFailure(ApiFailureCategory.protocol, endpoint);
+      ? value
+      : throw ApiFailure(ApiFailureCategory.protocol, endpoint);
   static Map<String, Object?> _mapOrEmpty(Object? value) =>
       value is Map<String, Object?> ? value : const {};
-  static List<Object?> _list(Object? value, String endpoint) =>
-      value is List
-          ? value
-          : throw ApiFailure(ApiFailureCategory.protocol, endpoint);
+  static List<Object?> _list(Object? value, String endpoint) => value is List
+      ? value
+      : throw ApiFailure(ApiFailureCategory.protocol, endpoint);
   static String _id(Object? value, String endpoint) =>
       _optionalId(value) ??
       (throw ApiFailure(ApiFailureCategory.protocol, endpoint));
   static String? _optionalId(Object? value) {
-    final text =
-        value is int
-            ? '$value'
-            : value is String
-            ? value
-            : null;
+    final text = value is int
+        ? '$value'
+        : value is String
+        ? value
+        : null;
     return text != null && RegExp(r'^[1-9][0-9]*$').hasMatch(text)
         ? text
         : null;
   }
 
-  static int? _int(Object? value) =>
-      value is int
-          ? value
-          : value is String
-          ? int.tryParse(value)
-          : null;
+  static int? _int(Object? value) => value is int
+      ? value
+      : value is String
+      ? int.tryParse(value)
+      : null;
   static DateTime? _unixSeconds(Object? value) {
     final seconds = _int(value);
     if (seconds == null || seconds <= 0 || seconds > 253402300799) return null;

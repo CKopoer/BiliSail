@@ -84,9 +84,8 @@ void main() {
           await Future<void>.delayed(Duration.zero);
         }().then<void>(
           (_) => finished.complete(),
-          onError:
-              (Object error, StackTrace stack) =>
-                  finished.completeError(error, stack),
+          onError: (Object error, StackTrace stack) =>
+              finished.completeError(error, stack),
         ),
       );
     }, (error, _) => uncaught.add(error));
