@@ -11,6 +11,8 @@ function Invoke-Check([string]$Executable, [string[]]$Parameters) {
 
 Push-Location $repoRoot
 try {
+  # A cold Windows SDK can emit pub bootstrap output before the machine JSON.
+  Invoke-Check flutter @('--version')
   $sdk = (& flutter --version --machine | ConvertFrom-Json)
   if ($sdk.frameworkVersion -ne '3.47.6') { throw 'This checkout is verified with Flutter 3.47.6.' }
   $pubArgs = @('pub', 'get')

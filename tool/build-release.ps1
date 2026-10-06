@@ -95,6 +95,8 @@ $oldMacSigningIdentity = $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY
 $oldMacSigningStyle = $env:FLUTTER_XCODE_CODE_SIGN_STYLE
 Push-Location $repoRoot
 try {
+  # Finish SDK bootstrap before capturing the machine-readable version.
+  Invoke-BuildCommand flutter @('--version')
   $sdkJson = & flutter --version --machine
   if ($LASTEXITCODE -ne 0) { throw 'Could not read Flutter SDK version.' }
   $sdk = $sdkJson | ConvertFrom-Json
@@ -155,7 +157,7 @@ try {
       $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY = '-'
       $env:FLUTTER_XCODE_CODE_SIGN_STYLE = 'Manual'
       Invoke-BuildCommand flutter (@('build', 'macos') + $versionArgs)
-      Invoke-BuildCommand lipo @('-verify_arch', 'arm64', 'build/macos/Build/Products/Release/BiliSail.app/Contents/MacOS/BiliSail')
+      Invoke-BuildCommand lipo @('build/macos/Build/Products/Release/BiliSail.app/Contents/MacOS/BiliSail', '-verify_arch', 'arm64')
       $staging = Join-Path $outputRoot $name
       New-Item -ItemType Directory -Path $staging -Force | Out-Null
       Invoke-BuildCommand ditto @('build/macos/Build/Products/Release/BiliSail.app', (Join-Path $staging 'BiliSail.app'))
