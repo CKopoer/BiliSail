@@ -21,3 +21,13 @@
 - Windows 原生用例 `Windows native responsive controls, fullscreen and Esc preserve one playback source` 通过。使用本地 DASH 音视频分轨与脱敏弹幕事件，覆盖 F／按钮／Esc 六次切换及控件显示／隐藏时的鼠标双击往返，检查同一活动弹幕、调度游标与丢弃计数保留。日志：`artifacts/danmaku-fullscreen-windows.log`。
 - `flutter build windows --profile --no-pub -t lib/main.dart` 通过，可运行版本位于 `build/windows/x64/runner/Profile/bilisail.exe`，须保留同目录依赖和资源。日志：`artifacts/danmaku-fullscreen-build-profile.log`。Release 尝试在 CMake 安装阶段失败；该输出目录中的 `bilisail.exe` 当时正在运行，本轮未关闭它或完成 Release 打包。失败日志：`artifacts/danmaku-fullscreen-build-windows.log`。
 - Android/macOS 本轮未构建或实机验证；未执行真实账号写操作，未测量性能。
+
+## 独立动画时钟后的原生用例复查
+
+同日后续检查发现，上述 Windows 原生用例在进入全屏前的弹幕准备阶段失败：期望 `visible`，实际为 `warmup`。今天 [弹幕速度与播放倍速](danmaku-playback-rate.md) 将活动弹幕寿命改为独立动画时间；暂停时该时间冻结。旧测试在无时间流逝的循环中始终传入 `playing: false`，只把确认媒体位置从 0 秒改到 5 秒，误以为固定弹幕也会经历四秒寿命并退场。该准备方式不再符合暂停／位置校正语义。
+
+暂时移除本轮悬停的请求帧修复后，旧用例仍在相同的准备断言失败（日志 `build/hover-preview-idle-fullscreen-baseline.log`）；恢复请求帧修复后单独运行也同样失败（`build/hover-preview-idle-fullscreen-recheck.log`）。因此这次失败不能归因于悬停初始化或全屏切换。
+
+[原生测试](../../integration_test/windows_playback_test.dart) 现在通过已有的 `PlaybackSession.danmakuNow` 接缝注入可控单调时钟，用 500 毫秒、Playing 的样本累积五秒动画时间，再同步为原生源的实际暂停位置。500 毫秒小于 700 毫秒过期样本边界。仍保留 `warmup`／容量丢弃项／`visible`／未来项，并额外确认未来队列和丢弃计数各为 1；六次 F／按钮／Esc 和显隐两种状态下的鼠标双击往返断言保持。只修正测试准备，不修改弹幕运行代码或放宽断言。
+
+调整后 Windows 原生播放套件报告 8 项全部通过（公网 UGC 分支未启用），包括该全屏用例、本地音视频分轨、headers／重定向／Range／seek、独立标签与工作区切换；日志 `build/hover-preview-idle-playback-corrected.log`。真实线上悬停另行验证，见 [预览初始化复查](video-preview-loading.md#静止窗口初始化阻塞复查)。Android/macOS 本轮原生未测。

@@ -43,6 +43,41 @@ void main() {
     )..addFont(rootBundle.load('assets/fonts/biliicon.ttf'))).load();
   });
   testWidgets(
+    'cover remains visible while native open waits for its first output frame',
+    (tester) async {
+      final frame = Completer<void>();
+      final services = _Interactions()..firstOutput = frame;
+      await tester.pumpWidget(_app(services));
+      final mouse = await _mouse(tester);
+      await mouse.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('video-card-cover-scale'))),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 310));
+      expect(services.engines, hasLength(1));
+      expect(
+        find.byKey(const ValueKey('video-card-cover-scale')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('video-card-preview')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('fake-card-video-surface')),
+        findsNothing,
+      );
+      frame.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('fake-card-video-surface')),
+        findsOneWidget,
+      );
+      await mouse.moveTo(const Offset(650, 550));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
     'whole card hover auto plays without pointer motion and stops on exit',
     (tester) async {
       final services = _Interactions();
@@ -365,6 +400,7 @@ class _Interactions implements VideoCardOperations {
   late final previews = VideoCardPreviewPlayback(
     createEngine: () {
       final engine = CardFakeEngine();
+      engine.opening = firstOutput;
       engines.add(engine);
       return engine;
     },
@@ -374,6 +410,7 @@ class _Interactions implements VideoCardOperations {
   bool added = false;
   RequestCancellation? token;
   Completer<void>? pending;
+  Completer<void>? firstOutput;
   @override
   Future<VideoCardPreviewSession?> preview(
     VideoId id,

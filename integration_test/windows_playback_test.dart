@@ -597,11 +597,13 @@ void main() {
       await window.initialize();
       await window.setFullScreen(false);
       final engine = MediaKitEngine();
+      var danmakuNow = Duration.zero;
       final session = PlaybackSession(
         engine: engine,
         repository: _FakePlaybackRepository(videoFile.uri, audioFile.uri),
         progress: _NoopProgressStore(),
         accountScope: () => 'guest',
+        danmakuNow: () => danmakuNow,
       );
       final semantics = tester.ensureSemantics();
       final panelWidth = ValueNotifier(640.0);
@@ -825,18 +827,30 @@ void main() {
           DanmakuEvent(id: 'future', at: Duration(seconds: 10), text: 'future'),
         ]);
         session.danmaku.seekConfirmed(Duration.zero);
-        for (var second = 0; second <= 5; second++) {
+        // Animation age uses elapsed playing time, not paused media corrections.
+        // Feed sub-700ms clock samples, then freeze at the actual paused source.
+        for (var halfSecond = 0; halfSecond <= 10; halfSecond++) {
+          danmakuNow = Duration(milliseconds: halfSecond * 500);
           session.danmaku.sync(
-            confirmedPosition: Duration(seconds: second),
-            playing: false,
+            confirmedPosition: danmakuNow,
+            playing: true,
             buffering: false,
             seeking: false,
             rate: 1,
           );
           session.danmaku.frame();
         }
+        session.danmaku.sync(
+          confirmedPosition: engine.currentSnapshot.position,
+          playing: false,
+          buffering: false,
+          seeking: false,
+          rate: 1,
+        );
         final pendingDanmaku = session.danmaku.pendingCount;
         final droppedDanmaku = session.danmaku.dropped;
+        expect(pendingDanmaku, 1);
+        expect(droppedDanmaku, 1);
         void expectDanmakuPreserved() {
           expect(session.danmaku.visibleCount, 1);
           expect(session.danmaku.pendingCount, pendingDanmaku);

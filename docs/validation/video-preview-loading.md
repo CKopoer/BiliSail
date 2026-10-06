@@ -40,3 +40,45 @@
 flutter test integration_test/windows_video_card_hover_test.dart -d windows --no-pub --dart-define=BILI_ONLINE_SMOKE=true --dart-define=BILI_PREVIEW_BVID=BV1rhHv6sEVm
 flutter test integration_test/windows_video_card_hover_test.dart -d windows --no-pub --dart-define=BILI_ONLINE_SMOKE=true --dart-define=BILI_PREVIEW_BVID=BV1rhHv6sEVm --dart-define=BILI_PREVIEW_DENIED_PRIMARY=true
 ```
+
+## 静止窗口初始化阻塞复查
+
+用户随后反馈打开应用后仍经常没有预览。本轮读取本机运行日志，看到多次 `openStarted` 之后没有 `openReady`，以及约 3 秒的 opening 超时；这些记录没有提供足够证据将原因归为某个 CDN。继续检查锁定版本 `media_kit 1.2.6` / `media_kit_video 2.0.1` 的初始化和释放链路，确认了一个与网络无关的阻塞：
+
+1. 预览先完成接口请求，再创建 `VideoController`；此时封面缩放动画可能已经结束，窗口停止请求新帧。
+2. 插件构造函数通过 `addPostFrameCallback` 等待帧结束才创建视频输出。这种回调[不会主动请求下一帧](https://api.flutter.dev/flutter/scheduler/SchedulerBinding/addPostFrameCallback.html)。
+3. `Player.open` 等待视频输出初始化；卡片又只在 `open` 成功返回后才挂载 `VideoSurface`，所以不会由挂载 surface 请求那一帧。
+4. 超时后的原生 dispose 同样等待初始化完成。旧引擎释放不完，会阻止后面的预览和备用地址；移动鼠标或其他界面更新偶尔提供一帧，又可能让链路继续，因此看起来是随机失败。
+
+**修复**：[播放器适配器](../../packages/bili_player/lib/src/media_kit_engine.dart) 在创建 `VideoController` 后调用 `WidgetsBinding.instance.ensureVisualUpdate()`，保证初始化回调有帧可执行。仍在打开及视频解码确认后显示预览，保持取消、串行释放和最多三个 URL 的边界；没有调整 CDN 顺序或增加超时。该处理位于通用播放器适配器，其他没有预先挂载 surface 的原生打开同样受益。
+
+**复现及回归**：[独立原生探针](../../tool/validation/video_preview_idle_probe.dart) 使用普通 `WidgetsFlutterBinding`，静止窗口打开本地视频，两次都不挂 surface、不移动鼠标、不运行动画，也不调用 `tester.pump`。此前悬停集成测试的 100 毫秒轮询会主动供给帧，无法验证这个边界。
+
+- 修复前两次都在 3 秒进入 failed，但截至 5024 / 5001 毫秒，open Future 仍因释放等待而未返回，视频没有解码。记录失败后才额外请求一帧，原生视频输出初始化及清理随即继续。日志 `build/hover-preview-idle-before.log`、结果 `build/validation/video-preview-idle-before.json`。
+- 修复后相同探针两次都完成打开及视频解码，约 536 / 368 毫秒进入 playing，并完成释放。日志 `build/hover-preview-idle-after.log`、结果 `build/validation/video-preview-idle.json`。这是 Windows Debug 本地文件功能观测，不能作为在线 CDN 或 Release 性能指标。
+- [运行脚本](../../tool/test-video-preview-idle.ps1) 同时校验探针生成的报告，防止 `flutter run` 在子进程失败退出时仍返回成功。探针不访问账号、不执行历史上报或其他账户写操作。
+- 本轮在线 Windows 悬停样本 `BV1rhHv6sEVm` 再次通过：首次 / 再次悬停约 890 / 825 毫秒，视频 852×480、无解码音频、位置持续前进，移开全部释放，最多一个未释放引擎。日志 `build/hover-preview-idle-online.log`。这项集成测试主动 pump，因此仅验证在线源及卡片行为；静止窗口初始化由上述独立探针验证。
+- `tool/check.ps1 -SkipPub` 全部通过：根应用 864、API 包 269、播放器包 17、弹幕包 32，共 1182 项；格式与分析通过。日志 `build/hover-preview-idle-check.log`。这是本轮实际统计，前面的 1164 项为首次加载策略修复时的记录。
+- Windows 正常 `lib/main.dart` 入口 Release 标准构建通过，完整 bundle 为 `artifacts/bilisail-hover-idle-fix-windows-x64`，日志 `build/hover-preview-idle-release.log`。Android/macOS 本轮原生未测，未做 Release 在线性能基准。
+- 补做普通播放 Windows 原生套件发现全屏用例的旧弹幕准备方式与今天的独立动画时钟不符；基线同样失败。修正测试准备后报告 8 项全部通过（公网 UGC 分支未启用），包含分轨、seek／释放和全屏往返；弹幕运行代码未改。日志 `build/hover-preview-idle-playback-corrected.log`，原因和验证见 [全屏用例复查](danmaku-fullscreen.md#独立动画时钟后的原生用例复查)。
+
+```powershell
+./tool/test-video-preview-idle.ps1
+```
+
+该复现确认了静止窗口下的初始化及释放阻塞；接口失败、媒体地址失效或所有线路不可达仍可能导致没有预览，不能由本地文件测试推断这些网络情况全部消失。
+
+## 首帧之前的短暂黑屏
+
+用户确认上面的初始化修复后预览可以稳定加载，但部分卡片在切换前短暂变黑。锁定版本的播放器中，解码器 `videoParams` 与原生输出纹理走不同的通知链路；取得视频宽高不表示输出纹理已准备好。原先 `DashVideoSource.open` 只等待解码尺寸，返回后卡片立即挂载 `VideoSurface`，此时插件可能仍在显示默认黑色背景／初始化纹理。输出先完成时不会看到黑闪，解码元数据先返回时就会露出这个空档。
+
+**修复**：静音预览在视频解码后继续等待插件的 [waitUntilFirstFrameRendered](https://github.com/media-kit/media-kit/blob/main/media_kit_video/lib/src/video_controller/video_controller.dart) 信号，再允许 open 返回、卡片显示预览；核对的实际依赖为 `media_kit_video 2.0.1`。卡片保留原封面直到这一步完成。首帧等待使用同一 3 秒总预算，generation 变化立即中断，并释放监听；初始化错误、超时继续使用已有的释放和备用地址路径。没有添加固定等待时长或改变弹幕代码。
+
+**证据与回归**：
+
+- [独立原生探针](../../tool/validation/video_preview_idle_probe.dart) 现在在 open Future 返回的当刻记录 `outputAtOpen`，由当前 controller 的纹理 ID 和非零输出尺寸读取，不用解码尺寸推断输出准备。修复前本地视频两次均 `opened=true`、`decoded=true`，但 `outputAtOpen=false`，复现了“已打开仍没有输出”的显示空档。结果 `build/validation/video-preview-frame-before.json`，日志 `build/hover-preview-frame-before.log`。
+- 修复后相同静止窗口、本地视频两次均在 open 返回时已具备输出；约 513 / 375 毫秒进入 playing。结果 `build/validation/video-preview-idle.json`，日志 `build/hover-preview-frame-after.log`。这是 Windows Debug 功能观测，不是性能基准，也不按画面颜色过滤视频的真实内容。
+- 播放器回归覆盖首帧信号未到／已经到达、移开后取消及迟到渲染、首帧超时和初始化错误；卡片测试确认等待期间不挂载视频层，首帧就绪后才切换。
+- 在线 Windows 游客样本 `BV1rhHv6sEVm` 通过，在打开返回时断言视频输出已就绪；首次 / 再次悬停约 1111 / 716 毫秒，无音频、持续播放、移开释放，最大未释放引擎数 1。受控首地址 403 也通过，首地址释放后备用出画面约 3877 毫秒，再次悬停约 821 毫秒；首帧条件没有阻止备用恢复。日志 `build/hover-preview-frame-online.log`、`build/hover-preview-frame-fallback.log`。以上为 Debug 功能观测，不作前后性能比较。
+- `tool/check.ps1 -SkipPub` 最终通过：根应用 865、API 包 269、播放器包 22、弹幕包 32，共 1188 项；格式和分析通过。日志 `build/hover-preview-frame-check-final.log`。
+- Windows 正常 `lib/main.dart` 入口 Release 构建通过，完整 bundle 为 `artifacts/bilisail-hover-first-frame-windows-x64`，包含程序、原生 DLL、数据和许可；日志 `build/hover-preview-frame-release.log`。Android/macOS 本轮原生未验证，未做 Release 逐帧画面或性能验收。

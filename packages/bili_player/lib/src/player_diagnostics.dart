@@ -8,6 +8,7 @@ final class PlayerDiagnostics {
     required this.position,
     required this.hasDecodedVideo,
     required this.hasDecodedAudio,
+    this.hasVideoOutput = false,
     this.videoWidth,
     this.videoHeight,
     this.audioChannels,
@@ -20,6 +21,9 @@ final class PlayerDiagnostics {
   final Duration position;
   final bool hasDecodedVideo;
   final bool hasDecodedAudio;
+
+  /// Native output dimensions are ready, independently of decoder metadata.
+  final bool hasVideoOutput;
   final int? videoWidth;
   final int? videoHeight;
   final int? audioChannels;
@@ -32,6 +36,7 @@ final class PlayerDiagnostics {
       'PlayerDiagnostics('
       'generation: $generation, position: $position, '
       'hasDecodedVideo: $hasDecodedVideo, hasDecodedAudio: $hasDecodedAudio, '
+      'hasVideoOutput: $hasVideoOutput, '
       'videoWidth: $videoWidth, videoHeight: $videoHeight, '
       'audioChannels: $audioChannels, audioSampleRate: $audioSampleRate, '
       'videoCodec: $videoCodec, audioCodec: $audioCodec)';

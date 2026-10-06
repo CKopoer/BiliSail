@@ -193,6 +193,11 @@ void main() {
           expect(engines.first.disposed, true);
         }
         final first = engines.last;
+        expect(
+          first.outputAtOpen,
+          true,
+          reason: 'Preview open includes first output',
+        );
         final start = first.currentSnapshot.position;
         await _until(
           tester,
@@ -203,6 +208,7 @@ void main() {
         expect(first.currentSnapshot.volume, 0);
         expect(first.currentSnapshot.desiredPlaying, true);
         final diagnostics = first.native.inspectDiagnostics();
+        expect(diagnostics.hasVideoOutput, true);
         expect(diagnostics.hasDecodedAudio, false);
         expect(
           find.byKey(const ValueKey('video-card-preview')),
@@ -248,6 +254,7 @@ void main() {
                   .isNotEmpty,
         );
         final secondHoverMs = secondHoverWatch.elapsedMilliseconds;
+        expect(engines.last.outputAtOpen, true);
         expect(maxActive, 1);
         expect(engines.length - initialEngines, lessThanOrEqualTo(2));
         await mouse.moveTo(Offset.zero);
@@ -296,6 +303,7 @@ class _TrackedEngine implements PlayerEngine, VideoSurfaceSource {
   final MediaKitEngine native;
   final Uri? deniedVideo;
   bool disposed = false;
+  bool? outputAtOpen;
   int stops = 0;
   Duration lastPlayingPosition = Duration.zero;
   @override
@@ -307,7 +315,7 @@ class _TrackedEngine implements PlayerEngine, VideoSurfaceSource {
   @override
   PlayerCapabilities get capabilities => native.capabilities;
   @override
-  Future<void> open(ResolvedMediaSource source, OpenOptions options) {
+  Future<void> open(ResolvedMediaSource source, OpenOptions options) async {
     if (source is DashVideoSource) {
       debugPrint(
         'VIDEO_CARD_CDN videoHost=${source.video.uri.host} audio=omitted',
@@ -318,7 +326,8 @@ class _TrackedEngine implements PlayerEngine, VideoSurfaceSource {
         );
       }
     }
-    return native.open(source, options);
+    await native.open(source, options);
+    outputAtOpen = native.inspectDiagnostics().hasVideoOutput;
   }
 
   @override

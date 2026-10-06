@@ -76,6 +76,8 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
   /// Track IDs can be signed URLs; this reads only safe decoder parameters.
   PlayerDiagnostics inspectDiagnostics() {
     final state = _player?.state;
+    final output = _videoController.value;
+    final outputRect = output?.rect.value;
     final width = state?.videoParams.w ?? state?.width;
     final height = state?.videoParams.h ?? state?.height;
     final channels = state?.audioParams.channelCount;
@@ -111,6 +113,11 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
           channels > 0 &&
           sampleRate != null &&
           sampleRate > 0,
+      hasVideoOutput:
+          output?.id.value != null &&
+          outputRect != null &&
+          outputRect.width > 0 &&
+          outputRect.height > 0,
       videoWidth: width,
       videoHeight: height,
       audioChannels: channels,
@@ -262,7 +269,7 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
         );
         _player = player;
         _subscribe(player, generation);
-        _videoController.value = mkv.VideoController(
+        final controller = mkv.VideoController(
           player,
           configuration: mkv.VideoControllerConfiguration(
             // Keep GPU rendering independent of software video decoding.
@@ -272,6 +279,12 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
                 : null,
           ),
         );
+        _videoController.value = controller;
+        // VideoController initializes in a post-frame callback, which does not
+        // request a frame. A hover has no mounted surface until open completes,
+        // so an idle window otherwise waits forever for output initialization
+        // (including dispose after timeout). Guarantee that callback can run.
+        WidgetsBinding.instance.ensureVisualUpdate();
         await player
             .open(
               mk.Media(
@@ -357,6 +370,18 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
               [player.stream.videoParams],
               _remaining(watch, openBudget),
               'Preview video did not decode.',
+            );
+            // Video dimensions can arrive before the native texture is resized
+            // and receives its first frame. Keep the cover until output is ready,
+            // rather than letting Video's black initialization fill replace it.
+            await waitForNativeSignal(
+              signal: controller.waitUntilFirstFrameRendered,
+              superseded: () =>
+                  generation != _generation ||
+                  _disposed ||
+                  !identical(_player, player),
+              changes: [_generationChanges.stream],
+              timeout: _remaining(watch, openBudget),
             );
           }
           if (_requiresDecodedAudio) {

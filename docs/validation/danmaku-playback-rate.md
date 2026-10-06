@@ -18,3 +18,5 @@
 - `tool/check.ps1 -SkipPub` 通过当前工作区根应用和三个包的格式、静态分析及 1066 项测试：根应用 773、`bili_api` 245、`bili_player` 16、`bili_danmaku` 32。日志：`artifacts/danmaku-playback-rate-check.log`。工作区同时存在其他改动，以上为该次检查快照的总数。
 - 修改文档的相对链接和 `git diff --check` 通过。
 - 本轮没有执行 Windows／Android／macOS 构建或实机播放验收，未测量性能；以上为 fake player／单调时钟驱动的行为验证。
+
+后续悬停故障排查补做 Windows 原生全屏用例，发现其旧准备循环用暂停状态推进媒体位置，无法推进独立动画寿命。已按可控 Playing 时钟准备后再暂停，仅调整测试；失败复现、基线对照和验证见 [全屏用例复查](danmaku-fullscreen.md#独立动画时钟后的原生用例复查)。
