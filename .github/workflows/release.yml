@@ -17,7 +17,7 @@ on:
         type: boolean
         default: true
       enable_macos:
-        description: macOS arm64 应用 ZIP
+        description: macOS arm64 DMG 安装文件
         type: boolean
         default: true
 
@@ -80,7 +80,7 @@ jobs:
           - 仅包含本次选中的平台；包旁附 SHA-256 校验文件。
           - Windows 提供 MSIX 安装包；测试签名需先信任包旁的 .cer；签名种类见 build-info.json。
           - Android 使用临时 debug key；macOS 仅 ad-hoc 签名，未 notarize。
-          - macOS ZIP 保留 .app 结构和权限。
+          - macOS 提供 DMG，打开后将 BiliSail.app 拖到 Applications 安装。
           - 构建成功不等于三端播放验收；正式分发前仍需完成签名、资源许可和设备验证。
           "@
           $notes | Set-Content release-notes.md -Encoding utf8

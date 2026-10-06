@@ -99,7 +99,7 @@ BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多
 | --- | --- | --- |
 | Windows x64 | `.msix`，附签名公钥证书 `.cer` | 使用测试签名时，需要先信任对应证书；具体步骤见 [MSIX 签名与安装](docs/validation/ci-cd.md#windows-msix-签名与安装) |
 | Android arm64 | `.apk` | 当前构建使用临时 debug 签名，尚未建立正式签名与升级链路 |
-| macOS arm64 | `.app.zip` | 当前配置使用 ad-hoc 签名，尚未完成 Developer ID 签名与公证 |
+| macOS arm64 | `.dmg` | 打开后将 `BiliSail.app` 拖到 `Applications`；当前配置使用 ad-hoc 签名，尚未完成 Developer ID 签名与公证 |
 
 GitHub Actions 的 **CI** 执行根应用和三个包的检查，并按平台构建预览产物；维护者可手动运行 **Release preview** 创建预览 Release 草稿。触发方式、产物校验与签名配置见 [CI/CD 说明](docs/validation/ci-cd.md)。
 

@@ -186,9 +186,12 @@ try {
       New-Item -ItemType Directory -Path $staging -Force | Out-Null
       Invoke-BuildCommand ditto @('build/macos/Build/Products/Release/BiliSail.app', (Join-Path $staging 'BiliSail.app'))
       Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination $staging
-      $package = Join-Path $releaseDir "$name.zip"
-      # ditto preserves the .app executable bits, symlinks and resource forks.
-      Invoke-BuildCommand ditto @('-c', '-k', '--sequesterRsrc', '--keepParent', $staging, $package)
+      # A root-level Applications link gives Finder a drag-to-install destination.
+      Invoke-BuildCommand ln @('-s', '/Applications', (Join-Path $staging 'Applications'))
+      $package = Join-Path $releaseDir "$name.dmg"
+      # Keep bundle permissions and symlinks in a compressed, read-only HFS+ image.
+      Invoke-BuildCommand hdiutil @('create', '-volname', 'BiliSail', '-srcfolder', $staging, '-fs', 'HFS+', '-format', 'UDZO', $package)
+      Invoke-BuildCommand hdiutil @('verify', $package)
       $signing = 'ad-hoc-not-notarized'
     }
   }

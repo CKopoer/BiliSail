@@ -118,14 +118,14 @@ flutter test
 
 只对已存在目录执行 format；各 package 的 `lib/test` 也必须格式检查。增加生成器时在对应包执行固定版本生成流程，生成后确认没有未提交差异；根命令不会自动替代所有子包测试。
 
-当前 GitHub Actions 已配置下列检查与构建，详见 [CI/CD 与 MSIX](validation/ci-cd.md)。原生播放、模拟器／真机与正式安装升级仍属于后续验收，不自动包含在常规 CI。
+当前 GitHub Actions 已配置下列检查与构建，详见 [CI/CD、MSIX 与 DMG](validation/ci-cd.md)。原生播放、模拟器／真机与正式安装升级仍属于后续验收，不自动包含在常规 CI。
 
 | CI 环境 | 当前配置的任务 |
 | --- | --- |
 | Ubuntu 分析 runner | 复用 `tool/check.ps1 -EnforceLockfile`，根与三个包的 format/analyze/unit/widget tests |
 | Windows runner | Visual Studio C++ 工具链、Windows x64 release 构建、MakeAppx MSIX 打包与签名 |
 | Ubuntu Android runner | JDK 17、锁定 SDK/工程选择的 Android SDK/NDK、Android arm64 release APK |
-| macOS runner | Xcode/所需原生依赖、macOS arm64 release `.app` 构建与 ZIP |
+| macOS runner | Xcode/所需原生依赖、macOS arm64 release `.app` 构建、DMG 打包与镜像校验 |
 
 Android release 测试产物和正式签名包区分；Windows 主机上的构建成功不能证明 macOS 可用。工具链缺失时报告缺失项和影响，不能将命令未运行写为通过。
 

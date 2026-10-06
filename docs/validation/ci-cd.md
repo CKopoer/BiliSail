@@ -1,4 +1,4 @@
-# GitHub Actions CI/CD 与 MSIX
+# GitHub Actions CI/CD、MSIX 与 DMG
 
 日期：2026-10-06。配置覆盖 Android arm64、Windows x64、macOS arm64；本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示 M0 三端验收或 M5 正式发行完成。
 
@@ -14,7 +14,7 @@
 | 版本解析、根与三个包检查 | `ubuntu-24.04` | 无需真实账号，不自动运行在线或原生播放集成测试 |
 | Android | `ubuntu-24.04`，Temurin JDK 17 | 仅 arm64 的 release APK；沿用工程临时 debug key，无正式签名 |
 | Windows | `windows-2022`，Visual Studio C++ / Windows SDK | x64 MSIX，包含 EXE、全部原生 DLL/data 及 VC++ runtime；无需 MSI 或安装 EXE |
-| macOS | `macos-15`，Apple Silicon / Xcode | arm64 `.app` ZIP，`ditto` 保留权限与链接；仅 ad-hoc 签名，未 notarize |
+| macOS | `macos-15`，Apple Silicon / Xcode | arm64 DMG，`ditto` 保留应用权限与链接，`hdiutil` 打包并校验镜像；仅 ad-hoc 签名，未 notarize |
 | Release 上传 | `ubuntu-24.04` | 合并本次所选平台的 Actions artifacts 后创建草稿 |
 
 PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要 Windows 主机与 Visual Studio 工具链，macOS 原生构建需要 macOS/Xcode。macOS 在固定 SDK 中显式启用 `--enable-macos-arm64-only`，避免默认 universal 构建引入未承诺的 Intel 目标。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
@@ -29,7 +29,7 @@ CI 在工作流顶层固定 `PUB_HOSTED_URL=https://pub.flutter-io.cn`，与根�
 
 每个平台的 `artifacts/<target>/release/` 中包含：
 
-- `BiliSail-<version>-<target>.apk`、`.msix` 或 `.zip`。
+- `BiliSail-<version>-<target>.apk`、`.msix` 或 `.dmg`。
 - Windows 包旁的 `.cer`，只含签名证书公钥。
 - `.build-info.json`：源码 revision 与 `sourceDirty`、Flutter/engine/Dart 版本、目标、签名类型、runner image、根锁文件 SHA-256。
 - 每个上述文件对应的 `.sha256`，格式兼容 `sha256sum -c`。
@@ -39,6 +39,12 @@ CI 的 artifacts 保留 14 天；Release 从同一运行下载，所选平台失
 构建前先 `pub get --enforce-lockfile`，随后保留 Flutter build 默认的 pub 阶段，并检查构建后锁文件哈希不变。在 Flutter 3.47.6 中，`--no-pub` 还会跳过 release 原生插件注册文件的重生成：本轮 Android 初次构建因此错误引用 dev-only `integration_test`。修正采用 SDK 自身的重生成流程，不手改 `GeneratedPluginRegistrant.java`。
 
 仅指定 `--target-platform android-arm64` 时，该 SDK 仍会把插件的其他 ABI 库装入非 split APK。本轮检查发现 armeabi-v7a/x86_64 的 mpv/JNI 库，已增加 `--split-per-abi` 并在脚本中校验 APK 内只存在 `arm64-v8a`。
+
+## macOS DMG 安装
+
+macOS 产物为 `BiliSail-<version>-macos-arm64.dmg`。脚本先使用 `ditto` 复制完整 `BiliSail.app`，再在镜像根目录加入指向 `/Applications` 的符号链接与 `THIRD_PARTY_NOTICES.md`。使用系统 `hdiutil create -srcfolder ... -fs HFS+ -format UDZO` 创建压缩只读镜像，随后执行 `hdiutil verify`；任一步失败均停止，不上传产物。CI 与 Release 共用此脚本，现有上传通配符同时覆盖 DMG、metadata 和 SHA-256 文件。
+
+打开 DMG 后，将 `BiliSail.app` 拖到镜像中的 `Applications` 入口，复制完成后推出镜像，再从应用程序目录启动。此方式采用 Apple 的应用 bundle 拖拽安装方案，参见 [Apple 应用分发说明](https://developer.apple.com/library/archive/documentation/Porting/Conceptual/PortingUnix/distributing/distibuting.html)。DMG 不改变应用签名：当前仍为 ad-hoc 预览包，未完成 Developer ID 签名与公证；打包与镜像校验不等于启动或 Gatekeeper 验收。
 
 ## Windows MSIX 签名与安装
 
@@ -131,3 +137,11 @@ macOS 命令在本机用 LLVM lipo 对真实 arm64 Mach-O fixture 验证通过�
 - 完整原生运行文件、SHA-256、CMS 数学签名、导出公钥证书匹配及临时签名证书清理通过；临时资源清单与 PFX 未进入包。PowerShell parser、7 条本地文档链接和 `git diff --check` 通过。
 
 本地验证包基于 `19caedd` 加检出目录的未提交修改，metadata 标记 `sourceDirty=true`。本轮未替换已安装的 `0.1.0+2`，未安装新版做任务栏浅/深主题及不同 DPI 的显示复验，也未推送代码或重发远端 Release；此处的验证不代表新版安装、升级或受信任发行证书链已通过。
+
+### macOS 产物改为 DMG
+
+2026-10-06 按用户要求，将本地与 CI 共用打包脚本的 macOS 产物由 ZIP 改为 DMG，新增 Applications 拖拽安装入口，并在生成后执行镜像校验。Release 手动选项、草稿说明、README、文档索引及实施/决策文档同步更新；此前 CI #4 的 ZIP 成功记录保留为历史证据，不能用于证明新 DMG 流程已通过。
+
+本轮在 Windows / Flutter 3.47.6 下运行 `tool/check.ps1 -EnforceLockfile`：根应用及三个包的依赖、格式、分析和 989 项离线测试全部通过（根应用 723、API 227、播放器 16、弹幕 23），四份锁文件无差异。两个工作流通过 actionlint 1.7.12，两份 PowerShell 脚本通过语法检查；变更文档的本地链接及 `git diff --check` 通过。
+
+本机为 Windows，未执行 macOS/Xcode、`ditto` / `ln` / `hdiutil` 原生命令；实际 DMG 生成、挂载、拖拽安装、启动及 Gatekeeper 验收仍需 macOS runner 和设备复验。Developer ID 签名与公证仍未接入。

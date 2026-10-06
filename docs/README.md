@@ -10,7 +10,7 @@
 | --- | --- |
 | [整体架构](architecture.md) | 产品范围、技术栈、模块依赖、目录、状态管理、存储和平台适配 |
 | [项目更名](validation/project-renaming.md) | BiliSail／哔帆的命名范围、安装／存储标识与平台验证 |
-| [CI/CD 与 MSIX](validation/ci-cd.md) | GitHub Actions 三端构建、预览 Release 草稿、Windows MSIX 签名与安装 |
+| [CI/CD、MSIX 与 DMG](validation/ci-cd.md) | GitHub Actions 三端构建、预览 Release 草稿、Windows MSIX 签名与 macOS DMG 安装 |
 | [API 与会话](api-design.md) | 协议边界、接口映射、鉴权、错误、缓存和降级 |
 | [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |
 | [实施与验收](implementation-plan.md) | 技术验证、开发里程碑、测试、构建与发布要求 |

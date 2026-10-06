@@ -189,7 +189,9 @@ FRB 支持跨平台是可行性依据，但平台构建、取消、错误和流�
 
 **决定（2026-10-06）**：GitHub Actions 在 Ubuntu 复用检查脚本并上传 Release，在对应主机构建 Android arm64、Windows x64、macOS arm64。Windows 按用户要求提供 MSIX，使用 Windows SDK MakeAppx/SignTool 和现有图标，不引入额外 Dart 包；默认临时测试签名，可通过 Secrets 提供固定 PFX。MSIX 安装下限为 Windows 10 1809，版本由 Flutter `x.y.z+N` 映射为 `x.y.z.N`。
 
-**发布边界**：借鉴 UWP 的手动选平台和 Release 草稿职责，独立编写 Flutter 工作流；只创建 draft + prerelease，不自动公开。固定 SDK 与锁文件、附源码/SDK metadata 和 SHA-256；构建成功不能替代三端媒体、安装/升级、签名与许可验收。配置、证书信任和实测状态见 [CI/CD 与 MSIX](validation/ci-cd.md)。
+**macOS 交付（2026-10-06）**：按用户要求将应用 ZIP 改为 DMG 安装文件。使用系统 `ditto` 保留应用 bundle，再以 `hdiutil` 创建并校验压缩只读 HFS+ 镜像；根目录包含 `BiliSail.app`、指向 `/Applications` 的符号链接和第三方说明，支持拖拽安装。不新增打包依赖；继续使用预览 ad-hoc 签名，Developer ID 签名与公证仍待完成。
+
+**发布边界**：借鉴 UWP 的手动选平台和 Release 草稿职责，独立编写 Flutter 工作流；只创建 draft + prerelease，不自动公开。固定 SDK 与锁文件、附源码/SDK metadata 和 SHA-256；构建成功不能替代三端媒体、安装/升级、签名与许可验收。配置、证书信任和实测状态见 [CI/CD、MSIX 与 DMG](validation/ci-cd.md)。
 
 ## D23：关于页与每日首次启动更新提示
 
