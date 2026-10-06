@@ -154,6 +154,7 @@ final class BiliApiClient {
       '/x/v3/fav/resource/deal',
       '/x/v3/fav/folder/unfav',
       '/x/v3/fav/season/unfav',
+      '/x/v3/fav/season/fav',
       '/x/v3/fav/folder/edit',
       '/x/v2/history/toview/add',
       '/x/click-interface/web/heartbeat',
@@ -161,6 +162,7 @@ final class BiliApiClient {
       '/x/v2/reply/action',
       '/x/v2/reply/add',
       '/x/relation/modify',
+      '/x/relation/tags/addUsers',
     }.contains(path)) {
       throw ArgumentError('Unsupported mutation');
     }

@@ -4,9 +4,10 @@ import 'package:flutter/services.dart';
 
 import 'app/bili_app.dart';
 import 'app/dependencies.dart';
+import 'core/presentation/bili_widgets_binding.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  BiliWidgetsBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks([
       'Alibaba PuHuiTi 3.0',

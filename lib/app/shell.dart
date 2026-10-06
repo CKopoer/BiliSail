@@ -190,8 +190,18 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   }
 
   bool _shortcut(String key) {
-    if (shortcutsBlocked(context)) return false;
-    switch (widget.shortcuts.actionFor(key)) {
+    final action = widget.shortcuts.actionFor(key);
+    // Closing a page is a workspace command even while its composer owns
+    // focus. Unmodified keys and mouse bindings still belong to the editor;
+    // dialogs must be dismissed before any underlying page can be closed.
+    if (ModalRoute.of(context)?.isCurrent == false) return false;
+    final keyParts = key.split('+');
+    final modifiers = keyParts.take(keyParts.length - 1);
+    final closeWhileEditing =
+        action == ShortcutAction.closeTab &&
+        (modifiers.contains('Ctrl') || modifiers.contains('Meta'));
+    if (!closeWhileEditing && shortcutsBlocked(context)) return false;
+    switch (action) {
       case ShortcutAction.newTab:
         _newTab();
       case ShortcutAction.closeTab:

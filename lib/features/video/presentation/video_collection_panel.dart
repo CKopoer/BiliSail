@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
 import '../../../domain/video.dart';
+import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/video_card.dart';
+import '../application/collection_subscription_controller.dart';
 import '../application/video_controller.dart';
+import '../domain/collection_subscription_repository.dart';
 
 /// One bounded card owns the collection heading, selection and nested parts.
 final class VideoCollectionPanel extends ConsumerStatefulWidget {
@@ -14,11 +17,13 @@ final class VideoCollectionPanel extends ConsumerStatefulWidget {
     required this.video,
     required this.selected,
     required this.onSelectPart,
+    this.onLogin,
     this.onOpenVideoPart,
   });
   final VideoDetail video;
   final VideoPart selected;
   final ValueChanged<VideoPart> onSelectPart;
+  final VoidCallback? onLogin;
   final void Function(VideoId, String?)? onOpenVideoPart;
 
   @override
@@ -65,6 +70,13 @@ final class _VideoCollectionPanelState
   @override
   Widget build(BuildContext context) {
     final collection = widget.video.collection;
+    final subscriptionState = collection == null
+        ? null
+        : ref.watch(
+            collectionSubscriptionControllerProvider(
+              CollectionId(collection.id),
+            ),
+          );
     final theme = Theme.of(context);
     final index =
         collection?.entries.indexWhere(
@@ -110,7 +122,23 @@ final class _VideoCollectionPanelState
                   ? '${index + 1}/${collection.entries.length}'
                   : '${collection.entries.length} 个视频',
               playCount: collection.playCount,
+              trailing: subscriptionState == null
+                  ? null
+                  : _subscriptionButton(
+                      CollectionId(collection.id),
+                      subscriptionState,
+                    ),
             ),
+            if (subscriptionState?.message case final String message)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                child: Text(
+                  message,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ),
             if (_expanded)
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 224),
@@ -139,6 +167,7 @@ final class _VideoCollectionPanelState
     VoidCallback onTap, {
     String? count,
     int? playCount,
+    Widget? trailing,
   }) => InkWell(
     onTap: onTap,
     child: Padding(
@@ -171,6 +200,11 @@ final class _VideoCollectionPanelState
               ],
             ),
           ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing,
+            const SizedBox(width: 4),
+          ],
           Icon(
             expanded ? Icons.expand_less : Icons.expand_more,
             size: 18,
@@ -180,6 +214,88 @@ final class _VideoCollectionPanelState
       ),
     ),
   );
+
+  Widget _subscriptionButton(
+    CollectionId id,
+    CollectionSubscriptionState state,
+  ) {
+    final theme = Theme.of(context);
+    final subscribed = state.subscribed == true;
+    final needsRefresh =
+        state.uncertain ||
+        state.subscribed == null && state.signedIn && !state.loading;
+    final foreground = subscribed || needsRefresh
+        ? theme.colorScheme.onSurfaceVariant
+        : theme.colorScheme.primary;
+    final label = state.busy
+        ? '处理中'
+        : state.loading
+        ? '读取中'
+        : needsRefresh
+        ? '刷新状态'
+        : subscribed
+        ? '已订阅'
+        : '订阅合集';
+    final tooltip = needsRefresh
+        ? '刷新合集订阅状态'
+        : subscribed
+        ? '取消订阅合集'
+        : '订阅合集';
+    return Tooltip(
+      message: tooltip,
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: foreground,
+          side: BorderSide(color: foreground),
+          minimumSize: const Size(0, 27),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+        ),
+        onPressed: state.busy || state.loading
+            ? null
+            : !state.signedIn
+            ? () {
+                if (widget.onLogin case final onLogin?) {
+                  onLogin();
+                } else {
+                  showAppNotice(context, '请先登录后操作');
+                }
+              }
+            : needsRefresh
+            ? () => ref
+                  .read(collectionSubscriptionControllerProvider(id).notifier)
+                  .refresh()
+            : () async {
+                final changed = await ref
+                    .read(collectionSubscriptionControllerProvider(id).notifier)
+                    .toggle();
+                if (mounted &&
+                    changed &&
+                    widget.video.collection?.id == id.value) {
+                  showAppNotice(context, subscribed ? '已取消订阅' : '已订阅合集');
+                }
+              },
+        child: state.busy || state.loading
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox.square(
+                    dimension: 12,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: foreground,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(label),
+                ],
+              )
+            : Text(label),
+      ),
+    );
+  }
 
   Widget _entry(VideoCollectionEntry entry) {
     final current = entry.id == widget.video.summary.id;

@@ -26,6 +26,20 @@ final class VideoAuthor {
   );
 }
 
+final class FollowGroup {
+  const FollowGroup({required this.id, required this.name});
+
+  final String id;
+  final String name;
+}
+
+final class FollowGroupSelection {
+  const FollowGroupSelection({required this.groups, required this.selectedIds});
+
+  final List<FollowGroup> groups;
+  final Set<String> selectedIds;
+}
+
 abstract interface class VideoAuthorRepository {
   String get accountScope;
   int get sessionEpoch;
@@ -33,6 +47,15 @@ abstract interface class VideoAuthorRepository {
   Future<void> follow(
     VideoAuthorId id,
     bool following,
+    RequestCancellation cancellation,
+  );
+  Future<FollowGroupSelection> loadGroups(
+    VideoAuthorId id,
+    RequestCancellation cancellation,
+  );
+  Future<void> saveGroups(
+    VideoAuthorId id,
+    Set<String> groupIds,
     RequestCancellation cancellation,
   );
 }

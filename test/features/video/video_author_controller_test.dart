@@ -232,4 +232,17 @@ final class _Repository implements VideoAuthorRepository {
     if (failure case final Object error) throw error;
     await writePending?.future;
   }
+
+  @override
+  Future<FollowGroupSelection> loadGroups(
+    VideoAuthorId id,
+    RequestCancellation cancellation,
+  ) async => const FollowGroupSelection(groups: [], selectedIds: {});
+
+  @override
+  Future<void> saveGroups(
+    VideoAuthorId id,
+    Set<String> groupIds,
+    RequestCancellation cancellation,
+  ) async {}
 }

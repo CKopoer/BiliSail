@@ -2,8 +2,17 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+final _stableLogicalKeyLabel = RegExp(r'^[A-Za-z0-9]$|^F([1-9]|1[0-2])$');
+
 String? shortcutKey(KeyEvent event) {
   final key = event.logicalKey;
+  // IMEs can report a nonstandard logical key for these punctuation keys.
+  // Keep recognized logical keys first for alternate keyboard layouts.
+  final physicalPunctuation = switch (event.physicalKey) {
+    PhysicalKeyboardKey.semicolon => 'Semicolon',
+    PhysicalKeyboardKey.quote => 'Quote',
+    _ => null,
+  };
   final special = <LogicalKeyboardKey, String>{
     LogicalKeyboardKey.space: 'Space',
     LogicalKeyboardKey.enter: 'Enter',
@@ -18,7 +27,9 @@ String? shortcutKey(KeyEvent event) {
     LogicalKeyboardKey.comma: 'Comma',
     LogicalKeyboardKey.period: 'Period',
   };
-  final name = special[key] ?? key.keyLabel;
+  final label = key.keyLabel;
+  final stableLabel = _stableLogicalKeyLabel.hasMatch(label) ? label : null;
+  final name = special[key] ?? stableLabel ?? physicalPunctuation ?? label;
   return _withModifiers(name);
 }
 
@@ -79,7 +90,12 @@ class MouseShortcutListener extends StatelessWidget {
 
 bool shortcutsBlocked(BuildContext context) {
   final focused = FocusManager.instance.primaryFocus?.context;
+  final widget = focused?.widget;
+  final editor = widget is EditableText
+      ? widget
+      : focused?.findAncestorWidgetOfExactType<EditableText>();
+  // SelectableText and guest-only composers also use EditableText, but do not
+  // accept typing. Only an actual editor needs to reserve playback shortcuts.
   return ModalRoute.of(context)?.isCurrent == false ||
-      focused?.widget is EditableText ||
-      focused?.findAncestorWidgetOfExactType<EditableText>() != null;
+      (editor != null && !editor.readOnly);
 }

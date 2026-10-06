@@ -32,7 +32,11 @@
 | [播放页与评论交互](validation/video-comments.md) | 官方桌面风格双标签、折叠合集、评论与楼中楼验证 |
 | [评论图片与作者装扮](validation/comment-images-decorations.md) | 共用动态原图预览、右侧装扮图片与粉丝编号、验证边界 |
 | [播放页简介侧栏](validation/video-sidebar.md) | UP 统计与关注、合集卡片、常驻推荐与分隔线 |
+| [合集订阅按钮](validation/collection-subscription.md) | 合集订阅态、粉色按钮、显式订阅/取消与账号隔离 |
+| [合集异常与播放崩溃](validation/collection-playback-crash.md) | 合集状态字段修正、Windows 原生转储与无障碍树更新规避 |
+| [关注用户分组](validation/follow-groups.md) | 已关注菜单、现有分组选择、特殊分组保留与单次保存 |
 | [快捷键与富评论](validation/shortcuts-rich-comments.md) | UWP 默认键位、悬浮控制栏、评论标识/表情/图片和资源来源 |
+| [音量提示与快捷键焦点](validation/keyboard-feedback-focus.md) | 音量百分比、标点键回退、评论焦点与关闭标签 |
 | [设置分类、侧键与字体](validation/settings-tabs-fonts.md) | 设置专属分类、关闭标签快捷键、鼠标侧键录制和默认 HarmonyOS Sans |
 | [普惠体与系统字体选择](validation/font-selection.md) | 内置阿里巴巴普惠体、Windows/macOS 已安装字体搜索、独立界面/弹幕偏好 |
 | [关于页与每日更新检查](validation/app-updates.md) | GitHub 地址、手动检查、每日首次启动提醒与 Release 跳转 |

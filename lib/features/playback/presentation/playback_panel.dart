@@ -20,6 +20,7 @@ import '../application/playback_session.dart';
 import '../domain/content_playback.dart';
 import 'player_settings_dialog.dart';
 import 'playback_timeline_bar.dart';
+import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/bili_icons.dart';
 
 class PlaybackPanel extends ConsumerStatefulWidget {
@@ -308,6 +309,9 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   Timer? _holdTimer;
   Timer? _rateFeedbackTimer;
   bool _showRateFeedback = false;
+  int _volumeNoticeRequest = 0;
+  int? _pendingVolumeGeneration;
+  double? _pendingShortcutVolume;
   double? _savedRate;
   double _savedVolume = 100;
   LogicalKeyboardKey? _heldKey;
@@ -375,6 +379,31 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _setShortcutVolume(double volume) async {
+    final request = ++_volumeNoticeRequest;
+    final generation = widget.session.snapshots.value.generation;
+    _pendingVolumeGeneration = generation;
+    _pendingShortcutVolume = volume;
+    try {
+      await widget.session.setVolume(volume);
+    } finally {
+      if (request == _volumeNoticeRequest) {
+        _pendingShortcutVolume = null;
+      }
+    }
+    if (!mounted ||
+        !widget.active ||
+        request != _volumeNoticeRequest ||
+        widget.session.error != null ||
+        widget.session.snapshots.value.generation != generation) {
+      return;
+    }
+    showAppNotice(
+      context,
+      '音量 ${widget.session.snapshots.value.volume.round()}%',
+    );
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) _releaseHold();
@@ -399,6 +428,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     super.didUpdateWidget(oldWidget);
     if (!widget.active) {
       _releaseHold();
+      _volumeNoticeRequest++;
+      _pendingShortcutVolume = null;
       _rateFeedbackTimer?.cancel();
       _showRateFeedback = false;
     }
@@ -417,6 +448,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   @override
   void dispose() {
     _releaseHold();
+    _volumeNoticeRequest++;
+    _pendingShortcutVolume = null;
     _rateFeedbackTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     widget.session.removeListener(_sourceChanged);
@@ -522,6 +555,11 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   bool _performShortcut(ShortcutAction action, {LogicalKeyboardKey? heldKey}) {
     final session = widget.session;
     final snapshot = session.snapshots.value;
+    // Native volume commands are serialized; repeats can arrive before the
+    // snapshot reflects an earlier 5% step.
+    final shortcutVolume = _pendingVolumeGeneration == snapshot.generation
+        ? _pendingShortcutVolume ?? snapshot.volume
+        : snapshot.volume;
     if (session.isLive &&
         const {
           ShortcutAction.seekBack,
@@ -594,12 +632,12 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
           session.seek(snapshot.position + const Duration(seconds: 90)),
         );
       case ShortcutAction.volumeUp:
-        unawaited(session.setVolume((snapshot.volume + 5).clamp(0, 100)));
+        unawaited(_setShortcutVolume((shortcutVolume + 5).clamp(0, 100)));
       case ShortcutAction.volumeDown:
-        unawaited(session.setVolume((snapshot.volume - 5).clamp(0, 100)));
+        unawaited(_setShortcutVolume((shortcutVolume - 5).clamp(0, 100)));
       case ShortcutAction.mute:
-        if (snapshot.volume > 0) _savedVolume = snapshot.volume;
-        unawaited(session.setVolume(snapshot.volume > 0 ? 0 : _savedVolume));
+        if (shortcutVolume > 0) _savedVolume = shortcutVolume;
+        unawaited(_setShortcutVolume(shortcutVolume > 0 ? 0 : _savedVolume));
       case ShortcutAction.danmaku:
         widget.onToggleComments();
       case ShortcutAction.subtitles:

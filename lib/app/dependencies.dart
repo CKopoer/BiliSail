@@ -39,6 +39,8 @@ import '../features/video/application/video_actions_controller.dart';
 import '../features/video/data/api_video_actions_repository.dart';
 import '../features/video/application/video_author_controller.dart';
 import '../features/video/data/api_video_author_repository.dart';
+import '../features/video/application/collection_subscription_controller.dart';
+import '../features/video/data/api_collection_subscription_repository.dart';
 import '../features/video/application/video_comments_controller.dart';
 import '../features/video/data/api_video_comments_repository.dart';
 import '../features/playback/data/api_sponsor_repository.dart';
@@ -277,9 +279,17 @@ class AppDependencies {
         videoRepositoryProvider.overrideWithValue(
           ApiVideoRepository(api, requests),
         ),
+        collectionSubscriptionRepositoryProvider.overrideWithValue(
+          ApiCollectionSubscriptionRepository(
+            CollectionSubscriptionClient(api),
+            requests,
+            accountScope: () => session.accountScope,
+          ),
+        ),
         videoAuthorRepositoryProvider.overrideWithValue(
           ApiVideoAuthorRepository(
             VideoAuthorClient(api),
+            FollowGroupClient(api),
             requests,
             accountScope: () => session.accountScope,
           ),

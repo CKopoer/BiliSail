@@ -267,6 +267,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                     key: ValueKey(video.summary.id),
                                     video: video,
                                     selected: selected,
+                                    onLogin: widget.onLogin,
                                     onSelectPart: (part) {
                                       setState(() => _selectedCid = part.cid);
                                       widget.onPartChanged?.call(part);
@@ -318,15 +319,21 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                   child: IndexedStack(
                                     index: _tab,
                                     children: [
-                                      SingleChildScrollView(
-                                        controller: _introScroll,
-                                        child: content,
+                                      ExcludeFocus(
+                                        excluding: _tab != 0,
+                                        child: SingleChildScrollView(
+                                          controller: _introScroll,
+                                          child: content,
+                                        ),
                                       ),
                                       if (_visitedTabs.contains(1))
-                                        VideoCommentsPanel(
-                                          detail: video,
-                                          onLogin: widget.onLogin,
-                                          onOpenUser: widget.onOpenUser,
+                                        ExcludeFocus(
+                                          excluding: _tab != 1,
+                                          child: VideoCommentsPanel(
+                                            detail: video,
+                                            onLogin: widget.onLogin,
+                                            onOpenUser: widget.onOpenUser,
+                                          ),
                                         )
                                       else
                                         const SizedBox(),

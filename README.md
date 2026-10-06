@@ -233,7 +233,6 @@ Pop-Location
   <img src="https://contrib.rocks/image?repo=CKopoer/BiliSail" alt="BiliSail 代码贡献者头像">
 </a>
 
-头像由 [contrib.rocks](https://contrib.rocks) 根据 GitHub 提交贡献生成；完整提交贡献见[贡献者列表](https://github.com/CKopoer/BiliSail/graphs/contributors)。
 
 ## 致谢
 

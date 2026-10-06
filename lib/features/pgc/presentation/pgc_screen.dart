@@ -225,17 +225,26 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                           : 0,
                     ),
                     children: [
-                      SingleChildScrollView(
-                        key: const ValueKey('pgc-intro'),
-                        controller: _introScroll,
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                        child: _details(context, season, selected),
+                      ExcludeFocus(
+                        excluding:
+                            _tab == 1 &&
+                            selected != null &&
+                            widget.commentsBuilder != null,
+                        child: SingleChildScrollView(
+                          key: const ValueKey('pgc-intro'),
+                          controller: _introScroll,
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                          child: _details(context, season, selected),
+                        ),
                       ),
                       if (widget.commentsBuilder case final builder?)
                         if (selected != null)
-                          _commentsVisited
-                              ? builder(context, season, selected)
-                              : const SizedBox(),
+                          ExcludeFocus(
+                            excluding: _tab != 1,
+                            child: _commentsVisited
+                                ? builder(context, season, selected)
+                                : const SizedBox(),
+                          ),
                     ],
                   ),
                 ),

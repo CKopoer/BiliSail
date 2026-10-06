@@ -181,81 +181,95 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
   }
 }
 
-/// A single frame clock follows a retargetable, critically damped spring.
-/// Retargeting preserves velocity and never inserts a new animation's zero frame.
+/// Wheel impulses drive a velocity that decays while the displayed velocity
+/// follows smoothly. One frame clock integrates motion without a position target.
 final class _WheelScrollActivity extends ScrollActivity {
   _WheelScrollActivity(
     ScrollPosition position,
     super.delegate,
     TickerProvider vsync,
     double delta,
-  ) : _position = position,
-      _target = position.pixels {
+  ) : _position = position {
     addDelta(delta);
     _ticker = vsync.createTicker(_tick)..start();
   }
 
-  // Critical damping avoids bounce. A 120px notch reaches ~99% in 210ms.
-  static const _spring = SpringDescription(
-    mass: 1,
-    stiffness: 1024,
-    damping: 64,
-  );
-  static const _tolerance = Tolerance(distance: .1, velocity: 5);
+  // Seconds. The short response smooths wheel impulses; the longer decay lets
+  // successive notches build speed. An uncapped impulse integrates to its delta.
+  static const _decaySeconds = .075;
+  static const _responseSeconds = .020;
+  static const _maxDriveVelocity = 24000.0; // Logical pixels / second.
+  static const _distanceTolerance = .01; // Remaining logical pixels.
+  static const _velocityTolerance = 5.0; // Logical pixels / second.
   ScrollPosition _position;
   ScrollPosition get position => _position;
   late final Ticker _ticker;
-  late ScrollSpringSimulation _simulation;
   Duration _lastElapsed = Duration.zero;
-  Duration _simulationStart = Duration.zero;
-  double _target;
   double _lastDelta = 0;
+  double _driveVelocity = 0;
   double _velocity = 0;
   bool disposed = false;
 
   void addDelta(double delta) {
-    final reversing = delta * _lastDelta < 0;
-    if (reversing) _velocity = 0;
-    final start = reversing ? position.pixels : _target;
-    _target = (start + delta)
-        .clamp(position.minScrollExtent, position.maxScrollExtent)
+    if (_lastDelta != 0 && delta.sign != _lastDelta.sign) {
+      _driveVelocity = 0;
+      _velocity = 0;
+    }
+    _driveVelocity = (_driveVelocity + delta / _decaySeconds)
+        .clamp(-_maxDriveVelocity, _maxDriveVelocity)
         .toDouble();
     _lastDelta = delta;
-    _retarget();
-  }
-
-  void _retarget() {
-    _simulationStart = _lastElapsed;
-    _simulation = ScrollSpringSimulation(
-      _spring,
-      position.pixels,
-      _target,
-      _velocity,
-      tolerance: _tolerance,
-    );
   }
 
   void _tick(Duration elapsed) {
-    if (disposed || elapsed == _lastElapsed) return;
+    if (disposed || elapsed <= _lastElapsed) return;
+    final seconds = (elapsed - _lastElapsed).inMicroseconds / 1000000;
     _lastElapsed = elapsed;
     if (!position.hasContentDimensions ||
         !position.physics.shouldAcceptUserOffset(position)) {
       stop();
       return;
     }
-    final seconds = (elapsed - _simulationStart).inMicroseconds / 1000000;
-    final pixels = position.pixels;
-    var next = _simulation.x(seconds);
-    _velocity = _simulation.dx(seconds);
-    // A resized viewport can move the target behind the remaining momentum.
-    // Clamp between the displayed offset and target rather than overshooting.
-    next = next.clamp(math.min(pixels, _target), math.max(pixels, _target));
-    final settled = _simulation.isDone(seconds);
-    final reached = next == _target;
-    final overscroll = delegate.setPixels(settled ? _target : next);
+    final previousDrive = _driveVelocity;
+    final previousVelocity = _velocity;
+    final decay = math.exp(-seconds / _decaySeconds);
+    final response = math.exp(-seconds / _responseSeconds);
+    _driveVelocity = previousDrive * decay;
+    // Exact integration of du/dt = -u/decay and dv/dt = (u-v)/response.
+    // This avoids frame-rate-dependent Euler steps at 60/120Hz or delayed frames.
+    _velocity =
+        previousVelocity * response +
+        previousDrive *
+            _decaySeconds /
+            (_decaySeconds - _responseSeconds) *
+            (decay - response);
+    var distance =
+        _decaySeconds * (previousDrive - _driveVelocity) +
+        _responseSeconds * (previousVelocity - _velocity);
+    final remainingDistance =
+        _decaySeconds * _driveVelocity + _responseSeconds * _velocity;
+    final settled =
+        remainingDistance.abs() < _distanceTolerance &&
+        _velocity.abs() < _velocityTolerance;
+    if (settled) {
+      // Integrate the subpixel tail once so separate gestures do not accumulate
+      // rounding loss. There is still no stored endpoint to chase or snap to.
+      distance += remainingDistance;
+      _driveVelocity = 0;
+      _velocity = 0;
+    }
+    final next = (position.pixels + distance).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    final overscroll = delegate.setPixels(next);
     // A scroll listener can take ownership while setPixels dispatches updates.
-    if (!disposed && (settled || reached || overscroll != 0)) stop();
+    if (!disposed && (settled || _atBoundary || overscroll != 0)) stop();
   }
+
+  bool get _atBoundary => _lastDelta > 0
+      ? position.pixels >= position.maxScrollExtent
+      : position.pixels <= position.minScrollExtent;
 
   void stop() {
     if (!disposed) delegate.goIdle();
@@ -263,11 +277,11 @@ final class _WheelScrollActivity extends ScrollActivity {
 
   @override
   void applyNewDimensions() {
-    _target = _target
-        .clamp(position.minScrollExtent, position.maxScrollExtent)
-        .toDouble();
-    if (_velocity * (_target - position.pixels) < 0) _velocity = 0;
-    _retarget();
+    // Layout owns any offset correction. Keep momentum if there is still room;
+    // at an edge discard it even if more content may arrive later.
+    if (_atBoundary || !position.physics.shouldAcceptUserOffset(position)) {
+      stop();
+    }
   }
 
   @override

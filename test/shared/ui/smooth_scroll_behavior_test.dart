@@ -63,6 +63,135 @@ void main() {
     expect(controller.offset, closeTo(240, .01));
   });
 
+  testWidgets('separate wheel gestures retain their cumulative distance', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(_list(controller)));
+    for (var i = 0; i < 3; i++) {
+      await _wheel(tester, find.byType(ListView), 120);
+      await tester.pumpAndSettle();
+      await _wheel(tester, find.byType(ListView), 40);
+      await tester.pumpAndSettle();
+    }
+    expect(controller.offset, closeTo(480, .001));
+  });
+
+  testWidgets('wheel velocity builds smoothly then coasts to rest', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(_list(controller)));
+    await _wheel(tester, find.byType(ListView), 120);
+    expect(controller.position.activity?.velocity, 0);
+    await tester.pump();
+    var previousOffset = controller.offset;
+    var previousVelocity = 0.0;
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 8));
+      final velocity = controller.position.activity?.velocity ?? 0;
+      expect(velocity, greaterThan(previousVelocity));
+      expect(controller.offset, greaterThan(previousOffset));
+      previousVelocity = velocity;
+      previousOffset = controller.offset;
+    }
+    await tester.pump(const Duration(milliseconds: 80));
+    final coastingVelocity = controller.position.activity?.velocity ?? 0;
+    expect(coastingVelocity, greaterThan(0));
+    expect(coastingVelocity, lessThan(previousVelocity));
+    expect(controller.offset, greaterThan(previousOffset));
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(controller.position.activity?.velocity, lessThan(coastingVelocity));
+    await tester.pumpAndSettle();
+    expect(controller.offset, closeTo(120, .01));
+    expect(controller.position.isScrollingNotifier.value, isFalse);
+  });
+
+  testWidgets('reversal clears momentum and moves backward on the next frame', (
+    tester,
+  ) async {
+    final controller = ScrollController(initialScrollOffset: 500);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(_list(controller)));
+    await _wheel(tester, find.byType(ListView), 400);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    final beforeReverse = controller.offset;
+    await _wheel(tester, find.byType(ListView), -120);
+    expect(controller.offset, beforeReverse);
+    expect(controller.position.activity?.velocity, 0);
+    var previous = beforeReverse;
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 8));
+      expect(controller.offset, lessThan(previous));
+      expect(controller.position.activity?.velocity, lessThan(0));
+      previous = controller.offset;
+    }
+    await tester.pumpAndSettle();
+    expect(controller.offset, closeTo(beforeReverse - 120, .01));
+  });
+
+  testWidgets('velocity integration is independent of the frame interval', (
+    tester,
+  ) async {
+    final offsets = <double>[];
+    final velocities = <double>[];
+    for (final frameMilliseconds in [8, 16, 32, 96]) {
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        _app(_list(controller, key: ValueKey(frameMilliseconds))),
+      );
+      await _wheel(tester, find.byType(ListView), 120);
+      await tester.pump();
+      for (var elapsed = 0; elapsed < 96; elapsed += frameMilliseconds) {
+        await tester.pump(Duration(milliseconds: frameMilliseconds));
+      }
+      offsets.add(controller.offset);
+      velocities.add(controller.position.activity?.velocity ?? 0);
+      await tester.pumpAndSettle();
+      expect(controller.offset, closeTo(120, .01));
+    }
+    for (var i = 1; i < offsets.length; i++) {
+      expect(offsets[i], closeTo(offsets.first, .000001));
+      expect(velocities[i], closeTo(velocities.first, .000001));
+    }
+  });
+
+  testWidgets('large wheel bursts have bounded velocity and coast distance', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      _app(
+        ListView(
+          controller: controller,
+          children: const [SizedBox(height: 100000)],
+        ),
+      ),
+    );
+    // A finite but extreme device delta must not overflow impulse conversion.
+    await _wheel(tester, find.byType(ListView), double.maxFinite);
+    for (var i = 0; i < 100; i++) {
+      await _wheel(tester, find.byType(ListView), 120);
+    }
+    expect(controller.offset, 0);
+    await tester.pump();
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      final velocity = controller.position.activity?.velocity ?? 0;
+      expect(velocity.isFinite, isTrue);
+      expect(velocity, inInclusiveRange(0, 24000));
+    }
+    await tester.pumpAndSettle();
+    expect(controller.offset, inExclusiveRange(0, 2200));
+    expect(controller.position.isScrollingNotifier.value, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final frame in [
     const Duration(milliseconds: 16),
     const Duration(milliseconds: 8),
@@ -305,7 +434,7 @@ void main() {
     expect(controller.offset, 0);
   });
 
-  testWidgets('programmatic navigation cancels pending wheel targets', (
+  testWidgets('programmatic navigation cancels pending wheel momentum', (
     tester,
   ) async {
     final controller = ScrollController();
@@ -423,7 +552,7 @@ void main() {
     expect(controller.offset, closeTo(before + 140, .01));
   });
 
-  testWidgets('shrinking content clamps the active target without bouncing', (
+  testWidgets('shrinking content stops momentum at the new edge', (
     tester,
   ) async {
     final controller = ScrollController();
@@ -461,6 +590,79 @@ void main() {
     expect(controller.offset, controller.position.maxScrollExtent);
     expect(controller.position.isScrollingNotifier.value, isFalse);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('growing content before the edge preserves wheel momentum', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    var height = 2400.0;
+    late StateSetter update;
+    await tester.pumpWidget(
+      _app(
+        StatefulBuilder(
+          builder: (_, setState) {
+            update = setState;
+            return ListView(
+              controller: controller,
+              children: [SizedBox(height: height)],
+            );
+          },
+        ),
+      ),
+    );
+    final oldEdge = controller.position.maxScrollExtent;
+    controller.jumpTo(oldEdge - 10);
+    await tester.pump();
+    final start = controller.offset;
+    await _wheel(tester, find.byType(ListView), 120);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 8));
+    expect(controller.offset, lessThan(oldEdge));
+    final velocity = controller.position.activity?.velocity ?? 0;
+    update(() => height = 3600);
+    await tester.pump();
+    expect(controller.position.activity?.velocity, closeTo(velocity, .001));
+    await tester.pumpAndSettle();
+    expect(controller.offset, closeTo(start + 120, .01));
+    expect(controller.offset, greaterThan(oldEdge));
+  });
+
+  testWidgets('reaching an edge discards momentum before new content arrives', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    var height = 2400.0;
+    late StateSetter update;
+    await tester.pumpWidget(
+      _app(
+        StatefulBuilder(
+          builder: (_, setState) {
+            update = setState;
+            return ListView(
+              controller: controller,
+              physics: const BouncingScrollPhysics(),
+              children: [SizedBox(height: height)],
+            );
+          },
+        ),
+      ),
+    );
+    final oldEdge = controller.position.maxScrollExtent;
+    controller.jumpTo(oldEdge - 10);
+    await tester.pump();
+    await _wheel(tester, find.byType(ListView), 120);
+    await tester.pumpAndSettle();
+    expect(controller.offset, oldEdge);
+    expect(controller.position.isScrollingNotifier.value, isFalse);
+    update(() => height = 3600);
+    await tester.pumpAndSettle();
+    expect(controller.offset, oldEdge);
+    await _wheel(tester, find.byType(ListView), 120);
+    await tester.pumpAndSettle();
+    expect(controller.offset, closeTo(oldEdge + 120, .01));
   });
 
   testWidgets('return-to-top animation takes ownership of wheel motion', (
