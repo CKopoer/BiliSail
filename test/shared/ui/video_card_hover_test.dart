@@ -227,6 +227,23 @@ void main() {
     },
   );
 
+  testWidgets('watch-later cards hide cover add without changing other cards', (
+    tester,
+  ) async {
+    final services = _Interactions();
+    final mouse = await _mouse(tester);
+    await tester.pumpWidget(_app(services, showWatchLaterButton: false));
+    await mouse.moveTo(tester.getCenter(find.text(_video.title)));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('video-card-watch-later')), findsNothing);
+    await tester.pumpWidget(_app(services));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('video-card-watch-later')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'background releases and resume restarts a stationary title hover',
     (tester) async {
@@ -353,6 +370,7 @@ Widget _app(
   double scale = 1,
   double width = 320,
   GlobalKey? boundary,
+  bool showWatchLaterButton = true,
 }) => MaterialApp(
   theme: dark ? BiliTheme.dark() : BiliTheme.light(),
   home: Scaffold(
@@ -378,7 +396,11 @@ Widget _app(
                       ),
                       child: SizedBox(
                         width: width,
-                        child: VideoCard(video: _video, onTap: open ?? () {}),
+                        child: VideoCard(
+                          video: _video,
+                          onTap: open ?? () {},
+                          showWatchLaterButton: showWatchLaterButton,
+                        ),
                       ),
                     ),
                   ),

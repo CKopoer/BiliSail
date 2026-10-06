@@ -97,6 +97,22 @@ final class WorkspaceTabs {
     return tab;
   }
 
+  /// Playback advancement changes a cached page without recording a visit or
+  /// selecting it. A closed page must never be recreated by a late callback.
+  bool updateLocation(String id, Uri route) {
+    final index = _tabs.indexWhere((tab) => tab.id == id);
+    if (index < 0) return false;
+    final previous = _tabs[index];
+    if (previous.pinned && route.path != '/') return false;
+    final parameters = {...route.queryParameters}..remove('tab');
+    _tabs[index] = WorkspaceTab(
+      id: previous.id,
+      location: route.replace(queryParameters: parameters),
+      pinned: previous.pinned,
+    );
+    return true;
+  }
+
   /// A route with a tab ID updates that tab; a plain feature route opens one.
   bool acceptRoute(Uri route, {bool singlePage = false}) {
     final requestedId = route.queryParameters['tab'];

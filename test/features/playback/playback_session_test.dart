@@ -6,6 +6,8 @@ import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/application/playback_rate_memory.dart';
+import 'package:bilisail/features/video/application/watch_later_queue_playback.dart';
+import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/domain/sponsor_repository.dart';
@@ -2188,6 +2190,158 @@ void main() {
     expect(engine.disposed, isTrue);
     expect(engine.subscriptionsActiveAtDispose, isFalse);
   });
+
+  test(
+    'watch-later completion runs remaining parts then next video once',
+    () async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress(),
+        accountScope: () => 'user:7',
+      );
+      addTearDown(session.close);
+      session.configureSettings(AppSettings(autoPlay: false));
+      final first = VideoDetail(
+        summary: _detail('one').summary,
+        description: '',
+        parts: [_part('one'), _part('one-p2')],
+      );
+      final second = _detail('two');
+      final queue = WatchLaterQueue(
+        id: 'test',
+        scope: 'user:7',
+        sessionEpoch: 0,
+        items: [
+          WatchLaterQueueItem(video: first.summary),
+          WatchLaterQueueItem(video: second.summary),
+        ],
+      );
+      final playback = WatchLaterQueuePlayback();
+      final owner = Object();
+      session.attach(owner);
+      await session.activate(owner, first, first.parts.first);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      await session.togglePlaying();
+      engine.emit(engine.currentSnapshot.copyWith(phase: PlaybackPhase.ended));
+      final nextPart = playback.completed(queue, session, first.summary.id);
+      expect(nextPart?.part?.cid, 'one-p2');
+      expect(nextPart?.video, isNull);
+      expect(playback.completed(queue, session, first.summary.id), isNull);
+      await session.deactivate(owner);
+      await session.activate(owner, first, first.parts.last);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      playback.reset();
+      engine.emit(engine.currentSnapshot.copyWith(phase: PlaybackPhase.ended));
+      final nextVideo = playback.completed(queue, session, first.summary.id);
+      expect(nextVideo?.video, second.summary.id);
+      expect(playback.completed(queue, session, first.summary.id), isNull);
+      await session.activate(owner, second, second.parts.first);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      playback.reset();
+      engine.emit(engine.currentSnapshot.copyWith(phase: PlaybackPhase.ended));
+      expect(playback.completed(queue, session, second.summary.id), isNull);
+      expect(session.engine, same(engine));
+      expect(engine.maxSimultaneousPlayers, 1);
+    },
+  );
+
+  test(
+    'watch-later explicit selection keeps pause and rejects old account epoch',
+    () async {
+      var scope = 'user:7';
+      var epoch = 4;
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress(),
+        accountScope: () => scope,
+        sessionEpoch: () => epoch,
+      );
+      addTearDown(session.close);
+      session.configureSettings(AppSettings(autoPlay: false));
+      final first = _detail('one');
+      final second = _detail('two');
+      final queue = WatchLaterQueue(
+        id: 'test',
+        scope: scope,
+        sessionEpoch: epoch,
+        items: [
+          WatchLaterQueueItem(video: first.summary),
+          WatchLaterQueueItem(video: second.summary),
+        ],
+      );
+      final playback = WatchLaterQueuePlayback();
+      final owner = Object();
+      session.attach(owner);
+      await session.activate(owner, first, first.parts.first);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(playback.select(queue, session, second.summary.id), isTrue);
+      await session.activate(owner, second, second.parts.first);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(
+        playback.adjacent(queue, session, second.summary.id, -1),
+        first.summary.id,
+      );
+      epoch++;
+      expect(playback.select(queue, session, first.summary.id), isFalse);
+      expect(playback.adjacent(queue, session, second.summary.id, -1), isNull);
+      engine.emit(engine.currentSnapshot.copyWith(phase: PlaybackPhase.ended));
+      expect(playback.completed(queue, session, second.summary.id), isNull);
+      scope = 'user:8';
+      expect(playback.select(queue, session, first.summary.id), isFalse);
+    },
+  );
+
+  test(
+    'watch-later pending play intent cannot cross a session epoch',
+    () async {
+      var epoch = 4;
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress(),
+        accountScope: () => 'user:7',
+        sessionEpoch: () => epoch,
+      );
+      addTearDown(session.close);
+      session.configureSettings(AppSettings(autoPlay: false));
+      final owner = Object();
+      session.attach(owner);
+      final first = _detail('one');
+      final second = _detail('two');
+      await session.activate(owner, first, first.parts.first);
+      await session.togglePlaying();
+      engine.emit(engine.currentSnapshot.copyWith(phase: PlaybackPhase.ended));
+      expect(
+        session.prepareNextVideo(
+          first.summary.id,
+          first.parts.first.cid,
+          nextId: second.summary.id,
+          completed: true,
+        ),
+        isTrue,
+      );
+      epoch++;
+      await session.activate(owner, second, second.parts.first);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      await session.togglePlaying();
+      expect(
+        session.prepareNextVideo(
+          second.summary.id,
+          second.parts.first.cid,
+          nextId: first.summary.id,
+        ),
+        isTrue,
+      );
+      await session.stop();
+      await session.activate(owner, first, first.parts.first);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+    },
+  );
 }
 
 Future<void> _flush() async {

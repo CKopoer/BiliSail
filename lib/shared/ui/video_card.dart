@@ -64,6 +64,7 @@ final class VideoCard extends StatefulWidget {
     this.publishText = '',
     this.menu,
     this.feedback,
+    this.showWatchLaterButton = true,
   });
 
   final ValueChanged<UserId>? onOpenUser;
@@ -79,6 +80,7 @@ final class VideoCard extends StatefulWidget {
   final String publishText;
   final VideoCardMenu? menu;
   final VideoCardFeedback? feedback;
+  final bool showWatchLaterButton;
 
   @override
   State<VideoCard> createState() => _VideoCardState();
@@ -170,6 +172,7 @@ final class _VideoCardState extends State<VideoCard> {
                   ),
                   null => VideoCardCover(
                     video: video,
+                    showWatchLaterButton: widget.showWatchLaterButton,
                     focused: _focused,
                     hovered: _hovered,
                     child: ClipRRect(

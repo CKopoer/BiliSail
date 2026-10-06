@@ -1,4 +1,4 @@
-"""Regenerate launcher assets: uv run --with pillow python tool/generate_uwp_icons.py."""
+"""Regenerate launcher assets: uv run --with pillow==12.3.0 python tool/generate_app_icons.py."""
 from pathlib import Path
 
 from PIL import Image

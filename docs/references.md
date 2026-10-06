@@ -82,7 +82,7 @@
 
 本地 `bili-kernel` 根 [LICENSE](../../bili-kernel/LICENSE) 是 GPL-3.0 文本，但已查看的多个 C# 文件头写 MIT，存在需要厘清的来源信息。本地 `biliuwp-lite` 用 `rg --files` 搜索未找到 LICENSE 命名文件，这不等于可随意复制其代码或资源。
 
-初始实现参考职责、协议入口和 UWP 实际界面，自行编写 Dart，没有复制 C# 或 Protobuf 文件。本轮按用户明确要求采用 `biliuwp-lite` 的业务图标字体、等级/认证图片和启动图标；具体来源、哈希和生成方法见 [资源清单](../assets/README.md)。本地参考仓库未找到明确覆盖这些资源的 LICENSE，本机预览采用不代表上游已授权开源或再分发。弹幕使用按公开 wire 字段编写的最小有界解析器，来源见 [API 验证记录](validation/api-endpoints.md)。测试媒体由本机 FFmpeg 的合成信号生成。依赖与原生来源见 [第三方说明](../THIRD_PARTY_NOTICES.md)；项目自己的最终开源许可证留待采用范围明确后决定。
+初始实现参考职责、协议入口和 UWP 实际界面，自行编写 Dart，没有复制 C# 或 Protobuf 文件。本轮按用户明确要求采用 `biliuwp-lite` 的业务图标字体、等级/认证图片和启动图标；具体来源、哈希和生成方法见 [资源清单](../assets/README.md)。2026-10-07 启动图标已替换为按 BiliSail 名称设计的帆船标识，官网视觉参考和提示词见 [品牌资源说明](../assets/branding/README.md)，业务图标的既有来源不变。本地参考仓库未找到明确覆盖这些资源的 LICENSE，本机预览采用不代表上游已授权开源或再分发。弹幕使用按公开 wire 字段编写的最小有界解析器，来源见 [API 验证记录](validation/api-endpoints.md)。测试媒体由本机 FFmpeg 的合成信号生成。依赖与原生来源见 [第三方说明](../THIRD_PARTY_NOTICES.md)；项目自己的最终开源许可证留待采用范围明确后决定。
 
 ### CI/CD 补充参考（2026-10-06）
 

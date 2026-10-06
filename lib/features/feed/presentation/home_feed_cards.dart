@@ -30,11 +30,13 @@ final class HomeVideoCard extends StatelessWidget {
     required this.onTap,
     this.onOpenUser,
     this.menu,
+    this.showWatchLaterButton = true,
   });
   final HomeEntry entry;
   final VoidCallback onTap;
   final ValueChanged<UserId>? onOpenUser;
   final VideoCardMenu? menu;
+  final bool showWatchLaterButton;
 
   @override
   Widget build(BuildContext context) => VideoCard(
@@ -56,6 +58,7 @@ final class HomeVideoCard extends StatelessWidget {
     onOpenUser: onOpenUser,
     onTap: onTap,
     menu: menu,
+    showWatchLaterButton: showWatchLaterButton,
   );
 }
 

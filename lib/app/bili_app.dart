@@ -14,6 +14,7 @@ import '../features/feed/application/watch_later_removal_controller.dart';
 import '../features/search/application/search_controller.dart';
 import '../features/video/application/video_controller.dart';
 import '../features/video/application/video_card_controller.dart';
+import '../features/video/application/watch_later_queue_registry.dart';
 import '../features/video/application/video_actions_controller.dart';
 import '../features/video/presentation/video_actions_bar.dart';
 import '../features/video/presentation/video_danmaku_composer.dart';
@@ -237,6 +238,8 @@ class _BiliAppState extends ConsumerState<BiliApp> {
   @override
   Widget build(BuildContext context) {
     ref.listen(authControllerProvider, (previous, next) {
+      // Session epoch may change while the visible MID and name stay the same.
+      ref.invalidate(watchLaterQueueRegistryProvider);
       if (previous?.isSignedIn != next.isSignedIn ||
           previous?.mid != next.mid ||
           previous?.userName != next.userName) {

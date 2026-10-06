@@ -17,6 +17,52 @@ import 'package:go_router/go_router.dart';
 
 void main() {
   testWidgets(
+    'background page navigation updates its tab without selecting it',
+    (tester) async {
+      final navigation = <String, ValueChanged<Uri>>{};
+      final router = _router(
+        (_, tab) => Builder(
+          builder: (context) {
+            navigation[tab.id] = WorkspacePageNavigation.maybeOf(context)!
+                .navigate;
+            return Text('page ${tab.id} ${tab.location.path}');
+          },
+        ),
+        initialLocation: '/video/BV1234567890?queue=fixture',
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      router.go('/search?q=still-reading');
+      await tester.pumpAndSettle();
+      navigation['tab-1']!(Uri.parse('/video/BV0987654321?queue=fixture'));
+      await tester.pumpAndSettle();
+      expect(find.text('page tab-2 /search'), findsOneWidget);
+      expect(router.routeInformationProvider.value.uri.path, '/search');
+      expect(
+        router.routeInformationProvider.value.uri.queryParameters['q'],
+        'still-reading',
+      );
+      expect(find.byKey(const ValueKey('workspace-tab-tab-3')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('workspace-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('page tab-1 /video/BV0987654321'), findsOneWidget);
+      expect(
+        router.routeInformationProvider.value.uri.queryParameters['queue'],
+        'fixture',
+      );
+      navigation['tab-1']!(Uri.parse('/video/BV1234567890?queue=fixture'));
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        '/video/BV1234567890',
+      );
+      expect(find.byKey(const ValueKey('workspace-tab-tab-3')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'single page back restores state, releases popped pages and handles system back',
     (tester) async {
       final disposed = <String>[];

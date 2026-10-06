@@ -12,6 +12,9 @@ import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/features/video/presentation/video_collection_panel.dart';
+import 'package:bilisail/features/video/domain/watch_later_queue.dart';
+import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/core/presentation/playback_page_commands.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -19,9 +22,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/video_card_fake_engine.dart';
+
 void main() {
   setUpAll(() async {
-    if (!const bool.fromEnvironment('VIDEO_TAGS_PREVIEW')) return;
+    if (!const bool.fromEnvironment('VIDEO_TAGS_PREVIEW') &&
+        const String.fromEnvironment('WATCH_LATER_PAGE_PREVIEW_CASE').isEmpty) {
+      return;
+    }
     await (FontLoader('HarmonyOS Sans')..addFont(
           rootBundle.load(
             'assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf',
@@ -29,8 +37,121 @@ void main() {
         ))
         .load();
     await (FontLoader(
+      'BiliIcons',
+    )..addFont(rootBundle.load('assets/fonts/biliicon.ttf'))).load();
+    await (FontLoader(
       'MaterialIcons',
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+  });
+
+  testWidgets('watch-later queue occupies sidebar and folds above intro', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final session = PlaybackSession(
+      engine: CardFakeEngine(),
+      repository: _UnusedPlaybackRepository(),
+      progress: _UnusedProgressStore(),
+      accountScope: () => 'user:7',
+    );
+    addTearDown(session.close);
+    final queue = WatchLaterQueue(
+      id: 'page-preview',
+      scope: 'user:7',
+      sessionEpoch: 0,
+      items: [
+        for (var i = 0; i < 58; i++)
+          WatchLaterQueueItem(
+            video: VideoSummary(
+              id: i == 0
+                  ? const VideoId('BV1abc123456')
+                  : VideoId('BV${i.toString().padLeft(10, '0')}'),
+              title: '第 ${i + 1} 条稍后再看视频，标题用于验证两行省略',
+              coverUrl: '',
+              author: '测试 UP 主',
+              duration: const Duration(minutes: 4, seconds: 33),
+            ),
+            playCountText: '64.5万',
+            danmakuCountText: '539',
+          ),
+      ],
+    );
+    for (final (name, dark, folded, width, scale) in [
+      ('light-expanded', false, false, 1100.0, 1.0),
+      ('light-folded', false, true, 1100.0, 1.0),
+      ('dark-expanded', true, false, 1100.0, 1.0),
+      ('narrow-large', false, false, 360.0, 2.0),
+    ]) {
+      const previewCase = String.fromEnvironment(
+        'WATCH_LATER_PAGE_PREVIEW_CASE',
+      );
+      if (previewCase.isNotEmpty && previewCase != name) continue;
+      tester.view.physicalSize = Size(width, 700);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            playbackSessionProvider.overrideWithValue(session),
+            authControllerProvider.overrideWith(_GuestAuthController.new),
+            videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+            videoExtrasRepositoryProvider.overrideWithValue(
+              _ExtrasRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            theme: dark ? BiliTheme.dark() : BiliTheme.light(),
+            home: Scaffold(
+              body: RepaintBoundary(
+                key: const ValueKey('watch-later-page-preview'),
+                child: MediaQuery(
+                  data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                  child: VideoScreen(
+                    key: ValueKey('queue-page-$name'),
+                    id: const VideoId('BV1abc123456'),
+                    queue: queue,
+                    playerBuilder: (_, _, _) =>
+                        const ColoredBox(color: Colors.black),
+                    onOpenQueueVideo: (_) {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      if (width < 700) {
+        await tester.tap(find.byTooltip('展开视频信息'));
+        await tester.pumpAndSettle();
+      }
+      if (folded) {
+        await tester.tap(find.text('稍后再看'));
+        await tester.pumpAndSettle();
+        expect(find.text('简介'), findsOneWidget);
+      } else {
+        expect(
+          find.byKey(const ValueKey('watch-later-queue-list')),
+          findsOneWidget,
+        );
+      }
+      expect(tester.takeException(), isNull, reason: name);
+      if (previewCase == name) {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const ValueKey('watch-later-page-preview')),
+        );
+        final bytes = await tester.runAsync(() async {
+          final image = await boundary.toImage();
+          final result = await image.toByteData(format: ui.ImageByteFormat.png);
+          image.dispose();
+          return result;
+        });
+        final directory = Directory('build/watch-later-page-preview')
+          ..createSync(recursive: true);
+        File('${directory.path}/$name.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
+      }
+    }
   });
   testWidgets(
     'tags stay visible and search full names without expanding intro',
@@ -472,6 +593,12 @@ final class _GuestAuthController extends AuthController {
   @override
   AuthState build() => const AuthState();
 }
+
+final class _UnusedPlaybackRepository extends Fake
+    implements PlaybackRepository {}
+
+final class _UnusedProgressStore extends Fake
+    implements PlaybackProgressStore {}
 
 Future<void> _tagsSnapshot(WidgetTester tester, String name) async {
   if (!const bool.fromEnvironment('VIDEO_TAGS_PREVIEW')) return;

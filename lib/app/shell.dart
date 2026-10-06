@@ -21,6 +21,24 @@ typedef WorkspacePageBuilder = Widget Function(
 );
 typedef DragRegionBuilder = Widget Function(BuildContext context, Widget child);
 
+/// Navigation within an existing playback page preserves the selected tab.
+final class WorkspacePageNavigation extends InheritedWidget {
+  const WorkspacePageNavigation({
+    super.key,
+    required this.navigate,
+    required super.child,
+  });
+
+  final ValueChanged<Uri> navigate;
+
+  static WorkspacePageNavigation? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<WorkspacePageNavigation>();
+
+  @override
+  bool updateShouldNotify(WorkspacePageNavigation oldWidget) =>
+      navigate != oldWidget.navigate;
+}
+
 /// Builds shell navigation inside a page's own provider scope.
 final class WorkspacePageHeader extends InheritedWidget {
   const WorkspacePageHeader({
@@ -175,6 +193,12 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   void _selectTab(String id) {
     setState(() => _workspace.select(id));
     _commitWorkspace();
+  }
+
+  void _updatePageLocation(String id, Uri location) {
+    if (!mounted || !_workspace.updateLocation(id, location)) return;
+    setState(() {});
+    if (id == _workspace.activeId) _commitWorkspace();
   }
 
   void _closeTab(String id) {
@@ -349,7 +373,11 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                   ),
                   child: WorkspacePageHeader(
                     builder: _searchHeader,
-                    child: builder(context, tab),
+                    child: WorkspacePageNavigation(
+                      navigate: (location) =>
+                          _updatePageLocation(tab.id, location),
+                      child: builder(context, tab),
+                    ),
                   ),
                 ),
               ),

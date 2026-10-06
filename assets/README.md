@@ -16,7 +16,15 @@ SHA-256 见 [来源哈希](fonts/alibaba_puhuiti/source_hashes.json)。用户目
 
 已安装系统字体只保存字体族名称，由系统文字渲染器访问，不复制字体文件、不作为应用资源分发。
 
-## UWP 图标
+## BiliSail 应用图标
+
+2026-10-07 按用户要求重新设计“哔帆 / BiliSail”应用图标：粉色主帆、蓝色副帆与海浪表达 Sail，船身的双眼呼应 B 站小电视。使用内置 `image_gen` 辅助生成并精修，透明 PNG 位于 `branding/app_icon.png`，不再使用 UWP 启动图标。
+
+视觉参考取自 [Bilibili 官网](https://www.bilibili.com/)及其[官方下载中心](https://app.bilibili.com/)公开加载的图标，官网原图没有内置到应用。参考 URL、采用范围、生成提示词、最终 SHA-256 与浅色／深色多尺寸预览见 [品牌资源说明](branding/README.md)。本记录不表示取得 Bilibili 品牌授权。
+
+Windows ICO、Android 各密度 PNG 和 macOS AppIcon PNG 由品牌原图等比缩放生成；复现命令：`uv run --with pillow==12.3.0 python tool/generate_app_icons.py`。MSIX 打包沿用 `tool/build-release.ps1`，从同一原图生成普通及两种主题的 unplated 资源。生成工具仅为开发工具，不新增应用运行依赖。
+
+## UWP 业务图标
 
 按用户明确要求从本机 `../biliuwp-lite` 采用视觉资源。来源提交：`baf7e7591e8dc2fe012cf1e7ba54a056dec7f3b0`。相邻仓库保持只读，无运行时依赖。
 
@@ -26,9 +34,8 @@ SHA-256 见 [来源哈希](fonts/alibaba_puhuiti/source_hashes.json)。用户目
 | `fonts/iconfont.json` | `src/BiliLite.UWP/Assets/Fonts/biliicon/iconfont.json` | 原始名称、codepoint 对照，不打包为运行时资源 |
 | `icons/lv0.png` 至 `lv6.png` | `src/BiliLite.UWP/Assets/Icon/lv0.png` 至 `lv6.png` | 用户等级 |
 | `icons/verify0.png`、`verify1.png`、`up.png` | `src/BiliLite.UWP/Assets/Icon/` 下同名文件 | 认证与 UP 主标记 |
-| `branding/app_icon.png` | `src/BiliLite.UWP/Assets/Square44x44Logo.targetsize-256.png` | 启动图标原图 |
 
-上述直接复制文件的 SHA-256 记录在 [source_hashes.json](source_hashes.json)。Windows ICO、Android 各密度 PNG 和 macOS AppIcon PNG 由原图等比缩放生成；复现命令：`uv run --with pillow python tool/generate_uwp_icons.py`。生成工具仅为开发工具，不新增应用运行依赖。
+上述仍在使用的直接复制文件的 SHA-256 记录在 [source_hashes.json](source_hashes.json)。启动图标已由上文的 BiliSail 品牌图标替代；业务图标字体、等级和认证标记的来源不变。
 
 字体的全部 99 个映射已核对 cmap 并渲染检查。应用只命名采用需要的 glyph；字体没有明确对应的通用操作继续使用 Material 图标。
 

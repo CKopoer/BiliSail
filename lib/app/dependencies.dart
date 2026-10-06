@@ -225,6 +225,7 @@ class AppDependencies {
     );
     return ProviderScope(
       overrides: [
+        sessionEpochProvider.overrideWithValue(() => requests.sessionEpoch),
         appUpdateRepositoryProvider.overrideWithValue(updates),
         updateCheckStoreProvider.overrideWithValue(
           SqliteUpdateCheckStore(database),

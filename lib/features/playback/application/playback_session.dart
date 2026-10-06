@@ -140,6 +140,8 @@ class PlaybackSession extends ChangeNotifier {
   bool _closing = false;
   bool _resolving = false;
   bool _desiredPlaying = true;
+  ({VideoId id, String? cid, bool playing, String scope, int epoch})?
+  _nextSourceIntent;
   bool _playbackAllowed = true;
   Future<void>? _playbackCommands;
   Duration _lastSaved = const Duration(seconds: -10);
@@ -169,6 +171,36 @@ class PlaybackSession extends ChangeNotifier {
   bool get isResolving => _resolving;
   int get sourceGeneration => _generation;
   String get sourceAccountScope => _scope;
+
+  /// Carry the user's play/pause choice across a video route's loading gap.
+  /// A completed source is the one exception: advancing starts the next item.
+  bool prepareNextVideo(
+    VideoId id,
+    String cid, {
+    required VideoId nextId,
+    String? nextCid,
+    bool completed = false,
+  }) {
+    if (_disposed ||
+        detail?.summary.id != id ||
+        part?.cid != cid ||
+        _scope != accountScope() ||
+        _epoch != sessionEpoch() ||
+        (completed && snapshots.value.phase != PlaybackPhase.ended)) {
+      return false;
+    }
+    _nextSourceIntent = (
+      id: nextId,
+      cid: nextCid,
+      playing: completed ? true : _desiredPlaying,
+      scope: _scope,
+      epoch: _epoch,
+    );
+    return true;
+  }
+
+  void discardNextVideo() => _nextSourceIntent = null;
+
   String? get danmakuCid => switch (contentTarget) {
     LivePlaybackTarget() => null,
     PgcPlaybackTarget(:final cid) => cid ?? part?.cid,
@@ -248,6 +280,20 @@ class PlaybackSession extends ChangeNotifier {
     _activeOwner = owner;
     _ownerVisible = true;
     _subtitlePreference = restored?.subtitleLabel;
+    final nextIntent = _nextSourceIntent;
+    final validIntent =
+        nextIntent != null &&
+        nextIntent.scope == accountScope() &&
+        nextIntent.epoch == sessionEpoch();
+    if (nextIntent != null && !validIntent) _nextSourceIntent = null;
+    final nextPlaying =
+        nextIntent != null &&
+            validIntent &&
+            nextIntent.id == video?.summary.id &&
+            (nextIntent.cid == null || nextIntent.cid == selected?.cid)
+        ? nextIntent.playing
+        : null;
+    if (nextPlaying != null) _nextSourceIntent = null;
     await open(
       video,
       selected,
@@ -258,6 +304,7 @@ class PlaybackSession extends ChangeNotifier {
           (target is LivePlaybackTarget ? 10000 : _settings.preferredQuality),
       position: restored?.position,
       desiredPlaying:
+          nextPlaying ??
           restored?.desiredPlaying ??
           (sameOwner ? _desiredPlaying : _settings.autoPlay),
       rate:
@@ -1367,6 +1414,7 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> stop({bool clearCheckpoints = true}) async {
+    _nextSourceIntent = null;
     if (clearCheckpoints) _checkpoints.clear();
     _activeOwner = null;
     _openingPosition = null;

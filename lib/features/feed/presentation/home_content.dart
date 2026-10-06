@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/platform/external_links.dart';
+import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/video.dart';
 import '../../../core/presentation/workspace_activity.dart';
@@ -19,6 +20,8 @@ import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/video_card_interaction_scope.dart';
 import '../../video/domain/video_card_interactions.dart';
 import '../../video/domain/video_actions_repository.dart';
+import '../../video/domain/watch_later_queue.dart';
+import '../../video/application/watch_later_queue_registry.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/app_notice.dart';
 import 'home_feed_cards.dart';
@@ -236,6 +239,9 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                                   HomeVideoCard(
                                     key: ValueKey((item.kind, item.id)),
                                     entry: item,
+                                    showWatchLaterButton:
+                                        widget.channel !=
+                                        HomeChannel.watchLater,
                                     menu:
                                         widget.channel == HomeChannel.watchLater
                                         ? VideoCardMenu(
@@ -253,7 +259,8 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                                         : null,
                                     onOpenUser: (id) =>
                                         context.go('/user/${id.value}'),
-                                    onTap: () => _open(item),
+                                    onTap: () =>
+                                        _open(item, visibleItems: items),
                                   )
                                 else if (item.kind == HomeEntryKind.folder ||
                                     item.kind == HomeEntryKind.collection)
@@ -549,7 +556,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
         .refresh();
   }
 
-  Future<void> _open(HomeEntry entry) async {
+  Future<void> _open(HomeEntry entry, {List<HomeEntry>? visibleItems}) async {
     if (entry.kind == HomeEntryKind.folder ||
         entry.kind == HomeEntryKind.collection) {
       setState(() => _folder = entry);
@@ -584,6 +591,36 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
       return;
     }
     if (entry.bvid != null) {
+      if (widget.channel == HomeChannel.watchLater && visibleItems != null) {
+        final scope = ref.read(homeRepositoryProvider).accountScope;
+        final queue = ref
+            .read(watchLaterQueueRegistryProvider)
+            .capture(
+              scope: scope,
+              sessionEpoch: ref.read(sessionEpochProvider)(),
+              items: [
+                for (final candidate in visibleItems)
+                  if (candidate.kind == HomeEntryKind.video &&
+                      VideoId(candidate.bvid ?? '').isValid)
+                    WatchLaterQueueItem(
+                      video: VideoSummary(
+                        id: VideoId(candidate.bvid!),
+                        title: candidate.title,
+                        coverUrl: candidate.coverUrl?.toString() ?? '',
+                        author: candidate.authorName,
+                        duration: candidate.duration ?? Duration.zero,
+                        authorId: UserId.tryParse(candidate.authorMid),
+                      ),
+                      playCountText: candidate.playCountText,
+                      danmakuCountText: candidate.danmakuCountText,
+                    ),
+              ],
+            );
+        if (queue != null && queue.indexOf(VideoId(entry.bvid!)) >= 0) {
+          context.go('/video/${entry.bvid}?queue=${queue.id}');
+          return;
+        }
+      }
       context.go('/video/${entry.bvid}');
       return;
     }

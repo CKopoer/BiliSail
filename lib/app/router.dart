@@ -35,6 +35,8 @@ import '../features/search/application/search_controller.dart';
 import '../features/search/presentation/search_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/video/presentation/video_screen.dart';
+import '../features/video/application/watch_later_queue_registry.dart';
+import '../core/network/api_requests.dart';
 import '../features/pgc/application/pgc_controller.dart';
 import '../features/pgc/presentation/pgc_screen.dart';
 import '../features/live/application/live_controller.dart';
@@ -387,10 +389,25 @@ final class _WorkspacePage extends ConsumerWidget {
                     }
                     if (tab.isVideo) {
                       final id = VideoId(uri.pathSegments.last);
+                      final queueId = uri.queryParameters['queue'];
+                      final queue = queueId == null
+                          ? null
+                          : ref
+                                .watch(watchLaterQueueRegistryProvider)
+                                .resolve(
+                                  queueId,
+                                  scope: ref
+                                      .read(homeRepositoryProvider)
+                                      .accountScope,
+                                  sessionEpoch: ref.read(
+                                    sessionEpochProvider,
+                                  )(),
+                                );
                       return id.isValid
                           ? VideoScreen(
                               key: PageStorageKey('video-${tab.id}'),
                               id: id,
+                              queue: queue?.indexOf(id) == -1 ? null : queue,
                               initialCid: uri.queryParameters['cid'],
                               playerBuilder: playerBuilder,
                               actionsBuilder: actionsBuilder,
@@ -419,17 +436,57 @@ final class _WorkspacePage extends ConsumerWidget {
                               ),
                               onOpenVideo: (video) =>
                                   context.go('/video/${video.id.value}'),
-                              onPartChanged: (part) => context.go(
-                                uri
-                                    .replace(
-                                      queryParameters: {
-                                        ...uri.queryParameters,
-                                        'cid': part.cid,
-                                        'tab': tab.id,
-                                      },
-                                    )
-                                    .toString(),
-                              ),
+                              onOpenQueueVideo: queue == null
+                                  ? null
+                                  : (video) {
+                                      final target = Uri(
+                                        path: '/video/${video.value}',
+                                        queryParameters: {'queue': queue.id},
+                                      );
+                                      final navigation =
+                                          WorkspacePageNavigation.maybeOf(
+                                            context,
+                                          );
+                                      if (navigation != null) {
+                                        navigation.navigate(target);
+                                      } else {
+                                        context.go(
+                                          target
+                                              .replace(
+                                                queryParameters: {
+                                                  ...target.queryParameters,
+                                                  'tab': tab.id,
+                                                },
+                                              )
+                                              .toString(),
+                                        );
+                                      }
+                                    },
+                              onPartChanged: (part) {
+                                final target = uri.replace(
+                                  queryParameters: {
+                                    ...uri.queryParameters,
+                                    'cid': part.cid,
+                                  },
+                                );
+                                final navigation = queue == null
+                                    ? null
+                                    : WorkspacePageNavigation.maybeOf(context);
+                                if (navigation != null) {
+                                  navigation.navigate(target);
+                                } else {
+                                  context.go(
+                                    target
+                                        .replace(
+                                          queryParameters: {
+                                            ...target.queryParameters,
+                                            'tab': tab.id,
+                                          },
+                                        )
+                                        .toString(),
+                                  );
+                                }
+                              },
                             )
                           : const StateView.empty(message: '视频地址无效');
                     }

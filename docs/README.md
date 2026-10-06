@@ -10,6 +10,7 @@
 | --- | --- |
 | [整体架构](architecture.md) | 产品范围、技术栈、模块依赖、目录、状态管理、存储和平台适配 |
 | [项目更名](validation/project-renaming.md) | BiliSail／哔帆的命名范围、安装／存储标识与平台验证 |
+| [应用图标](../assets/branding/README.md) | 帆船与小电视的品牌设计、官网参考、生成提示词和平台资源 |
 | [CI/CD、MSIX 与 DMG](validation/ci-cd.md) | GitHub Actions 三端构建、预览 Release 草稿、Windows MSIX 签名与 macOS DMG 安装 |
 | [API 与会话](api-design.md) | 协议边界、接口映射、鉴权、错误、缓存和降级 |
 | [密码、短信与移动登录窗口](validation/password-sms-login.md) | 三种 Web 登录、交互验证码、安全会话与小屏/键盘布局 |
@@ -62,6 +63,7 @@
 | [共享视频卡片](validation/shared-video-cards.md) | 推荐理由、搜索/视频动态显示差异、16:9 封面与宽屏网格 |
 | [视频卡悬停预览](validation/video-card-hover.md) | 官方客户端式封面放大、悬停视频自动播放、稍后再看与网页接口核对 |
 | [视频卡操作菜单](validation/video-card-menus.md) | 推荐反馈、添加稍后再看、删除稍后再看及悬停入口范围 |
+| [稍后再看队列播放](validation/watch-later-queue.md) | 列表上下文、分 P 与队列推进、侧栏和账号/标签隔离 |
 | [收藏子标签与视频卡片](validation/favorites-tabs.md) | 五类收藏入口、公共视频卡、自建收藏夹状态/日期与信息编辑、Windows 验证边界 |
 | [收藏与订阅取消操作](validation/favorites-unsubscribe.md) | 卡片三点菜单、取消前确认、CSRF 单次提交与分页/账号竞态 |
 | [媒体包验证](validation/media-packages.md) | 包契约、限制、原生资产来源 |

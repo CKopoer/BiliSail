@@ -122,7 +122,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         widget.part?.cid != oldWidget.part?.cid ||
         widget.target != oldWidget.target;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_active) return;
+      if (!mounted || (!_active && !_session.ownsPlayback(this))) return;
       if (sourceChanged) {
         unawaited(
           _session.activate(

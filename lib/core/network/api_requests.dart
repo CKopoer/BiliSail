@@ -1,7 +1,14 @@
 import 'package:bili_api/bili_api.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/app_failure.dart';
 import '../../domain/request_cancellation.dart';
+
+/// Read the current account-session generation without exposing ApiRequests.
+final sessionEpochProvider = Provider<int Function()>(
+  (ref) =>
+      () => 0,
+);
 
 /// Process-owned cancellation scope. Every account transition invalidates reads.
 class ApiRequests implements ApiSessionProvider {

@@ -21,12 +21,14 @@ class VideoCardCover extends StatefulWidget {
     this.focused = false,
     this.borderRadius = 6,
     this.hovered,
+    this.showWatchLaterButton = true,
   });
   final VideoSummary video;
   final Widget child;
   final bool focused;
   final double borderRadius;
   final bool? hovered;
+  final bool showWatchLaterButton;
   @override
   State<VideoCardCover> createState() => _VideoCardCoverState();
 }
@@ -205,7 +207,8 @@ class _VideoCardCoverState extends State<VideoCardCover>
                       preview: preview,
                     ),
                   ),
-                if (_active &&
+                if (widget.showWatchLaterButton &&
+                    _active &&
                     _scope != null &&
                     widget.video.id.isValid &&
                     (_coverHovered || widget.focused))

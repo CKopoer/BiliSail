@@ -9,6 +9,8 @@
 - Bilibili 标题、封面、弹幕和媒体由服务端动态取得，未作为应用素材内置。测试的音视频由 FFmpeg 合成，生成命令见 [测试媒体说明](test/fixtures/media/README.md)。
 - 界面业务图标采用上述 Bili 图标字体，通用操作保留 Flutter Material 图标；构建产物 `data/flutter_assets/NOTICES.Z` 包含 Flutter 工具收集的包许可文本，但不能替代手动记录的 UWP 资源许可审查。用户界面“关于”提供 Flutter 的许可证页。
 
+2026-10-07 应用启动图标已改为按“BiliSail / 哔帆”设计的帆船标识，由内置 `image_gen` 辅助生成，替代原 UWP 启动图标。Bilibili 官网及其下载中心的小电视仅作为视觉参考，官网原图未打包；具体 URL、提示词、SHA-256 和采用边界见 [品牌资源说明](assets/branding/README.md)。本应用仍为独立第三方客户端，品牌参考不构成官方授权、合作或背书；业务图标的既有来源登记不变。
+
 空降助手可选访问 [BilibiliSponsorBlock API](https://github.com/hanydd/BilibiliSponsorBlock/wiki/API) 的 `bsbsb.top` 服务，默认关闭。客户端按公开协议独立实现，无第三方源码或资源复制；只读查询不携带 Bilibili 凭据。服务范围、字段与未在线验证项见 [验证记录](docs/validation/ui-controls.md)。
 
 ## 直接组件

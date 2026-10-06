@@ -2,6 +2,51 @@ import 'package:bilisail/app/workspace_tabs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('background playback updates preserve selection and visit history', () {
+    final workspace = WorkspaceTabs();
+    workspace.acceptRoute(Uri.parse('/video/BV1234567890?queue=fixture'));
+    final videoId = workspace.activeId;
+    workspace.acceptRoute(Uri.parse('/search?q=still-reading'));
+    final searchId = workspace.activeId;
+    expect(
+      workspace.updateLocation(
+        videoId,
+        Uri.parse('/video/BV0987654321?queue=fixture&tab=$videoId'),
+      ),
+      isTrue,
+    );
+    expect(workspace.activeId, searchId);
+    expect(workspace.tabs, hasLength(3));
+    expect(
+      workspace.tabs.firstWhere((tab) => tab.id == videoId).location,
+      Uri.parse('/video/BV0987654321?queue=fixture'),
+    );
+    expect(workspace.goBack(), isTrue);
+    expect(workspace.activeId, videoId);
+    expect(workspace.active.location.path, '/video/BV0987654321');
+    expect(workspace.goBack(), isTrue);
+    expect(workspace.activeId, 'home');
+    expect(workspace.canGoBack, isFalse);
+  });
+
+  test('late playback cannot recreate closed tabs or replace pinned home', () {
+    final workspace = WorkspaceTabs();
+    workspace.acceptRoute(Uri.parse('/video/BV1234567890'));
+    final videoId = workspace.activeId;
+    workspace.close(videoId);
+    expect(
+      workspace.updateLocation(videoId, Uri.parse('/video/BV0987654321')),
+      isFalse,
+    );
+    expect(
+      workspace.updateLocation('home', Uri.parse('/video/BV0987654321')),
+      isFalse,
+    );
+    expect(workspace.tabs, hasLength(1));
+    expect(workspace.activeId, 'home');
+    expect(workspace.canGoBack, isFalse);
+  });
+
   test(
     'back follows visits, reuses pages and does not record route commits',
     () {

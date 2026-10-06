@@ -542,8 +542,12 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
   void _subscribe(mk.Player player, int generation) {
     bool active() =>
         !_disposed && generation == _generation && identical(_player, player);
+    // Native EOF can be followed by playing=false or buffering=false. Keep
+    // completion observable until an explicit seek/play or source replacement.
     bool canChangePhase() =>
-        active() && _snapshot.phase != PlaybackPhase.failed;
+        active() &&
+        _snapshot.phase != PlaybackPhase.failed &&
+        _snapshot.phase != PlaybackPhase.ended;
     _subscriptions.add(
       player.stream.position.listen((value) {
         if (active()) _publish(_snapshot.copyWith(position: value));
@@ -677,22 +681,28 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
   @override
   Future<void> play() {
     final generation = _generation;
-    return _command((player) async {
-      await player.play();
-      if (_requiresDecodedAudio) {
-        try {
-          await _waitForDecodedAudio(
-            player,
-            generation,
-            const Duration(seconds: 12),
-          );
-        } on PlayerFailure {
-          // A video-only result is not a successful DASH playback session.
-          await player.pause();
-          rethrow;
+    return _command(
+      (player) async {
+        await player.play();
+        if (_requiresDecodedAudio) {
+          try {
+            await _waitForDecodedAudio(
+              player,
+              generation,
+              const Duration(seconds: 12),
+            );
+          } on PlayerFailure {
+            // A video-only result is not a successful DASH playback session.
+            await player.pause();
+            rethrow;
+          }
         }
-      }
-    }, optimistic: (s) => s.copyWith(desiredPlaying: true));
+      },
+      optimistic: (s) => s.copyWith(
+        desiredPlaying: true,
+        phase: s.phase == PlaybackPhase.ended ? PlaybackPhase.paused : s.phase,
+      ),
+    );
   }
 
   @override
@@ -703,14 +713,23 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
   @override
   Future<void> seek(Duration target) {
     if (target < Duration.zero) throw ArgumentError.value(target, 'target');
-    return _command((player) async {
-      await player.seek(target);
-      if (!_disposed) {
-        _publish(
-          _snapshot.copyWith(position: player.state.position, isSeeking: false),
-        );
-      }
-    }, optimistic: (s) => s.copyWith(isSeeking: true));
+    return _command(
+      (player) async {
+        await player.seek(target);
+        if (!_disposed) {
+          _publish(
+            _snapshot.copyWith(
+              position: player.state.position,
+              isSeeking: false,
+            ),
+          );
+        }
+      },
+      optimistic: (s) => s.copyWith(
+        isSeeking: true,
+        phase: s.phase == PlaybackPhase.ended ? PlaybackPhase.paused : s.phase,
+      ),
+    );
   }
 
   @override
