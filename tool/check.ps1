@@ -15,15 +15,25 @@ try {
   if ($sdk.frameworkVersion -ne '3.47.6') { throw 'This checkout is verified with Flutter 3.47.6.' }
   $pubArgs = @('pub', 'get')
   if ($EnforceLockfile) { $pubArgs += '--enforce-lockfile' }
-  if (!$SkipPub) { Invoke-Check flutter $pubArgs }
+  $packages = @('bili_api', 'bili_player', 'bili_danmaku')
+  if (!$SkipPub) {
+    Invoke-Check flutter $pubArgs
+    # Root analysis also scans local packages; their dev dependencies need their own configs.
+    foreach ($package in $packages) {
+      Push-Location (Join-Path $repoRoot "packages/$package")
+      try {
+        $runner = if ($package -eq 'bili_api') { 'dart' } else { 'flutter' }
+        Invoke-Check $runner $pubArgs
+      } finally { Pop-Location }
+    }
+  }
   Invoke-Check dart @('format', '--output=none', '--set-exit-if-changed', 'lib', 'test', 'integration_test')
   Invoke-Check flutter @('analyze')
   Invoke-Check flutter @('test')
-  foreach ($package in @('bili_api', 'bili_player', 'bili_danmaku')) {
+  foreach ($package in $packages) {
     Push-Location (Join-Path $repoRoot "packages/$package")
     try {
       $runner = if ($package -eq 'bili_api') { 'dart' } else { 'flutter' }
-      if (!$SkipPub) { Invoke-Check $runner $pubArgs }
       Invoke-Check dart @('format', '--output=none', '--set-exit-if-changed', 'lib', 'test')
       Invoke-Check $runner @('analyze')
       Invoke-Check $runner @('test')

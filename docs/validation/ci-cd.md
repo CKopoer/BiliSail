@@ -6,7 +6,7 @@
 
 - [CI](../../.github/workflows/ci.yml)：替换原来的 `windows.yml`；分支 push、PR、手动运行时执行检查及构建，也供 Release 复用。
 - [Release preview](../../.github/workflows/release.yml)：在 Actions 页面手动运行；可选择三个平台，全部所选构建通过后创建 **draft + prerelease** 并上传包、签名公钥证书、校验文件与第三方说明。不会自动公开发布。
-- [检查脚本](../../tool/check.ps1)：CI 在 Ubuntu 使用 PowerShell 7 执行，同一脚本覆盖根应用和三个独立包的依赖、格式、分析和离线测试。`-EnforceLockfile` 要求 pub 使用提交的锁文件及内容哈希。
+- [检查脚本](../../tool/check.ps1)：CI 在 Ubuntu 使用 PowerShell 7 执行，先安装根应用和三个独立包的依赖，再分别运行格式、分析和离线测试。根分析会扫描子包，故子包开发依赖也须先安装。`-EnforceLockfile` 要求 pub 使用提交的锁文件及内容哈希。
 - [构建打包脚本](../../tool/build-release.ps1)：各平台使用对应主机生成预览包，缺文件、原生命令失败、签名失败立即停止。已有同目标输出目录时拒绝覆盖，重新本地构建前先将其移走。
 
 | 任务 | Runner | 产物与边界 |
@@ -81,4 +81,14 @@ Android 仍使用 runner 上自动生成的 debug keystore，多次运行不能�
 
 本轮修复在 Windows / Flutter 3.47.6 下运行 `tool/check.ps1 -EnforceLockfile`：根应用 597、`bili_api` 206、`bili_player` 16、`bili_danmaku` 19 项测试全部通过，各目录格式及静态分析通过，四份锁文件 SHA-256 均未变化。两个工作流通过 actionlint 1.7.12；本文件 6 条本地链接及 `git diff --check` 通过。此结果不代表修复后的远端运行或三端构建已通过。
 
-**未测**：修复后的 GitHub Actions 运行、Ubuntu runner 完整检查/构建、macOS 构建/启动、MSIX 安装/卸载/升级、正式 PFX 签名、Android 真机播放与签名升级。未创建或公开远端 Release；需将修复提交并推送到 GitHub 后运行 Actions。本机 Windows 成功不能代替这些结果。
+### 干净检出时的子包依赖初始化修复
+
+[CI #2](https://github.com/CKopoer/BiliSail/actions/runs/37407053988/job/112086879462) 使用提交 `8b120ebccee92dccfbf27bc0c4371c92113cfd37`，镜像配置已生效，根依赖安装和格式检查通过；根 `flutter analyze` 在 `packages/bili_api/test` 中找不到 `package:test/test.dart`，产生 1304 条连带诊断，测试及构建尚未执行。
+
+根应用的 `pub get` 不会安装 path 依赖包的 `dev_dependencies`，参见 [Dart 开发依赖说明](https://dart.dev/tools/pub/dependencies#dev-dependencies)。原脚本在根分析后才逐个安装子包依赖；本机已有的子包 `.dart_tool/package_config.json` 掩盖了此问题。修复将根及三个包的依赖安装全部放到任何分析和测试之前，再分别执行完整检查；四次安装均保留锁文件强校验，`-SkipPub` 仍只跳过安装阶段。
+
+在 Windows / Flutter 3.47.6 下，从提交 `8b120eb` 导出两份不含生成配置的源码副本：旧顺序复现相同的 1304 条诊断；替换修复脚本后，先安装全部依赖的根分析通过。隔离副本中 `tool/check.ps1 -EnforceLockfile` 最终通过全部格式、分析及 838 项测试，四份锁文件 SHA-256 均未变化；PowerShell parser、6 条本地文档链接和 `git diff --check` 通过。
+
+完整测试初次因本机下载 SQLite 3.5.2 Windows 原生库连接中断而停止，随后复用本机已下载的同版本库，其 SHA-256 与包内 `asset_hashes.dart` 一致；没有复制任何已有包解析配置。此验证覆盖干净检出的依赖初始化，不表示本机原生库下载或 Ubuntu 远端运行已通过。
+
+**未测**：子包依赖初始化修复后的 GitHub Actions 运行、Ubuntu runner 完整检查/构建、macOS 构建/启动、MSIX 安装/卸载/升级、正式 PFX 签名、Android 真机播放与签名升级。未创建或公开远端 Release；需将修复提交并推送到 GitHub 后运行 Actions。本机 Windows 成功不能代替这些结果。
