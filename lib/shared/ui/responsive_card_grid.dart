@@ -4,9 +4,13 @@ const _spacing = 20.0;
 const _runSpacing = 24.0;
 
 ({int columns, double width}) _layout(BuildContext context, double extent) {
-  final minimum = MediaQuery.textScalerOf(context).scale(300).clamp(300, 450);
+  final textScaler = MediaQuery.textScalerOf(context);
+  final minimum = textScaler.scale(300).clamp(300, 450);
+  // Phone-sized grids can fit two compact cards; wider rows keep desktop sizes.
+  final compactMinimum = textScaler.scale(140).clamp(140, 210);
+  final minimumColumns = extent >= compactMinimum * 2 + _spacing ? 2 : 1;
   final columns = ((extent + _spacing) / (minimum + _spacing)).floor().clamp(
-    1,
+    minimumColumns,
     12,
   );
   return (

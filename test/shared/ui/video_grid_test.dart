@@ -26,6 +26,57 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('phone widths show two cards per row after page padding', (
+    tester,
+  ) async {
+    _setViewport(tester, 1920);
+    for (final width in [360.0, 375.0, 393.0, 412.0, 430.0]) {
+      final extent = width - 56;
+      await tester.pumpWidget(_gridApp(width: extent));
+      await tester.pumpAndSettle();
+      final cards = find.byType(VideoCard);
+      final first = tester.getRect(cards.at(0));
+      final second = tester.getRect(cards.at(1));
+      final third = tester.getRect(cards.at(2));
+      expect(second.top, first.top, reason: 'phone width=$width');
+      expect(second.right, closeTo(extent, .01));
+      expect(third.top, greaterThan(first.bottom));
+      expect(tester.takeException(), isNull, reason: 'phone width=$width');
+    }
+  });
+
+  testWidgets('compact breakpoint respects narrow widths and enlarged text', (
+    tester,
+  ) async {
+    _setViewport(tester, 1920);
+    for (final (width, scale, columns) in [
+      (299.0, 1.0, 1),
+      (300.0, 1.0, 2),
+      (619.0, 1.0, 2),
+      (620.0, 1.0, 2),
+      (939.0, 1.0, 2),
+      (940.0, 1.0, 3),
+      (439.0, 2.0, 1),
+      (440.0, 2.0, 2),
+      (720.0, 2.0, 2),
+    ]) {
+      await tester.pumpWidget(_gridApp(width: width, scale: scale));
+      await tester.pumpAndSettle();
+      final cards = find.byType(VideoCard);
+      final first = tester.getRect(cards.first);
+      final lastInRow = tester.getRect(cards.at(columns - 1));
+      final nextRow = tester.getRect(cards.at(columns));
+      expect(lastInRow.top, first.top);
+      expect(lastInRow.right, closeTo(width, .01));
+      expect(nextRow.top, greaterThan(first.bottom));
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'width=$width, scale=$scale',
+      );
+    }
+  });
+
   testWidgets('cards fit narrow windows and double text scale in both themes', (
     tester,
   ) async {
