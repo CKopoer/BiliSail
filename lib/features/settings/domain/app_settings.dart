@@ -41,6 +41,7 @@ final class AppSettings {
     this.shortcuts = const ShortcutSettings.defaults(),
     this.theme = AppThemePreference.system,
     this.navigationMode = WorkspaceNavigationMode.multipleTabs,
+    this.allowConcurrentPlayback = true,
     this.font = AppFontPreference.harmonyOsSans,
     this.systemFontFamily = '',
     this.cacheImages = true,
@@ -84,6 +85,7 @@ final class AppSettings {
   /// Constant defaults have no caller-owned collection inputs.
   const AppSettings.defaults({
     this.navigationMode = WorkspaceNavigationMode.multipleTabs,
+    this.allowConcurrentPlayback = true,
   }) : shortcuts = const ShortcutSettings.defaults(),
        theme = AppThemePreference.system,
        font = AppFontPreference.harmonyOsSans,
@@ -127,6 +129,10 @@ final class AppSettings {
   final ShortcutSettings shortcuts;
   final AppThemePreference theme;
   final WorkspaceNavigationMode navigationMode;
+  final bool allowConcurrentPlayback;
+  bool get concurrentPlaybackEnabled =>
+      navigationMode == WorkspaceNavigationMode.multipleTabs &&
+      allowConcurrentPlayback;
   final AppFontPreference font;
   final String systemFontFamily;
   String? get fontFamily => font.resolveFamily(systemFontFamily);
@@ -182,6 +188,7 @@ final class AppSettings {
     ShortcutSettings? shortcuts,
     AppThemePreference? theme,
     WorkspaceNavigationMode? navigationMode,
+    bool? allowConcurrentPlayback,
     AppFontPreference? font,
     String? systemFontFamily,
     bool? cacheImages,
@@ -223,6 +230,8 @@ final class AppSettings {
     shortcuts: shortcuts ?? this.shortcuts,
     theme: theme ?? this.theme,
     navigationMode: navigationMode ?? this.navigationMode,
+    allowConcurrentPlayback:
+        allowConcurrentPlayback ?? this.allowConcurrentPlayback,
     font: font ?? this.font,
     systemFontFamily: systemFontFamily ?? this.systemFontFamily,
     cacheImages: cacheImages ?? this.cacheImages,

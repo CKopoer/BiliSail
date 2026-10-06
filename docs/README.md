@@ -58,6 +58,7 @@
 | [媒体包验证](validation/media-packages.md) | 包契约、限制、原生资产来源 |
 | [弹幕顶部距离](validation/danmaku-top-margin.md) | 默认 0、两处配置入口、点播／直播区域计算和旧设置兼容 |
 | [弹幕样式与过滤配置](validation/danmaku-style-settings.md) | 字体/加粗/效果、时间偏移、重复合并、同屏密度与本地过滤 |
+| [全屏弹幕保留](validation/danmaku-fullscreen.md) | 点播视口变更保留活动弹幕、调度游标和滚动进度，Windows 全屏回归 |
 | [播放错误排查](validation/native-playback-errors.md) | 原生日志误判、错误态控制栏与本地脱敏日志 |
 | [开发协作约定](../AGENTS.md) | 后续开发与自动化代理必须遵守的仓库规则 |
 

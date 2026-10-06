@@ -36,6 +36,66 @@ void main() {
       );
     }
   });
+  for (final mode in WorkspaceNavigationMode.values) {
+    testWidgets(
+      'concurrent playback switch respects ${mode.name} and retains its choice',
+      (tester) async {
+        final repository = _SettingsRepository()
+          ..settings = AppSettings.defaults(navigationMode: mode);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(
+                body: SettingsScreen(category: SettingsCategory.playback),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final toggle = find.widgetWithText(SwitchListTile, '允许多个标签页同时播放');
+        await tester.ensureVisible(toggle);
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+        expect(
+          tester.widget<SwitchListTile>(toggle).onChanged != null,
+          mode == WorkspaceNavigationMode.multipleTabs,
+        );
+        final container = ProviderScope.containerOf(
+          tester.element(toggle),
+          listen: false,
+        );
+        final controller = container.read(settingsControllerProvider.notifier);
+        if (mode == WorkspaceNavigationMode.singlePage) {
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          expect(repository.settings.allowConcurrentPlayback, isTrue);
+          await controller.setNavigationMode(
+            WorkspaceNavigationMode.multipleTabs,
+          );
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(repository.settings.allowConcurrentPlayback, isFalse);
+        await controller.setNavigationMode(WorkspaceNavigationMode.singlePage);
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(toggle).onChanged, isNull);
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+        await controller.setNavigationMode(
+          WorkspaceNavigationMode.multipleTabs,
+        );
+        await tester.pumpAndSettle();
+        container.invalidate(settingsControllerProvider);
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(toggle).onChanged, isNotNull);
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   for (final inPlayer in [false, true]) {
     testWidgets('top margin slider saves 4-pixel steps (player: $inPlayer)', (
       tester,

@@ -47,14 +47,14 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _toggle(
     String title,
     bool value,
-    Future<void> Function(bool) save, [
+    Future<void> Function(bool)? save, [
     String? description,
   ]) => SwitchListTile.adaptive(
     contentPadding: EdgeInsets.zero,
     title: Text(title),
     subtitle: description == null ? null : Text(description),
     value: value,
-    onChanged: (v) => _save(() => save(v)),
+    onChanged: save == null ? null : (v) => _save(() => save(v)),
   );
   Widget _choices<T>(
     String title,
@@ -209,6 +209,15 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             s.autoPlay,
                             controller.setAutoPlay,
                             '打开视频后开始播放',
+                          ),
+                          _toggle(
+                            '允许多个标签页同时播放',
+                            s.allowConcurrentPlayback,
+                            s.navigationMode ==
+                                    WorkspaceNavigationMode.multipleTabs
+                                ? controller.setAllowConcurrentPlayback
+                                : null,
+                            '仅在多标签页模式下生效；关闭后切换播放标签会暂停其他标签',
                           ),
                           _toggle(
                             '记住播放进度',

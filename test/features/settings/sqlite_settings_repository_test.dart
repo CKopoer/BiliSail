@@ -48,7 +48,7 @@ void main() {
           final snapshot = jsonDecode(
             (await database.readSetting('preferences.v1')) ?? '{}',
           ) as Map<String, Object?>;
-          expect(snapshot['schemaVersion'], 12);
+          expect(snapshot['schemaVersion'], 13);
           expect(snapshot['navigationMode'], mode.name);
         }
         for (final selected in WorkspaceNavigationMode.values) {
@@ -95,7 +95,7 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 12);
+      expect(snapshot['schemaVersion'], 13);
       expect(snapshot['theme'], 'dark');
       expect(database.schemaVersion, 2);
     },
@@ -116,6 +116,40 @@ void main() {
     final reloaded = await repository.load();
     expect(reloaded.navigationMode, WorkspaceNavigationMode.multipleTabs);
     expect(reloaded.theme, AppThemePreference.dark);
+  });
+  test('concurrent playback migrates with compatible defaults and retains its preference', () async {
+    for (final oldValue in [null, 'false', 0, false, true]) {
+      await database.writeSetting(
+        'preferences.v1',
+        jsonEncode({
+          'schemaVersion': 12,
+          'navigationMode': 'singlePage',
+          'theme': 'dark',
+          'allowConcurrentPlayback': ?oldValue,
+        }),
+      );
+      final loaded = await repository.load();
+      final allowed = oldValue is bool ? oldValue : true;
+      expect(loaded.allowConcurrentPlayback, allowed);
+      expect(loaded.concurrentPlaybackEnabled, isFalse);
+      expect(loaded.theme, AppThemePreference.dark);
+      await repository.save(loaded);
+      final snapshot = jsonDecode(
+        (await database.readSetting('preferences.v1')) ?? '{}',
+      ) as Map<String, Object?>;
+      expect(snapshot['schemaVersion'], 13);
+      expect(snapshot['allowConcurrentPlayback'], allowed);
+      expect(snapshot['navigationMode'], 'singlePage');
+      final reloaded = await repository.load();
+      expect(reloaded.allowConcurrentPlayback, allowed);
+      expect(
+        reloaded
+            .copyWith(navigationMode: WorkspaceNavigationMode.multipleTabs)
+            .concurrentPlaybackEnabled,
+        allowed,
+      );
+      expect(database.schemaVersion, 2);
+    }
   });
   test(
     'bundled and installed font choices survive reload independently',
@@ -174,6 +208,7 @@ void main() {
           .withActionEnabled(ShortcutAction.fullscreen, false)
           .withPlayback(seekSeconds: 8, holdRate: 2),
       theme: AppThemePreference.light,
+      allowConcurrentPlayback: false,
       font: AppFontPreference.system,
       cacheImages: false,
       autoPlay: false,
@@ -216,6 +251,7 @@ void main() {
     await repository.save(reloaded);
     expect(await database.readSetting('preferences.v1'), first);
     expect(reloaded.defaultVolume, 35);
+    expect(reloaded.allowConcurrentPlayback, isFalse);
     expect(reloaded.danmakuTopMargin, 48);
     expect(reloaded.danmakuFont, DanmakuFontPreference.harmonyOsSans);
     expect(reloaded.danmakuBold, isTrue);

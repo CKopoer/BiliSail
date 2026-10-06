@@ -41,6 +41,7 @@ class SqliteSettingsRepository implements SettingsRepository {
               .firstOrNull ??
           defaultNavigationMode,
       shortcuts: ShortcutSettings.fromJson(decoded['shortcuts']),
+      allowConcurrentPlayback: boolean('allowConcurrentPlayback', true),
       cacheImages: boolean('cacheImages', true),
       systemFontFamily: decoded['systemFontFamily'] is String
           ? decoded['systemFontFamily'] as String
@@ -134,8 +135,9 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 12,
+        'schemaVersion': 13,
         'navigationMode': value.navigationMode.name,
+        'allowConcurrentPlayback': value.allowConcurrentPlayback,
         'cacheImages': value.cacheImages,
         'shortcuts': value.shortcuts.toJson(),
         'theme': value.theme.name,

@@ -165,6 +165,7 @@ final class _VideoCardState extends State<VideoCard> {
                   children: [
                     // Reserve two scaled lines so author rows align across cards.
                     SizedBox(
+                      width: double.infinity,
                       height: textScaler.scale(_titleFontSize) * 1.4 * 2 + 2,
                       child: HighlightedText(
                         video.title,
@@ -228,36 +229,59 @@ final class _CoverMetadata extends StatelessWidget {
     fontWeight: FontWeight.w400,
     shadows: [Shadow(blurRadius: 2, color: Colors.black)],
   );
+  static const _iconSize = 13.0;
+  static const _iconGap = 3.0;
+  static const _countGap = 8.0;
+  static const _durationGap = 8.0;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      final playLabel = playCountText.isEmpty
+          ? compactCount(video.playCount)
+          : playCountText;
+      final danmakuLabel = danmakuCountText.isEmpty
+          ? compactCount(video.danmakuCount)
+          : danmakuCountText;
+      final timeLabel = durationLabel(video.duration);
+      double textWidth(String label) {
+        final painter = TextPainter(
+          text: TextSpan(
+            text: label,
+            style: DefaultTextStyle.of(context).style.merge(_style),
+          ),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          locale: Localizations.maybeLocaleOf(context),
+          maxLines: 1,
+        )..layout();
+        final width = painter.width;
+        painter.dispose();
+        return width;
+      }
+
+      // Measure the actual labels, icons and gaps before moving time below counts.
+      final countsWidth =
+          textWidth(playLabel) +
+          textWidth(danmakuLabel) +
+          2 * (_iconSize + _iconGap) +
+          _countGap;
+      final countsFit = countsWidth <= constraints.maxWidth;
       final stacked =
-          MediaQuery.textScalerOf(context).scale(12) > 16 ||
-          constraints.maxWidth < 210;
+          countsWidth + _durationGap + textWidth(timeLabel) >
+          constraints.maxWidth;
+      final play = _count(BiliIcons.playCount, playLabel);
+      final danmaku = _count(BiliIcons.danmaku, danmakuLabel);
       final counts = Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Flexible(
-            child: _count(
-              BiliIcons.playCount,
-              playCountText.isEmpty
-                  ? compactCount(video.playCount)
-                  : playCountText,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: _count(
-              BiliIcons.danmaku,
-              danmakuCountText.isEmpty
-                  ? compactCount(video.danmakuCount)
-                  : danmakuCountText,
-            ),
-          ),
+          countsFit ? play : Flexible(child: play),
+          const SizedBox(width: _countGap),
+          countsFit ? danmaku : Flexible(child: danmaku),
         ],
       );
       final duration = Text(
-        durationLabel(video.duration),
+        timeLabel,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: _style,
@@ -275,7 +299,7 @@ final class _CoverMetadata extends StatelessWidget {
       return Row(
         children: [
           Expanded(child: counts),
-          const SizedBox(width: 8),
+          const SizedBox(width: _durationGap),
           duration,
         ],
       );
@@ -285,8 +309,8 @@ final class _CoverMetadata extends StatelessWidget {
   Widget _count(IconData icon, String count) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(icon, color: Colors.white, size: 13),
-      const SizedBox(width: 3),
+      Icon(icon, color: Colors.white, size: _iconSize),
+      const SizedBox(width: _iconGap),
       Flexible(
         child: Text(
           count,
@@ -382,28 +406,6 @@ final class _AuthorMetadata extends StatelessWidget {
     );
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Keep the author readable with large fonts instead of squeezing three labels.
-        if (MediaQuery.textScalerOf(context).scale(12) > 18 ||
-            constraints.maxWidth < 260) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              author,
-              if (reasonText.isNotEmpty || dateText.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    if (reasonText.isNotEmpty) ...[
-                      Flexible(child: badge),
-                      const SizedBox(width: 6),
-                    ],
-                    if (dateText.isNotEmpty) Flexible(child: published),
-                  ],
-                ),
-              ],
-            ],
-          );
-        }
         return Row(
           children: [
             if (reasonText.isNotEmpty) ...[

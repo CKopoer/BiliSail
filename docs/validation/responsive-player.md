@@ -16,6 +16,8 @@
 - 视频、影视和直播共用的播放面板由页面保存控件显隐状态，普通视图与全屏视图共用该状态。双击画面进入或退出全屏时，隐藏的控件继续隐藏，显示的控件继续显示；全屏内单击改变的状态也保留到退出后。
 - 单击画面仍切换控件显隐。全屏按钮、F 和 Esc 沿用同一状态；播放错误时仍显示控制栏，保留重试与设置入口。
 - 回归测试覆盖鼠标／触摸、初始显示／隐藏、连续进入和退出、全屏内单击，以及媒体源、暂停位置和单一 surface 保留。Windows 原生用例增加鼠标双击在两种显隐状态下的进入／退出验证。
+- `tool/check.ps1 -SkipPub` 通过：根应用 713、`bili_api` 227、`bili_player` 16、`bili_danmaku` 21 项，共 977 项；格式与静态分析均通过。Windows 原生响应式／全屏用例通过，使用本地音视频分轨，无真实账号写操作。日志：`artifacts/fullscreen-controls-check.log`、`artifacts/fullscreen-controls-windows.log`。Android/macOS 本轮未进行实机验证。
+- `flutter build windows --release --no-pub` 通过，程序位于 `build/windows/x64/runner/Release/bilisail.exe`，运行时保留同目录依赖与资源。日志：`artifacts/fullscreen-controls-build-windows.log`。
 
 ## 连续音量滑条（2026-10-05）
 

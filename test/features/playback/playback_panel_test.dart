@@ -32,132 +32,165 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
-  for (final mode in WorkspaceNavigationMode.values) {
-    testWidgets('workspace scopes players and enforces ${mode.name} playback', (
-      tester,
-    ) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1280, 800);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final sessions = <PlaybackSession>[];
-      final manager = PlaybackManager(
-        createSession: () {
-          final session = _session(_FakeEngine());
-          sessions.add(session);
-          return session;
-        },
-      );
-      addTearDown(manager.close);
-      final settings = _Settings()
-        ..value = AppSettings.defaults(navigationMode: mode);
-      final second = VideoDetail(
-        summary: const VideoSummary(
-          id: VideoId('BV2abc123456'),
-          title: '第二个视频',
-          coverUrl: '',
-          author: 'UP',
-          duration: Duration(minutes: 3),
-        ),
-        description: '',
-        parts: const [
-          VideoPart(
-            cid: '456',
-            page: 1,
+  for (final (mode, concurrent) in [
+    for (final mode in WorkspaceNavigationMode.values)
+      for (final allowed in [false, true]) (mode, allowed),
+  ]) {
+    testWidgets(
+      'workspace scopes players and enforces ${mode.name} playback (concurrent: $concurrent)',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1280, 800);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final sessions = <PlaybackSession>[];
+        final manager = PlaybackManager(
+          createSession: () {
+            final session = _session(_FakeEngine());
+            sessions.add(session);
+            return session;
+          },
+        );
+        addTearDown(manager.close);
+        final settings = _Settings()
+          ..value = AppSettings.defaults(
+            navigationMode: mode,
+            allowConcurrentPlayback: concurrent,
+          );
+        final second = VideoDetail(
+          summary: const VideoSummary(
+            id: VideoId('BV2abc123456'),
             title: '第二个视频',
+            coverUrl: '',
+            author: 'UP',
             duration: Duration(minutes: 3),
           ),
-        ],
-      );
-      final router = createBiliRouter(
-        initialLocation: '/video/${_detail.summary.id.value}',
-        playerBuilder: (_, detail, part) => PlaybackPanel(
-          detail: detail,
-          part: part,
-          settings: const AppSettings.defaults(),
-          onToggleComments: () {},
-          window: _FakeWindowService(),
-        ),
-      );
-      addTearDown(router.dispose);
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            playbackManagerProvider.overrideWithValue(manager),
-            settingsRepositoryProvider.overrideWithValue(settings),
-            for (final video in [_detail, second]) ...[
-              videoDetailProvider(video.summary.id).overrideWith((_) => video),
-              relatedVideosProvider(video.summary.id).overrideWith((_) => []),
-            ],
+          description: '',
+          parts: const [
+            VideoPart(
+              cid: '456',
+              page: 1,
+              title: '第二个视频',
+              duration: Duration(minutes: 3),
+            ),
           ],
-          child: MaterialApp.router(
-            builder: AppNoticeHost.builder,
-            routerConfig: router,
+        );
+        final router = createBiliRouter(
+          initialLocation: '/video/${_detail.summary.id.value}',
+          playerBuilder: (_, detail, part) => PlaybackPanel(
+            detail: detail,
+            part: part,
+            settings: const AppSettings.defaults(),
+            onToggleComments: () {},
+            window: _FakeWindowService(),
           ),
-        ),
-      );
-      await _pumpFrames(tester);
-      expect(sessions.length, 1);
-      final firstSession = sessions.first;
-      await firstSession.seek(const Duration(milliseconds: 1234));
-      final generation = firstSession.sourceGeneration;
-      router.go('/video/${second.summary.id.value}');
-      await _pumpFrames(tester);
-      expect(sessions.length, 2);
-      final secondSession = sessions.last;
-      expect(secondSession.detail?.summary.id, second.summary.id);
-      expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
-      expect(
-        firstSession.snapshots.value.phase,
-        mode == WorkspaceNavigationMode.multipleTabs
-            ? PlaybackPhase.playing
-            : PlaybackPhase.paused,
-      );
-      expect(firstSession.sourceGeneration, generation);
-      expect((firstSession.engine as _FakeEngine).activeSurfaces, 0);
-      expect((secondSession.engine as _FakeEngine).activeSurfaces, 1);
-      // Mode changes preserve the page/provider identity and media sources.
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(PlaybackPanel).last),
-        listen: false,
-      );
-      await container
-          .read(settingsControllerProvider.notifier)
-          .setNavigationMode(WorkspaceNavigationMode.singlePage);
-      await _pumpFrames(tester);
-      expect(firstSession.snapshots.value.phase, PlaybackPhase.paused);
-      expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
-      await container
-          .read(settingsControllerProvider.notifier)
-          .setNavigationMode(WorkspaceNavigationMode.multipleTabs);
-      await _pumpFrames(tester);
-      expect(firstSession.snapshots.value.phase, PlaybackPhase.playing);
-      expect(sessions.length, 2);
-      router.go('/video/${_detail.summary.id.value}');
-      await _pumpFrames(tester);
-      expect(
-        firstSession.snapshots.value.position,
-        const Duration(milliseconds: 1234),
-      );
-      expect(firstSession.sourceGeneration, generation);
-      // Closing the visible tab must leave the other tab's stream running.
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-      await _pumpFrames(tester);
-      expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
-      expect(firstSession.media, isNull);
-      await tester.pumpWidget(const SizedBox());
-      await _pumpFrames(tester);
-      final closing = manager.close();
-      // Provider disposal and broadcast stream closure cross Riverpod's real
-      // scheduler and the widget test's fake clock; drain both before teardown.
-      for (var i = 0; i < 5; i++) {
-        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              playbackManagerProvider.overrideWithValue(manager),
+              settingsRepositoryProvider.overrideWithValue(settings),
+              for (final video in [_detail, second]) ...[
+                videoDetailProvider(video.summary.id)
+                    .overrideWith((_) => video),
+                relatedVideosProvider(video.summary.id).overrideWith((_) => []),
+              ],
+            ],
+            child: MaterialApp.router(
+              builder: AppNoticeHost.builder,
+              routerConfig: router,
+            ),
+          ),
+        );
+        await _pumpFrames(tester);
+        expect(sessions.length, 1);
+        final firstSession = sessions.first;
+        await firstSession.seek(const Duration(milliseconds: 1234));
+        final generation = firstSession.sourceGeneration;
+        router.go('/video/${second.summary.id.value}');
+        await _pumpFrames(tester);
+        expect(sessions.length, 2);
+        final secondSession = sessions.last;
+        expect(secondSession.detail?.summary.id, second.summary.id);
+        expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
+        expect(
+          firstSession.snapshots.value.phase,
+          mode == WorkspaceNavigationMode.multipleTabs && concurrent
+              ? PlaybackPhase.playing
+              : PlaybackPhase.paused,
+        );
+        expect(firstSession.sourceGeneration, generation);
+        expect((firstSession.engine as _FakeEngine).activeSurfaces, 0);
+        expect((secondSession.engine as _FakeEngine).activeSurfaces, 1);
+        // Mode changes preserve the page/provider identity and media sources.
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(PlaybackPanel).last),
+          listen: false,
+        );
+        final controller = container.read(settingsControllerProvider.notifier);
+        await controller.setNavigationMode(WorkspaceNavigationMode.singlePage);
+        await _pumpFrames(tester);
+        expect(firstSession.snapshots.value.phase, PlaybackPhase.paused);
+        expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
+        await controller.setNavigationMode(
+          WorkspaceNavigationMode.multipleTabs,
+        );
+        await _pumpFrames(tester);
+        expect(
+          firstSession.snapshots.value.phase,
+          concurrent ? PlaybackPhase.playing : PlaybackPhase.paused,
+        );
+        await controller.setAllowConcurrentPlayback(true);
+        await _pumpFrames(tester);
+        expect(firstSession.snapshots.value.phase, PlaybackPhase.playing);
+        // The real settings page changes policy without replacing either source.
+        router.go('/settings?section=playback');
+        await _pumpFrames(tester);
+        final toggle = find.widgetWithText(SwitchListTile, '允许多个标签页同时播放');
+        await tester.ensureVisible(toggle);
         await tester.pump();
-      }
-      await closing;
-    });
+        await tester.tap(toggle);
+        await _pumpFrames(tester);
+        expect(settings.value.allowConcurrentPlayback, isFalse);
+        expect(firstSession.snapshots.value.phase, PlaybackPhase.paused);
+        expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
+        expect(firstSession.sourceGeneration, generation);
+        await firstSession.pause();
+        await tester.tap(toggle);
+        await _pumpFrames(tester);
+        expect(settings.value.allowConcurrentPlayback, isTrue);
+        expect(firstSession.snapshots.value.phase, PlaybackPhase.paused);
+        expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
+        await firstSession.togglePlaying();
+        await _pumpFrames(tester);
+        expect(sessions.length, 2);
+        router.go('/video/${_detail.summary.id.value}');
+        await _pumpFrames(tester);
+        expect(
+          firstSession.snapshots.value.position,
+          const Duration(milliseconds: 1234),
+        );
+        expect(firstSession.sourceGeneration, generation);
+        // Closing the visible tab must leave the other tab's stream running.
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await _pumpFrames(tester);
+        expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
+        expect(firstSession.media, isNull);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+        final closing = manager.close();
+        // Provider disposal and broadcast stream closure cross Riverpod's real
+        // scheduler and the widget test's fake clock; drain both before teardown.
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+          await tester.pump();
+        }
+        await closing;
+      },
+    );
   }
 
   testWidgets(
@@ -236,6 +269,108 @@ void main() {
       await _pumpFrames(tester);
     },
   );
+
+  for (final controlsVisible in [true, false]) {
+    testWidgets(
+      'fullscreen round trips preserve scrolling danmaku with controls $controlsVisible',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1280, 800);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final window = _FakeWindowService();
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(session, window, AppSettings(danmakuMaxOnScreen: 1), width: 800),
+        );
+        await _pumpFrames(tester);
+        await session.pause();
+        final target = find.byKey(const ValueKey('player-surface-tap-target'));
+        if (!controlsVisible) {
+          await tester.tapAt(tester.getTopLeft(target) + const Offset(30, 50));
+          await tester.pump(const Duration(milliseconds: 350));
+        }
+        session.danmaku.replaceEvents(const [
+          DanmakuEvent(
+            id: 'warmup',
+            at: Duration.zero,
+            text: 'warmup',
+            mode: DanmakuMode.top,
+          ),
+          DanmakuEvent(
+            id: 'dropped',
+            at: Duration(seconds: 1),
+            text: 'dropped',
+          ),
+          DanmakuEvent(
+            id: 'visible',
+            at: Duration(seconds: 4),
+            text: 'visible',
+          ),
+          DanmakuEvent(id: 'future', at: Duration(seconds: 14), text: 'future'),
+        ]);
+        session.danmaku.seekConfirmed(Duration.zero);
+        for (var second = 0; second <= 5; second++) {
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              position: Duration(seconds: second),
+            ),
+          );
+          await tester.pump();
+        }
+        final before = session.danmaku.frame().single;
+        expect(before.event.id, 'visible');
+        final generation = session.sourceGeneration;
+        final pending = session.danmaku.pendingCount;
+        final dropped = session.danmaku.dropped;
+        final layouts = session.danmaku.textLayoutCount;
+        final inlineWidth = tester.getSize(find.byType(DanmakuOverlay)).width;
+        for (final fullscreen in [true, false, true, false]) {
+          final point = tester.getTopLeft(target) + const Offset(30, 50);
+          await tester.tapAt(point);
+          await tester.pump(const Duration(milliseconds: 50));
+          await tester.tapAt(point);
+          await _pumpFrames(tester);
+          await tester.pump(const Duration(milliseconds: 350));
+          expect(window.fullScreen, fullscreen);
+          final controls = find.byKey(const ValueKey('player-controls'));
+          expect(controls, controlsVisible ? findsOneWidget : findsNothing);
+          expect(session.danmaku.visibleCount, 1);
+          expect(session.danmaku.pendingCount, pending);
+          expect(session.danmaku.textLayoutCount, layouts);
+          final after = session.danmaku.frame().single;
+          final width = tester.getSize(find.byType(DanmakuOverlay)).width;
+          expect(after.event.id, before.event.id);
+          expect(
+            after.x,
+            closeTo(before.x + (width - inlineWidth) * 7 / 8, .001),
+          );
+          expect(after.y, before.y);
+          expect(session.danmaku.dropped, dropped);
+          expect(engine.currentSnapshot.position, const Duration(seconds: 5));
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(session.sourceGeneration, generation);
+          expect(engine.opens, 1);
+          expect(engine.maxSurfaces, 1);
+        }
+        await session.togglePlaying();
+        engine._emit(
+          engine.currentSnapshot.copyWith(
+            position: const Duration(milliseconds: 5500),
+          ),
+        );
+        await tester.pump();
+        final resumed = session.danmaku.frame().single;
+        expect(resumed.event.id, before.event.id);
+        expect(resumed.x, lessThan(before.x));
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
 
   testWidgets('top margin settings reach the shared playback overlay', (
     tester,

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:bili_api/bili_api.dart';
+import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
@@ -547,7 +548,7 @@ void main() {
                         child: PlaybackPanel(
                           detail: detail,
                           part: part,
-                          settings: AppSettings(danmakuEnabled: false),
+                          settings: AppSettings(danmakuMaxOnScreen: 1),
                           onToggleComments: () {},
                           window: window,
                           danmakuComposerBuilder: (_) => const SizedBox(
@@ -706,6 +707,57 @@ void main() {
           reason: 'Releasing a long press must not also perform a short seek',
         );
 
+        await session.seek(const Duration(seconds: 5));
+        await _until(
+          tester,
+          () =>
+              (engine.currentSnapshot.position - const Duration(seconds: 5))
+                  .abs() <
+              const Duration(milliseconds: 250),
+        );
+        session.danmaku.replaceEvents(const [
+          DanmakuEvent(
+            id: 'warmup',
+            at: Duration.zero,
+            text: 'warmup',
+            mode: DanmakuMode.top,
+          ),
+          DanmakuEvent(
+            id: 'dropped',
+            at: Duration(seconds: 1),
+            text: 'dropped',
+          ),
+          DanmakuEvent(
+            id: 'visible',
+            at: Duration(seconds: 4),
+            text: 'visible',
+          ),
+          DanmakuEvent(id: 'future', at: Duration(seconds: 10), text: 'future'),
+        ]);
+        session.danmaku.seekConfirmed(Duration.zero);
+        for (var second = 0; second <= 5; second++) {
+          session.danmaku.sync(
+            confirmedPosition: Duration(seconds: second),
+            playing: false,
+            buffering: false,
+            seeking: false,
+            rate: 1,
+          );
+          session.danmaku.frame();
+        }
+        final pendingDanmaku = session.danmaku.pendingCount;
+        final droppedDanmaku = session.danmaku.dropped;
+        void expectDanmakuPreserved() {
+          expect(session.danmaku.visibleCount, 1);
+          expect(session.danmaku.pendingCount, pendingDanmaku);
+          expect(session.danmaku.frame().single.event.id, 'visible');
+          expect(session.danmaku.dropped, droppedDanmaku);
+          expect(find.byType(DanmakuOverlay), findsOneWidget);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        }
+
+        expectDanmakuPreserved();
+
         for (var cycle = 0; cycle < 6; cycle++) {
           if (cycle.isEven) {
             await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
@@ -719,6 +771,7 @@ void main() {
                 find.byTooltip('退出全屏（Esc）').evaluate().length == 1,
           );
           expect(find.byTooltip('退出全屏（Esc）'), findsOneWidget);
+          expectDanmakuPreserved();
           expect(engine.currentSnapshot.generation, generation);
           expect(tester.takeException(), isNull);
 
@@ -730,6 +783,7 @@ void main() {
                 find.byTooltip('全屏（F）').evaluate().length == 1,
           );
           expect(find.byTooltip('全屏（F）'), findsOneWidget);
+          expectDanmakuPreserved();
           expect(engine.currentSnapshot.generation, generation);
           expect(engine.inspectDiagnostics().generation, generation);
           expect(tester.takeException(), isNull);
@@ -759,6 +813,7 @@ void main() {
           );
           await tester.pump(const Duration(milliseconds: 400));
           expect(controls, expectedControls);
+          expectDanmakuPreserved();
           await doubleClickSurface();
           await _until(
             tester,
@@ -766,6 +821,7 @@ void main() {
           );
           await tester.pump(const Duration(milliseconds: 400));
           expect(controls, expectedControls);
+          expectDanmakuPreserved();
           expect(find.byType(VideoSurface), findsOneWidget);
           expect(engine.currentSnapshot.generation, generation);
           expect(engine.currentSnapshot.desiredPlaying, isFalse);

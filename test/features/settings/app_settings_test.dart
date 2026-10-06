@@ -3,6 +3,31 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'concurrent playback requires multiple tabs and an enabled preference',
+    () {
+      expect(AppSettings().allowConcurrentPlayback, isTrue);
+      expect(const AppSettings.defaults().allowConcurrentPlayback, isTrue);
+      for (final mode in WorkspaceNavigationMode.values) {
+        for (final allowed in [false, true]) {
+          final settings = const AppSettings.defaults()
+              .copyWith(navigationMode: mode, allowConcurrentPlayback: allowed)
+              .normalized();
+          expect(settings.allowConcurrentPlayback, allowed);
+          expect(
+            settings.concurrentPlaybackEnabled,
+            mode == WorkspaceNavigationMode.multipleTabs && allowed,
+          );
+          expect(
+            settings
+                .copyWith(theme: AppThemePreference.dark)
+                .allowConcurrentPlayback,
+            allowed,
+          );
+        }
+      }
+    },
+  );
+  test(
     'danmaku style defaults preserve existing behavior and clamp limits',
     () {
       final defaults = const AppSettings.defaults();

@@ -62,40 +62,34 @@ GoRouter createBiliRouter({
   routes: [
     ShellRoute(
       builder: (context, state, child) => Consumer(
-        builder: (context, ref, _) => BiliAppShell(
-          navigationMode:
-              (ref.watch(settingsControllerProvider).value ??
-                      AppSettings.defaults(
-                        navigationMode: defaultWorkspaceNavigationMode,
-                      ))
-                  .navigationMode,
-          shortcuts:
-              (ref.watch(settingsControllerProvider).value ??
-                      const AppSettings.defaults())
-                  .shortcuts,
-          location: state.uri.toString(),
-          accountBuilder: accountBuilder,
-          windowControlsBuilder: windowControlsBuilder,
-          dragRegionBuilder: dragRegionBuilder,
-          pageBuilder: (context, tab) => _WorkspacePage(
-            tab: tab,
-            playerBuilder: playerBuilder,
-            pgcPlayerBuilder: pgcPlayerBuilder,
-            pgcCommentsBuilder: pgcCommentsBuilder,
-            livePlayerBuilder: livePlayerBuilder,
-            liveComposerBuilder: liveComposerBuilder,
-            actionsBuilder: actionsBuilder,
-            menuBuilder: menuBuilder,
-            observeAccount: accountBuilder != null,
-            navigationMode:
-                (ref.watch(settingsControllerProvider).value ??
-                        AppSettings.defaults(
-                          navigationMode: defaultWorkspaceNavigationMode,
-                        ))
-                    .navigationMode,
-          ),
-          child: child,
-        ),
+        builder: (context, ref, _) {
+          final settings =
+              ref.watch(settingsControllerProvider).value ??
+              AppSettings.defaults(
+                navigationMode: defaultWorkspaceNavigationMode,
+              );
+          return BiliAppShell(
+            navigationMode: settings.navigationMode,
+            shortcuts: settings.shortcuts,
+            location: state.uri.toString(),
+            accountBuilder: accountBuilder,
+            windowControlsBuilder: windowControlsBuilder,
+            dragRegionBuilder: dragRegionBuilder,
+            pageBuilder: (context, tab) => _WorkspacePage(
+              tab: tab,
+              playerBuilder: playerBuilder,
+              pgcPlayerBuilder: pgcPlayerBuilder,
+              pgcCommentsBuilder: pgcCommentsBuilder,
+              livePlayerBuilder: livePlayerBuilder,
+              liveComposerBuilder: liveComposerBuilder,
+              actionsBuilder: actionsBuilder,
+              menuBuilder: menuBuilder,
+              observeAccount: accountBuilder != null,
+              allowConcurrentPlayback: settings.concurrentPlaybackEnabled,
+            ),
+            child: child,
+          );
+        },
       ),
       // The shell owns cached pages; these routes retain go_router's deep-link
       // parsing and location updates without mounting a duplicate page/player.
@@ -135,7 +129,7 @@ final class _WorkspacePage extends ConsumerWidget {
     this.actionsBuilder,
     this.menuBuilder,
     required this.observeAccount,
-    required this.navigationMode,
+    required this.allowConcurrentPlayback,
   });
   final WorkspaceTab tab;
   final VideoPlayerBuilder playerBuilder;
@@ -146,7 +140,7 @@ final class _WorkspacePage extends ConsumerWidget {
   final VideoPlayerBuilder? actionsBuilder;
   final VideoPlayerBuilder? menuBuilder;
   final bool observeAccount;
-  final WorkspaceNavigationMode navigationMode;
+  final bool allowConcurrentPlayback;
 
   bool _shortcut(BuildContext context, String key) {
     if (!WorkspaceActivity.isActive(context) || shortcutsBlocked(context)) {
@@ -206,8 +200,7 @@ final class _WorkspacePage extends ConsumerWidget {
         if (!context.mounted || !WorkspaceActivity.isActive(context)) return;
         unawaited(
           playback.updateWorkspace(
-            allowConcurrent:
-                navigationMode == WorkspaceNavigationMode.multipleTabs,
+            allowConcurrent: allowConcurrentPlayback,
             activeTabId: tab.id,
           ),
         );

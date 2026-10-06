@@ -164,18 +164,14 @@ final class DanmakuController extends ChangeNotifier {
         nextBottomInset == _bottomInset) {
       return;
     }
-    final resized = nextWidth != _width || nextHeight != _height;
     _width = nextWidth;
     _height = nextHeight;
     _bottomInset = nextBottomInset;
-    if (resized) {
-      _active.clear();
-      _clearLayouts();
-      _rewindTo(_displayPosition);
-    } else {
-      // Control visibility only changes the reserved area. Replaying past
-      // arrivals can admit previously dropped comments and displace active
-      // scrolling comments, so retain their lanes and the scheduling cursor.
+    if (_width > 0 && _height > 0) {
+      // Fullscreen and control visibility are layout changes, not seeks.
+      // Keep arrival times, lanes and the cursor: replaying dropped history
+      // can displace comments already on screen. frame() projects their
+      // existing progress onto the new width; text layouts are width-independent.
       final laneCount = _laneCount;
       _active.removeWhere((item) => item.lane >= laneCount);
     }

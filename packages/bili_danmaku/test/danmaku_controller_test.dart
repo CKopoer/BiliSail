@@ -1,7 +1,77 @@
 import 'package:bili_danmaku/bili_danmaku.dart';
+import 'package:flutter/painting.dart' show Size;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('fullscreen resizing preserves arrivals and scroll progress', () {
+    final controller = DanmakuController(monotonicNow: () => Duration.zero);
+    addTearDown(controller.dispose);
+    controller.configure(area: 1, speed: 1, maxOnScreen: 1);
+    controller.setViewport(width: 600, height: 384, bottomInset: 100);
+    controller.replaceEvents(const [
+      DanmakuEvent(
+        id: 'warmup',
+        at: Duration.zero,
+        text: 'warmup',
+        mode: DanmakuMode.top,
+      ),
+      DanmakuEvent(id: 'dropped', at: Duration(seconds: 1), text: 'dropped'),
+      DanmakuEvent(id: 'visible', at: Duration(seconds: 4), text: 'visible'),
+      DanmakuEvent(id: 'future', at: Duration(seconds: 14), text: 'future'),
+    ]);
+    for (var second = 0; second <= 5; second++) {
+      controller.sync(
+        confirmedPosition: Duration(seconds: second),
+        playing: false,
+        buffering: false,
+        seeking: false,
+        rate: 1,
+      );
+      controller.frame();
+    }
+    final before = controller.frame().single;
+    expect(before.event.id, 'visible');
+    final pending = controller.pendingCount;
+    final dropped = controller.dropped;
+    final layouts = controller.textLayoutCount;
+    for (final size in [
+      const Size(1920, 1080),
+      const Size(600, 384),
+      const Size(1280, 720),
+      const Size(600, 384),
+    ]) {
+      controller.setViewport(
+        width: size.width,
+        height: size.height,
+        bottomInset: 100,
+      );
+      expect(controller.visibleCount, 1);
+      expect(controller.pendingCount, pending);
+      expect(controller.textLayoutCount, layouts);
+      final after = controller.frame().single;
+      expect(after.event.id, before.event.id);
+      // The same one-second age in an eight-second lifetime at the new width.
+      expect(after.x, closeTo(before.x + (size.width - 600) * 7 / 8, .001));
+      expect(after.y, before.y);
+      expect(controller.dropped, dropped);
+    }
+    for (var second = 6; second <= 14; second++) {
+      controller.sync(
+        confirmedPosition: Duration(seconds: second),
+        playing: false,
+        buffering: false,
+        seeking: false,
+        rate: 1,
+      );
+      expect(
+        controller.frame().map((p) => p.event.id),
+        second < 12 ? ['visible'] : (second < 14 ? <String>[] : ['future']),
+      );
+    }
+    controller.seekConfirmed(const Duration(seconds: 1));
+    expect(controller.frame().single.event.id, 'warmup');
+  });
+
   test(
     'bottom inset changes preserve active comments and scheduling history',
     () {
@@ -72,10 +142,66 @@ void main() {
       controller.seekConfirmed(const Duration(seconds: 1));
       expect(controller.frame().single.event.id, 'warmup');
       controller.setViewport(width: 800, height: 384, bottomInset: 100);
-      expect(controller.visibleCount, 0);
+      expect(controller.visibleCount, 1);
       expect(controller.frame().single.event.id, 'warmup');
     },
   );
+
+  test('resize retains valid lanes without replaying removed comments', () {
+    final controller = DanmakuController(monotonicNow: () => Duration.zero);
+    addTearDown(controller.dispose);
+    controller.configure(area: 1, speed: 1, topInset: 40);
+    controller.setViewport(width: 600, height: 384, bottomInset: 100);
+    controller.replaceEvents([
+      for (var lane = 0; lane < 5; lane++)
+        DanmakuEvent(id: 'scroll-$lane', at: Duration.zero, text: 'scroll'),
+      const DanmakuEvent(
+        id: 'top',
+        at: Duration.zero,
+        text: 'top',
+        mode: DanmakuMode.top,
+      ),
+      const DanmakuEvent(
+        id: 'bottom',
+        at: Duration.zero,
+        text: 'bottom',
+        mode: DanmakuMode.bottom,
+      ),
+    ]);
+    final before = controller.frame();
+    expect(before, hasLength(7));
+    controller.setViewport(width: 320, height: 284, bottomInset: 100);
+    final after = controller.frame();
+    expect(after.map((p) => p.event.id), [
+      'scroll-0',
+      'scroll-1',
+      'scroll-2',
+      'top',
+      'bottom',
+    ]);
+    expect(
+      after.take(4).map((p) => p.y),
+      before.take(3).map((p) => p.y).followedBy([40.0]),
+    );
+    expect(after.last.y, before.last.y - 100);
+    expect(after[3].x, before[5].x - 140);
+    expect(after[4].x, before[6].x - 140);
+    final pending = controller.pendingCount;
+    controller.setViewport(width: 0, height: 0);
+    expect(controller.frame(), isEmpty);
+    expect(controller.visibleCount, after.length);
+    expect(controller.pendingCount, pending);
+    controller.setViewport(width: 600, height: 384, bottomInset: 100);
+    final restored = controller.frame();
+    expect(restored.map((p) => p.event.id), after.map((p) => p.event.id));
+    expect(restored.map((p) => p.x), [
+      ...before.take(3).map((p) => p.x),
+      before[5].x,
+      before[6].x,
+    ]);
+    controller.seekConfirmed(Duration.zero);
+    expect(controller.frame(), hasLength(7));
+  });
 
   test(
     'inset changes only remove lanes outside the remaining display area',
@@ -167,6 +293,8 @@ void main() {
     ]);
     expect(controller.frame(), isEmpty);
     controller.setViewport(width: 600, height: 384, bottomInset: 40);
+    expect(controller.frame(), isEmpty);
+    controller.seekConfirmed(Duration.zero);
     expect(controller.frame().single.y, 200);
     controller.configure(area: 1, speed: 1, topInset: double.nan);
     expect(controller.frame().single.y, 0);
