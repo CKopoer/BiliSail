@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/branding/app_icon.png" width="144" height="144" alt="BiliSail 哔帆应用图标">
+</p>
+
 <h1 align="center">BiliSail · 哔帆</h1>
 
 <p align="center">

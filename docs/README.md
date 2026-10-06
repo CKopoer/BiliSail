@@ -10,7 +10,7 @@
 | --- | --- |
 | [整体架构](architecture.md) | 产品范围、技术栈、模块依赖、目录、状态管理、存储和平台适配 |
 | [项目更名](validation/project-renaming.md) | BiliSail／哔帆的命名范围、安装／存储标识与平台验证 |
-| [应用图标](../assets/branding/README.md) | 帆船与小电视的品牌设计、官网参考、生成提示词和平台资源 |
+| [应用图标](../assets/branding/README.md) | 小电视与船帆角标、保留候选方案、官网参考和平台资源 |
 | [CI/CD、MSIX 与 DMG](validation/ci-cd.md) | GitHub Actions 三端构建、预览 Release 草稿、Windows MSIX 签名与 macOS DMG 安装 |
 | [API 与会话](api-design.md) | 协议边界、接口映射、鉴权、错误、缓存和降级 |
 | [密码、短信与移动登录窗口](validation/password-sms-login.md) | 三种 Web 登录、交互验证码、安全会话与小屏/键盘布局 |
