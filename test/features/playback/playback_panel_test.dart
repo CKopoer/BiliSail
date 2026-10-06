@@ -30,6 +30,83 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  testWidgets(
+    'control visibility preserves scrolling danmaku inline and fullscreen',
+    (tester) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, _FakeWindowService(), AppSettings(danmakuMaxOnScreen: 1)),
+      );
+      await _pumpFrames(tester);
+      await session.pause();
+      for (final fullscreen in [false, true]) {
+        if (fullscreen) {
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+        }
+        session.danmaku.replaceEvents(const [
+          DanmakuEvent(
+            id: 'warmup',
+            at: Duration.zero,
+            text: 'warmup',
+            mode: DanmakuMode.top,
+          ),
+          DanmakuEvent(
+            id: 'dropped',
+            at: Duration(seconds: 1),
+            text: 'dropped',
+          ),
+          DanmakuEvent(
+            id: 'visible',
+            at: Duration(seconds: 4),
+            text: 'visible',
+          ),
+        ]);
+        session.danmaku.seekConfirmed(Duration.zero);
+        for (var second = 0; second <= 5; second++) {
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              position: Duration(seconds: second),
+            ),
+          );
+          await tester.pump();
+        }
+        final before = session.danmaku.frame().single;
+        expect(before.event.id, 'visible');
+        final generation = engine.currentSnapshot.generation;
+        final controls = find.byKey(const ValueKey('player-controls'));
+        final target = find.byKey(const ValueKey('player-surface-tap-target'));
+        for (final visible in [false, true, false, true]) {
+          await tester.tapAt(tester.getTopLeft(target) + const Offset(30, 50));
+          await tester.pump(const Duration(milliseconds: 350));
+          await tester.pump();
+          expect(controls, visible ? findsOneWidget : findsNothing);
+          expect(
+            tester
+                .widget<DanmakuOverlay>(find.byType(DanmakuOverlay))
+                .bottomInset,
+            visible ? 100 : 48,
+          );
+          final after = session.danmaku.frame().single;
+          expect(after.event.id, before.event.id);
+          expect(after.x, before.x);
+          expect(after.y, before.y);
+          expect(engine.currentSnapshot.position, const Duration(seconds: 5));
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(engine.currentSnapshot.generation, generation);
+          expect(engine.opens, 1);
+          expect(engine.maxSurfaces, 1);
+        }
+      }
+      await tester.tap(find.byTooltip('退出全屏（Esc）'));
+      await _pumpFrames(tester);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+  );
+
   testWidgets('top margin settings reach the shared playback overlay', (
     tester,
   ) async {

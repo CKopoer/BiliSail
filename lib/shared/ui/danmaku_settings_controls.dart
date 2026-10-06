@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'system_font_picker.dart';
+
 import '../../features/settings/domain/app_settings.dart';
 
 /// Shared editor for global settings and the in-player dialog.
@@ -213,10 +215,25 @@ final class _DanmakuSettingsControlsState
           divisions: 100,
           suffix: ' 条',
         ),
-        _choice('弹幕字体', 'danmaku-font', s.danmakuFont, const {
+        _choice('弹幕字体', 'danmaku-font', s.danmakuFont, {
           DanmakuFontPreference.system: '系统默认',
           DanmakuFontPreference.harmonyOsSans: 'HarmonyOS Sans',
+          DanmakuFontPreference.alibabaPuHuiTi: '阿里巴巴普惠体 3.0',
+          if (s.danmakuFont == DanmakuFontPreference.installed)
+            DanmakuFontPreference.installed:
+                '系统字体：${s.danmakuSystemFontFamily}',
         }, (s, v) => s.copyWith(danmakuFont: v)),
+        SystemFontPicker(
+          family: s.danmakuFont == DanmakuFontPreference.installed
+              ? s.danmakuSystemFontFamily
+              : null,
+          onSelected: (family) => _save(
+            (s) => s.copyWith(
+              danmakuFont: DanmakuFontPreference.installed,
+              danmakuSystemFontFamily: family,
+            ),
+          ),
+        ),
         const SizedBox(height: 12),
         const Text('弹幕偏移（秒）'),
         const Text('正数延后，负数提前；直播仅支持延后', style: TextStyle(fontSize: 12)),

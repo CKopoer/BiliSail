@@ -47,11 +47,60 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 9);
+      expect(snapshot['schemaVersion'], 10);
       expect(snapshot['theme'], 'dark');
       expect(database.schemaVersion, 2);
     },
   );
+  test(
+    'bundled and installed font choices survive reload independently',
+    () async {
+      for (final bundled in [true, false]) {
+        await repository.save(
+          AppSettings(
+            font: bundled
+                ? AppFontPreference.alibabaPuHuiTi
+                : AppFontPreference.installed,
+            systemFontFamily: 'Microsoft YaHei',
+            danmakuFont: bundled
+                ? DanmakuFontPreference.alibabaPuHuiTi
+                : DanmakuFontPreference.installed,
+            danmakuSystemFontFamily: 'Segoe UI',
+          ),
+        );
+        final loaded = await repository.load();
+        expect(
+          loaded.fontFamily,
+          bundled ? 'Alibaba PuHuiTi 3.0' : 'Microsoft YaHei',
+        );
+        expect(
+          loaded.danmakuFontFamily,
+          bundled ? 'Alibaba PuHuiTi 3.0' : 'Segoe UI',
+        );
+        expect(
+          loaded.copyWith(font: AppFontPreference.system).fontFamily,
+          isNull,
+        );
+      }
+    },
+  );
+  test('invalid installed family fields fall back without losing other preferences', () async {
+    await database.writeSetting(
+      'preferences.v1',
+      jsonEncode({
+        'schemaVersion': 9,
+        'font': 'installed',
+        'systemFontFamily': 123,
+        'danmakuFont': 'installed',
+        'danmakuSystemFontFamily': 'bad\u0000name',
+        'theme': 'dark',
+      }),
+    );
+    final loaded = await repository.load();
+    expect(loaded.fontFamily, isNull);
+    expect(loaded.danmakuFontFamily, isNull);
+    expect(loaded.theme, AppThemePreference.dark);
+  });
   test('all configurable fields survive a repository reload', () async {
     final settings = AppSettings(
       shortcuts: const ShortcutSettings.defaults()

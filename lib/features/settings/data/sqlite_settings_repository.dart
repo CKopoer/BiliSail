@@ -31,6 +31,12 @@ class SqliteSettingsRepository implements SettingsRepository {
     return AppSettings(
       shortcuts: ShortcutSettings.fromJson(decoded['shortcuts']),
       cacheImages: boolean('cacheImages', true),
+      systemFontFamily: decoded['systemFontFamily'] is String
+          ? decoded['systemFontFamily'] as String
+          : '',
+      danmakuSystemFontFamily: decoded['danmakuSystemFontFamily'] is String
+          ? decoded['danmakuSystemFontFamily'] as String
+          : '',
       font:
           AppFontPreference.values
               .where((item) => item.name == decoded['font'])
@@ -117,11 +123,13 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 9,
+        'schemaVersion': 10,
         'cacheImages': value.cacheImages,
         'shortcuts': value.shortcuts.toJson(),
         'theme': value.theme.name,
         'font': value.font.name,
+        'systemFontFamily': value.systemFontFamily,
+        'danmakuSystemFontFamily': value.danmakuSystemFontFamily,
         'danmakuEnabled': value.danmakuEnabled,
         'danmakuOpacity': value.danmakuOpacity,
         'danmakuFontScale': value.danmakuFontScale,

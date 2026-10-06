@@ -253,8 +253,14 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         locale: const Locale('zh', 'CN'),
         supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        theme: BiliTheme.light(font: settings.font),
-        darkTheme: BiliTheme.dark(font: settings.font),
+        theme: BiliTheme.light(
+          font: settings.font,
+          systemFontFamily: settings.systemFontFamily,
+        ),
+        darkTheme: BiliTheme.dark(
+          font: settings.font,
+          systemFontFamily: settings.systemFontFamily,
+        ),
         themeMode: switch (settings.theme) {
           AppThemePreference.system => ThemeMode.system,
           AppThemePreference.light => ThemeMode.light,

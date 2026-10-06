@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/ui/state_view.dart';
+import '../../../shared/ui/system_font_picker.dart';
 import '../../../shared/ui/danmaku_settings_controls.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../domain/playback_rates.dart';
@@ -9,6 +10,14 @@ import '../application/settings_controller.dart';
 import '../domain/app_settings.dart';
 import '../domain/settings_category.dart';
 import 'shortcut_settings_section.dart';
+
+const _usageNotice = <Widget>[
+  Text('本应用是哔哩哔哩第三方客户端，视频、影视、直播及相关内容均来自哔哩哔哩，与官方无隶属关系。'),
+  SizedBox(height: 8),
+  Text('本程序仅供学习交流与编程技术研究使用。'),
+  SizedBox(height: 8),
+  Text('如果侵犯了您的合法权益，请及时联系开发者，我们会第一时间处理并删除相关内容。'),
+];
 
 final class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({
@@ -143,9 +152,20 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           }, controller.setTheme),
                           _choices('界面字体', s.font, const {
                             AppFontPreference.harmonyOsSans: 'HarmonyOS Sans',
+                            AppFontPreference.alibabaPuHuiTi: '阿里巴巴普惠体 3.0',
                             AppFontPreference.system: '系统默认',
                           }, controller.setFont),
-                          const Text('字体预览：哔哩哔哩 BiliSail（哔帆） · Aa 0123456789'),
+                          SystemFontPicker(
+                            family: s.font == AppFontPreference.installed
+                                ? s.systemFontFamily
+                                : null,
+                            onSelected: (family) =>
+                                _save(() => controller.setSystemFont(family)),
+                          ),
+                          Text(
+                            '字体预览：哔哩哔哩 BiliSail（哔帆） · Aa 0123456789',
+                            style: TextStyle(fontFamily: s.fontFamily),
+                          ),
                         ]),
                       if (widget.category == SettingsCategory.shortcuts)
                         _section('快捷键', [
@@ -323,9 +343,6 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       if (widget.category == SettingsCategory.about)
                         _section('关于', [
                           const Text('一个专注观看体验的跨平台 Bilibili 第三方客户端'),
-                          const Text(
-                            '本应用使用 HarmonyOS Sans 字体，Copyright 2021 Huawei Device Co., Ltd.',
-                          ),
                           ListTile(
                             contentPadding: EdgeInsets.zero,
                             title: const Text('BiliSail（哔帆）'),
@@ -336,9 +353,13 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               applicationVersion: '0.1.0',
                               children: const [
                                 Text('一个专注观看体验的跨平台 Bilibili 第三方客户端'),
+                                SizedBox(height: 12),
+                                ..._usageNotice,
                               ],
                             ),
                           ),
+                          const SizedBox(height: 12),
+                          ..._usageNotice,
                         ]),
                     ],
                   ),

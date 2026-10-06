@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../core/network/api_requests.dart';
 import '../core/logging/playback_diagnostic_log.dart';
 import '../core/platform/window_service.dart';
+import '../core/platform/system_font_catalog.dart';
 import '../core/storage/app_database.dart';
 import '../core/storage/credential_store.dart';
 import '../core/storage/image_byte_cache.dart';
@@ -58,6 +59,7 @@ import '../features/live/application/live_controller.dart';
 import '../features/live/data/api_live_repository.dart';
 import '../features/playback/data/local_progress_store.dart';
 import '../features/settings/application/settings_controller.dart';
+import '../features/settings/application/system_fonts_controller.dart';
 import '../features/settings/data/sqlite_settings_repository.dart';
 
 class AppDependencies {
@@ -272,6 +274,9 @@ class AppDependencies {
         libraryRepositoryProvider.overrideWithValue(library),
         settingsRepositoryProvider.overrideWithValue(
           SqliteSettingsRepository(database),
+        ),
+        systemFontCatalogProvider.overrideWithValue(
+          const NativeSystemFontCatalog(),
         ),
         authRepositoryProvider.overrideWithValue(session),
         originalImageRepositoryProvider.overrideWithValue(

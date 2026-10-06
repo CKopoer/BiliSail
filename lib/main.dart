@@ -8,6 +8,9 @@ import 'app/dependencies.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'Alibaba PuHuiTi 3.0',
+    ], await rootBundle.loadString('assets/fonts/alibaba_puhuiti/LICENSE.txt'));
     final license = await rootBundle.loadString(
       'assets/fonts/harmonyos_sans/LICENSE.txt',
     );

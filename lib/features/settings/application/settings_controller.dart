@@ -41,6 +41,12 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(theme: value));
   Future<void> setFont(AppFontPreference value) =>
       update((current) => current.copyWith(font: value));
+  Future<void> setSystemFont(String family) => update(
+    (current) => current.copyWith(
+      font: AppFontPreference.installed,
+      systemFontFamily: family,
+    ),
+  );
   Future<void> setCacheImages(bool value) =>
       update((current) => current.copyWith(cacheImages: value));
   Future<void> setDanmakuEnabled(bool value) =>

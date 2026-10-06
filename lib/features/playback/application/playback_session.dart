@@ -595,9 +595,7 @@ class PlaybackSession extends ChangeNotifier {
       mergeDuplicates: _settings.danmakuMergeDuplicates,
       maxOnScreen: _settings.danmakuMaxOnScreen,
       textStyle: DanmakuTextStyle(
-        fontFamily: _settings.danmakuFont == DanmakuFontPreference.harmonyOsSans
-            ? 'HarmonyOS Sans'
-            : null,
+        fontFamily: _settings.danmakuFontFamily,
         bold: _settings.danmakuBold,
         effect: switch (_settings.danmakuStyle) {
           DanmakuStylePreference.shadow => DanmakuTextEffect.shadow,

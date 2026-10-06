@@ -65,10 +65,7 @@ final class _LivePlayerDanmakuState extends ConsumerState<LivePlayerDanmaku>
     mergeDuplicates: widget.settings.danmakuMergeDuplicates,
     maxOnScreen: widget.settings.danmakuMaxOnScreen,
     textStyle: DanmakuTextStyle(
-      fontFamily:
-          widget.settings.danmakuFont == DanmakuFontPreference.harmonyOsSans
-          ? 'HarmonyOS Sans'
-          : null,
+      fontFamily: widget.settings.danmakuFontFamily,
       bold: widget.settings.danmakuBold,
       effect: switch (widget.settings.danmakuStyle) {
         DanmakuStylePreference.shadow => DanmakuTextEffect.shadow,

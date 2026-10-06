@@ -72,6 +72,7 @@ final class DanmakuController extends ChangeNotifier {
   Duration get _displayPosition => position - _offset;
   double get _top => _topInset.clamp(0, _height - _bottomInset);
   double get _availableHeight => (_height - _bottomInset - _top) * _area;
+  int get _laneCount => (_availableHeight / _laneHeight).floor().clamp(0, 24);
   Duration get _scrollLifetime =>
       Duration(microseconds: (scrollDuration.inMicroseconds / _speed).round());
 
@@ -155,15 +156,29 @@ final class DanmakuController extends ChangeNotifier {
     required double height,
     double bottomInset = 0,
   }) {
-    if (width == _width && height == _height && bottomInset == _bottomInset) {
+    final double nextWidth = width.clamp(0, double.infinity);
+    final double nextHeight = height.clamp(0, double.infinity);
+    final double nextBottomInset = bottomInset.clamp(0, nextHeight);
+    if (nextWidth == _width &&
+        nextHeight == _height &&
+        nextBottomInset == _bottomInset) {
       return;
     }
-    _width = width.clamp(0, double.infinity);
-    _height = height.clamp(0, double.infinity);
-    _bottomInset = bottomInset.clamp(0, _height);
-    _active.clear();
-    _clearLayouts();
-    _rewindTo(_displayPosition);
+    final resized = nextWidth != _width || nextHeight != _height;
+    _width = nextWidth;
+    _height = nextHeight;
+    _bottomInset = nextBottomInset;
+    if (resized) {
+      _active.clear();
+      _clearLayouts();
+      _rewindTo(_displayPosition);
+    } else {
+      // Control visibility only changes the reserved area. Replaying past
+      // arrivals can admit previously dropped comments and displace active
+      // scrolling comments, so retain their lanes and the scheduling cursor.
+      final laneCount = _laneCount;
+      _active.removeWhere((item) => item.lane >= laneCount);
+    }
     notifyListeners();
   }
 
@@ -346,8 +361,7 @@ final class DanmakuController extends ChangeNotifier {
   }
 
   int _findLane(DanmakuEvent event, double textWidth, Duration at) {
-    final available = _availableHeight;
-    final laneCount = (available / _laneHeight).floor().clamp(0, 24);
+    final laneCount = _laneCount;
     for (var lane = 0; lane < laneCount; lane++) {
       var free = true;
       for (final prior in _active) {

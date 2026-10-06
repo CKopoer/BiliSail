@@ -6,9 +6,29 @@ export '../../../domain/video_codec.dart';
 
 enum AppThemePreference { system, light, dark }
 
-enum AppFontPreference { harmonyOsSans, system }
+enum AppFontPreference { harmonyOsSans, system, alibabaPuHuiTi, installed }
 
-enum DanmakuFontPreference { system, harmonyOsSans }
+enum DanmakuFontPreference { system, harmonyOsSans, alibabaPuHuiTi, installed }
+
+extension AppFontFamily on AppFontPreference {
+  String? resolveFamily(String installedFamily) => switch (this) {
+    AppFontPreference.harmonyOsSans => 'HarmonyOS Sans',
+    AppFontPreference.alibabaPuHuiTi => 'Alibaba PuHuiTi 3.0',
+    AppFontPreference.system => null,
+    AppFontPreference.installed =>
+      installedFamily.isEmpty ? null : installedFamily,
+  };
+}
+
+extension DanmakuFontFamily on DanmakuFontPreference {
+  String? resolveFamily(String installedFamily) => switch (this) {
+    DanmakuFontPreference.harmonyOsSans => 'HarmonyOS Sans',
+    DanmakuFontPreference.alibabaPuHuiTi => 'Alibaba PuHuiTi 3.0',
+    DanmakuFontPreference.system => null,
+    DanmakuFontPreference.installed =>
+      installedFamily.isEmpty ? null : installedFamily,
+  };
+}
 
 enum DanmakuStylePreference { shadow, stroke, plain }
 
@@ -19,6 +39,7 @@ final class AppSettings {
     this.shortcuts = const ShortcutSettings.defaults(),
     this.theme = AppThemePreference.system,
     this.font = AppFontPreference.harmonyOsSans,
+    this.systemFontFamily = '',
     this.cacheImages = true,
     this.danmakuEnabled = true,
     this.danmakuOpacity = 0.8,
@@ -40,6 +61,7 @@ final class AppSettings {
     this.danmakuTopEnabled = true,
     this.danmakuBottomEnabled = true,
     this.danmakuFont = DanmakuFontPreference.system,
+    this.danmakuSystemFontFamily = '',
     this.danmakuBold = false,
     this.danmakuStyle = DanmakuStylePreference.shadow,
     this.danmakuMergeDuplicates = false,
@@ -61,6 +83,7 @@ final class AppSettings {
     : shortcuts = const ShortcutSettings.defaults(),
       theme = AppThemePreference.system,
       font = AppFontPreference.harmonyOsSans,
+      systemFontFamily = '',
       cacheImages = true,
       danmakuEnabled = true,
       danmakuOpacity = 0.8,
@@ -82,6 +105,7 @@ final class AppSettings {
       danmakuTopEnabled = true,
       danmakuBottomEnabled = true,
       danmakuFont = DanmakuFontPreference.system,
+      danmakuSystemFontFamily = '',
       danmakuBold = false,
       danmakuStyle = DanmakuStylePreference.shadow,
       danmakuMergeDuplicates = false,
@@ -99,6 +123,8 @@ final class AppSettings {
   final ShortcutSettings shortcuts;
   final AppThemePreference theme;
   final AppFontPreference font;
+  final String systemFontFamily;
+  String? get fontFamily => font.resolveFamily(systemFontFamily);
   final bool cacheImages;
   final bool danmakuEnabled;
   final double danmakuOpacity;
@@ -124,6 +150,9 @@ final class AppSettings {
   final bool danmakuTopEnabled;
   final bool danmakuBottomEnabled;
   final DanmakuFontPreference danmakuFont;
+  final String danmakuSystemFontFamily;
+  String? get danmakuFontFamily =>
+      danmakuFont.resolveFamily(danmakuSystemFontFamily);
   final bool danmakuBold;
   final DanmakuStylePreference danmakuStyle;
   final bool danmakuMergeDuplicates;
@@ -148,6 +177,7 @@ final class AppSettings {
     ShortcutSettings? shortcuts,
     AppThemePreference? theme,
     AppFontPreference? font,
+    String? systemFontFamily,
     bool? cacheImages,
     bool? danmakuEnabled,
     double? danmakuOpacity,
@@ -169,6 +199,7 @@ final class AppSettings {
     bool? danmakuTopEnabled,
     bool? danmakuBottomEnabled,
     DanmakuFontPreference? danmakuFont,
+    String? danmakuSystemFontFamily,
     bool? danmakuBold,
     DanmakuStylePreference? danmakuStyle,
     bool? danmakuMergeDuplicates,
@@ -186,6 +217,7 @@ final class AppSettings {
     shortcuts: shortcuts ?? this.shortcuts,
     theme: theme ?? this.theme,
     font: font ?? this.font,
+    systemFontFamily: systemFontFamily ?? this.systemFontFamily,
     cacheImages: cacheImages ?? this.cacheImages,
     danmakuEnabled: danmakuEnabled ?? this.danmakuEnabled,
     danmakuOpacity: danmakuOpacity ?? this.danmakuOpacity,
@@ -207,6 +239,8 @@ final class AppSettings {
     danmakuTopEnabled: danmakuTopEnabled ?? this.danmakuTopEnabled,
     danmakuBottomEnabled: danmakuBottomEnabled ?? this.danmakuBottomEnabled,
     danmakuFont: danmakuFont ?? this.danmakuFont,
+    danmakuSystemFontFamily:
+        danmakuSystemFontFamily ?? this.danmakuSystemFontFamily,
     danmakuBold: danmakuBold ?? this.danmakuBold,
     danmakuStyle: danmakuStyle ?? this.danmakuStyle,
     danmakuMergeDuplicates:
@@ -249,9 +283,19 @@ final class AppSettings {
     'preview',
   ];
   AppSettings normalized() {
+    String family(String value) {
+      final trimmed = value.trim();
+      return trimmed.length <= 200 &&
+              !RegExp(r'[\x00-\x1f\x7f]').hasMatch(trimmed)
+          ? trimmed
+          : '';
+    }
+
     double bounded(double value, double min, double max, double fallback) =>
         value.isFinite ? value.clamp(min, max) : fallback;
     return copyWith(
+      systemFontFamily: family(systemFontFamily),
+      danmakuSystemFontFamily: family(danmakuSystemFontFamily),
       preferredQuality: supportedQualities.contains(preferredQuality)
           ? preferredQuality
           : 80,

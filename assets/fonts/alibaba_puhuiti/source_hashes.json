@@ -1,0 +1,22 @@
+[
+  {
+    "sha256": "be33bc8d45ced30fa5c542f6f056565baf85003d4e079522110d76016f8a04e2",
+    "file": "AlibabaPuHuiTi-3-55-Regular.ttf"
+  },
+  {
+    "sha256": "d92b378a2d08ac1e5c2b87d03b9939fdfae93d3c336b6a13ac4e00ce44f6db9e",
+    "file": "AlibabaPuHuiTi-3-65-Medium.ttf"
+  },
+  {
+    "sha256": "463818f16d73e8bca7c4a1478db0304bd0aaaaeb6c689476744d4713aa0bd7dc",
+    "file": "AlibabaPuHuiTi-3-75-SemiBold.ttf"
+  },
+  {
+    "sha256": "d50f483fd8d9f95f9edbecdc199aee5fa9ddc5db8027f0d80334c3f502af61c8",
+    "file": "AlibabaPuHuiTi-3-85-Bold.ttf"
+  },
+  {
+    "sha256": "b9dcc667a42ff440e28687e9a9099209fcb0b933b01c0faccfa4fc5e23419d5b",
+    "file": "LICENSE.txt"
+  }
+]
