@@ -53,4 +53,4 @@ shell 通过 `WorkspacePageHeader` 提供顶部布局，router 在搜索标签�
 - 布局回归覆盖 1440×900、1000×800、360×640、320×568／2 倍字体；验证宽屏同排、窄屏分行，以及 Windows 模拟鼠标滚轮访问末尾用户分类。预览位于 `build/search-preview/workspace-1440-1.png`、`workspace-1000-1.png`、`workspace-360-1.png`、`workspace-320-2.png`，均为脱敏 fixture，包含真实 shell 和 router。
 - `flutter analyze lib/app/shell.dart lib/app/router.dart lib/features/search test/features/search test/app/workspace_shell_test.dart test/app/workspace_router_test.dart`：无问题；修改文件格式检查通过。
 
-本项未修改搜索协议或原生播放，没有执行在线搜索、新的原生构建或 Windows 物理滚轮及 Android/macOS 实机验收。完整工程检查由集成阶段执行；上述结果只覆盖本项定向检查。
+本项未修改搜索协议或原生播放；定向阶段没有执行在线搜索、新的原生构建或 Windows 物理滚轮及 Android/macOS 实机验收。后续当前共享工作区完整工程检查共 1157 项通过，Windows Release 构建成功，打包及验证边界见 [视频卡菜单最终集成检查](video-card-menus.md#最终集成检查2026-10-06)。上述 72 项仅为搜索专项定向检查。

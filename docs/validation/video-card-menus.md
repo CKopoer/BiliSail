@@ -31,3 +31,10 @@ Windows/macOS 任意窗口宽度均在整卡悬停、键盘聚焦或菜单打开
 新增 API fake transport 测试覆盖长 ID、原样 track、空默认、Cookie/CSRF 作用域、单次写、取消/deadline/会话 epoch 和推荐元数据解析。仓储测试覆盖 aid 删除、不明结果及账号取消；应用测试覆盖单飞、成功移除、失败保留、旧分页/刷新、两个稍后再看子标签、确认重新添加、账号变化、隐藏推荐缓存失败恢复；卡片测试覆盖标题位置、窄桌面隐藏、悬停后菜单存活、键盘、触摸、卡/作者点击隔离、共享添加及菜单页面范围。
 
 定向验证均使用手写无隐私 fixture，不使用真实账号执行任何添加、删除或反馈。官网脚本和游客公开读取只确认接口结构，不能代替登录后真实写入验收。菜单截图由主代理离线渲染检查，Windows 构建/全量检查结果由主代理统一记录；Android/macOS 实机与真实账号写行为仍未验证。
+
+### 最终集成检查（2026-10-06）
+
+- 当前共享工作区 `tool/check.ps1 -SkipPub` 通过：根应用 843、API 包 266、播放器包 16、弹幕包 32，共 1157 项；根应用与三个包格式检查、静态分析均通过。日志为 `build/search-card-menus-check.log`。
+- `flutter build windows --release --no-pub` 成功，产物为 `build/windows/x64/runner/Release/bilisail.exe`；既有 WebView 插件 CMake 开发警告不阻断构建。日志为 `build/search-card-menus-windows-build.log`。
+- 完整运行目录打包为 `artifacts/bilisail-search-card-menus-windows-x64.zip`，已核对应用、Flutter DLL 和 assets 都在包内；SHA-256 为 `bc97e3ba2b58ab35aef51338c9636676c0dbb311ecb6755acaf35d90bacca447`。
+- 已检查真实 shell/router 的 1440、1000、360 宽度和 320 宽度／两倍字体的搜索布局，以及两种菜单的离线渲染预览。预览在 `build/search-preview/` 与 `build/video-card-menus-preview/`；它们不是安装后实机或账号写入证据。本轮没有启动新构建、没有关闭用户运行中的旧程序，真实账号写操作和 Android/macOS 实机仍待验收。
