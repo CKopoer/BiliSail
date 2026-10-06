@@ -5,6 +5,7 @@ import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/playback/domain/video_preview_repository.dart';
 import 'package:bilisail/features/video/application/video_actions_controller.dart';
 import 'package:bilisail/features/video/application/video_card_controller.dart';
 import 'package:bilisail/features/video/application/video_card_preview_playback.dart';
@@ -56,7 +57,6 @@ void main() {
       final first = await controller.preview(id, RequestCancellation());
       expect(first?.engine, engines.single);
       expect(playback.lastCid, '42');
-      expect(playback.lastQuality, 32);
       final next = await controller.preview(id, RequestCancellation());
       expect(next, isNot(same(first)));
       expect(first?.closed, true);
@@ -89,6 +89,18 @@ void main() {
     expect(await first, isNull);
     expect(playback.calls, 1);
   });
+
+  test(
+    'list cid skips detail and invalid cid uses the first page fallback',
+    () async {
+      await controller.preview(id, RequestCancellation(), cid: '123');
+      expect(videos.calls, 0);
+      expect(playback.lastCid, '123');
+      await controller.preview(id, RequestCancellation(), cid: '0');
+      expect(videos.calls, 1);
+      expect(playback.lastCid, '42');
+    },
+  );
 
   test('cancelled late stream never opens a native player', () async {
     playback.pending = Completer<PlaybackMedia>();
@@ -253,22 +265,18 @@ class _Videos extends Fake implements VideoRepository {
   }
 }
 
-class _Playback extends Fake implements PlaybackRepository {
+class _Playback extends Fake implements VideoPreviewRepository {
   int calls = 0;
   String? lastCid;
-  int? lastQuality;
   Completer<PlaybackMedia>? pending;
   @override
   Future<PlaybackMedia> resolve(
     VideoId video,
     String cid, {
-    required int quality,
-    VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
     required RequestCancellation cancellation,
   }) async {
     calls++;
     lastCid = cid;
-    lastQuality = quality;
     return pending?.future ?? cardPreviewMedia();
   }
 }

@@ -2476,6 +2476,7 @@ final class _FakeEngine implements PlayerEngine {
     sources.add(source);
     openedUris.add(switch (source) {
       DashPairSource(:final video) => video.uri,
+      DashVideoSource(:final video) => video.uri,
       ManifestSource(:final media) => media.uri,
       ProgressiveSource(:final media) => media.uri,
     });

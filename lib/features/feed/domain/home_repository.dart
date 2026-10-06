@@ -15,6 +15,7 @@ final class HomeEntry {
     this.description = '',
     this.bvid,
     this.aid,
+    this.previewCid,
     this.url,
     this.authorName = '',
     this.authorAvatarUrl,
@@ -41,6 +42,7 @@ final class HomeEntry {
   final String description;
   final String? bvid;
   final String? aid;
+  final String? previewCid;
   final Uri? url;
   final String authorName;
   final Uri? authorAvatarUrl;

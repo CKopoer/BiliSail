@@ -54,6 +54,7 @@ class ApiVideoRepository implements VideoRepository {
       favoriteCount: detail.favoriteCount,
       summary: VideoSummary(
         id: VideoId(detail.bvid),
+        previewCid: detail.pages.firstOrNull?.cid,
         title: detail.title,
         coverUrl: detail.coverUrl?.toString() ?? '',
         author: detail.ownerName,

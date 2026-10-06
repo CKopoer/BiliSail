@@ -128,6 +128,7 @@ final class ApiHomeRepository
     description: item.description,
     bvid: item.bvid,
     aid: item.aid,
+    previewCid: item.previewCid,
     url: item.url,
     authorName: item.authorName,
     authorAvatarUrl: item.authorAvatarUrl,

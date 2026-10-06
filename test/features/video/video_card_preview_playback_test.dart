@@ -23,33 +23,26 @@ void main() {
   });
   tearDown(() => previews.close());
 
-  test(
-    'plays both DASH tracks muted from zero and cancellation disposes it',
-    () async {
-      final token = RequestCancellation();
-      final session = await previews.start(cardPreviewMedia(), token);
-      final engine = engines.single;
-      final source = engine.source as DashPairSource;
-      expect(source.audio, isNotNull);
-      expect(
-        source.video.requestPolicy.headers['Referer'],
-        'https://www.bilibili.com/',
-      );
-      expect(
-        source.audio?.requestPolicy.headers,
-        source.video.requestPolicy.headers,
-      );
-      expect(engine.options?.play, true);
-      expect(engine.options?.volume, 0);
-      expect(engine.options?.startPosition, Duration.zero);
-      token.cancel();
-      expect(engine.currentSnapshot.phase, PlaybackPhase.idle);
-      await previews.stop();
-      expect(session?.closed, true);
-      expect(engine.stops, 1);
-      expect(engine.disposals, 1);
-    },
-  );
+  test('plays video DASH without fetching audio, muted from zero and releases on cancel', () async {
+    final token = RequestCancellation();
+    final session = await previews.start(cardPreviewMedia(), token);
+    final engine = engines.single;
+    final source = engine.source as DashVideoSource;
+    expect(
+      source.video.requestPolicy.headers['Referer'],
+      'https://www.bilibili.com/',
+    );
+    expect(engine.options?.play, true);
+    expect(engine.options?.volume, 0);
+    expect(engine.options?.startPosition, Duration.zero);
+    expect(engine.options?.openTimeout, const Duration(seconds: 3));
+    token.cancel();
+    expect(engine.currentSnapshot.phase, PlaybackPhase.idle);
+    await previews.stop();
+    expect(session?.closed, true);
+    expect(engine.stops, 1);
+    expect(engine.disposals, 1);
+  });
 
   test('leaving during open invalidates late native completion', () async {
     final engine = CardFakeEngine()..opening = Completer<void>();
@@ -106,7 +99,7 @@ void main() {
     },
   );
 
-  test('incomplete DASH does not create a video-only preview', () async {
+  test('explicit video preview does not depend on companion audio', () async {
     final media = cardPreviewMedia();
     final missingAudio = PlaybackMedia(
       video: media.video,
@@ -116,8 +109,11 @@ void main() {
       duration: media.duration,
       headers: media.headers,
     );
-    expect(await previews.start(missingAudio, RequestCancellation()), isNull);
-    expect(engines, isEmpty);
+    expect(
+      await previews.start(missingAudio, RequestCancellation()),
+      isNotNull,
+    );
+    expect(engines.single.source, isA<DashVideoSource>());
   });
 
   test(
@@ -140,7 +136,7 @@ void main() {
   );
 
   test(
-    'open failure event retains hover and tries both DASH backup tracks',
+    'open failure event retains hover and tries the backup video without audio',
     () async {
       // The first open emits the same failure event/future pair as native open.
       final first = CardFakeEngine()..opening = Completer<void>();
@@ -167,9 +163,8 @@ void main() {
       expect(session, isNotNull);
       expect(engines, hasLength(2));
       expect(first.disposals, 1);
-      final source = engines.last.source as DashPairSource;
+      final source = engines.last.source as DashVideoSource;
       expect(source.video.uri.host, 'backup.example.com');
-      expect(source.audio?.uri.host, 'backup.example.com');
       expect(engines.last.options?.volume, 0);
       expect(hover.isCancelled, false);
     },
@@ -248,6 +243,53 @@ void main() {
     );
     expect(engines, hasLength(2));
   });
+
+  test(
+    'uses the third distinct video URL and never exceeds three attempts',
+    () async {
+      final base = cardPreviewMedia();
+      final media = PlaybackMedia(
+        video: PlaybackTrack(
+          urls: [
+            for (var i = 0; i < 4; i++)
+              Uri.parse('https://cdn$i.example/video'),
+          ],
+          codec: base.video.codec,
+          bandwidth: base.video.bandwidth,
+        ),
+        audio: null,
+        quality: base.quality,
+        qualities: base.qualities,
+        duration: base.duration,
+        headers: base.headers,
+      );
+      final created = <CardFakeEngine>[];
+      final manager = VideoCardPreviewPlayback(
+        createEngine: () {
+          final engine = CardFakeEngine()..opening = Completer<void>();
+          created.add(engine);
+          scheduleMicrotask(
+            () => engine.opening!.completeError(
+              const PlayerFailure(
+                PlayerFailureKind.nativePlayback,
+                'failed',
+                1,
+              ),
+            ),
+          );
+          return engine;
+        },
+      );
+      addTearDown(manager.close);
+      expect(await manager.start(media, RequestCancellation()), isNull);
+      expect(created, hasLength(3));
+      expect(
+        (created.last.source as DashVideoSource).video.uri.host,
+        'cdn2.example',
+      );
+      expect(created.every((engine) => engine.disposals == 1), true);
+    },
+  );
 
   test('uncertain dispose still blocks overlapping native engines', () async {
     await previews.start(cardPreviewMedia(), RequestCancellation());

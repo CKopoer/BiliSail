@@ -289,6 +289,7 @@ void main() {
       const entry = {
         'bvid': 'BV1234567890',
         'title': 'Home video',
+        'cid': 12345,
         'duration': 60,
         'owner': {'name': 'Creator'},
         'stat': {'view': 42, 'danmaku': 2},
@@ -335,6 +336,7 @@ void main() {
       final recommended = await client.getRecommended(page: 2);
       expect(recommended.items.single.title, 'Home video');
       expect(recommended.items.single.recommendationReason, '已关注');
+      expect(recommended.items.single.previewCid, '12345');
       expect(recommended.hasMore, isTrue);
       expect(recommended.nextCursor, '3');
       expect(requests.last.queryParameters['fresh_idx'], '2');

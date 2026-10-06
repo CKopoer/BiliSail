@@ -12,6 +12,8 @@
 
 2026-10-06 增加视频 CDN 偏好：默认保留接口调度，其他选项只排序服务端提供的 URL，不重写签名地址或 IP；普通视频、影视与临时悬停播放器共用轨道排序，直播线路独立。悬停打开采用 8 秒预算和一次备用尝试，恢复前台／工作区时重新检查悬停；边界与实测见 [CDN 与悬停恢复](validation/video-cdn.md)。
 
+同日官网加载对照后，悬停改为独立 `DashVideoSource` 无音轨预览，自动模式优先服务端常规 CDN，每地址外层/原生统一 3 秒、最多三个地址；有效 cid 直传。普通点播/影视继续验证音视频分轨，预览不作为完整点播验收；现行预览策略与原因见 [悬停加载验证](validation/video-preview-loading.md)，覆盖上段早期策略。
+
 | 组件 | 所属位置 | 职责 |
 | --- | --- | --- |
 | PlaybackResolver | 主应用 playback/application，依赖内容 Repository | bvid/cid/episode/roomId → 权限、可选轨道、URL 与请求上下文 |

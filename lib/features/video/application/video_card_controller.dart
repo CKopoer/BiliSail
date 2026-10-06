@@ -4,7 +4,7 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../auth/application/auth_controller.dart';
-import '../../playback/domain/playback_repository.dart';
+import '../../playback/domain/video_preview_repository.dart';
 import '../domain/video_card_interactions.dart';
 import '../domain/video_repository.dart';
 import '../domain/video_actions_repository.dart';
@@ -12,7 +12,7 @@ import 'video_controller.dart';
 import 'video_actions_controller.dart';
 import 'video_card_preview_playback.dart';
 
-final videoCardPlaybackRepositoryProvider = Provider<PlaybackRepository>(
+final videoCardPlaybackRepositoryProvider = Provider<VideoPreviewRepository>(
   (ref) => throw UnimplementedError('Video card playback repository'),
 );
 final videoCardPreviewPlaybackProvider = Provider<VideoCardPreviewPlayback>(
@@ -51,7 +51,7 @@ final class VideoCardController
     this.onWatchLaterAdded,
   });
   final VideoRepository videos;
-  final PlaybackRepository playback;
+  final VideoPreviewRepository playback;
   final VideoCardPreviewPlayback previews;
   final VideoActionsRepository actions;
   final bool signedIn;
@@ -100,25 +100,32 @@ final class VideoCardController
   @override
   Future<VideoCardPreviewSession?> preview(
     VideoId id,
-    RequestCancellation cancellation,
-  ) async {
+    RequestCancellation cancellation, {
+    String? cid,
+  }) async {
     if (_disposed || cancellation.isCancelled || !id.isValid) return null;
     _hover?.cancel();
     _hover = cancellation;
     final scope = actions.accountScope;
     try {
       var part = _parts.remove(id);
-      if (part == null) {
+      final suppliedCid = cid != null && RegExp(r'^[1-9][0-9]*$').hasMatch(cid)
+          ? cid
+          : null;
+      if (part == null && suppliedCid == null) {
         final detail = await videos.loadDetail(id, cancellation: cancellation);
         if (!_current(scope, cancellation) || detail.parts.isEmpty) return null;
         part = detail.parts.first;
       }
-      _parts[id] = part;
-      if (_parts.length > 24) _parts.remove(_parts.keys.first);
+      if (part != null) {
+        _parts[id] = part;
+        if (_parts.length > 24) _parts.remove(_parts.keys.first);
+      }
+      final previewCid = suppliedCid ?? part?.cid;
+      if (previewCid == null) return null;
       final media = await playback.resolve(
         id,
-        part.cid,
-        quality: 32,
+        previewCid,
         cancellation: cancellation,
       );
       if (!_current(scope, cancellation)) return null;

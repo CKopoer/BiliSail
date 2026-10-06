@@ -47,6 +47,13 @@ final class DashPairSource extends ResolvedMediaSource {
   final bool isIntentionallySilent;
 }
 
+/// A video representation with audio deliberately omitted for a muted preview.
+/// This is distinct from a regular DASH pair with missing companion audio.
+final class DashVideoSource extends ResolvedMediaSource {
+  const DashVideoSource(this.video);
+  final MediaTrack video;
+}
+
 /// An HLS or similar media manifest supplied by a resolver.
 final class ManifestSource extends ResolvedMediaSource {
   const ManifestSource(this.media, {this.isLive = false});
@@ -64,12 +71,14 @@ final class OpenOptions {
     this.rate = 1,
     this.volume = 100,
     this.videoDecoding = VideoDecodingMode.automatic,
+    this.openTimeout = const Duration(seconds: 35),
   });
   final Duration startPosition;
   final bool play;
   final double rate;
   final double volume;
   final VideoDecodingMode videoDecoding;
+  final Duration openTimeout;
 }
 
 enum PlaybackPhase {

@@ -253,7 +253,7 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
       try {
         final (mediaTrack, audioTrack) = _validate(source, options, generation);
         final watch = Stopwatch()..start();
-        const openBudget = Duration(seconds: 35);
+        final openBudget = options.openTimeout;
         initializePlayerBackend();
         final player = mk.Player(
           configuration: const mk.PlayerConfiguration(
@@ -282,7 +282,7 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
             )
             .timeout(_remaining(watch, openBudget));
         if (generation != _generation || _disposed) return;
-        if (source is DashPairSource) {
+        if (source is DashPairSource || source is DashVideoSource) {
           // Player.open acknowledges loadlist before mpv has run the on_load
           // header hook and demuxed the video. The real track-list appears
           // only after that stage, and is the prerequisite for audio-add.
@@ -316,7 +316,7 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
             'External audio track did not become ready.',
           );
           _requiresDecodedAudio = true;
-        } else if (source is DashPairSource) {
+        } else if (source is DashPairSource || source is DashVideoSource) {
           await player
               .setAudioTrack(mk.AudioTrack.no())
               .timeout(_remaining(watch, openBudget));
@@ -347,6 +347,18 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
         _diagnose(PlayerDiagnosticKind.openReady);
         if (options.play) {
           await player.play().timeout(_remaining(watch, openBudget));
+          if (source is DashVideoSource) {
+            await _waitReady(
+              player,
+              generation,
+              () =>
+                  (player.state.videoParams.w ?? 0) > 0 &&
+                  (player.state.videoParams.h ?? 0) > 0,
+              [player.stream.videoParams],
+              _remaining(watch, openBudget),
+              'Preview video did not decode.',
+            );
+          }
           if (_requiresDecodedAudio) {
             await _waitForDecodedAudio(
               player,
@@ -408,7 +420,8 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
         options.rate <= 0 ||
         !options.volume.isFinite ||
         options.volume < 0 ||
-        options.volume > 100) {
+        options.volume > 100 ||
+        options.openTimeout <= Duration.zero) {
       throw PlayerFailure(
         PlayerFailureKind.invalidSource,
         'Invalid playback options.',
@@ -418,6 +431,15 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
     final MediaTrack media;
     MediaTrack? audio;
     switch (source) {
+      case DashVideoSource(:final video):
+        if (options.volume != 0) {
+          throw PlayerFailure(
+            PlayerFailureKind.invalidSource,
+            'Video-only DASH requires a muted preview.',
+            generation,
+          );
+        }
+        return (_validateTrack(video, generation), null);
       case ProgressiveSource(:final media):
         return (_validateTrack(media, generation), null);
       case ManifestSource(:final media):

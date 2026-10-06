@@ -10,8 +10,9 @@ import '../domain/video_card_interactions.dart';
 abstract interface class VideoCardOperations implements VideoCardInteractions {
   Future<VideoCardPreviewSession?> preview(
     VideoId id,
-    RequestCancellation cancellation,
-  );
+    RequestCancellation cancellation, {
+    String? cid,
+  });
 }
 
 /// A transient engine, with no progress store, history reporter or playback tab.
@@ -27,7 +28,7 @@ final class VideoCardPreviewSession {
 final class VideoCardPreviewPlayback {
   VideoCardPreviewPlayback({
     required this.createEngine,
-    this.openTimeout = const Duration(seconds: 8),
+    this.openTimeout = const Duration(seconds: 3),
   });
   final PlayerEngine Function() createEngine;
   final Duration openTimeout;
@@ -49,17 +50,12 @@ final class VideoCardPreviewPlayback {
         cancellation.isCancelled) {
       return null;
     }
-    final audio = media.audio;
-    if (media.kind != PlaybackMediaKind.dash ||
-        audio == null ||
-        media.video.urls.isEmpty ||
-        audio.urls.isEmpty) {
+    if (media.kind != PlaybackMediaKind.dash || media.video.urls.isEmpty) {
       return null;
     }
     final policy = MediaRequestPolicy(headers: media.headers);
     final videos = media.video.urls.toSet().toList();
-    final audios = audio.urls.toSet().toList();
-    final attempts = videos.length > 1 || audios.length > 1 ? 2 : 1;
+    final attempts = videos.length.clamp(1, 3);
     for (var attempt = 0; attempt < attempts; attempt++) {
       if (_closed ||
           generation != _generation ||
@@ -84,21 +80,15 @@ final class VideoCardPreviewPlayback {
       try {
         await session.engine
             .open(
-              DashPairSource(
-                video: MediaTrack(
+              DashVideoSource(
+                MediaTrack(
                   uri: videos[attempt.clamp(0, videos.length - 1)],
                   requestPolicy: policy,
                   codec: media.video.codec,
                   bandwidth: media.video.bandwidth,
                 ),
-                audio: MediaTrack(
-                  uri: audios[attempt.clamp(0, audios.length - 1)],
-                  requestPolicy: policy,
-                  codec: audio.codec,
-                  bandwidth: audio.bandwidth,
-                ),
               ),
-              const OpenOptions(play: true, volume: 0),
+              OpenOptions(play: true, volume: 0, openTimeout: openTimeout),
             )
             .timeout(openTimeout);
         opening = false;

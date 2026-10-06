@@ -11,6 +11,7 @@ PlaybackMedia selectDashMedia(
   required VideoCodecPreference preferredCodec,
   required Map<String, String> headers,
   MediaCdnPreference cdnPreference = MediaCdnPreference.automatic,
+  bool videoOnly = false,
 }) {
   final videos =
       info.dashVideo
@@ -24,10 +25,10 @@ PlaybackMedia selectDashMedia(
           .where((track) => track.codecs.toLowerCase().startsWith('mp4a'))
           .toList()
         ..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
-  if (videos.isEmpty || audios.isEmpty) {
-    throw const AppFailure(
+  if (videos.isEmpty || !videoOnly && audios.isEmpty) {
+    throw AppFailure(
       AppFailureKind.playback,
-      '未取得可用的 H.264、HEVC 或 AV1 视频和 AAC 音频轨道',
+      videoOnly ? '未取得可用的预览视频轨道' : '未取得可用的 H.264、HEVC 或 AV1 视频和 AAC 音频轨道',
     );
   }
   final selectedQuality =
@@ -56,7 +57,7 @@ PlaybackMedia selectDashMedia(
   );
   return PlaybackMedia(
     video: map(candidates.first),
-    audio: map(audios.first),
+    audio: videoOnly ? null : map(audios.first),
     quality: selectedQuality,
     qualities: videos.map((track) => track.id).toSet().toList()..sort(),
     duration: info.duration,

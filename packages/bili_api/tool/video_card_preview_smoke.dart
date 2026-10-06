@@ -7,6 +7,18 @@ Future<void> main(List<String> args) async {
     final bvid = args.firstOrNull ?? 'BV1HcHn6UEdF';
     final detail = await api.getVideoDetail(bvid);
     final part = detail.pages.first;
+    final previewWatch = Stopwatch()..start();
+    final preview = await api.getVideoPreviewInfo(bvid, part.cid);
+    print(
+      'PREVIEW elapsedMs=${previewWatch.elapsedMilliseconds} '
+      'video=${preview.dashVideo.length} audio=${preview.dashAudio.length}',
+    );
+    for (final track in preview.dashVideo.where((t) => t.id == 32)) {
+      print(
+        'PREVIEW track id=${track.id} codec=${track.codecs} '
+        'hosts=${[track.url, ...track.backupUrls].map((u) => u.host).join(",")}',
+      );
+    }
     for (final qn in [32, 80]) {
       final info = await api.getPlayInfo(bvid, part.cid, qn: qn);
       print(

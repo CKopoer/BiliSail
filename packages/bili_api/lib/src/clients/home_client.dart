@@ -504,6 +504,7 @@ final class HomeClient {
       publishedAt: _date(m['pubtime'] ?? m['pubdate']),
       bvid: bvid,
       aid: aid,
+      previewCid: _positiveId(m['cid']),
     );
   }
 

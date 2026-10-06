@@ -10,7 +10,7 @@ import 'package:bilisail/core/storage/image_byte_cache.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/domain/media_cdn.dart';
-import 'package:bilisail/features/playback/data/api_playback_repository.dart';
+import 'package:bilisail/features/playback/data/api_video_preview_repository.dart';
 import 'package:bilisail/features/video/application/video_card_controller.dart';
 import 'package:bilisail/features/video/data/api_video_actions_repository.dart';
 import 'package:bilisail/features/video/data/api_video_repository.dart';
@@ -27,7 +27,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
   testWidgets(
-    'Windows guest hover decodes muted DASH, advances without motion and releases on exit',
+    'Windows guest hover decodes video without audio, advances and releases on exit',
     (tester) async {
       initializePlayerBackend();
       final deniedPrimary = const bool.fromEnvironment(
@@ -82,7 +82,7 @@ void main() {
       final videos = ApiVideoRepository(api, requests);
       final controller = VideoCardController(
         videos: videos,
-        playback: ApiPlaybackRepository(
+        playback: ApiVideoPreviewRepository(
           api,
           requests,
           cdnPreference: () async => preference,
@@ -169,6 +169,7 @@ void main() {
         final cover = tester.getRect(
           find.byKey(const ValueKey('video-card-cover-scale')),
         );
+        final firstHoverWatch = Stopwatch()..start();
         await mouse.moveTo(
           Offset(cover.left + cover.width * .2, cover.center.dy),
         );
@@ -177,9 +178,13 @@ void main() {
           () =>
               engines.isNotEmpty &&
               engines.last.native.inspectDiagnostics().hasDecodedVideo &&
-              engines.last.native.inspectDiagnostics().hasDecodedAudio &&
-              engines.last.currentSnapshot.position.inMilliseconds >= 1000,
+              engines.last.currentSnapshot.position > Duration.zero &&
+              find
+                  .byKey(const ValueKey('video-card-preview'))
+                  .evaluate()
+                  .isNotEmpty,
         );
+        final firstHoverMs = firstHoverWatch.elapsedMilliseconds;
         final initialEngines = engines.length;
         expect(initialEngines, lessThanOrEqualTo(2));
         if (deniedPrimary) {
@@ -198,6 +203,7 @@ void main() {
         expect(first.currentSnapshot.volume, 0);
         expect(first.currentSnapshot.desiredPlaying, true);
         final diagnostics = first.native.inspectDiagnostics();
+        expect(diagnostics.hasDecodedAudio, false);
         expect(
           find.byKey(const ValueKey('video-card-preview')),
           findsOneWidget,
@@ -226,6 +232,7 @@ void main() {
         final stopped = first.currentSnapshot.position;
         await tester.pump(const Duration(milliseconds: 500));
         expect(first.currentSnapshot.position, stopped);
+        final secondHoverWatch = Stopwatch()..start();
         // Title is part of the hover target; reopening uses a fresh native engine.
         await mouse.moveTo(tester.getCenter(find.text(detail.summary.title)));
         await tester.pump(const Duration(milliseconds: 500));
@@ -234,8 +241,13 @@ void main() {
           () =>
               engines.length > initialEngines &&
               engines.last.native.inspectDiagnostics().hasDecodedVideo &&
-              engines.last.currentSnapshot.position.inMilliseconds >= 500,
+              engines.last.currentSnapshot.position > Duration.zero &&
+              find
+                  .byKey(const ValueKey('video-card-preview'))
+                  .evaluate()
+                  .isNotEmpty,
         );
+        final secondHoverMs = secondHoverWatch.elapsedMilliseconds;
         expect(maxActive, 1);
         expect(engines.length - initialEngines, lessThanOrEqualTo(2));
         await mouse.moveTo(Offset.zero);
@@ -248,6 +260,9 @@ void main() {
           'engines=${engines.length} maxActive=$maxActive cdn=${preference.name} '
           'deniedPrimary=$deniedPrimary deniedRequests=$deniedRequests '
           'imageLoads=$loads disposed=${engines.every((e) => e.disposed)}',
+        );
+        debugPrint(
+          'VIDEO_CARD_LATENCY firstHoverMs=$firstHoverMs secondHoverMs=$secondHoverMs',
         );
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
@@ -293,17 +308,13 @@ class _TrackedEngine implements PlayerEngine, VideoSurfaceSource {
   PlayerCapabilities get capabilities => native.capabilities;
   @override
   Future<void> open(ResolvedMediaSource source, OpenOptions options) {
-    if (source is DashPairSource) {
+    if (source is DashVideoSource) {
       debugPrint(
-        'VIDEO_CARD_CDN videoHost=${source.video.uri.host} audioHost=${source.audio?.uri.host}',
+        'VIDEO_CARD_CDN videoHost=${source.video.uri.host} audio=omitted',
       );
       if (deniedVideo case final uri?) {
-        source = DashPairSource(
-          video: MediaTrack(
-            uri: uri,
-            requestPolicy: source.video.requestPolicy,
-          ),
-          audio: source.audio,
+        source = DashVideoSource(
+          MediaTrack(uri: uri, requestPolicy: source.video.requestPolicy),
         );
       }
     }

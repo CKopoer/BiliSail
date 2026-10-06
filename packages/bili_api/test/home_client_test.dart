@@ -494,12 +494,14 @@ void main() {
               {
                 'bvid': 'BV1234567890',
                 'title': '有播放量',
+                'cid': '12345',
                 'progress': 30,
                 'stat': {'view': 12345, 'danmaku': 178},
               },
               {
                 'bvid': 'BV1234567891',
                 'title': '零播放量',
+                'cid': 0,
                 'progress': 0,
                 'stat': {'view': 0, 'play': 999, 'danmaku': 0},
               },
@@ -525,6 +527,11 @@ void main() {
         '178',
         '0',
         '3',
+      ]);
+      expect(result.items.map((item) => item.previewCid), [
+        '12345',
+        null,
+        null,
       ]);
       expect(transport.requests.single.path, '/x/v2/history/toview');
     });

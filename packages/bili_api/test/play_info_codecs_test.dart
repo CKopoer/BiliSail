@@ -5,6 +5,28 @@ import 'package:bili_api/bili_api.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test(
+    'preview signs the browser profile and ignores missing companion audio',
+    () async {
+      final transport = _Transport(['avc1.640028'], includeAudio: false);
+      final api = BiliApiClient(transport: transport);
+      addTearDown(api.close);
+      final info = await api.getVideoPreviewInfo('BV1xx411c7mD', '123');
+      expect(info.dashVideo.single.codecs, 'avc1.640028');
+      expect(info.dashAudio, isEmpty);
+      final query = transport.playRequest?.queryParameters;
+      expect(query?['qn'], '32');
+      expect(query?['fnval'], '2000');
+      expect(query?['fnver'], '0');
+      expect(query?['from_client'], 'BROWSER');
+      expect(query?['need_fragment'], 'false');
+      expect(query?['w_rid'], isNotEmpty);
+      await expectLater(
+        api.getPlayInfo('BV1xx411c7mD', '123'),
+        throwsA(isA<ApiFailure>()),
+      );
+    },
+  );
   for (final pgc in [false, true]) {
     for (final codecs in [
       ['avc1.640028', 'hev1.1.6.L120', 'av01.0.08M.08'],
@@ -28,8 +50,9 @@ void main() {
 }
 
 final class _Transport implements ApiTransport {
-  _Transport(this.codecs);
+  _Transport(this.codecs, {this.includeAudio = true});
   final List<String> codecs;
+  final bool includeAudio;
   Uri? playRequest;
 
   @override
@@ -67,13 +90,14 @@ final class _Transport implements ApiTransport {
                   'codecs': codec,
                 },
             ],
-            'audio': [
-              {
-                'id': 30280,
-                'base_url': 'https://cdn.example/audio.m4s',
-                'codecs': 'mp4a.40.2',
-              },
-            ],
+            if (includeAudio)
+              'audio': [
+                {
+                  'id': 30280,
+                  'base_url': 'https://cdn.example/audio.m4s',
+                  'codecs': 'mp4a.40.2',
+                },
+              ],
           },
         },
       };

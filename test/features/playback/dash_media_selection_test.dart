@@ -5,6 +5,23 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('explicit video preview accepts video without weakening normal DASH selection', () {
+    final info = ApiPlayInfo(
+      duration: const Duration(seconds: 20),
+      dashVideo: [_track(32, 'avc1')],
+      dashAudio: const [],
+      acceptQuality: const [32],
+    );
+    PlaybackMedia resolve(bool videoOnly) => selectDashMedia(
+      info,
+      quality: 32,
+      preferredCodec: VideoCodecPreference.h264,
+      videoOnly: videoOnly,
+      headers: const {},
+    );
+    expect(resolve(true).audio, isNull);
+    expect(() => resolve(false), throwsA(isA<AppFailure>()));
+  });
   PlaybackMedia select(
     List<ApiMediaTrack> video, {
     int quality = 80,

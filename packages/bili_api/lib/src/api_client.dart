@@ -888,6 +888,22 @@ final class BiliApiClient {
     String cid, {
     int qn = 80,
     ApiRequestContext? context,
+  }) => _getPlayInfo(bvid, cid, qn: qn, context: context);
+
+  /// Homepage inline playback uses the same endpoint with a browser profile.
+  /// Missing audio is allowed here because the caller explicitly requests video.
+  Future<ApiPlayInfo> getVideoPreviewInfo(
+    String bvid,
+    String cid, {
+    ApiRequestContext? context,
+  }) => _getPlayInfo(bvid, cid, qn: 32, preview: true, context: context);
+
+  Future<ApiPlayInfo> _getPlayInfo(
+    String bvid,
+    String cid, {
+    required int qn,
+    bool preview = false,
+    ApiRequestContext? context,
   }) async {
     _validateBvid(bvid);
     if (int.tryParse(cid) == null || qn < 1) {
@@ -895,7 +911,18 @@ final class BiliApiClient {
     }
     final data = await _wbiJson(
       '/x/player/wbi/playurl',
-      {'bvid': bvid, 'cid': cid, 'qn': '$qn', 'fnval': '4048', 'fourk': '1'},
+      {
+        'bvid': bvid,
+        'cid': cid,
+        'qn': '$qn',
+        'fnval': preview ? '2000' : '4048',
+        'fourk': '1',
+        if (preview) ...{
+          'fnver': '0',
+          'from_client': 'BROWSER',
+          'need_fragment': 'false',
+        },
+      },
       'playurl',
       context,
     );
@@ -909,11 +936,13 @@ final class BiliApiClient {
           'playurl',
         ).map((v) => _track(_map(v, 'playurl'))).toList();
     final audios =
-        _list(dash['audio'], 'playurl')
-            .map((v) => _track(_map(v, 'playurl')))
-            .where((v) => v.codecs.toLowerCase().startsWith('mp4a'))
-            .toList();
-    if (videos.isEmpty || audios.isEmpty) {
+        preview
+            ? const <ApiMediaTrack>[]
+            : _list(dash['audio'], 'playurl')
+                .map((v) => _track(_map(v, 'playurl')))
+                .where((v) => v.codecs.toLowerCase().startsWith('mp4a'))
+                .toList();
+    if (videos.isEmpty || !preview && audios.isEmpty) {
       throw const ApiFailure(ApiFailureCategory.unavailable, 'playurl');
     }
     final dashSeconds = _num(dash['duration']);
@@ -1379,6 +1408,7 @@ final class BiliApiClient {
     final stat = _optionalMap(data['stat']);
     return ApiVideoSummary(
       bvid: _requiredString(data['bvid'], endpoint),
+      previewCid: _userMid(data['cid']),
       title: _requiredString(
         data['title'],
         endpoint,

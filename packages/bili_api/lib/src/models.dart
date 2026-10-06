@@ -81,6 +81,7 @@ final class ApiVideoSummary {
     this.ownerMid,
     this.recommendationReason,
     this.recommendationFeedback,
+    this.previewCid,
   });
   final String bvid;
   final String title;
@@ -94,6 +95,7 @@ final class ApiVideoSummary {
   final String? ownerMid;
   final String? recommendationReason;
   final ApiRecommendationFeedback? recommendationFeedback;
+  final String? previewCid;
 }
 
 final class ApiRecommendationFeedback {

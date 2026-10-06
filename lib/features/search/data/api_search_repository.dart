@@ -76,6 +76,7 @@ class ApiSearchRepository implements SearchRepository {
   };
   static VideoSummary _video(ApiVideoSummary v) => VideoSummary(
     id: VideoId(v.bvid),
+    previewCid: v.previewCid,
     title: v.title,
     coverUrl: v.coverUrl?.toString() ?? '',
     author: v.ownerName,

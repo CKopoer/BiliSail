@@ -31,6 +31,7 @@ final class VideoSummary {
     this.authorId,
     this.recommendationReason,
     this.recommendationFeedback,
+    this.previewCid,
   });
 
   final VideoId id;
@@ -45,6 +46,9 @@ final class VideoSummary {
   final UserId? authorId;
   final String? recommendationReason;
   final RecommendationFeedback? recommendationFeedback;
+
+  /// Optional page ID already supplied by a list, avoiding a detail read.
+  final String? previewCid;
 }
 
 /// Opaque recommendation context returned by the Web feed, kept in memory.

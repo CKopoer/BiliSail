@@ -13,6 +13,7 @@ final class ApiHomeEntry {
     this.description = '',
     this.bvid,
     this.aid,
+    this.previewCid,
     this.url,
     this.authorName = '',
     this.authorAvatarUrl,
@@ -41,6 +42,7 @@ final class ApiHomeEntry {
 
   /// Decimal archive ID, independent of the card's stable BVID identity.
   final String? aid;
+  final String? previewCid;
   final Uri? url;
   final String authorName;
   final Uri? authorAvatarUrl;

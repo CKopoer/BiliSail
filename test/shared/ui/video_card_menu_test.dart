@@ -398,8 +398,9 @@ final class _Operations implements VideoCardOperations {
   @override
   Future<VideoCardPreviewSession?> preview(
     VideoId id,
-    RequestCancellation cancellation,
-  ) async => null;
+    RequestCancellation cancellation, {
+    String? cid,
+  }) async => null;
   @override
   bool isAdded(VideoId id) => writes > 0;
   @override

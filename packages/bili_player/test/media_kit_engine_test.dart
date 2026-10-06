@@ -3,6 +3,37 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'video-only DASH requires explicit mute and a positive startup budget',
+    () async {
+      for (final options in [
+        const OpenOptions(volume: 100),
+        const OpenOptions(volume: 0, openTimeout: Duration.zero),
+      ]) {
+        final engine = MediaKitEngine();
+        await expectLater(
+          engine.open(
+            DashVideoSource(
+              MediaTrack(
+                uri: Uri.parse('https://cdn.example/video.m4s'),
+                requestPolicy: MediaRequestPolicy(),
+              ),
+            ),
+            options,
+          ),
+          throwsA(
+            isA<PlayerFailure>().having(
+              (failure) => failure.kind,
+              'kind',
+              PlayerFailureKind.invalidSource,
+            ),
+          ),
+        );
+        expect(engine.inspectDiagnostics().hasDecodedVideo, false);
+        await engine.dispose();
+      }
+    },
+  );
+  test(
     'diagnostics before native open contain no media URI or headers',
     () async {
       final engine = MediaKitEngine();

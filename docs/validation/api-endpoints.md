@@ -28,6 +28,7 @@
 | 搜索 `searchVideos` | `api.bilibili.com` GET `/x/web-interface/wbi/search/type` | Web，Cookie 可选，WBI | JSON；`keyword`、`search_type=video`、`page`、`page_size=20`；同上 | 成功；视频搜索结果中出现空 bvid 的内嵌直播卡，已排除 |
 | 详情/分 P `getVideoDetail` | `api.bilibili.com` GET `/x/web-interface/view` | Web，Cookie 可选，无签名 | JSON；`bvid`；同上 | 成功，aid/cid 以十进制字符串交付 |
 | DASH `getPlayInfo` | `api.bilibili.com` GET `/x/player/wbi/playurl` | Web，Cookie 可选，WBI | JSON；`bvid`、`cid`、`qn`、`fnval=4048`、`fourk=1`；同上 | 成功取得 H.264 视频轨与 AAC 音轨元数据；未验证 CDN headers、Range 或实播 |
+| 悬停 `getVideoPreviewInfo` | `api.bilibili.com` GET `/x/player/wbi/playurl` | Web browser profile，Cookie 可选，WBI | JSON；`bvid`、`cid`、`qn=32`、`fnval=2000`、`fnver=0`、`fourk=1`、`from_client=BROWSER`、`need_fragment=false`；既有有界读重试和 deadline | 2026-10-06 官网参数和 Windows 游客无音轨预览通过；见 [加载验证](video-preview-loading.md) |
 | 字幕索引 `getSubtitleTracks` | `api.bilibili.com` GET `/x/player/wbi/v2` | Web，Cookie 可选，WBI | JSON；`aid`、`cid`；同上 | 请求成功；样本字幕列表为空，未证明有字幕视频可用 |
 | 字幕正文 `getSubtitleCues` | 响应中的 `.hdslb.com` / `.bilibili.com` HTTPS URL，GET | 不附带非匹配域 Cookie；不签名 | JSON `body[]`；同上 | 未测（样本无字幕） |
 | 分段弹幕 `getDanmakuSegment` | `api.bilibili.com` GET `/x/v2/dm/web/seg.so` | Web，Cookie 可选，无签名 | HTTP Protobuf；`type=1`、`oid=cid`、`segment_index`；同上 | 成功解析第 1 段；只实现普通滚动/顶部/底部所需字段 |

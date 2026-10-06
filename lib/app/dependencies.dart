@@ -57,6 +57,7 @@ import '../features/playback/application/playback_session.dart';
 import '../features/playback/application/playback_manager.dart';
 import '../features/playback/application/playback_rate_memory.dart';
 import '../features/playback/data/api_playback_repository.dart';
+import '../features/playback/data/api_video_preview_repository.dart';
 import '../features/playback/data/api_playback_history_repository.dart';
 import '../features/playback/data/api_content_playback_repository.dart';
 import '../features/pgc/application/pgc_controller.dart';
@@ -321,7 +322,7 @@ class AppDependencies {
                   .restore(id.value),
         ),
         videoCardPlaybackRepositoryProvider.overrideWithValue(
-          ApiPlaybackRepository(
+          ApiVideoPreviewRepository(
             api,
             requests,
             cdnPreference: () async => (await settings.load()).mediaCdn,

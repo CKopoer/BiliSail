@@ -123,6 +123,7 @@ class ApiFeedRepository
             .map(
               (item) => VideoSummary(
                 id: VideoId(item.bvid),
+                previewCid: item.previewCid,
                 title: item.title,
                 coverUrl: item.coverUrl?.toString() ?? '',
                 author: item.ownerName,

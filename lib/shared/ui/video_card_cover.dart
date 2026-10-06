@@ -123,7 +123,7 @@ class _VideoCardCoverState extends State<VideoCardCover>
       _preview = null;
     });
     if (!hovered || _scope == null || !widget.video.id.isValid) return;
-    _hoverDelay = Timer(const Duration(milliseconds: 300), _loadPreview);
+    _hoverDelay = Timer(const Duration(milliseconds: 200), _loadPreview);
   }
 
   Future<void> _loadPreview() async {
@@ -132,7 +132,11 @@ class _VideoCardCoverState extends State<VideoCardCover>
     final token = RequestCancellation();
     _previewCancellation = token;
     try {
-      final result = await scope.interactions.preview(widget.video.id, token);
+      final result = await scope.interactions.preview(
+        widget.video.id,
+        token,
+        cid: widget.video.previewCid,
+      );
       if (!mounted ||
           token.isCancelled ||
           !_coverHovered ||

@@ -27,6 +27,7 @@ const _video = VideoSummary(
   duration: Duration(seconds: 20),
   playCount: 21000,
   danmakuCount: 36,
+  previewCid: '42',
 );
 
 void main() {
@@ -58,7 +59,7 @@ void main() {
         Offset(cover.left + cover.width * .1, cover.center.dy),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 150));
       expect(services.reads, 0);
       expect(
         tester
@@ -75,6 +76,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 60));
       await tester.pump();
       expect(services.reads, 1);
+      expect(services.lastCid, '42');
       expect(
         find.byKey(const ValueKey('fake-card-video-surface')),
         findsOneWidget,
@@ -368,15 +370,18 @@ class _Interactions implements VideoCardOperations {
     },
   );
   int reads = 0, writes = 0;
+  String? lastCid;
   bool added = false;
   RequestCancellation? token;
   Completer<void>? pending;
   @override
   Future<VideoCardPreviewSession?> preview(
     VideoId id,
-    RequestCancellation cancellation,
-  ) async {
+    RequestCancellation cancellation, {
+    String? cid,
+  }) async {
     reads++;
+    lastCid = cid;
     token = cancellation;
     await pending?.future;
     return previews.start(cardPreviewMedia(), cancellation);
