@@ -1402,7 +1402,9 @@ void main() {
     'workspace player keys work on entry and after returning to video',
     (tester) async {
       final engine = _FakeEngine();
-      final session = _session(engine);
+      // Keep interpolation active so this test cannot pass by waiting for a
+      // real Stopwatch to expire on a slower machine.
+      final session = _session(engine, danmakuNow: () => Duration.zero);
       final window = _FakeWindowService();
       var danmakuToggles = 0;
       addTearDown(session.close);
@@ -1432,7 +1434,9 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      expect(session.danmaku.isAnimating, isTrue);
       await tester.sendKeyEvent(LogicalKeyboardKey.f2);
       await _pumpFrames(tester);
       expect(engine.currentSnapshot.rate, 1.25);
@@ -1473,12 +1477,15 @@ void main() {
       expect(engine.currentSnapshot.rate, 1);
 
       router.go('/downloads');
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester);
+      expect(find.byType(PlaybackPanel), findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.f2);
       await _pumpFrames(tester);
       expect(engine.currentSnapshot.rate, 1);
       router.go('/video/${_detail.summary.id.value}');
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester);
+      expect(find.byType(PlaybackPanel), findsOneWidget);
+      expect(session.danmaku.isAnimating, isTrue);
       await tester.sendKeyEvent(LogicalKeyboardKey.f2);
       await _pumpFrames(tester);
       expect(engine.currentSnapshot.rate, 1.25);

@@ -116,6 +116,16 @@ macOS ad-hoc 签名不能替代 Developer ID / notarization。资源许可范围
 
 ## 验证记录
 
+### 播放页快捷键测试超时修复（2026-10-07）
+
+[CI #23](https://github.com/CKopoer/BiliSail/actions/runs/37637676303/job/112848184331) 使用提交 `0b2605efe9fdb6fc5a30e7e8a920c47ba2540958`，依赖强校验、格式与静态分析通过；根应用测试 1292 项通过、1 项失败，后续包检查与三端构建未执行。失败位于 [播放面板测试](../../test/features/playback/playback_panel_test.dart) 的 `workspace player keys work on entry and after returning to video`，首次进入播放页的 `pumpAndSettle` 超时。
+
+该测试的播放会话默认以真实 `Stopwatch` 驱动弹幕插值，[弹幕控制器](../../packages/bili_danmaku/lib/src/danmaku_controller.dart) 在最近播放状态更新后的 700 毫秒内保持动画，[绘制层](../../packages/bili_danmaku/lib/src/danmaku_overlay.dart) 持续请求下一帧。`pumpAndSettle` 推进 Flutter 测试的模拟时间，两者不共用时钟；快速执行的 runner 可在真实插值窗口结束前耗尽模拟的十分钟超时。本机旧测试单独通过，注入固定单调时钟、让插值保持活跃后，稳定复现同一行的超时。
+
+修复只修改此测试：进入、离开和返回播放页时复用有限帧等待；使用固定单调时钟防止用例依赖机器速度，并断言播放已开始、插值仍活跃、隐藏／返回后的面板可见性。保留倍速、音量、seek、弹幕、全屏、非视频页快捷键屏蔽及单 surface 检查。没有修改播放器运行逻辑或放宽 CI 检查。
+
+本机 Windows / Flutter 3.47.6 下，受控时钟的旧等待方式失败，修复后的同一用例通过；`tool/check.ps1 -EnforceLockfile` 完整通过根应用与三个包的格式、静态分析及 1696 项测试（根应用 1293、API 319、播放器 32、弹幕 52），另通过 21 项 Android 签名边界与 14 项 Windows 安装版本检查。四份锁文件无差异，本文件 18 条本地链接及 `git diff --check` 通过。修复尚未推送或远端重跑；本轮未执行安装包构建或平台实机验证。
+
 ### Windows 安装目录选择（2026-10-07）
 
 - 使用本机 WiX 6.0.2 及固定 UI／Util／Bootstrapper 扩展，以已有完整 Release payload 重新打包 `0.3.0+2` 的 MSI 和 EXE，编译通过；再用同一临时测试证书完成 MSI 签名和 EXE 的 engine／Bundle 两阶段签名，签名后的包仍通过 21 项检查。临时私钥已清理，未添加系统信任。本轮只验证安装配置，未重新编译 Flutter，也未替换此前签名发行产物。验证包及日志在 `artifacts/windows-install-directory-validation/`。
