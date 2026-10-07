@@ -315,35 +315,20 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                             ],
                           );
                         }
-                        final columns =
-                            (constraints.maxWidth /
-                                    (widget.channel == HomeChannel.live
-                                        ? 340
-                                        : 250))
-                                .floor()
-                                .clamp(1, 8);
-                        final width =
-                            (constraints.maxWidth - (columns - 1) * 16) /
-                            columns;
-                        return Wrap(
-                          spacing: 16,
-                          runSpacing: 16,
+                        return ResponsiveCardGrid(
                           children: [
                             for (final item in items)
-                              SizedBox(
-                                width: width,
-                                child:
-                                    widget.channel == HomeChannel.live &&
-                                        item.kind == HomeEntryKind.live
-                                    ? LiveRoomCard(
-                                        entry: item,
-                                        onTap: () => _open(item),
-                                      )
-                                    : _EntryCard(
-                                        entry: item,
-                                        onTap: () => _open(item),
-                                      ),
-                              ),
+                              if (widget.channel == HomeChannel.live &&
+                                  item.kind == HomeEntryKind.live)
+                                LiveRoomCard(
+                                  entry: item,
+                                  onTap: () => _open(item),
+                                )
+                              else
+                                _EntryCard(
+                                  entry: item,
+                                  onTap: () => _open(item),
+                                ),
                           ],
                         );
                       },
@@ -648,6 +633,7 @@ final class _EntryCard extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => Card(
+    margin: entry.kind == HomeEntryKind.season ? EdgeInsets.zero : null,
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: entry.kind == HomeEntryKind.video && entry.bvid == null

@@ -306,7 +306,6 @@ final class _BiliAppShellState extends State<BiliAppShell> {
             body: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 760;
                   return Column(
                     children: [
                       if (_singlePage)
@@ -315,24 +314,11 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                         _tabStrip(context),
                       if (_workspace.active.location.path != '/search' &&
                           !_workspace.active.isPlayback &&
-                          !_workspace.active.isProfile &&
-                          compact) ...[
-                        _channelBar(context),
-                        _tools(context),
-                      ] else if (_workspace.active.location.path != '/search' &&
-                          !_workspace.active.isPlayback &&
                           !_workspace.active.isProfile)
-                        SizedBox(
-                          height: 58,
-                          child: Row(
-                            children: [
-                              Expanded(child: _channelBar(context)),
-                              SizedBox(
-                                width: constraints.maxWidth >= 1300 ? 470 : 380,
-                                child: _tools(context),
-                              ),
-                            ],
-                          ),
+                        _navigationHeader(
+                          context,
+                          constraints,
+                          _channelBar(context),
                         ),
                       Expanded(child: _pages(context)),
                     ],
@@ -632,24 +618,31 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   }
 
   Widget _searchHeader(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => constraints.maxWidth < 760
-        ? Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [const SearchCategoryBar(), _tools(context)],
-          )
-        : SizedBox(
-            height: 58,
-            child: Row(
-              children: [
-                const Expanded(child: SearchCategoryBar()),
-                SizedBox(
-                  width: constraints.maxWidth >= 1300 ? 470 : 380,
-                  child: _tools(context),
-                ),
-              ],
-            ),
-          ),
+    builder: (context, constraints) =>
+        _navigationHeader(context, constraints, const SearchCategoryBar()),
   );
+
+  Widget _navigationHeader(
+    BuildContext context,
+    BoxConstraints constraints,
+    Widget navigation,
+  ) => constraints.maxWidth < 760
+      ? Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [_tools(context), navigation],
+        )
+      : SizedBox(
+          height: 58,
+          child: Row(
+            children: [
+              SizedBox(
+                width: constraints.maxWidth >= 1300 ? 470 : 380,
+                child: _tools(context),
+              ),
+              Expanded(child: navigation),
+            ],
+          ),
+        );
 
   Widget _settingsBar(BuildContext context) {
     final selected = SettingsCategory.fromName(
@@ -726,6 +719,10 @@ final class _BiliAppShellState extends State<BiliAppShell> {
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Row(
         children: [
+          if (widget.accountBuilder case final builder?) ...[
+            builder(context),
+            const SizedBox(width: 5),
+          ],
           Expanded(
             child: SizedBox(
               height: 34,
@@ -749,7 +746,6 @@ final class _BiliAppShellState extends State<BiliAppShell> {
             ),
           ),
           const SizedBox(width: 5),
-          if (widget.accountBuilder case final builder?) builder(context),
           _tool('观看历史', BiliIcons.history, '/history'),
           _tool('下载', Icons.download_outlined, '/downloads'),
           _tool('设置', BiliIcons.settings, '/settings'),

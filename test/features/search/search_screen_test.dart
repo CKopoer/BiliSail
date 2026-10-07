@@ -180,8 +180,8 @@ void main() {
         expect(tester.getCenter(strip).dy, tester.getCenter(search).dy);
       } else {
         expect(
-          tester.getTopLeft(search).dy,
-          greaterThan(tester.getBottomLeft(strip).dy),
+          tester.getTopLeft(strip).dy,
+          greaterThan(tester.getBottomLeft(search).dy),
         );
       }
       await _snapshot(

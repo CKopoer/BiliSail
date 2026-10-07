@@ -16,6 +16,8 @@
 
 ## 实现与持久化
 
+2026-10-07 顶部工具与频道顺序统一调整为：头像、搜索框、观看历史、下载、设置，然后是当前页面的频道／分类子标签。首页、搜索页与设置页共用同一布局规则：可用宽度小于 760 时工具在第一行、子标签在第二行；宽度足够时按相同顺序排成一行。搜索框占工具行剩余宽度，子标签保留横向滚动；不按操作系统分别实现布局，桌面窄窗口同样拆行。此布局规则不改变单／多标签导航模式。
+
 [WorkspaceTabs](../../lib/app/workspace_tabs.dart) 持有有界的页面访问 ID 栈；路由提交和回退不会重复添加访问。关闭／淘汰清除旧 ID，固定首页始终保留。[BiliAppShell](../../lib/app/shell.dart) 负责模式布局、PopScope、搜索草稿和页面生命周期。[路由组合根](../../lib/app/router.dart) 注入设置；其 feature 路由仅渲染空占位，工作区将 ShellRoute 内部 Navigator 以 Offstage 挂载，供 go_router 分发系统返回与弹窗关闭，不挂第二份内容页面或播放器。
 
 平台默认值集中在 [app 适配函数](../../lib/app/platform_defaults.dart)，通过组合根注入设置 Repository。设置加载期间的路由外壳及无显式参数的外壳也使用同一规则，避免 Android 首次显示多标签页。领域模型和 Repository 不直接读取 Flutter 或平台 API。
@@ -38,3 +40,7 @@
 - 65 项定向测试通过，日志 `artifacts/platform-navigation-targeted.log`。`tool/check.ps1 -SkipPub` 通过：根应用 693、bili_api 227、bili_player 16、bili_danmaku 21，共 957 项测试，四处格式和静态分析均通过，日志 `artifacts/platform-navigation-check.log`。
 - Windows release 与 Android arm64 debug 构建通过，输出分别为 `build/windows/x64/runner/Release/bilisail.exe`、`build/app/outputs/flutter-apk/app-debug.apk`，日志 `artifacts/platform-navigation-windows-build.log`、`artifacts/platform-navigation-android-build.log`。
 - 变更文档的 116 条本地链接检查通过，`git diff --check` 通过。Android/macOS 平台默认值使用测试平台覆盖验证，不代表实机验证。
+
+## 顶部顺序调整验证（2026-10-07）
+
+`tool/check.ps1 -SkipPub` 通过：根应用 966、bili_api 282、bili_player 22、bili_danmaku 32，共 1302 项测试；四处格式与静态分析通过。现有搜索布局测试已改为检查分类位于搜索工具下方，继续覆盖 320px 双倍字体与宽屏布局。账号测试覆盖 320–1200px 往返调整、登录／账号菜单及单／多标签模式；400px 和 1200px 的离线渲染核对了工具顺序与双行／单行布局。本文 5 条本地链接和 `git diff --check` 通过。本轮未运行平台构建或 Android/macOS 实机交互验证。
