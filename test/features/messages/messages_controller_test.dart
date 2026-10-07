@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/messages/application/messages_controller.dart';
@@ -41,6 +42,74 @@ void main() {
     expect(state().thread.items.single.text, '测试私信正文');
     expect(repo.sends + repo.marks, 0);
   });
+  test(
+    'profile entry reuses a known conversation and returns to private',
+    () async {
+      controller.selectSection(InboxSection.replies);
+      await flush();
+      expect(controller.openUserConversation(const UserId('2')), isTrue);
+      await flush();
+      expect(state().section, InboxSection.private);
+      expect(state().selected, conversation);
+      expect(repo.lastThread?.userId, const UserId('2'));
+      expect(repo.sends + repo.marks, 0);
+    },
+  );
+  test(
+    'new profile conversation opens and sends once to its decimal UID',
+    () async {
+      const id = UserId('3493276401272849');
+      expect(controller.openUserConversation(id, name: '新会话用户'), isTrue);
+      await flush();
+      expect(state().selected?.title, '新会话用户');
+      expect(state().selected?.canSend, isTrue);
+      expect(repo.lastThread?.id, '1:${id.value}');
+      expect(repo.sends + repo.marks, 0);
+      expect(await controller.send('测试'), isTrue);
+      expect(repo.lastSend?.userId, id);
+      expect(repo.sends, 1);
+    },
+  );
+  test(
+    'invalid, own, guest and mismatched account targets cannot open',
+    () async {
+      expect(controller.openUserConversation(const UserId('0')), isFalse);
+      expect(controller.openUserConversation(const UserId('1')), isFalse);
+      repo.accountScope = 'user:9';
+      expect(controller.openUserConversation(const UserId('2')), isFalse);
+      auth.emit(const AuthState());
+      await flush();
+      expect(controller.openUserConversation(const UserId('2')), isFalse);
+      expect(state().selected, isNull);
+      expect(repo.sends + repo.marks, 0);
+    },
+  );
+  test(
+    'late inbox updates reconcile system restrictions for profile target',
+    () async {
+      final pending = repo.inboxPending = Completer<MessagePage<InboxEntry>>();
+      final read = controller.loadInbox(refresh: true);
+      controller.openUserConversation(const UserId('2'), name: '临时名称');
+      await flush();
+      pending.complete(
+        const MessagePage([
+          InboxEntry(
+            id: '1:2',
+            title: '系统账号',
+            text: '',
+            userId: UserId('2'),
+            sessionType: 1,
+            system: true,
+          ),
+        ], hasMore: false),
+      );
+      await read;
+      expect(state().selected?.title, '系统账号');
+      expect(state().selected?.canSend, isFalse);
+      expect(await controller.send('不得发送'), isFalse);
+      expect(repo.sends + repo.marks, 0);
+    },
+  );
   test('refresh cancels pagination and rejects its late completion', () async {
     final pending = repo.inboxPending = Completer<MessagePage<InboxEntry>>();
     final old = controller.loadInbox();

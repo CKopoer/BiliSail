@@ -71,6 +71,7 @@ class MessageRepositoryFake implements MessageRepository {
   RequestCancellation? inboxRead, threadRead, writeRead;
   int sends = 0, marks = 0, reads = 0;
   String? lastText, lastAck;
+  InboxEntry? lastThread, lastSend;
   @override
   Future<Map<InboxSection, int>> unread({
     required RequestCancellation cancellation,
@@ -95,6 +96,7 @@ class MessageRepositoryFake implements MessageRepository {
     required RequestCancellation cancellation,
   }) async {
     threadRead = cancellation;
+    lastThread = entry;
     return threadPending == null
         ? MessagePage(messages, hasMore: more, cursor: this.cursor)
         : threadPending!.future;
@@ -107,6 +109,7 @@ class MessageRepositoryFake implements MessageRepository {
     required RequestCancellation cancellation,
   }) async {
     sends++;
+    lastSend = entry;
     lastText = text;
     writeRead = cancellation;
     if (writeFailure case final error?) throw error;

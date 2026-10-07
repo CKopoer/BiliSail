@@ -1,3 +1,7 @@
+import 'package:bilisail/features/video/application/video_author_controller.dart';
+
+import '../../support/follow_repository_fake.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
@@ -35,6 +39,7 @@ void main() {
     auth = _Auth();
     container = ProviderContainer(
       overrides: [
+        videoAuthorRepositoryProvider.overrideWithValue(FollowRepositoryFake()),
         profileRepositoryProvider.overrideWithValue(repo),
         authRepositoryProvider.overrideWithValue(auth),
       ],

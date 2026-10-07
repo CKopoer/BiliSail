@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
+import '../../../domain/user.dart';
 import '../../auth/application/auth_controller.dart';
 import '../domain/message_repository.dart';
 
@@ -186,6 +187,7 @@ class MessagesController extends Notifier<MessagesState> {
         unique[item.id] = item;
       }
       state = state.copy(
+        selected: unique[state.selected?.id],
         inbox: MessageListState(
           items: List.unmodifiable(unique.values.take(500)),
           cursor: page.cursor,
@@ -221,6 +223,35 @@ class MessagesController extends Notifier<MessagesState> {
       clearWriteMessage: true,
     );
     unawaited(loadThread());
+  }
+
+  /// Opening a profile starts a local conversation; only Send writes remotely.
+  bool openUserConversation(UserId id, {String? name, Uri? avatarUrl}) {
+    final auth = ref.read(authControllerProvider);
+    final repository = ref.read(messageRepositoryProvider);
+    if (!id.isValid ||
+        !auth.isSignedIn ||
+        auth.mid == id.value ||
+        repository.accountScope != 'user:${auth.mid}') {
+      return false;
+    }
+    selectSection(InboxSection.private);
+    final title = name?.trim() ?? '';
+    final entry = state.inbox.items
+        .where((entry) => entry.sessionType == 1 && entry.userId == id)
+        .firstOrNull;
+    selectConversation(
+      entry ??
+          InboxEntry(
+            id: '1:${id.value}',
+            title: title.isEmpty ? '用户 ${id.value}' : title,
+            text: '',
+            userId: id,
+            avatarUrl: avatarUrl,
+            sessionType: 1,
+          ),
+    );
+    return true;
   }
 
   void closeConversation() {

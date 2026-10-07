@@ -13,6 +13,7 @@ class ProfileHeader extends StatelessWidget {
     this.isSelf = false,
     this.liveRoom,
     this.onOpenLiveRoom,
+    this.actions,
   });
 
   final UserProfile profile;
@@ -20,6 +21,7 @@ class ProfileHeader extends StatelessWidget {
   final bool isSelf;
   final ProfileLiveRoom? liveRoom;
   final VoidCallback? onOpenLiveRoom;
+  final Widget? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -112,6 +114,8 @@ class ProfileHeader extends StatelessWidget {
             ),
           ],
         ),
+        if (actions case final actions?)
+          Padding(padding: const EdgeInsets.only(top: 12), child: actions),
         const SizedBox(height: 6),
         Wrap(
           spacing: 12,

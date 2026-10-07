@@ -332,6 +332,16 @@ final class _WorkspacePage extends ConsumerWidget {
                 case '/messages':
                   return MessagesScreen(
                     key: PageStorageKey('messages-${tab.id}'),
+                    initialUserId: UserId.tryParse(
+                      uri.queryParameters['talker'],
+                    ),
+                    initialUserName: uri.queryParameters['name'],
+                    initialUserAvatar: switch (uri.queryParameters['avatar']) {
+                      final avatar? => Uri.tryParse(avatar),
+                      _ => null,
+                    },
+                    onInitialConversationOpened: () =>
+                        context.go('/messages?tab=${tab.id}'),
                     onLogin: () => showDialog<void>(
                       context: context,
                       builder: (_) => const AccountDialog(),
@@ -450,6 +460,21 @@ final class _WorkspacePage extends ConsumerWidget {
                                 context.go('/video/${video.id.value}'),
                             onOpenLiveRoom: (room) =>
                                 context.go('/live/${room.value}'),
+                            onLogin: () => showDialog<void>(
+                              context: context,
+                              builder: (_) => const AccountDialog(),
+                            ),
+                            onMessage: (profile) => context.go(
+                              Uri(
+                                path: '/messages',
+                                queryParameters: {
+                                  'talker': profile.id.value,
+                                  'name': profile.name,
+                                  if (profile.avatarUrl case final avatar?)
+                                    'avatar': avatar.toString(),
+                                },
+                              ).toString(),
+                            ),
                           )
                         : const StateView.empty(message: '用户地址无效');
                   }

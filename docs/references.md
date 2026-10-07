@@ -122,6 +122,10 @@
 
 本轮对照用户提供的头像菜单截图，读取 [HomePage.xaml](../../biliuwp-lite/src/BiliLite.UWP/Pages/HomePage.xaml)、[MessageApi.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/User/MessageApi.cs)、[MessagesPage.xaml.cs](../../biliuwp-lite/src/BiliLite.UWP/Pages/MessagesPage.xaml.cs)、[BiliMessageSession.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Common/Msg/BiliMessageSession.cs)、[BiliSessionPrivateMessage.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Common/Msg/BiliSessionPrivateMessage.cs)，以及内核的 [MessageService.cs](../../bili-kernel/src/Services/Services.User/MessageService.cs) 和 [MyClient.cs](../../bili-kernel/src/Services/Services.User/Core/MyClient.cs)。参考菜单信息、导航职责和 Web 会话/私信、未读、回复/@/点赞的协议字段；两仓库仍采用前文登记的提交快照。系统通知的独立 host/path 和字段另参考 [BiliChrome API 源码](https://github.com/EZ118/BiliChrome/blob/main/js/api/index.js)，并用本机已有 Web 会话只读验证。本轮独立编写 Dart/Flutter，没有新增复制上游代码、schema 或资源，也没有修改相邻仓库。许可范围沿用第 4 节限制，实际采用与验证见 [账号菜单与消息](validation/account-messages.md)。
 
+### 用户主页关注与私信补充参考
+
+2026-10-07 只读参考 [FollowAPI.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/User/FollowAPI.cs) 的 `fid`、`act=1/2`、[UserInfoPage.xaml.cs](../../biliuwp-lite/src/BiliLite.UWP/Pages/UserInfoPage.xaml.cs) 的目标用户私信导航，以及内核 [MyClient.cs](../../bili-kernel/src/Services/Services.User/Core/MyClient.cs) 的关注、历史消息和发送职责。两仓库当前 HEAD 仍分别为 `baf7e7591e8dc2fe012cf1e7ba54a056dec7f3b0`、`e26f6dbd071e20d4220806fcff7bd675f3c29fc5`。复用本项目已经接入的 Web Cookie/CSRF 客户端，不采用参考关注代码的 App token 假设；在应用内消息页打开聊天。独立实现 Flutter 导航与共用组件，没有新增复制上游代码、schema、资源或修改相邻仓库，采用范围沿用第 4 节。结果与线上验证边界见 [用户主页记录](validation/user-profile.md#2026-10-07关注与私信按钮)。
+
 ### 自建收藏夹编辑补充参考
 
 自建收藏夹卡片按用户补充截图显示内容数、私密锁和创建日期，编辑交互与 `folder/edit` 参数只读参考 [EditFavFolderDialog.xaml](../../biliuwp-lite/src/BiliLite.UWP/Controls/Dialogs/EditFavFolderDialog.xaml)、[EditFavFolderDialog.xaml.cs](../../biliuwp-lite/src/BiliLite.UWP/Controls/Dialogs/EditFavFolderDialog.xaml.cs) 和 [FavoriteAPI.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/User/FavoriteAPI.cs)。独立实现 Dart/Flutter，只参考职责与协议；没有复制新增源码/schema/资源、修改相邻仓库或增加运行时依赖。采用范围沿用第 4 节，线上只读与模拟写入的区别见 [收藏验证](validation/favorites-tabs.md)。

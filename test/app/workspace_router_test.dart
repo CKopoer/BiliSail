@@ -1,3 +1,7 @@
+import 'package:bilisail/features/video/application/video_author_controller.dart';
+
+import '../support/follow_repository_fake.dart';
+
 import '../support/input_test_app.dart';
 
 import 'dart:async';
@@ -51,6 +55,98 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mode in WorkspaceNavigationMode.values) {
+    _workspaceTestWidgets(
+      'profile private messages reuse inbox and drafts in $mode',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(375, 1000);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final auth = AuthFake();
+        final messages = MessageRepositoryFake();
+        final settings = _SettingsRepository()
+          ..settings = const AppSettings.defaults().copyWith(
+            navigationMode: mode,
+          );
+        final router = createBiliRouter(
+          initialLocation: '/user/2',
+          playerBuilder: (_, _, _) => const SizedBox(),
+          accountBuilder: (_) => const SizedBox(),
+        );
+        addTearDown(() async {
+          router.dispose();
+          await auth.stream.close();
+        });
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authRepositoryProvider.overrideWithValue(auth),
+              settingsRepositoryProvider.overrideWithValue(settings),
+              profileRepositoryProvider.overrideWithValue(_ProfileRepository()),
+              videoAuthorRepositoryProvider.overrideWithValue(
+                FollowRepositoryFake()..accountScope = 'user:1',
+              ),
+              messageRepositoryProvider.overrideWithValue(messages),
+              feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+              homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            ],
+            child: InputTestApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('profile-message')));
+        await tester.pumpAndSettle();
+        expect(find.text('我的消息'), findsWidgets);
+        final inbox = ProviderScope.containerOf(
+          tester.element(find.byType(MessagesScreen)),
+        );
+        expect(
+          inbox.read(messagesControllerProvider).selected?.userId,
+          const UserId('2'),
+        );
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters.containsKey(
+            'talker',
+          ),
+          isFalse,
+        );
+        final composer = find.widgetWithText(TextField, '输入私信消息');
+        await tester.enterText(composer, '用户2草稿');
+        router.go('/user/3493276401272849');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('profile-message')));
+        await tester.pumpAndSettle();
+        expect(
+          ProviderScope.containerOf(
+            tester.element(find.byType(MessagesScreen)),
+          ),
+          same(inbox),
+        );
+        expect(
+          inbox.read(messagesControllerProvider).selected?.userId,
+          const UserId('3493276401272849'),
+        );
+        expect(
+          inbox.read(messagesControllerProvider).selected?.title,
+          '用户3493276401272849',
+        );
+        expect(tester.widget<TextField>(composer).controller?.text, isEmpty);
+        router.go('/user/2');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('profile-message')));
+        await tester.pumpAndSettle();
+        expect(
+          inbox.read(messagesControllerProvider).selected?.userId,
+          const UserId('2'),
+        );
+        expect(tester.widget<TextField>(composer).controller?.text, '用户2草稿');
+        expect(messages.sends + messages.marks, 0);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
   for (final mode in WorkspaceNavigationMode.values) {
     _workspaceTestWidgets(
       'search header shares its tab state and preserves categories in $mode',
@@ -345,6 +441,9 @@ void main() {
             settingsRepositoryProvider.overrideWithValue(_SettingsRepository()),
             feedRepositoryProvider.overrideWithValue(_FeedRepository()),
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            videoAuthorRepositoryProvider.overrideWithValue(
+              FollowRepositoryFake(),
+            ),
             profileRepositoryProvider.overrideWithValue(_ProfileRepository()),
           ],
           child: InputTestApp.router(routerConfig: router),
@@ -398,6 +497,9 @@ void main() {
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
             searchRepositoryProvider.overrideWithValue(_SearchRepository()),
             libraryRepositoryProvider.overrideWithValue(_HistoryRepository()),
+            videoAuthorRepositoryProvider.overrideWithValue(
+              FollowRepositoryFake(),
+            ),
             profileRepositoryProvider.overrideWithValue(_ProfileRepository()),
             videoRepositoryProvider.overrideWithValue(_VideoRepository()),
             pgcRepositoryProvider.overrideWithValue(_ContentPgcRepository()),
@@ -641,6 +743,9 @@ void main() {
         ProviderScope(
           overrides: [
             authRepositoryProvider.overrideWithValue(auth),
+            videoAuthorRepositoryProvider.overrideWithValue(
+              FollowRepositoryFake(),
+            ),
             profileRepositoryProvider.overrideWithValue(profiles),
             feedRepositoryProvider.overrideWithValue(_FeedRepository()),
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
@@ -688,6 +793,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          videoAuthorRepositoryProvider.overrideWithValue(
+            FollowRepositoryFake(),
+          ),
           profileRepositoryProvider.overrideWithValue(profiles),
           feedRepositoryProvider.overrideWithValue(_FeedRepository()),
           homeRepositoryProvider.overrideWithValue(_HomeRepository()),
@@ -728,6 +836,9 @@ void main() {
           overrides: [
             authRepositoryProvider.overrideWithValue(auth),
             settingsRepositoryProvider.overrideWithValue(settings),
+            videoAuthorRepositoryProvider.overrideWithValue(
+              FollowRepositoryFake(),
+            ),
             profileRepositoryProvider.overrideWithValue(profiles),
             liveRepositoryProvider.overrideWithValue(_ContentLiveRepository()),
             feedRepositoryProvider.overrideWithValue(_FeedRepository()),

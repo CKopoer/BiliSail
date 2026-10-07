@@ -136,8 +136,18 @@ final class WorkspaceTabs {
       _activate('home');
       return true;
     }
-    final existing = _tabs.where((tab) => tab.location == location).firstOrNull;
+    final existing = _tabs
+        .where(
+          (tab) =>
+              tab.location == location ||
+              (location.path == '/messages' &&
+                  tab.location.path == '/messages'),
+        )
+        .firstOrNull;
     if (existing != null) {
+      // A profile recipient is a one-time intent for the existing inbox page.
+      // Preserve its controller and drafts instead of opening another inbox.
+      if (location.path == '/messages') updateLocation(existing.id, location);
       _activate(existing.id);
       return true;
     }

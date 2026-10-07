@@ -10,6 +10,8 @@ import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/dynamic_post_interactions.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/video_card.dart';
+import '../../../shared/ui/user_follow_button.dart';
+import '../../auth/application/auth_controller.dart';
 import 'profile_header.dart';
 import 'profile_video_card.dart';
 import '../application/profile_controller.dart';
@@ -22,6 +24,8 @@ class ProfileScreen extends ConsumerStatefulWidget {
     this.onOpenUser,
     this.onOpenVideo,
     this.onOpenLiveRoom,
+    this.onMessage,
+    this.onLogin,
     this.isSelf = false,
     this.initialSection = ProfileSection.videos,
   });
@@ -29,6 +33,8 @@ class ProfileScreen extends ConsumerStatefulWidget {
   final void Function(UserId)? onOpenUser;
   final void Function(VideoSummary)? onOpenVideo;
   final void Function(RoomId)? onOpenLiveRoom;
+  final ValueChanged<UserProfile>? onMessage;
+  final VoidCallback? onLogin;
   final bool isSelf;
   final ProfileSection initialSection;
   @override
@@ -74,6 +80,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(profileControllerProvider(widget.id));
     final controller = ref.read(profileControllerProvider(widget.id).notifier);
+    final account = ref.watch(authControllerProvider);
+    final isSelf = widget.isSelf || account.mid == widget.id.value;
     final p = state.profile;
     return Column(
       children: [
@@ -92,7 +100,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       if (p != null)
                         ProfileHeader(
                           profile: p,
-                          isSelf: widget.isSelf,
+                          isSelf: isSelf,
+                          actions: isSelf
+                              ? null
+                              : Wrap(
+                                  spacing: 12,
+                                  runSpacing: 8,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    UserFollowButton(
+                                      key: const ValueKey('profile-follow'),
+                                      id: widget.id,
+                                      onLogin: widget.onLogin,
+                                    ),
+                                    OutlinedButton.icon(
+                                      key: const ValueKey('profile-message'),
+                                      style: OutlinedButton.styleFrom(
+                                        minimumSize: const Size(80, 40),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                      ),
+                                      onPressed: account.isSignedIn
+                                          ? widget.onMessage == null
+                                                ? null
+                                                : () =>
+                                                      widget.onMessage?.call(p)
+                                          : widget.onLogin,
+                                      icon: const Icon(
+                                        Icons.mail_outline,
+                                        size: 18,
+                                      ),
+                                      label: const Text('私信'),
+                                    ),
+                                  ],
+                                ),
                           onSelectSection: controller.select,
                           liveRoom: state.liveRoom,
                           onOpenLiveRoom: switch ((

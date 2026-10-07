@@ -2,6 +2,23 @@ import 'package:bilisail/app/workspace_tabs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'profile recipients reuse the inbox and consume intent without a visit',
+    () {
+      final workspace = WorkspaceTabs();
+      workspace.acceptRoute(Uri.parse('/messages'));
+      final inboxId = workspace.activeId;
+      workspace.acceptRoute(Uri.parse('/user/2'));
+      final profileId = workspace.activeId;
+      workspace.acceptRoute(Uri.parse('/messages?talker=2'));
+      expect(workspace.activeId, inboxId);
+      expect(workspace.tabs, hasLength(3));
+      expect(workspace.active.location.queryParameters['talker'], '2');
+      workspace.acceptRoute(Uri.parse('/messages?tab=$inboxId'));
+      expect(workspace.goBack(), isTrue);
+      expect(workspace.activeId, profileId);
+    },
+  );
   test('background playback updates preserve selection and visit history', () {
     final workspace = WorkspaceTabs();
     workspace.acceptRoute(Uri.parse('/video/BV1234567890?queue=fixture'));

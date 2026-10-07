@@ -17,23 +17,68 @@ class MessagesScreen extends ConsumerStatefulWidget {
     this.onLogin,
     this.onOpenUser,
     this.onOpenTarget,
+    this.initialUserId,
+    this.initialUserName,
+    this.initialUserAvatar,
+    this.onInitialConversationOpened,
   });
   final VoidCallback? onLogin;
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<Uri>? onOpenTarget;
+  final UserId? initialUserId;
+  final String? initialUserName;
+  final Uri? initialUserAvatar;
+  final VoidCallback? onInitialConversationOpened;
   @override
   ConsumerState<MessagesScreen> createState() => _MessagesScreenState();
 }
 
 class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   final Map<String, String> _drafts = {};
+  int _openVersion = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _openInitialConversation();
+  }
+
+  @override
+  void didUpdateWidget(MessagesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialUserId != widget.initialUserId) {
+      _openInitialConversation();
+    }
+  }
+
+  void _openInitialConversation() {
+    final version = ++_openVersion;
+    final id = widget.initialUserId;
+    if (id == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || version != _openVersion) return;
+      if (ref
+          .read(messagesControllerProvider.notifier)
+          .openUserConversation(
+            id,
+            name: widget.initialUserName,
+            avatarUrl: widget.initialUserAvatar,
+          )) {
+        widget.onInitialConversationOpened?.call();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
-    ref.listen(
-      authControllerProvider.select((s) => (s.isSignedIn, s.mid)),
-      (_, _) => _drafts.clear(),
-    );
+    ref.listen(authControllerProvider.select((s) => (s.isSignedIn, s.mid)), (
+      _,
+      _,
+    ) {
+      _drafts.clear();
+      _openInitialConversation();
+    });
     if (!auth.isSignedIn) {
       return StateView.empty(
         message: '登录后查看我的消息',
