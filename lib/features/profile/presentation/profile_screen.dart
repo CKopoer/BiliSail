@@ -136,8 +136,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           message: message,
                           onAction: () => controller.load(),
                         ),
+                      if (state.current.isHidden)
+                        StateView.empty(
+                          message:
+                              '该用户未公开${profileSectionLabel(state.section)}列表',
+                          icon: Icons.visibility_off_outlined,
+                        ),
                       if (state.current.items.isEmpty &&
                           !state.current.loading &&
+                          !state.current.isHidden &&
                           state.current.message == null)
                         StateView.empty(
                           message:

@@ -11,3 +11,10 @@ WorkspaceNavigationMode workspaceNavigationModeForPlatform(
 
 WorkspaceNavigationMode get defaultWorkspaceNavigationMode =>
     workspaceNavigationModeForPlatform(defaultTargetPlatform);
+
+/// Mobile navigation uses system back without desktop workspace chrome.
+bool workspaceHeaderVisibleForPlatform(TargetPlatform platform) =>
+    platform != TargetPlatform.android && platform != TargetPlatform.iOS;
+
+bool get workspaceHeaderVisible =>
+    workspaceHeaderVisibleForPlatform(defaultTargetPlatform);

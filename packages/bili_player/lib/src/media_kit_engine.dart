@@ -214,12 +214,11 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
 
   Future<void> _configureBufferAhead(
     mk.Player player,
-    Duration? window,
+    Duration window,
     int generation,
     Stopwatch watch,
     Duration budget,
   ) async {
-    if (window == null) return;
     final platform = player.platform;
     if (platform is! mk.NativePlayer) {
       throw PlayerFailure(
@@ -506,7 +505,8 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
         options.volume < 0 ||
         options.volume > 100 ||
         options.openTimeout <= Duration.zero ||
-        (maxBufferAhead != null && maxBufferAhead <= Duration.zero)) {
+        maxBufferAhead <= Duration.zero ||
+        maxBufferAhead > OpenOptions.maximumBufferAhead) {
       throw PlayerFailure(
         PlayerFailureKind.invalidSource,
         'Invalid playback options.',

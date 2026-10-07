@@ -328,28 +328,20 @@ class ProfileVideoToolbar extends StatelessWidget {
       ),
       onSubmitted: onSearch,
     );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-        // Both controls need their own usable width when text is enlarged.
-        if (constraints.maxWidth < 560 + (scale - 1) * 160) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              sort,
-              const SizedBox(height: 10),
-              SizedBox(width: constraints.maxWidth, child: search),
-            ],
-          );
-        }
-        return Row(
-          children: [
-            sort,
-            const Spacer(),
-            SizedBox(width: 260, child: search),
-          ],
-        );
-      },
+    return Row(
+      children: [
+        sort,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 260),
+              child: search,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

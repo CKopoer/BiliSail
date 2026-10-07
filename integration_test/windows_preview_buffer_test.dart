@@ -10,7 +10,7 @@ void main() {
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
   testWidgets(
-    'Windows preview keeps a rolling 5-second buffer and regular opens reset it',
+    'Windows preview keeps a rolling 5-second buffer and regular opens allow longer buffering',
     (tester) async {
       initializePlayerBackend();
       final fixturePath = Platform.environment['BILI_TEST_MEDIA_DIR'];
@@ -134,7 +134,7 @@ void main() {
       await checkWindow('seek');
       expect(rangeRequests, greaterThan(0));
 
-      // Reusing the adapter creates a fresh native player with backend defaults.
+      // A regular open restores the five-minute window, covering this short file.
       await engine.open(source, const OpenOptions(volume: 0));
       await _until(
         tester,

@@ -900,6 +900,10 @@ void main() {
         await session.open(null, null, target: target);
         expect(content.codecs, [VideoCodecPreference.av1]);
         expect(
+          engine.openOptions.single.maxBufferAhead,
+          const Duration(minutes: 5),
+        );
+        expect(
           engine.openOptions.single.videoDecoding,
           VideoDecodingMode.software,
         );
@@ -1495,6 +1499,10 @@ void main() {
     expect(engine.openOptions.single.play, false);
     expect(engine.openOptions.single.rate, 1.5);
     expect(engine.openOptions.single.volume, 35);
+    expect(
+      engine.openOptions.single.maxBufferAhead,
+      const Duration(minutes: 5),
+    );
     expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
     expect(sponsor.pending, isEmpty);
     await session.close();

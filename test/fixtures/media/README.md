@@ -12,4 +12,6 @@ ffmpeg -f lavfi -i 'testsrc2=size=160x90:rate=24:duration=60' -an -c:v libx264 -
 
 执行 `./tool/test-windows-media.ps1` 验证本地 HTTP 分轨；显式加 `-Online` 才访问游客公开 API 和媒体 CDN。测试要求两轨实际解码，并检查音视频请求头、同主机重定向、Range、暂停/seek/倍速/释放重开。它不能替代人工音画同步、跨主机重定向或长时间稳定性测试。
 
-60 秒无音轨测试图用于检查悬停预览的 5 秒向前缓冲窗口、随进度补充、seek 后窗口及普通打开恢复默认缓存；使用本地 HTTP，不访问公网或账号。
+60 秒无音轨测试图用于检查悬停预览的 5 秒向前缓冲窗口、随进度补充、seek 后窗口及普通打开恢复 5 分钟窗口；使用本地 HTTP，不访问公网或账号。
+
+`./tool/test-windows-buffer.ps1` 在忽略的 `build/validation/player-buffer-fixtures` 下生成 12 分钟的同类分轨素材，检查普通播放的 5 分钟向前窗口、暂停、播放推进、窗口外 seek 和短视频重开。它同样只访问本地 HTTP，不访问账号或公网；由 `test-windows-media.ps1` 一并执行。

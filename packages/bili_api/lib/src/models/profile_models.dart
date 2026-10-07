@@ -3,6 +3,15 @@ import '../models.dart';
 
 enum ApiProfileEntryKind { video, dynamic, folder, user }
 
+final class ApiProfileRelationPrivacy {
+  const ApiProfileRelationPrivacy({
+    required this.followingHidden,
+    required this.followersHidden,
+  });
+
+  final bool followingHidden, followersHidden;
+}
+
 final class ApiUserProfile {
   const ApiUserProfile({
     required this.mid,

@@ -5,6 +5,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'workspace header is hidden on Android/iOS and visible on Windows/macOS',
+    () {
+      for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+        expect(workspaceHeaderVisibleForPlatform(platform), isFalse);
+      }
+      for (final platform in [TargetPlatform.windows, TargetPlatform.macOS]) {
+        expect(workspaceHeaderVisibleForPlatform(platform), isTrue);
+      }
+    },
+  );
+  test(
     'Windows/macOS default to multiple tabs and Android to a single page',
     () {
       expect(

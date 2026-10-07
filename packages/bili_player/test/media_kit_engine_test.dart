@@ -10,6 +10,10 @@ void main() {
         const OpenOptions(volume: 0, openTimeout: Duration.zero),
         const OpenOptions(volume: 0, maxBufferAhead: Duration.zero),
         const OpenOptions(volume: 0, maxBufferAhead: Duration(seconds: -1)),
+        const OpenOptions(
+          volume: 0,
+          maxBufferAhead: Duration(minutes: 5, microseconds: 1),
+        ),
       ]) {
         final engine = MediaKitEngine();
         await expectLater(

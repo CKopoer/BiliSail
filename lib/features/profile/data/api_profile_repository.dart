@@ -57,6 +57,20 @@ class ApiProfileRepository implements ProfileRepository {
     required RequestCancellation cancellation,
   }) => _read(
     requests.run((context) async {
+      final isRelation =
+          section == ProfileSection.following ||
+          section == ProfileSection.followers;
+      // The owner can view their own lists even when hidden from visitors.
+      if (isRelation && accountScope != 'user:${id.value}') {
+        final privacy = await client.loadRelationPrivacy(
+          id.value,
+          context: context,
+        );
+        final hidden = section == ProfileSection.following
+            ? privacy.followingHidden
+            : privacy.followersHidden;
+        if (hidden) return const ProfilePage.hidden();
+      }
       final result = await switch (section) {
         ProfileSection.videos => client.loadVideos(
           id.value,

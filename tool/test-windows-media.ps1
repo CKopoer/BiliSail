@@ -9,6 +9,7 @@ try {
     & flutter @arguments
     if ($LASTEXITCODE -ne 0) { throw "Windows playback validation failed ($testFile): $LASTEXITCODE" }
   }
+  & (Join-Path $PSScriptRoot 'test-windows-buffer.ps1')
 } finally {
   Remove-Item Env:BILI_TEST_MEDIA_DIR -ErrorAction SilentlyContinue
   Pop-Location

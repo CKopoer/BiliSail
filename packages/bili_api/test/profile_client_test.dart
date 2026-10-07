@@ -22,6 +22,52 @@ final class FakeTransport implements ApiTransport {
 ProfileClient client(Object Function(Uri) handler) =>
     ProfileClient(BiliApiClient(transport: FakeTransport(handler)));
 void main() {
+  for (final (following, followers) in [(0, 0), (1, 0), (0, 1), (1, 1)]) {
+    test(
+      'relation privacy flags are independent: $following / $followers',
+      () async {
+        final privacy = await client((uri) {
+          expect(uri.path, '/x/space/setting');
+          expect(uri.queryParameters['mid'], '9007199254740993123');
+          return {
+            'code': 0,
+            'data': {
+              'privacy': {
+                'disable_following': following,
+                'disable_show_fans': followers,
+              },
+            },
+          };
+        }).loadRelationPrivacy('9007199254740993123');
+        expect(privacy.followingHidden, following == 1);
+        expect(privacy.followersHidden, followers == 1);
+      },
+    );
+  }
+  test(
+    'malformed privacy fails instead of treating the lists as public',
+    () async {
+      for (final value in [null, 2, true, 'bad']) {
+        await expectLater(
+          client(
+            (_) => {
+              'code': 0,
+              'data': {
+                'privacy': {'disable_following': value, 'disable_show_fans': 0},
+              },
+            },
+          ).loadRelationPrivacy('1'),
+          throwsA(
+            isA<ApiFailure>().having(
+              (e) => e.category,
+              'category',
+              ApiFailureCategory.protocol,
+            ),
+          ),
+        );
+      }
+    },
+  );
   test(
     'favorite videos retain statistics and unavailable media is disabled',
     () async {

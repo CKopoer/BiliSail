@@ -222,6 +222,59 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('用户甲'), findsOneWidget);
   });
+  for (final section in [ProfileSection.following, ProfileSection.followers]) {
+    testWidgets(
+      'hidden ${section.name} is a privacy state and can be refreshed',
+      (tester) async {
+        controller.select(section);
+        await tester.pump();
+        expect(state().current.items, isNotEmpty);
+        repo.isHidden = true;
+        await controller.load();
+        expect(state().current.items, isEmpty);
+        expect(state().current.isHidden, isTrue);
+        expect(state().current.hasMore, isFalse);
+        expect(state().current.message, isNull);
+        final reads = repo.listReads;
+        await controller.load();
+        expect(repo.listReads, reads);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              home: Scaffold(
+                body: ProfileScreen(id: id, initialSection: section),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final label = section == ProfileSection.following ? '关注' : '粉丝';
+        expect(find.text('该用户未公开$label列表'), findsOneWidget);
+        expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
+        expect(find.text('重试'), findsNothing);
+        expect(find.text('$label暂无公开内容'), findsNothing);
+        expect(find.text('个人主页'), findsOneWidget);
+        repo.isHidden = false;
+        await controller.refresh();
+        await tester.pumpAndSettle();
+        expect(state().current.isHidden, isFalse);
+        expect(find.text('用户甲'), findsOneWidget);
+        expect(find.text('该用户未公开$label列表'), findsNothing);
+      },
+    );
+  }
+  test('a late hidden result cannot replace a newer public result', () async {
+    final pending = Completer<ProfilePage>();
+    repo.pending = pending;
+    final old = controller.load(refresh: true);
+    repo.pending = null;
+    await controller.load(refresh: true);
+    pending.complete(const ProfilePage.hidden());
+    await old;
+    expect(state().current.isHidden, isFalse);
+    expect(state().current.items, isNotEmpty);
+  });
   testWidgets('user navigation and narrow enlarged layout', (tester) async {
     UserId? opened;
     await tester.binding.setSurfaceSize(const Size(375, 900));
@@ -372,6 +425,8 @@ void main() {
 
 class _Repo implements ProfileRepository {
   int epoch = 0;
+  int listReads = 0;
+  bool isHidden = false;
   List<ProfileEntry> items = const [entry];
   Completer<ProfilePage>? pending;
   RequestCancellation? read;
@@ -405,11 +460,14 @@ class _Repo implements ProfileRepository {
     String? folderId,
     required RequestCancellation cancellation,
   }) async {
+    listReads++;
     read = cancellation;
     this.keyword = keyword;
     if (failure case final error?) throw error;
     return pending?.future ??
-        ProfilePage(items: items, hasMore: true, cursor: '$page');
+        (isHidden
+            ? const ProfilePage.hidden()
+            : ProfilePage(items: items, hasMore: true, cursor: '$page'));
   }
 }
 

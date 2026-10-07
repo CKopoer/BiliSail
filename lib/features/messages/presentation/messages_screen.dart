@@ -1,9 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/platform/external_links.dart';
 import '../../../domain/user.dart';
 import '../../../shared/ui/network_avatar.dart';
+import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../auth/application/auth_controller.dart';
 import '../application/messages_controller.dart';
@@ -74,23 +76,64 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
           ),
         ),
         SizedBox(
-          height: 52,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            children: [
-              for (final section in InboxSection.values)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    selected: state.section == section,
-                    label: Text(
-                      '${section.label}${(unread[section] ?? 0) > 0 ? ' · ${unread[section]}' : ''}',
-                    ),
-                    onSelected: (_) => controller.selectSection(section),
-                  ),
+          height: 58,
+          child: ScrollConfiguration(
+            behavior: const SmoothScrollBehavior(horizontalMouseWheel: true)
+                .copyWith(
+                  dragDevices: {
+                    ...const SmoothScrollBehavior().dragDevices,
+                    PointerDeviceKind.mouse,
+                  },
                 ),
-            ],
+            child: SingleChildScrollView(
+              key: const ValueKey('message-section-strip'),
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                children: [
+                  for (final section in InboxSection.values)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: Semantics(
+                        selected: state.section == section,
+                        button: true,
+                        child: TextButton(
+                          key: ValueKey('message-section-${section.name}'),
+                          onPressed: () => controller.selectSection(section),
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(48, 42),
+                            padding: const EdgeInsets.symmetric(horizontal: 7),
+                            foregroundColor: state.section == section
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.onSurface,
+                            textStyle: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                '${section.label}${(unread[section] ?? 0) > 0 ? ' · ${unread[section]}' : ''}',
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                width: 20,
+                                height: 2,
+                                color: state.section == section
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.transparent,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
         const Divider(height: 1),

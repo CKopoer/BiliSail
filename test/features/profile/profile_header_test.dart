@@ -119,8 +119,14 @@ void main() {
     expect(selected, ProfileSection.followers);
   });
 
-  for (final scale in [1.0, 2.0]) {
-    testWidgets('narrow toolbar keeps search usable at text scale $scale', (
+  for (final (width, scale) in [
+    (320.0, 1.0),
+    (320.0, 2.0),
+    (375.0, 1.0),
+    (375.0, 2.0),
+    (500.0, 1.0),
+  ]) {
+    testWidgets('toolbar fits one row at width $width and text scale $scale', (
       tester,
     ) async {
       final keyword = TextEditingController();
@@ -134,17 +140,23 @@ void main() {
           onOrderChanged: (value) => order = value,
           onSearch: (value) => searched = value,
         ),
-        width: 320,
+        width: width,
         scale: scale,
       );
       expect(tester.takeException(), isNull);
       final search = find.byKey(const ValueKey('profile-video-search'));
       final sort = find.byKey(const ValueKey('profile-video-sort'));
-      expect(
-        tester.getRect(search).top,
-        greaterThan(tester.getRect(sort).bottom),
-      );
-      expect(tester.getSize(search).width, 288);
+      final searchRect = tester.getRect(search);
+      final sortRect = tester.getRect(sort);
+      expect(searchRect.center.dy, closeTo(sortRect.center.dy, .01));
+      expect(searchRect.right, width - 16);
+      expect(searchRect.left, greaterThanOrEqualTo(sortRect.right + 12));
+      expect(searchRect.width, lessThanOrEqualTo(260));
+      expect(searchRect.width, greaterThan(80));
+      if (width <= 375) {
+        expect(searchRect.width, lessThan(260));
+        expect(searchRect.left, closeTo(sortRect.right + 12, .01));
+      }
       await tester.tap(sort);
       await tester.pumpAndSettle();
       await tester.tap(find.text('最多播放').last);

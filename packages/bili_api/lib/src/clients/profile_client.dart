@@ -215,6 +215,25 @@ final class ProfileClient {
     return _paged(items, page, total);
   }
 
+  Future<ApiProfileRelationPrivacy> loadRelationPrivacy(
+    String mid, {
+    ApiRequestContext? context,
+  }) async {
+    _id(mid);
+    const e = 'profile_relation_privacy';
+    final data = await _get('/x/space/setting', e, {'mid': mid}, context);
+    final privacy = _map(data['privacy'], e);
+    bool hidden(Object? value) => switch (_number(value)) {
+      0 => false,
+      1 => true,
+      _ => _fail(e),
+    };
+    return ApiProfileRelationPrivacy(
+      followingHidden: hidden(privacy['disable_following']),
+      followersHidden: hidden(privacy['disable_show_fans']),
+    );
+  }
+
   Future<ApiPage<ApiProfileEntry>> loadRelations(
     String mid, {
     required bool followers,

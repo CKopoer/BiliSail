@@ -4,7 +4,9 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/messages/application/messages_controller.dart';
+import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,7 +21,11 @@ void main() {
     repo = MessageRepositoryFake();
   });
   tearDown(() async => auth.stream.close());
-  Future<void> mount(WidgetTester tester, {double scale = 1}) async {
+  Future<void> mount(
+    WidgetTester tester, {
+    double scale = 1,
+    TargetPlatform? platform,
+  }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -27,6 +33,7 @@ void main() {
           messageRepositoryProvider.overrideWithValue(repo),
         ],
         child: MaterialApp(
+          theme: ThemeData(platform: platform),
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context)
                 .copyWith(textScaler: TextScaler.linear(scale)),
@@ -39,6 +46,58 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets(
+    'narrow message tabs scroll by mouse wheel and switch without writes',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await mount(tester, scale: 2, platform: TargetPlatform.windows);
+      final scope = ProviderScope.containerOf(
+        tester.element(find.byType(MessagesScreen)),
+      );
+      expect(find.text('私信 · 3'), findsOneWidget);
+      final strip = find.byKey(const ValueKey('message-section-strip'));
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(of: strip, matching: find.byType(Scrollable)),
+      );
+      expect(scrollable.position.maxScrollExtent, greaterThan(0));
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: tester.getCenter(strip),
+          scrollDelta: const Offset(0, 2000),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final system = find.byKey(const ValueKey('message-section-system'));
+      expect(system.hitTestable(), findsOneWidget);
+      await tester.tap(system);
+      await tester.pumpAndSettle();
+      expect(
+        scope.read(messagesControllerProvider).section,
+        InboxSection.system,
+      );
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: tester.getCenter(strip),
+          scrollDelta: const Offset(0, -2000),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('message-section-private')));
+      await tester.pumpAndSettle();
+      expect(
+        scope.read(messagesControllerProvider).section,
+        InboxSection.private,
+      );
+      expect(repo.sends, 0);
+      expect(repo.marks, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'wide inbox shows categories and conversation; reading does not acknowledge',
     (tester) async {

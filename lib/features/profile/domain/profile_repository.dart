@@ -60,9 +60,15 @@ final class ProfileEntry {
 }
 
 final class ProfilePage {
-  const ProfilePage({required this.items, required this.hasMore, this.cursor});
+  const ProfilePage({required this.items, required this.hasMore, this.cursor})
+    : isHidden = false;
+  const ProfilePage.hidden()
+    : items = const [],
+      hasMore = false,
+      cursor = null,
+      isHidden = true;
   final List<ProfileEntry> items;
-  final bool hasMore;
+  final bool hasMore, isHidden;
   final String? cursor;
 }
 

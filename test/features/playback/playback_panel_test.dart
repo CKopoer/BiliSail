@@ -63,6 +63,7 @@ void main() {
       expect(engine.maxSurfaces, 1);
       expect(tester.takeException(), isNull);
     },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
   );
 
   for (final (mode, concurrent) in [

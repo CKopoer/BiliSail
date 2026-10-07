@@ -291,10 +291,10 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                 builder: (context, constraints) {
                   return Column(
                     children: [
-                      if (_singlePage)
-                        _singlePageHeader(context)
-                      else
-                        _tabStrip(context),
+                      if (workspaceHeaderVisible)
+                        _singlePage
+                            ? _singlePageHeader(context)
+                            : _tabStrip(context),
                       if (_workspace.active.location.path != '/search' &&
                           !_workspace.active.isPlayback &&
                           !_workspace.active.isProfile)
@@ -544,7 +544,8 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   Widget? _channelBar(BuildContext context) {
     final active = _workspace.active;
     if (active.location.path == '/history' ||
-        active.location.path == '/downloads') {
+        active.location.path == '/downloads' ||
+        active.location.path == '/messages') {
       return null;
     }
     if (active.location.path == '/settings') return _settingsBar(context);

@@ -250,8 +250,8 @@ void main() {
             workspaceNavigationModeForPlatform(platform) ==
             WorkspaceNavigationMode.singlePage;
         expect(
-          find.byKey(const ValueKey('single-page-header')),
-          singlePage ? findsOneWidget : findsNothing,
+          find.byKey(const ValueKey('workspace-tab-strip')),
+          singlePage ? findsNothing : findsOneWidget,
         );
         settings.loaded.complete(
           AppSettings(
@@ -261,9 +261,10 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('workspace-tab-strip')), findsNothing);
         expect(
           find.byKey(const ValueKey('single-page-header')),
-          singlePage ? findsNothing : findsOneWidget,
+          platform == TargetPlatform.android ? findsNothing : findsOneWidget,
         );
         expect(tester.takeException(), isNull);
       },
@@ -302,6 +303,7 @@ void main() {
         WorkspaceNavigationMode.singlePage,
       );
       expect(find.byKey(const ValueKey('single-page-header')), findsOneWidget);
+      expect(find.byKey(const ValueKey('workspace-tab-strip')), findsNothing);
       expect(find.byKey(const ValueKey('new-workspace-tab')), findsNothing);
       await tester.tap(find.widgetWithText(ChoiceChip, '多标签页'));
       await tester.pumpAndSettle();

@@ -19,12 +19,13 @@ final class ProfileListState {
     this.cursor,
     this.loading = false,
     this.hasMore = true,
+    this.isHidden = false,
     this.message,
   });
   final List<ProfileEntry> items;
   final int page;
   final String? cursor, message;
-  final bool loading, hasMore;
+  final bool loading, hasMore, isHidden;
 }
 
 final class ProfileState {
@@ -219,6 +220,13 @@ class ProfileController extends Notifier<ProfileState> {
       );
       if (!_current(generation, scope, epoch) ||
           _versions[section] != version) {
+        return;
+      }
+      if (result.isHidden) {
+        _setList(
+          section,
+          const ProfileListState(hasMore: false, isHidden: true),
+        );
         return;
       }
       final unique = <String, ProfileEntry>{
