@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,14 +10,7 @@ import '../application/account_overview_controller.dart';
 import '../application/auth_controller.dart';
 
 class AccountMenu extends ConsumerWidget {
-  const AccountMenu({
-    super.key,
-    required this.top,
-    required this.right,
-    this.onOpenUser,
-    this.onNavigate,
-  });
-  final double top, right;
+  const AccountMenu({super.key, this.onOpenUser, this.onNavigate});
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<String>? onNavigate;
 
@@ -54,8 +49,8 @@ class AccountMenu extends ConsumerWidget {
       bool profile = false,
       Widget? trailing,
     }) => ListTile(
-      dense: true,
-      minTileHeight: 40,
+      minTileHeight: 48,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
       leading: Icon(icon, size: 20),
       title: Text(title),
       trailing: trailing,
@@ -75,137 +70,173 @@ class AccountMenu extends ConsumerWidget {
         ),
       ),
     );
-    return Dialog(
+    return Drawer(
+      width: math.min(360, math.max(0, MediaQuery.sizeOf(context).width - 32)),
+      semanticLabel: '我的账号',
       backgroundColor: theme.colorScheme.surface,
       surfaceTintColor: Colors.transparent,
-      elevation: 8,
-      alignment: Alignment.topRight,
-      insetPadding: EdgeInsets.fromLTRB(12, top, right, 12),
+      elevation: 16,
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: SizedBox(
-        width: 280,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 22, 20, 8),
-                child: Column(
-                  children: [
-                    NetworkAvatar(
-                      url: auth.avatarUrl,
-                      name: auth.userName ?? '',
-                      radius: 28,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      auth.userName ?? '我的账号',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    if (data?.vipLabel case final label? when label.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          label,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      spacing: 12,
-                      runSpacing: 4,
-                      children: [
-                        Text('等级 ${data?.level ?? '—'}'),
-                        Text(
-                          data?.level != null && (data?.level ?? 0) >= 6
-                              ? '已满级 · ${data?.currentExperience ?? '—'}'
-                              : '${data?.currentExperience ?? '—'} / ${data?.nextExperience ?? '—'}',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    LinearProgressIndicator(
-                      value: data?.progress ?? (overview.isLoading ? null : 0),
-                      minHeight: 3,
-                    ),
-                    if (data?.coins case final coins?)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          '硬币 $coins',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                    if (overview.hasError)
-                      TextButton(
-                        onPressed: () =>
-                            ref.invalidate(accountOverviewProvider),
-                        child: Text(
-                          overview.error is AppFailure
-                              ? (overview.error as AppFailure).message
-                              : '资料加载失败，点击重试',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Row(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.horizontal(left: Radius.circular(16)),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 8, 4),
+              child: Row(
                 children: [
-                  statistic('关注', data?.following, 'following'),
-                  statistic('粉丝', data?.followers, 'followers'),
-                  statistic('动态', data?.dynamics, 'dynamics'),
+                  Expanded(
+                    child: Text('我的账号', style: theme.textTheme.titleMedium),
+                  ),
+                  IconButton(
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
                 ],
               ),
-              const Divider(height: 12),
-              if (id != null)
-                item(
-                  '个人中心',
-                  Icons.person_outline,
-                  '/user/${id.value}',
-                  profile: true,
-                ),
-              item(
-                '我的消息',
-                Icons.mail_outline,
-                '/messages',
-                trailing: count > 0
-                    ? Badge(label: Text(count > 99 ? '99+' : '$count'))
-                    : null,
-              ),
-              if (unread.failed)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: TextButton(
-                    onPressed: unread.refresh,
-                    child: const Text('未读数量获取失败，重试'),
+            ),
+            Expanded(
+              child: Scrollbar(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 22, 20, 8),
+                        child: Column(
+                          children: [
+                            NetworkAvatar(
+                              url: auth.avatarUrl,
+                              name: auth.userName ?? '',
+                              radius: 28,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              auth.userName ?? '我的账号',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                            if (data?.vipLabel case final label?
+                                when label.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  label,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              spacing: 12,
+                              runSpacing: 4,
+                              children: [
+                                Text('等级 ${data?.level ?? '—'}'),
+                                Text(
+                                  data?.level != null && (data?.level ?? 0) >= 6
+                                      ? '已满级 · ${data?.currentExperience ?? '—'}'
+                                      : '${data?.currentExperience ?? '—'} / ${data?.nextExperience ?? '—'}',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            LinearProgressIndicator(
+                              value:
+                                  data?.progress ??
+                                  (overview.isLoading ? null : 0),
+                              minHeight: 3,
+                            ),
+                            if (data?.coins case final coins?)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  '硬币 $coins',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ),
+                            if (overview.hasError)
+                              TextButton(
+                                onPressed: () =>
+                                    ref.invalidate(accountOverviewProvider),
+                                child: Text(
+                                  overview.error is AppFailure
+                                      ? (overview.error as AppFailure).message
+                                      : '资料加载失败，点击重试',
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          statistic('关注', data?.following, 'following'),
+                          statistic('粉丝', data?.followers, 'followers'),
+                          statistic('动态', data?.dynamics, 'dynamics'),
+                        ],
+                      ),
+                      const Divider(height: 12),
+                      if (id != null)
+                        item(
+                          '个人中心',
+                          Icons.person_outline,
+                          '/user/${id.value}',
+                          profile: true,
+                        ),
+                      item(
+                        '我的消息',
+                        Icons.mail_outline,
+                        '/messages',
+                        trailing: count > 0
+                            ? Badge(label: Text(count > 99 ? '99+' : '$count'))
+                            : null,
+                      ),
+                      if (unread.failed)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: TextButton(
+                            onPressed: unread.refresh,
+                            child: const Text('未读数量获取失败，重试'),
+                          ),
+                        ),
+                      item(
+                        '稍后再看',
+                        Icons.play_circle_outline,
+                        '/?channel=watchLater',
+                      ),
+                      item('我的收藏', Icons.star_border, '/?channel=favorites'),
+                      item('历史记录', Icons.history, '/history'),
+                      item(
+                        '直播中心',
+                        Icons.flag_outlined,
+                        '/?channel=live&section=我的关注',
+                      ),
+                      const Divider(height: 12),
+                      ListTile(
+                        minTileHeight: 48,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                        ),
+                        leading: const Icon(Icons.logout, size: 20),
+                        title: const Text('退出登录'),
+                        onTap: () {
+                          Navigator.pop(context);
+                          ref.read(authControllerProvider.notifier).signOut();
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                   ),
                 ),
-              item('稍后再看', Icons.play_circle_outline, '/?channel=watchLater'),
-              item('我的收藏', Icons.star_border, '/?channel=favorites'),
-              item('历史记录', Icons.history, '/history'),
-              item('直播中心', Icons.flag_outlined, '/?channel=live&section=我的关注'),
-              const Divider(height: 12),
-              ListTile(
-                dense: true,
-                minTileHeight: 44,
-                leading: const Icon(Icons.logout, size: 20),
-                title: const Text('退出登录'),
-                onTap: () {
-                  Navigator.pop(context);
-                  ref.read(authControllerProvider.notifier).signOut();
-                },
               ),
-              const SizedBox(height: 4),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

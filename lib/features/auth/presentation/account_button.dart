@@ -23,46 +23,52 @@ class AccountButton extends ConsumerWidget {
         ? ref.watch(accountMessageIndicatorProvider)
         : const AccountMessageIndicator();
     final count = indicator.count;
-    return Builder(
-      builder: (buttonContext) => IconButton(
-        tooltip: auth.isSignedIn ? '我的账号' : '登录',
-        icon: Badge(
-          isLabelVisible: count > 0,
-          label: Text(count > 99 ? '99+' : '$count'),
-          child: NetworkAvatar(
-            url: auth.avatarUrl,
-            name: auth.userName ?? '',
-            radius: 12,
-          ),
+    return IconButton(
+      tooltip: auth.isSignedIn ? '我的账号' : '登录',
+      icon: Badge(
+        isLabelVisible: count > 0,
+        label: Text(count > 99 ? '99+' : '$count'),
+        child: NetworkAvatar(
+          url: auth.avatarUrl,
+          name: auth.userName ?? '',
+          radius: 12,
         ),
-        onPressed: () {
-          if (auth.isSignedIn) {
-            indicator.refresh?.call();
-            final box = buttonContext.findRenderObject() as RenderBox?;
-            final position = box?.localToGlobal(Offset.zero) ?? Offset.zero;
-            final size = MediaQuery.sizeOf(context);
-            showDialog<void>(
-              context: context,
-              barrierColor: Colors.transparent,
-              builder: (_) => AccountMenu(
-                top: (position.dy + (box?.size.height ?? 40) + 8).clamp(
-                  12,
-                  size.height / 2,
-                ),
-                right: (size.width - position.dx - (box?.size.width ?? 40))
-                    .clamp(12, (size.width - 292).clamp(12, double.infinity)),
-                onOpenUser: onOpenUser,
-                onNavigate: onNavigate,
-              ),
-            );
-            return;
-          }
-          showDialog<void>(
-            context: context,
-            builder: (_) => AccountDialog(onOpenUser: onOpenUser),
-          );
-        },
       ),
+      onPressed: () {
+        if (auth.isSignedIn) {
+          indicator.refresh?.call();
+          showGeneralDialog<void>(
+            context: context,
+            barrierDismissible: true,
+            barrierLabel: MaterialLocalizations.of(context)
+                .modalBarrierDismissLabel,
+            barrierColor: Colors.black38,
+            transitionDuration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 280),
+            pageBuilder: (_, _, _) =>
+                AccountMenu(onOpenUser: onOpenUser, onNavigate: onNavigate),
+            transitionBuilder: (_, animation, _, child) => Align(
+              alignment: Alignment.centerRight,
+              child: SlideTransition(
+                position:
+                    Tween<Offset>(
+                      begin: const Offset(1, 0),
+                      end: Offset.zero,
+                    ).animate(
+                      animation.drive(CurveTween(curve: Curves.easeOutCubic)),
+                    ),
+                child: child,
+              ),
+            ),
+          );
+          return;
+        }
+        showDialog<void>(
+          context: context,
+          builder: (_) => AccountDialog(onOpenUser: onOpenUser),
+        );
+      },
     );
   }
 }
