@@ -43,7 +43,7 @@ final class _PagedScrollViewportState extends State<PagedScrollViewport> {
   bool _checkScheduled = false;
   bool _forceCheck = false;
   bool _requestPending = false;
-  bool _showTop = false;
+  final _showTop = ValueNotifier(false);
   (Object, double, double)? _lastRequestLayout;
 
   @override
@@ -102,7 +102,7 @@ final class _PagedScrollViewportState extends State<PagedScrollViewport> {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
     final show = position.pixels > position.minScrollExtent + 0.5;
-    if (show != _showTop && mounted) setState(() => _showTop = show);
+    if (mounted) _showTop.value = show;
   }
 
   void _checkForMore({required bool force}) {
@@ -195,10 +195,13 @@ final class _PagedScrollViewportState extends State<PagedScrollViewport> {
           Positioned(
             right: 20,
             bottom: 20,
-            child: ScrollFloatingActions(
-              refreshTooltip: widget.refreshTooltip,
-              onRefresh: _refresh,
-              onToTop: _showTop ? _toTop : null,
+            child: ValueListenableBuilder(
+              valueListenable: _showTop,
+              builder: (context, showTop, _) => ScrollFloatingActions(
+                refreshTooltip: widget.refreshTooltip,
+                onRefresh: _refresh,
+                onToTop: showTop ? _toTop : null,
+              ),
             ),
           ),
       ],
@@ -210,6 +213,7 @@ final class _PagedScrollViewportState extends State<PagedScrollViewport> {
     _scrollController
       ..removeListener(_updateTopVisibility)
       ..dispose();
+    _showTop.dispose();
     super.dispose();
   }
 }

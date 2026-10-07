@@ -7,6 +7,7 @@ import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -54,12 +55,31 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   HomeEntry? _liveParent;
   bool _expandedAreas = false;
   final Set<HomeQuery> _visitedQueries = {};
+  List<HomeEntry>? _bodyItems;
+  HomeQuery? _bodyQuery;
+  Set<(HomeEntryKind, String)>? _bodyUnsubscribing;
+  Set<String>? _bodyWatchLaterPending;
+  VoidCallback? _bodyLogin;
+  bool? _bodyCanUnsubscribe;
+  Widget? _bodySliver;
+
+  void _clearBodyCache() {
+    _bodyItems = null;
+    _bodyQuery = null;
+    _bodyUnsubscribing = null;
+    _bodyWatchLaterPending = null;
+    _bodyLogin = null;
+    _bodyCanUnsubscribe = null;
+    _bodySliver = null;
+  }
+
   @override
   void didUpdateWidget(HomeContent oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.channel != widget.channel ||
         oldWidget.section != widget.section ||
         oldWidget.isSignedIn != widget.isSignedIn) {
+      _clearBodyCache();
       _folder = null;
       _liveParent = null;
       _visitedQueries.clear();
@@ -117,6 +137,11 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
       ref.watch(homeControllerProvider(visited));
     }
     final feed = ref.watch(homeControllerProvider(query));
+    if (_bodyQuery != query || feed.items.asData?.value.isNotEmpty != true) {
+      // A full load, empty/error state or query replacement has no retained
+      // body. Release its models and callbacks; paging errors still carry data.
+      _clearBodyCache();
+    }
     final controller = ref.read(homeControllerProvider(query).notifier);
     final watchLaterActions = widget.channel == HomeChannel.watchLater
         ? ref.watch(watchLaterRemovalProvider(scope))
@@ -134,233 +159,241 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
       onRefresh: controller.refresh,
       builder: (scrollController) => RefreshIndicator(
         onRefresh: controller.refresh,
-        child: ListView(
+        child: CustomScrollView(
           key: PageStorageKey(
             'home-${widget.channel.name}-${widget.section}-$scope-${query.folderId}',
           ),
           controller: scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          children: [
-            if (liveBrowse && areas != null)
-              areas.items.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (error, _) => StateView.error(
-                  message: _message(error),
-                  onAction: ref
-                      .read(homeControllerProvider(areasQuery).notifier)
-                      .refresh,
-                ),
-                data: (items) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _areaRow(items, parent: true),
-                    if (_liveParent != null)
-                      _areaRow(_liveParent!.children, parent: false),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-            if (_folder != null && !liveBrowse)
-              Row(
-                children: [
-                  IconButton(
-                    tooltip: '返回列表',
-                    onPressed: () => setState(() => _folder = null),
-                    icon: const Icon(Icons.arrow_back),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              sliver: SliverMainAxisGroup(
+                slivers: [
+                  if (liveBrowse && areas != null)
+                    SliverToBoxAdapter(
+                      child: areas.items.when(
+                        loading: () => const LinearProgressIndicator(),
+                        error: (error, _) => StateView.error(
+                          message: _message(error),
+                          onAction: ref
+                              .read(homeControllerProvider(areasQuery).notifier)
+                              .refresh,
+                        ),
+                        data: (items) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _areaRow(items, parent: true),
+                            if (_liveParent != null)
+                              _areaRow(_liveParent!.children, parent: false),
+                            const SizedBox(height: 12),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (_folder != null && !liveBrowse)
+                    SliverToBoxAdapter(
+                      child: Row(
+                        children: [
+                          IconButton(
+                            tooltip: '返回列表',
+                            onPressed: () => setState(() => _folder = null),
+                            icon: const Icon(Icons.arrow_back),
+                          ),
+                          Expanded(child: Text(_folder!.title)),
+                        ],
+                      ),
+                    ),
+                  feed.items.when(
+                    loading: () => const SliverToBoxAdapter(
+                      child: SizedBox(height: 300, child: StateView.loading()),
+                    ),
+                    error: (error, _) => SliverToBoxAdapter(
+                      child: StateView.error(
+                        message: _message(error),
+                        onAction: controller.refresh,
+                      ),
+                    ),
+                    data: (items) => items.isEmpty
+                        ? const SliverToBoxAdapter(
+                            child: StateView.empty(message: '这里暂时没有内容'),
+                          )
+                        : _itemsSliver(
+                            items,
+                            query: query,
+                            controller: controller,
+                            feed: feed,
+                            watchLaterActions: watchLaterActions,
+                          ),
                   ),
-                  Expanded(child: Text(_folder!.title)),
+                  SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        if (feed.limitReached)
+                          Center(
+                            child: Text(
+                              widget.channel == HomeChannel.favorites
+                                  ? '已显示 ${HomeController.maxFavoriteEntries} 条内容，可刷新重新加载'
+                                  : '已显示 ${HomeController.maxDynamicEntries} 条动态，可刷新查看最新内容',
+                            ),
+                          ),
+                        if (feed.loadingMore)
+                          const Center(child: CircularProgressIndicator())
+                        else if (feed.pageError != null)
+                          StateView.error(
+                            message: _message(feed.pageError),
+                            onAction: controller.loadMore,
+                          )
+                        else if (feed.hasMore)
+                          Center(
+                            child: OutlinedButton(
+                              onPressed: controller.loadMore,
+                              child: const Text('加载更多'),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            feed.items.when(
-              loading: () =>
-                  const SizedBox(height: 300, child: StateView.loading()),
-              error: (error, _) => StateView.error(
-                message: _message(error),
-                onAction: controller.refresh,
-              ),
-              data: (items) => items.isEmpty
-                  ? const StateView.empty(message: '这里暂时没有内容')
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (widget.channel == HomeChannel.dynamic) {
-                          return Align(
-                            alignment: Alignment.topCenter,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 780),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  for (final item in items)
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 16,
-                                      ),
-                                      child: InteractiveDynamicPostCard(
-                                        key: ValueKey(item.id),
-                                        post:
-                                            item.dynamicPost ??
-                                            DynamicPost(
-                                              id: item.id,
-                                              authorName: item.authorName,
-                                              authorId: UserId.tryParse(
-                                                item.authorMid,
-                                              ),
-                                              authorAvatarUrl:
-                                                  item.authorAvatarUrl,
-                                              publishText: item.publishText,
-                                              publishedAt: item.publishedAt,
-                                              text: item.description.isEmpty
-                                                  ? item.title
-                                                  : item.description,
-                                            ),
-                                        onOpenUser: (id) =>
-                                            context.go('/user/${id.value}'),
-                                        onOpenVideo: (video) => context.go(
-                                          '/video/${video.id.value}',
-                                        ),
-                                        onOpenLink: _openLink,
-                                        onLogin: widget.onLogin,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }
-                        if (widget.channel == HomeChannel.favorites ||
-                            widget.channel == HomeChannel.watchLater) {
-                          return ResponsiveCardGrid(
-                            children: [
-                              for (final item in items)
-                                if (item.kind == HomeEntryKind.video &&
-                                    (item.bvid != null ||
-                                        widget.channel ==
-                                            HomeChannel.watchLater))
-                                  HomeVideoCard(
-                                    key: ValueKey((item.kind, item.id)),
-                                    entry: item,
-                                    showWatchLaterButton:
-                                        widget.channel !=
-                                        HomeChannel.watchLater,
-                                    menu:
-                                        widget.channel == HomeChannel.watchLater
-                                        ? VideoCardMenu(
-                                            actions: const [
-                                              VideoCardMenuAction
-                                                  .removeWatchLater,
-                                            ],
-                                            busy:
-                                                watchLaterActions?.pending
-                                                    .contains(item.id) ==
-                                                true,
-                                            onSelected: (_) =>
-                                                _removeWatchLater(item, scope),
-                                          )
-                                        : null,
-                                    onOpenUser: (id) =>
-                                        context.go('/user/${id.value}'),
-                                    onTap: () =>
-                                        _open(item, visibleItems: items),
-                                  )
-                                else if (item.kind == HomeEntryKind.folder ||
-                                    item.kind == HomeEntryKind.collection)
-                                  FavoriteFolderCard(
-                                    key: ValueKey((item.kind, item.id)),
-                                    entry: item,
-                                    onTap: () => _open(item),
-                                    showCreatedMetadata:
-                                        widget.section == '我创建的收藏夹' &&
-                                        item.kind == HomeEntryKind.folder,
-                                    onEdit:
-                                        widget.section == '我创建的收藏夹' &&
-                                            item.kind == HomeEntryKind.folder
-                                        ? () => _editFolder(item, scope)
-                                        : null,
-                                    unsubscribing: feed.unsubscribing.contains((
-                                      item.kind,
-                                      item.id,
-                                    )),
-                                    onUnsubscribe:
-                                        widget.section == '我的收藏与订阅' &&
-                                            query.folderId == null &&
-                                            ref.read(homeRepositoryProvider)
-                                                is HomeSubscriptionRepository
-                                        ? () => _unsubscribe(controller, item)
-                                        : null,
-                                  )
-                                else
-                                  _EntryCard(
-                                    entry: item,
-                                    onTap: () => _open(item),
-                                  ),
-                            ],
-                          );
-                        }
-                        if (widget.channel == HomeChannel.videoDynamic) {
-                          return ResponsiveCardGrid(
-                            children: [
-                              for (final item in items)
-                                if (item.kind == HomeEntryKind.video)
-                                  VideoDynamicCard(
-                                    entry: item,
-                                    onOpenUser: (id) =>
-                                        context.go('/user/${id.value}'),
-                                    onTap: () => _open(item),
-                                  )
-                                else
-                                  _EntryCard(
-                                    entry: item,
-                                    onTap: () => _open(item),
-                                  ),
-                            ],
-                          );
-                        }
-                        return ResponsiveCardGrid(
-                          children: [
-                            for (final item in items)
-                              if (widget.channel == HomeChannel.live &&
-                                  item.kind == HomeEntryKind.live)
-                                LiveRoomCard(
-                                  entry: item,
-                                  onTap: () => _open(item),
-                                )
-                              else
-                                _EntryCard(
-                                  entry: item,
-                                  onTap: () => _open(item),
-                                ),
-                          ],
-                        );
-                      },
-                    ),
             ),
-            const SizedBox(height: 16),
-            if (feed.limitReached)
-              Center(
-                child: Text(
-                  widget.channel == HomeChannel.favorites
-                      ? '已显示 ${HomeController.maxFavoriteEntries} 条内容，可刷新重新加载'
-                      : '已显示 ${HomeController.maxDynamicEntries} 条动态，可刷新查看最新内容',
-                ),
-              ),
-            if (feed.loadingMore)
-              const Center(child: CircularProgressIndicator())
-            else if (feed.pageError != null)
-              StateView.error(
-                message: _message(feed.pageError),
-                onAction: controller.loadMore,
-              )
-            else if (feed.hasMore)
-              Center(
-                child: OutlinedButton(
-                  onPressed: controller.loadMore,
-                  child: const Text('加载更多'),
-                ),
-              ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _itemsSliver(
+    List<HomeEntry> items, {
+    required HomeQuery query,
+    required HomeController controller,
+    required HomeState feed,
+    required WatchLaterRemovalState? watchLaterActions,
+  }) {
+    final canUnsubscribe =
+        ref.read(homeRepositoryProvider) is HomeSubscriptionRepository;
+    final cached = _bodySliver;
+    if (cached != null &&
+        identical(items, _bodyItems) &&
+        query == _bodyQuery &&
+        setEquals(feed.unsubscribing, _bodyUnsubscribing) &&
+        setEquals(watchLaterActions?.pending, _bodyWatchLaterPending) &&
+        widget.onLogin == _bodyLogin &&
+        canUnsubscribe == _bodyCanUnsubscribe) {
+      return cached;
+    }
+    // Pagination status only changes the footer. Preserve the child delegate
+    // until entries or card actions change, so retained rows are not rebuilt.
+    _bodyItems = items;
+    _bodyQuery = query;
+    _bodyUnsubscribing = feed.unsubscribing;
+    _bodyWatchLaterPending = watchLaterActions?.pending;
+    _bodyLogin = widget.onLogin;
+    _bodyCanUnsubscribe = canUnsubscribe;
+    if (widget.channel == HomeChannel.dynamic) {
+      return _bodySliver = SliverList.builder(
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return Padding(
+            key: ValueKey(item.id),
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 780),
+                child: InteractiveDynamicPostCard(
+                  key: ValueKey(item.id),
+                  post:
+                      item.dynamicPost ??
+                      DynamicPost(
+                        id: item.id,
+                        authorName: item.authorName,
+                        authorId: UserId.tryParse(item.authorMid),
+                        authorAvatarUrl: item.authorAvatarUrl,
+                        publishText: item.publishText,
+                        publishedAt: item.publishedAt,
+                        text: item.description.isEmpty
+                            ? item.title
+                            : item.description,
+                      ),
+                  onOpenUser: (id) => context.go('/user/${id.value}'),
+                  onOpenVideo: (video) =>
+                      context.go('/video/${video.id.value}'),
+                  onOpenLink: _openLink,
+                  onLogin: widget.onLogin,
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+    return _bodySliver = SliverResponsiveCardGrid(
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        final key = ValueKey((item.kind, item.id));
+        if (widget.channel == HomeChannel.favorites ||
+            widget.channel == HomeChannel.watchLater) {
+          if (item.kind == HomeEntryKind.video &&
+              (item.bvid != null || widget.channel == HomeChannel.watchLater)) {
+            return HomeVideoCard(
+              key: key,
+              entry: item,
+              showWatchLaterButton: widget.channel != HomeChannel.watchLater,
+              menu: widget.channel == HomeChannel.watchLater
+                  ? VideoCardMenu(
+                      actions: const [VideoCardMenuAction.removeWatchLater],
+                      busy:
+                          watchLaterActions?.pending.contains(item.id) == true,
+                      onSelected: (_) => _removeWatchLater(item, query.scope),
+                    )
+                  : null,
+              onOpenUser: (id) => context.go('/user/${id.value}'),
+              onTap: () => _open(item, visibleItems: items),
+            );
+          }
+          if (item.kind == HomeEntryKind.folder ||
+              item.kind == HomeEntryKind.collection) {
+            return FavoriteFolderCard(
+              key: key,
+              entry: item,
+              onTap: () => _open(item),
+              showCreatedMetadata:
+                  widget.section == '我创建的收藏夹' &&
+                  item.kind == HomeEntryKind.folder,
+              onEdit:
+                  widget.section == '我创建的收藏夹' &&
+                      item.kind == HomeEntryKind.folder
+                  ? () => _editFolder(item, query.scope)
+                  : null,
+              unsubscribing: feed.unsubscribing.contains((item.kind, item.id)),
+              onUnsubscribe:
+                  widget.section == '我的收藏与订阅' &&
+                      query.folderId == null &&
+                      canUnsubscribe
+                  ? () => _unsubscribe(controller, item)
+                  : null,
+            );
+          }
+        }
+        if (widget.channel == HomeChannel.videoDynamic &&
+            item.kind == HomeEntryKind.video) {
+          return VideoDynamicCard(
+            key: key,
+            entry: item,
+            onOpenUser: (id) => context.go('/user/${id.value}'),
+            onTap: () => _open(item),
+          );
+        }
+        if (widget.channel == HomeChannel.live &&
+            item.kind == HomeEntryKind.live) {
+          return LiveRoomCard(key: key, entry: item, onTap: () => _open(item));
+        }
+        return _EntryCard(key: key, entry: item, onTap: () => _open(item));
+      },
     );
   }
 
@@ -629,7 +662,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
 }
 
 final class _EntryCard extends StatelessWidget {
-  const _EntryCard({required this.entry, required this.onTap});
+  const _EntryCard({super.key, required this.entry, required this.onTap});
   final HomeEntry entry;
   final VoidCallback onTap;
   @override

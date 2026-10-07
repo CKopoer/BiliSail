@@ -81,13 +81,12 @@ void main() {
       final previousOffset = _position(tester).pixels;
       repository.nextPage.complete(_page(2));
       await tester.pumpAndSettle();
-      expect(find.text('推荐1-0'), findsOneWidget);
-      expect(find.text('推荐2-0'), findsOneWidget);
+      expect(_titles(tester), containsAll(['推荐1-0', '推荐2-0']));
       expect(_position(tester).pixels, closeTo(previousOffset, 1));
 
       await _wheelNearBottom(tester);
       await tester.pumpAndSettle();
-      expect(find.text('推荐3-0'), findsOneWidget);
+      expect(_titles(tester), contains('推荐3-0'));
       await _wheel(tester, _position(tester).extentAfter + 100);
       await _wheel(tester, 100);
       expect(repository.calls, [
@@ -115,13 +114,13 @@ void main() {
     await _wheel(tester, _position(tester).extentAfter + 100);
     await _wheel(tester, 100);
     await tester.pumpAndSettle();
-    expect(find.text('推荐1-0'), findsOneWidget);
+    expect(_titles(tester), contains('推荐1-0'));
     expect(find.text('下一页加载失败'), findsOneWidget);
     expect(repository.calls, ['recommended:1', 'recommended:2']);
     await tester.ensureVisible(find.text('重试'));
     await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
-    expect(find.text('推荐2-0'), findsOneWidget);
+    expect(_titles(tester), contains('推荐2-0'));
     expect(repository.calls, [
       'recommended:1',
       'recommended:2',
@@ -142,8 +141,8 @@ void main() {
       expect(repository.pageCancellation?.isCancelled, isTrue);
       repository.nextPage.complete(_page(2));
       await tester.pumpAndSettle();
-      expect(find.text('推荐1-0'), findsOneWidget);
-      expect(find.text('推荐2-0'), findsNothing);
+      expect(_titles(tester), contains('推荐1-0'));
+      expect(_titles(tester), isNot(contains('推荐2-0')));
       expect(repository.calls, [
         'recommended:1',
         'recommended:2',
@@ -169,8 +168,8 @@ void main() {
       await tester.pumpAndSettle();
       await _wheelNearBottom(tester);
       await tester.pumpAndSettle();
-      expect(find.text('推荐2-0'), findsNothing);
-      expect(find.text('热门2-0'), findsOneWidget);
+      expect(_titles(tester), isNot(contains('推荐2-0')));
+      expect(_titles(tester), contains('热门2-0'));
       expect(repository.calls, [
         'recommended:1',
         'recommended:2',
@@ -180,8 +179,7 @@ void main() {
 
       channel.value = HomeChannel.recommended;
       await tester.pumpAndSettle();
-      expect(find.text('推荐1-0'), findsOneWidget);
-      expect(find.text('推荐2-0'), findsOneWidget);
+      expect(_titles(tester), containsAll(['推荐1-0', '推荐2-0']));
       expect(repository.calls.last, 'recommended:2');
       expect(tester.takeException(), isNull);
     },
@@ -208,6 +206,19 @@ ScrollPosition _position(WidgetTester tester) => tester
       ),
     )
     .position;
+
+// Offscreen rows are deliberately unmounted. Check the loaded data as well as
+// the scroll-triggered requests so a hidden stale page cannot escape detection.
+List<String> _titles(WidgetTester tester) => [
+  for (final item
+      in ProviderScope.containerOf(tester.element(find.byType(FeedScreen)))
+              .read(feedControllerProvider)
+              .items
+              .asData
+              ?.value ??
+          const <VideoSummary>[])
+    item.title,
+];
 
 Future<void> _wheelNearBottom(WidgetTester tester) =>
     _wheel(tester, _position(tester).extentAfter - 400);

@@ -60,23 +60,59 @@ final class VideoGrid extends StatelessWidget {
   Widget build(BuildContext context) => ResponsiveCardGrid(
     children: [
       for (var index = 0; index < items.length; index++)
-        VideoCard(
-          key: ValueKey((items[index].id, index)),
-          video: items[index],
-          onTap: () => _onOpenIndex != null
-              ? _onOpenIndex(index)
-              : onOpen?.call(items[index].id),
-          onOpenUser: onOpenUser,
-          showUpBadge: showUpBadge,
-          showRecommendationReason: showRecommendationReason,
-          highlightQuery: highlightQuery,
-          publishText: publishTextAt?.call(index) ?? '',
-          publishTooltip: publishTooltipAt?.call(index),
-          menu: menuFor?.call(items[index]),
-          feedback: feedbackFor?.call(items[index]),
-          progress:
-              progressAt?.call(index) ?? progressFor?.call(items[index].id),
-        ),
+        _cardAt(context, index),
     ],
   );
+
+  Widget _cardAt(BuildContext context, int index) => VideoCard(
+    key: ValueKey((items[index].id, index)),
+    video: items[index],
+    onTap: () => _onOpenIndex != null
+        ? _onOpenIndex(index)
+        : onOpen?.call(items[index].id),
+    onOpenUser: onOpenUser,
+    showUpBadge: showUpBadge,
+    showRecommendationReason: showRecommendationReason,
+    highlightQuery: highlightQuery,
+    publishText: publishTextAt?.call(index) ?? '',
+    publishTooltip: publishTooltipAt?.call(index),
+    menu: menuFor?.call(items[index]),
+    feedback: feedbackFor?.call(items[index]),
+    progress: progressAt?.call(index) ?? progressFor?.call(items[index].id),
+  );
+}
+
+/// The same video-card policy, with only viewport/cache rows mounted.
+final class SliverVideoGrid extends VideoGrid {
+  const SliverVideoGrid({
+    super.key,
+    required super.items,
+    required super.onOpen,
+    super.progressFor,
+    super.onOpenUser,
+    super.showUpBadge,
+    super.showRecommendationReason,
+    super.highlightQuery,
+    super.menuFor,
+    super.feedbackFor,
+  });
+
+  const SliverVideoGrid.indexed({
+    super.key,
+    required super.items,
+    required super.onOpen,
+    super.progressAt,
+    super.publishTextAt,
+    super.publishTooltipAt,
+    super.onOpenUser,
+    super.showUpBadge,
+    super.showRecommendationReason,
+    super.highlightQuery,
+    super.menuFor,
+    super.feedbackFor,
+  }) : super.indexed();
+
+  @override
+  Widget build(BuildContext context) =>
+      SliverResponsiveCardGrid(itemCount: items.length, itemBuilder: _cardAt);
 }

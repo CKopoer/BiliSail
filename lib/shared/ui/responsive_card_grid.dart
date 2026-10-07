@@ -42,7 +42,7 @@ final class ResponsiveCardGrid extends StatelessWidget {
 }
 
 /// Lazily build rows with natural heights for cards and enlarged text.
-final class SliverResponsiveCardGrid extends StatelessWidget {
+final class SliverResponsiveCardGrid extends StatefulWidget {
   const SliverResponsiveCardGrid({
     super.key,
     required this.itemCount,
@@ -52,11 +52,35 @@ final class SliverResponsiveCardGrid extends StatelessWidget {
   final IndexedWidgetBuilder itemBuilder;
 
   @override
+  State<SliverResponsiveCardGrid> createState() =>
+      _SliverResponsiveCardGridState();
+}
+
+final class _SliverResponsiveCardGridState
+    extends State<SliverResponsiveCardGrid> {
+  ({int columns, double width})? _previousLayout;
+  Widget? _rows;
+
+  @override
+  void didUpdateWidget(SliverResponsiveCardGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.itemCount != widget.itemCount ||
+        oldWidget.itemBuilder != widget.itemBuilder) {
+      _rows = null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) => SliverLayoutBuilder(
     builder: (context, constraints) {
       final layout = _layout(context, constraints.crossAxisExtent);
-      return SliverList.builder(
-        itemCount: (itemCount / layout.columns).ceil(),
+      // Sliver constraints also change on every scroll frame. Reusing the rows
+      // keeps a scroll offset change from replacing the delegate and rebuilding
+      // all visible cards; cross-axis layout and content changes still update it.
+      if (_rows case final rows? when layout == _previousLayout) return rows;
+      _previousLayout = layout;
+      return _rows = SliverList.builder(
+        itemCount: (widget.itemCount / layout.columns).ceil(),
         itemBuilder: (context, row) => Padding(
           padding: const EdgeInsets.only(bottom: _runSpacing),
           child: Row(
@@ -64,10 +88,13 @@ final class SliverResponsiveCardGrid extends StatelessWidget {
             spacing: _spacing,
             children: [
               for (var column = 0; column < layout.columns; column++)
-                if (row * layout.columns + column < itemCount)
+                if (row * layout.columns + column < widget.itemCount)
                   SizedBox(
                     width: layout.width,
-                    child: itemBuilder(context, row * layout.columns + column),
+                    child: widget.itemBuilder(
+                      context,
+                      row * layout.columns + column,
+                    ),
                   ),
             ],
           ),

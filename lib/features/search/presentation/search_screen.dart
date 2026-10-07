@@ -1,5 +1,5 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide SearchController;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
@@ -19,6 +19,40 @@ final class SearchScreen extends ConsumerStatefulWidget {
 
 final class _SearchScreenState extends ConsumerState<SearchScreen> {
   bool _showFilters = false;
+  List<SearchEntry>? _previousItems;
+  String? _previousQuery;
+  SearchCategory? _previousCategory;
+  Widget? _results;
+
+  void _clearResults() {
+    _previousItems = null;
+    _previousQuery = null;
+    _previousCategory = null;
+    _results = null;
+  }
+
+  Widget _resultSliver(
+    List<SearchEntry> items,
+    SearchState result,
+    SearchController controller,
+  ) {
+    if (_results == null ||
+        !identical(items, _previousItems) ||
+        result.query != _previousQuery ||
+        result.category != _previousCategory) {
+      _previousItems = items;
+      _previousQuery = result.query;
+      _previousCategory = result.category;
+      _results = SearchResults(
+        items: items,
+        query: result.query,
+        category: result.category,
+        onCategory: controller.selectCategory,
+      );
+    }
+    return _results!;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +81,14 @@ final class _SearchScreenState extends ConsumerState<SearchScreen> {
       }
     });
     final result = ref.watch(searchControllerProvider);
+    // Only a usable current result belongs in this presentation cache. Paging
+    // loading/errors retain data; whole-query replacement must release it.
+    if (result.query.isEmpty ||
+        result.items.asData?.value.isNotEmpty != true ||
+        result.query != _previousQuery ||
+        result.category != _previousCategory) {
+      _clearResults();
+    }
     final controller = ref.read(searchControllerProvider.notifier);
     final theme = Theme.of(context);
     return LayoutBuilder(
@@ -170,81 +212,100 @@ final class _SearchScreenState extends ConsumerState<SearchScreen> {
                 onLoadMore: controller.loadMore,
                 onRefresh: result.query.isEmpty ? null : controller.refresh,
                 refreshTooltip: '刷新搜索结果',
-                builder: (scrollController) => ListView(
+                builder: (scrollController) => CustomScrollView(
                   controller: scrollController,
-                  padding: EdgeInsets.fromLTRB(padding, 8, padding, 32),
-                  children: [
-                    result.query.isEmpty
-                        ? const SizedBox(
-                            height: 280,
-                            child: StateView.empty(
-                              message: '输入关键词开始搜索',
-                              icon: Icons.search_rounded,
-                            ),
-                          )
-                        : result.items.when(
-                            loading: () => const SizedBox(
-                              height: 300,
-                              child: StateView.loading(),
-                            ),
-                            error: (error, _) => SizedBox(
-                              height: 300,
-                              child: StateView.error(
-                                message: error is AppFailure
-                                    ? error.message
-                                    : '搜索失败，请重试',
-                                onAction: controller.refresh,
+                  slivers: [
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(padding, 8, padding, 32),
+                      sliver: result.query.isEmpty
+                          ? const SliverToBoxAdapter(
+                              child: SizedBox(
+                                height: 280,
+                                child: StateView.empty(
+                                  message: '输入关键词开始搜索',
+                                  icon: Icons.search_rounded,
+                                ),
                               ),
-                            ),
-                            data: (items) => items.isEmpty
-                                ? SizedBox(
-                                    height: 280,
-                                    child: StateView.empty(
-                                      message:
-                                          '没有找到相关${result.category == SearchCategory.all ? '内容' : result.category.label}，试试其他关键词或筛选',
-                                    ),
-                                  )
-                                : Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      SearchResults(
-                                        items: items,
-                                        query: result.query,
-                                        category: result.category,
-                                        onCategory: controller.selectCategory,
-                                      ),
-                                      const SizedBox(height: 28),
-                                      if (result.pageError != null)
-                                        StateView.error(
+                            )
+                          : result.items.when(
+                              loading: () => const SliverToBoxAdapter(
+                                child: SizedBox(
+                                  height: 300,
+                                  child: StateView.loading(),
+                                ),
+                              ),
+                              error: (error, _) => SliverToBoxAdapter(
+                                child: SizedBox(
+                                  height: 300,
+                                  child: StateView.error(
+                                    message: error is AppFailure
+                                        ? error.message
+                                        : '搜索失败，请重试',
+                                    onAction: controller.refresh,
+                                  ),
+                                ),
+                              ),
+                              data: (items) => items.isEmpty
+                                  ? SliverToBoxAdapter(
+                                      child: SizedBox(
+                                        height: 280,
+                                        child: StateView.empty(
                                           message:
-                                              result.pageError is AppFailure
-                                              ? (result.pageError as AppFailure)
-                                                    .message
-                                              : '下一页加载失败',
-                                          onAction: controller.loadMore,
-                                        )
-                                      else if (result.loadingMore)
-                                        const Center(
-                                          child: CircularProgressIndicator(),
-                                        )
-                                      else if (result.hasMore)
-                                        Center(
-                                          child: OutlinedButton(
-                                            onPressed: controller.loadMore,
-                                            child: const Text('加载更多'),
-                                          ),
-                                        )
-                                      else
-                                        Center(
-                                          child: Text(
-                                            '已经到底了',
-                                            style: theme.textTheme.bodySmall,
+                                              '没有找到相关${result.category == SearchCategory.all ? '内容' : result.category.label}，试试其他关键词或筛选',
+                                        ),
+                                      ),
+                                    )
+                                  : SliverMainAxisGroup(
+                                      slivers: [
+                                        _resultSliver(
+                                          items,
+                                          result,
+                                          controller,
+                                        ),
+                                        SliverToBoxAdapter(
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 28,
+                                            ),
+                                            child: result.pageError != null
+                                                ? StateView.error(
+                                                    message:
+                                                        result.pageError
+                                                            is AppFailure
+                                                        ? (result.pageError
+                                                                  as AppFailure)
+                                                              .message
+                                                        : '下一页加载失败',
+                                                    onAction:
+                                                        controller.loadMore,
+                                                  )
+                                                : result.loadingMore
+                                                ? const Center(
+                                                    child:
+                                                        CircularProgressIndicator(),
+                                                  )
+                                                : result.hasMore
+                                                ? Center(
+                                                    child: OutlinedButton(
+                                                      onPressed:
+                                                          controller.loadMore,
+                                                      child: const Text('加载更多'),
+                                                    ),
+                                                  )
+                                                : Center(
+                                                    child: Text(
+                                                      '已经到底了',
+                                                      style: theme
+                                                          .textTheme
+                                                          .bodySmall,
+                                                    ),
+                                                  ),
                                           ),
                                         ),
-                                    ],
-                                  ),
-                          ),
+                                      ],
+                                    ),
+                            ),
+                    ),
                   ],
                 ),
               ),

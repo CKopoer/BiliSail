@@ -171,7 +171,7 @@ void main() {
             const ValueKey('search-category-strip'),
           );
           final list = tester
-              .widget<ListView>(find.byType(ListView))
+              .widget<CustomScrollView>(find.byType(CustomScrollView))
               .controller!;
           expect(position(orders).maxScrollExtent, greaterThan(0));
           await move(orders);
@@ -357,10 +357,11 @@ void main() {
     'sort change starts at the top even with a retained page storage key',
     (tester) async {
       await _mount(tester, _Repository());
-      await tester.drag(find.byType(ListView), const Offset(0, -700));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
       await tester.pumpAndSettle();
-      ScrollController? scroll() =>
-          tester.widget<ListView>(find.byType(ListView)).controller;
+      ScrollController? scroll() => tester
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
+          .controller;
       expect(scroll()?.offset, greaterThan(0));
       await tester.tap(find.text('最新发布'));
       await tester.pumpAndSettle();

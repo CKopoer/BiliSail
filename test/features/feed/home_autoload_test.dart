@@ -255,7 +255,7 @@ Widget _app(
 ScrollPosition _position(WidgetTester tester) => tester
     .state<ScrollableState>(
       find.descendant(
-        of: find.byType(ListView),
+        of: find.byType(CustomScrollView),
         matching: find.byType(Scrollable),
       ),
     )
@@ -264,7 +264,7 @@ ScrollPosition _position(WidgetTester tester) => tester
 Future<void> _wheel(WidgetTester tester, double delta) async {
   await tester.sendEventToBinding(
     PointerScrollEvent(
-      position: tester.getCenter(find.byType(ListView)),
+      position: tester.getCenter(find.byType(CustomScrollView)),
       scrollDelta: Offset(0, delta),
     ),
   );

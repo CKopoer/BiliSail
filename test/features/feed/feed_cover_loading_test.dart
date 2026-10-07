@@ -82,7 +82,7 @@ void main() {
             .state<ScrollableState>(
               find
                   .descendant(
-                    of: find.byType(ListView),
+                    of: find.byType(CustomScrollView),
                     matching: find.byType(Scrollable),
                   )
                   .first,
@@ -114,7 +114,9 @@ void main() {
             final images = tester
                 .widgetList<RawImage>(find.byType(RawImage))
                 .toList();
-            final viewport = tester.getRect(find.byType(ListView)).inflate(160);
+            final viewport = tester
+                .getRect(find.byType(CustomScrollView))
+                .inflate(160);
             final visibleCount = find
                 .byType(AppNetworkImage)
                 .evaluate()

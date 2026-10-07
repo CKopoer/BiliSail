@@ -42,7 +42,7 @@ void main() {
         await tester.pumpAndSettle();
 
         final slots = _slots(tester);
-        expect(slots, hasLength(6));
+        expect(slots.length, inInclusiveRange(columns + 1, 6));
         final first = tester.getRect(slots.first);
         final last = tester.getRect(slots[columns - 1]);
         final next = tester.getRect(slots[columns]);
@@ -75,7 +75,7 @@ void main() {
         expect(tester.getTopLeft(slots[1]).dy, tester.getTopLeft(slots[0]).dy);
         expect(
           find.text(channel == HomeChannel.live ? '直播作者' : '更新至第12集'),
-          findsNWidgets(6),
+          findsNWidgets(slots.length),
         );
         expect(tester.takeException(), isNull, reason: section);
       }
@@ -84,13 +84,15 @@ void main() {
 }
 
 List<Finder> _slots(WidgetTester tester) => tester
-    .widget<Wrap>(
+    .widgetList<Row>(
       find.descendant(
-        of: find.byType(ResponsiveCardGrid),
-        matching: find.byType(Wrap),
+        of: find.byType(SliverResponsiveCardGrid),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is Row && widget.spacing == 20,
+        ),
       ),
     )
-    .children
+    .expand((row) => row.children)
     .map(find.byWidget)
     .toList();
 

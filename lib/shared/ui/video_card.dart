@@ -437,7 +437,7 @@ final class _VideoCardState extends State<VideoCard> {
   );
 }
 
-final class _CoverMetadata extends StatelessWidget {
+final class _CoverMetadata extends StatefulWidget {
   const _CoverMetadata({
     required this.video,
     required this.cardWidth,
@@ -449,6 +449,65 @@ final class _CoverMetadata extends StatelessWidget {
   final double cardWidth;
   final String playLabel;
   final String danmakuLabel;
+
+  @override
+  State<_CoverMetadata> createState() => _CoverMetadataState();
+}
+
+typedef _CoverTextMetricsKey = ({
+  String label,
+  TextStyle style,
+  TextScaler textScaler,
+  TextDirection direction,
+  Locale? locale,
+});
+
+final class _CoverMetadataState extends State<_CoverMetadata> {
+  // Three labels across three width tiers; changing data cannot grow the cache.
+  static const _maximumCachedWidths = 9;
+  final _textWidths = <_CoverTextMetricsKey, double>{};
+
+  @override
+  void initState() {
+    super.initState();
+    PaintingBinding.instance.systemFonts.addListener(_fontsChanged);
+  }
+
+  void _fontsChanged() {
+    setState(_textWidths.clear);
+  }
+
+  @override
+  void dispose() {
+    PaintingBinding.instance.systemFonts.removeListener(_fontsChanged);
+    super.dispose();
+  }
+
+  double _textWidth(_CoverTextMetricsKey key) {
+    final cached = _textWidths.remove(key);
+    if (cached != null) {
+      _textWidths[key] = cached;
+      return cached;
+    }
+    final painter = TextPainter(
+      text: TextSpan(text: key.label, style: key.style),
+      textDirection: key.direction,
+      textScaler: key.textScaler,
+      locale: key.locale,
+      maxLines: 1,
+    );
+    try {
+      painter.layout();
+      final width = painter.width;
+      if (_textWidths.length == _maximumCachedWidths) {
+        _textWidths.remove(_textWidths.keys.first);
+      }
+      _textWidths[key] = width;
+      return width;
+    } finally {
+      painter.dispose();
+    }
+  }
 
   static const _regularFontSize = 12.0;
   static const _style = TextStyle(
@@ -466,7 +525,7 @@ final class _CoverMetadata extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       // Use the whole card width so padding does not shift typography tiers.
-      final fontSize = switch (cardWidth) {
+      final fontSize = switch (widget.cardWidth) {
         < 180 => 10.0,
         < 240 => 11.0,
         _ => _regularFontSize,
@@ -477,27 +536,28 @@ final class _CoverMetadata extends StatelessWidget {
       final iconGap = _iconGap * sizeFactor;
       final countGap = _countGap * sizeFactor;
       final durationGap = _durationGap * sizeFactor;
-      final timeLabel = durationLabel(video.duration);
-      double textWidth(String label) {
-        final painter = TextPainter(
-          text: TextSpan(
-            text: label,
-            style: DefaultTextStyle.of(context).style.merge(style),
-          ),
-          textDirection: Directionality.of(context),
-          textScaler: MediaQuery.textScalerOf(context),
-          locale: Localizations.maybeLocaleOf(context),
-          maxLines: 1,
-        )..layout();
-        final width = painter.width;
-        painter.dispose();
-        return width;
+      final timeLabel = durationLabel(widget.video.duration);
+      var effectiveStyle = DefaultTextStyle.of(context).style.merge(style);
+      if (MediaQuery.boldTextOf(context)) {
+        effectiveStyle = effectiveStyle.merge(
+          const TextStyle(fontWeight: FontWeight.bold),
+        );
       }
+      final textScaler = MediaQuery.textScalerOf(context);
+      final direction = Directionality.of(context);
+      final locale = Localizations.maybeLocaleOf(context);
+      double textWidth(String label) => _textWidth((
+        label: label,
+        style: effectiveStyle,
+        textScaler: textScaler,
+        direction: direction,
+        locale: locale,
+      ));
 
       // Measure the actual labels, icons and gaps before moving time below counts.
       final countsWidth =
-          textWidth(playLabel) +
-          textWidth(danmakuLabel) +
+          textWidth(widget.playLabel) +
+          textWidth(widget.danmakuLabel) +
           2 * (iconSize + iconGap) +
           countGap;
       final countsFit = countsWidth <= constraints.maxWidth;
@@ -520,8 +580,8 @@ final class _CoverMetadata extends StatelessWidget {
         ],
       );
 
-      final play = count(BiliIcons.playCount, playLabel);
-      final danmaku = count(BiliIcons.danmaku, danmakuLabel);
+      final play = count(BiliIcons.playCount, widget.playLabel);
+      final danmaku = count(BiliIcons.danmaku, widget.danmakuLabel);
       final counts = Row(
         mainAxisSize: MainAxisSize.min,
         children: [

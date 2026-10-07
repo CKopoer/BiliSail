@@ -41,13 +41,25 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byType(DynamicPostCard), findsNWidgets(6));
+      expect(
+        find.byType(DynamicPostCard).evaluate().length,
+        inInclusiveRange(2, 6),
+      );
       final first = tester.getRect(find.byType(DynamicPostCard).first);
       final second = tester.getRect(find.byType(DynamicPostCard).at(1));
       expect(first.left, second.left);
       expect(second.top, greaterThan(first.bottom));
       expect(first.width, lessThanOrEqualTo(780));
       expect(first.center.dx, width / 2);
+      await tester.scrollUntilVisible(
+        find.text('动态内容5'),
+        300,
+        scrollable: find.descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      expect(find.text('动态内容5'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -86,14 +98,35 @@ void main() {
             ),
           );
           await tester.pumpAndSettle();
-          expect(find.byType(VideoCard), findsNWidgets(6));
-          expect(find.text('2万'), findsNWidgets(6));
-          expect(find.text('100'), findsNWidgets(6));
-          expect(find.text('02:05'), findsNWidgets(6));
-          expect(find.text('测试UP'), findsNWidgets(6));
-          expect(find.text('今天投稿'), findsNWidgets(6));
+          final mountedCards = find.byType(VideoCard).evaluate().length;
+          expect(mountedCards, inInclusiveRange(2, 6));
+          expect(find.text('2万'), findsNWidgets(mountedCards));
+          expect(find.text('100'), findsNWidgets(mountedCards));
+          expect(find.text('02:05'), findsNWidgets(mountedCards));
+          expect(find.text('测试UP'), findsNWidgets(mountedCards));
+          expect(find.text('今天投稿'), findsNWidgets(mountedCards));
           final first = tester.getRect(find.byType(VideoCard).first);
           expect(first.width, lessThanOrEqualTo(width - 40));
+          await tester.scrollUntilVisible(
+            find.text('这是第5条视频或直播标题'),
+            300,
+            scrollable: find.descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(Scrollable),
+            ),
+          );
+          final lastCard = find.ancestor(
+            of: find.text('这是第5条视频或直播标题'),
+            matching: find.byType(VideoCard),
+          );
+          expect(
+            find.descendant(of: lastCard, matching: find.text('2万')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: lastCard, matching: find.text('今天投稿')),
+            findsOneWidget,
+          );
           expect(tester.takeException(), isNull);
         },
       );
@@ -125,17 +158,24 @@ void main() {
         expect(tester.takeException(), isNull);
         if (channel == HomeChannel.videoDynamic) {
           expect(find.text('投稿视频'), findsNothing);
-          expect(find.byType(VideoDynamicCard), findsNWidgets(6));
-          expect(find.byType(VideoCard), findsNWidgets(6));
+          expect(
+            find.byType(VideoDynamicCard).evaluate().length,
+            inInclusiveRange(2, 6),
+          );
+          final mountedCards = find.byType(VideoCard).evaluate().length;
+          expect(mountedCards, inInclusiveRange(2, 6));
           expect(find.byType(BiliUpBadge), findsNothing);
-          expect(find.text('2万'), findsNWidgets(6));
-          expect(find.text('100'), findsNWidgets(6));
-          expect(find.text('今天投稿'), findsNWidgets(6));
+          expect(find.text('2万'), findsNWidgets(mountedCards));
+          expect(find.text('100'), findsNWidgets(mountedCards));
+          expect(find.text('今天投稿'), findsNWidgets(mountedCards));
           final a = tester.getTopLeft(find.byType(VideoDynamicCard).at(0));
           final b = tester.getTopLeft(find.byType(VideoDynamicCard).at(1));
           expect(a.dy == b.dy, width >= 800);
         } else {
-          expect(find.byType(LiveRoomCard), findsNWidgets(6));
+          expect(
+            find.byType(LiveRoomCard).evaluate().length,
+            inInclusiveRange(2, 6),
+          );
           final a = tester.getTopLeft(find.byType(LiveRoomCard).at(0));
           final b = tester.getTopLeft(
             find.byType(LiveRoomCard).at(width == 1920 ? 4 : 0),

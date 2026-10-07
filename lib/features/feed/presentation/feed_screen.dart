@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -35,6 +36,112 @@ final class FeedScreen extends ConsumerStatefulWidget {
 final class _FeedScreenState extends ConsumerState<FeedScreen> {
   final Map<HomeChannel, String> _sections = {};
   final Set<(HomeChannel, String)> _visitedSections = {};
+  (List<VideoSummary>, HomeChannel, Set<VideoId>, Set<VideoId>, Set<VideoId>)?
+  _gridVersion;
+  Widget? _grid;
+
+  Widget _videoItemsSliver(FeedState feed, HomeChannel channel) {
+    Widget status(Widget child) =>
+        SliverToBoxAdapter(child: SizedBox(height: 300, child: child));
+    if (feed.channel != channel || feed.items.asData == null) {
+      _gridVersion = null;
+      _grid = null;
+    }
+    if (feed.channel != channel) return status(const StateView.loading());
+    return feed.items.when(
+      loading: () => status(const StateView.loading()),
+      error: (error, _) => status(
+        StateView.error(
+          message: error is AppFailure ? error.message : '视频加载失败，请稍后重试',
+          onAction: _refreshFeed,
+        ),
+      ),
+      data: (items) {
+        final controller = ref.read(feedControllerProvider.notifier);
+        final version = (
+          items,
+          channel,
+          feed.rejected,
+          feed.rejecting,
+          feed.uncertainRestorations,
+        );
+        // Pagination flags belong to the footer. Keep the same grid widget
+        // while its data/actions are unchanged so its visible rows stay built.
+        final previous = _gridVersion;
+        if (previous == null ||
+            !identical(previous.$1, items) ||
+            previous.$2 != channel ||
+            !setEquals(previous.$3, feed.rejected) ||
+            !setEquals(previous.$4, feed.rejecting) ||
+            !setEquals(previous.$5, feed.uncertainRestorations)) {
+          _gridVersion = version;
+          _grid = SliverVideoGrid(
+            items: items,
+            onOpen: (id) => context.go('/video/${id.value}'),
+            onOpenUser: (id) => context.go('/user/${id.value}'),
+            showRecommendationReason: channel == HomeChannel.recommended,
+            feedbackFor: channel == HomeChannel.recommended
+                ? (video) => feed.rejected.contains(video.id)
+                      ? VideoCardFeedback(
+                          busy: feed.rejecting.contains(video.id),
+                          onUndo: feed.uncertainRestorations.contains(video.id)
+                              ? null
+                              : () => _undoRecommendationFeedback(video.id),
+                        )
+                      : null
+                : null,
+            menuFor: channel == HomeChannel.recommended
+                ? (video) => VideoCardMenu(
+                    actions: const [
+                      VideoCardMenuAction.notInterested,
+                      VideoCardMenuAction.watchLater,
+                    ],
+                    busy: feed.rejecting.contains(video.id),
+                    onSelected: (action) {
+                      if (action == VideoCardMenuAction.notInterested) {
+                        _rejectRecommendation(video);
+                      }
+                    },
+                  )
+                : null,
+          );
+        }
+        return SliverMainAxisGroup(
+          slivers: [
+            if (items.isEmpty)
+              status(const StateView.empty(message: '这里暂时没有视频'))
+            else
+              ?_grid,
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: Center(
+                  child: feed.pageError != null
+                      ? StateView.error(
+                          message: feed.pageError is AppFailure
+                              ? (feed.pageError as AppFailure).message
+                              : '加载更多失败',
+                          onAction: controller.loadMore,
+                        )
+                      : feed.loadingMore
+                      ? const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: CircularProgressIndicator(),
+                        )
+                      : feed.hasMore
+                      ? OutlinedButton(
+                          onPressed: controller.loadMore,
+                          child: const Text('加载更多'),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   Widget _content({
     required Widget videoFeed,
@@ -289,119 +396,7 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
                           ),
                         SliverPadding(
                           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                          sliver: SliverToBoxAdapter(
-                            child: feed.channel != channel
-                                ? const SizedBox(
-                                    height: 300,
-                                    child: StateView.loading(),
-                                  )
-                                : feed.items.when(
-                                    loading: () => const SizedBox(
-                                      height: 300,
-                                      child: StateView.loading(),
-                                    ),
-                                    error: (error, _) => SizedBox(
-                                      height: 300,
-                                      child: StateView.error(
-                                        message: error is AppFailure
-                                            ? error.message
-                                            : '视频加载失败，请稍后重试',
-                                        onAction: _refreshFeed,
-                                      ),
-                                    ),
-                                    data: (items) => Column(
-                                      children: [
-                                        if (items.isEmpty)
-                                          const SizedBox(
-                                            height: 300,
-                                            child: StateView.empty(
-                                              message: '这里暂时没有视频',
-                                            ),
-                                          )
-                                        else
-                                          VideoGrid(
-                                            feedbackFor:
-                                                channel ==
-                                                    HomeChannel.recommended
-                                                ? (video) =>
-                                                      feed.rejected.contains(
-                                                        video.id,
-                                                      )
-                                                      ? VideoCardFeedback(
-                                                          busy: feed.rejecting
-                                                              .contains(
-                                                                video.id,
-                                                              ),
-                                                          onUndo:
-                                                              feed.uncertainRestorations
-                                                                  .contains(
-                                                                    video.id,
-                                                                  )
-                                                              ? null
-                                                              : () =>
-                                                                    _undoRecommendationFeedback(
-                                                                      video.id,
-                                                                    ),
-                                                        )
-                                                      : null
-                                                : null,
-                                            menuFor:
-                                                channel ==
-                                                    HomeChannel.recommended
-                                                ? (video) => VideoCardMenu(
-                                                    actions: const [
-                                                      VideoCardMenuAction
-                                                          .notInterested,
-                                                      VideoCardMenuAction
-                                                          .watchLater,
-                                                    ],
-                                                    busy: feed.rejecting
-                                                        .contains(video.id),
-                                                    onSelected: (action) {
-                                                      if (action ==
-                                                          VideoCardMenuAction
-                                                              .notInterested) {
-                                                        _rejectRecommendation(
-                                                          video,
-                                                        );
-                                                      }
-                                                    },
-                                                  )
-                                                : null,
-                                            showRecommendationReason:
-                                                channel ==
-                                                HomeChannel.recommended,
-                                            onOpenUser: (id) =>
-                                                context.go('/user/${id.value}'),
-                                            items: items,
-                                            onOpen: (id) => context.go(
-                                              '/video/${id.value}',
-                                            ),
-                                          ),
-                                        const SizedBox(height: 20),
-                                        if (feed.pageError != null)
-                                          StateView.error(
-                                            message:
-                                                feed.pageError is AppFailure
-                                                ? (feed.pageError as AppFailure)
-                                                      .message
-                                                : '加载更多失败',
-                                            onAction: controller.loadMore,
-                                          )
-                                        else if (feed.loadingMore)
-                                          const Padding(
-                                            padding: EdgeInsets.all(16),
-                                            child: CircularProgressIndicator(),
-                                          )
-                                        else if (feed.hasMore)
-                                          OutlinedButton(
-                                            onPressed: controller.loadMore,
-                                            child: const Text('加载更多'),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                          ),
+                          sliver: _videoItemsSliver(feed, channel),
                         ),
                       ],
                     ),

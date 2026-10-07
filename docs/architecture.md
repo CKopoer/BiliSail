@@ -220,6 +220,8 @@ Riverpod 负责状态订阅和注入，不承担弹幕逐帧广播。路由 prov
 
 页面排版按可用宽度调整；工作区的默认导航模式按平台决定，由 app 中的单一适配函数选择 Windows/macOS 多标签页、Android 单标签页，用户设置可以覆盖。模式不随窗口宽度或横竖屏变化。横向首页频道在宽屏和搜索工具同排，窄屏拆行；频道、子标签、设置分类与工作区标签均支持横向拖动及桌面普通鼠标滚轮。视频卡片按剩余宽度排成网格。视频详情在宽度足够时显示播放/详情分栏。原先的侧栏/导航轨方案已由界面调整替代，见决策 D10、D25。播放器保持宽高比，窄窗口也能完整操作。
 
+2026-10-07 首页视频频道、其他首页子标签、观看历史和搜索结果已改用按视口懒创建的 Sliver 列表；共享视频网格使用 `SliverVideoGrid` / `SliverResponsiveCardGrid`，按行保留自然高度与原有响应式列数。行委托只在数据、动作或横向布局改变时更新，滚动位置变化不替换委托；分页尾部和回顶部按钮单独更新。页面的领域列表仍完整保留，稍后再看队列使用完整列表；屏幕外卡片释放自己的悬停预览资源，隐藏子标签保留列表滚动位置。具体性能证据和平台边界见 [列表滚动性能修复](validation/feed-scroll-performance.md)。
+
 桌面提供 hover、右键、滚轮、可见焦点、快捷键和窗口尺寸恢复；移动提供返回栈、横竖屏、触控手势和安全区。文本缩放、屏幕阅读器和键盘访问在共享组件层处理。
 
 `PlatformServices` 分成小接口：`WindowService`、`AudioSessionService`、`PowerService`、`MediaControlsService`、`PipService`、`FileAccessService`、`ExternalLinkService`。通过 capability 返回支持状态，页面不散落 `Platform.isWindows`。

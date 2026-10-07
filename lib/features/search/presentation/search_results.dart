@@ -27,61 +27,75 @@ final class SearchResults extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final users = items.whereType<SearchUserEntry>();
-    final videos = items.whereType<SearchVideoEntry>();
-    final media = items.whereType<SearchMediaEntry>();
-    final lives = items.whereType<SearchLiveEntry>();
-    final articles = items.whereType<SearchArticleEntry>();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final user in users) ...[
-          _UserCard(
-            user: user,
-            query: query,
-            featured: category == SearchCategory.all,
+    // Partition models once per result update; card creation stays in builders.
+    final users = items.whereType<SearchUserEntry>().toList(growable: false);
+    final videos = items.whereType<SearchVideoEntry>().toList(growable: false);
+    final media = items.whereType<SearchMediaEntry>().toList(growable: false);
+    final lives = items.whereType<SearchLiveEntry>().toList(growable: false);
+    final articles = items.whereType<SearchArticleEntry>().toList(
+      growable: false,
+    );
+    return SliverMainAxisGroup(
+      slivers: [
+        if (users.isNotEmpty)
+          SliverList.builder(
+            itemCount: users.length,
+            itemBuilder: (context, index) => Padding(
+              key: ValueKey(users[index].key),
+              padding: const EdgeInsets.only(bottom: 24),
+              child: _UserCard(
+                user: users[index],
+                query: query,
+                featured: category == SearchCategory.all,
+              ),
+            ),
           ),
-          const SizedBox(height: 24),
-        ],
         for (final type in [SearchCategory.bangumi, SearchCategory.film])
           if (media.any((item) => item.category == type)) ...[
-            if (category == SearchCategory.all) _section(context, type),
-            _ResultGrid(
+            if (category == SearchCategory.all)
+              SliverToBoxAdapter(child: _section(context, type)),
+            _SliverResultGrid(
               minWidth: 440,
-              children: [
-                for (final item in media.where((item) => item.category == type))
+              items: media
+                  .where((item) => item.category == type)
+                  .toList(growable: false),
+              itemBuilder: (context, item) =>
                   _MediaCard(item: item, query: query),
-              ],
             ),
-            const SizedBox(height: 28),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
           ],
         if (lives.isNotEmpty) ...[
           if (category == SearchCategory.all)
-            _section(context, SearchCategory.live),
-          _ResultGrid(
-            children: [
-              for (final item in lives) _LiveCard(item: item, query: query),
-            ],
+            SliverToBoxAdapter(child: _section(context, SearchCategory.live)),
+          _SliverResultGrid(
+            items: lives,
+            itemBuilder: (context, item) => _LiveCard(item: item, query: query),
           ),
-          const SizedBox(height: 28),
+          const SliverToBoxAdapter(child: SizedBox(height: 28)),
         ],
         if (articles.isNotEmpty) ...[
           if (category == SearchCategory.all)
-            _section(context, SearchCategory.article),
-          for (final item in articles) ...[
-            _ArticleCard(
-              item: item,
-              query: query,
-              onOpen: () => _openArticle(context, ref, item),
+            SliverToBoxAdapter(
+              child: _section(context, SearchCategory.article),
             ),
-            const SizedBox(height: 18),
-          ],
+          SliverList.builder(
+            itemCount: articles.length,
+            itemBuilder: (context, index) => Padding(
+              key: ValueKey(articles[index].key),
+              padding: const EdgeInsets.only(bottom: 18),
+              child: _ArticleCard(
+                item: articles[index],
+                query: query,
+                onOpen: () => _openArticle(context, ref, articles[index]),
+              ),
+            ),
+          ),
         ],
         if (videos.isNotEmpty) ...[
           if (category == SearchCategory.all &&
               items.any((item) => item is! SearchVideoEntry))
-            _section(context, SearchCategory.video),
-          VideoGrid(
+            SliverToBoxAdapter(child: _section(context, SearchCategory.video)),
+          SliverVideoGrid(
             items: videos.map((item) => item.video).toList(growable: false),
             showUpBadge: true,
             highlightQuery: query,
@@ -120,27 +134,80 @@ final class SearchResults extends ConsumerWidget {
   }
 }
 
-final class _ResultGrid extends StatelessWidget {
-  const _ResultGrid({required this.children, this.minWidth = 245});
-  final List<Widget> children;
+/// Search media/live keep their existing widths and natural card heights.
+final class _SliverResultGrid<T extends SearchEntry> extends StatefulWidget {
+  const _SliverResultGrid({
+    required this.items,
+    required this.itemBuilder,
+    this.minWidth = 245,
+  });
+  final List<T> items;
+  final Widget Function(BuildContext, T) itemBuilder;
   final double minWidth;
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
+  State<_SliverResultGrid<T>> createState() => _SliverResultGridState<T>();
+}
+
+final class _SliverResultGridState<T extends SearchEntry>
+    extends State<_SliverResultGrid<T>> {
+  ({int columns, double width})? _previousLayout;
+  Widget? _rows;
+
+  @override
+  void didUpdateWidget(_SliverResultGrid<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.items, widget.items) ||
+        oldWidget.itemBuilder != widget.itemBuilder ||
+        oldWidget.minWidth != widget.minWidth) {
+      _rows = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => SliverLayoutBuilder(
     builder: (context, constraints) {
       const spacing = 20.0;
       final minimum = MediaQuery.textScalerOf(context)
-          .scale(minWidth)
-          .clamp(minWidth, minWidth * 1.5);
-      final columns = ((constraints.maxWidth + spacing) / (minimum + spacing))
-          .floor()
-          .clamp(1, 6);
-      final width = (constraints.maxWidth - (columns - 1) * spacing) / columns;
-      return Wrap(
-        spacing: spacing,
-        runSpacing: 24,
-        children: [
-          for (final child in children) SizedBox(width: width, child: child),
-        ],
+          .scale(widget.minWidth)
+          .clamp(widget.minWidth, widget.minWidth * 1.5);
+      final columns =
+          ((constraints.crossAxisExtent + spacing) / (minimum + spacing))
+              .floor()
+              .clamp(1, 6);
+      final width =
+          (constraints.crossAxisExtent - (columns - 1) * spacing) / columns;
+      final layout = (columns: columns, width: width);
+      if (_rows != null && _previousLayout == layout) return _rows!;
+      _previousLayout = layout;
+      return _rows = SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, row) => Padding(
+            padding: EdgeInsets.only(
+              bottom: (row + 1) * columns < widget.items.length ? 24 : 0,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: spacing,
+              children: [
+                for (var column = 0; column < columns; column++)
+                  if (row * columns + column < widget.items.length)
+                    IndexedSemantics(
+                      index: row * columns + column,
+                      child: SizedBox(
+                        key: ValueKey(widget.items[row * columns + column].key),
+                        width: width,
+                        child: widget.itemBuilder(
+                          context,
+                          widget.items[row * columns + column],
+                        ),
+                      ),
+                    ),
+              ],
+            ),
+          ),
+          childCount: (widget.items.length / columns).ceil(),
+          addSemanticIndexes: false,
+        ),
       );
     },
   );
