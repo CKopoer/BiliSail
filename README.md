@@ -11,8 +11,8 @@
 
 <p align="center">
   <a href="https://github.com/CKopoer/BiliSail/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/CKopoer/BiliSail/ci.yml?label=CI" alt="CI 状态"></a>
-  <a href="pubspec.yaml"><img src="https://img.shields.io/badge/version-0.1.0%20preview-fb7299" alt="版本：0.1.0 预览"></a>
-  <a href="docs/validation/m0-results.md"><img src="https://img.shields.io/badge/Flutter-3.47.6-02569B?logo=flutter&amp;logoColor=white" alt="Flutter 3.47.6"></a>
+  <a href="pubspec.yaml"><img src="https://img.shields.io/badge/version-0.3.0%2B1%20preview-fb7299" alt="版本：0.3.0+1 预览"></a>
+  <a href="docs/validation/ci-cd.md"><img src="https://img.shields.io/badge/Flutter-3.47.6-02569B?logo=flutter&amp;logoColor=white" alt="Flutter 3.47.6"></a>
   <a href="https://github.com/CKopoer/BiliSail/stargazers"><img src="https://img.shields.io/github/stars/CKopoer/BiliSail?style=flat" alt="GitHub Stars"></a>
   <a href="https://github.com/CKopoer/BiliSail/forks"><img src="https://img.shields.io/github/forks/CKopoer/BiliSail?style=flat" alt="GitHub Forks"></a>
 </p>
@@ -26,9 +26,9 @@
 
 ---
 
-BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多标签浏览、原生播放、弹幕与本地续播。界面借鉴 BiliLite 的轻量桌面布局，结合自适应导航与网格、播放详情分栏和可配置快捷键。
+BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多标签浏览、原生播放、弹幕、云端观看历史与本地续播，以及下载队列和离线播放。界面借鉴 BiliLite 的轻量桌面布局，结合自适应网格、视频卡片悬停预览、播放详情分栏和可配置快捷键。
 
-当前开发版本为 **0.1.0 预览版**，主要在 Windows 上调试和验证。Android 与 macOS 为首批目标平台，完整三端验收仍在推进；具体状态见下方平台表及[验证文档](docs/README.md)。本项目为独立的第三方客户端，与哔哩哔哩官方无隶属关系。
+当前工程版本为 **0.3.0+1 预览版**。截至 **2026-10-07**，已公开提供 Windows x64、Android arm64 和 macOS arm64 预览包，三端 CI 构建与打包已有通过记录；运行与功能实测主要在 Windows 上进行，完整三端验收仍在推进。具体状态见下方平台表及[验证文档](docs/README.md)。本项目为独立的第三方客户端，与哔哩哔哩官方无隶属关系。
 
 ## 使用声明
 
@@ -57,21 +57,25 @@ BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多
 
 | 模块 | 当前能力 |
 | --- | --- |
-| 内容浏览 | 推荐、热门、分区、排行榜；动态、视频动态、番剧、国创、放映厅和直播入口 |
+| 内容浏览 | 推荐、热门、分区、排行榜；动态、视频动态、番剧、国创、放映厅和直播；自适应卡片网格、自动分页与列表位置保留 |
+| 视频卡片 | 悬停封面放大与静音视频预览、添加稍后再看、操作菜单；推荐反馈保留原卡片位置并支持撤销 |
 | 搜索 | 综合、视频、番剧、影视、直播、专栏和用户七类搜索，支持对应排序、筛选与自动分页 |
-| 视频与影视 | DASH 音视频分轨播放，分 P、合集与选集，清晰度、倍速、音量、全屏、章节与缩略图预览 |
-| 直播 | HLS / FLV、可用清晰度、实时聊天、画面弹幕、Super Chat 展示及发送入口 |
+| 视频与影视 | DASH 音视频分轨播放，分 P、合集与选集、合集订阅、稍后再看队列；清晰度、编码与 CDN 偏好、倍速、音量、全屏、章节与进度条缩略图 |
+| 直播 | HLS / FLV、可用清晰度、实时聊天与表情、画面弹幕、Super Chat 展示、用户主页跳转及弹幕发送入口 |
 | 弹幕与字幕 | 滚动、顶部、底部弹幕，暂停与缓冲冻结、seek 重定位；样式、密度与本地过滤配置，字幕 cue 显示 |
-| 账号与互动 | Web 扫码、密码、短信验证码登录流程、系统安全存储、用户主页、收藏、追番、追剧、稍后再看、评论与消息；用户主动触发的点赞、投币、收藏和发送 |
-| 导航与界面 | 单／多标签模式与平台默认值、访问顺序回退、顶部频道与子标签横向滚轮、自适应视频卡片、紧凑播放布局、键盘与鼠标侧键配置、图片缓存、当前账号云端观看历史分页与本地优先续播 |
-| 播放历史 | 登录点播上报云端进度；开启记住进度时本地优先，缺少本地记录时按当前分 P 读取云端续播 |
+| 账号与个人空间 | 扫码登录、内嵌官方网页密码／短信登录、系统安全存储；用户主页、关注分组、收藏夹查看与编辑、追番、追剧、稍后再看及消息／私信 |
+| 评论与动态互动 | 最热／最新评论、楼中楼、表情与图片、作者装扮、服务端提供的 IP 属地、正文链接与时间点跳转；视频点赞／投币／收藏，动态点赞、评论、复制链接与转发 |
+| 导航与界面 | 单／多标签模式与平台默认值、独立播放标签及可选并发播放、访问顺序回退、顶部分类横向滚轮、紧凑播放布局、桌面平滑滚动、键盘与鼠标侧键配置、图片缓存 |
+| 历史与续播 | 当前账号云端观看历史分页；登录点播上报云端进度，记住进度开启时本地优先、云端补充；新点播继承本次运行中最近选择的倍速 |
 | 下载与离线 | 分 P／剧集多选、画质与编码、队列暂停/继续/重试、断点和重启恢复、文件校验；本地音视频分轨、弹幕与字幕播放 |
-| 个性化 | 外观、字体、播放、弹幕和字幕设置；可选空降助手，默认关闭 |
+| 个性化 | 明暗主题、内置／系统字体、播放、弹幕、字幕和下载设置；手动及每日首次启动更新检查；可选空降助手，默认关闭 |
 
 上表描述已接入的功能，在线和平台验证范围见[文档索引](docs/README.md)。部分能力仍需进一步验收：
 
-- 完整的真实扫码、密码／短信登录、部分私有列表的在线分页，以及真实账号的投币、收藏、发送等写操作仍待验证；互动写请求只由明确的用户操作触发，不自动重试。登录协议、移动端布局和平台边界见[登录验证](docs/validation/password-sms-login.md)；云端进度由用户播放动作及周期观察触发，真实账号读写边界见[云端进度验证](docs/validation/cloud-playback-progress.md)。
-- 字幕正文目前仅通过 fixture 验证，在线样本未取得可用字幕。
+- Windows 官方登录窗口打开及关闭重开、现有登录会话的动态／评论只读请求已有验证；三种登录方式的完整账号闭环、部分私有列表在线分页，以及投币、收藏、评论／私信／动态转发等真实写操作仍需逐项验收。互动写请求只由明确的用户操作触发，不自动重试。详见[登录验证](docs/validation/password-sms-login.md)与[动态互动验证](docs/validation/dynamic-interactions.md)。
+- 云端观看历史列表和云端进度读写仍需真实账号验收；云端进度由用户播放动作及周期观察触发，具体边界见[云端观看历史](docs/validation/cloud-watch-history.md)和[云端进度验证](docs/validation/cloud-playback-progress.md)。
+- Windows 已验证游客公开视频下载与本地分轨离线播放；会员影视下载、长视频断网／休眠恢复和 Android/macOS 设备离线播放待验。Android 退入后台会主动暂停下载，尚未实现系统后台下载服务。详见[下载与离线播放](docs/downloads.md)。
+- 字幕正文与离线字幕显示已通过合成 fixture 验证，在线样本尚未取得可用字幕；Windows 悬停预览已验证首帧与 5 秒向前预读窗口，Android/macOS 原生预览仍待验。详见[悬停预览验证](docs/validation/video-preview-loading.md)。
 - 部分公开视频准备时间较长，排行榜可能受到服务端风控；Windows 辅助功能场景的原生崩溃防护仍需持续回归。详见[首版记录](docs/validation/m0-results.md)和[播放错误排查](docs/validation/native-playback-errors.md)。
 
 应用默认不添加自动遥测。空降助手启用后会查询独立第三方服务，不携带 Bilibili 账号凭据，也不自动上报。
@@ -80,11 +84,11 @@ BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多
 
 | 平台 | 目标架构 / 系统 | 仓库记录的验证状态 |
 | --- | --- | --- |
-| Windows | x64 / Windows 10 1809 及以上 | 已本地构建并运行，验证游客视频、影视和直播原生播放；MSIX 打包与测试签名通过，安装、卸载和升级待验 |
-| Android | arm64 / Android 7.0（API 24）及以上 | 已本地构建 APK；真机运行、播放与签名升级待验 |
-| macOS | arm64 / macOS 12.0 及以上 | 已创建平台入口与 CI 配置；构建、启动和原生播放待验 |
+| Windows | x64 / Windows 10 1809 及以上 | 本地与 CI 构建、MSIX 打包／测试签名通过；游客视频／影视／直播、受控多标签并发和离线分轨播放已有原生验证，本机已有 MSIX 安装运行记录；新版安装、卸载和升级待完整回归 |
+| Android | arm64 / Android 7.0（API 24）及以上 | 本地与 CI 构建 APK 通过，固定 release 签名与单 arm64 ABI 校验通过；真机运行、播放、离线下载和覆盖升级待验 |
+| macOS | arm64 / macOS 12.0 及以上 | CI 的 arm64 构建、架构校验和 DMG 打包通过；设备启动、原生播放、安装及 Gatekeeper 验收待验 |
 
-平台状态以[首版实测](docs/validation/m0-results.md)、[影视与直播播放验证](docs/validation/content-playback.md)和[构建打包记录](docs/validation/ci-cd.md)为准。构建成功与实机验收分别记录，当前预览版尚未完成 M0 三端验收。
+2026-10-07 的 [CI 通过记录（提交 `3b8ed05`）](https://github.com/CKopoer/BiliSail/actions/runs/37591479657)覆盖根应用与三个包的检查及三端构建／打包。各项运行证据见[首版实测](docs/validation/m0-results.md)、[影视与直播播放](docs/validation/content-playback.md)、[多标签并发播放](docs/validation/multi-tab-playback.md)、[下载与离线播放](docs/downloads.md)和[构建打包记录](docs/validation/ci-cd.md)。首版记录保留历史快照，后续专项记录补充当前能力；构建成功与实机验收分别记录，预览版尚未完成 M0 三端验收。
 
 后续重点：
 
@@ -98,15 +102,15 @@ BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多
 
 安装包入口：[GitHub Releases](https://github.com/CKopoer/BiliSail/releases)。
 
-公开版本在 Release 页面提供预览安装包，也可按[源码运行说明](#从源码运行)自行构建。各平台包格式如下：
+截至 2026-10-07，最新公开预览为 [0.3.0+1](https://github.com/CKopoer/BiliSail/releases/tag/v0.3.0%2B1)，提供三个平台的安装包、构建信息及 SHA-256 校验文件。该版本基于提交 `de71b86`，当前源码已包含后续改进，本文功能概览以当前源码为准；安装包能力以对应 Release 的提交和说明为准。也可按[源码运行说明](#从源码运行)自行构建。
 
 | 平台 | 预览包格式 | 安装说明 |
 | --- | --- | --- |
 | Windows x64 | `.msix`，附签名公钥证书 `.cer` | 使用测试签名时，需要先信任对应证书；具体步骤见 [MSIX 签名与安装](docs/validation/ci-cd.md#windows-msix-签名与安装) |
-| Android arm64 | `.apk` | 正常构建复用固定 release 密钥；PR 为临时预览签名，真机覆盖升级待验 |
+| Android arm64 | `.apk` | 当前公开 0.3.0+1 包使用临时 debug 签名；后续非 PR 构建已改用固定 release 密钥，跨签名切换与覆盖升级说明见 [Android 签名](docs/validation/ci-cd.md#android-固定签名与覆盖升级) |
 | macOS arm64 | `.dmg` | 打开后将 `BiliSail.app` 拖到 `Applications`；当前配置使用 ad-hoc 签名，尚未完成 Developer ID 签名与公证 |
 
-GitHub Actions 的 **CI** 执行根应用和三个包的检查，并按平台构建预览产物；维护者可手动运行 **Release preview** 创建预览 Release 草稿。触发方式、产物校验与签名配置见 [CI/CD 说明](docs/validation/ci-cd.md)。
+GitHub Actions 的 **CI** 执行根应用和三个包的检查，并按平台构建预览产物；维护者可手动运行 **Release preview** 创建预览 Release 草稿，再公开发布。Release 和 CI 构建包的签名种类以各自的 `build-info.json` 为准。触发方式、产物校验与签名配置见 [CI/CD 说明](docs/validation/ci-cd.md)。
 
 后续 CI 和 Release 构建的 Windows 产物同时包含 `.msix`、`.msi` 和 `.exe` 安装包，均附 SHA-256；MSI 与 EXE 使用同一安装链，任选一种安装，详见 [Windows MSI 与 EXE](docs/validation/ci-cd.md#windows-msi-与-exe)。已发布版本的文件不会因工作流修改而自动补齐。
 
@@ -142,7 +146,7 @@ flutter build windows --release
 
 设置“关于”提供项目 GitHub 地址和“检查更新”。每天首次打开应用时会自动检查已发布版本（包含预览版）；发现新版本后弹窗提示，点击“前往 Release”可查看说明并下载。自动检查失败时保持安静，可随时手动重试；应用不会自动下载或安装更新。
 
-桌面工作区支持同时打开首页、搜索、视频、用户、历史和设置等标签。首页固定，最多打开 16 个标签；标签状态保留至本次运行结束。切换到普通标签时，当前视频继续播放；切换到另一个视频时复用单一播放器，保留各视频的进度与播放选项。关闭当前播放标签会停止播放。
+桌面工作区支持同时打开首页、搜索、视频、影视、直播、用户、历史、消息、下载和设置等标签。首页固定，最多打开 16 个标签；标签状态保留至本次运行结束。每个播放标签拥有独立播放器，切换到普通页面时媒体继续播放；是否允许不同播放标签同时播放由下方设置控制。关闭播放标签只停止并释放该标签的播放器。
 
 ### 常用快捷键
 
@@ -151,11 +155,14 @@ flutter build windows --release
 | 播放 / 暂停 | `Space` |
 | 前进 / 后退 | `→` / `←`，默认 3 秒 |
 | 临时加速 | 长按 `→`，默认 3 倍速 |
+| 提高 / 降低音量 | `↑` / `↓` |
 | 切换 / 退出全屏 | `F`、`F11` 或 `Enter` / `Esc` |
 | 收起 / 展开视频信息 | `W` 或 `F12` |
 | 开关弹幕 / 字幕 | `D` 或 `F9` / `F6` |
 | 降低 / 提高倍速 | `F1` 或 `;` / `F2` 或 `'` |
 | 切换 1 / 2 倍速 | `Ctrl+1` |
+| 上一 / 下一分 P | `Z`、`N` 或 `,` / `X`、`M` 或 `.` |
+| 刷新当前页面 | `Ctrl+R` 或 `F5` |
 | 新建 / 关闭标签 | `Ctrl+T` / `Ctrl+W` |
 | 下一个 / 上一个标签 | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
 
@@ -164,6 +171,10 @@ flutter build windows --release
 设置 → 播放 → “允许多个标签页同时播放”默认开启，仅在多标签页模式下生效。开启时，不同视频、影视或直播标签可同时播放，打开新播放标签不会中止旧媒体流；每个标签内仍只有一个播放器。关闭开关或使用单标签模式时只允许一个会话播放，进入另一播放页会暂停旧会话并保留进度和播放意图。开关立即生效，恢复允许并发时继续被导航暂停的会话，手动暂停的会话保持暂停；单标签模式禁用开关并保留选择，关闭标签只释放该标签的播放器。详见[多标签并发播放](docs/validation/multi-tab-playback.md)。
 
 单击视频画面切换控制栏，双击切换全屏。快捷键可在设置中修改、停用或恢复默认，支持组合键和鼠标侧键。输入时保留编辑，明确绑定的侧键或 Ctrl／Meta 关闭组合仍可关闭当前标签；普通弹窗隔离底层，全屏播放保留当前标签命令。固定标签循环和图片查看器操作不受快捷键总开关影响。设置中的本次运行诊断可查看输入匹配与拦截结果，关闭即清空。当前结构与验证边界见[快捷键重构实施记录](docs/shortcut-system/implementation-results.md)。历史操作见[快捷键与富评论](docs/validation/shortcuts-rich-comments.md)、[设置与侧键](docs/validation/settings-tabs-fonts.md)和[标签播放行为](docs/validation/profile-playback-rates.md)。
+
+视频卡片悬停时放大封面并静音预览，移开后停止；预览持续播放，并维持当前位置之后约 5 秒的向前预读窗口。稍后再看页面通过菜单管理条目，从该列表开始播放会保留可折叠队列。点播中选择的新倍速会由后续视频／分 P／影视剧集继承，重启应用后使用设置中的默认值；长按临时加速不改变这份选择。
+
+视频与影视播放页可按分 P／剧集多选下载，选择当前账号可用的画质与编码，在下载中心暂停、继续、重试或打开已完成项。重启后保留任务并等待手动继续；离线文件与普通图片缓存分开，清理图片缓存不会删除离线媒体。完整使用与验收边界见[下载与离线播放](docs/downloads.md)。
 
 ## 开发与文档
 
@@ -175,7 +186,7 @@ lib/
 ├── core/                 # 存储、安全凭据、取消与平台能力
 ├── domain/               # 共享领域类型
 ├── features/             # 按 domain / data / application / presentation 分层
-└── shared/ui/            # 通用界面组件
+└── shared/               # 共用数据映射与 ui 组件
 packages/
 ├── bili_api/             # 纯 Dart 协议与 API 包
 ├── bili_player/          # 通用播放器契约、media_kit 适配与 VideoSurface
@@ -219,6 +230,9 @@ Pop-Location
 | [整体架构](docs/architecture.md) | 功能分层、独立包、状态与生命周期 |
 | [API 与会话](docs/api-design.md) | 接口、鉴权、错误处理与账号隔离 |
 | [播放、直播与弹幕](docs/playback-and-danmaku.md) | 播放会话、媒体请求与弹幕时钟 |
+| [下载与离线播放](docs/downloads.md) | 下载队列、断点恢复、文件校验与离线播放边界 |
+| [快捷键实施记录](docs/shortcut-system/implementation-results.md) | 输入作用域、页面刷新、键位录制与验证 |
+| [CI/CD 与安装包](docs/validation/ci-cd.md) | 三端构建、MSIX／APK／DMG、签名与安装说明 |
 | [实施与验收](docs/implementation-plan.md) | 开发阶段与平台验收要求 |
 | [架构决策](docs/decisions.md) | 重要技术选择及其依据 |
 | [开发约定](AGENTS.md) | 代码、文档、测试与交付规则 |
