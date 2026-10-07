@@ -102,17 +102,17 @@ BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多
 
 安装包入口：[GitHub Releases](https://github.com/CKopoer/BiliSail/releases)。
 
-截至 2026-10-07，最新公开预览为 [0.3.0+1](https://github.com/CKopoer/BiliSail/releases/tag/v0.3.0%2B1)，提供三个平台的安装包、构建信息及 SHA-256 校验文件。该版本基于提交 `de71b86`，当前源码已包含后续改进，本文功能概览以当前源码为准；安装包能力以对应 Release 的提交和说明为准。也可按[源码运行说明](#从源码运行)自行构建。
+提供三个平台的安装包、构建信息及 SHA-256 校验文件。也可按[源码运行说明](#从源码运行)自行构建。
 
 | 平台 | 预览包格式 | 安装说明 |
 | --- | --- | --- |
-| Windows x64 | `.msix`，附签名公钥证书 `.cer` | 使用测试签名时，需要先信任对应证书；具体步骤见 [MSIX 签名与安装](docs/validation/ci-cd.md#windows-msix-签名与安装) |
+| Windows x64 | `.msix`/`.msi`/`.exe`，附签名公钥证书 `.cer` | 使用测试签名时，需要先信任对应证书；具体步骤见 [MSIX 签名与安装](docs/validation/ci-cd.md#windows-msix-签名与安装) |
 | Android arm64 | `.apk` | 当前公开 0.3.0+1 包使用临时 debug 签名；后续非 PR 构建已改用固定 release 密钥，跨签名切换与覆盖升级说明见 [Android 签名](docs/validation/ci-cd.md#android-固定签名与覆盖升级) |
 | macOS arm64 | `.dmg` | 打开后将 `BiliSail.app` 拖到 `Applications`；当前配置使用 ad-hoc 签名，尚未完成 Developer ID 签名与公证 |
 
 GitHub Actions 的 **CI** 执行根应用和三个包的检查，并按平台构建预览产物；维护者可手动运行 **Release preview** 创建预览 Release 草稿，再公开发布。Release 和 CI 构建包的签名种类以各自的 `build-info.json` 为准。触发方式、产物校验与签名配置见 [CI/CD 说明](docs/validation/ci-cd.md)。
 
-后续 CI 和 Release 构建的 Windows 产物同时包含 `.msix`、`.msi` 和 `.exe` 安装包，均附 SHA-256；MSI 与 EXE 使用同一安装链，任选一种安装，详见 [Windows MSI 与 EXE](docs/validation/ci-cd.md#windows-msi-与-exe)。已发布版本的文件不会因工作流修改而自动补齐。
+CI 和 Release 构建的 Windows 产物同时包含 `.msix`、`.msi` 和 `.exe` 安装包，均附 SHA-256；MSI 与 EXE 使用同一安装链，任选一种安装，详见 [Windows MSI 与 EXE](docs/validation/ci-cd.md#windows-msi-与-exe)。已发布版本的文件不会因工作流修改而自动补齐。
 
 ## 从源码运行
 
