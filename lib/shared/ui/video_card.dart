@@ -14,19 +14,30 @@ import 'package:flutter/material.dart';
 
 import '../../domain/video.dart';
 
-String compactCount(int? count) {
+String compactCount(int? count, {bool abbreviateThousands = false}) {
   if (count == null) return '—';
   if (count >= 100000000) return '${(count / 100000000).toStringAsFixed(1)}亿';
   if (count >= 10000) return '${(count / 10000).toStringAsFixed(1)}万';
+  if (abbreviateThousands && count >= 1000) {
+    return '${(count / 1000).toStringAsFixed(1)}千';
+  }
   return '$count';
 }
 
-String _videoCountLabel(int? count, String text) {
+String compactCountLabel(
+  int? count,
+  String text, {
+  bool abbreviateThousands = false,
+}) {
   final value = text.trim();
-  if (value.isEmpty) return compactCount(count);
+  if (value.isEmpty) {
+    return compactCount(count, abbreviateThousands: abbreviateThousands);
+  }
   // Keep server-provided abbreviations; format decimal count text locally.
   final numericCount = int.tryParse(value, radix: 10);
-  return numericCount == null ? text : compactCount(numericCount);
+  return numericCount == null
+      ? text
+      : compactCount(numericCount, abbreviateThousands: abbreviateThousands);
 }
 
 String durationLabel(Duration duration) {
@@ -131,8 +142,8 @@ final class _VideoCardState extends State<VideoCard> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final video = widget.video;
-    final playLabel = _videoCountLabel(video.playCount, widget.playCountText);
-    final danmakuLabel = _videoCountLabel(
+    final playLabel = compactCountLabel(video.playCount, widget.playCountText);
+    final danmakuLabel = compactCountLabel(
       video.danmakuCount,
       widget.danmakuCountText,
     );

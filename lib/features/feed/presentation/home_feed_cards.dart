@@ -274,9 +274,9 @@ final class LiveRoomCard extends StatelessWidget {
               aspectRatio: 16 / 9,
               child: _Cover(
                 url: entry.coverUrl,
-                left: entry.popularityText.isEmpty
+                left: entry.popularityText.trim().isEmpty
                     ? ''
-                    : '♨ ${entry.popularityText}',
+                    : '♨ ${compactCountLabel(null, entry.popularityText, abbreviateThousands: true)}',
                 right: entry.areaName,
               ),
             ),
