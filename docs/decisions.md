@@ -191,6 +191,8 @@ FRB 支持跨平台是可行性依据，但平台构建、取消、错误和流�
 
 **macOS 交付（2026-10-06）**：按用户要求将应用 ZIP 改为 DMG 安装文件。使用系统 `ditto` 保留应用 bundle，再以 `hdiutil` 创建并校验压缩只读 HFS+ 镜像；根目录包含 `BiliSail.app`、指向 `/Applications` 的符号链接和第三方说明，支持拖拽安装。不新增打包依赖；继续使用预览 ad-hoc 签名，Developer ID 签名与公证仍待完成。
 
+**Android 固定签名（2026-10-07）**：按用户要求，正常 CI 与 Release 长期复用同一 release keystore，包名保持 `dev.bilisail.bilisail`。私钥及密码由仓库 Secrets 注入，仅在 Android 打包步骤还原到临时目录，用完清理；证书 SHA-256 由公开仓库变量固定，打包后验证实际 APK 签名并记入 metadata，缺失或不匹配直接失败。PR 只允许显式临时预览签名，不接收长期私钥；debug 开发不要求 release 凭据。后续发布保持密钥并递增 Flutter 的数字构建号，旧临时签名包不属于新升级链；真实设备升级仍需验收。
+
 **发布边界**：借鉴 UWP 的手动选平台和 Release 草稿职责，独立编写 Flutter 工作流；只创建 draft + prerelease，不自动公开。固定 SDK 与锁文件、附源码/SDK metadata 和 SHA-256；构建成功不能替代三端媒体、安装/升级、签名与许可验收。配置、证书信任和实测状态见 [CI/CD、MSIX 与 DMG](validation/ci-cd.md)。
 
 ## D23：关于页与每日首次启动更新提示

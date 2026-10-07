@@ -35,6 +35,14 @@ on:
         type: boolean
         default: true
     secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: false
+      ANDROID_KEYSTORE_PASSWORD:
+        required: false
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASSWORD:
+        required: false
       MSIX_CERTIFICATE_BASE64:
         required: false
       MSIX_CERTIFICATE_PASSWORD:
@@ -150,10 +158,16 @@ jobs:
         env:
           BUILD_TARGET: ${{ matrix.target }}
           BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+          ANDROID_PREVIEW_SIGNING: ${{ matrix.target == 'android-arm64' && github.event_name == 'pull_request' }}
+          ANDROID_KEYSTORE_BASE64: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+          ANDROID_KEY_ALIAS: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEY_ALIAS || '' }}
+          ANDROID_KEY_PASSWORD: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEY_PASSWORD || '' }}
+          ANDROID_SIGNING_CERTIFICATE_SHA256: ${{ matrix.target == 'android-arm64' && vars.ANDROID_SIGNING_CERTIFICATE_SHA256 || '' }}
           MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER || 'CN=BiliSail' }}
           MSIX_CERTIFICATE_BASE64: ${{ matrix.target == 'windows-x64' && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_BASE64 || '' }}
           MSIX_CERTIFICATE_PASSWORD: ${{ matrix.target == 'windows-x64' && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_PASSWORD || '' }}
-        run: ./tool/build-release.ps1 -Target $env:BUILD_TARGET -Version $env:BUILD_VERSION
+        run: ./tool/build-release.ps1 -Target $env:BUILD_TARGET -Version $env:BUILD_VERSION -AndroidPreviewSigning:($env:ANDROID_PREVIEW_SIGNING -eq 'true')
       - name: Upload packages and checksums
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

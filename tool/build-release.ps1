@@ -1,10 +1,12 @@
 param(
   [Parameter(Mandatory)][ValidateSet('android-arm64', 'windows-x64', 'macos-arm64')][string]$Target,
-  [Parameter(Mandatory)][string]$Version
+  [Parameter(Mandatory)][string]$Version,
+  [switch]$AndroidPreviewSigning
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+. (Join-Path $PSScriptRoot 'android-signing.ps1')
 
 function Invoke-BuildCommand([string]$Executable, [string[]]$Parameters) {
   & $Executable @Parameters
@@ -117,8 +119,16 @@ if ($Target -eq 'macos-arm64' -and (!$IsMacOS -or [System.Runtime.InteropService
 
 $oldMacSigningIdentity = $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY
 $oldMacSigningStyle = $env:FLUTTER_XCODE_CODE_SIGN_STYLE
+$androidSigning = $null
+$androidCertificateSha256 = $null
 Push-Location $repoRoot
 try {
+  if ($AndroidPreviewSigning -and $Target -ne 'android-arm64') {
+    throw 'AndroidPreviewSigning is only valid for Android packages.'
+  }
+  if ($Target -eq 'android-arm64') {
+    $androidSigning = Initialize-AndroidSigning -Preview:$AndroidPreviewSigning
+  }
   # Finish SDK bootstrap before capturing the machine-readable version.
   Invoke-BuildCommand flutter @('--version')
   $sdkJson = & flutter --version --machine
@@ -152,7 +162,8 @@ try {
         $abis = @($apk.Entries.FullName | Where-Object { $_ -match '^lib/' } | ForEach-Object { $_.Split('/')[1] } | Sort-Object -Unique)
         if ($abis.Count -ne 1 -or $abis[0] -ne 'arm64-v8a') { throw 'APK contains unexpected native ABIs.' }
       } finally { $apk.Dispose() }
-      $signing = 'temporary-debug-key'
+      $androidCertificateSha256 = Confirm-AndroidApkSigning $package $androidSigning
+      $signing = $androidSigning.Signing
     }
     'windows-x64' {
       Invoke-BuildCommand flutter (@('build', 'windows') + $versionArgs)
@@ -205,6 +216,7 @@ try {
     sourceRevision = $revision
     sourceDirty = $sourceDirty
     androidVersionCode = if ($Target -eq 'android-arm64') { [long]$buildNumber + 2000 } else { $null }
+    androidSigningCertificateSha256 = $androidCertificateSha256
     flutterVersion = $sdk.frameworkVersion
     flutterRevision = $sdk.frameworkRevision
     engineRevision = $sdk.engineRevision
@@ -221,6 +233,7 @@ try {
   }
   Write-Output "Packaged $package"
 } finally {
+  Clear-AndroidSigning $androidSigning
   if ($Target -eq 'macos-arm64') {
     $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY = $oldMacSigningIdentity
     $env:FLUTTER_XCODE_CODE_SIGN_STYLE = $oldMacSigningStyle

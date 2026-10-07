@@ -12,7 +12,7 @@
 | 任务 | Runner | 产物与边界 |
 | --- | --- | --- |
 | 版本解析、根与三个包检查 | `ubuntu-24.04` | 无需真实账号，不自动运行在线或原生播放集成测试 |
-| Android | `ubuntu-24.04`，Temurin JDK 17 | 仅 arm64 的 release APK；沿用工程临时 debug key，无正式签名 |
+| Android | `ubuntu-24.04`，Temurin JDK 17 | 仅 arm64 的 release APK；正常构建复用固定 keystore，PR 使用临时预览签名 |
 | Windows | `windows-2022`，Visual Studio C++ / Windows SDK | x64 MSIX，包含 EXE、全部原生 DLL/data 及 VC++ runtime；无需 MSI 或安装 EXE |
 | macOS | `macos-15`，Apple Silicon / Xcode | arm64 DMG，`ditto` 保留应用权限与链接，`hdiutil` 打包并校验镜像；仅 ad-hoc 签名，未 notarize |
 | Release 上传 | `ubuntu-24.04` | 合并本次所选平台的 Actions artifacts 后创建草稿 |
@@ -31,7 +31,7 @@ CI 在工作流顶层固定 `PUB_HOSTED_URL=https://pub.flutter-io.cn`，与根�
 
 - `BiliSail-<version>-<target>.apk`、`.msix` 或 `.dmg`。
 - Windows 包旁的 `.cer`，只含签名证书公钥。
-- `.build-info.json`：源码 revision 与 `sourceDirty`、Flutter/engine/Dart 版本、目标、签名类型、runner image、根锁文件 SHA-256。
+- `.build-info.json`：源码 revision 与 `sourceDirty`、Flutter/engine/Dart 版本、目标、签名类型、Android 签名证书 SHA-256、runner image、根锁文件 SHA-256。
 - 每个上述文件对应的 `.sha256`，格式兼容 `sha256sum -c`。
 
 CI 的 artifacts 保留 14 天；Release 从同一运行下载，所选平台失败时不创建新草稿。不使用参考仓库的 WebDAV、NuGet ZIP、UWP manifest、Chocolatey 或 TLS 验证绕过逻辑。
@@ -39,6 +39,37 @@ CI 的 artifacts 保留 14 天；Release 从同一运行下载，所选平台失
 构建前先 `pub get --enforce-lockfile`，随后保留 Flutter build 默认的 pub 阶段，并检查构建后锁文件哈希不变。在 Flutter 3.47.6 中，`--no-pub` 还会跳过 release 原生插件注册文件的重生成：本轮 Android 初次构建因此错误引用 dev-only `integration_test`。修正采用 SDK 自身的重生成流程，不手改 `GeneratedPluginRegistrant.java`。
 
 仅指定 `--target-platform android-arm64` 时，该 SDK 仍会把插件的其他 ABI 库装入非 split APK。本轮检查发现 armeabi-v7a/x86_64 的 mpv/JNI 库，已增加 `--split-per-abi` 并在脚本中校验 APK 内只存在 `arm64-v8a`。
+
+## Android 固定签名与覆盖升级
+
+2026-10-07 起，push、手动 CI 和 Release 共用固定 release keystore。仓库 Actions Secrets 配置：
+
+| 名称 | 内容 |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | 长期保存的 keystore 文件的 Base64 |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore 密码 |
+| `ANDROID_KEY_ALIAS` | 签名私钥别名 |
+| `ANDROID_KEY_PASSWORD` | 签名私钥密码 |
+
+Actions Variable `ANDROID_SIGNING_CERTIFICATE_SHA256` 保存该证书的 64 位十六进制 SHA-256。工作流仅在 Android 的非 PR 打包步骤注入私钥 Secrets；Release 显式将同一组 Secrets 传给复用 CI。缺失、配置不完整、文件无效、密码错误或证书指纹不符均失败，不自动生成密钥或降级为 debug 签名。
+
+[Android 签名辅助脚本](../../tool/android-signing.ps1) 将 keystore 还原到独立临时目录，Linux 目录权限为 `700`；密码仅经进程环境传给 Gradle，不生成含密码的 `key.properties`。打包成功后使用 Android SDK 的 `apksigner verify --verbose --print-certs` 验证 APK，要求唯一签名证书且 SHA-256 与仓库变量一致；metadata 标记 `signing=configured-keystore` 并保存实际 `androidSigningCertificateSha256`。成功或失败均清理临时 keystore。
+
+PR 不接收长期签名 Secrets，仅通过 `-AndroidPreviewSigning` 显式启用临时 debug 签名，metadata 为 `temporary-debug-key`。这些预览包不属于长期升级链。该模式若收到 release 密钥则拒绝执行。普通 debug 开发不需要 release 凭据；直接 `flutter build apk --release` 需要设置 `ANDROID_KEYSTORE_PATH`、密码和别名环境变量，缺失时拒绝构建。
+
+本机打包可用 `ANDROID_KEYSTORE_PATH` 替代 Base64，但二者只能选一个，并设置同一组密码、别名、证书 SHA-256 以及 `ANDROID_HOME` 或 `ANDROID_SDK_ROOT`。私钥及密码不进入源码、产物、日志或普通配置文件；离线备份须保留 keystore 与受保护的密码。
+
+包名保持 `dev.bilisail.bilisail`。后续发布必须保持同一密钥并单调递增 `x.y.z+N` 中的 `N`，arm64 split APK 的内部版本号仍为 `N+2000`；只增加 `x.y.z` 不会增加 Android 内部版本号。旧临时 debug 签名包不能直接覆盖为不同密钥的新包，原私钥未保存时首次切换需卸载重装，卸载会影响应用私有数据。参考 [Android 签名与升级](https://developer.android.com/studio/publish/app-signing#considerations)、[Android 版本号](https://developer.android.com/studio/publish/versioning#appversioning)、[apksigner](https://developer.android.com/tools/apksigner)。
+
+[签名边界检查](../../tool/test-android-signing.ps1) 已加入 `tool/check.ps1`，覆盖缺失配置、错误 Base64、预览密钥隔离、临时文件清理、调用方 keystore 保留和错误 APK 证书拒绝。实机安装与覆盖升级仍需单独验收。
+
+2026-10-07 本机验证：已配置上述四个 Secrets 与证书指纹变量，生成 RSA 3072 位固定签名密钥，证书有效期至 2056-09-29；keystore 和 DPAPI 加密的密码备份保存在仓库外，仅当前 Windows 用户与 SYSTEM 可访问。证书 SHA-256 为 `be3770071a0e9c71a701405a685dd455cd1baa134abd2eac2d97b9926349996e`。
+
+- `tool/check.ps1 -EnforceLockfile` 的格式、分析、1333 个应用／包测试和 20 个签名边界检查通过，四份锁文件未变。
+- actionlint 1.7.12、PowerShell 解析、144 条相对文档链接及差异检查通过。
+- Gradle 在缺少密钥时拒绝 `preReleaseBuild`，无 release 凭据时 `preDebugBuild` 通过。
+- 在独立检出中生成 `0.3.0+1` 的 arm64 release APK；实际 application ID 为 `dev.bilisail.bilisail`、versionCode 为 `2001`、最低 API 为 `24`。APK 签名、固定证书指纹、单 arm64 ABI、metadata 与 SHA-256 校验通过，包内无 keystore／密码文件，临时签名目录已清理。
+- 本地首次构建受其他开发操作生成的 dev-only 插件注册文件干扰；独立检出的 SQLite 原生资产下载另遇 TLS 连接中断，随后复用经包内固定 SHA-256 验证的缓存完成构建，未改 TLS 验证或生成源码。真实 Android 设备安装、旧临时签名切换与固定签名下的覆盖升级尚未实测。
 
 ## macOS DMG 安装
 
@@ -61,7 +92,7 @@ macOS 产物为 `BiliSail-<version>-macos-arm64.dmg`。脚本先使用 `ditto` �
 
 仓库 Actions Variable `MSIX_PUBLISHER` 可指定证书的完整 Subject，缺省为 `CN=BiliSail`；manifest Publisher 必须与证书 Subject 匹配。PR 构建始终使用临时测试证书，避免向 PR 提供正式私钥。已配置 PFX 无效、密码错误、证书过期或 publisher 不匹配时失败，不降级成测试签名。当前未接入可信时间戳；正式发行还需完善时间戳、证书续期与升级验证。参见 [Microsoft MSIX 证书](https://learn.microsoft.com/en-us/windows/msix/package/create-certificate-package-signing)、[SignTool 签名](https://learn.microsoft.com/en-us/windows/msix/package/sign-app-package-using-signtool)。
 
-Android 仍使用 runner 上自动生成的 debug keystore，多次运行不能保证相同签名或覆盖升级；macOS ad-hoc 签名不能替代 Developer ID / notarization。资源许可范围沿用 [第三方说明](../../THIRD_PARTY_NOTICES.md)，公开发布前仍需完成其待核实项。
+macOS ad-hoc 签名不能替代 Developer ID / notarization。资源许可范围沿用 [第三方说明](../../THIRD_PARTY_NOTICES.md)，公开发布前仍需完成其待核实项。
 
 ## 验证记录
 

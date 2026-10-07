@@ -11,6 +11,7 @@ function Invoke-Check([string]$Executable, [string[]]$Parameters) {
 
 Push-Location $repoRoot
 try {
+  & (Join-Path $PSScriptRoot 'test-android-signing.ps1')
   # A cold Windows SDK can emit pub bootstrap output before the machine JSON.
   Invoke-Check flutter @('--version')
   $sdk = (& flutter --version --machine | ConvertFrom-Json)
