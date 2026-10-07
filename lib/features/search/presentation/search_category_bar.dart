@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,7 +22,13 @@ final class SearchCategoryBar extends ConsumerWidget {
     return SizedBox(
       height: 58,
       child: ScrollConfiguration(
-        behavior: const SmoothScrollBehavior(horizontalMouseWheel: true),
+        behavior: const SmoothScrollBehavior(horizontalMouseWheel: true)
+            .copyWith(
+              dragDevices: {
+                ...const SmoothScrollBehavior().dragDevices,
+                PointerDeviceKind.mouse,
+              },
+            ),
         child: SingleChildScrollView(
           key: const ValueKey('search-category-strip'),
           scrollDirection: Axis.horizontal,

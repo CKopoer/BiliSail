@@ -288,7 +288,8 @@ final class SearchClient {
       ownerAvatarUrl: _uri(item['upic']),
       duration: Duration(seconds: seconds ?? 0),
       playCount: _int(item['play']),
-      danmakuCount: _int(item['video_review'] ?? item['danmaku']),
+      // User search previews in res use dm; regular video results use video_review.
+      danmakuCount: _int(item['video_review'] ?? item['danmaku'] ?? item['dm']),
       publishedAt: _date(item['pubdate']),
     );
   }

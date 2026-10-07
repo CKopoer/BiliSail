@@ -14,6 +14,19 @@
 - 共用 `PagedScrollViewport` 首屏补页、接近底部加载和悬浮刷新/回顶部；隐藏标签不自动补页，失败只显式重试，稳定 ID 去重，重复/空页停止请求。
 - 分类、排序和展开筛选可横向滚动，“更多筛选”常驻右侧，窄窗口及字体放大仍能操作。
 
+## 横向交互与 UP 主预览弹幕数修正（2026-10-07）
+
+顶部“综合、视频”等分类、排序方式及展开的时长／用户类型筛选均允许鼠标按住拖动；桌面普通纵向滚轮在这些横向栏内映射为左右滚动。分类栏原有横向滚轮支持，但默认滚动行为未接受鼠标拖动；排序／筛选原有横向滚动容器同时缺少这两项桌面配置。现在三处局部复用 `SmoothScrollBehavior(horizontalMouseWheel: true)`，在原有拖动设备集合中加入鼠标，保留触摸／触控板和共享滚轮算法。
+
+综合搜索附带的 UP 主稿件使用 `bili_user.data[].res[].dm` 表示弹幕数，普通视频搜索使用 `video_review`。旧解析只读取 `video_review`／`danmaku`，导致预览稿件的已有弹幕数丢失，经 Repository 传到共用 `VideoCard` 后显示缺失标记。现在补充 `dm` 字段映射，已有字段优先，合法的 `0` 保留，缺字段继续表示未知；页面不额外请求视频详情或虚构统计。
+
+本次游客只读观测搜索“我是”，返回“我是郭杰瑞”（UID `176037767`）的三条预览：`BV1sS4y1t7ce`、`BV1yZ4y1a7Ck`、`BV1PY4y137at`，`dm` 分别为 `14010`、`11387`、`13506`，响应未提供 `video_review`／`danmaku`。修复后的 `packages/bili_api/tool/search_smoke.dart 我是 all` 确认三条均解析出这些弹幕数；数值和搜索排名仅对应当次观测。回归 fixture 保留真实字段形状并替换无关文本／图片。
+
+- 75 项定向测试通过：根应用 64 项、搜索 API 11 项。日志 `artifacts/search-scroll-targeted.log`。
+- 420px／普通字体和 320px／双倍字体下，验证三处横向栏的普通滚轮、鼠标拖动、滚到末尾并点击最后选项、反向回到开头，及横向栏之间／结果列表的滚动隔离。响应 → API 模型 → Repository → UP 主预览视频卡的整条链路覆盖弹幕 `14010`、`0`、缺字段；API 另外验证数字文本和原有字段优先级。
+- `tool/check.ps1 -SkipPub` 通过：根应用 989、`bili_api` 283、`bili_player` 22、`bili_danmaku` 32，共 1326 项测试，四处格式与静态分析通过；日志 `artifacts/search-scroll-check.log`。本文本地链接及 `git diff --check` 通过。
+- 本轮未验证实体鼠标／触控板操作手感、Android/macOS 实机交互，也未执行平台构建。
+
 ## 协议登记
 
 全部为 `api.bilibili.com`、GET、Web、Cookie 可选、WBI、JSON，只读请求，无 CSRF、App/TV token 或 gRPC。沿用传输层最多两次额外网络/超时/指定 5xx 重试，风控不重试；每次 Repository 操作共享账号 epoch、取消信号及 25 秒总 deadline。

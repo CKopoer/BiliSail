@@ -77,13 +77,16 @@ class _PassportDialogState extends State<_PassportDialog>
     with WidgetsBindingObserver {
   PassportWebViewEnvironment? _environment;
   InAppWebViewController? _controller;
+  InAppWebView? _webView;
   Timer? _poll;
   Timer? _timeout;
   bool _ready = false;
-  bool _capturing = false;
+  Future<void>? _captureOperation;
   bool _paused = false;
   bool _finished = false;
+  int _navigationGeneration = 0;
   String? _error;
+  String? _pageError;
 
   @override
   void initState() {
@@ -146,25 +149,30 @@ class _PassportDialogState extends State<_PassportDialog>
     if (mounted && !_finished) setState(() => _error = message);
   }
 
-  Future<void> _capture() async {
+  Future<void> _capture() {
+    // Error callbacks must await a read already in flight before deciding that
+    // login failed. Starting a second read can also race native view disposal.
+    return _captureOperation ??= _readCookies().whenComplete(
+      () => _captureOperation = null,
+    );
+  }
+
+  Future<void> _readCookies() async {
     final controller = _controller;
-    if (controller == null ||
-        _capturing ||
-        _paused ||
-        _finished ||
-        _error != null) {
+    if (controller == null || _paused || _finished || _error != null) {
       return;
     }
-    _capturing = true;
     try {
       // Fetch cookies applicable to the API root, retaining their native scope.
       final cookies =
           await CookieManager.instance(
-            webViewEnvironment: _environment?.environment,
-          ).getCookies(
-            url: WebUri('https://api.bilibili.com/'),
-            webViewController: controller,
-          );
+                webViewEnvironment: _environment?.environment,
+              )
+              .getCookies(
+                url: WebUri('https://api.bilibili.com/'),
+                webViewController: controller,
+              )
+              .timeout(const Duration(seconds: 10));
       if (!mounted ||
           _paused ||
           _finished ||
@@ -192,8 +200,55 @@ class _PassportDialogState extends State<_PassportDialog>
       _fail('当前系统 WebView 无法读取完整会话信息，请更新后重试或使用扫码登录');
     } catch (_) {
       _fail('无法读取网页登录会话，请重试或使用扫码登录');
-    } finally {
-      _capturing = false;
+    }
+  }
+
+  void _pageLoadedOrStarted() {
+    _navigationGeneration++;
+    if (mounted && !_finished && _pageError != null) {
+      setState(() => _pageError = null);
+    }
+    unawaited(_capture());
+  }
+
+  Future<void> _pageFailed(
+    WebResourceRequest request,
+    WebResourceError error,
+  ) async {
+    if (request.isForMainFrame != true) return;
+    if (error.type == WebResourceErrorType.CANCELLED) {
+      // WebView2/WKWebView report superseded or policy-cancelled navigation as
+      // an error too. It does not invalidate cookies created by the login POST.
+      await _capture();
+      return;
+    }
+    final generation = _navigationGeneration;
+    await _capture();
+    if (mounted &&
+        !_finished &&
+        _error == null &&
+        generation == _navigationGeneration) {
+      setState(() => _pageError = '登录页面加载失败，请检查网络后重试');
+    }
+  }
+
+  Future<void> _retryPage() async {
+    await _capture();
+    if (!mounted || _finished || _error != null) return;
+    _pageLoadedOrStarted();
+    try {
+      // Reloading the failed navigation can replay a password/SMS form POST.
+      // An explicit retry always opens the original login page with a GET.
+      await _controller?.loadUrl(
+        urlRequest: URLRequest(
+          url: WebUri('https://passport.bilibili.com/login'),
+          method: 'GET',
+        ),
+      );
+    } catch (_) {
+      if (mounted && !_finished && _error == null) {
+        setState(() => _pageError = '登录页面加载失败，请检查网络后重试');
+      }
     }
   }
 
@@ -224,72 +279,104 @@ class _PassportDialogState extends State<_PassportDialog>
     }
   }
 
+  InAppWebView _createWebView() => InAppWebView(
+    webViewEnvironment: _environment?.environment,
+    initialUrlRequest: URLRequest(
+      url: WebUri('https://passport.bilibili.com/login'),
+    ),
+    initialSettings: InAppWebViewSettings(
+      incognito: true,
+      generalAutofillEnabled: false,
+      passwordAutosaveEnabled: false,
+      isInspectable: false,
+      sharedCookiesEnabled: false,
+      useShouldOverrideUrlLoading: true,
+      javaScriptBridgeEnabled: false,
+    ),
+    onWebViewCreated: (controller) => _controller = controller,
+    onLoadStart: (_, _) => _pageLoadedOrStarted(),
+    onLoadStop: (_, _) => _pageLoadedOrStarted(),
+    onUpdateVisitedHistory: (_, _, _) => unawaited(_capture()),
+    shouldOverrideUrlLoading: (_, action) async {
+      final uri = action.request.url;
+      if (!action.isForMainFrame) return NavigationActionPolicy.ALLOW;
+      unawaited(_capture());
+      return uri != null &&
+              uri.scheme == 'https' &&
+              (uri.host == 'bilibili.com' || uri.host.endsWith('.bilibili.com'))
+          ? NavigationActionPolicy.ALLOW
+          : NavigationActionPolicy.CANCEL;
+    },
+    onReceivedError: (_, request, error) =>
+        unawaited(_pageFailed(request, error)),
+  );
+
   @override
-  Widget build(BuildContext context) => Dialog(
-    insetPadding: const EdgeInsets.all(8),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
-            child: Row(
-              children: [
-                const Expanded(child: Text('哔哩哔哩官网登录')),
-                IconButton(
-                  tooltip: '关闭网页登录',
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _error != null
-                ? Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
-                      child: Text(_error!, textAlign: TextAlign.center),
-                    ),
-                  )
-                : !_ready
-                ? const Center(child: CircularProgressIndicator())
-                : InAppWebView(
-                    webViewEnvironment: _environment?.environment,
-                    initialUrlRequest: URLRequest(
-                      url: WebUri('https://passport.bilibili.com/login'),
-                    ),
-                    initialSettings: InAppWebViewSettings(
-                      incognito: true,
-                      generalAutofillEnabled: false,
-                      passwordAutosaveEnabled: false,
-                      isInspectable: false,
-                      sharedCookiesEnabled: false,
-                      useShouldOverrideUrlLoading: true,
-                      javaScriptBridgeEnabled: false,
-                    ),
-                    onWebViewCreated: (controller) => _controller = controller,
-                    onLoadStop: (_, _) => unawaited(_capture()),
-                    shouldOverrideUrlLoading: (_, action) async {
-                      final uri = action.request.url;
-                      if (!action.isForMainFrame) {
-                        return NavigationActionPolicy.ALLOW;
-                      }
-                      return uri != null &&
-                              uri.scheme == 'https' &&
-                              (uri.host == 'bilibili.com' ||
-                                  uri.host.endsWith('.bilibili.com'))
-                          ? NavigationActionPolicy.ALLOW
-                          : NavigationActionPolicy.CANCEL;
-                    },
-                    onReceivedError: (_, request, _) {
-                      if (request.isForMainFrame == true) {
-                        _fail('登录页面加载失败，请检查网络后重试');
-                      }
-                    },
+  Widget build(BuildContext context) => PopScope<List<BrowserLoginCookie>>(
+    onPopInvokedWithResult: (didPop, _) {
+      // A popped route stays mounted during its closing animation.
+      if (didPop) _finished = true;
+    },
+    child: Dialog(
+      insetPadding: const EdgeInsets.all(8),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+              child: Row(
+                children: [
+                  const Expanded(child: Text('哔哩哔哩官网登录')),
+                  IconButton(
+                    tooltip: '关闭网页登录',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
                   ),
-          ),
-        ],
+                ],
+              ),
+            ),
+            Expanded(
+              child: _error != null
+                  ? Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(_error!, textAlign: TextAlign.center),
+                      ),
+                    )
+                  : !_ready
+                  ? const Center(child: CircularProgressIndicator())
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // The platform delegate owns the native controller.
+                        // Keep both identities stable while showing errors.
+                        _webView ??= _createWebView(),
+                        if (_pageError case final message?)
+                          ColoredBox(
+                            color: Theme.of(context).colorScheme.surface,
+                            child: Center(
+                              child: SingleChildScrollView(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(message, textAlign: TextAlign.center),
+                                    const SizedBox(height: 12),
+                                    TextButton(
+                                      onPressed: () => unawaited(_retryPage()),
+                                      child: const Text('重新打开登录页'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
       ),
     ),
   );

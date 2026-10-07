@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/core/platform/external_links.dart';
 import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -15,6 +18,7 @@ import 'package:bilisail/features/feed/domain/feed_repository.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/pgc/domain/pgc_repository.dart';
 import 'package:bilisail/features/search/application/search_controller.dart';
+import 'package:bilisail/features/search/data/api_search_repository.dart';
 import 'package:bilisail/features/search/domain/search_repository.dart';
 import 'package:bilisail/features/search/domain/search_result.dart';
 import 'package:bilisail/features/search/presentation/search_screen.dart';
@@ -126,6 +130,124 @@ void main() {
       expect(urls.single, Uri.parse('https://www.bilibili.com/read/cv789'));
     },
   );
+
+  for (final (size, scale) in [
+    (const Size(420, 800), 1.0),
+    (const Size(320, 700), 2.0),
+  ]) {
+    for (final mouseDrag in [false, true]) {
+      testWidgets(
+        'search strips reach later options with ${mouseDrag ? 'mouse drag' : 'wheel'} at $size scale $scale',
+        (tester) async {
+          final repository = _Repository();
+          await _mount(tester, repository, size: size, scale: scale);
+          ScrollPosition position(Finder strip) => tester
+              .state<ScrollableState>(
+                find.descendant(of: strip, matching: find.byType(Scrollable)),
+              )
+              .position;
+          Future<void> move(Finder strip, {bool forward = true}) async {
+            final direction = forward ? 1.0 : -1.0;
+            if (mouseDrag) {
+              await tester.dragFrom(
+                tester.getCenter(strip),
+                Offset(-2000 * direction, 0),
+                kind: PointerDeviceKind.mouse,
+              );
+            } else {
+              await tester.sendEventToBinding(
+                PointerScrollEvent(
+                  kind: PointerDeviceKind.mouse,
+                  position: tester.getCenter(strip),
+                  scrollDelta: Offset(0, 2000 * direction),
+                ),
+              );
+            }
+            await tester.pumpAndSettle();
+          }
+
+          final orders = find.byKey(const ValueKey('search-order-strip'));
+          final categories = find.byKey(
+            const ValueKey('search-category-strip'),
+          );
+          final list = tester
+              .widget<ListView>(find.byType(ListView))
+              .controller!;
+          expect(position(orders).maxScrollExtent, greaterThan(0));
+          await move(orders);
+          expect(position(orders).pixels, position(orders).maxScrollExtent);
+          expect(list.offset, 0);
+          expect(position(categories).pixels, 0);
+          await tester.tap(find.text('最多收藏'));
+          await tester.pumpAndSettle();
+          expect(repository.calls.last.order, SearchOrder.favorites);
+
+          await tester.tap(find.byKey(const ValueKey('search-more-filters')));
+          await tester.pumpAndSettle();
+          final filters = find.byKey(const ValueKey('search-filter-strip'));
+          expect(position(filters).maxScrollExtent, greaterThan(0));
+          await move(filters);
+          expect(position(filters).pixels, position(filters).maxScrollExtent);
+          expect(position(orders).pixels, position(orders).maxScrollExtent);
+          await tester.tap(find.text('60分钟以上'));
+          await tester.pumpAndSettle();
+          expect(repository.calls.last.duration, SearchDuration.overSixty);
+          expect(repository.calls.last.page, 1);
+          await move(filters, forward: false);
+          expect(position(filters).pixels, 0);
+          await tester.tap(find.text('全部时长'));
+          await tester.pumpAndSettle();
+          expect(repository.calls.last.duration, SearchDuration.any);
+          await move(orders, forward: false);
+          expect(position(orders).pixels, 0);
+
+          expect(position(categories).maxScrollExtent, greaterThan(0));
+          await move(categories);
+          expect(
+            position(categories).pixels,
+            position(categories).maxScrollExtent,
+          );
+          await tester.tap(find.byKey(const ValueKey('search-category-user')));
+          await tester.pumpAndSettle();
+          expect(repository.calls.last.category, SearchCategory.user);
+          await move(categories, forward: false);
+          expect(position(categories).pixels, 0);
+          await tester.tap(find.byKey(const ValueKey('search-category-all')));
+          await tester.pumpAndSettle();
+          expect(repository.calls.last.category, SearchCategory.all);
+          expect(tester.takeException(), isNull);
+        },
+        variant: TargetPlatformVariant.only(TargetPlatform.windows),
+      );
+    }
+  }
+
+  for (final (count, label) in [(14010, '1.4万'), (0, '0'), (null, '—')]) {
+    testWidgets(
+      'featured UP preview maps dm=$count through to the video card',
+      (tester) async {
+        final requests = ApiRequests();
+        final api = BiliApiClient(
+          transport: _PreviewTransport(count),
+          sessionProvider: requests,
+        );
+        addTearDown(api.close);
+        await _mount(
+          tester,
+          ApiSearchRepository(api, requests),
+          size: const Size(420, 800),
+        );
+        final card = find.byType(VideoCard);
+        expect(card, findsOneWidget);
+        expect(tester.widget<VideoCard>(card).video.danmakuCount, count);
+        expect(
+          find.descendant(of: card, matching: find.text(label)),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   for (final (size, scale) in [
     (const Size(1895, 927), 1.0),
@@ -249,7 +371,7 @@ void main() {
 
 Future<GoRouter> _mount(
   WidgetTester tester,
-  _Repository repository, {
+  SearchRepository repository, {
   Size size = const Size(1400, 900),
   double scale = 1,
   List<Uri>? urls,
@@ -327,6 +449,59 @@ Future<GoRouter> _mount(
   );
   await tester.pumpAndSettle();
   return router;
+}
+
+final class _PreviewTransport implements ApiTransport {
+  const _PreviewTransport(this.danmakuCount);
+  final int? danmakuCount;
+
+  @override
+  Future<ApiHttpResponse> get(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  }) async {
+    final Object data;
+    if (uri.path.endsWith('/nav')) {
+      data = {
+        'wbi_img': {
+          'img_url': 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+          'sub_url': 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+        },
+      };
+    } else if (uri.path.endsWith('/all/v2')) {
+      data = {
+        'result': [
+          {
+            'result_type': 'bili_user',
+            'data': [
+              {
+                'mid': 42,
+                'uname': '测试用户',
+                'res': [
+                  {
+                    'bvid': 'BV1sS4y1t7ce',
+                    'title': '测试预览视频',
+                    'play': '5506056',
+                    'duration': '05:30',
+                    if (danmakuCount != null) 'dm': danmakuCount,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+    } else {
+      data = {'numResults': 0, 'numPages': 0, 'result': []};
+    }
+    return ApiHttpResponse(
+      200,
+      Uint8List.fromList(utf8.encode(jsonEncode({'code': 0, 'data': data}))),
+      const {},
+    );
+  }
 }
 
 final class _FeedRepository implements FeedRepository {

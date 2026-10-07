@@ -58,3 +58,14 @@
 - 修复后 `tool/check.ps1 -SkipPub` 通过：根应用 965 项、bili_api 282 项、bili_player 22 项、bili_danmaku 32 项，共 1301 项；根应用与三个包的格式／静态分析全部通过。数量包含工作区其他同期改动。登录相关 28 项局部测试、普通权限下 2 项 Windows 原生测试、本文相对文件链接检查通过。Android／macOS 设备和真实密码／短信账号提交仍需独立验收。
 - Windows x64 Release 构建通过，独立产物为 `build/qa/passport-windows-release`。已核对 EXE、Flutter／Dart 运行文件、资产、网页登录插件、WebView2Loader 和五份原生许可；没有覆盖运行中的默认 Release，构建后恢复默认 CMake 输出／安装配置。Flutter 的成功消息仍显示默认路径，以此独立目录为准。保留上游 WebView 插件的 CMake 开发警告。
 - 用户随后使用上述修复版以管理员权限启动，确认“管理员权限下也可以打开”。本机普通权限原生测试与用户管理员权限复验均已通过，原登录窗口无法打开的问题已解决；此确认仅覆盖窗口打开，不推导为真实密码／短信账号提交或所有跨账号提权场景完成验收。
+
+## 2026-10-07 登录成功后页面加载失败修复
+
+- 用户报告密码／短信验证成功后显示“登录页面加载失败，请检查网络后重试”。已确认原代码对所有主 frame `onReceivedError` 直接设置终止错误，随后停止 Cookie 读取并移除原生视图；因此成功登录后的跳转一旦报告错误，已生成的会话也不能交给应用验证。没有采集用户该次原生错误码，不把具体跳转地址或取消码写成现场实测事实。
+- 固定 Windows 插件把 WebView2 非成功导航映射到该回调，其中操作取消映射为 `WebResourceErrorType.CANCELLED`；[Microsoft 的导航完成文档](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2navigationcompletedeventargs?view=webview2-1.0.4022.49)说明提前跳转、应用取消也能产生非成功导航，必须结合错误类型判断。现在取消导航只检查 Cookie，不显示加载失败；验证码等子 frame 错误继续不影响主登录流程。
+- 主 frame 跳转决策、开始／完成、访问历史变化和加载错误均触发 Cookie 检查。并发检查共用正在执行的 Future；真正的加载失败先等该检查完成，有 SESSDATA 时返回会话，没有时显示可重试提示。提示覆盖网页但保留同一 WebView、平台 delegate、controller 和隐私配置，2 秒轮询继续接收稍晚生成的 Cookie；新导航代次使旧错误处理结果失效。
+- “重新打开登录页”仍使用当前隐私视图，但只对初始官网登录地址发起显式 GET，避免 reload 重放密码／短信表单 POST。窗口被 pop 后立即拒绝结果，不等关闭动画结束；网页总时限仍为 10 分钟，单次原生 Cookie 读取增加 10 秒 deadline，超时／关闭后的迟到结果被丢弃。
+- 取得 Cookie 只完成平台交接，仍由既有 SessionRepository 校验 Cookie 作用域／有效期、调用隔离 nav 校验账号、写入系统安全存储后升级会话；没有放宽页面 HTTPS／域限制，也没有新增官网登录表单协议。
+- [导航回归测试](../../test/core/platform/passport_web_login_navigation_test.dart)覆盖取消后成功、已生成 Cookie 的失败跳转、等待并发读取、错误覆盖层下的迟到 Cookie、WebView／平台实例保留、新导航隔离、子 frame 错误、GET 重试、关闭动画竞态、总超时及原生读取 deadline。使用假的 Cookie 和平台回调，不提交真实账号表单；真实密码／短信提交、Android／macOS 设备回归仍需独立验收。
+- 最终应用代码运行 `tool/check.ps1 -SkipPub` 通过：根应用 980 项、bili_api 282 项、bili_player 22 项、bili_danmaku 32 项，共 1316 项，四处格式和静态分析通过。随后补充“跳转目标尚未加载即提取 Cookie”的测试，最终 11 项导航回归及局部静态分析通过；本文相对文件链接和 `git diff --check` 通过。最终代码另通过 2 项 Windows 原生测试，覆盖真实 WebView2 Cookie 读写／隔离、官网登录窗口打开／重开和环境清理，不等同于真实账号登录后跳转验收。
+- Windows x64 Release 构建通过，产物为 `build/windows/x64/runner/Release/bilisail.exe`；同目录的 Flutter／Dart 运行文件、资产、网页登录插件、WebView2Loader 和五份原生许可已核对齐全。保留上游 WebView 插件的 CMake `CMP0175` 开发警告，构建退出码为 0。运行和分发须保留完整 Release 目录。

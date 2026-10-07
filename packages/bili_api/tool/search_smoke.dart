@@ -6,10 +6,9 @@ Future<void> main(List<String> args) async {
   try {
     final client = SearchClient(api);
     final keyword = args.isEmpty ? '哔哩哔哩' : args.first;
-    final types =
-        args.length < 2
-            ? ApiSearchType.values
-            : ApiSearchType.values.where((type) => type.name == args[1]);
+    final types = args.length < 2
+        ? ApiSearchType.values
+        : ApiSearchType.values.where((type) => type.name == args[1]);
     for (final type in types) {
       try {
         final page = await client.search(
@@ -29,6 +28,9 @@ Future<void> main(List<String> args) async {
         final firstUser = page.items.whereType<ApiSearchUser>().firstOrNull;
         if (firstUser != null) {
           print('first user=${firstUser.name}, mid=${firstUser.mid}');
+          print(
+            'preview stats=${firstUser.videos.map((video) => (video.playCount, video.danmakuCount)).toList()}',
+          );
         }
         print(
           'video stats=${page.items.whereType<ApiSearchVideo>().take(3).map((item) => (item.video.playCount, item.video.publishedAt)).toList()}',

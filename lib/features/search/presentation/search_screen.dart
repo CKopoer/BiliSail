@@ -1,8 +1,10 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
+import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/state_view.dart';
 import '../application/search_controller.dart';
 import '../domain/search_result.dart';
@@ -69,6 +71,7 @@ final class _SearchScreenState extends ConsumerState<SearchScreen> {
                     children: [
                       Expanded(
                         child: _OptionStrip(
+                          key: const ValueKey('search-order-strip'),
                           children: [
                             for (final order in result.category.orders)
                               _Option(
@@ -119,6 +122,7 @@ final class _SearchScreenState extends ConsumerState<SearchScreen> {
                   if (_showFilters) ...[
                     const SizedBox(height: 12),
                     _OptionStrip(
+                      key: const ValueKey('search-filter-strip'),
                       children: [
                         if (result.category.hasDurationFilter)
                           for (final duration in SearchDuration.values)
@@ -285,19 +289,27 @@ final class _Option extends StatelessWidget {
 
 /// Keep controls accessible on short windows and at large text scales.
 final class _OptionStrip extends StatelessWidget {
-  const _OptionStrip({required this.children});
+  const _OptionStrip({super.key, required this.children});
   final List<Widget> children;
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < children.length; i++) ...[
-          if (i > 0) const SizedBox(width: 10),
-          children[i],
+  Widget build(BuildContext context) => ScrollConfiguration(
+    behavior: const SmoothScrollBehavior(horizontalMouseWheel: true).copyWith(
+      dragDevices: {
+        ...const SmoothScrollBehavior().dragDevices,
+        PointerDeviceKind.mouse,
+      },
+    ),
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const SizedBox(width: 10),
+            children[i],
+          ],
         ],
-      ],
+      ),
     ),
   );
 }

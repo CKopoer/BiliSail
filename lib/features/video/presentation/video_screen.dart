@@ -77,7 +77,7 @@ final class VideoScreen extends ConsumerStatefulWidget {
 final class _VideoScreenState extends ConsumerState<VideoScreen> {
   String? _selectedCid;
   int _tab = 0;
-  bool? _infoVisible;
+  bool _infoVisible = true;
   bool _descriptionExpanded = false;
   bool _queueExpanded = true;
   VideoDetail? _lastQueueVideo;
@@ -231,13 +231,8 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
         LayoutBuilder(
           builder: (context, constraints) {
             final wide = constraints.maxWidth >= 1000;
-            // Narrow windows open as a player-first mini view. An explicit
-            // information toggle remains authoritative across later resizes.
-            final showInfo = _infoVisible ?? constraints.maxWidth >= 700;
-            void toggleInfo() => setState(
-              () =>
-                  _infoVisible = !(_infoVisible ?? constraints.maxWidth >= 700),
-            );
+            final showInfo = _infoVisible;
+            void toggleInfo() => setState(() => _infoVisible = !_infoVisible);
             return PlaybackPageCommands(
               previousPart: () => _changePart(video, selected, -1),
               nextPart: () => _changePart(video, selected, 1),

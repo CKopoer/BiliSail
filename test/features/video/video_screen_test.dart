@@ -121,10 +121,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      if (width < 700) {
-        await tester.tap(find.byTooltip('展开视频信息'));
-        await tester.pumpAndSettle();
-      }
+      expect(find.byTooltip('收起视频信息'), findsOneWidget);
       if (folded) {
         await tester.tap(find.text('稍后再看'));
         await tester.pumpAndSettle();
@@ -203,8 +200,7 @@ void main() {
       await tester.pumpAndSettle();
       tester.view.physicalSize = const Size(360, 800);
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('展开视频信息'));
-      await tester.pumpAndSettle();
+      expect(find.byTooltip('收起视频信息'), findsOneWidget);
       expect(find.text('标签'), findsOneWidget);
       await _tagsSnapshot(tester, 'narrow');
       expect(created, 1);
@@ -212,62 +208,87 @@ void main() {
     },
   );
 
-  testWidgets(
-    'narrow window fills the page and restores details without remounting',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1100, 800);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      var created = 0;
-      var disposed = 0;
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            authControllerProvider.overrideWith(_GuestAuthController.new),
-            videoRepositoryProvider.overrideWithValue(_VideoRepository()),
-            videoExtrasRepositoryProvider.overrideWithValue(
-              _ExtrasRepository(),
-            ),
-          ],
-          child: MaterialApp(
-            home: Scaffold(
-              body: VideoScreen(
-                id: const VideoId('BV1abc123456'),
-                playerBuilder: (_, _, _) => _TrackedPlayer(
-                  onCreate: () => created++,
-                  onDispose: () => disposed++,
+  for (final initialSize in [const Size(480, 660), const Size(1100, 800)]) {
+    testWidgets(
+      'video info defaults to expanded at ${initialSize.width} and retains user choice',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = initialSize;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        var created = 0;
+        var disposed = 0;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authControllerProvider.overrideWith(_GuestAuthController.new),
+              videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+              videoExtrasRepositoryProvider.overrideWithValue(
+                _ExtrasRepository(),
+              ),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: VideoScreen(
+                  id: const VideoId('BV1abc123456'),
+                  playerBuilder: (_, _, _) => _TrackedPlayer(
+                    onCreate: () => created++,
+                    onDispose: () => disposed++,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('评论'));
-      await tester.pumpAndSettle();
-      tester.view.physicalSize = const Size(480, 660);
-      await tester.pumpAndSettle();
-      expect(find.text('评论'), findsNothing);
-      expect(tester.getSize(find.byType(_TrackedPlayer)), const Size(480, 660));
-      expect(find.byTooltip('展开视频信息').hitTestable(), findsOneWidget);
-      tester.view.physicalSize = const Size(1100, 800);
-      await tester.pumpAndSettle();
-      expect(find.text('暂无评论信息'), findsOneWidget);
-      tester.view.physicalSize = const Size(480, 660);
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('展开视频信息'));
-      await tester.pumpAndSettle();
-      expect(find.text('暂无评论信息'), findsOneWidget);
-      expect(tester.getSize(find.byType(_TrackedPlayer)).height, 270);
-      await tester.tap(find.byTooltip('收起视频信息'));
-      await tester.pumpAndSettle();
-      expect(tester.getSize(find.byType(_TrackedPlayer)), const Size(480, 660));
-      expect(created, 1);
-      expect(disposed, 0);
-      expect(tester.takeException(), isNull);
-    },
-  );
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('简介'), findsOneWidget);
+        expect(find.text('评论'), findsOneWidget);
+        expect(find.byTooltip('收起视频信息'), findsOneWidget);
+        expect(
+          tester.getSize(find.byType(_TrackedPlayer)).height,
+          initialSize.width >= 1000
+              ? initialSize.height
+              : initialSize.width * 9 / 16,
+        );
+        await tester.tap(find.text('评论'));
+        await tester.pumpAndSettle();
+        for (final width in [699.0, 700.0, 999.0, 1000.0, 1100.0, 480.0]) {
+          tester.view.physicalSize = Size(width, 660);
+          await tester.pumpAndSettle();
+          expect(find.text('暂无评论信息'), findsOneWidget);
+          expect(find.byTooltip('收起视频信息'), findsOneWidget);
+          expect(
+            tester.getSize(find.byType(_TrackedPlayer)).height,
+            width >= 1000 ? 660 : width * 9 / 16,
+          );
+        }
+        await tester.tap(find.byTooltip('收起视频信息'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.getSize(find.byType(_TrackedPlayer)),
+          const Size(480, 660),
+        );
+        for (final width in [1100.0, 480.0]) {
+          tester.view.physicalSize = Size(width, 660);
+          await tester.pumpAndSettle();
+          expect(find.text('评论'), findsNothing);
+          expect(find.byTooltip('展开视频信息'), findsOneWidget);
+          expect(tester.getSize(find.byType(_TrackedPlayer)), Size(width, 660));
+        }
+        final commands = tester.widget<PlaybackPageCommands>(
+          find.byType(PlaybackPageCommands),
+        );
+        commands.toggleInfo();
+        await tester.pumpAndSettle();
+        expect(find.text('暂无评论信息'), findsOneWidget);
+        expect(find.byTooltip('收起视频信息'), findsOneWidget);
+        expect(tester.getSize(find.byType(_TrackedPlayer)).height, 270);
+        expect(created, 1);
+        expect(disposed, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets(
     'long collection stays bounded and current nested parts stay in one card',

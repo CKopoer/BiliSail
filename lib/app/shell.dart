@@ -558,8 +558,12 @@ final class _BiliAppShellState extends State<BiliAppShell> {
           : BiliIcons.home,
   };
 
-  Widget _channelBar(BuildContext context) {
+  Widget? _channelBar(BuildContext context) {
     final active = _workspace.active;
+    if (active.location.path == '/history' ||
+        active.location.path == '/downloads') {
+      return null;
+    }
     if (active.location.path == '/settings') return _settingsBar(context);
     final selected = active.isBrowse
         ? active.location.queryParameters['channel'] ?? 'recommended'
@@ -625,11 +629,11 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   Widget _navigationHeader(
     BuildContext context,
     BoxConstraints constraints,
-    Widget navigation,
+    Widget? navigation,
   ) => constraints.maxWidth < 760
       ? Column(
           mainAxisSize: MainAxisSize.min,
-          children: [_tools(context), navigation],
+          children: [_tools(context), ?navigation],
         )
       : SizedBox(
           height: 58,
@@ -639,7 +643,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                 width: constraints.maxWidth >= 1300 ? 470 : 380,
                 child: _tools(context),
               ),
-              Expanded(child: navigation),
+              if (navigation != null) Expanded(child: navigation),
             ],
           ),
         );

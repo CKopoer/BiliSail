@@ -58,7 +58,17 @@ const _user = {
   'level': 6,
   'usign': 'signature',
   'official_verify': {'type': 0, 'desc': '认证'},
-  'res': [_video],
+  'res': [_userVideo],
+};
+// Sanitized all/v2 user preview shape observed on 2026-10-07.
+const _userVideo = {
+  'bvid': 'BV1sS4y1t7ce',
+  'title': '<em class="keyword">测试</em> &amp; &#x4e2d;',
+  'pic': '//i0.hdslb.com/cover.jpg',
+  'duration': '05:30',
+  'play': '5506056',
+  'dm': 14010,
+  'pubdate': 1700000000,
 };
 const _media = {
   'season_id': 123,
@@ -154,8 +164,14 @@ void main() {
       expect(user.mid, '9007199254740993123');
       expect(user.signature, '认证');
       expect(user.videos.single.title, '测试 & 中');
-      expect(user.videos.single.duration.inSeconds, 3723);
+      expect(user.videos.single.duration.inSeconds, 330);
+      expect(user.videos.single.playCount, 5506056);
+      expect(user.videos.single.danmakuCount, 14010);
       expect(user.videos.single.ownerMid, user.mid);
+      expect(
+        result.items.whereType<ApiSearchVideo>().single.video.danmakuCount,
+        45,
+      );
       final media = result.items.whereType<ApiSearchMedia>().first;
       expect(media.score, 9.5);
       expect(media.coverUrl?.scheme, 'https');
@@ -166,6 +182,44 @@ void main() {
       expect(result.hasMore, isTrue);
       expect(() => result.items.clear(), throwsUnsupportedError);
       expect(() => result.counts.clear(), throwsUnsupportedError);
+    },
+  );
+
+  test(
+    'user preview danmaku preserves numeric text, zero and absent counts',
+    () async {
+      for (final (fields, expected) in <(Map<String, Object?>, int?)>[
+        ({'dm': '23000'}, 23000),
+        ({'dm': 0}, 0),
+        ({}, null),
+        ({'video_review': 0, 'dm': 14010}, 0),
+        ({'danmaku': 45, 'dm': 14010}, 45),
+      ]) {
+        final preview = {..._userVideo}..remove('dm');
+        final page = await _client(
+          (_) => {
+            'numResults': 1,
+            'numPages': 1,
+            'result': [
+              {
+                ..._user,
+                'res': [
+                  {...preview, ...fields},
+                ],
+              },
+            ],
+          },
+        ).search('测试', type: ApiSearchType.user);
+        expect(
+          page.items
+              .whereType<ApiSearchUser>()
+              .single
+              .videos
+              .single
+              .danmakuCount,
+          expected,
+        );
+      }
     },
   );
 
