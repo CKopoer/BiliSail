@@ -9,9 +9,6 @@ import 'core/presentation/bili_widgets_binding.dart';
 Future<void> main() async {
   BiliWidgetsBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {
-    yield LicenseEntryWithLineBreaks([
-      'Alibaba PuHuiTi 3.0',
-    ], await rootBundle.loadString('assets/fonts/alibaba_puhuiti/LICENSE.txt'));
     final license = await rootBundle.loadString(
       'assets/fonts/harmonyos_sans/LICENSE.txt',
     );

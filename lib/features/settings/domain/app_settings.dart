@@ -12,14 +12,13 @@ enum WorkspaceNavigationMode { singlePage, multipleTabs }
 
 enum PlayerControlsMode { click, dynamic }
 
-enum AppFontPreference { harmonyOsSans, system, alibabaPuHuiTi, installed }
+enum AppFontPreference { harmonyOsSans, system, installed }
 
-enum DanmakuFontPreference { system, harmonyOsSans, alibabaPuHuiTi, installed }
+enum DanmakuFontPreference { system, harmonyOsSans, installed }
 
 extension AppFontFamily on AppFontPreference {
   String? resolveFamily(String installedFamily) => switch (this) {
     AppFontPreference.harmonyOsSans => 'HarmonyOS Sans',
-    AppFontPreference.alibabaPuHuiTi => 'Alibaba PuHuiTi 3.0',
     AppFontPreference.system => null,
     AppFontPreference.installed =>
       installedFamily.isEmpty ? null : installedFamily,
@@ -29,7 +28,6 @@ extension AppFontFamily on AppFontPreference {
 extension DanmakuFontFamily on DanmakuFontPreference {
   String? resolveFamily(String installedFamily) => switch (this) {
     DanmakuFontPreference.harmonyOsSans => 'HarmonyOS Sans',
-    DanmakuFontPreference.alibabaPuHuiTi => 'Alibaba PuHuiTi 3.0',
     DanmakuFontPreference.system => null,
     DanmakuFontPreference.installed =>
       installedFamily.isEmpty ? null : installedFamily,

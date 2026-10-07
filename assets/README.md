@@ -8,9 +8,11 @@
 
 ## 阿里巴巴普惠体 3.0
 
-按用户指定，从 `C:\Users\14562\Desktop\AlibabaPuHuiTi-3\AlibabaPuHuiTi-3` 采用 Regular、Medium、SemiBold、Bold 的原始 TTF，分别注册 400、500、600、700 字重。四个文件的内部版本均为 3.01，应用字体族名为 `Alibaba PuHuiTi 3.0`，文件位于 `fonts/alibaba_puhuiti/`，未转换、裁剪或修改；这四份资源共约 32.1 MiB。版本、字重与本轮中英文预览字符 cmap 均已核对。
+2026-10-07 按用户要求移除内置普惠体：界面和弹幕设置不再提供该选项，`pubspec.yaml` 不再声明四份字体及其许可证，应用许可证页也不再加载该字体声明。原始文件、许可证与来源哈希只留在仓库供历史追溯，不进入运行时构建产物。
 
-SHA-256 见 [来源哈希](fonts/alibaba_puhuiti/source_hashes.json)。用户目录未附法律声明，2026-10-06 从 [字体官网](https://www.alibabafonts.com/) 指向的 [普惠体 3.0 官方法律声明](https://www.yuque.com/yiguang-wkqc2/hgpff0/nus9wiinq4aeiegy) 获取，完整保留中英文两个标题和各六条正文，仅去除 HTML 展示标签，存为 [LICENSE.txt](fonts/alibaba_puhuiti/LICENSE.txt)，随应用打包并登记到 Flutter 许可证页。
+以下为 2026-10-06 的采用记录：按用户指定，从 `C:\Users\14562\Desktop\AlibabaPuHuiTi-3\AlibabaPuHuiTi-3` 采用 Regular、Medium、SemiBold、Bold 的原始 TTF，分别注册 400、500、600、700 字重。四个文件的内部版本均为 3.01，原应用字体族名为 `Alibaba PuHuiTi 3.0`，文件位于 `fonts/alibaba_puhuiti/`，未转换、裁剪或修改；这四份字体共约 32.15 MiB。版本、字重与当时中英文预览字符 cmap 均已核对。
+
+SHA-256 见 [来源哈希](fonts/alibaba_puhuiti/source_hashes.json)。用户目录未附法律声明，2026-10-06 从 [字体官网](https://www.alibabafonts.com/) 指向的 [普惠体 3.0 官方法律声明](https://www.yuque.com/yiguang-wkqc2/hgpff0/nus9wiinq4aeiegy) 获取，完整保留中英文两个标题和各六条正文，仅去除 HTML 展示标签，存为 [LICENSE.txt](fonts/alibaba_puhuiti/LICENSE.txt)，此前随应用打包并登记到 Flutter 许可证页。
 
 版权为 Alibaba (China) Co., Ltd.，许可范围遵循该声明的免费商业/非商业使用及限制：不修改字体、不删改法律声明、不将字体单独定价销售、不声称与阿里巴巴存在合作、赞助或背书。字体仅作为应用文字资源使用。本应用是独立第三方客户端，与阿里巴巴无上述关系。
 

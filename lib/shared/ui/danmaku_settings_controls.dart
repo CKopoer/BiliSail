@@ -229,7 +229,6 @@ final class _DanmakuSettingsControlsState
         _choice('弹幕字体', 'danmaku-font', s.danmakuFont, {
           DanmakuFontPreference.system: '系统默认',
           DanmakuFontPreference.harmonyOsSans: 'HarmonyOS Sans',
-          DanmakuFontPreference.alibabaPuHuiTi: '阿里巴巴普惠体 3.0',
           if (s.danmakuFont == DanmakuFontPreference.installed)
             DanmakuFontPreference.installed:
                 '系统字体：${s.danmakuSystemFontFamily}',

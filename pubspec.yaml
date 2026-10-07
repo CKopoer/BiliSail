@@ -44,18 +44,7 @@ flutter:
     - assets/icons/
     - assets/branding/app_icon.png
     - assets/fonts/harmonyos_sans/LICENSE.txt
-    - assets/fonts/alibaba_puhuiti/LICENSE.txt
   fonts:
-    - family: Alibaba PuHuiTi 3.0
-      fonts:
-        - asset: assets/fonts/alibaba_puhuiti/AlibabaPuHuiTi-3-55-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/alibaba_puhuiti/AlibabaPuHuiTi-3-65-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/alibaba_puhuiti/AlibabaPuHuiTi-3-75-SemiBold.ttf
-          weight: 600
-        - asset: assets/fonts/alibaba_puhuiti/AlibabaPuHuiTi-3-85-Bold.ttf
-          weight: 700
     - family: HarmonyOS Sans
       fonts:
         - asset: assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf

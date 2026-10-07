@@ -225,11 +225,11 @@ void main() {
         await repository.save(
           AppSettings(
             font: bundled
-                ? AppFontPreference.alibabaPuHuiTi
+                ? AppFontPreference.harmonyOsSans
                 : AppFontPreference.installed,
             systemFontFamily: 'Microsoft YaHei',
             danmakuFont: bundled
-                ? DanmakuFontPreference.alibabaPuHuiTi
+                ? DanmakuFontPreference.harmonyOsSans
                 : DanmakuFontPreference.installed,
             danmakuSystemFontFamily: 'Segoe UI',
           ),
@@ -237,17 +237,57 @@ void main() {
         final loaded = await repository.load();
         expect(
           loaded.fontFamily,
-          bundled ? 'Alibaba PuHuiTi 3.0' : 'Microsoft YaHei',
+          bundled ? 'HarmonyOS Sans' : 'Microsoft YaHei',
         );
         expect(
           loaded.danmakuFontFamily,
-          bundled ? 'Alibaba PuHuiTi 3.0' : 'Segoe UI',
+          bundled ? 'HarmonyOS Sans' : 'Segoe UI',
         );
         expect(
           loaded.copyWith(font: AppFontPreference.system).fontFamily,
           isNull,
         );
       }
+    },
+  );
+  test(
+    'removed bundled font falls back without losing other preferences',
+    () async {
+      await database.writeSetting(
+        'preferences.v1',
+        jsonEncode({
+          'schemaVersion': 16,
+          'font': 'alibabaPuHuiTi',
+          'danmakuFont': 'alibabaPuHuiTi',
+          'systemFontFamily': 'Microsoft YaHei',
+          'danmakuSystemFontFamily': 'Segoe UI',
+          'theme': 'dark',
+          'autoPlay': false,
+          'defaultVolume': 35,
+        }),
+      );
+      final loaded = await repository.load();
+      expect(loaded.font, AppFontPreference.harmonyOsSans);
+      expect(loaded.fontFamily, 'HarmonyOS Sans');
+      expect(loaded.danmakuFont, DanmakuFontPreference.system);
+      expect(loaded.danmakuFontFamily, isNull);
+      expect(loaded.systemFontFamily, 'Microsoft YaHei');
+      expect(loaded.danmakuSystemFontFamily, 'Segoe UI');
+      expect(loaded.theme, AppThemePreference.dark);
+      expect(loaded.autoPlay, isFalse);
+      expect(loaded.defaultVolume, 35);
+      await repository.save(loaded);
+      final snapshot = jsonDecode(
+        (await database.readSetting('preferences.v1')) ?? '{}',
+      ) as Map<String, Object?>;
+      expect(snapshot['font'], 'harmonyOsSans');
+      expect(snapshot['danmakuFont'], 'system');
+      final reloaded = await repository.load();
+      expect(reloaded.font, loaded.font);
+      expect(reloaded.danmakuFont, loaded.danmakuFont);
+      expect(reloaded.theme, loaded.theme);
+      expect(reloaded.autoPlay, loaded.autoPlay);
+      expect(database.schemaVersion, 3);
     },
   );
   test('invalid installed family fields fall back without losing other preferences', () async {

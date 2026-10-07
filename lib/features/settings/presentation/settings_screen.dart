@@ -165,7 +165,6 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           }, controller.setTheme),
                           _choices('界面字体', s.font, const {
                             AppFontPreference.harmonyOsSans: 'HarmonyOS Sans',
-                            AppFontPreference.alibabaPuHuiTi: '阿里巴巴普惠体 3.0',
                             AppFontPreference.system: '系统默认',
                           }, controller.setFont),
                           SystemFontPicker(

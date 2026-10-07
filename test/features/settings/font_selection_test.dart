@@ -20,11 +20,11 @@ void main() {
   test('both themes resolve bundled and installed fonts', () {
     for (final theme in [BiliTheme.light, BiliTheme.dark]) {
       expect(
-        theme(font: AppFontPreference.alibabaPuHuiTi)
+        theme(font: AppFontPreference.harmonyOsSans)
             .textTheme
             .bodyMedium
             ?.fontFamily,
-        'Alibaba PuHuiTi 3.0',
+        'HarmonyOS Sans',
       );
       expect(
         theme(
@@ -78,6 +78,9 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final repository = _Repository();
+      if (entry == 'appearance') {
+        repository.value = AppSettings(font: AppFontPreference.system);
+      }
       final catalog = _Catalog();
       await tester.pumpWidget(
         ProviderScope(
@@ -116,13 +119,14 @@ void main() {
         await tester.tap(dropdown);
         await tester.pumpAndSettle();
       }
-      await tester.tap(find.text('阿里巴巴普惠体 3.0').last);
+      expect(find.text('阿里巴巴普惠体 3.0'), findsNothing);
+      await tester.tap(find.text('HarmonyOS Sans').last);
       await tester.pumpAndSettle();
       expect(
         entry == 'appearance'
             ? repository.value.fontFamily
             : repository.value.danmakuFontFamily,
-        'Alibaba PuHuiTi 3.0',
+        'HarmonyOS Sans',
       );
       final picker = find.byType(SystemFontPicker);
       await tester.ensureVisible(picker);

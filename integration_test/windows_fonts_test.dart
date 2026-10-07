@@ -28,7 +28,7 @@ void main() {
     final boundary = GlobalKey();
     await tester.pumpWidget(
       MaterialApp(
-        theme: BiliTheme.light(font: AppFontPreference.alibabaPuHuiTi),
+        theme: BiliTheme.light(font: AppFontPreference.harmonyOsSans),
         home: Scaffold(
           body: RepaintBoundary(
             key: boundary,
@@ -40,11 +40,7 @@ void main() {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('BiliSail 字体验证', style: TextStyle(fontSize: 24)),
-                    for (final family in [
-                      'HarmonyOS Sans',
-                      'Alibaba PuHuiTi 3.0',
-                      installed,
-                    ]) ...[
+                    for (final family in ['HarmonyOS Sans', installed]) ...[
                       const SizedBox(height: 16),
                       Text(family, style: const TextStyle(fontSize: 16)),
                       Text(
@@ -101,9 +97,8 @@ void main() {
       return data?.buffer.asUint8List().toList() ?? [];
     }
 
-    final bundled = await pixels('Alibaba PuHuiTi 3.0');
+    final bundled = await pixels('HarmonyOS Sans');
     expect(bundled, isNotEmpty);
-    expect(bundled, isNot(await pixels('HarmonyOS Sans')));
     expect(bundled, isNot(await pixels(installed)));
     const output = String.fromEnvironment('FONT_PREVIEW_OUTPUT');
     if (output.isNotEmpty) {
