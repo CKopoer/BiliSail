@@ -154,7 +154,7 @@ Cookie 由 domain/path/secure/expiry 规则的 CookieStore 维护，持久化整
 
 ### WBI、CSRF 与设备上下文
 
-- WBI key 由 nav 信息建立，缓存并记录取回时间；签名失败时只允许一次重新获取和重签。参数 canonicalization 用 fixture 校验；不能硬编码某次抓到的 key。
+- WBI key 由 nav 信息建立，缓存并记录取回时间；签名失败时只允许一次重新获取和重签。取 key 的共享请求拥有独立取消信号与有界 deadline，每个调用者只取消自己的等待；在途请求按 session epoch 隔离，旧请求收尾不能清除新请求。参数 canonicalization 用 fixture 校验；不能硬编码某次抓到的 key。启动恢复与取消竞态的验证见 [首页子频道记录](validation/home-subtabs.md#启动推荐加载竞态修复)。
 - WBI key 更新与会话刷新是不同流程，各自合并并发请求。外部时钟可注入测试，生产使用 UTC 时间戳。
 - CSRF 从当前 Cookie 会话取得，按端点规定放 query/body；Web CSRF 与 App 签名不是替代关系。
 - buvid 等设备上下文由协议模块按需要获取和持久化，保持同一安装内一致；不能每次请求随机生成或全局伪造设备参数。

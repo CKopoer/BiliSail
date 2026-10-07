@@ -26,8 +26,9 @@ const discovery = {
 };
 
 final class _Transport implements ApiTransport {
-  _Transport({this.cancelFirstPath});
+  _Transport({this.cancelFirstPath, this.navGate});
   final String? cancelFirstPath;
+  final Future<void>? navGate;
   final calls = <String, int>{};
   final headers = <Uri, Map<String, String>>{};
   bool malformed = false;
@@ -44,6 +45,7 @@ final class _Transport implements ApiTransport {
       await cancellation?.whenCancelled;
       throw const ApiFailure(ApiFailureCategory.cancelled, 'fixture');
     }
+    if (uri.path == '/x/web-interface/nav') await navGate;
     final Object value = switch (uri.path) {
       '/x/frontend/finger/spi' => {
         'code': 0,
@@ -151,9 +153,10 @@ void main() {
     },
   );
   test(
-    'caller cancelling shared WBI producer permits one current-consumer retry',
+    'cancelled room read leaves shared WBI nav available to the current room',
     () async {
-      final transport = _Transport(cancelFirstPath: '/x/web-interface/nav');
+      final navGate = Completer<void>();
+      final transport = _Transport(navGate: navGate.future);
       final api = BiliApiClient(transport: transport);
       api.cookieJar.receive(Uri.https('api.bilibili.com', '/'), [
         'buvid3=fixture-device; Domain=.bilibili.com; Path=/; Secure',
@@ -181,8 +184,9 @@ void main() {
       );
       oldSignal.cancel();
       await oldResult;
+      navGate.complete();
       expect((await fresh).roomId, '13');
-      expect(transport.calls['/x/web-interface/nav'], 2);
+      expect(transport.calls['/x/web-interface/nav'], 1);
     },
   );
   test('no trusted candidate is protocol failure', () async {

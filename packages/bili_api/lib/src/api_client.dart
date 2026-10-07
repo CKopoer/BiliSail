@@ -10,6 +10,13 @@ import 'models.dart';
 import 'transport.dart';
 import 'wbi.dart';
 
+final class _WbiKeyFlight {
+  _WbiKeyFlight(this.epoch);
+  final int? epoch;
+  final cancellation = ApiCancellation();
+  late final Future<WbiSigner> result;
+}
+
 abstract interface class ApiSessionProvider {
   int get sessionEpoch;
 }
@@ -38,7 +45,7 @@ final class BiliApiClient {
   final Duration timeout;
   final DateTime Function() _clock;
   final Future<List<ApiDanmakuItem>> Function(Uint8List) _danmakuDecoder;
-  Future<WbiSigner>? _wbiInFlight;
+  _WbiKeyFlight? _wbiInFlight;
   WbiSigner? _wbi;
   DateTime? _wbiFetched;
 
@@ -69,36 +76,21 @@ final class BiliApiClient {
     Map<String, String> parameters,
     String endpoint, {
     ApiRequestContext? context,
-  }) async {
+  }) {
     if (!const {'/xlive/web-room/v1/index/getDanmuInfo'}.contains(path)) {
       throw ArgumentError('Unsupported live WBI endpoint');
     }
-    final epoch = _sessionProvider?.sessionEpoch;
-    for (var attempt = 0; attempt < 2; attempt++) {
-      try {
-        return await _wbiJson(
-          path,
-          parameters,
-          endpoint,
-          context,
-          origin: Uri.https('api.live.bilibili.com', '/'),
-        );
-      } on ApiFailure catch (error) {
-        // A shared key's producer may belong to an old cancelled room read.
-        if (attempt != 0 ||
-            error.category != ApiFailureCategory.cancelled ||
-            context?.cancellation?.isCancelled == true ||
-            (epoch != null && epoch != _sessionProvider?.sessionEpoch) ||
-            (context?.sessionEpoch != null &&
-                context?.sessionEpoch != _sessionProvider?.sessionEpoch)) {
-          rethrow;
-        }
-      }
-    }
-    throw ApiFailure(ApiFailureCategory.cancelled, endpoint);
+    return _wbiJson(
+      path,
+      parameters,
+      endpoint,
+      context,
+      origin: Uri.https('api.live.bilibili.com', '/'),
+    );
   }
 
   void close() {
+    _wbiInFlight?.cancellation.cancel();
     if (_ownsTransport && _transport is DioApiTransport) {
       (_transport).close();
     }
@@ -1203,18 +1195,82 @@ final class BiliApiClient {
     ApiRequestContext? context,
   ) async {
     final now = _clock();
+    final epoch = _sessionProvider?.sessionEpoch;
+    final deadline = context?.deadline ?? now.add(timeout);
+    _checkWbiContext(context, epoch, deadline);
     if (_wbi == null ||
         _wbiFetched == null ||
         now.difference(_wbiFetched!) > const Duration(hours: 1)) {
-      _wbiInFlight ??= _loadWbi(context);
+      var flight = _wbiInFlight;
+      if (flight == null ||
+          flight.epoch != epoch ||
+          flight.cancellation.isCancelled) {
+        flight?.cancellation.cancel();
+        flight = _WbiKeyFlight(epoch);
+        _wbiInFlight = flight;
+        final active = flight;
+        // Public keys are shared, but the first consumer must not own their
+        // cancellation/deadline. A session change starts a separate flight.
+        active.result =
+            _loadWbi(
+                  ApiRequestContext(
+                    cancellation: active.cancellation,
+                    sessionEpoch: epoch,
+                    deadline: now.add(timeout),
+                  ),
+                )
+                .then((signer) {
+                  if (identical(_wbiInFlight, active) &&
+                      !active.cancellation.isCancelled &&
+                      _sessionProvider?.sessionEpoch == epoch) {
+                    _wbi = signer;
+                    _wbiFetched = _clock();
+                  }
+                  return signer;
+                })
+                .whenComplete(() {
+                  // A late old-session completion cannot clear a newer flight.
+                  if (identical(_wbiInFlight, active)) _wbiInFlight = null;
+                });
+      }
+      final pending = flight;
       try {
-        _wbi = await _wbiInFlight;
-        _wbiFetched = now;
-      } finally {
-        _wbiInFlight = null;
+        final signer = await Future.any<WbiSigner>([
+          pending.result,
+          pending.cancellation.whenCancelled.then(
+            (_) =>
+                throw const ApiFailure(ApiFailureCategory.cancelled, 'wbi_key'),
+          ),
+          if (context?.cancellation case final cancellation?)
+            cancellation.whenCancelled.then(
+              (_) => throw const ApiFailure(
+                ApiFailureCategory.cancelled,
+                'wbi_key',
+              ),
+            ),
+        ]).timeout(deadline.difference(_clock()));
+        _checkWbiContext(context, epoch, deadline);
+        return signer.sign(values, _clock());
+      } on TimeoutException {
+        throw const ApiFailure(ApiFailureCategory.timeout, 'wbi_key');
       }
     }
     return _wbi!.sign(values, now);
+  }
+
+  void _checkWbiContext(
+    ApiRequestContext? context,
+    int? epoch,
+    DateTime deadline,
+  ) {
+    if (context?.cancellation?.isCancelled == true ||
+        _sessionProvider?.sessionEpoch != epoch ||
+        context?.sessionEpoch != null && context?.sessionEpoch != epoch) {
+      throw const ApiFailure(ApiFailureCategory.cancelled, 'wbi_key');
+    }
+    if (!deadline.isAfter(_clock())) {
+      throw const ApiFailure(ApiFailureCategory.timeout, 'wbi_key');
+    }
   }
 
   Future<WbiSigner> _loadWbi(ApiRequestContext? context) async {

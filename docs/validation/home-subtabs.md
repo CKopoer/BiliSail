@@ -51,4 +51,14 @@
 
 新增 [滚动分页测试](../../test/features/feed/feed_autoload_test.dart) 5 项，使用鼠标滚轮事件和延迟 Repository，覆盖提前加载、连续滚动单次请求、末页停止、位置保持、失败手动重试、刷新/频道切换旧响应隔离与非活动工作区。与原有推荐页测试共 13 项通过。本轮为离线 widget 验证，未进行真实客户端鼠标操作或 Android/macOS 实机验证。
 
+## 启动推荐加载竞态修复
+
+2026-10-07 使用延迟安全存储、真实 `SessionRepository` / `ApiRequests` 与工作区路由复现：恢复期间已开始的推荐读取，在旧登录失效并退出时被会话代次取消；恢复前后界面都显示游客，原工作区只按登录标记、MID 和名称隔离页面，没有重建列表。控制器忽略旧请求的取消结果后，首屏一直保留加载态。工作区页面作用域现在同时包含 session epoch，账号显示信息相同的会话变化也会释放旧控制器，并由新页面发起一次读取。
+
+推荐首屏的 WBI key 单飞还有独立竞态：原共享 nav 请求使用第一个调用者的取消信号与 deadline，旧页面释放会让新页面或其他等待者同时得到取消结果；新 session 也可能加入旧 session 的在途请求。现在同 session 的 key 请求独立拥有取消信号和默认 12 秒总 deadline，调用者取消或超过自己的 deadline 只结束自己的等待。新 session 请求独立取 key 并取消旧在途请求；迟到响应不能写回缓存或清除新在途请求。关闭 API client 取消其共享取 key 任务。既有 key 缓存、签名失败一次重签与只读重试规则继续沿用，不增加推荐请求的无限自动重试。
+
+回归使用脱敏手写响应和延迟 transport，不读取真实账号。[启动测试](../../test/app/home_startup_test.dart)覆盖旧登录失效、恢复登录成功、旧响应迟到丢弃与首屏退出加载态；[协议测试](../../packages/bili_api/test/wbi_request_lifecycle_test.dart)覆盖同 session 并发、首个等待者取消、等待取消及时结束、跨 session 新请求、旧请求收尾、调用者 deadline、失败后显式重试和 client 关闭。直播连接回归也确认旧房间取消后新房间继续共用同一次 nav，移除已不需要的取消重试补偿。
+
+本轮根应用 1120、bili_api 298、bili_player 22、bili_danmaku 52 项测试分别通过，共 1492 项；三个包的格式与静态分析、本次根应用文件的静态分析均通过。`flutter build windows --release --no-pub` 成功，产物 `build/windows/x64/runner/Release/bilisail.exe`。执行 `tool/check.ps1 -SkipPub` 时，最后一次运行的根格式检查通过，整体静态分析仍被并行改动 `test/features/feed/dynamic_scroll_layout_test.dart` 的 `curly_braces_in_flow_control_structures` 提示阻塞，本轮未修改该文件。真实客户端冷启动、慢网和 Android/macOS 实机验收仍待验证。
+
 

@@ -244,13 +244,18 @@ final class _WorkspacePage extends ConsumerWidget {
     final account = observeAccount
         ? ref.watch(
             authControllerProvider.select(
-              (auth) => (auth.isSignedIn, auth.mid, auth.userName),
+              (auth) => (
+                auth.isSignedIn,
+                auth.mid,
+                auth.userName,
+                ref.read(sessionEpochProvider)(),
+              ),
             ),
           )
-        : (false, null, null);
+        : (false, null, null, 0);
     return ProviderScope(
-      // Account changes dispose every cached tab's controller/request and
-      // rebuild its page. SearchScreen then re-runs its own preserved query.
+      // An expired restored login can cancel reads while still displaying
+      // guest. Include the epoch so cancelled pages restart in that case too.
       key: ValueKey(account),
       overrides: [
         if (playback != null)
