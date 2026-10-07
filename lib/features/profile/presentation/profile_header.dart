@@ -13,7 +13,8 @@ class ProfileHeader extends StatelessWidget {
     this.isSelf = false,
     this.liveRoom,
     this.onOpenLiveRoom,
-    this.actions,
+    this.followAction,
+    this.messageAction,
   });
 
   final UserProfile profile;
@@ -21,12 +22,30 @@ class ProfileHeader extends StatelessWidget {
   final bool isSelf;
   final ProfileLiveRoom? liveRoom;
   final VoidCallback? onOpenLiveRoom;
-  final Widget? actions;
+  final Widget? followAction;
+  final Widget? messageAction;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
+    final actions = <Widget>[
+      ?followAction,
+      if (liveRoom case final room? when room.id.isValid)
+        Tooltip(
+          message: room.isLive ? '进入正在直播的直播间' : '进入直播间，当前未开播',
+          child: OutlinedButton.icon(
+            key: const ValueKey('profile-live-room'),
+            onPressed: onOpenLiveRoom,
+            icon: Icon(
+              room.isLive ? Icons.live_tv : Icons.live_tv_outlined,
+              size: 18,
+            ),
+            label: Text(room.isLive ? '正在直播' : '直播间'),
+          ),
+        ),
+      ?messageAction,
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -114,8 +133,16 @@ class ProfileHeader extends StatelessWidget {
             ),
           ],
         ),
-        if (actions case final actions?)
-          Padding(padding: const EdgeInsets.only(top: 12), child: actions),
+        if (actions.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: actions,
+            ),
+          ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 12,
@@ -144,19 +171,6 @@ class ProfileHeader extends StatelessWidget {
                 key: const ValueKey('profile-videos-stat'),
                 count: count,
                 label: '投稿',
-              ),
-            if (liveRoom case final room? when room.id.isValid)
-              Tooltip(
-                message: room.isLive ? '进入正在直播的直播间' : '进入直播间，当前未开播',
-                child: OutlinedButton.icon(
-                  key: const ValueKey('profile-live-room'),
-                  onPressed: onOpenLiveRoom,
-                  icon: Icon(
-                    room.isLive ? Icons.live_tv : Icons.live_tv_outlined,
-                    size: 18,
-                  ),
-                  label: Text(room.isLive ? '正在直播' : '直播间'),
-                ),
               ),
           ],
         ),

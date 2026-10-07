@@ -101,40 +101,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ProfileHeader(
                           profile: p,
                           isSelf: isSelf,
-                          actions: isSelf
+                          followAction: isSelf
                               ? null
-                              : Wrap(
-                                  spacing: 12,
-                                  runSpacing: 8,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    UserFollowButton(
-                                      key: const ValueKey('profile-follow'),
-                                      id: widget.id,
-                                      onLogin: widget.onLogin,
+                              : UserFollowButton(
+                                  key: const ValueKey('profile-follow'),
+                                  id: widget.id,
+                                  onLogin: widget.onLogin,
+                                ),
+                          messageAction: isSelf
+                              ? null
+                              : OutlinedButton.icon(
+                                  key: const ValueKey('profile-message'),
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size(80, 40),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
                                     ),
-                                    OutlinedButton.icon(
-                                      key: const ValueKey('profile-message'),
-                                      style: OutlinedButton.styleFrom(
-                                        minimumSize: const Size(80, 40),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 8,
-                                        ),
-                                      ),
-                                      onPressed: account.isSignedIn
-                                          ? widget.onMessage == null
-                                                ? null
-                                                : () =>
-                                                      widget.onMessage?.call(p)
-                                          : widget.onLogin,
-                                      icon: const Icon(
-                                        Icons.mail_outline,
-                                        size: 18,
-                                      ),
-                                      label: const Text('私信'),
-                                    ),
-                                  ],
+                                  ),
+                                  onPressed: account.isSignedIn
+                                      ? widget.onMessage == null
+                                            ? null
+                                            : () => widget.onMessage?.call(p)
+                                      : widget.onLogin,
+                                  icon: const Icon(
+                                    Icons.mail_outline,
+                                    size: 18,
+                                  ),
+                                  label: const Text('私信'),
                                 ),
                           onSelectSection: controller.select,
                           liveRoom: state.liveRoom,
