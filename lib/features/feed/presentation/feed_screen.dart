@@ -16,6 +16,7 @@ import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../application/feed_controller.dart';
 import '../domain/home_channel.dart';
 import 'home_content.dart';
+import 'home_channel_swipe.dart';
 
 final class FeedScreen extends ConsumerStatefulWidget {
   const FeedScreen({
@@ -24,11 +25,13 @@ final class FeedScreen extends ConsumerStatefulWidget {
     this.isSignedIn = false,
     this.onLogin,
     this.initialSection,
+    this.onChannelChanged,
   });
   final HomeChannel channel;
   final bool isSignedIn;
   final VoidCallback? onLogin;
   final String? initialSection;
+  final ValueChanged<HomeChannel>? onChannelChanged;
   @override
   ConsumerState<FeedScreen> createState() => _FeedScreenState();
 }
@@ -285,7 +288,7 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
       else
         for (final label in channel.sections) (label, label),
     ];
-    return Stack(
+    final content = Stack(
       children: [
         Column(
           children: [
@@ -408,5 +411,13 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
         ),
       ],
     );
+    final onChannelChanged = widget.onChannelChanged;
+    return onChannelChanged == null
+        ? content
+        : HomeChannelSwipe(
+            channel: channel,
+            onChanged: onChannelChanged,
+            child: content,
+          );
   }
 }

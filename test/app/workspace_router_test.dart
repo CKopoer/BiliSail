@@ -57,6 +57,88 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   for (final mode in WorkspaceNavigationMode.values) {
     _workspaceTestWidgets(
+      'home swipes synchronize routes and visible channels in $mode',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(375, 850);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final settings = _SettingsRepository()
+          ..settings = const AppSettings.defaults().copyWith(
+            navigationMode: mode,
+          );
+        final auth = _AuthRepository();
+        addTearDown(auth.dispose);
+        final router = createBiliRouter(
+          playerBuilder: (_, _, _) => const SizedBox(),
+          accountBuilder: (_) => const SizedBox(),
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authRepositoryProvider.overrideWithValue(auth),
+              settingsRepositoryProvider.overrideWithValue(settings),
+              feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+              homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            ],
+            child: InputTestApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final originalState = tester.state(find.byType(FeedScreen));
+        final scope = ProviderScope.containerOf(
+          tester.element(find.byType(FeedScreen)),
+        );
+        final surface = find.byKey(const ValueKey('home-channel-swipe'));
+        await tester.drag(surface, const Offset(-220, 0));
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters,
+          containsPair('channel', 'popular'),
+        );
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters,
+          containsPair('tab', 'home'),
+        );
+        expect(scope.read(feedControllerProvider).channel, HomeChannel.popular);
+        await tester.drag(surface, const Offset(-220, 0));
+        await tester.pumpAndSettle();
+        expect(find.text('登录后可查看动态'), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('channel-recommended')));
+        await tester.pumpAndSettle();
+        for (final channel in HomeChannel.values.skip(1)) {
+          await tester.drag(surface, const Offset(-220, 0));
+          await tester.pumpAndSettle();
+          expect(
+            tester.widget<FeedScreen>(find.byType(FeedScreen)).channel,
+            channel,
+          );
+          expect(
+            find.byKey(ValueKey('channel-${channel.name}')).hitTestable(),
+            findsOneWidget,
+          );
+        }
+        await tester.drag(surface, const Offset(-220, 0));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<FeedScreen>(find.byType(FeedScreen)).channel,
+          HomeChannel.favorites,
+        );
+        expect(tester.state(find.byType(FeedScreen)), same(originalState));
+        expect(
+          ProviderScope.containerOf(tester.element(find.byType(FeedScreen))),
+          same(scope),
+        );
+        expect(find.byType(FeedScreen, skipOffstage: false), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+      platform: TargetPlatform.android,
+    );
+  }
+  for (final mode in WorkspaceNavigationMode.values) {
+    _workspaceTestWidgets(
       'profile private messages reuse inbox and drafts in $mode',
       (tester) async {
         tester.view.devicePixelRatio = 1;

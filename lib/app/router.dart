@@ -309,6 +309,15 @@ final class _WorkspacePage extends ConsumerWidget {
                     key: PageStorageKey('feed-${tab.id}'),
                     channel: channel,
                     initialSection: uri.queryParameters['section'],
+                    onChannelChanged: (channel) => context.go(
+                      Uri(
+                        path: '/',
+                        queryParameters: {
+                          'channel': channel.name,
+                          'tab': tab.id,
+                        },
+                      ).toString(),
+                    ),
                     isSignedIn: account.$1,
                     onLogin: observeAccount
                         ? () => showDialog<void>(

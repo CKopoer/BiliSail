@@ -18,6 +18,66 @@ import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
 
 void main() {
   testWidgets(
+    'touch channel round-trip keeps cached lists and scroll position',
+    (tester) async {
+      tester.view.physicalSize = const Size(375, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = _FeedRepository(itemCount: 30);
+      final channel = ValueNotifier(HomeChannel.recommended);
+      addTearDown(channel.dispose);
+      await tester.pumpWidget(
+        _app(
+          repository,
+          channel: channel,
+          onChannelChanged: (value) => channel.value = value,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final list = find.byType(CustomScrollView);
+      await tester.drag(list, const Offset(0, -400));
+      await tester.pumpAndSettle();
+      final offset = tester
+          .state<ScrollableState>(
+            find.descendant(of: list, matching: find.byType(Scrollable)).first,
+          )
+          .position
+          .pixels;
+      expect(offset, greaterThan(100));
+      await tester.drag(list, const Offset(-220, 0));
+      await tester.pumpAndSettle();
+      expect(channel.value, HomeChannel.popular);
+      await tester.drag(find.byType(CustomScrollView), const Offset(-220, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('登录后可查看动态'), findsOneWidget);
+      await tester.drag(
+        find.byKey(const ValueKey('home-channel-swipe')),
+        const Offset(220, 0),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(CustomScrollView), const Offset(220, 0));
+      await tester.pumpAndSettle();
+      expect(channel.value, HomeChannel.recommended);
+      expect(repository.calls, ['recommended:1', 'popular:1']);
+      expect(
+        tester
+            .state<ScrollableState>(
+              find
+                  .descendant(
+                    of: find.byType(CustomScrollView),
+                    matching: find.byType(Scrollable),
+                  )
+                  .first,
+            )
+            .position
+            .pixels,
+        closeTo(offset, 1),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'mouse wheel exposes and selects the final home subtab in a narrow viewport',
     (tester) async {
       tester.view.devicePixelRatio = 1;
@@ -405,6 +465,7 @@ Widget _app(
   _FeedRepository repository, {
   ValueNotifier<HomeChannel>? channel,
   VoidCallback? onLogin,
+  ValueChanged<HomeChannel>? onChannelChanged,
 }) => ProviderScope(
   overrides: [
     feedRepositoryProvider.overrideWithValue(repository),
@@ -416,8 +477,11 @@ Widget _app(
           ? const FeedScreen()
           : ValueListenableBuilder(
               valueListenable: channel,
-              builder: (context, value, child) =>
-                  FeedScreen(channel: value, onLogin: onLogin),
+              builder: (context, value, child) => FeedScreen(
+                channel: value,
+                onLogin: onLogin,
+                onChannelChanged: onChannelChanged,
+              ),
             ),
     ),
   ),

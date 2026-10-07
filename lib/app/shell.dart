@@ -98,6 +98,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   final _workspace = WorkspaceTabs();
   final _searchController = TextEditingController();
   final _tabKeys = <String, GlobalKey>{};
+  final _channelKeys = <HomeChannel, GlobalKey>{};
   final _searchDrafts = <String, String>{};
   final _pageStorage = <String, PageStorageBucket>{};
 
@@ -169,6 +170,22 @@ final class _BiliAppShellState extends State<BiliAppShell> {
       final tabContext = _tabKeys[_workspace.activeId]?.currentContext;
       if (tabContext != null) {
         Scrollable.ensureVisible(tabContext, alignment: 0.5);
+      }
+      final active = _workspace.active;
+      if (active.isBrowse) {
+        final channel =
+            HomeChannel.values
+                .where(
+                  (channel) =>
+                      channel.name ==
+                      active.location.queryParameters['channel'],
+                )
+                .firstOrNull ??
+            HomeChannel.recommended;
+        final channelContext = _channelKeys[channel]?.currentContext;
+        if (channelContext != null) {
+          Scrollable.ensureVisible(channelContext, alignment: 0.5);
+        }
       }
     });
   }
@@ -561,6 +578,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
           children: [
             for (final channel in HomeChannel.values)
               Padding(
+                key: _channelKeys.putIfAbsent(channel, GlobalKey.new),
                 padding: const EdgeInsets.symmetric(horizontal: 3),
                 child: TextButton(
                   key: ValueKey('channel-${channel.name}'),
