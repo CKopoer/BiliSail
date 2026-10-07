@@ -122,7 +122,12 @@ final class _VideoCardState extends State<VideoCard> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) =>
+        _buildCard(context, constraints.maxWidth),
+  );
+
+  Widget _buildCard(BuildContext context, double cardWidth) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final video = widget.video;
@@ -227,6 +232,7 @@ final class _VideoCardState extends State<VideoCard> {
                               excludeSemantics: true,
                               child: _CoverMetadata(
                                 video: video,
+                                cardWidth: cardWidth,
                                 playLabel: playLabel,
                                 danmakuLabel: danmakuLabel,
                               ),
@@ -434,17 +440,20 @@ final class _VideoCardState extends State<VideoCard> {
 final class _CoverMetadata extends StatelessWidget {
   const _CoverMetadata({
     required this.video,
+    required this.cardWidth,
     required this.playLabel,
     required this.danmakuLabel,
   });
 
   final VideoSummary video;
+  final double cardWidth;
   final String playLabel;
   final String danmakuLabel;
 
+  static const _regularFontSize = 12.0;
   static const _style = TextStyle(
     color: Colors.white,
-    fontSize: 12,
+    fontSize: _regularFontSize,
     fontWeight: FontWeight.w400,
     shadows: [Shadow(blurRadius: 2, color: Colors.black)],
   );
@@ -456,12 +465,24 @@ final class _CoverMetadata extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      // Use the whole card width so padding does not shift typography tiers.
+      final fontSize = switch (cardWidth) {
+        < 180 => 10.0,
+        < 240 => 11.0,
+        _ => _regularFontSize,
+      };
+      final sizeFactor = fontSize / _regularFontSize;
+      final style = _style.copyWith(fontSize: fontSize);
+      final iconSize = _iconSize * sizeFactor;
+      final iconGap = _iconGap * sizeFactor;
+      final countGap = _countGap * sizeFactor;
+      final durationGap = _durationGap * sizeFactor;
       final timeLabel = durationLabel(video.duration);
       double textWidth(String label) {
         final painter = TextPainter(
           text: TextSpan(
             text: label,
-            style: DefaultTextStyle.of(context).style.merge(_style),
+            style: DefaultTextStyle.of(context).style.merge(style),
           ),
           textDirection: Directionality.of(context),
           textScaler: MediaQuery.textScalerOf(context),
@@ -477,19 +498,35 @@ final class _CoverMetadata extends StatelessWidget {
       final countsWidth =
           textWidth(playLabel) +
           textWidth(danmakuLabel) +
-          2 * (_iconSize + _iconGap) +
-          _countGap;
+          2 * (iconSize + iconGap) +
+          countGap;
       final countsFit = countsWidth <= constraints.maxWidth;
       final stacked =
-          countsWidth + _durationGap + textWidth(timeLabel) >
+          countsWidth + durationGap + textWidth(timeLabel) >
           constraints.maxWidth;
-      final play = _count(BiliIcons.playCount, playLabel);
-      final danmaku = _count(BiliIcons.danmaku, danmakuLabel);
+      Widget count(IconData icon, String label) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: iconSize),
+          SizedBox(width: iconGap),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
+        ],
+      );
+
+      final play = count(BiliIcons.playCount, playLabel);
+      final danmaku = count(BiliIcons.danmaku, danmakuLabel);
       final counts = Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           countsFit ? play : Flexible(child: play),
-          const SizedBox(width: _countGap),
+          SizedBox(width: countGap),
           countsFit ? danmaku : Flexible(child: danmaku),
         ],
       );
@@ -497,14 +534,14 @@ final class _CoverMetadata extends StatelessWidget {
         timeLabel,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: _style,
+        style: style,
       );
       if (stacked) {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             counts,
-            const SizedBox(height: 2),
+            SizedBox(height: 2 * sizeFactor),
             Align(alignment: Alignment.centerRight, child: duration),
           ],
         );
@@ -512,27 +549,11 @@ final class _CoverMetadata extends StatelessWidget {
       return Row(
         children: [
           Expanded(child: counts),
-          const SizedBox(width: _durationGap),
+          SizedBox(width: durationGap),
           duration,
         ],
       );
     },
-  );
-
-  Widget _count(IconData icon, String count) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(icon, color: Colors.white, size: _iconSize),
-      const SizedBox(width: _iconGap),
-      Flexible(
-        child: Text(
-          count,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: _style,
-        ),
-      ),
-    ],
   );
 }
 

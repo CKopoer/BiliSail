@@ -169,6 +169,69 @@ void main() {
     },
   );
 
+  testWidgets(
+    'cover metadata changes width tiers and keeps hour-long videos on one row',
+    (tester) async {
+      const video = VideoSummary(
+        id: VideoId('BV1234567890'),
+        title: '去台湾地区管辖的马祖列岛旅行',
+        coverUrl: '',
+        author: '赖导AboutLai',
+        duration: Duration(hours: 1, minutes: 50, seconds: 56),
+        playCount: 963000,
+        danmakuCount: 10000,
+      );
+      const labels = ['96.3万', '1.0万', '1:50:56'];
+      for (final (width, fontSize) in [
+        (300.0, 12.0),
+        (240.0, 12.0),
+        (239.0, 11.0),
+        (220.0, 11.0),
+        (180.0, 11.0),
+        (179.0, 10.0),
+        (170.0, 10.0),
+      ]) {
+        await tester.pumpWidget(_app(width: width, video: video));
+        await tester.pumpAndSettle();
+        final duration = tester.getRect(find.text(labels.last));
+        for (final label in labels) {
+          final text = find.text(label);
+          expect(tester.widget<Text>(text).style?.fontSize, fontSize);
+          expect(
+            tester.getCenter(text).dy,
+            closeTo(duration.center.dy, .01),
+            reason: '$width: $label',
+          );
+          final paragraph = tester.renderObject<RenderParagraph>(
+            find.descendant(of: text, matching: find.byType(RichText)),
+          );
+          expect(
+            paragraph.didExceedMaxLines,
+            isFalse,
+            reason: '$width: $label',
+          );
+        }
+        expect(tester.takeException(), isNull, reason: 'width=$width');
+      }
+
+      await tester.pumpWidget(_app(width: 170, scale: 2, video: video));
+      await tester.pumpAndSettle();
+      for (final label in labels) {
+        final text = find.text(label);
+        expect(tester.widget<Text>(text).style?.fontSize, 10);
+        final paragraph = tester.renderObject<RenderParagraph>(
+          find.descendant(of: text, matching: find.byType(RichText)),
+        );
+        expect(paragraph.textScaler.scale(10), 20);
+      }
+      expect(
+        tester.getCenter(find.text(labels.last)).dy,
+        greaterThan(tester.getCenter(find.text(labels.first)).dy),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('long titles and authors ellipsize as card width changes', (
     tester,
   ) async {

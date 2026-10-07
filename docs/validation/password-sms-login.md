@@ -55,4 +55,6 @@
 - 同时修复确定的环境绑定缺陷：`CookieManager.instance(webViewEnvironment: ...)` 与网页登录窗口使用同一环境，避免插件另外创建默认环境并写入 EXE 所在目录。该参数要求见 [维护方 CookieManager 文档](https://inappwebview.dev/docs/cookie-manager/)。仍通过当前 WebView controller 读取隐私模式 Cookie，不注入主会话。
 - [Windows 环境所有者](../../lib/core/platform/passport_webview_environment.dart) 独立分配配置目录；创建失败时仅清理本次目录，关闭后先移除原生视图，再释放环境并有界重试清理目录。没有关闭沙盒、修改系统／其他应用目录权限或迁移既有用户数据。隐私模式与安全账号提交规则保留。
 - [环境回归测试](../../test/core/platform/passport_webview_environment_test.dart) 覆盖多次登录目录隔离、重复释放、初始化失败清理／异常保留及关闭失败清理。[Windows 原生测试](../../integration_test/windows_passport_web_login_test.dart) 验证真实 WebView2 隐私 Cookie 的写读与新配置隔离、官网登录窗口关闭重开和配置目录释放；测试 Cookie 是本地无鉴权的假值，不提交密码、发送短信或执行真实账号登录。
-- 修复后的检查、构建和平台边界将在实际运行后记录。Android／macOS 设备和真实密码／短信账号提交仍需独立验收。
+- 修复后 `tool/check.ps1 -SkipPub` 通过：根应用 965 项、bili_api 282 项、bili_player 22 项、bili_danmaku 32 项，共 1301 项；根应用与三个包的格式／静态分析全部通过。数量包含工作区其他同期改动。登录相关 28 项局部测试、普通权限下 2 项 Windows 原生测试、本文相对文件链接检查通过。Android／macOS 设备和真实密码／短信账号提交仍需独立验收。
+- Windows x64 Release 构建通过，独立产物为 `build/qa/passport-windows-release`。已核对 EXE、Flutter／Dart 运行文件、资产、网页登录插件、WebView2Loader 和五份原生许可；没有覆盖运行中的默认 Release，构建后恢复默认 CMake 输出／安装配置。Flutter 的成功消息仍显示默认路径，以此独立目录为准。保留上游 WebView 插件的 CMake 开发警告。
+- 用户随后使用上述修复版以管理员权限启动，确认“管理员权限下也可以打开”。本机普通权限原生测试与用户管理员权限复验均已通过，原登录窗口无法打开的问题已解决；此确认仅覆盖窗口打开，不推导为真实密码／短信账号提交或所有跨账号提权场景完成验收。
