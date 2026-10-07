@@ -53,7 +53,7 @@ CI 的 artifacts 保留 14 天；Release 从同一运行下载，所选平台失
 
 Actions Variable `ANDROID_SIGNING_CERTIFICATE_SHA256` 保存该证书的 64 位十六进制 SHA-256。工作流仅在 Android 的非 PR 打包步骤注入私钥 Secrets；Release 显式将同一组 Secrets 传给复用 CI。缺失、配置不完整、文件无效、密码错误或证书指纹不符均失败，不自动生成密钥或降级为 debug 签名。
 
-[Android 签名辅助脚本](../../tool/android-signing.ps1) 将 keystore 还原到独立临时目录，Linux 目录权限为 `700`；密码仅经进程环境传给 Gradle，不生成含密码的 `key.properties`。打包成功后使用 Android SDK 的 `apksigner verify --verbose --print-certs` 验证 APK，要求唯一签名证书且 SHA-256 与仓库变量一致；metadata 标记 `signing=configured-keystore` 并保存实际 `androidSigningCertificateSha256`。成功或失败均清理临时 keystore。
+[Android 签名辅助脚本](../../tool/android-signing.ps1) 将 keystore 还原到独立临时目录，Linux 目录权限为 `700`；密码仅经进程环境传给 Gradle，不生成含密码的 `key.properties`。打包成功后使用 Android SDK 的 `apksigner verify --verbose --print-certs-pem` 验证 APK，从标准 PEM 证书的 DER 内容计算 SHA-256，要求唯一签名证书且指纹与仓库变量一致；metadata 标记 `signing=configured-keystore` 并保存实际 `androidSigningCertificateSha256`。成功或失败均清理临时 keystore。
 
 PR 不接收长期签名 Secrets，仅通过 `-AndroidPreviewSigning` 显式启用临时 debug 签名，metadata 为 `temporary-debug-key`。这些预览包不属于长期升级链。该模式若收到 release 密钥则拒绝执行。普通 debug 开发不需要 release 凭据；直接 `flutter build apk --release` 需要设置 `ANDROID_KEYSTORE_PATH`、密码和别名环境变量，缺失时拒绝构建。
 
@@ -70,6 +70,8 @@ PR 不接收长期签名 Secrets，仅通过 `-AndroidPreviewSigning` 显式启�
 - Gradle 在缺少密钥时拒绝 `preReleaseBuild`，无 release 凭据时 `preDebugBuild` 通过。
 - 在独立检出中生成 `0.3.0+1` 的 arm64 release APK；实际 application ID 为 `dev.bilisail.bilisail`、versionCode 为 `2001`、最低 API 为 `24`。APK 签名、固定证书指纹、单 arm64 ABI、metadata 与 SHA-256 校验通过，包内无 keystore／密码文件，临时签名目录已清理。
 - 本地首次构建受其他开发操作生成的 dev-only 插件注册文件干扰；独立检出的 SQLite 原生资产下载另遇 TLS 连接中断，随后复用经包内固定 SHA-256 验证的缓存完成构建，未改 TLS 验证或生成源码。真实 Android 设备安装、旧临时签名切换与固定签名下的覆盖升级尚未实测。
+
+后续验证修正：远端 [CI 37578713971](https://github.com/CKopoer/BiliSail/actions/runs/37578713971/job/112654748403) 已生成 APK，但原先按人类可读摘要行解析证书的检查失败，未上传 Android 产物。改为读取标准 PEM 证书并自行计算指纹，新增格式变化、重复摘要行和非法证书覆盖；21 项签名边界检查与本机实际 APK 证书校验通过。修复后的远端 CI 结果尚待确认。
 
 ## macOS DMG 安装
 
