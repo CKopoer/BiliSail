@@ -191,7 +191,7 @@ FRB 支持跨平台是可行性依据，但平台构建、取消、错误和流�
 
 **macOS 交付（2026-10-06）**：按用户要求将应用 ZIP 改为 DMG 安装文件。使用系统 `ditto` 保留应用 bundle，再以 `hdiutil` 创建并校验压缩只读 HFS+ 镜像；根目录包含 `BiliSail.app`、指向 `/Applications` 的符号链接和第三方说明，支持拖拽安装。不新增打包依赖；继续使用预览 ad-hoc 签名，Developer ID 签名与公证仍待完成。
 
-**Windows 多格式交付（2026-10-07）**：按用户新要求保留 MSIX，同时增加 MSI 与内嵌同一 MSI 的 EXE 安装器。固定 WiX 6.0.2 与 Bal 扩展作为 Windows 构建依赖；原生 Burn 界面不引入用户侧 .NET 依赖。三种包共用完整 Release 文件与现有签名证书，MSI/EXE 安装到 Program Files，具有稳定 UpgradeCode、开始菜单和卸载入口。MSI 版本映射为 `x.y.(z*1000+N)`，校验其字段上限，保持构建号递增时可升级；MSIX 包身份独立，不自动跨安装格式迁移。实现、许可与安装验收边界见 [Windows MSI 与 EXE](validation/ci-cd.md#windows-msi-与-exe)。
+**Windows 多格式交付（2026-10-07）**：按用户新要求保留 MSIX，同时增加 MSI 与内嵌同一 MSI 的 EXE 安装器。固定 WiX 6.0.2 与 Bootstrapper／UI／Util 扩展作为 Windows 构建依赖；原生 Burn 界面不引入用户侧 .NET 依赖。三种包共用完整 Release 文件与现有签名证书，MSI/EXE 默认安装到 Program Files，具有稳定 UpgradeCode、开始菜单和卸载入口。后续按用户要求增加 MSI 安装目录向导及 EXE Options／Browse，所选目录通过 secure MSI 属性贯穿权限提升、文件与快捷方式，成功安装后保存到同一 x64 注册表位置供升级默认沿用；构建检查实际 MSI／EXE 产物中的路径绑定。MSI 版本映射为 `x.y.(z*1000+N)`，校验其字段上限，保持构建号递增时可升级；MSIX 包身份独立，不自动跨安装格式迁移。实现、许可与安装验收边界见 [Windows MSI 与 EXE](validation/ci-cd.md#windows-msi-与-exe)。
 
 **Android 固定签名（2026-10-07）**：按用户要求，正常 CI 与 Release 长期复用同一 release keystore，包名保持 `dev.bilisail.bilisail`。私钥及密码由仓库 Secrets 注入，仅在 Android 打包步骤还原到临时目录，用完清理；证书 SHA-256 由公开仓库变量固定，打包后验证实际 APK 签名并记入 metadata，缺失或不匹配直接失败。PR 只允许显式临时预览签名，不接收长期私钥；debug 开发不要求 release 凭据。后续发布保持密钥并递增 Flutter 的数字构建号，旧临时签名包不属于新升级链；真实设备升级仍需验收。
 

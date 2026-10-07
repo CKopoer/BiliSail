@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Bundle Name="BiliSail" Manufacturer="BiliSail" Version="$(BundleVersion)"
           UpgradeCode="57DB873E-8B4F-4188-82BA-85C12A3775AA" IconSourceFile="$(AppIcon)">
     <BootstrapperApplication>
       <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl=""
-                                            ShowVersion="yes" SuppressOptionsUI="yes" />
+                                            ShowVersion="yes" />
     </BootstrapperApplication>
+    <!-- The stock Options page edits this variable and supplies a Browse button. -->
+    <Variable Name="InstallFolder" Type="formatted" Value="[ProgramFiles64Folder]BiliSail"
+              Persisted="yes" />
+    <util:RegistrySearch Id="PreviousInstallFolder" Root="HKLM" Key="Software\BiliSail\Installer"
+                         Value="InstallFolder" Variable="InstallFolder" Result="value" Bitness="always64" />
     <Chain>
       <!-- Embed the signed MSI, including its CAB: setup works without downloading files. -->
-      <MsiPackage Id="BiliSailMsi" SourceFile="$(MsiPackage)" Compressed="yes" Visible="no" />
+      <MsiPackage Id="BiliSailMsi" SourceFile="$(MsiPackage)" Compressed="yes" Visible="no">
+        <MsiProperty Name="INSTALLFOLDER" Value="[InstallFolder]" />
+      </MsiPackage>
     </Chain>
   </Bundle>
 </Wix>

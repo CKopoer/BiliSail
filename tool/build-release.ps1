@@ -101,6 +101,7 @@ function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [stri
       param($file)
       Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $file)
     }
+    & (Join-Path $PSScriptRoot 'test-windows-installer-packages.ps1') -Wix $Wix -Msi $msi -Bundle $setup -WorkingDirectory $WorkingDirectory | Out-Host
     Export-Certificate -Cert $certificate -FilePath ([System.IO.Path]::ChangeExtension($Destination, '.cer')) | Out-Null
     return $signing
   } finally {

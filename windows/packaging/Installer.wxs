@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <!-- Keep UpgradeCode and installation paths stable across every MSI/EXE release. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <!-- Keep UpgradeCode and directory/component identities stable across releases. -->
   <Package Name="BiliSail" Manufacturer="BiliSail" Version="$(MsiVersion)"
            UpgradeCode="BA1B4BF9-F727-42A7-A69C-0FCFD1FDA365" Scope="perMachine">
     <MajorUpgrade AllowSameVersionUpgrades="yes" Schedule="afterInstallInitialize"
@@ -18,6 +18,28 @@
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
     <Property Id="ARPHELPLINK" Value="https://github.com/CKopoer/BiliSail" />
     <Property Id="ARPCOMMENTS" Value="BiliSail $(DisplayVersion)" />
+    <!-- Public/secure so the chosen directory survives MSI's elevation boundary. -->
+    <Property Id="INSTALLFOLDER" Secure="yes" />
+    <Property Id="BILISAIL_PREVIOUS_INSTALLFOLDER">
+      <RegistrySearch Id="PreviousInstallFolder" Root="HKLM" Key="Software\BiliSail\Installer"
+                      Name="InstallFolder" Type="raw" Bitness="always64" />
+    </Property>
+    <!-- An explicit UI/Burn/command-line choice takes priority over the old location. -->
+    <SetProperty Id="INSTALLFOLDER" Value="[BILISAIL_PREVIOUS_INSTALLFOLDER]"
+                 Before="CostFinalize" Sequence="both"
+                 Condition="NOT INSTALLFOLDER AND BILISAIL_PREVIOUS_INSTALLFOLDER" />
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]"
+                 After="CostFinalize" Sequence="both" />
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+    <UI>
+      <!-- Reuse the standard wizard without showing WiX's placeholder licence. -->
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg"
+               Order="2" Condition="NOT Installed" />
+      <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg"
+               Order="2" />
+    </UI>
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="BiliSail" />
@@ -30,6 +52,8 @@
           <RemoveFolder Id="RemoveAppMenuFolder" On="uninstall" />
           <RegistryValue Root="HKLM" Key="Software\BiliSail\Installer" Name="StartMenuShortcut"
                          Type="integer" Value="1" KeyPath="yes" />
+          <RegistryValue Root="HKLM" Key="Software\BiliSail\Installer" Name="InstallFolder"
+                         Type="string" Value="[INSTALLFOLDER]" />
         </Component>
       </Directory>
     </StandardDirectory>

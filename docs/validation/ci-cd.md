@@ -83,11 +83,15 @@ macOS 产物为 `BiliSail-<version>-macos-arm64.dmg`。脚本先使用 `ditto` �
 
 ## Windows MSI 与 EXE
 
-2026-10-07 起，CI 与 Release 共用 [Windows 安装器辅助脚本](../../tool/windows-installers.ps1)，在 Windows runner 通过 NuGet 安装固定 **WiX 6.0.2** CLI 与同版本 `WixToolset.BootstrapperApplications.wixext`。需要 .NET 8 runtime 与 .NET SDK，仅作为构建依赖；用户机器无需安装 .NET。工具位于 `artifacts/windows-x64/installer-work/tools/`，不上传到 Release。
+2026-10-07 起，CI 与 Release 共用 [Windows 安装器辅助脚本](../../tool/windows-installers.ps1)，在 Windows runner 通过 NuGet 安装固定 **WiX 6.0.2** CLI 与同版本 `WixToolset.BootstrapperApplications.wixext`、`WixToolset.UI.wixext`、`WixToolset.Util.wixext`。需要 .NET 8 runtime 与 .NET SDK，仅作为构建依赖；用户机器无需安装 .NET。工具位于 `artifacts/windows-x64/installer-work/tools/`，不上传到 Release。
 
-[MSI 定义](../../windows/packaging/Installer.wxs) 安装到 `%ProgramFiles%\BiliSail`，提供开始菜单入口与系统卸载、修复，并用固定 UpgradeCode 替换旧版本、拒绝较低版本。包内 CAB 嵌入完整 Flutter Release 目录、播放器／WebView／SQLite 原生文件、资产、字体、第三方说明和三份 VC++ runtime DLL；在 MSIX 添加 manifest、PRI 与专属图标之前打包，避免混入 MSIX 文件。系统下限通过注册表实际构建号检查 Windows 10 1809（17763）或更高版本，不依赖 MSI 的兼容性版本属性。
+[MSI 定义](../../windows/packaging/Installer.wxs) 默认安装到 `%ProgramFiles%\BiliSail`，首次安装提供“欢迎 → 安装目录 → 确认安装 → 进度 → 完成”向导；安装目录页可编辑路径或点击 **Change…** 浏览文件夹。复用 WiX 的 `WixUI_InstallDir`，跳过其占位许可页面；第三方许可继续随应用文件分发。提供开始菜单入口与系统卸载、修复，并用固定 UpgradeCode 替换旧版本、拒绝较低版本。包内 CAB 嵌入完整 Flutter Release 目录、播放器／WebView／SQLite 原生文件、资产、字体、第三方说明和三份 VC++ runtime DLL；在 MSIX 添加 manifest、PRI 与专属图标之前打包，避免混入 MSIX 文件。系统下限通过注册表实际构建号检查 Windows 10 1809（17763）或更高版本，不依赖 MSI 的兼容性版本属性。
 
-[EXE 定义](../../windows/packaging/Bundle.wxs) 使用原生 Burn 标准安装界面，内嵌已签名的同一 MSI 和 CAB，安装时无需下载应用文件。MSI 与 EXE 属于同一应用安装链，任选一种；安装需要管理员权限，EXE 不再额外显示底层 MSI 的卸载条目。MSIX 具有独立包身份，不自动迁移为 MSI/EXE；账户、设置及卸载后的数据保留行为仍需分别实测。
+[EXE 定义](../../windows/packaging/Bundle.wxs) 使用原生 Burn 标准安装界面，首次安装时点击 **Options → Browse** 选择目录，确定后返回主界面点击 **Install**。界面的 `InstallFolder` 变量显式传给内嵌 MSI 的 `INSTALLFOLDER`，避免界面选择与实际落盘路径分离。EXE 内嵌已签名的同一 MSI 和 CAB，安装时无需下载应用文件。MSI 与 EXE 属于同一应用安装链，任选一种；安装需要管理员权限，EXE 不再额外显示底层 MSI 的卸载条目。MSIX 具有独立包身份，不自动迁移为 MSI/EXE；账户、设置及卸载后的数据保留行为仍需分别实测。
+
+安装成功时，将实际目录写到 64 位 `HKLM\Software\BiliSail\Installer\InstallFolder`；MSI 和 EXE 后续升级均读取同一位置作为默认值。MSI 显式选择或命令行 `INSTALLFOLDER` 优先于旧位置，目录属性标为 secure 以通过权限提升边界；开始菜单快捷方式仍指向该目录。首次升级来自旧版固定目录安装器时，该注册表值可能不存在，此时继续默认 Program Files。修复属于原安装目录的维护操作，迁移到其他目录建议卸载后重新安装。静默部署可使用 `msiexec /i "BiliSail-<version>-windows-x64.msi" INSTALLFOLDER="D:\Apps\BiliSail" /qn`，不会显示目录选择页。
+
+Windows 打包在签名之后运行 [实际产物检查](../../tool/test-windows-installer-packages.ps1)，反编译 MSI 并提取 EXE 的 BA 与 Burn manifest，验证目录页、浏览事件、双向向导跳转、路径持久化、x64 注册表读取及 EXE → MSI 参数传递；失败时 CI 不上传安装包。此检查只读取安装包，不在 CI 主机安装应用。配置依据 [WiX 对话库](https://docs.firegiant.com/wix/tools/wixext/wixui/)、[Burn 标准界面属性](https://docs.firegiant.com/wix/schema/bal/wixstandardbootstrapperapplication/) 与 [Windows Installer 对话事件顺序](https://learn.microsoft.com/en-us/windows/win32/msi/controlevent-table)。
 
 三种安装包共用既有 `MSIX_CERTIFICATE_BASE64` / `MSIX_CERTIFICATE_PASSWORD` 与 `MSIX_PUBLISHER`，也共用无 Secrets 时的临时测试证书。先签 MSIX 和 MSI，再构建 EXE，按 WiX 的 detach → 签 engine → reattach → 签 Bundle 顺序完成 EXE 签名；公钥仍通过包旁 `.cer` 导出，私钥只在既有临时签名作用域存在。每个安装包均附独立 SHA-256；任一步失败均不进入上传步骤。自签名证书不代表受系统默认信任的 Authenticode 发行身份。参见 [WiX Bundle 签名](https://docs.firegiant.com/wix/tools/signing/)。
 
@@ -111,6 +115,15 @@ WiX 源码采用 MS-RL，固定版本来源和内嵌 Burn 的许可见 [第三�
 macOS ad-hoc 签名不能替代 Developer ID / notarization。资源许可范围沿用 [第三方说明](../../THIRD_PARTY_NOTICES.md)，公开发布前仍需完成其待核实项。
 
 ## 验证记录
+
+### Windows 安装目录选择（2026-10-07）
+
+- 使用本机 WiX 6.0.2 及固定 UI／Util／Bootstrapper 扩展，以已有完整 Release payload 重新打包 `0.3.0+2` 的 MSI 和 EXE，编译通过；再用同一临时测试证书完成 MSI 签名和 EXE 的 engine／Bundle 两阶段签名，签名后的包仍通过 21 项检查。临时私钥已清理，未添加系统信任。本轮只验证安装配置，未重新编译 Flutter，也未替换此前签名发行产物。验证包及日志在 `artifacts/windows-install-directory-validation/`。
+- 新增实际产物检查通过 **21 项**，包括 MSI 目录页和浏览器、欢迎／返回跳转、确认安装、提权属性、升级目录读取与保存、快捷方式，以及 EXE Options／Browse／路径变量到 MSI 的传递。此前无目录向导的安装包被该检查正确拒绝。
+- 使用 Windows Installer `MsiOpenPackageEx(..., MSIOPENPACKAGEFLAGS_IGNOREMACHINESTATE)` 的受限会话，执行包内目录恢复动作和原生 costing：默认 Program Files、显式中文／空格路径、沿用旧目录、显式路径优先于旧目录 **4 项通过**。该句柄禁止改变系统安装状态；测试没有安装、卸载应用或写入 HKLM。依据 [Microsoft 受限安装会话](https://learn.microsoft.com/en-us/windows/win32/api/msi/nf-msi-msiopenpackageexa)。
+- `tool/check.ps1 -SkipPub` 通过根应用 **1286**、API **319**、播放器 **32**、弹幕 **52** 项测试，四组格式／分析通过，原有 Android 签名与 Windows 版本边界检查通过。
+- PowerShell 三份修改脚本的语法解析、两个工作流的 actionlint、109 条修改文档的本地链接与差异检查通过。
+- 尚未运行远端 GitHub CI，也未点击真实向导完成提权安装、实体盘落盘、卸载和跨版本升级；这些不由编译、受限目录解析或包结构检查推导为已验收。既有安装包不会自动变更，下次 CI／Release 打包采用新流程。
 
 ### Windows 增加 MSI 与 EXE（2026-10-07）
 

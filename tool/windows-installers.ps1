@@ -29,7 +29,9 @@ function Initialize-WindowsInstallerTools([string]$ToolsDirectory) {
     if ($LASTEXITCODE -ne 0) { throw 'Could not install the pinned WiX toolset.' }
   } finally { $env:DOTNET_CLI_TELEMETRY_OPTOUT = $oldTelemetry }
   $wix = Join-Path $ToolsDirectory 'wix.exe'
-  Invoke-WixCommand $wix @('extension', 'add', '-g', "WixToolset.BootstrapperApplications.wixext/$script:WindowsWixVersion")
+  foreach ($extension in @('WixToolset.BootstrapperApplications.wixext', 'WixToolset.UI.wixext', 'WixToolset.Util.wixext')) {
+    Invoke-WixCommand $wix @('extension', 'add', '-g', "$extension/$script:WindowsWixVersion")
+  }
   return $wix
 }
 
@@ -39,12 +41,12 @@ function New-WindowsMsi([string]$Wix, [string]$Staging, [string]$Destination, [s
   }
   # Build before MSIX adds package identity, icons and PRI to this directory.
   if (Test-Path -LiteralPath (Join-Path $Staging 'AppxManifest.xml')) { throw 'MSI payload must be staged before MSIX packaging.' }
-  Invoke-WixCommand $Wix @('build', (Join-Path $script:WindowsPackagingRoot 'Installer.wxs'), '-arch', 'x64', '-d', "PayloadDirectory=$Staging", '-d', "MsiVersion=$(Get-WindowsMsiVersion $Version)", '-d', "DisplayVersion=$Version", '-d', "AppIcon=$(Join-Path $script:WindowsPackagingRoot '../runner/resources/app_icon.ico')", '-pdbtype', 'none', '-o', $Destination)
+  Invoke-WixCommand $Wix @('build', (Join-Path $script:WindowsPackagingRoot 'Installer.wxs'), '-arch', 'x64', '-ext', "WixToolset.UI.wixext/$script:WindowsWixVersion", '-d', "PayloadDirectory=$Staging", '-d', "MsiVersion=$(Get-WindowsMsiVersion $Version)", '-d', "DisplayVersion=$Version", '-d', "AppIcon=$(Join-Path $script:WindowsPackagingRoot '../runner/resources/app_icon.ico')", '-pdbtype', 'none', '-o', $Destination)
 }
 
 function New-WindowsBundle([string]$Wix, [string]$Msi, [string]$Destination, [string]$Version) {
   Get-WindowsMsiVersion $Version | Out-Null
-  Invoke-WixCommand $Wix @('build', (Join-Path $script:WindowsPackagingRoot 'Bundle.wxs'), '-arch', 'x64', '-ext', "WixToolset.BootstrapperApplications.wixext/$script:WindowsWixVersion", '-d', "MsiPackage=$Msi", '-d', "BundleVersion=$($Version.Replace('+', '.'))", '-d', "AppIcon=$(Join-Path $script:WindowsPackagingRoot '../runner/resources/app_icon.ico')", '-pdbtype', 'none', '-o', $Destination)
+  Invoke-WixCommand $Wix @('build', (Join-Path $script:WindowsPackagingRoot 'Bundle.wxs'), '-arch', 'x64', '-ext', "WixToolset.BootstrapperApplications.wixext/$script:WindowsWixVersion", '-ext', "WixToolset.Util.wixext/$script:WindowsWixVersion", '-d', "MsiPackage=$Msi", '-d', "BundleVersion=$($Version.Replace('+', '.'))", '-d', "AppIcon=$(Join-Path $script:WindowsPackagingRoot '../runner/resources/app_icon.ico')", '-pdbtype', 'none', '-o', $Destination)
 }
 
 function Complete-WindowsBundleSigning([string]$Wix, [string]$Bundle, [string]$Destination, [string]$WorkingDirectory, [scriptblock]$SignFile) {
