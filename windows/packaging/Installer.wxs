@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- Keep UpgradeCode and installation paths stable across every MSI/EXE release. -->
+  <Package Name="BiliSail" Manufacturer="BiliSail" Version="$(MsiVersion)"
+           UpgradeCode="BA1B4BF9-F727-42A7-A69C-0FCFD1FDA365" Scope="perMachine">
+    <MajorUpgrade AllowSameVersionUpgrades="yes" Schedule="afterInstallInitialize"
+                  DowngradeErrorMessage="A newer version of BiliSail is already installed." />
+    <!-- MSI compatibility properties can report Windows 8.1 on newer systems. -->
+    <Property Id="BILISAIL_WINDOWS_BUILD">
+      <RegistrySearch Id="WindowsBuildNumber" Root="HKLM"
+                      Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                      Name="CurrentBuildNumber" Type="raw" Bitness="always64" />
+    </Property>
+    <Launch Condition="Installed OR (VersionNT64 AND BILISAIL_WINDOWS_BUILD &gt;= 17763)"
+            Message="BiliSail requires Windows 10 version 1809 or later (x64)." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <Icon Id="AppIcon" SourceFile="$(AppIcon)" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/CKopoer/BiliSail" />
+    <Property Id="ARPCOMMENTS" Value="BiliSail $(DisplayVersion)" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="BiliSail" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenuFolder" Name="BiliSail">
+        <Component Id="StartMenuShortcut" Guid="9B17D46F-69B5-4E9C-9019-1A874099C504">
+          <Shortcut Id="AppShortcut" Name="BiliSail" Target="[INSTALLFOLDER]bilisail.exe"
+                    WorkingDirectory="INSTALLFOLDER" Icon="AppIcon" />
+          <RemoveFolder Id="RemoveAppMenuFolder" On="uninstall" />
+          <RegistryValue Root="HKLM" Key="Software\BiliSail\Installer" Name="StartMenuShortcut"
+                         Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <ComponentGroup Id="AppPayload" Directory="INSTALLFOLDER">
+      <Files Include="$(PayloadDirectory)\**" />
+    </ComponentGroup>
+    <Feature Id="Application" Title="BiliSail" Level="1">
+      <ComponentGroupRef Id="AppPayload" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+  </Package>
+</Wix>

@@ -12,7 +12,7 @@
 | [下载与离线播放](downloads.md) | 分 P／剧集、下载队列、断点恢复、校验、本地分轨播放及三端验收边界 |
 | [项目更名](validation/project-renaming.md) | BiliSail／哔帆的命名范围、安装／存储标识与平台验证 |
 | [应用图标](../assets/branding/README.md) | 小电视与船帆角标、保留候选方案、官网参考和平台资源 |
-| [CI/CD、MSIX 与 DMG](validation/ci-cd.md) | GitHub Actions 三端构建、Android 固定签名、预览 Release 草稿、Windows MSIX 签名与 macOS DMG 安装 |
+| [CI/CD 与安装包](validation/ci-cd.md) | GitHub Actions 三端构建、Android 固定签名、预览 Release 草稿、Windows MSIX／MSI／EXE 签名与 macOS DMG 安装 |
 | [API 与会话](api-design.md) | 协议边界、接口映射、鉴权、错误、缓存和降级 |
 | [密码、短信与移动登录窗口](validation/password-sms-login.md) | 三种 Web 登录、交互验证码、安全会话与小屏/键盘布局 |
 | [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |

@@ -1,6 +1,6 @@
-# GitHub Actions CI/CD、MSIX 与 DMG
+# GitHub Actions CI/CD 与安装包
 
-日期：2026-10-06。配置覆盖 Android arm64、Windows x64、macOS arm64；本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示 M0 三端验收或 M5 正式发行完成。
+更新日期：2026-10-07。配置覆盖 Android arm64、Windows x64、macOS arm64；本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示 M0 三端验收或 M5 正式发行完成。
 
 ## 入口与分工
 
@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | 版本解析、根与三个包检查 | `ubuntu-24.04` | 无需真实账号，不自动运行在线或原生播放集成测试 |
 | Android | `ubuntu-24.04`，Temurin JDK 17 | 仅 arm64 的 release APK；正常构建复用固定 keystore，PR 使用临时预览签名 |
-| Windows | `windows-2022`，Visual Studio C++ / Windows SDK | x64 MSIX，包含 EXE、全部原生 DLL/data 及 VC++ runtime；无需 MSI 或安装 EXE |
+| Windows | `windows-2022`，Visual Studio C++ / Windows SDK / .NET 8 / WiX 6.0.2 | 同时提供 x64 MSIX、MSI 和 EXE 安装包；全部包含完整原生 DLL/data 及 VC++ runtime |
 | macOS | `macos-15`，Apple Silicon / Xcode | arm64 DMG，`ditto` 保留应用权限与链接，`hdiutil` 打包并校验镜像；仅 ad-hoc 签名，未 notarize |
 | Release 上传 | `ubuntu-24.04` | 合并本次所选平台的 Actions artifacts 后创建草稿 |
 
@@ -25,13 +25,13 @@ CI 在工作流顶层固定 `PUB_HOSTED_URL=https://pub.flutter-io.cn`，与根�
 
 ## 版本与产物
 
-手动输入版本使用 Flutter 的 `x.y.z+N`，例如 `0.1.0+1`；留空取根 `pubspec.yaml`。脚本通过 `--build-name` 和 `--build-number` 传入，不改源码版本或锁文件。Windows MSIX 映射为 `x.y.z.N`，四段均不超过 65535。Android 使用 arm64 split APK，Flutter 自动将 versionCode 设为 `N + 2000`，因此 `N` 不超过 2099998000；实际 versionCode 同时写入 metadata。MSIX 升级要求递增包版本并保持 identity/publisher。当前草稿 tag 为 `v0.1.0+1`；已有同名 tag 时拒绝附加新构建，重跑草稿遇到冲突时也需使用新版本或显式处理旧草稿。
+手动输入版本使用 Flutter 的 `x.y.z+N`，例如 `0.1.0+1`；留空取根 `pubspec.yaml`。脚本通过 `--build-name` 和 `--build-number` 传入，不改源码版本或锁文件。Windows MSIX 与 EXE Bundle 映射为 `x.y.z.N`；MSI 使用三段 `x.y.(z*1000+N)`，例如 `0.3.0+1` → `0.3.1`、`0.3.0+2` → `0.3.2`、`0.3.1+1` → `0.3.1001`。选择 Windows 时要求 `x/y <= 255`、`1 <= N <= 999`、`z*1000+N <= 65535`，版本解析阶段即拒绝超限值。MSI 只比较前三段，不能直接采用 MSIX 的第四段构建号；依据 [Microsoft ProductVersion](https://learn.microsoft.com/en-us/windows/win32/msi/productversion)。Android 使用 arm64 split APK，Flutter 自动将 versionCode 设为 `N + 2000`，因此 `N` 不超过 2099998000；实际 versionCode 同时写入 metadata。MSIX 升级要求递增包版本并保持 identity/publisher。已有同名 tag 时拒绝附加新构建，重跑草稿遇到冲突时也需使用新版本或显式处理旧草稿。
 
 每个平台的 `artifacts/<target>/release/` 中包含：
 
-- `BiliSail-<version>-<target>.apk`、`.msix` 或 `.dmg`。
+- Android 的 `.apk`、Windows 的 `.msix` / `.msi` / `.exe`、macOS 的 `.dmg`，命名均为 `BiliSail-<version>-<target>.<extension>`。
 - Windows 包旁的 `.cer`，只含签名证书公钥。
-- `.build-info.json`：源码 revision 与 `sourceDirty`、Flutter/engine/Dart 版本、目标、签名类型、Android 签名证书 SHA-256、runner image、根锁文件 SHA-256。
+- `.build-info.json`：源码 revision 与 `sourceDirty`、Flutter/engine/Dart 版本、目标、签名类型、Android 签名证书 SHA-256、Windows MSI 内部版本与 WiX 版本、runner image、根锁文件 SHA-256。
 - 每个上述文件对应的 `.sha256`，格式兼容 `sha256sum -c`。
 
 CI 的 artifacts 保留 14 天；Release 从同一运行下载，所选平台失败时不创建新草稿。不使用参考仓库的 WebDAV、NuGet ZIP、UWP manifest、Chocolatey 或 TLS 验证绕过逻辑。
@@ -79,6 +79,18 @@ macOS 产物为 `BiliSail-<version>-macos-arm64.dmg`。脚本先使用 `ditto` �
 
 打开 DMG 后，将 `BiliSail.app` 拖到镜像中的 `Applications` 入口，复制完成后推出镜像，再从应用程序目录启动。此方式采用 Apple 的应用 bundle 拖拽安装方案，参见 [Apple 应用分发说明](https://developer.apple.com/library/archive/documentation/Porting/Conceptual/PortingUnix/distributing/distibuting.html)。DMG 不改变应用签名：当前仍为 ad-hoc 预览包，未完成 Developer ID 签名与公证；打包与镜像校验不等于启动或 Gatekeeper 验收。
 
+## Windows MSI 与 EXE
+
+2026-10-07 起，CI 与 Release 共用 [Windows 安装器辅助脚本](../../tool/windows-installers.ps1)，在 Windows runner 通过 NuGet 安装固定 **WiX 6.0.2** CLI 与同版本 `WixToolset.BootstrapperApplications.wixext`。需要 .NET 8 runtime 与 .NET SDK，仅作为构建依赖；用户机器无需安装 .NET。工具位于 `artifacts/windows-x64/installer-work/tools/`，不上传到 Release。
+
+[MSI 定义](../../windows/packaging/Installer.wxs) 安装到 `%ProgramFiles%\BiliSail`，提供开始菜单入口与系统卸载、修复，并用固定 UpgradeCode 替换旧版本、拒绝较低版本。包内 CAB 嵌入完整 Flutter Release 目录、播放器／WebView／SQLite 原生文件、资产、字体、第三方说明和三份 VC++ runtime DLL；在 MSIX 添加 manifest、PRI 与专属图标之前打包，避免混入 MSIX 文件。系统下限通过注册表实际构建号检查 Windows 10 1809（17763）或更高版本，不依赖 MSI 的兼容性版本属性。
+
+[EXE 定义](../../windows/packaging/Bundle.wxs) 使用原生 Burn 标准安装界面，内嵌已签名的同一 MSI 和 CAB，安装时无需下载应用文件。MSI 与 EXE 属于同一应用安装链，任选一种；安装需要管理员权限，EXE 不再额外显示底层 MSI 的卸载条目。MSIX 具有独立包身份，不自动迁移为 MSI/EXE；账户、设置及卸载后的数据保留行为仍需分别实测。
+
+三种安装包共用既有 `MSIX_CERTIFICATE_BASE64` / `MSIX_CERTIFICATE_PASSWORD` 与 `MSIX_PUBLISHER`，也共用无 Secrets 时的临时测试证书。先签 MSIX 和 MSI，再构建 EXE，按 WiX 的 detach → 签 engine → reattach → 签 Bundle 顺序完成 EXE 签名；公钥仍通过包旁 `.cer` 导出，私钥只在既有临时签名作用域存在。每个安装包均附独立 SHA-256；任一步失败均不进入上传步骤。自签名证书不代表受系统默认信任的 Authenticode 发行身份。参见 [WiX Bundle 签名](https://docs.firegiant.com/wix/tools/signing/)。
+
+WiX 源码采用 MS-RL，固定版本来源和内嵌 Burn 的许可见 [第三方说明](../../THIRD_PARTY_NOTICES.md)。WiX v6 的二进制发布同时适用 [Open Source Maintenance Fee 条款](https://docs.firegiant.com/wix/osmf/)；本工程不引入 FireGiant 商业扩展。`tool/check.ps1` 增加 [Windows 版本检查](../../tool/test-windows-installers.ps1)，在 Ubuntu 和 Windows 均验证补丁／构建号顺序与超限拒绝。
+
 ## Windows MSIX 签名与安装
 
 [AppxManifest.xml](../../windows/packaging/AppxManifest.xml) 的 identity 为 `dev.bilisail.bilisail`，默认 publisher 为 `CN=BiliSail`；Windows 安装下限为 Windows 10 1809（build 17763）。`MakeAppx` 打包完整 Flutter Release 目录，`SignTool` 使用 SHA-256 签名。MSIX 图标在构建时从已有品牌 PNG 派生；生成普通、深色 `unplated`、浅色 `lightunplated` 的多尺寸图标，并使用同一 Windows SDK 的 `MakePri` 与 [PRI 配置](../../windows/packaging/priconfig.xml) 生成 `resources.pri`，供任务栏和开始菜单选择无底板图标。不引入新品牌资源或 Dart 依赖。
@@ -97,6 +109,20 @@ macOS 产物为 `BiliSail-<version>-macos-arm64.dmg`。脚本先使用 `ditto` �
 macOS ad-hoc 签名不能替代 Developer ID / notarization。资源许可范围沿用 [第三方说明](../../THIRD_PARTY_NOTICES.md)，公开发布前仍需完成其待核实项。
 
 ## 验证记录
+
+### Windows 增加 MSI 与 EXE（2026-10-07）
+
+本机 Windows x64 / Flutter 3.47.6 / WiX 6.0.2 实际运行 `tool/build-release.ps1 -Target windows-x64 -Version '0.3.0+1'`，生成三个安装包、公钥证书、metadata 与五份 SHA-256 校验文件，位于 `artifacts/windows-x64/release/`。metadata 的源码 HEAD 为 `42ea8fd2e44c1e8a6e04104505f317c7040630b6`，包含工作区未提交修改，标记 `sourceDirty=true`，不能仅凭该 HEAD 复现本地包；此前 Windows 输出已另行保留。
+
+- Windows Release 编译、WiX MSI 的内嵌 CAB、MakePri / MakeAppx、MSI / MSIX 签名与 EXE 的 engine / Bundle 两阶段签名全部通过。三个包和签名前的 engine 使用同一导出证书，本轮为 `self-signed-preview`；临时私钥证书已清理，没有添加系统信任。
+- 解包 MSI 后，将全部 **67 个运行文件**逐一与 staging 比较 SHA-256，完整一致，包含资产、字体、原生依赖、VC++ runtime 与 WiX 许可，没有 MSIX 专属文件。读取 MSI 实际执行表确认 `InstallInitialize=1500`、`RemoveExistingProducts=1501`、`InstallFinalize=6600`，升级替换处于可回滚事务内。
+- 解包 EXE，内嵌的已签名 MSI 与独立 `.msi` 的 SHA-256 完全一致。MSIX 运行文件与许可、公钥证书一致性、metadata 中 `windowsMsiVersion=0.3.1` / `windowsInstallerToolVersion=6.0.2`、五份校验文件均通过；产物无 PFX / `.wixpdb` 或旧名称 EXE。
+- `tool/check.ps1 -EnforceLockfile` 已完成依赖强校验；首次测试遇到工作区并行修改的中间状态，更新后运行 `tool/check.ps1 -SkipPub` 全部通过：根应用 **1116**、API **291**、播放器 **22**、弹幕 **52** 项测试，以及 **14** 项新增 Windows 版本边界检查。根应用与三个包的格式、分析均通过，四份锁文件无差异。
+- 两个工作流通过 actionlint 1.7.12；PowerShell 解析、WiX XML 编译、185 条本地文档链接与差异空白检查通过。
+
+尚未推送或运行新版远端 Actions，没有执行 MSI / EXE 的系统安装、卸载、修复、覆盖升级或跨格式迁移，也未用仓库固定 PFX 复验本次新产物。上述验证证明本地构建、签名流程及包内容，不代表系统默认信任、实际安装或原生播放验收。
+
+### 首次 CI/CD 本地验证（2026-10-06）
 
 在本机 Windows 使用 Flutter 3.47.6 / Dart 3.13.5 完成；源码 HEAD 为 `4bcbfb0fe03315543b3dcc18730fed051af0cdbb`，含用户原有修改与本轮配置，metadata 的 `sourceDirty=true`，不能仅凭 HEAD 复现这份本地包。
 

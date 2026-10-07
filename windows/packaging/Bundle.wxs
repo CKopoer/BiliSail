@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+  <Bundle Name="BiliSail" Manufacturer="BiliSail" Version="$(BundleVersion)"
+          UpgradeCode="57DB873E-8B4F-4188-82BA-85C12A3775AA" IconSourceFile="$(AppIcon)">
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl=""
+                                            ShowVersion="yes" SuppressOptionsUI="yes" />
+    </BootstrapperApplication>
+    <Chain>
+      <!-- Embed the signed MSI, including its CAB: setup works without downloading files. -->
+      <MsiPackage Id="BiliSailMsi" SourceFile="$(MsiPackage)" Compressed="yes" Visible="no" />
+    </Chain>
+  </Bundle>
+</Wix>

@@ -13,7 +13,7 @@ on:
         type: boolean
         default: true
       enable_windows:
-        description: Windows x64 MSIX 安装包
+        description: Windows x64 MSIX / MSI / EXE 安装包
         type: boolean
         default: true
       enable_macos:
@@ -82,7 +82,7 @@ jobs:
           - 源码提交：$env:GITHUB_SHA
           - Flutter 3.47.6；各平台 SDK 信息见 build-info.json。
           - 仅包含本次选中的平台；包旁附 SHA-256 校验文件。
-          - Windows 提供 MSIX 安装包；测试签名需先信任包旁的 .cer；签名种类见 build-info.json。
+          - Windows 同时提供 MSIX、MSI 和 EXE 安装包；EXE 内嵌同一 MSI，任选一种安装。三者复用同一签名证书，测试签名需先信任包旁的 .cer；签名种类及 MSI 内部版本见 build-info.json。
           - Android 复用仓库配置的固定 release keystore，证书 SHA-256 见 build-info.json；macOS 仅 ad-hoc 签名，未 notarize。
           - macOS 提供 DMG，打开后将 BiliSail.app 拖到 Applications 安装。
           - 构建成功不等于三端播放验收；正式分发前仍需完成签名、资源许可和设备验证。

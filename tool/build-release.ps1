@@ -7,13 +7,17 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'android-signing.ps1')
+. (Join-Path $PSScriptRoot 'windows-installers.ps1')
 
 function Invoke-BuildCommand([string]$Executable, [string[]]$Parameters) {
   & $Executable @Parameters
   if ($LASTEXITCODE -ne 0) { throw "$Executable failed: $LASTEXITCODE" }
 }
 
-function New-MsixPackage([string]$Staging, [string]$Destination, [string]$PackageVersion) {
+function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [string]$Version, [string]$Wix, [string]$WorkingDirectory) {
+  $msi = [System.IO.Path]::ChangeExtension($Destination, '.msi')
+  $setup = [System.IO.Path]::ChangeExtension($Destination, '.exe')
+  New-WindowsMsi $Wix $Staging $msi $Version
   $sdkTool = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/makeappx.exe" |
     Sort-Object FullName -Descending | Select-Object -First 1
   if (!$sdkTool) { throw 'Windows SDK MakeAppx.exe was not found.' }
@@ -22,7 +26,7 @@ function New-MsixPackage([string]$Staging, [string]$Destination, [string]$Packag
   if (!(Test-Path -LiteralPath $makePri)) { throw 'Windows SDK MakePri.exe was not found.' }
   $publisher = if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { 'CN=BiliSail' }
   [xml]$manifest = Get-Content 'windows/packaging/AppxManifest.xml' -Raw
-  $manifest.Package.Identity.Version = $PackageVersion
+  $manifest.Package.Identity.Version = $Version.Replace('+', '.')
   $manifest.Package.Identity.Publisher = $publisher
   $manifest.Save((Join-Path $Staging 'AppxManifest.xml'))
 
@@ -90,6 +94,13 @@ function New-MsixPackage([string]$Staging, [string]$Destination, [string]$Packag
     }
     if ($certificate.NotAfter -le (Get-Date)) { throw 'The MSIX signing certificate has expired.' }
     Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $Destination) | Out-Host
+    Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $msi) | Out-Host
+    $unsignedBundle = Join-Path $WorkingDirectory 'unsigned-setup.exe'
+    New-WindowsBundle $Wix $msi $unsignedBundle $Version
+    Complete-WindowsBundleSigning $Wix $unsignedBundle $setup $WorkingDirectory {
+      param($file)
+      Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $file)
+    }
     Export-Certificate -Cert $certificate -FilePath ([System.IO.Path]::ChangeExtension($Destination, '.cer')) | Out-Null
     return $signing
   } finally {
@@ -110,6 +121,7 @@ if ($Target -eq 'android-arm64' -and [long]$buildNumber -gt 2099998000) { throw 
 if ($Target -eq 'windows-x64' -and @(($Version -split '[.+]') | Where-Object { [long]$_ -gt 65535 }).Count) {
   throw 'MSIX version components must be at most 65535.'
 }
+if ($Target -eq 'windows-x64') { $msiVersion = Get-WindowsMsiVersion $Version }
 if ($Target -eq 'windows-x64' -and (!$IsWindows -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64')) {
   throw 'windows-x64 requires a Windows x64 host.'
 }
@@ -166,6 +178,9 @@ try {
       $signing = $androidSigning.Signing
     }
     'windows-x64' {
+      $installerWork = Join-Path $outputRoot 'installer-work'
+      New-Item -ItemType Directory -Path $installerWork | Out-Null
+      $wix = Initialize-WindowsInstallerTools (Join-Path $installerWork 'tools')
       Invoke-BuildCommand flutter (@('build', 'windows') + $versionArgs)
       $staging = Join-Path $outputRoot $name
       Copy-Item -LiteralPath 'build/windows/x64/runner/Release' -Destination $staging -Recurse
@@ -183,8 +198,11 @@ try {
         Copy-Item -LiteralPath (Join-Path $runtime.FullName $dll) -Destination $staging
       }
       Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination $staging
+      $wixLicenseDir = Join-Path $staging 'data/licenses/wix'
+      New-Item -ItemType Directory -Path $wixLicenseDir -Force | Out-Null
+      Copy-Item -Path 'windows/licenses/wix/*' -Destination $wixLicenseDir
       $package = Join-Path $releaseDir "$name.msix"
-      $signing = New-MsixPackage $staging $package "$buildName.$buildNumber"
+      $signing = New-SignedWindowsPackages $staging $package $Version $wix $installerWork
     }
     'macos-arm64' {
       Invoke-BuildCommand flutter @('config', '--enable-macos-desktop', '--enable-macos-arm64-only')
@@ -222,6 +240,8 @@ try {
     engineRevision = $sdk.engineRevision
     dartVersion = $sdk.dartSdkVersion
     signing = $signing
+    windowsMsiVersion = if ($Target -eq 'windows-x64') { $msiVersion } else { $null }
+    windowsInstallerToolVersion = if ($Target -eq 'windows-x64') { $script:WindowsWixVersion } else { $null }
     runnerImage = $env:ImageVersion
     pubspecLockSha256 = $lockHash.ToLowerInvariant()
   }
@@ -232,6 +252,7 @@ try {
     "$hash  $([System.IO.Path]::GetFileName($file))" | Set-Content -LiteralPath "$file.sha256" -Encoding ascii
   }
   Write-Output "Packaged $package"
+  if ($Target -eq 'windows-x64') { Write-Output "Also packaged $name.msi and $name.exe" }
 } finally {
   Clear-AndroidSigning $androidSigning
   if ($Target -eq 'macos-arm64') {

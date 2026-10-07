@@ -185,15 +185,17 @@ FRB 支持跨平台是可行性依据，但平台构建、取消、错误和流�
 
 **验证边界**：工程检查、原生回归、平台构建及未测项见 [项目更名记录](validation/project-renaming.md)。
 
-## D22：Linux 编排 CI/CD，Windows 以 MSIX 交付
+## D22：Linux 编排 CI/CD，Windows 安装包交付
 
 **决定（2026-10-06）**：GitHub Actions 在 Ubuntu 复用检查脚本并上传 Release，在对应主机构建 Android arm64、Windows x64、macOS arm64。Windows 按用户要求提供 MSIX，使用 Windows SDK MakeAppx/SignTool 和现有图标，不引入额外 Dart 包；默认临时测试签名，可通过 Secrets 提供固定 PFX。MSIX 安装下限为 Windows 10 1809，版本由 Flutter `x.y.z+N` 映射为 `x.y.z.N`。
 
 **macOS 交付（2026-10-06）**：按用户要求将应用 ZIP 改为 DMG 安装文件。使用系统 `ditto` 保留应用 bundle，再以 `hdiutil` 创建并校验压缩只读 HFS+ 镜像；根目录包含 `BiliSail.app`、指向 `/Applications` 的符号链接和第三方说明，支持拖拽安装。不新增打包依赖；继续使用预览 ad-hoc 签名，Developer ID 签名与公证仍待完成。
 
+**Windows 多格式交付（2026-10-07）**：按用户新要求保留 MSIX，同时增加 MSI 与内嵌同一 MSI 的 EXE 安装器。固定 WiX 6.0.2 与 Bal 扩展作为 Windows 构建依赖；原生 Burn 界面不引入用户侧 .NET 依赖。三种包共用完整 Release 文件与现有签名证书，MSI/EXE 安装到 Program Files，具有稳定 UpgradeCode、开始菜单和卸载入口。MSI 版本映射为 `x.y.(z*1000+N)`，校验其字段上限，保持构建号递增时可升级；MSIX 包身份独立，不自动跨安装格式迁移。实现、许可与安装验收边界见 [Windows MSI 与 EXE](validation/ci-cd.md#windows-msi-与-exe)。
+
 **Android 固定签名（2026-10-07）**：按用户要求，正常 CI 与 Release 长期复用同一 release keystore，包名保持 `dev.bilisail.bilisail`。私钥及密码由仓库 Secrets 注入，仅在 Android 打包步骤还原到临时目录，用完清理；证书 SHA-256 由公开仓库变量固定，打包后验证实际 APK 签名并记入 metadata，缺失或不匹配直接失败。PR 只允许显式临时预览签名，不接收长期私钥；debug 开发不要求 release 凭据。后续发布保持密钥并递增 Flutter 的数字构建号，旧临时签名包不属于新升级链；真实设备升级仍需验收。
 
-**发布边界**：借鉴 UWP 的手动选平台和 Release 草稿职责，独立编写 Flutter 工作流；只创建 draft + prerelease，不自动公开。固定 SDK 与锁文件、附源码/SDK metadata 和 SHA-256；构建成功不能替代三端媒体、安装/升级、签名与许可验收。配置、证书信任和实测状态见 [CI/CD、MSIX 与 DMG](validation/ci-cd.md)。
+**发布边界**：借鉴 UWP 的手动选平台和 Release 草稿职责，独立编写 Flutter 工作流；只创建 draft + prerelease，不自动公开。固定 SDK 与锁文件、附源码/SDK metadata 和 SHA-256；构建成功不能替代三端媒体、安装/升级、签名与许可验收。配置、证书信任和实测状态见 [CI/CD 与安装包](validation/ci-cd.md)。
 
 ## D23：关于页与每日首次启动更新提示
 

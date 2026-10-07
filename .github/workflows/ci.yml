@@ -14,6 +14,7 @@ on:
         type: boolean
         default: true
       enable_windows:
+        description: Windows x64 MSIX / MSI / EXE 安装包
         type: boolean
         default: true
       enable_macos:
@@ -29,6 +30,7 @@ on:
         type: boolean
         default: true
       enable_windows:
+        description: Windows x64 MSIX / MSI / EXE installers.
         type: boolean
         default: true
       enable_macos:
@@ -101,6 +103,10 @@ jobs:
           if (!$platforms.Count) { throw 'Select at least one platform.' }
           if ($env:ENABLE_WINDOWS -eq 'true' -and @(($version -split '[.+]') | Where-Object { [long]$_ -gt 65535 }).Count) {
             throw 'MSIX version components must be at most 65535.'
+          }
+          if ($env:ENABLE_WINDOWS -eq 'true') {
+            . ./tool/windows-installers.ps1
+            Get-WindowsMsiVersion $version | Out-Null
           }
           "version=$version" >> $env:GITHUB_OUTPUT
           "matrix=$(@{ include = @($platforms) } | ConvertTo-Json -Depth 3 -Compress)" >> $env:GITHUB_OUTPUT

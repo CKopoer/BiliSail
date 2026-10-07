@@ -15,6 +15,8 @@
 
 ## 直接组件
 
+Windows MSI/EXE 打包使用固定 [WiX Toolset 6.0.2](https://github.com/wixtoolset/wix/releases/tag/v6.0.2) 与 `WixToolset.BootstrapperApplications.wixext 6.0.2`，来源为 NuGet 官方包。源码采用 [Microsoft Reciprocal License（MS-RL）](https://github.com/wixtoolset/wix/blob/v6.0.2/LICENSE.TXT)，二进制使用另适用 [Open Source Maintenance Fee](https://docs.firegiant.com/wix/osmf/)；没有采用 FireGiant 商业扩展。WiX CLI 和 .NET 仅用于构建，EXE 安装器内嵌原生 Burn 引擎与标准 Bootstrapper UI，用户机器无需 .NET。[原始许可](windows/licenses/wix/LICENSE.TXT) 与 [二进制条款](windows/licenses/wix/OSMFEULA.txt) 随 Windows 安装包一并保留于 `data/licenses/wix`。
+
 内嵌官网登录使用 [flutter_inappwebview 6.2.0-beta.3](https://pub.dev/packages/flutter_inappwebview/versions/6.2.0-beta.3)，Apache-2.0；选此固定预览版是因为工程 AGP 9 与其稳定版不兼容。官网页面与验证码按需通过 HTTPS 加载，未复制到应用资产。Windows 的 WebView2 SDK／Loader 使用 NuGet 包内 Microsoft BSD 类许可，WIL、CppWinRT 与 nlohmann.json 使用 MIT；这些原生许可另随 Windows 产物置于 `data/licenses/webview`。nlohmann.json 3.12.0 的 [原始许可](https://github.com/nlohmann/json/blob/v3.12.0/LICENSE.MIT)保留于 [本地许可](windows/licenses/nlohmann-json-LICENSE.txt)。平台 SDK 来源、锁定版本和实测边界见 [登录验证](docs/validation/password-sms-login.md)。
 
 应用默认内置 HarmonyOS Sans（简体中文 Regular/Medium/Bold），来源为用户提供的本机字体目录，文件未修改。随字体提供的 HarmonyOS Sans Fonts License Agreement、版权通知与 SHA-256 见 [资源来源](assets/README.md#harmonyos-sans)。完整许可证打包到应用，并通过“关于”中的许可证页展示；设置中可切换为系统默认字体。
