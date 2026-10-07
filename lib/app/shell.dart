@@ -318,7 +318,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                           !_workspace.active.isProfile &&
                           compact) ...[
                         _channelBar(context),
-                        _tools(context, compact: true),
+                        _tools(context),
                       ] else if (_workspace.active.location.path != '/search' &&
                           !_workspace.active.isPlayback &&
                           !_workspace.active.isProfile)
@@ -329,7 +329,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                               Expanded(child: _channelBar(context)),
                               SizedBox(
                                 width: constraints.maxWidth >= 1300 ? 470 : 380,
-                                child: _tools(context, compact: false),
+                                child: _tools(context),
                               ),
                             ],
                           ),
@@ -635,10 +635,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     builder: (context, constraints) => constraints.maxWidth < 760
         ? Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              const SearchCategoryBar(),
-              _tools(context, compact: true),
-            ],
+            children: [const SearchCategoryBar(), _tools(context)],
           )
         : SizedBox(
             height: 58,
@@ -647,7 +644,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                 const Expanded(child: SearchCategoryBar()),
                 SizedBox(
                   width: constraints.maxWidth >= 1300 ? 470 : 380,
-                  child: _tools(context, compact: false),
+                  child: _tools(context),
                 ),
               ],
             ),
@@ -723,7 +720,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     HomeChannel.favorites => BiliIcons.favorite,
   };
 
-  Widget _tools(BuildContext context, {required bool compact}) => SizedBox(
+  Widget _tools(BuildContext context) => SizedBox(
     height: 52,
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -752,22 +749,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
             ),
           ),
           const SizedBox(width: 5),
-          if (widget.accountBuilder case final builder?)
-            compact
-                ? IconButton(
-                    tooltip: '账号',
-                    onPressed: () => showModalBottomSheet<void>(
-                      context: context,
-                      builder: (context) => SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: builder(context),
-                        ),
-                      ),
-                    ),
-                    icon: const Icon(BiliIcons.account, size: 22),
-                  )
-                : builder(context),
+          if (widget.accountBuilder case final builder?) builder(context),
           _tool('观看历史', BiliIcons.history, '/history'),
           _tool('下载', Icons.download_outlined, '/downloads'),
           _tool('设置', BiliIcons.settings, '/settings'),

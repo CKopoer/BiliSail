@@ -3,8 +3,9 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+
+import 'passport_webview_environment.dart';
 
 final class BrowserLoginCookie {
   const BrowserLoginCookie(
@@ -74,7 +75,7 @@ class _PassportDialog extends StatefulWidget {
 
 class _PassportDialogState extends State<_PassportDialog>
     with WidgetsBindingObserver {
-  WebViewEnvironment? _environment;
+  PassportWebViewEnvironment? _environment;
   InAppWebViewController? _controller;
   Timer? _poll;
   Timer? _timeout;
@@ -104,23 +105,17 @@ class _PassportDialogState extends State<_PassportDialog>
         _fail('请更新 Android System WebView 后使用密码／短信登录，或使用扫码登录');
         return;
       }
-      WebViewEnvironment? environment;
+      PassportWebViewEnvironment? environment;
       if (Platform.isWindows) {
         if (await WebViewEnvironment.getAvailableVersion() == null) {
           _fail('网页登录需要 Microsoft Edge WebView2 Runtime，请安装后重试或使用扫码登录');
           return;
         }
-        final directory = await getTemporaryDirectory();
-        environment = await WebViewEnvironment.create(
-          settings: WebViewEnvironmentSettings(
-            userDataFolder: path.join(
-              directory.path,
-              'bilisail-passport-webview',
-            ),
-          ),
+        environment = await PassportWebViewEnvironment.create(
+          await getApplicationSupportDirectory(),
         );
       }
-      if (!mounted) {
+      if (!mounted || _finished || _error != null) {
         await environment?.dispose();
         return;
       }
@@ -133,7 +128,11 @@ class _PassportDialogState extends State<_PassportDialog>
         (_) => unawaited(_capture()),
       );
     } catch (_) {
-      _fail('无法打开网页登录，请重试或使用扫码登录');
+      _fail(
+        Platform.isWindows
+            ? '无法创建网页登录窗口。若以管理员权限运行，请关闭应用后以普通权限重新启动；也可使用扫码登录。'
+            : '无法打开网页登录，请重试或使用扫码登录',
+      );
     }
   }
 
@@ -159,10 +158,13 @@ class _PassportDialogState extends State<_PassportDialog>
     _capturing = true;
     try {
       // Fetch cookies applicable to the API root, retaining their native scope.
-      final cookies = await CookieManager.instance().getCookies(
-        url: WebUri('https://api.bilibili.com/'),
-        webViewController: controller,
-      );
+      final cookies =
+          await CookieManager.instance(
+            webViewEnvironment: _environment?.environment,
+          ).getCookies(
+            url: WebUri('https://api.bilibili.com/'),
+            webViewController: controller,
+          );
       if (!mounted ||
           _paused ||
           _finished ||
@@ -201,12 +203,25 @@ class _PassportDialogState extends State<_PassportDialog>
     _poll?.cancel();
     _timeout?.cancel();
     WidgetsBinding.instance.removeObserver(this);
-    // Incognito views release the temporary profile with their native widget.
+    // Remove the native view before releasing its environment/profile.
     final environment = _environment;
     if (environment != null) {
-      unawaited(Future<void>.delayed(Duration.zero, environment.dispose));
+      unawaited(_releaseEnvironment(environment));
     }
     super.dispose();
+  }
+
+  Future<void> _releaseEnvironment(
+    PassportWebViewEnvironment environment,
+  ) async {
+    await WidgetsBinding.instance.endOfFrame;
+    try {
+      await environment.dispose();
+    } catch (_) {
+      // Closing the dialog must not surface a native shutdown exception.
+      // Do not log the exception: plugin errors can contain private paths.
+      debugPrint('passport_webview: environment shutdown failed');
+    }
   }
 
   @override
@@ -240,7 +255,7 @@ class _PassportDialogState extends State<_PassportDialog>
                 : !_ready
                 ? const Center(child: CircularProgressIndicator())
                 : InAppWebView(
-                    webViewEnvironment: _environment,
+                    webViewEnvironment: _environment?.environment,
                     initialUrlRequest: URLRequest(
                       url: WebUri('https://passport.bilibili.com/login'),
                     ),

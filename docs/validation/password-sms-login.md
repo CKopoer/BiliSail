@@ -47,3 +47,12 @@
 - `flutter build apk --release --target-platform android-arm64 --split-per-abi` 通过，`build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` 为 77,858,620 字节；ZIP 的 native library 目录仅含 arm64-v8a。保留现有 CupertinoIcons 字体提示，不影响本次构建成功。
 - Windows x64 Release 通过。默认 EXE 被正在运行的应用占用，未关闭它；临时 CMake runtime/install 路径将新产物置于 `build/qa/auth-windows-release`，随后恢复默认生成配置。该目录核对 EXE、网页插件、WebView2Loader、Flutter／Dart 产物、资产与五份原生许可齐全。Flutter 成功消息仍显示默认路径，实际新产物以独立目录为准。上游 CMake 警告仍存在，构建成功不代表网页／验证码已实测。
 - 本机没有连接 Android 设备。真实扫码／密码／短信登录、Windows 官方网页与验证码交互、Android 真机软键盘／WebView／安全存储、macOS 构建和运行均未验收。官网为具体账号展示何种额外验证，由网站行为决定，不能由 fixture 或构建成功推断。
+
+## 2026-10-07 Windows 登录窗口初始化修复
+
+- 用户报告开发版点击密码／短信登录立即显示“无法打开网页登录”。此提示来自 `_initialize` 的异常分支，发生于网页创建前，不是密码、短信或官网验证码拒绝。现场确认开发版进程以管理员权限运行；用户关闭并用普通权限启动同一产物后，确认可以打开。普通权限原生复现也能打开和关闭重开。当前已确认提权启动与故障的关系，原异常被吞掉，没有取得该次 WebView2 的 HRESULT，因此不把具体目录拒绝码写成现场事实。
+- WebView2 的浏览器可能降权运行；管理员／系统临时路径、跨账号权限可使环境创建失败。维护方相关问题见 [WebView2 #932](https://github.com/MicrosoftEdge/WebView2Feedback/issues/932) 和 [#3128](https://github.com/MicrosoftEdge/WebView2Feedback/issues/3128)。应用选择 [自定义用户数据目录](https://inappwebview.dev/docs/webview/in-app-webview/)，改用 `getApplicationSupportDirectory()` 下每次登录独立创建的 `passport-webview/login-*`，不再共用固定 TEMP 配置目录。此改动避免继承启动器的管理员临时路径和多实例配置冲突，不代表所有提权／跨账号启动均受 WebView2 支持；初始化失败的提示补充普通权限重启的处理方式。
+- 同时修复确定的环境绑定缺陷：`CookieManager.instance(webViewEnvironment: ...)` 与网页登录窗口使用同一环境，避免插件另外创建默认环境并写入 EXE 所在目录。该参数要求见 [维护方 CookieManager 文档](https://inappwebview.dev/docs/cookie-manager/)。仍通过当前 WebView controller 读取隐私模式 Cookie，不注入主会话。
+- [Windows 环境所有者](../../lib/core/platform/passport_webview_environment.dart) 独立分配配置目录；创建失败时仅清理本次目录，关闭后先移除原生视图，再释放环境并有界重试清理目录。没有关闭沙盒、修改系统／其他应用目录权限或迁移既有用户数据。隐私模式与安全账号提交规则保留。
+- [环境回归测试](../../test/core/platform/passport_webview_environment_test.dart) 覆盖多次登录目录隔离、重复释放、初始化失败清理／异常保留及关闭失败清理。[Windows 原生测试](../../integration_test/windows_passport_web_login_test.dart) 验证真实 WebView2 隐私 Cookie 的写读与新配置隔离、官网登录窗口关闭重开和配置目录释放；测试 Cookie 是本地无鉴权的假值，不提交密码、发送短信或执行真实账号登录。
+- 修复后的检查、构建和平台边界将在实际运行后记录。Android／macOS 设备和真实密码／短信账号提交仍需独立验收。
