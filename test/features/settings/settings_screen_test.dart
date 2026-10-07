@@ -11,6 +11,52 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final inPlayer in [false, true]) {
+    testWidgets('player control modes save and reload (player: $inPlayer)', (
+      tester,
+    ) async {
+      final repository = _SettingsRepository();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+          child: MaterialApp(
+            home: Scaffold(
+              body: inPlayer
+                  ? Builder(
+                      builder: (context) => ElevatedButton(
+                        onPressed: () => showPlayerSettings(context),
+                        child: const Text('播放配置'),
+                      ),
+                    )
+                  : const SettingsScreen(category: SettingsCategory.playback),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      if (inPlayer) {
+        await tester.tap(find.text('播放配置'));
+        await tester.pumpAndSettle();
+      }
+      final click = find.widgetWithText(ChoiceChip, '点击');
+      final dynamic = find.widgetWithText(ChoiceChip, '动态');
+      expect(tester.widget<ChoiceChip>(click).selected, isTrue);
+      for (final (choice, mode) in [
+        (dynamic, PlayerControlsMode.dynamic),
+        (click, PlayerControlsMode.click),
+      ]) {
+        await tester.ensureVisible(choice);
+        await tester.tap(choice);
+        await tester.pumpAndSettle();
+        expect(repository.settings.playerControlsMode, mode);
+        final container = ProviderScope.containerOf(tester.element(choice));
+        container.invalidate(settingsControllerProvider);
+        await tester.pumpAndSettle();
+        expect(tester.widget<ChoiceChip>(choice).selected, isTrue);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets('playback CDN choices persist and default to automatic', (
     tester,
   ) async {

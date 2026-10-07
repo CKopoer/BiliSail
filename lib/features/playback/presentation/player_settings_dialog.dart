@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/playback_rates.dart';
 import '../../../shared/ui/danmaku_settings_controls.dart';
+import '../../../shared/ui/player_controls_mode_setting.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../settings/domain/app_settings.dart';
 
@@ -132,6 +133,17 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                   children: [
                     ListView(
                       children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: PlayerControlsModeSetting(
+                            value: s.playerControlsMode,
+                            onChanged: (mode) => unawaited(
+                              _update(
+                                (c) => c.copyWith(playerControlsMode: mode),
+                              ),
+                            ),
+                          ),
+                        ),
                         _switch(
                           '自动播放新视频',
                           s.autoPlay,

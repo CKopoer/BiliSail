@@ -65,6 +65,11 @@ class SqliteSettingsRepository implements SettingsRepository {
       autoPlay: boolean('autoPlay', true),
       resumePlayback: boolean('resumePlayback', true),
       showCollapsedProgress: boolean('showCollapsedProgress', true),
+      playerControlsMode:
+          PlayerControlsMode.values
+              .where((item) => item.name == decoded['playerControlsMode'])
+              .firstOrNull ??
+          PlayerControlsMode.click,
       preferredQuality: number('preferredQuality', 80.0).isFinite
           ? number('preferredQuality', 80.0).toInt()
           : 80,
@@ -141,7 +146,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 15,
+        'schemaVersion': 16,
         'navigationMode': value.navigationMode.name,
         'allowConcurrentPlayback': value.allowConcurrentPlayback,
         'cacheImages': value.cacheImages,
@@ -156,6 +161,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'autoPlay': value.autoPlay,
         'resumePlayback': value.resumePlayback,
         'showCollapsedProgress': value.showCollapsedProgress,
+        'playerControlsMode': value.playerControlsMode.name,
         'preferredQuality': value.preferredQuality,
         'preferredVideoCodec': value.preferredVideoCodec.name,
         'mediaCdn': value.mediaCdn.name,

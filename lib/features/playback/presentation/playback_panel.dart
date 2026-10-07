@@ -417,34 +417,142 @@ class _PlayerView extends StatefulWidget {
   State<_PlayerView> createState() => _PlayerViewState();
 }
 
-class _PlayerViewState extends State<_PlayerView> {
+class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   final FocusNode _focusNode = FocusNode(debugLabel: 'video player');
   final GlobalKey _playerBoundsKey = GlobalKey();
+  final GlobalKey _controlsBoundsKey = GlobalKey();
   bool _exitingFullScreen = false;
   bool _composeExpanded = false;
   final GlobalKey _composerKey = GlobalKey();
+  Timer? _controlsHideTimer;
+  final Set<int> _pressedPointers = {};
+  bool _mouseInside = false;
+  bool _appActive = true;
+  late PlayerControlsMode _controlsMode;
+
+  bool get _dynamicControls => _controlsMode == PlayerControlsMode.dynamic;
+
   @override
   void initState() {
     super.initState();
+    _controlsMode = widget.settings.value.playerControlsMode;
     widget.settings.addListener(_onSettingsChanged);
+    WidgetsBinding.instance.addObserver(this);
+    _scheduleControlsHide();
   }
 
   void _onSettingsChanged() {
+    final mode = widget.settings.value.playerControlsMode;
+    if (_controlsMode != mode) {
+      _controlsMode = mode;
+      _pressedPointers.clear();
+      if (_dynamicControls && _mouseInside) {
+        _showDynamicControls();
+      } else {
+        _scheduleControlsHide();
+      }
+    }
     if (mounted) setState(() {});
   }
 
   @override
+  void didUpdateWidget(covariant _PlayerView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active != widget.active) {
+      _mouseInside = false;
+      _pressedPointers.clear();
+      _scheduleControlsHide();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appActive = state == AppLifecycleState.resumed;
+    _pressedPointers.clear();
+    _scheduleControlsHide();
+  }
+
+  @override
   void dispose() {
+    _controlsHideTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     widget.settings.removeListener(_onSettingsChanged);
     widget.shortcuts.endTouchHold();
     _focusNode.dispose();
     super.dispose();
   }
 
-  void _toggleControls() {
+  void _scheduleControlsHide() {
+    _controlsHideTimer?.cancel();
+    _controlsHideTimer = null;
+    if (!_dynamicControls ||
+        !widget.active ||
+        !_appActive ||
+        !widget.controlsVisible.value ||
+        _pressedPointers.isNotEmpty) {
+      return;
+    }
+    _controlsHideTimer = Timer(const Duration(seconds: 1), () {
+      _controlsHideTimer = null;
+      if (mounted && widget.active && _appActive && _dynamicControls) {
+        widget.controlsVisible.value = false;
+      }
+    });
+  }
+
+  void _showDynamicControls() {
+    if (!_dynamicControls || !widget.active || !_appActive) return;
+    widget.controlsVisible.value = true;
+    _scheduleControlsHide();
+  }
+
+  void _onMouseEnter(PointerEnterEvent event) {
+    _mouseInside = true;
+    _showDynamicControls();
+  }
+
+  void _onMouseExit(PointerExitEvent event) {
+    _mouseInside = false;
+    if (!_dynamicControls || !widget.active) return;
+    _controlsHideTimer?.cancel();
+    _controlsHideTimer = null;
+    widget.controlsVisible.value = false;
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    if (!_dynamicControls) return;
+    final bounds = _controlsBoundsKey.currentContext?.findRenderObject();
+    final onControls =
+        bounds is RenderBox &&
+        bounds.hasSize &&
+        (Offset.zero & bounds.size).contains(
+          bounds.globalToLocal(event.position),
+        );
+    final touchHold =
+        !widget.session.isLive && event.kind == PointerDeviceKind.touch;
+    // Keep drags and touch holds alive without changing a live surface click's
+    // hover deadline. Video and live controls use the same drag protection.
+    if (!onControls && !touchHold) return;
+    _pressedPointers.add(event.pointer);
+    _scheduleControlsHide();
+  }
+
+  void _onPointerEnd(PointerEvent event) {
+    if (_pressedPointers.remove(event.pointer)) _scheduleControlsHide();
+  }
+
+  void _onSurfaceTap() {
     if (!widget.active) return;
     _focusNode.requestFocus();
-    widget.controlsVisible.value = !widget.controlsVisible.value;
+    if (_dynamicControls) {
+      if (!widget.session.isLive) {
+        _showDynamicControls();
+        unawaited(widget.session.togglePlaying());
+      }
+    } else {
+      widget.controlsVisible.value = !widget.controlsVisible.value;
+      _scheduleControlsHide();
+    }
   }
 
   Future<void> _openSettings(int tab) async {
@@ -478,6 +586,25 @@ class _PlayerViewState extends State<_PlayerView> {
   @override
   Widget build(BuildContext context) {
     if (!widget.active) return const ColoredBox(color: Colors.black);
+    return MouseRegion(
+      onEnter: _onMouseEnter,
+      onHover: (_) => _showDynamicControls(),
+      onExit: _onMouseExit,
+      child: Listener(
+        onPointerDown: _onPointerDown,
+        onPointerMove: (event) {
+          if (event.kind == PointerDeviceKind.mouse && _mouseInside) {
+            _showDynamicControls();
+          }
+        },
+        onPointerUp: _onPointerEnd,
+        onPointerCancel: _onPointerEnd,
+        child: _buildPlayer(context),
+      ),
+    );
+  }
+
+  Widget _buildPlayer(BuildContext context) {
     final session = widget.session;
     return InputProtection(
       playerSurface: true,
@@ -493,7 +620,7 @@ class _PlayerViewState extends State<_PlayerView> {
             explicitChildNodes: true,
             label: '视频播放器',
             focusable: _focusNode.canRequestFocus,
-            onTap: _toggleControls,
+            onTap: _onSurfaceTap,
             focused: _focusNode.hasPrimaryFocus,
             onFocus: _focusNode.requestFocus,
             child: ListenableBuilder(
@@ -590,7 +717,7 @@ class _PlayerViewState extends State<_PlayerView> {
                                     'player-surface-tap-target',
                                   ),
                                   behavior: HitTestBehavior.translucent,
-                                  onTap: _toggleControls,
+                                  onTap: _onSurfaceTap,
                                   onDoubleTap: () {
                                     if (!widget.active) return;
                                     _focusNode.requestFocus();
@@ -922,6 +1049,7 @@ class _PlayerViewState extends State<_PlayerView> {
                                 right: 0,
                                 bottom: 0,
                                 child: Theme(
+                                  key: _controlsBoundsKey,
                                   data: ThemeData.dark(useMaterial3: true)
                                       .copyWith(
                                         colorScheme: ColorScheme.fromSeed(

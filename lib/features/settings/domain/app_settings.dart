@@ -10,6 +10,8 @@ enum AppThemePreference { system, light, dark }
 
 enum WorkspaceNavigationMode { singlePage, multipleTabs }
 
+enum PlayerControlsMode { click, dynamic }
+
 enum AppFontPreference { harmonyOsSans, system, alibabaPuHuiTi, installed }
 
 enum DanmakuFontPreference { system, harmonyOsSans, alibabaPuHuiTi, installed }
@@ -53,6 +55,7 @@ final class AppSettings {
     this.autoPlay = true,
     this.resumePlayback = true,
     this.showCollapsedProgress = true,
+    this.playerControlsMode = PlayerControlsMode.click,
     this.preferredQuality = 80,
     this.preferredVideoCodec = VideoCodecPreference.h264,
     this.mediaCdn = MediaCdnPreference.automatic,
@@ -101,6 +104,7 @@ final class AppSettings {
        autoPlay = true,
        resumePlayback = true,
        showCollapsedProgress = true,
+       playerControlsMode = PlayerControlsMode.click,
        preferredQuality = 80,
        preferredVideoCodec = VideoCodecPreference.h264,
        mediaCdn = MediaCdnPreference.automatic,
@@ -149,6 +153,7 @@ final class AppSettings {
   final bool autoPlay;
   final bool resumePlayback;
   final bool showCollapsedProgress;
+  final PlayerControlsMode playerControlsMode;
   final int preferredQuality;
   final VideoCodecPreference preferredVideoCodec;
   final MediaCdnPreference mediaCdn;
@@ -208,6 +213,7 @@ final class AppSettings {
     bool? autoPlay,
     bool? resumePlayback,
     bool? showCollapsedProgress,
+    PlayerControlsMode? playerControlsMode,
     int? preferredQuality,
     VideoCodecPreference? preferredVideoCodec,
     MediaCdnPreference? mediaCdn,
@@ -253,6 +259,7 @@ final class AppSettings {
     autoPlay: autoPlay ?? this.autoPlay,
     resumePlayback: resumePlayback ?? this.resumePlayback,
     showCollapsedProgress: showCollapsedProgress ?? this.showCollapsedProgress,
+    playerControlsMode: playerControlsMode ?? this.playerControlsMode,
     preferredQuality: preferredQuality ?? this.preferredQuality,
     preferredVideoCodec: preferredVideoCodec ?? this.preferredVideoCodec,
     mediaCdn: mediaCdn ?? this.mediaCdn,

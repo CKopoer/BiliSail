@@ -16,6 +16,44 @@ void main() {
   });
   tearDown(() => database.close());
   test(
+    'player controls migrate to click and both modes survive reload',
+    () async {
+      expect(
+        (await repository.load()).playerControlsMode,
+        PlayerControlsMode.click,
+      );
+      for (final oldValue in [null, 'future', 42, true]) {
+        await database.writeSetting(
+          'preferences.v1',
+          jsonEncode({
+            'schemaVersion': 15,
+            'theme': 'dark',
+            'autoPlay': false,
+            'playerControlsMode': ?oldValue,
+          }),
+        );
+        final loaded = await repository.load();
+        expect(loaded.playerControlsMode, PlayerControlsMode.click);
+        expect(loaded.theme, AppThemePreference.dark);
+        expect(loaded.autoPlay, isFalse);
+      }
+      for (final mode in PlayerControlsMode.values) {
+        await repository.save(
+          AppSettings(playerControlsMode: mode, autoPlay: false),
+        );
+        final loaded = await repository.load();
+        expect(loaded.playerControlsMode, mode);
+        expect(loaded.autoPlay, isFalse);
+        final snapshot = jsonDecode(
+          (await database.readSetting('preferences.v1')) ?? '{}',
+        ) as Map<String, Object?>;
+        expect(snapshot['schemaVersion'], 16);
+        expect(snapshot['playerControlsMode'], mode.name);
+      }
+      expect(database.schemaVersion, 3);
+    },
+  );
+  test(
     'CDN migrates to automatic and every preference survives reload',
     () async {
       for (final oldValue in [null, 'future', 7]) {
@@ -76,7 +114,7 @@ void main() {
           final snapshot = jsonDecode(
             (await database.readSetting('preferences.v1')) ?? '{}',
           ) as Map<String, Object?>;
-          expect(snapshot['schemaVersion'], 15);
+          expect(snapshot['schemaVersion'], 16);
           expect(snapshot['navigationMode'], mode.name);
         }
         for (final selected in WorkspaceNavigationMode.values) {
@@ -124,7 +162,7 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 15);
+      expect(snapshot['schemaVersion'], 16);
       expect(snapshot['theme'], 'dark');
       expect(database.schemaVersion, 3);
     },
@@ -166,7 +204,7 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 15);
+      expect(snapshot['schemaVersion'], 16);
       expect(snapshot['allowConcurrentPlayback'], allowed);
       expect(snapshot['navigationMode'], 'singlePage');
       final reloaded = await repository.load();

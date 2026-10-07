@@ -72,6 +72,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(danmakuEnabled: value));
   Future<void> setShowCollapsedProgress(bool value) =>
       update((current) => current.copyWith(showCollapsedProgress: value));
+  Future<void> setPlayerControlsMode(PlayerControlsMode value) =>
+      update((current) => current.copyWith(playerControlsMode: value));
   Future<void> setDanmakuOpacity(double value) =>
       update((current) => current.copyWith(danmakuOpacity: value));
   Future<void> setDanmakuFontScale(double value) =>

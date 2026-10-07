@@ -2,6 +2,21 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('player controls default to click and preserve the chosen mode', () {
+    expect(AppSettings().playerControlsMode, PlayerControlsMode.click);
+    expect(
+      const AppSettings.defaults().playerControlsMode,
+      PlayerControlsMode.click,
+    );
+    expect(
+      const AppSettings.defaults()
+          .copyWith(playerControlsMode: PlayerControlsMode.dynamic)
+          .normalized()
+          .copyWith(theme: AppThemePreference.dark)
+          .playerControlsMode,
+      PlayerControlsMode.dynamic,
+    );
+  });
   test('danmaku line spacing preserves the default and normalizes bounds', () {
     expect(const AppSettings.defaults().danmakuLineSpacing, 5);
     expect(AppSettings().danmakuLineSpacing, 5);

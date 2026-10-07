@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/system_font_picker.dart';
 import '../../../shared/ui/danmaku_settings_controls.dart';
+import '../../../shared/ui/player_controls_mode_setting.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../domain/playback_rates.dart';
 import '../application/settings_controller.dart';
@@ -197,6 +198,14 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ]),
                       if (widget.category == SettingsCategory.playback)
                         _section('播放', [
+                          PlayerControlsModeSetting(
+                            value: s.playerControlsMode,
+                            onChanged: (mode) => unawaited(
+                              _save(
+                                () => controller.setPlayerControlsMode(mode),
+                              ),
+                            ),
+                          ),
                           _toggle(
                             '隐藏控件时显示底部进度条',
                             s.showCollapsedProgress,
