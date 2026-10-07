@@ -21,6 +21,7 @@ import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../../../shared/ui/video_card.dart';
+import '../../../shared/ui/video_card_cover.dart';
 import 'video_author_header.dart';
 import 'video_collection_panel.dart';
 import '../application/video_controller.dart';
@@ -442,9 +443,12 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                   children: [
                                     ExcludeFocus(
                                       excluding: _tab != 0,
-                                      child: SingleChildScrollView(
-                                        controller: _introScroll,
-                                        child: content,
+                                      child: TickerMode(
+                                        enabled: showInfo && _tab == 0,
+                                        child: SingleChildScrollView(
+                                          controller: _introScroll,
+                                          child: content,
+                                        ),
                                       ),
                                     ),
                                     if (_visitedTabs.contains(1))
@@ -643,119 +647,12 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                   for (final video in videos)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: InkWell(
+                      child: _RelatedVideoCard(
+                        key: ValueKey(video.id),
+                        video: video,
                         onTap: widget.onOpenVideo == null
                             ? null
                             : () => widget.onOpenVideo?.call(video),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 140,
-                              height: 79,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(5),
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    if (video.coverUrl.isEmpty)
-                                      const ColoredBox(
-                                        color: Colors.black12,
-                                        child: Icon(
-                                          Icons.video_library_outlined,
-                                        ),
-                                      )
-                                    else
-                                      AppCoverImage(
-                                        url: video.coverUrl,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) => const Icon(
-                                          Icons.video_library_outlined,
-                                        ),
-                                      ),
-                                    Positioned(
-                                      right: 4,
-                                      bottom: 3,
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          color: Colors.black54,
-                                          borderRadius: BorderRadius.circular(
-                                            2,
-                                          ),
-                                        ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 3,
-                                          ),
-                                          child: Text(
-                                            durationLabel(video.duration),
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    video.title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleSmall,
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        BiliIcons.up,
-                                        size: 13,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                      ),
-                                      const SizedBox(width: 3),
-                                      Expanded(
-                                        child: Text(
-                                          video.author,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 3,
-                                    children: [
-                                      _Meta(
-                                        icon: BiliIcons.playCount,
-                                        label: compactCount(video.playCount),
-                                      ),
-                                      _Meta(
-                                        icon: BiliIcons.danmaku,
-                                        label: compactCount(video.danmakuCount),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
                       ),
                     ),
                 ],
@@ -767,6 +664,145 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     thickness: 0.7,
     color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.55),
   );
+}
+
+final class _RelatedVideoCard extends StatefulWidget {
+  const _RelatedVideoCard({super.key, required this.video, this.onTap});
+
+  final VideoSummary video;
+  final VoidCallback? onTap;
+
+  @override
+  State<_RelatedVideoCard> createState() => _RelatedVideoCardState();
+}
+
+final class _RelatedVideoCardState extends State<_RelatedVideoCard> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final video = widget.video;
+    return InkWell(
+      onTap: widget.onTap,
+      onHover: (hovered) => setState(() => _hovered = hovered),
+      onFocusChange: (focused) => setState(() => _focused = focused),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            height: 79,
+            child: VideoCardCover(
+              video: video,
+              hovered: _hovered,
+              focused: _focused,
+              borderRadius: 5,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (video.coverUrl.isEmpty)
+                    const ColoredBox(
+                      color: Colors.black12,
+                      child: Icon(Icons.video_library_outlined),
+                    )
+                  else
+                    AppCoverImage(
+                      url: video.coverUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          const Icon(Icons.video_library_outlined),
+                    ),
+                  Positioned(
+                    right: 4,
+                    bottom: 3,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: Text(
+                          durationLabel(video.duration),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 79),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    video.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              BiliIcons.up,
+                              size: 13,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                video.author,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 3,
+                          children: [
+                            _Meta(
+                              icon: BiliIcons.playCount,
+                              label: compactCount(video.playCount),
+                            ),
+                            _Meta(
+                              icon: BiliIcons.danmaku,
+                              label: compactCount(video.danmakuCount),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 final class _Pivot extends StatelessWidget {

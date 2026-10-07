@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -16,6 +17,11 @@ import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/core/presentation/playback_page_commands.dart';
+import 'package:bilisail/features/video/application/video_card_preview_playback.dart';
+import 'package:bilisail/features/video/domain/video_card_interactions.dart';
+import 'package:bilisail/shared/ui/video_card_cover.dart';
+import 'package:bilisail/shared/ui/video_card_interaction_scope.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -430,6 +436,167 @@ void main() {
     expect(created, 1);
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+    'related card previews from title hover and adds without opening',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1100, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final operations = _RelatedCardOperations();
+      addTearDown(() => unawaited(operations.previews.close()));
+      final notices = <String>[];
+      var opened = 0;
+      var created = 0;
+      var disposed = 0;
+      await tester.pumpWidget(
+        _relatedCardApp(
+          operations,
+          onNotice: notices.add,
+          onOpen: () => opened++,
+          playerBuilder: (_, _, _) => _TrackedPlayer(
+            onCreate: () => created++,
+            onDispose: () => disposed++,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('相关推荐视频'));
+      final cover = find.byType(VideoCardCover);
+      final card = find
+          .ancestor(of: cover, matching: find.byType(InkWell))
+          .first;
+      final counts = find.descendant(of: card, matching: find.byType(Wrap));
+      expect(
+        tester.getRect(counts).bottom,
+        closeTo(tester.getRect(cover).bottom, .01),
+      );
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(100, 100));
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(tester.getCenter(find.text('相关推荐视频')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(operations.reads, 0);
+      expect(find.byTooltip('添加稍后再看'), findsOneWidget);
+      expect(
+        tester
+            .widget<AnimatedScale>(
+              find.byKey(const ValueKey('video-card-cover-scale')),
+            )
+            .scale,
+        1.05,
+      );
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.pump();
+      expect(operations.reads, 1);
+      expect(operations.previewId, const VideoId('BV1xyz123456'));
+      expect(operations.previewCid, '42');
+      expect(
+        find.byKey(const ValueKey('fake-card-video-surface')),
+        findsOneWidget,
+      );
+      final engine = operations.engines.single;
+      expect(engine.options?.play, true);
+      expect(engine.options?.volume, 0);
+      engine.advance(const Duration(seconds: 8));
+      await tester.pump();
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byKey(const ValueKey('video-card-preview-progress')),
+            )
+            .value,
+        .4,
+      );
+      await mouse.moveTo(tester.getCenter(find.byType(VideoCardCover)));
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(operations.reads, 1);
+      await tester.tap(find.byKey(const ValueKey('video-card-watch-later')));
+      await tester.pump();
+      expect(operations.writtenIds, [const VideoId('BV1xyz123456')]);
+      expect(opened, 0);
+      expect(notices, ['已加入稍后再看']);
+      expect(find.byTooltip('已加入稍后再看'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('video-card-watch-later')));
+      expect(operations.writtenIds, hasLength(1));
+      await mouse.moveTo(const Offset(100, 100));
+      await tester.pump();
+      expect(operations.token?.isCancelled, true);
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      expect(engine.disposals, 1);
+      expect(find.byKey(const ValueKey('video-card-preview')), findsNothing);
+      await tester.tap(find.text('相关推荐视频'));
+      expect(opened, 1);
+      expect(created, 1);
+      expect(disposed, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('related card keyboard add and hidden sidebar cancel previews', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1100, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final operations = _RelatedCardOperations();
+    addTearDown(() => unawaited(operations.previews.close()));
+    var opened = 0;
+    await tester.pumpWidget(
+      _relatedCardApp(operations, onOpen: () => opened++),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('相关推荐视频'));
+    for (
+      var i = 0;
+      i < 20 && find.byTooltip('添加稍后再看').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    expect(find.byTooltip('添加稍后再看'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(operations.writtenIds, [const VideoId('BV1xyz123456')]);
+    expect(operations.reads, 0);
+    expect(opened, 0);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(100, 100));
+    addTearDown(mouse.removePointer);
+    Future<void> hoverRelated() async {
+      await mouse.moveTo(const Offset(100, 100));
+      await mouse.moveTo(tester.getCenter(find.text('相关推荐视频')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 210));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('video-card-preview')), findsOneWidget);
+    }
+
+    await hoverRelated();
+    await tester.tap(find.text('评论'));
+    await tester.pump();
+    expect(operations.token?.isCancelled, true);
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+    expect(operations.engines.last.disposals, 1);
+    await tester.tap(find.text('简介'));
+    await tester.pumpAndSettle();
+    await hoverRelated();
+    await tester.tap(find.byTooltip('收起视频信息'));
+    await tester.pump();
+    expect(operations.token?.isCancelled, true);
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+    expect(operations.engines.last.disposals, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('collection parts navigate with cid and collapse independently', (
     tester,
   ) async {
@@ -615,6 +782,72 @@ final class _GuestAuthController extends AuthController {
   AuthState build() => const AuthState();
 }
 
+Widget _relatedCardApp(
+  _RelatedCardOperations operations, {
+  required VoidCallback onOpen,
+  ValueChanged<String>? onNotice,
+  VideoPlayerBuilder? playerBuilder,
+}) => ProviderScope(
+  overrides: [
+    authControllerProvider.overrideWith(_GuestAuthController.new),
+    videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+    videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
+  ],
+  child: MaterialApp(
+    home: Scaffold(
+      body: VideoCardInteractionScope(
+        interactions: operations,
+        onNotice: (_, message) => onNotice?.call(message),
+        child: VideoScreen(
+          id: const VideoId('BV1abc123456'),
+          onOpenVideo: (_) => onOpen(),
+          playerBuilder: playerBuilder ?? (_, _, _) => const SizedBox(),
+        ),
+      ),
+    ),
+  ),
+);
+
+final class _RelatedCardOperations implements VideoCardOperations {
+  final engines = <CardFakeEngine>[];
+  late final previews = VideoCardPreviewPlayback(
+    createEngine: () {
+      final engine = CardFakeEngine();
+      engines.add(engine);
+      return engine;
+    },
+  );
+  int reads = 0;
+  VideoId? previewId;
+  String? previewCid;
+  RequestCancellation? token;
+  final writtenIds = <VideoId>[];
+
+  @override
+  Future<VideoCardPreviewSession?> preview(
+    VideoId id,
+    RequestCancellation cancellation, {
+    String? cid,
+  }) {
+    reads++;
+    previewId = id;
+    previewCid = cid;
+    token = cancellation;
+    return previews.start(cardPreviewMedia(), cancellation);
+  }
+
+  @override
+  Future<WatchLaterResult> addWatchLater(VideoId id) async {
+    writtenIds.add(id);
+    return WatchLaterResult.added;
+  }
+
+  @override
+  bool isAdded(VideoId id) => writtenIds.contains(id);
+  @override
+  bool isUncertain(VideoId id) => false;
+}
+
 final class _UnusedPlaybackRepository extends Fake
     implements PlaybackRepository {}
 
@@ -742,6 +975,7 @@ final class _ExtrasRepository implements VideoExtrasRepository {
         coverUrl: '',
         author: '推荐UP',
         duration: Duration(minutes: 2),
+        previewCid: '42',
       ),
     ];
   }

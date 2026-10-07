@@ -138,7 +138,7 @@ void main() {
       safeArea: const EdgeInsets.only(top: 24, bottom: 20),
     );
     final panel = tester.getRect(find.byType(Drawer));
-    expect(panel, const Rect.fromLTWH(32, 0, 328, 600));
+    expect(panel, const Rect.fromLTWH(72, 0, 288, 600));
     expect(
       tester.getTopLeft(find.byTooltip('关闭')).dy,
       greaterThanOrEqualTo(24),

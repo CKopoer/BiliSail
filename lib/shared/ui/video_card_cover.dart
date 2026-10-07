@@ -225,37 +225,42 @@ class _VideoCardCoverState extends State<VideoCardCover>
     final added = _scope?.interactions.isAdded(widget.video.id) ?? false;
     final uncertain =
         _scope?.interactions.isUncertain(widget.video.id) ?? false;
-    return Tooltip(
-      message: added
-          ? '已加入稍后再看'
-          : uncertain
-          ? '请在稍后再看列表核对添加结果'
-          : '添加稍后再看',
-      child: Material(
-        color: const Color(0x99000000),
-        borderRadius: BorderRadius.circular(5),
-        child: InkWell(
-          key: const ValueKey('video-card-watch-later'),
+    return GestureDetector(
+      // Disabled add actions must still consume taps inside a clickable card.
+      onTap: () {},
+      excludeFromSemantics: true,
+      child: Tooltip(
+        message: added
+            ? '已加入稍后再看'
+            : uncertain
+            ? '请在稍后再看列表核对添加结果'
+            : '添加稍后再看',
+        child: Material(
+          color: const Color(0x99000000),
           borderRadius: BorderRadius.circular(5),
-          onTap: _busy || added || uncertain ? null : _watchLater,
-          child: SizedBox(
-            width: 30,
-            height: 30,
-            child: Center(
-              child: _busy
-                  ? const SizedBox(
-                      width: 17,
-                      height: 17,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
+          child: InkWell(
+            key: const ValueKey('video-card-watch-later'),
+            borderRadius: BorderRadius.circular(5),
+            onTap: _busy || added || uncertain ? null : _watchLater,
+            child: SizedBox(
+              width: 30,
+              height: 30,
+              child: Center(
+                child: _busy
+                    ? const SizedBox(
+                        width: 17,
+                        height: 17,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        added ? Icons.check_rounded : BiliIcons.watchLater,
+                        size: 23,
                         color: Colors.white,
                       ),
-                    )
-                  : Icon(
-                      added ? Icons.check_rounded : BiliIcons.watchLater,
-                      size: 23,
-                      color: Colors.white,
-                    ),
+              ),
             ),
           ),
         ),

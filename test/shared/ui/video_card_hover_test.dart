@@ -137,6 +137,10 @@ void main() {
       expect(opens, 0);
       expect(notices, ['已加入稍后再看']);
       expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('video-card-watch-later')));
+      await tester.pump();
+      expect(services.writes, 1);
+      expect(opens, 0);
       await mouse.moveTo(const Offset(650, 550));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));

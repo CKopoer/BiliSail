@@ -71,7 +71,7 @@ class AccountMenu extends ConsumerWidget {
       ),
     );
     return Drawer(
-      width: math.min(360, math.max(0, MediaQuery.sizeOf(context).width - 32)),
+      width: math.min(360, MediaQuery.sizeOf(context).width * 0.8),
       semanticLabel: '我的账号',
       backgroundColor: theme.colorScheme.surface,
       surfaceTintColor: Colors.transparent,
