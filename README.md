@@ -11,7 +11,8 @@
 
 <p align="center">
   <a href="https://github.com/CKopoer/BiliSail/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/CKopoer/BiliSail/ci.yml?label=CI" alt="CI 状态"></a>
-  <a href="pubspec.yaml"><img src="https://img.shields.io/badge/version-0.3.0%2B1%20preview-fb7299" alt="版本：0.3.0+1 预览"></a>
+  <a href="pubspec.yaml"><img src="https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FCKopoer%2FBiliSail%2Fmaster%2Fpubspec.yaml&amp;query=%24.version&amp;label=version&amp;color=fb7299" alt="源码版本（pubspec.yaml）"></a>
+  <a href="https://github.com/CKopoer/BiliSail/releases"><img src="https://img.shields.io/github/v/release/CKopoer/BiliSail?include_prereleases&amp;sort=date&amp;label=release&amp;color=fb7299" alt="最新公开发布版本（含预发布）"></a>
   <a href="docs/validation/ci-cd.md"><img src="https://img.shields.io/badge/Flutter-3.47.6-02569B?logo=flutter&amp;logoColor=white" alt="Flutter 3.47.6"></a>
   <a href="https://github.com/CKopoer/BiliSail/stargazers"><img src="https://img.shields.io/github/stars/CKopoer/BiliSail?style=flat" alt="GitHub Stars"></a>
   <a href="https://github.com/CKopoer/BiliSail/forks"><img src="https://img.shields.io/github/forks/CKopoer/BiliSail?style=flat" alt="GitHub Forks"></a>
@@ -28,7 +29,7 @@
 
 BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多标签浏览、原生播放、弹幕、云端观看历史与本地续播，以及下载队列和离线播放。界面借鉴 BiliLite 的轻量桌面布局，结合自适应网格、视频卡片悬停预览、播放详情分栏和可配置快捷键。
 
-当前工程版本为 **0.3.0+1 预览版**。截至 **2026-10-07**，已公开提供 Windows x64、Android arm64 和 macOS arm64 预览包，三端 CI 构建与打包已有通过记录；运行与功能实测主要在 Windows 上进行，完整三端验收仍在推进。具体状态见下方平台表及[验证文档](docs/README.md)。本项目为独立的第三方客户端，与哔哩哔哩官方无隶属关系。
+当前处于预览阶段，源码版本以 [pubspec.yaml](pubspec.yaml) 为准，最新公开发布版本见 [GitHub Releases](https://github.com/CKopoer/BiliSail/releases)。截至 **2026-10-07**，已公开提供 Windows x64、Android arm64 和 macOS arm64 预览包，三端 CI 构建与打包已有通过记录；运行与功能实测主要在 Windows 上进行，完整三端验收仍在推进。具体状态见下方平台表及[验证文档](docs/README.md)。本项目为独立的第三方客户端，与哔哩哔哩官方无隶属关系。
 
 ## 使用声明
 
@@ -107,7 +108,7 @@ BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多
 | 平台 | 预览包格式 | 安装说明 |
 | --- | --- | --- |
 | Windows x64 | `.msix`/`.msi`/`.exe`，附签名公钥证书 `.cer` | 使用测试签名时，需要先信任对应证书；具体步骤见 [MSIX 签名与安装](docs/validation/ci-cd.md#windows-msix-签名与安装) |
-| Android arm64 | `.apk` | 当前公开 0.3.0+1 包使用临时 debug 签名；后续非 PR 构建已改用固定 release 密钥，跨签名切换与覆盖升级说明见 [Android 签名](docs/validation/ci-cd.md#android-固定签名与覆盖升级) |
+| Android arm64 | `.apk` | 旧版 0.3.0+1 包使用临时 debug 签名；后续非 PR 构建已改用固定 release 密钥，跨签名切换与覆盖升级说明见 [Android 签名](docs/validation/ci-cd.md#android-固定签名与覆盖升级) |
 | macOS arm64 | `.dmg` | 打开后将 `BiliSail.app` 拖到 `Applications`；当前配置使用 ad-hoc 签名，尚未完成 Developer ID 签名与公证 |
 
 GitHub Actions 的 **CI** 执行根应用和三个包的检查，并按平台构建预览产物；维护者可手动运行 **Release preview** 创建预览 Release 草稿，再公开发布。Release 和 CI 构建包的签名种类以各自的 `build-info.json` 为准。触发方式、产物校验与签名配置见 [CI/CD 说明](docs/validation/ci-cd.md)。
