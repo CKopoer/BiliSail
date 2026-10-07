@@ -60,6 +60,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
   bool _chatUserScrolling = false;
   bool _adjustingChatScroll = false;
   bool _chatFollowScheduled = false;
+  String? _chatStatusAfterMessageKey;
 
   bool get _foreground => !const {
     AppLifecycleState.hidden,
@@ -86,6 +87,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       _selectedSuperChatId = null;
       _followChat = true;
       _chatUserScrolling = false;
+      _chatStatusAfterMessageKey = null;
     }
   }
 
@@ -188,6 +190,16 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       );
     }
     final state = ref.watch(liveControllerProvider(id));
+    ref.listen(liveControllerProvider(id), (previous, next) {
+      if (next.room == null || next.messages.isEmpty) {
+        _chatStatusAfterMessageKey = null;
+      } else if (previous?.connectionPhase != next.connectionPhase) {
+        // Anchor before this update's new messages, including a batch that
+        // contains both authentication success and the first live chats.
+        _chatStatusAfterMessageKey =
+            previous?.messages.lastOrNull?.deduplicationKey;
+      }
+    });
     final controller = ref.read(liveControllerProvider(id).notifier);
     final active = WorkspaceActivity.isActive(context) && _foreground;
     if (_controller != controller || _lastActive != active) {
@@ -505,45 +517,26 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
     LiveState state,
     LiveController controller,
   ) {
-    final theme = Theme.of(context);
     final selected = state.superChats
         .where((message) => message.id == _selectedSuperChatId)
         .firstOrNull;
     if (selected == null) _scheduleChatFollow();
     final bodyCount = state.messages.isEmpty ? 1 : state.messages.length;
+    final statusAnchor = _chatStatusAfterMessageKey;
+    final anchorIndex = statusAnchor == null
+        ? -1
+        : state.messages.indexWhere(
+            (message) => message.deduplicationKey == statusAnchor,
+          );
+    // Drop the notice with its message once the bounded chat window evicts it.
+    final statusIndex = statusAnchor == null
+        ? (state.messages.isEmpty ? bodyCount : 0)
+        : anchorIndex < 0
+        ? null
+        : anchorIndex + 1;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 7, 12, 6),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  switch (state.connectionPhase) {
-                    LiveConnectionPhase.connected => '实时弹幕已连接',
-                    LiveConnectionPhase.fetching ||
-                    LiveConnectionPhase.connecting ||
-                    LiveConnectionPhase.authenticating => '正在连接实时弹幕…',
-                    LiveConnectionPhase.reconnecting => '实时弹幕重连中…',
-                    LiveConnectionPhase.failed => '实时弹幕已断开',
-                    LiveConnectionPhase.offline => '主播尚未开播',
-                    LiveConnectionPhase.closed => '实时弹幕已暂停',
-                    LiveConnectionPhase.idle => '历史消息 · 定时刷新',
-                  },
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              if (state.chatLoading || state.superChatLoading)
-                const SizedBox.square(
-                  dimension: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
-          ),
-        ),
         if (state.superChats.isNotEmpty)
           SizedBox(
             height: 54,
@@ -593,7 +586,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                   key: const ValueKey('live-chat-list'),
                   controller: _chatScrollController,
                   padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                  itemCount: (selected == null ? 0 : 1) + bodyCount,
+                  itemCount:
+                      (selected == null ? 0 : 1) +
+                      bodyCount +
+                      (statusIndex == null ? 0 : 1),
                   itemBuilder: (context, index) {
                     if (selected != null && index == 0) {
                       return Padding(
@@ -602,6 +598,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                       );
                     }
                     final bodyIndex = index - (selected == null ? 0 : 1);
+                    if (bodyIndex == statusIndex) {
+                      return _chatConnectionStatus(context, state);
+                    }
                     if (state.messages.isEmpty) {
                       return switch (state.chatMessage) {
                         final String message => StateView.error(
@@ -617,7 +616,12 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                         ),
                       };
                     }
-                    final message = state.messages[bodyIndex];
+                    final messageIndex =
+                        bodyIndex -
+                        (statusIndex != null && bodyIndex > statusIndex
+                            ? 1
+                            : 0);
+                    final message = state.messages[messageIndex];
                     return LiveChatBubble(
                       message: message,
                       onOpenUser: widget.onOpenUser,
@@ -629,6 +633,41 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _chatConnectionStatus(BuildContext context, LiveState state) {
+    final theme = Theme.of(context);
+    return Padding(
+      key: const ValueKey('live-chat-connection-status'),
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 7),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              switch (state.connectionPhase) {
+                LiveConnectionPhase.connected => '实时弹幕已连接',
+                LiveConnectionPhase.fetching ||
+                LiveConnectionPhase.connecting ||
+                LiveConnectionPhase.authenticating => '正在连接实时弹幕…',
+                LiveConnectionPhase.reconnecting => '实时弹幕重连中…',
+                LiveConnectionPhase.failed => '实时弹幕已断开',
+                LiveConnectionPhase.offline => '主播尚未开播',
+                LiveConnectionPhase.closed => '实时弹幕已暂停',
+                LiveConnectionPhase.idle => '历史消息 · 定时刷新',
+              },
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          if (state.chatLoading || state.superChatLoading)
+            const SizedBox.square(
+              dimension: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+        ],
+      ),
     );
   }
 

@@ -743,6 +743,151 @@ void main() {
     expect(realtime.opens, 3);
   });
 
+  testWidgets('connection notice joins chat after history and scrolls away', (
+    tester,
+  ) async {
+    repository.chatMessages = List.generate(
+      80,
+      (index) => LiveChatMessage(userName: '观众', text: '历史消息 $index'),
+    );
+    await showPage(tester);
+    await tester.pumpAndSettle();
+    final player = tester.state(find.byType(_PlayerProbe));
+    realtime.events.add(const [
+      LiveConnectionChanged(LiveConnectionPhase.connected),
+      LiveChatReceived(LiveChatMessage(userName: '观众', text: '连接后的第一条')),
+    ]);
+    await tester.pumpAndSettle();
+    final status = find.byKey(const ValueKey('live-chat-connection-status'));
+    final chatList = find.byKey(const ValueKey('live-chat-list'));
+    expect(
+      find.descendant(of: chatList, matching: status).hitTestable(),
+      findsOneWidget,
+    );
+    expect(find.text('实时弹幕已连接').hitTestable(), findsOneWidget);
+    expect(
+      tester.getRect(status).bottom,
+      lessThan(tester.getRect(find.textContaining('连接后的第一条')).top),
+    );
+
+    receiveMessages(0, 30);
+    await tester.pumpAndSettle();
+    expect(chatPosition(tester).extentAfter, 0);
+    expect(find.text('实时弹幕已连接').hitTestable(), findsNothing);
+    expect(find.textContaining('新消息 29 ').hitTestable(), findsOneWidget);
+    await tester.scrollUntilVisible(
+      status,
+      -200,
+      scrollable: find.descendant(
+        of: chatList,
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('实时弹幕已连接').hitTestable(), findsOneWidget);
+    final before = chatPosition(tester).pixels;
+    receiveMessages(30, 5);
+    await tester.pumpAndSettle();
+    expect(chatPosition(tester).pixels, before);
+    expect(tester.state(find.byType(_PlayerProbe)), same(player));
+  });
+
+  testWidgets(
+    'connection notice expires with bounded messages and reconnects',
+    (tester) async {
+      repository.chatMessages = List.generate(
+        LiveController.maxChatMessages,
+        (index) => LiveChatMessage(userName: '观众', text: '历史消息 $index'),
+      );
+      await showPage(tester);
+      await tester.pumpAndSettle();
+      realtime.events.add(const [
+        LiveConnectionChanged(LiveConnectionPhase.connected),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('实时弹幕已连接').hitTestable(), findsOneWidget);
+      receiveMessages(0, LiveController.maxChatMessages);
+      await tester.pumpAndSettle();
+      expect(find.text('实时弹幕已连接'), findsNothing);
+      final list = tester.widget<ListView>(
+        find.byKey(const ValueKey('live-chat-list')),
+      );
+      expect(
+        list.childrenDelegate.estimatedChildCount,
+        LiveController.maxChatMessages,
+      );
+
+      realtime.events.add(const [
+        LiveViewerCountChanged('1.9万'),
+        LiveWatchedCountChanged('8.5万'),
+        LivePopularityChanged(90000),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('实时弹幕已连接'), findsNothing);
+      realtime.events.add(const [
+        LiveConnectionChanged(LiveConnectionPhase.reconnecting),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('实时弹幕重连中…').hitTestable(), findsOneWidget);
+      realtime.events.add(const [
+        LiveConnectionChanged(LiveConnectionPhase.connected),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('实时弹幕已连接').hitTestable(), findsOneWidget);
+      expect(find.text('实时弹幕重连中…'), findsNothing);
+      expect(chatPosition(tester).extentAfter, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('history refresh keeps connection notice before later chats', (
+    tester,
+  ) async {
+    await showPage(tester);
+    realtime.events.add(const [
+      LiveConnectionChanged(LiveConnectionPhase.connected),
+      LiveChatReceived(LiveChatMessage(userName: '观众', text: '稍后的聊天')),
+    ]);
+    await tester.pumpAndSettle();
+    repository.chatMessages = const [
+      LiveChatMessage(userName: '普通观众', text: '普通聊天消息', userId: UserId('123')),
+    ];
+    await container
+        .read(liveControllerProvider(room.id).notifier)
+        .refreshChat();
+    await tester.pumpAndSettle();
+    final status = find.byKey(const ValueKey('live-chat-connection-status'));
+    expect(find.text('实时弹幕已连接').hitTestable(), findsOneWidget);
+    expect(
+      tester.getRect(status).bottom,
+      lessThan(tester.getRect(find.textContaining('稍后的聊天')).top),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('changing room resets connection notice in narrow layouts', (
+    tester,
+  ) async {
+    repository.chatMessages = const [];
+    await showPage(tester, width: 320, height: 640, textScale: 2);
+    realtime.events.add(const [
+      LiveConnectionChanged(LiveConnectionPhase.connected),
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text('实时弹幕已连接').hitTestable(), findsOneWidget);
+    receiveMessages(0, 10);
+    await tester.pumpAndSettle();
+    expect(find.text('实时弹幕已连接').hitTestable(), findsNothing);
+    await showPage(tester, roomId: '13', width: 320, height: 640, textScale: 2);
+    realtime.events.add(const [
+      LiveConnectionChanged(LiveConnectionPhase.connected),
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text('实时弹幕已连接').hitTestable(), findsOneWidget);
+    expect(find.textContaining('新消息 9 '), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('short room ID keeps player on the sidebar message controller', (
     tester,
   ) async {
