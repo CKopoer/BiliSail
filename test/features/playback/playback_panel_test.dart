@@ -446,6 +446,36 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
   });
+  testWidgets('row gap settings update VOD without reopening the player', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    final window = _FakeWindowService();
+    double? textHeight;
+    for (final gap in [0.0, 20.0, 0.0, 5.0]) {
+      await tester.pumpWidget(
+        _app(session, window, AppSettings(danmakuLineSpacing: gap), width: 800),
+      );
+      await _pumpFrames(tester);
+      await session.pause();
+      session.danmaku.replaceEvents(const [
+        DanmakuEvent(id: 'one', at: Duration(seconds: 1), text: 'line'),
+        DanmakuEvent(id: 'two', at: Duration(seconds: 1), text: 'line'),
+      ]);
+      session.danmaku.seekConfirmed(const Duration(seconds: 1));
+      final frame = session.danmaku.frame();
+      expect(frame, hasLength(2));
+      final laneHeight = frame[1].y - frame[0].y;
+      textHeight ??= laneHeight;
+      expect(laneHeight, textHeight + gap);
+      expect(engine.opens, 1);
+      expect(engine.maxSurfaces, 1);
+    }
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
   for (final width in [320.0, 1200.0]) {
     testWidgets('volume drags continuously at width $width and fullscreen', (
       tester,

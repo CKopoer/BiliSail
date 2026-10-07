@@ -76,7 +76,7 @@ void main() {
           final snapshot = jsonDecode(
             (await database.readSetting('preferences.v1')) ?? '{}',
           ) as Map<String, Object?>;
-          expect(snapshot['schemaVersion'], 14);
+          expect(snapshot['schemaVersion'], 15);
           expect(snapshot['navigationMode'], mode.name);
         }
         for (final selected in WorkspaceNavigationMode.values) {
@@ -111,6 +111,7 @@ void main() {
       expect(settings.danmakuOpacity, .7);
       expect(settings.danmakuFontScale, 1.2);
       expect(settings.danmakuTopMargin, 0);
+      expect(settings.danmakuLineSpacing, 5);
       expect(settings.autoPlay, isTrue);
       expect(settings.resumePlayback, isTrue);
       expect(settings.showCollapsedProgress, isTrue);
@@ -123,7 +124,7 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 14);
+      expect(snapshot['schemaVersion'], 15);
       expect(snapshot['theme'], 'dark');
       expect(database.schemaVersion, 3);
     },
@@ -165,7 +166,7 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 14);
+      expect(snapshot['schemaVersion'], 15);
       expect(snapshot['allowConcurrentPlayback'], allowed);
       expect(snapshot['navigationMode'], 'singlePage');
       final reloaded = await repository.load();
@@ -252,6 +253,7 @@ void main() {
       danmakuFontScale: 1.3,
       danmakuArea: .5,
       danmakuTopMargin: 48,
+      danmakuLineSpacing: 80,
       danmakuSpeed: 1.5,
       danmakuFont: DanmakuFontPreference.harmonyOsSans,
       danmakuBold: true,
@@ -281,6 +283,7 @@ void main() {
     expect(reloaded.defaultVolume, 35);
     expect(reloaded.allowConcurrentPlayback, isFalse);
     expect(reloaded.danmakuTopMargin, 48);
+    expect(reloaded.danmakuLineSpacing, 80);
     expect(reloaded.danmakuFont, DanmakuFontPreference.harmonyOsSans);
     expect(reloaded.danmakuBold, isTrue);
     expect(reloaded.danmakuStyle, DanmakuStylePreference.stroke);
@@ -323,6 +326,7 @@ void main() {
         'defaultVolume': 200,
         'danmakuArea': -1,
         'danmakuTopMargin': -4,
+        'danmakuLineSpacing': 'wide',
         'danmakuMaxPerSecond': 0,
         'danmakuFont': 'unknown',
         'danmakuBold': 'yes',
@@ -346,6 +350,7 @@ void main() {
     expect(s.defaultVolume, 100);
     expect(s.danmakuArea, .25);
     expect(s.danmakuTopMargin, 0);
+    expect(s.danmakuLineSpacing, 5);
     expect(s.danmakuMaxPerSecond, 0);
     expect(s.danmakuFont, DanmakuFontPreference.system);
     expect(s.danmakuBold, isFalse);
@@ -367,6 +372,34 @@ void main() {
     await database.writeSetting('preferences.v1', '[]');
     await expectLater(repository.load(), throwsFormatException);
   });
+  test(
+    'version fourteen adds default line spacing and saves changes',
+    () async {
+      await database.writeSetting(
+        'preferences.v1',
+        jsonEncode({
+          'schemaVersion': 14,
+          'danmakuLineSpacing': null,
+          'danmakuArea': .5,
+          'danmakuTopMargin': 40,
+          'danmakuBlockedWords': ['spoiler'],
+        }),
+      );
+      final settings = await repository.load();
+      expect(settings.danmakuLineSpacing, 5);
+      await repository.save(settings.copyWith(danmakuLineSpacing: 80));
+      final reloaded = await SqliteSettingsRepository(database).load();
+      expect(reloaded.danmakuLineSpacing, 80);
+      expect(reloaded.danmakuTopMargin, 40);
+      expect(reloaded.danmakuArea, .5);
+      expect(reloaded.danmakuBlockedWords, ['spoiler']);
+      await repository.save(reloaded.copyWith(danmakuLineSpacing: 0));
+      expect((await repository.load()).danmakuLineSpacing, 0);
+      await repository.save(reloaded.copyWith(danmakuLineSpacing: 5));
+      expect((await repository.load()).danmakuLineSpacing, 5);
+      expect(database.schemaVersion, 3);
+    },
+  );
   test(
     'version seven snapshot adds zero top margin without losing values',
     () async {

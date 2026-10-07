@@ -61,6 +61,7 @@ final class _LivePlayerDanmakuState extends ConsumerState<LivePlayerDanmaku>
     speed: widget.settings.danmakuSpeed,
     maxPerSecond: widget.settings.danmakuMaxPerSecond,
     topInset: widget.settings.danmakuTopMargin,
+    lineSpacing: widget.settings.danmakuLineSpacing,
     offset: widget.settings.danmakuOffset,
     mergeDuplicates: widget.settings.danmakuMergeDuplicates,
     maxOnScreen: widget.settings.danmakuMaxOnScreen,

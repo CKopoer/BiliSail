@@ -2,6 +2,32 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('danmaku line spacing preserves the default and normalizes bounds', () {
+    expect(const AppSettings.defaults().danmakuLineSpacing, 5);
+    expect(AppSettings().danmakuLineSpacing, 5);
+    expect(
+      const AppSettings.defaults()
+          .copyWith(danmakuLineSpacing: 80)
+          .normalized()
+          .copyWith(danmakuOpacity: .5)
+          .danmakuLineSpacing,
+      80,
+    );
+    for (final entry in <double, double>{
+      -4: 0,
+      0: 0,
+      200: 100,
+      double.nan: 5,
+      double.infinity: 5,
+    }.entries) {
+      expect(
+        AppSettings(danmakuLineSpacing: entry.key)
+            .normalized()
+            .danmakuLineSpacing,
+        entry.value,
+      );
+    }
+  });
   test(
     'concurrent playback requires multiple tabs and an enabled preference',
     () {

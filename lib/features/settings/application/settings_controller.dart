@@ -96,6 +96,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(danmakuArea: value));
   Future<void> setDanmakuTopMargin(double value) =>
       update((current) => current.copyWith(danmakuTopMargin: value));
+  Future<void> setDanmakuLineSpacing(double value) =>
+      update((current) => current.copyWith(danmakuLineSpacing: value));
   Future<void> setDanmakuSpeed(double value) =>
       update((current) => current.copyWith(danmakuSpeed: value));
   Future<void> setDanmakuMaxPerSecond(int value) =>

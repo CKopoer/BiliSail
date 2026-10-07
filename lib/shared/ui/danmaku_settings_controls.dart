@@ -178,6 +178,17 @@ final class _DanmakuSettingsControlsState
           suffix: '×',
         ),
         _slider(
+          '弹幕行距',
+          'danmaku-line-spacing',
+          s.danmakuLineSpacing,
+          0,
+          100,
+          (s, v) => s.copyWith(danmakuLineSpacing: v),
+          divisions: 100,
+          suffix: ' px',
+        ),
+        const Text('上一行文字底部到下一行文字顶部的距离，0 时两行紧挨着。'),
+        _slider(
           '不透明度',
           'danmaku-opacity',
           s.danmakuOpacity,

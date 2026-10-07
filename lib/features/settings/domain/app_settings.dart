@@ -61,6 +61,7 @@ final class AppSettings {
     this.defaultVolume = 100.0,
     this.danmakuArea = 0.75,
     this.danmakuTopMargin = 0,
+    this.danmakuLineSpacing = 5,
     this.danmakuSpeed = 1.0,
     this.danmakuMaxPerSecond = 20,
     this.danmakuMaxOnScreen = 0,
@@ -108,6 +109,7 @@ final class AppSettings {
        defaultVolume = 100.0,
        danmakuArea = 0.75,
        danmakuTopMargin = 0,
+       danmakuLineSpacing = 5,
        danmakuSpeed = 1.0,
        danmakuMaxPerSecond = 20,
        danmakuMaxOnScreen = 0,
@@ -157,6 +159,9 @@ final class AppSettings {
 
   /// Distance from the video surface top, in Flutter logical pixels.
   final double danmakuTopMargin;
+
+  /// Extra logical pixels between rows of text; zero lets them touch.
+  final double danmakuLineSpacing;
   final double danmakuSpeed;
   final int danmakuMaxPerSecond;
 
@@ -211,6 +216,7 @@ final class AppSettings {
     double? defaultVolume,
     double? danmakuArea,
     double? danmakuTopMargin,
+    double? danmakuLineSpacing,
     double? danmakuSpeed,
     int? danmakuMaxPerSecond,
     int? danmakuMaxOnScreen,
@@ -255,6 +261,7 @@ final class AppSettings {
     defaultVolume: defaultVolume ?? this.defaultVolume,
     danmakuArea: danmakuArea ?? this.danmakuArea,
     danmakuTopMargin: danmakuTopMargin ?? this.danmakuTopMargin,
+    danmakuLineSpacing: danmakuLineSpacing ?? this.danmakuLineSpacing,
     danmakuSpeed: danmakuSpeed ?? this.danmakuSpeed,
     danmakuMaxPerSecond: danmakuMaxPerSecond ?? this.danmakuMaxPerSecond,
     danmakuMaxOnScreen: danmakuMaxOnScreen ?? this.danmakuMaxOnScreen,
@@ -328,6 +335,7 @@ final class AppSettings {
       danmakuFontScale: bounded(danmakuFontScale, .7, 1.5, 1),
       danmakuArea: bounded(danmakuArea, .25, 1, .75),
       danmakuTopMargin: bounded(danmakuTopMargin, 0, 200, 0),
+      danmakuLineSpacing: bounded(danmakuLineSpacing, 0, 100, 5),
       danmakuSpeed: bounded(danmakuSpeed, .5, 2, 1),
       danmakuMaxPerSecond: danmakuMaxPerSecond.clamp(0, 100),
       danmakuMaxOnScreen: danmakuMaxOnScreen.clamp(0, 120),

@@ -66,12 +66,13 @@ final class LiveDanmakuController extends ChangeNotifier {
   bool _enabled = true;
   double _width = 0, _height = 0, _bottomInset = 0, _area = .75, _speed = 1;
   double _topInset = 0;
+  double _lineSpacing = 5;
   Duration _offset = Duration.zero;
   bool _mergeDuplicates = false;
   int _maxOnScreen = 0;
   double get _top => _topInset.clamp(0, _height - _bottomInset);
   double get _availableHeight => (_height - _bottomInset - _top) * _area;
-  double _laneHeight = 48;
+  double _laneHeight = 17;
   int _maxPerSecond = 20, _windowCount = 0;
   Duration _windowAt = Duration.zero;
   int dropped = 0;
@@ -84,11 +85,14 @@ final class LiveDanmakuController extends ChangeNotifier {
       Duration(microseconds: (scrollDuration.inMicroseconds / _speed).round());
 
   /// [topInset] reserves logical pixels before applying [area].
+  /// [lineSpacing] adds 0–100 logical pixels after measured text height.
+  /// The default gap is 5 pixels.
   void configure({
     required double area,
     required double speed,
     required int maxPerSecond,
     double topInset = 0,
+    double lineSpacing = 5,
     Duration offset = Duration.zero,
     bool mergeDuplicates = false,
     int maxOnScreen = 0,
@@ -98,10 +102,14 @@ final class LiveDanmakuController extends ChangeNotifier {
     final nextTopInset = topInset.isFinite
         ? topInset.clamp(0.0, double.infinity)
         : 0.0;
+    final nextLineSpacing = lineSpacing.isFinite
+        ? lineSpacing.clamp(0.0, 100.0)
+        : 5.0;
     final nextMaxPerSecond = maxPerSecond.clamp(0, 100);
     if (_area != nextArea ||
         _speed != nextSpeed ||
         _topInset != nextTopInset ||
+        _lineSpacing != nextLineSpacing ||
         _offset != offset ||
         _mergeDuplicates != mergeDuplicates ||
         _maxOnScreen != maxOnScreen.clamp(0, maxVisible) ||
@@ -110,11 +118,12 @@ final class LiveDanmakuController extends ChangeNotifier {
       _area = nextArea;
       _speed = nextSpeed;
       _topInset = nextTopInset;
+      _lineSpacing = nextLineSpacing;
       _offset = offset;
       _mergeDuplicates = mergeDuplicates;
       _maxOnScreen = maxOnScreen.clamp(0, maxVisible);
       _maxPerSecond = nextMaxPerSecond;
-      _laneHeight = 48;
+      _laneHeight = 12 + _lineSpacing;
       _clearLayouts();
       _layouts.style = textStyle;
       clear();
@@ -213,7 +222,10 @@ final class LiveDanmakuController extends ChangeNotifier {
     if (_width <= 0 || _height <= 0) return const [];
     final priorLaneHeight = _laneHeight;
     for (final received in _pending.takeWhile((item) => item.at <= now)) {
-      _laneHeight = max(_laneHeight, _layout(received.event).height + 4);
+      _laneHeight = max(
+        _laneHeight,
+        _layout(received.event).height + _lineSpacing,
+      );
     }
     if (_laneHeight != priorLaneHeight) _visible.clear();
     while (_pending.isNotEmpty && _pending.first.at <= now) {

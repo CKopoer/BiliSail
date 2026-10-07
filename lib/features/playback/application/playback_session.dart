@@ -808,6 +808,7 @@ class PlaybackSession extends ChangeNotifier {
       area: _settings.danmakuArea,
       speed: _settings.danmakuSpeed,
       topInset: _settings.danmakuTopMargin,
+      lineSpacing: _settings.danmakuLineSpacing,
       offset: _settings.danmakuOffset,
       mergeDuplicates: _settings.danmakuMergeDuplicates,
       maxOnScreen: _settings.danmakuMaxOnScreen,

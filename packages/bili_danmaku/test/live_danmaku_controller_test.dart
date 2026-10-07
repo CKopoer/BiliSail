@@ -3,6 +3,105 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mode in DanmakuMode.values) {
+    for (final fontSize in [12.0, 24.0, 54.0]) {
+      test(
+        'live ${mode.name} row gaps follow measured text at size $fontSize',
+        () {
+          final controller = LiveDanmakuController(
+            monotonicNow: () => Duration.zero,
+          );
+          addTearDown(controller.dispose);
+          final text = TextPainter(
+            text: TextSpan(
+              text: 'line',
+              style: TextStyle(fontSize: fontSize),
+            ),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          addTearDown(text.dispose);
+          controller.setViewport(width: 600, height: 400, bottomInset: 40);
+          final events = [
+            for (var i = 0; i < 20; i++)
+              LiveDanmakuEvent(
+                id: '$i',
+                text: 'line',
+                mode: mode,
+                fontSize: fontSize,
+              ),
+          ];
+          controller.configure(
+            area: .5,
+            speed: 1,
+            maxPerSecond: 0,
+            topInset: 40,
+          );
+          controller.add(events);
+          final defaultHeight = text.height + 5;
+          expect(controller.frame(), hasLength((160 / defaultHeight).floor()));
+          for (final spacing in [0.0, 8.0, 40.0, 0.0]) {
+            controller.configure(
+              area: .5,
+              speed: 1,
+              maxPerSecond: 0,
+              topInset: 40,
+              lineSpacing: spacing,
+            );
+            controller.add(events);
+            final frame = controller.frame();
+            final laneHeight = text.height + spacing;
+            expect(frame, hasLength((160 / laneHeight).floor()));
+            if (frame.length > 1) {
+              expect((frame[1].y - frame[0].y).abs() - text.height, spacing);
+            }
+            for (var lane = 0; lane < frame.length; lane++) {
+              expect(
+                frame[lane].y,
+                mode == DanmakuMode.bottom
+                    ? 200 - (lane + 1) * laneHeight
+                    : 40 + lane * laneHeight,
+              );
+            }
+          }
+          controller.configure(
+            area: .5,
+            speed: 1,
+            maxPerSecond: 0,
+            topInset: 40,
+          );
+          controller.add(events);
+          expect(controller.frame(), hasLength((160 / defaultHeight).floor()));
+        },
+      );
+    }
+  }
+  test('live spacing normalizes nonfinite and out-of-range values', () {
+    final controller = LiveDanmakuController(monotonicNow: () => Duration.zero);
+    addTearDown(controller.dispose);
+    controller.setViewport(width: 600, height: 400);
+    for (final (value, expected) in [
+      (-1.0, 12.0),
+      (0.0, 12.0),
+      (200.0, 112.0),
+      (double.nan, 17.0),
+      (double.infinity, 17.0),
+    ]) {
+      controller.configure(
+        area: 1,
+        speed: 1,
+        maxPerSecond: 0,
+        lineSpacing: value,
+      );
+      controller.clear();
+      controller.add(const [
+        LiveDanmakuEvent(id: 'one', text: 'line', fontSize: 12),
+        LiveDanmakuEvent(id: 'two', text: 'line', fontSize: 12),
+      ]);
+      final frame = controller.frame();
+      expect(frame, hasLength(2));
+      expect(frame[1].y - frame[0].y, expected);
+    }
+  });
   test('top inset offsets live modes and shrinks their available lanes', () {
     final controller = LiveDanmakuController(monotonicNow: () => Duration.zero);
     addTearDown(controller.dispose);
@@ -14,10 +113,10 @@ void main() {
       LiveDanmakuEvent(id: 'bottom', text: 'bottom', mode: DanmakuMode.bottom),
     ];
     controller.add(events);
-    expect(controller.frame().map((item) => item.y), [40, 40, 132]);
+    expect(controller.frame().map((item) => item.y), [40, 40, 151]);
     controller.configure(area: .5, speed: 1, maxPerSecond: 20);
     controller.add(events);
-    expect(controller.frame().map((item) => item.y), [0, 0, 112]);
+    expect(controller.frame().map((item) => item.y), [0, 0, 131]);
   });
   test(
     'live top inset clamps to short viewports and rejects nonfinite values',
@@ -91,7 +190,7 @@ void main() {
       final controller = LiveDanmakuController(
         monotonicNow: () => Duration.zero,
       );
-      controller.configure(area: 1, speed: 1, maxPerSecond: 20);
+      controller.configure(area: 1, speed: 1, maxPerSecond: 20, lineSpacing: 0);
       controller.setViewport(width: 600, height: 400);
       controller.add(const [
         LiveDanmakuEvent(id: 'one', text: '弹幕', fontSize: 54),
@@ -103,10 +202,7 @@ void main() {
         text: const TextSpan(text: '弹幕', style: TextStyle(fontSize: 54)),
         textDirection: TextDirection.ltr,
       )..layout();
-      expect(
-        placements[1].y - placements[0].y,
-        greaterThanOrEqualTo(text.height),
-      );
+      expect(placements[1].y - placements[0].y, text.height);
       text.dispose();
       controller.dispose();
     },

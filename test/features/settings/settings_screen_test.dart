@@ -127,6 +127,79 @@ void main() {
     );
   }
   for (final inPlayer in [false, true]) {
+    testWidgets(
+      'row gap defaults to five and saves zero without a switch (player: $inPlayer)',
+      (tester) async {
+        final repository = _SettingsRepository();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: inPlayer
+                    ? Builder(
+                        builder: (context) => ElevatedButton(
+                          onPressed: () => showPlayerSettings(context, tab: 1),
+                          child: const Text('弹幕配置'),
+                        ),
+                      )
+                    : const SettingsScreen(category: SettingsCategory.danmaku),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (inPlayer) {
+          await tester.tap(find.text('弹幕配置'));
+          await tester.pumpAndSettle();
+        }
+        final toggle = find.widgetWithText(SwitchListTile, '使用默认弹幕行距');
+        final slider = find.descendant(
+          of: find.byKey(const ValueKey('danmaku-line-spacing')),
+          matching: find.byType(Slider),
+        );
+        expect(toggle, findsNothing);
+        await tester.ensureVisible(slider);
+        await tester.pumpAndSettle();
+        expect(repository.settings.danmakuLineSpacing, 5);
+        expect(tester.widget<Slider>(slider).value, 5);
+        expect(tester.widget<Slider>(slider).min, 0);
+        final rect = tester.getRect(slider);
+        final gesture = await tester.startGesture(
+          Offset(rect.left + 24, rect.center.dy),
+        );
+        await gesture.moveTo(
+          Offset(rect.left + rect.width * .4, rect.center.dy),
+        );
+        await gesture.up();
+        await tester.pumpAndSettle();
+        final saved = repository.settings.danmakuLineSpacing;
+        expect(saved, inExclusiveRange(0, 100));
+        if (inPlayer) {
+          await tester.tap(find.byTooltip('关闭'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('弹幕配置'));
+          await tester.pumpAndSettle();
+        } else {
+          ProviderScope.containerOf(
+            tester.element(slider),
+            listen: false,
+          ).invalidate(settingsControllerProvider);
+          await tester.pumpAndSettle();
+        }
+        await tester.ensureVisible(slider);
+        await tester.pumpAndSettle();
+        expect(tester.widget<Slider>(slider).value, saved);
+        final zeroRect = tester.getRect(slider);
+        await tester.tapAt(Offset(zeroRect.left + 24, zeroRect.center.dy));
+        await tester.pumpAndSettle();
+        expect(repository.settings.danmakuLineSpacing, 0);
+        expect(tester.widget<Slider>(slider).value, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
     testWidgets('top margin slider saves 4-pixel steps (player: $inPlayer)', (
       tester,
     ) async {

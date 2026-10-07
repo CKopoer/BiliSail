@@ -66,6 +66,7 @@ final class DanmakuController extends ChangeNotifier {
   double _area = 1;
   double _speed = 1;
   double _topInset = 0;
+  double _lineSpacing = 5;
   Duration _offset = Duration.zero;
   bool _mergeDuplicates = false;
   int _maxOnScreen = 0;
@@ -77,10 +78,13 @@ final class DanmakuController extends ChangeNotifier {
       Duration(microseconds: (scrollDuration.inMicroseconds / _speed).round());
 
   /// [topInset] reserves logical pixels before applying [area].
+  /// [lineSpacing] adds 0–100 logical pixels after measured text height.
+  /// The default gap is 5 pixels.
   void configure({
     required double area,
     required double speed,
     double topInset = 0,
+    double lineSpacing = 5,
     Duration offset = Duration.zero,
     bool mergeDuplicates = false,
     int maxOnScreen = 0,
@@ -91,9 +95,13 @@ final class DanmakuController extends ChangeNotifier {
     final nextTopInset = topInset.isFinite
         ? topInset.clamp(0.0, double.infinity)
         : 0.0;
+    final nextLineSpacing = lineSpacing.isFinite
+        ? lineSpacing.clamp(0.0, 100.0)
+        : 5.0;
     if (_area == nextArea &&
         _speed == nextSpeed &&
         _topInset == nextTopInset &&
+        _lineSpacing == nextLineSpacing &&
         _offset == offset &&
         _mergeDuplicates == mergeDuplicates &&
         _maxOnScreen == maxOnScreen.clamp(0, maxVisible) &&
@@ -103,6 +111,7 @@ final class DanmakuController extends ChangeNotifier {
     _area = nextArea;
     _speed = nextSpeed;
     _topInset = nextTopInset;
+    _lineSpacing = nextLineSpacing;
     _offset = offset;
     _mergeDuplicates = mergeDuplicates;
     _maxOnScreen = maxOnScreen.clamp(0, maxVisible);
@@ -128,7 +137,7 @@ final class DanmakuController extends ChangeNotifier {
   double _width = 0;
   double _height = 0;
   double _bottomInset = 0;
-  double _laneHeight = 48;
+  double _laneHeight = 17;
   int dropped = 0;
 
   Duration get position => _estimate(_now());
@@ -323,11 +332,13 @@ final class DanmakuController extends ChangeNotifier {
       _layouts.layout(event.text, event.color, event.fontSize);
 
   void _updateLaneHeight() {
-    var laneHeight = 48.0;
+    // The renderer clamps font size to at least 12; keep empty layouts valid.
+    var textHeight = 12.0;
     for (final event in _events) {
-      final height = _layout(event).height + 4;
-      if (height > laneHeight) laneHeight = height;
+      final height = _layout(event).height;
+      if (height > textHeight) textHeight = height;
     }
+    final laneHeight = textHeight + _lineSpacing;
     if (_laneHeight != laneHeight) {
       _laneHeight = laneHeight;
       _active.clear();

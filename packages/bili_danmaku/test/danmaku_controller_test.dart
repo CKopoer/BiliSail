@@ -1,8 +1,113 @@
 import 'package:bili_danmaku/bili_danmaku.dart';
-import 'package:flutter/painting.dart' show Size;
+import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mode in DanmakuMode.values) {
+    for (final fontSize in [12.0, 24.0, 54.0]) {
+      test(
+        'VOD ${mode.name} row gaps follow measured text at size $fontSize',
+        () {
+          final controller = DanmakuController(
+            monotonicNow: () => Duration.zero,
+          );
+          addTearDown(controller.dispose);
+          final text = TextPainter(
+            text: TextSpan(
+              text: 'line',
+              style: TextStyle(fontSize: fontSize),
+            ),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          addTearDown(text.dispose);
+          controller.setViewport(width: 600, height: 400, bottomInset: 40);
+          controller.replaceEvents([
+            for (var i = 0; i < 20; i++)
+              DanmakuEvent(
+                id: '$i',
+                at: Duration.zero,
+                text: 'line',
+                mode: mode,
+                fontSize: fontSize,
+              ),
+          ]);
+          // Omitting the option uses the five-pixel gap at every font size.
+          controller.configure(area: .5, speed: 1, topInset: 40);
+          final defaultHeight = text.height + 5;
+          expect(controller.frame(), hasLength((160 / defaultHeight).floor()));
+          for (final spacing in [0.0, 8.0, 40.0, 0.0]) {
+            controller.configure(
+              area: .5,
+              speed: 1,
+              topInset: 40,
+              lineSpacing: spacing,
+            );
+            final frame = controller.frame();
+            final laneHeight = text.height + spacing;
+            expect(frame, hasLength((160 / laneHeight).floor()));
+            if (frame.length > 1) {
+              expect((frame[1].y - frame[0].y).abs() - text.height, spacing);
+            }
+            for (var lane = 0; lane < frame.length; lane++) {
+              expect(
+                frame[lane].y,
+                mode == DanmakuMode.bottom
+                    ? 200 - (lane + 1) * laneHeight
+                    : 40 + lane * laneHeight,
+              );
+            }
+          }
+          controller.configure(area: .5, speed: 1, topInset: 40);
+          expect(controller.frame(), hasLength((160 / defaultHeight).floor()));
+        },
+      );
+    }
+  }
+  test('VOD spacing normalizes invalid values and protects large text', () {
+    final controller = DanmakuController(monotonicNow: () => Duration.zero);
+    addTearDown(controller.dispose);
+    controller.setViewport(width: 600, height: 400);
+    controller.replaceEvents(const [
+      DanmakuEvent(id: 'one', at: Duration.zero, text: 'line', fontSize: 12),
+      DanmakuEvent(id: 'two', at: Duration.zero, text: 'line', fontSize: 12),
+    ]);
+    for (final (value, expected) in [
+      (-1.0, 12.0),
+      (0.0, 12.0),
+      (200.0, 112.0),
+      (double.nan, 17.0),
+      (double.infinity, 17.0),
+    ]) {
+      controller.configure(area: 1, speed: 1, lineSpacing: value);
+      controller.seekConfirmed(Duration.zero);
+      final frame = controller.frame();
+      expect(frame, hasLength(2));
+      expect(frame[1].y - frame[0].y, expected);
+    }
+    controller.configure(area: 1, speed: 1, lineSpacing: 0);
+    controller.replaceEvents(const [
+      DanmakuEvent(
+        id: 'large-one',
+        at: Duration.zero,
+        text: '弹幕',
+        fontSize: 54,
+      ),
+      DanmakuEvent(
+        id: 'large-two',
+        at: Duration.zero,
+        text: '弹幕',
+        fontSize: 54,
+      ),
+    ]);
+    final text = TextPainter(
+      text: const TextSpan(text: '弹幕', style: TextStyle(fontSize: 54)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    addTearDown(text.dispose);
+    final frame = controller.frame();
+    expect(frame, hasLength(2));
+    expect(frame[1].y - frame[0].y, text.height);
+  });
   test('fullscreen resizing preserves arrivals and scroll progress', () {
     var now = Duration.zero;
     final controller = DanmakuController(monotonicNow: () => now);
@@ -159,7 +264,7 @@ void main() {
   test('resize retains valid lanes without replaying removed comments', () {
     final controller = DanmakuController(monotonicNow: () => Duration.zero);
     addTearDown(controller.dispose);
-    controller.configure(area: 1, speed: 1, topInset: 40);
+    controller.configure(area: 1, speed: 1, topInset: 40, lineSpacing: 24);
     controller.setViewport(width: 600, height: 384, bottomInset: 100);
     controller.replaceEvents([
       for (var lane = 0; lane < 5; lane++)
@@ -218,7 +323,7 @@ void main() {
       final controller = DanmakuController(monotonicNow: () => Duration.zero);
       addTearDown(controller.dispose);
       controller.setViewport(width: 600, height: 384, bottomInset: 48);
-      controller.configure(area: .5, speed: 1, topInset: 40);
+      controller.configure(area: .5, speed: 1, topInset: 40, lineSpacing: 24);
       controller.replaceEvents(const [
         DanmakuEvent(id: 'scroll-0', at: Duration.zero, text: 'scroll-0'),
         DanmakuEvent(id: 'scroll-1', at: Duration.zero, text: 'scroll-1'),
@@ -288,9 +393,9 @@ void main() {
       ),
     ]);
     final frame = controller.frame();
-    expect(frame.map((item) => item.y), [40, 40, 132]);
+    expect(frame.map((item) => item.y), [40, 40, 151]);
     controller.configure(area: .5, speed: 1);
-    expect(controller.frame().map((item) => item.y), [0, 0, 112]);
+    expect(controller.frame().map((item) => item.y), [0, 0, 131]);
   });
   test('top inset clamps to the viewport without negative lanes', () {
     final controller = DanmakuController(monotonicNow: () => Duration.zero);

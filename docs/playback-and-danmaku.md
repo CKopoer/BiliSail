@@ -174,6 +174,7 @@ estimatedPosition = anchorPosition + (monotonicNow - anchorTime) × playbackRate
 
 - 基础实现使用 `CustomPainter`、`TextPainter`、`RepaintBoundary`，单一 Ticker；不为每条弹幕创建动画 Widget。
 - 支持右到左滚动、顶部固定、底部固定；轨道高度受字号/行高影响，字幕安全区和控制区预留。
+- 弹幕行距表示文字布局之间的空白，范围 0–100 逻辑像素，默认 5，0 时紧挨着；轨道高度为最大文字布局高度加设置行距。两处设置入口与点播／直播接入见 [弹幕行距](validation/danmaku-line-spacing.md)。
 - 滚动轨道考虑前项的尾部、后项速度及追尾时间，不能只检查初始间距；固定弹幕按显示区间占位。
 - 点播全屏、窗口尺寸和控件避让变化保留活动弹幕的时间进度与调度游标，只移除超出可用轨道的项；不能清空后重放已丢弃的历史弹幕。零尺寸过渡不消耗调度项，实际 seek 仍按确认位置重建，验证见 [全屏弹幕保留](validation/danmaku-fullscreen.md)。
 - 初始上限 120 条同时可见、500 条待调度；不足时优先保持播放流畅，按密度规则丢弃/抽样，不无限排队。

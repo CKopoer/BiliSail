@@ -181,6 +181,41 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
   });
+  testWidgets('live bridge applies row gaps including the five-pixel default', (
+    tester,
+  ) async {
+    await show(tester);
+    final controller = container.read(
+      liveControllerProvider(requested).notifier,
+    );
+    controller.setActive(true);
+    await tester.pump();
+    await tester.pump();
+    double? textHeight;
+    var batch = 0;
+    for (final gap in [0.0, 20.0, 0.0, 5.0]) {
+      batch++;
+      await show(tester, settings: AppSettings(danmakuLineSpacing: gap));
+      realtime.events.add([
+        LiveChatReceived(
+          LiveChatMessage(userName: '甲', text: 'line', id: '$batch-one'),
+        ),
+        LiveChatReceived(
+          LiveChatMessage(userName: '乙', text: 'line', id: '$batch-two'),
+        ),
+      ]);
+      await tester.pump();
+      await tester.pump();
+      final frame = drawing(tester).frame();
+      expect(frame, hasLength(2));
+      final laneHeight = frame[1].y - frame[0].y;
+      textHeight ??= laneHeight;
+      expect(laneHeight, textHeight + gap);
+    }
+    controller.setActive(false);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
   testWidgets(
     'short-room bridge paints new messages and filters history/modes',
     (tester) async {

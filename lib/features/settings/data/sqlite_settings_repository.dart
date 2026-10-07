@@ -87,6 +87,7 @@ class SqliteSettingsRepository implements SettingsRepository {
       defaultVolume: number('defaultVolume', 100.0),
       danmakuArea: number('danmakuArea', 0.75),
       danmakuTopMargin: number('danmakuTopMargin', 0),
+      danmakuLineSpacing: number('danmakuLineSpacing', 5),
       danmakuSpeed: number('danmakuSpeed', 1.0),
       danmakuMaxPerSecond: number('danmakuMaxPerSecond', 20.0).isFinite
           ? number('danmakuMaxPerSecond', 20.0).toInt()
@@ -140,7 +141,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 14,
+        'schemaVersion': 15,
         'navigationMode': value.navigationMode.name,
         'allowConcurrentPlayback': value.allowConcurrentPlayback,
         'cacheImages': value.cacheImages,
@@ -163,6 +164,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'defaultVolume': value.defaultVolume,
         'danmakuArea': value.danmakuArea,
         'danmakuTopMargin': value.danmakuTopMargin,
+        'danmakuLineSpacing': value.danmakuLineSpacing,
         'danmakuSpeed': value.danmakuSpeed,
         'danmakuMaxPerSecond': value.danmakuMaxPerSecond,
         'danmakuMaxOnScreen': value.danmakuMaxOnScreen,
