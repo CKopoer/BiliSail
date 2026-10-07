@@ -1,5 +1,6 @@
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/profile/presentation/profile_header.dart';
 import 'package:flutter/material.dart';
@@ -55,6 +56,8 @@ void main() {
           tester,
           ProfileHeader(
             profile: profile,
+            liveRoom: const ProfileLiveRoom(id: RoomId('1024'), isLive: true),
+            onOpenLiveRoom: () {},
             isSelf: true,
             onSelectSection: (value) => selected = value,
           ),
@@ -89,6 +92,44 @@ void main() {
       expect(rect.top, statisticRects.first.top);
       expect(rect.height, statisticRects.first.height);
       expect(rect.height, greaterThanOrEqualTo(44));
+    }
+  });
+  for (final isLive in [false, true]) {
+    testWidgets('profile live room entry supports live status $isLive', (
+      tester,
+    ) async {
+      var opens = 0;
+      await pumpLayout(
+        tester,
+        ProfileHeader(
+          profile: profile,
+          liveRoom: ProfileLiveRoom(id: const RoomId('1024'), isLive: isLive),
+          onSelectSection: (_) {},
+          onOpenLiveRoom: () => opens++,
+        ),
+      );
+      expect(find.text(isLive ? '正在直播' : '直播间'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('profile-live-room')));
+      expect(opens, 1);
+    });
+  }
+  testWidgets('no room and invalid room do not offer navigation', (
+    tester,
+  ) async {
+    for (final room in [
+      null,
+      const ProfileLiveRoom(id: RoomId('0'), isLive: true),
+    ]) {
+      await pumpLayout(
+        tester,
+        ProfileHeader(
+          profile: profile,
+          liveRoom: room,
+          onSelectSection: (_) {},
+          onOpenLiveRoom: () => fail('Invalid room must not navigate'),
+        ),
+      );
+      expect(find.byKey(const ValueKey('profile-live-room')), findsNothing);
     }
   });
 

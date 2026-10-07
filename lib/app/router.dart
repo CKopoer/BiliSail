@@ -448,6 +448,8 @@ final class _WorkspacePage extends ConsumerWidget {
                                 context.go('/user/${user.value}'),
                             onOpenVideo: (video) =>
                                 context.go('/video/${video.id.value}'),
+                            onOpenLiveRoom: (room) =>
+                                context.go('/live/${room.value}'),
                           )
                         : const StateView.empty(message: '用户地址无效');
                   }

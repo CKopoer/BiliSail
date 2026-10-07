@@ -7,6 +7,7 @@ import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/profile/data/api_profile_repository.dart';
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +15,96 @@ import 'package:flutter_test/flutter_test.dart';
 const id = UserId('9007199254740993123');
 
 void main() {
+  test(
+    'live lookup maps an offline room without losing its string ID',
+    () async {
+      final requests = ApiRequests();
+      final api = BiliApiClient(
+        sessionProvider: requests,
+        transport: _Transport((uri) {
+          expect(uri.queryParameters['mid'], id.value);
+          return {
+            'code': 0,
+            'data': {
+              'roomStatus': 1,
+              'roomid': '9007199254740993123',
+              'liveStatus': 0,
+            },
+          };
+        }),
+      );
+      addTearDown(api.close);
+      final repository = ApiProfileRepository(
+        ProfileClient(api),
+        requests,
+        accountScope: () => 'guest',
+      );
+      final room = await repository.loadLiveRoom(
+        id,
+        cancellation: RequestCancellation(),
+      );
+      expect(room?.id, const RoomId('9007199254740993123'));
+      expect(room?.isLive, false);
+    },
+  );
+  test('live lookup failure is not a successful absent room', () async {
+    final requests = ApiRequests();
+    final api = BiliApiClient(
+      sessionProvider: requests,
+      transport: _Transport((_) => {'code': -101}),
+    );
+    addTearDown(api.close);
+    final repository = ApiProfileRepository(
+      ProfileClient(api),
+      requests,
+      accountScope: () => 'guest',
+    );
+    await expectLater(
+      repository.loadLiveRoom(id, cancellation: RequestCancellation()),
+      throwsA(
+        isA<AppFailure>().having(
+          (e) => e.kind,
+          'kind',
+          AppFailureKind.authentication,
+        ),
+      ),
+    );
+  });
+  test('live lookup is cancelled when the account session changes', () async {
+    final requests = ApiRequests();
+    final pending = Completer<Object>();
+    final api = BiliApiClient(
+      sessionProvider: requests,
+      transport: _Transport((_) => pending.future),
+    );
+    addTearDown(api.close);
+    final repository = ApiProfileRepository(
+      ProfileClient(api),
+      requests,
+      accountScope: () => 'guest',
+    );
+    final read = repository.loadLiveRoom(
+      id,
+      cancellation: RequestCancellation(),
+    );
+    final assertion = expectLater(
+      read,
+      throwsA(
+        isA<AppFailure>().having(
+          (e) => e.kind,
+          'kind',
+          AppFailureKind.cancelled,
+        ),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    requests.advanceSession();
+    pending.complete({
+      'code': 0,
+      'data': {'roomStatus': 1, 'roomid': 1024, 'liveStatus': 1},
+    });
+    await assertion;
+  });
   for (final section in [ProfileSection.following, ProfileSection.followers]) {
     final followers = section == ProfileSection.followers;
     for (final hidden in [false, true]) {

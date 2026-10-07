@@ -7,6 +7,7 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
+import '../../live/domain/live_room.dart';
 import '../domain/profile_repository.dart';
 
 class ApiProfileRepository implements ProfileRepository {
@@ -45,6 +46,16 @@ class ApiProfileRepository implements ProfileRepository {
       );
     }, cancellation: cancellation),
   );
+  @override
+  Future<ProfileLiveRoom?> loadLiveRoom(
+    UserId id, {
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    final room = await client.loadLiveRoom(id.value, context: context);
+    return room == null
+        ? null
+        : ProfileLiveRoom(id: RoomId(room.roomId), isLive: room.isLive);
+  }, cancellation: cancellation);
   @override
   Future<ProfilePage> loadEntries(
     UserId id,

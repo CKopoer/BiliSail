@@ -703,6 +703,64 @@ void main() {
     expect(profiles.loaded, isEmpty);
   });
 
+  for (final mode in WorkspaceNavigationMode.values) {
+    _workspaceTestWidgets('profile live entry opens and reuses room in $mode', (
+      tester,
+    ) async {
+      final profiles = _ProfileRepository(
+        liveRoom: const ProfileLiveRoom(id: RoomId('1024'), isLive: true),
+      );
+      final auth = _AuthRepository();
+      final settings = _SettingsRepository()
+        ..settings = const AppSettings.defaults().copyWith(
+          navigationMode: mode,
+        );
+      addTearDown(auth.dispose);
+      final router = createBiliRouter(
+        initialLocation: '/user/42',
+        playerBuilder: (_, _, _) => const SizedBox(),
+        livePlayerBuilder: (_, room) => Text('直播播放器 ${room.id.value}'),
+        liveComposerBuilder: (_, _) => const SizedBox(),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(auth),
+            settingsRepositoryProvider.overrideWithValue(settings),
+            profileRepositoryProvider.overrideWithValue(profiles),
+            liveRepositoryProvider.overrideWithValue(_ContentLiveRepository()),
+            feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+            homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+          ],
+          child: InputTestApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('profile-live-room')));
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, '/live/1024');
+      expect(find.text('直播播放器 1024'), findsOneWidget);
+      final roomScope = ProviderScope.containerOf(
+        tester.element(find.byType(LiveScreen)),
+      );
+      router.go('/user/42');
+      await tester.pumpAndSettle();
+      expect(profiles.loaded, ['42']);
+      await tester.tap(find.byKey(const ValueKey('profile-live-room')));
+      await tester.pumpAndSettle();
+      expect(
+        identical(
+          roomScope,
+          ProviderScope.containerOf(tester.element(find.byType(LiveScreen))),
+        ),
+        true,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   _workspaceTestWidgets(
     'workspace shortcuts work after focusing a real channel section',
     (tester) async {
@@ -1176,6 +1234,17 @@ final class _HomeRepository implements HomeRepository {
 }
 
 final class _ProfileRepository implements ProfileRepository {
+  _ProfileRepository({this.liveRoom});
+  final ProfileLiveRoom? liveRoom;
+  @override
+  Future<ProfileLiveRoom?> loadLiveRoom(
+    UserId id, {
+    required RequestCancellation cancellation,
+  }) async {
+    signals.putIfAbsent(id.value, () => []).add(cancellation);
+    return liveRoom;
+  }
+
   final loaded = <String>[];
   final signals = <String, List<RequestCancellation>>{};
   @override

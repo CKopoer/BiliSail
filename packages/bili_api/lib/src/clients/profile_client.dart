@@ -46,6 +46,32 @@ final class ProfileClient {
     );
   }
 
+  /// The public user card does not contain a live room. A successful null
+  /// result means the user has not opened a room, rather than a failed lookup.
+  Future<ApiProfileLiveRoom?> loadLiveRoom(
+    String mid, {
+    ApiRequestContext? context,
+  }) async {
+    _id(mid);
+    const e = 'profile_live_room';
+    final data = await api.requestJson(
+      Uri.https('api.live.bilibili.com', '/room/v1/Room/getRoomInfoOld', {
+        'mid': mid,
+      }),
+      e,
+      context: context,
+    );
+    final roomStatus = _number(data['roomStatus']);
+    if (roomStatus == 0) return null;
+    if (roomStatus != 1) _fail(e);
+    final liveStatus = _number(data['liveStatus']);
+    if (liveStatus != 0 && liveStatus != 1) _fail(e);
+    return ApiProfileLiveRoom(
+      roomId: _key(data['roomid'], e),
+      isLive: liveStatus == 1,
+    );
+  }
+
   Future<ApiPage<ApiProfileEntry>> loadVideos(
     String mid, {
     required int page,

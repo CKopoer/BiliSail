@@ -2,10 +2,18 @@ import '../../../domain/dynamic_post.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
+import '../../live/domain/live_room.dart';
 
 enum ProfileSection { videos, dynamics, folders, following, followers }
 
 enum ProfileEntryKind { video, dynamic, folder, user }
+
+final class ProfileLiveRoom {
+  const ProfileLiveRoom({required this.id, required this.isLive});
+
+  final RoomId id;
+  final bool isLive;
+}
 
 final class UserProfile {
   const UserProfile({
@@ -76,6 +84,10 @@ abstract interface class ProfileRepository {
   String get accountScope;
   int get sessionEpoch;
   Future<UserProfile> loadProfile(
+    UserId id, {
+    required RequestCancellation cancellation,
+  });
+  Future<ProfileLiveRoom?> loadLiveRoom(
     UserId id, {
     required RequestCancellation cancellation,
   });

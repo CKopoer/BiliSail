@@ -22,6 +22,62 @@ final class FakeTransport implements ApiTransport {
 ProfileClient client(Object Function(Uri) handler) =>
     ProfileClient(BiliApiClient(transport: FakeTransport(handler)));
 void main() {
+  for (final status in [0, 1]) {
+    for (final roomId in [1024, '9007199254740993123']) {
+      test(
+        'live lookup preserves room ID $roomId with status $status',
+        () async {
+          final room = await client((uri) {
+            expect(uri.host, 'api.live.bilibili.com');
+            expect(uri.path, '/room/v1/Room/getRoomInfoOld');
+            expect(uri.queryParameters, {'mid': '9007199254740993123'});
+            return {
+              'code': 0,
+              'data': {
+                'roomStatus': 1,
+                'roomid': roomId,
+                'liveStatus': status,
+                'roundStatus': 1,
+              },
+            };
+          }).loadLiveRoom('9007199254740993123');
+          expect(room?.roomId, '$roomId');
+          expect(room?.isLive, status == 1);
+        },
+      );
+    }
+  }
+  test('a user without a live room returns a successful null', () async {
+    final room = await client(
+      (_) => {
+        'code': 0,
+        'data': {'roomStatus': 0},
+      },
+    ).loadLiveRoom('1');
+    expect(room, isNull);
+  });
+  test('missing and malformed live fields fail as protocol errors', () async {
+    for (final data in [
+      <String, Object?>{},
+      {'roomStatus': 2},
+      {'roomStatus': 1, 'roomid': 0, 'liveStatus': 0},
+      {'roomStatus': 1, 'roomid': 123.0, 'liveStatus': 1},
+      {'roomStatus': 1, 'roomid': 'bad', 'liveStatus': 1},
+      {'roomStatus': 1, 'roomid': 123},
+      {'roomStatus': 1, 'roomid': 123, 'liveStatus': 2},
+    ]) {
+      await expectLater(
+        client((_) => {'code': 0, 'data': data}).loadLiveRoom('1'),
+        throwsA(
+          isA<ApiFailure>().having(
+            (error) => error.category,
+            'category',
+            ApiFailureCategory.protocol,
+          ),
+        ),
+      );
+    }
+  });
   for (final (following, followers) in [(0, 0), (1, 0), (0, 1), (1, 1)]) {
     test(
       'relation privacy flags are independent: $following / $followers',

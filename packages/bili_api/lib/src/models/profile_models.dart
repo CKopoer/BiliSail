@@ -3,6 +3,13 @@ import '../models.dart';
 
 enum ApiProfileEntryKind { video, dynamic, folder, user }
 
+final class ApiProfileLiveRoom {
+  const ApiProfileLiveRoom({required this.roomId, required this.isLive});
+
+  final String roomId;
+  final bool isLive;
+}
+
 final class ApiProfileRelationPrivacy {
   const ApiProfileRelationPrivacy({
     required this.followingHidden,

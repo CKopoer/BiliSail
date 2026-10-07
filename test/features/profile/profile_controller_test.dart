@@ -5,6 +5,7 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/profile/application/profile_controller.dart';
@@ -84,6 +85,67 @@ void main() {
     pending.complete(const UserProfile(id: id, name: '迟到资料'));
     await old;
     expect(state().profile?.name, '个人主页');
+  });
+  test(
+    'live lookup failures preserve profile and list, retry restores room',
+    () async {
+      repo.liveFailure = const AppFailure(AppFailureKind.network, '直播查询失败');
+      await controller.loadLiveRoom();
+      expect(state().liveRoomMessage, '直播查询失败');
+      expect(state().profile?.name, '个人主页');
+      expect(state().current.items, isNotEmpty);
+      repo.liveFailure = null;
+      repo.liveRoom = const ProfileLiveRoom(id: RoomId('1024'), isLive: true);
+      await controller.loadLiveRoom();
+      expect(state().liveRoom?.id, const RoomId('1024'));
+      expect(state().liveRoomMessage, isNull);
+    },
+  );
+  test(
+    'live refresh cancels old lookup and removes a room that was closed',
+    () async {
+      final pending = Completer<ProfileLiveRoom?>();
+      repo.livePending = pending;
+      final old = controller.loadLiveRoom();
+      final read = repo.liveRead;
+      repo.livePending = null;
+      repo.liveRoom = const ProfileLiveRoom(id: RoomId('1024'), isLive: false);
+      await controller.loadLiveRoom();
+      expect(read?.isCancelled, true);
+      pending.complete(const ProfileLiveRoom(id: RoomId('999'), isLive: true));
+      await old;
+      expect(state().liveRoom?.id, const RoomId('1024'));
+      repo.liveRoom = null;
+      await controller.refresh();
+      expect(state().liveRoom, isNull);
+    },
+  );
+  test(
+    'account changes cancel live lookup and discard its late room',
+    () async {
+      final pending = Completer<ProfileLiveRoom?>();
+      repo.livePending = pending;
+      final old = controller.loadLiveRoom();
+      final read = repo.liveRead;
+      repo.livePending = null;
+      repo.epoch++;
+      auth.emit(const AuthState());
+      await Future<void>.delayed(Duration.zero);
+      expect(read?.isCancelled, true);
+      pending.complete(const ProfileLiveRoom(id: RoomId('999'), isLive: true));
+      await old;
+      expect(state().liveRoom, isNull);
+    },
+  );
+  test('closing a profile cancels its live lookup', () async {
+    final pending = Completer<ProfileLiveRoom?>();
+    repo.livePending = pending;
+    final old = controller.loadLiveRoom();
+    final read = repo.liveRead;
+    container.dispose();
+    expect(read?.isCancelled, true);
+    pending.complete(const ProfileLiveRoom(id: RoomId('999'), isLive: true));
+    await old;
   });
   test('profile failure does not remove list and list reload preserves profile error', () async {
     repo.profileFailure = const AppFailure(AppFailureKind.network, '资料加载失败');
@@ -424,6 +486,23 @@ void main() {
 }
 
 class _Repo implements ProfileRepository {
+  ProfileLiveRoom? liveRoom;
+  AppFailure? liveFailure;
+  Completer<ProfileLiveRoom?>? livePending;
+  RequestCancellation? liveRead;
+  @override
+  Future<ProfileLiveRoom?> loadLiveRoom(
+    UserId id, {
+    required RequestCancellation cancellation,
+  }) async {
+    liveRead = cancellation;
+    if (liveFailure case final error?) throw error;
+    return switch (livePending) {
+      final pending? => await pending.future,
+      null => liveRoom,
+    };
+  }
+
   int epoch = 0;
   int listReads = 0;
   bool isHidden = false;

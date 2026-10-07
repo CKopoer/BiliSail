@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/platform/external_links.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
+import '../../live/domain/live_room.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/dynamic_post_interactions.dart';
@@ -20,12 +21,14 @@ class ProfileScreen extends ConsumerStatefulWidget {
     required this.id,
     this.onOpenUser,
     this.onOpenVideo,
+    this.onOpenLiveRoom,
     this.isSelf = false,
     this.initialSection = ProfileSection.videos,
   });
   final UserId id;
   final void Function(UserId)? onOpenUser;
   final void Function(VideoSummary)? onOpenVideo;
+  final void Function(RoomId)? onOpenLiveRoom;
   final bool isSelf;
   final ProfileSection initialSection;
   @override
@@ -91,6 +94,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           profile: p,
                           isSelf: widget.isSelf,
                           onSelectSection: controller.select,
+                          liveRoom: state.liveRoom,
+                          onOpenLiveRoom: switch ((
+                            state.liveRoom,
+                            widget.onOpenLiveRoom,
+                          )) {
+                            (final room?, final open?) => () => open(room.id),
+                            _ => null,
+                          },
                         )
                       else if (state.profileLoading)
                         const LinearProgressIndicator(),
@@ -98,6 +109,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         StateView.error(
                           message: message,
                           onAction: controller.loadProfile,
+                        ),
+                      if (state.liveRoomMessage case final message?)
+                        StateView.error(
+                          message: '直播间：$message',
+                          onAction: controller.loadLiveRoom,
                         ),
                       const SizedBox(height: 4),
                       ProfileSectionNavigation(

@@ -11,11 +11,15 @@ class ProfileHeader extends StatelessWidget {
     required this.profile,
     required this.onSelectSection,
     this.isSelf = false,
+    this.liveRoom,
+    this.onOpenLiveRoom,
   });
 
   final UserProfile profile;
   final ValueChanged<ProfileSection> onSelectSection;
   final bool isSelf;
+  final ProfileLiveRoom? liveRoom;
+  final VoidCallback? onOpenLiveRoom;
 
   @override
   Widget build(BuildContext context) {
@@ -136,6 +140,19 @@ class ProfileHeader extends StatelessWidget {
                 key: const ValueKey('profile-videos-stat'),
                 count: count,
                 label: '投稿',
+              ),
+            if (liveRoom case final room? when room.id.isValid)
+              Tooltip(
+                message: room.isLive ? '进入正在直播的直播间' : '进入直播间，当前未开播',
+                child: OutlinedButton.icon(
+                  key: const ValueKey('profile-live-room'),
+                  onPressed: onOpenLiveRoom,
+                  icon: Icon(
+                    room.isLive ? Icons.live_tv : Icons.live_tv_outlined,
+                    size: 18,
+                  ),
+                  label: Text(room.isLive ? '正在直播' : '直播间'),
+                ),
               ),
           ],
         ),

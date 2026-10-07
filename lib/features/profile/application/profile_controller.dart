@@ -33,6 +33,8 @@ final class ProfileState {
     this.profile,
     this.profileLoading = false,
     this.profileMessage,
+    this.liveRoom,
+    this.liveRoomMessage,
     this.section = ProfileSection.videos,
     this.lists = const {},
     this.order = 'pubdate',
@@ -41,6 +43,8 @@ final class ProfileState {
     this.folderTitle,
   });
   final UserProfile? profile;
+  final ProfileLiveRoom? liveRoom;
+  final String? liveRoomMessage;
   final bool profileLoading;
   final String? profileMessage, folderId, folderTitle;
   final ProfileSection section;
@@ -52,6 +56,10 @@ final class ProfileState {
     bool? profileLoading,
     String? profileMessage,
     bool clearProfileMessage = false,
+    ProfileLiveRoom? liveRoom,
+    String? liveRoomMessage,
+    bool clearLiveRoom = false,
+    bool clearLiveRoomMessage = false,
     ProfileSection? section,
     Map<ProfileSection, ProfileListState>? lists,
     String? order,
@@ -65,6 +73,10 @@ final class ProfileState {
     profileMessage: clearProfileMessage
         ? null
         : profileMessage ?? this.profileMessage,
+    liveRoom: clearLiveRoom ? null : liveRoom ?? this.liveRoom,
+    liveRoomMessage: clearLiveRoomMessage
+        ? null
+        : liveRoomMessage ?? this.liveRoomMessage,
     section: section ?? this.section,
     lists: lists ?? this.lists,
     order: order ?? this.order,
@@ -78,7 +90,9 @@ class ProfileController extends Notifier<ProfileState> {
   ProfileController(this.id);
   final UserId id;
   int _generation = 0, _profileGeneration = 0;
+  int _liveRoomGeneration = 0;
   RequestCancellation _profileRead = RequestCancellation();
+  RequestCancellation _liveRoomRead = RequestCancellation();
   final Map<ProfileSection, RequestCancellation> _reads = {};
   final Map<ProfileSection, int> _versions = {};
   @override
@@ -93,6 +107,7 @@ class ProfileController extends Notifier<ProfileState> {
     Future<void>.microtask(() {
       if (ref.mounted && generation == _generation) {
         loadProfile();
+        loadLiveRoom();
         load();
       }
     });
@@ -101,12 +116,14 @@ class ProfileController extends Notifier<ProfileState> {
 
   void _cancel() {
     _profileRead.cancel();
+    _liveRoomRead.cancel();
     for (final read in _reads.values) {
       read.cancel();
     }
     _reads.clear();
     _versions.clear();
     ++_profileGeneration;
+    ++_liveRoomGeneration;
   }
 
   bool _current(int generation, String scope, int epoch) =>
@@ -175,7 +192,40 @@ class ProfileController extends Notifier<ProfileState> {
   }
 
   Future<void> refresh() async {
-    await Future.wait([loadProfile(), load(refresh: true)]);
+    await Future.wait([loadProfile(), loadLiveRoom(), load(refresh: true)]);
+  }
+
+  Future<void> loadLiveRoom() async {
+    _liveRoomRead.cancel();
+    _liveRoomRead = RequestCancellation();
+    final version = ++_liveRoomGeneration, generation = _generation;
+    final repository = ref.read(profileRepositoryProvider);
+    final scope = repository.accountScope, epoch = repository.sessionEpoch;
+    state = state.copy(clearLiveRoomMessage: true);
+    try {
+      final room = await repository.loadLiveRoom(
+        id,
+        cancellation: _liveRoomRead,
+      );
+      if (_current(generation, scope, epoch) &&
+          version == _liveRoomGeneration) {
+        state = state.copy(liveRoom: room, clearLiveRoom: room == null);
+      }
+    } on AppFailure catch (error) {
+      if (_current(generation, scope, epoch) &&
+          version == _liveRoomGeneration) {
+        state = state.copy(
+          liveRoomMessage: error.kind == AppFailureKind.cancelled
+              ? null
+              : error.message,
+        );
+      }
+    } catch (_) {
+      if (_current(generation, scope, epoch) &&
+          version == _liveRoomGeneration) {
+        state = state.copy(liveRoomMessage: '直播间信息暂时无法加载，请重试');
+      }
+    }
   }
 
   void _setList(ProfileSection section, ProfileListState list) {
