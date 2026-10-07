@@ -1918,6 +1918,63 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final fullscreen in [false, true]) {
+    testWidgets('ended playback hides stale buffering fullscreen=$fullscreen', (
+      tester,
+    ) async {
+      final engine = _FakeEngine();
+      final window = _FakeWindowService();
+      final session = _session(engine);
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      if (fullscreen) {
+        await tester.tap(find.byTooltip('全屏（F）'));
+        await _pumpFrames(tester);
+      }
+
+      engine._emit(
+        engine.currentSnapshot.copyWith(
+          phase: PlaybackPhase.buffering,
+          isBuffering: true,
+        ),
+      );
+      await _pumpFrames(tester);
+      expect(find.text('正在准备音视频…'), findsOneWidget);
+
+      // Completion takes precedence even if a backend retains its last flag.
+      engine._emit(
+        engine.currentSnapshot.copyWith(
+          phase: PlaybackPhase.ended,
+          position: engine.currentSnapshot.duration,
+          desiredPlaying: false,
+        ),
+      );
+      await _pumpFrames(tester);
+      expect(find.text('正在准备音视频…'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byTooltip('播放（空格）'), findsOneWidget);
+
+      // A later position sample must not bring the completion spinner back.
+      engine._emit(engine.currentSnapshot);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('正在准备音视频…'), findsNothing);
+
+      engine._emit(
+        engine.currentSnapshot.copyWith(
+          phase: PlaybackPhase.buffering,
+          position: Duration.zero,
+          desiredPlaying: true,
+        ),
+      );
+      await _pumpFrames(tester);
+      expect(find.text('正在准备音视频…'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('player group keeps its name and exposes controls', (
     tester,
   ) async {

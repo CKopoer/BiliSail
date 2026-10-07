@@ -18,6 +18,7 @@ const root = CommentEntry(
   author: '甲',
   authorId: UserId('100'),
   message: '原评论',
+  ipLocation: 'IP属地：广东',
   replyCount: 3,
 );
 const child = CommentEntry(
@@ -25,6 +26,7 @@ const child = CommentEntry(
   author: '乙',
   authorId: UserId('101'),
   message: '回复',
+  ipLocation: 'IP属地：上海',
   rootId: '10',
   parentId: '10',
 );
@@ -336,11 +338,14 @@ void main() {
       ),
     );
     await tester.pump();
+    expect(find.text('IP属地：广东'), findsOneWidget);
     expect(find.text('共 3 条回复 ›'), findsOneWidget);
     await tester.tap(find.text('共 3 条回复 ›'));
     await tester.pumpAndSettle();
     expect(find.text('详情'), findsOneWidget);
     expect(find.text('回复'), findsOneWidget);
+    expect(find.text('IP属地：广东'), findsOneWidget);
+    expect(find.text('IP属地：上海'), findsOneWidget);
     await tester.tap(find.byTooltip('回复评论').last);
     await tester.pumpAndSettle();
     expect(find.text('回复 @乙'), findsOneWidget);

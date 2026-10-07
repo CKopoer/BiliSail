@@ -26,6 +26,80 @@ class _Transport implements ApiTransport {
 }
 
 void main() {
+  test('comment locations map for roots, previews and reply pages', () async {
+    final transport = _Transport(
+      (_) => {
+        'code': 0,
+        'data': {
+          'page': {'count': 1, 'size': 20},
+          'replies': [
+            {
+              'rpid': '10',
+              'member': {'uname': 'reader'},
+              'content': {'message': 'comment'},
+              'reply_control': {'location': ' IP属地：广东 '},
+              'replies': [
+                {
+                  'rpid': '11',
+                  'member': {'uname': 'reply author'},
+                  'content': {'message': 'reply'},
+                  'reply_control': {'location': 'IP属地：上海'},
+                },
+              ],
+            },
+          ],
+        },
+      },
+    );
+    final api = BiliApiClient(transport: transport);
+    for (final page in [
+      await api.getVideoComments('42'),
+      await api.getVideoReplies('42', '10'),
+    ]) {
+      expect(page.items.single.ipLocation, 'IP属地：广东');
+      expect(page.items.single.replies.single.ipLocation, 'IP属地：上海');
+    }
+    expect(transport.requests.map((uri) => uri.path), [
+      '/x/v2/reply',
+      '/x/v2/reply/reply',
+    ]);
+  });
+
+  test('missing or malformed optional locations preserve comments', () async {
+    for (final control in <Object?>[
+      null,
+      'invalid',
+      <Object?>[],
+      <String, Object?>{},
+      {'location': null},
+      {'location': 42},
+      {'location': ''},
+      {'location': ' \n '},
+    ]) {
+      final api = BiliApiClient(
+        transport: _Transport(
+          (_) => {
+            'code': 0,
+            'data': {
+              'page': {'count': 1, 'size': 20},
+              'replies': [
+                {
+                  'rpid': '10',
+                  'member': {'uname': 'reader'},
+                  'content': {'message': 'comment'},
+                  'reply_control': control,
+                },
+              ],
+            },
+          },
+        ),
+      );
+      final comment = (await api.getVideoComments('42')).items.single;
+      expect(comment.ipLocation, isNull);
+      expect(comment.message, 'comment');
+    }
+  });
+
   test(
     'video tags preserve names, deduplicate and use the video bvid',
     () async {

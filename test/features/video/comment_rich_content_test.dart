@@ -24,6 +24,7 @@ void main() {
         message: 'comment',
         level: 6,
         publishedAt: DateTime(2026, 10, 6),
+        ipLocation: 'IP属地：内蒙古',
         decorationImageUrl: Uri.https('i0.hdslb.com', '/card.png'),
         decorationName: '装扮名称',
         decorationFanNumber: '0014931',
@@ -44,6 +45,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(BiliLevelBadge), findsOneWidget);
+      expect(find.text('IP属地：内蒙古'), findsOneWidget);
       expect(find.text('装扮名称'), findsNothing);
       final serial = tester.widget<Text>(find.text('NO.\n0014931'));
       expect(serial.style?.color, const Color(0xffabcdef));
@@ -65,6 +67,59 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+  testWidgets('IP location follows the date in the existing metadata style', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommentAuthorHeader(
+            comment: CommentEntry(
+              id: '1',
+              author: 'reader',
+              message: 'comment',
+              publishedAt: DateTime(2026, 10, 7),
+              ipLocation: 'IP属地：广东',
+            ),
+          ),
+        ),
+      ),
+    );
+    final date = find.text('10-7');
+    final location = find.text('IP属地：广东');
+    expect(
+      tester.widget<Text>(location).style,
+      tester.widget<Text>(date).style,
+    );
+    expect(tester.getTopLeft(location).dy, tester.getTopLeft(date).dy);
+    expect(tester.getTopLeft(location).dx, tester.getTopRight(date).dx + 8);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('absent IP location leaves the date without a placeholder', (
+    tester,
+  ) async {
+    for (final location in <String?>[null, '', ' \n ']) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CommentAuthorHeader(
+              comment: CommentEntry(
+                id: '1',
+                author: 'reader',
+                message: 'comment',
+                publishedAt: DateTime(2026, 10, 7),
+                ipLocation: location,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('10-7'), findsOneWidget);
+      expect(find.textContaining('IP属地'), findsNothing);
+      expect(find.byType(Text), findsNWidgets(2));
+      expect(tester.takeException(), isNull);
+    }
+  });
   testWidgets('absent decoration or serial never invents image metadata', (
     tester,
   ) async {
@@ -115,6 +170,7 @@ void main() {
       id: '1',
       author: 'a',
       message: '[笑]',
+      ipLocation: 'IP属地：广东',
       level: 6,
       medalName: 'medal',
       medalLevel: 5,
@@ -127,6 +183,7 @@ void main() {
     );
     for (final changed in [c.withLike(true), c.withReplies([])]) {
       expect(changed.level, 6);
+      expect(changed.ipLocation, 'IP属地：广东');
       expect(changed.medalName, 'medal');
       expect(changed.medalLevel, 5);
       expect(changed.decorationImageUrl, c.decorationImageUrl);

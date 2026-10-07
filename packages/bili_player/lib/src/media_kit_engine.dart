@@ -595,10 +595,14 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
     _subscriptions.add(
       player.stream.completed.listen((value) {
         if (canChangePhase() && value) {
+          // media_kit emits completion before its final buffering=false event.
+          // Ended ignores those late events, so clear transient flags here.
           _publish(
             _snapshot.copyWith(
               phase: PlaybackPhase.ended,
               desiredPlaying: false,
+              isBuffering: false,
+              isSeeking: false,
             ),
           );
         }

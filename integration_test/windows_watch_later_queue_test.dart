@@ -180,9 +180,15 @@ void main() {
           tester,
           () => engine.currentSnapshot.phase == PlaybackPhase.ended,
         );
+        expect(engine.currentSnapshot.isBuffering, isFalse);
+        expect(engine.currentSnapshot.isSeeking, isFalse);
+        expect(find.text('正在准备音视频…'), findsNothing);
         // Late native playing/buffering notifications must not hide EOF.
         await tester.pump(const Duration(seconds: 1));
         expect(engine.currentSnapshot.phase, PlaybackPhase.ended);
+        expect(engine.currentSnapshot.isBuffering, isFalse);
+        expect(engine.currentSnapshot.isSeeking, isFalse);
+        expect(find.text('正在准备音视频…'), findsNothing);
         expect(session.detail?.summary.id, _details.last.summary.id);
         final lastGeneration = session.sourceGeneration;
         await session.togglePlaying();
@@ -193,6 +199,9 @@ void main() {
               engine.currentSnapshot.position < const Duration(seconds: 2),
         );
         expect(session.sourceGeneration, lastGeneration);
+        expect(engine.currentSnapshot.isBuffering, isFalse);
+        expect(engine.currentSnapshot.isSeeking, isFalse);
+        expect(find.text('正在准备音视频…'), findsNothing);
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());

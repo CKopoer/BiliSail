@@ -131,6 +131,7 @@ final class ApiVideoComment {
     required this.message,
     required this.likeCount,
     required this.publishedAt,
+    this.ipLocation,
     this.liked = false,
     this.replyCount = 0,
     this.rootId,
@@ -170,6 +171,9 @@ final class ApiVideoComment {
   final String message;
   final int likeCount;
   final DateTime? publishedAt;
+
+  /// Server-supplied display text from reply_control.location.
+  final String? ipLocation;
 }
 
 final class ApiVideoCollection {

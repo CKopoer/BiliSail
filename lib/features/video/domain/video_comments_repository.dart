@@ -11,6 +11,7 @@ final class CommentEntry {
     this.avatarUrl,
     this.authorId,
     this.publishedAt,
+    this.ipLocation,
     this.likeCount = 0,
     this.liked = false,
     this.replyCount = 0,
@@ -42,6 +43,7 @@ final class CommentEntry {
   final Uri? avatarUrl;
   final UserId? authorId;
   final DateTime? publishedAt;
+  final String? ipLocation;
   final int likeCount, replyCount;
   final bool liked;
   final String? rootId, parentId;
@@ -64,6 +66,7 @@ final class CommentEntry {
     avatarUrl: avatarUrl,
     authorId: authorId,
     publishedAt: publishedAt,
+    ipLocation: ipLocation,
     likeCount: (likeCount + (value ? 1 : -1)).clamp(0, 1 << 31),
     liked: value,
     replyCount: replyCount,
@@ -90,6 +93,7 @@ final class CommentEntry {
         avatarUrl: avatarUrl,
         authorId: authorId,
         publishedAt: publishedAt,
+        ipLocation: ipLocation,
         likeCount: likeCount,
         liked: liked,
         replyCount: count ?? replyCount,

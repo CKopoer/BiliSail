@@ -38,6 +38,7 @@ final class ApiVideoCommentsRepository
     pictures: v.pictures,
     avatarUrl: v.avatarUrl,
     publishedAt: v.publishedAt,
+    ipLocation: v.ipLocation,
     likeCount: v.likeCount,
     liked: v.liked,
     replyCount: v.replyCount,

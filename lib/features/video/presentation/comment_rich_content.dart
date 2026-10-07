@@ -168,6 +168,8 @@ class CommentAuthorHeader extends StatelessWidget {
     final theme = Theme.of(context), c = comment;
     final styles = CommentTextStyles(theme);
     final time = c.publishedAt?.toLocal();
+    final location = c.ipLocation?.trim();
+    final hasLocation = location != null && location.isNotEmpty;
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -214,10 +216,18 @@ class CommentAuthorHeader extends StatelessWidget {
               ),
           ],
         ),
-        if (time != null)
+        if (time != null || hasLocation)
           Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Text('${time.month}-${time.day}', style: styles.metadata),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 2,
+              children: [
+                if (time != null)
+                  Text('${time.month}-${time.day}', style: styles.metadata),
+                if (hasLocation) Text(location, style: styles.metadata),
+              ],
+            ),
           ),
       ],
     );

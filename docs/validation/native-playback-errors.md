@@ -29,3 +29,13 @@
 - 详细记录：`artifacts/native-error-final-playback-tests.log`、`native-error-player-analysis.log`、`native-error-player-tests.log`、`native-error-windows-media.log`、`native-error-windows-build.log`；完整检查受阻记录为 `native-error-check.log`、`native-error-final-analysis.log`。真实 HTTP 403 脱敏事件位于 `artifacts/native-playback-diagnostics/playback-*.log`，它们是受控测试证据，不是用户此前故障的日志。
 
 未取得本次用户故障的原始 native 文本；新日志只能记录新版启动后的事件。Android/macOS 原生运行、长时间网络恢复与性能仍需逐平台实测。
+
+## 播放完成后加载提示不消失（2026-10-07）
+
+用户反馈视频已经播放到末尾、时间显示完成，但仍显示“正在准备音视频…”。本机锁定的 `media_kit 1.2.6` 在 EOF 时先发送 `completed=true`，随后发送 `buffering=false`。适配器为防止后续通知覆盖完播状态，在 `ended` 后忽略状态切换；此前完播只修改 phase 和播放意图，保留了 `isBuffering=true`，后续清除事件又被忽略。播放面板直接读取该标记，导致加载提示一直存在。
+
+修复在进入 `PlaybackPhase.ended` 时同时清除缓冲、seek 标记，继续保留完播状态直到显式 seek/play 或换源。共享播放面板也排除已结束源的缓冲提示；解析新源和正常播放缓冲仍显示原有加载提示。
+
+修复前，窗口/全屏两项回归均复现提示残留，Windows 原生队列测试确认完播后 `isBuffering` 实际为 true。修复后两项界面回归及 `integration_test/windows_watch_later_queue_test.dart` 通过，覆盖结束时/延后一秒/末尾重播均无残留提示、分 P 与下条自动推进，以及重播沿用原 source generation。使用本地分轨夹具，未启用在线 smoke；Android/macOS 原生运行尚未验证。
+
+原生修复前后日志分别为 `build/playback-completion-native-before.log` 与 `build/playback-completion-native-after.log`。

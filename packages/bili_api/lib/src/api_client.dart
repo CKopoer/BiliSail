@@ -438,6 +438,9 @@ final class BiliApiClient {
   }) {
     final member = _map(entry['member'], endpoint);
     final content = _map(entry['content'], endpoint);
+    final location = _text(
+      _commentMap(entry['reply_control'])['location'],
+    )?.trim();
     final card = _commentMap(_commentMap(member['user_sailing'])['cardbg']);
     final fan = _commentMap(card['fan']);
     String? optionalId(Object? value) =>
@@ -498,6 +501,7 @@ final class BiliApiClient {
                   ),
             ),
       publishedAt: _publishedAt(entry['ctime']),
+      ipLocation: location?.isNotEmpty == true ? location : null,
     );
   }
 

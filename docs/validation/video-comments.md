@@ -35,3 +35,13 @@
 `flutter build apk --debug --target-platform android-arm64 --no-pub` 成功，仅为构建检查，没有连接 Android 设备实测。Windows 便携目录和 ZIP、Android 调试 APK 已更新至 `artifacts/`，SHA-256 记录于 `artifacts/SHA256SUMS.txt`；便携 EXE 与 Release 构建哈希一致，ZIP 可打开且包含完整入口，更新后的便携版已重新启动。
 
 未执行真实账号点赞、评论或回复发送。Android/macOS 运行、性能和长期播放仍需对应平台实测；公开游客读接口的成功不代表登录写接口已完成在线验收。
+
+## 评论 IP 属地（2026-10-07）
+
+属地取自评论响应的可选 `reply_control.location`，映射为 `ApiVideoComment.ipLocation` 和 `CommentEntry.ipLocation`。沿用服务端显示文本（例如 `IP属地：广东`），去除首尾空白，不重复添加前缀。缺失、空白或类型异常时省略属地，不影响日期、正文和其他评论信息。主评论及完整二级回复通过既有作者头部在日期后显示，复用当前元数据字体/灰色，间距 8px，宽度不足时换行；点赞和更新回复列表保留属地。
+
+只读参考相邻 `biliuwp-lite` 的 `Models/Requests/Api/CommentApi.cs`、`Models/Common/Comment/CommentItem.cs` 和 `CommentReplyControlModel.cs`，借鉴响应字段语义，独立实现 Dart 映射与 Flutter 展示；未复制代码、样式或资源，不扩大许可采用范围。保持现有 `/x/v2/reply` 和 `/x/v2/reply/reply` 页码契约。
+
+定向测试通过 43 项，覆盖主评论/预览/二级响应映射、Repository 转换、点赞/回复复制、属地缺省/异常降级、日期同行样式及 180/320px 双倍字号布局。游客只读样本 `BV1GLHE6hEFg` 的旧接口返回 3 条主评论、7 条预览及 1 条二级回复，均未携带属地；按参考实现签名请求 WBI main 返回 20 条主评论，同样未携带属地。此结果只说明该游客响应未提供字段，不能推断登录后的响应或其他视频行为。非空属地以脱敏 fixture/widget 测试验证，尚未完成真实登录响应及 Windows/Android/macOS 视觉验收。
+
+`tool/check.ps1 -SkipPub` 完整通过：根应用 994 项、`bili_api` 285 项、`bili_player` 22 项、`bili_danmaku` 32 项，共 1333 项；根应用及三个包的格式、静态分析通过。文档相对文件链接和 `git diff --check` 通过。
