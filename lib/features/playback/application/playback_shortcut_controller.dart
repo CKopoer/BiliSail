@@ -8,6 +8,8 @@ import '../../../domain/playback_rates.dart';
 import '../../settings/domain/shortcut_settings.dart';
 import 'playback_session.dart';
 
+enum _RateHoldInput { keyboard, touch }
+
 /// One controller per PlaybackPanel owner, shared by inline/fullscreen views.
 final class PlaybackShortcutController extends ChangeNotifier {
   PlaybackShortcutController({
@@ -30,7 +32,9 @@ final class PlaybackShortcutController extends ChangeNotifier {
   final Timer Function(Duration, void Function()) timer;
   Timer? _hold, _feedback;
   int? _holdGeneration;
+  _RateHoldInput? _holdInput;
   bool _accelerating = false, rateFeedback = false, _disposed = false;
+  bool get isHoldingRate => _accelerating;
   double _savedVolume = 100;
   Set<ShortcutAction> get capabilities => {
     ShortcutAction.playPause,
@@ -62,6 +66,8 @@ final class PlaybackShortcutController extends ChangeNotifier {
     _hold = null;
     final generation = _holdGeneration;
     _holdGeneration = null;
+    _holdInput = null;
+    final accelerating = _accelerating;
     if (_accelerating && generation == session.sourceGeneration) {
       unawaited(
         session.endTemporaryRate(
@@ -70,6 +76,39 @@ final class PlaybackShortcutController extends ChangeNotifier {
       );
     }
     _accelerating = false;
+    if (accelerating && !_disposed) notifyListeners();
+  }
+
+  void _beginRateHold() {
+    // Record the hold before awaiting the engine so early release restores
+    // even a pending rate change.
+    _accelerating = true;
+    unawaited(session.beginTemporaryRate(settings().holdRate));
+    notifyListeners();
+  }
+
+  void prepareTouchHold() {
+    // Register at pointer down so navigation, focus or source changes can
+    // invalidate the gesture before the recognizer's deadline is reached.
+    if (_disposed || !active() || session.isLive) return;
+    cancel();
+    _holdInput = _RateHoldInput.touch;
+    _holdGeneration = session.sourceGeneration;
+  }
+
+  void beginTouchHold() {
+    if (_disposed ||
+        !active() ||
+        session.isLive ||
+        _holdInput != _RateHoldInput.touch ||
+        _holdGeneration != session.sourceGeneration) {
+      return;
+    }
+    _beginRateHold();
+  }
+
+  void endTouchHold() {
+    if (_holdInput == _RateHoldInput.touch) cancel();
   }
 
   Future<CommandOutcome> execute(
@@ -81,8 +120,9 @@ final class PlaybackShortcutController extends ChangeNotifier {
     if (action == ShortcutAction.seekForward &&
         stroke.device == InputDevice.keyboard) {
       if (stroke.phase == InputPhase.down) {
+        cancel();
+        _holdInput = _RateHoldInput.keyboard;
         _holdGeneration = generation;
-        _accelerating = false;
         _hold = timer(Duration(milliseconds: settings().holdDelayMs), () {
           if (_disposed ||
               !active() ||
@@ -90,12 +130,10 @@ final class PlaybackShortcutController extends ChangeNotifier {
             cancel();
             return;
           }
-          // Mark acceleration before awaiting the engine. Early release must
-          // restore the pending begin rather than perform a short seek.
-          _accelerating = true;
-          unawaited(session.beginTemporaryRate(settings().holdRate));
+          _beginRateHold();
         });
-      } else if (stroke.phase == InputPhase.up) {
+      } else if (stroke.phase == InputPhase.up &&
+          _holdInput == _RateHoldInput.keyboard) {
         final short = !_accelerating && _holdGeneration == generation;
         cancel();
         if (short) {
@@ -188,8 +226,8 @@ final class PlaybackShortcutController extends ChangeNotifier {
 
   @override
   void dispose() {
-    cancel();
     _disposed = true;
+    cancel();
     _feedback?.cancel();
     session.removeListener(_sourceChanged);
     super.dispose();

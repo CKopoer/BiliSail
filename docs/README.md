@@ -67,6 +67,7 @@
 | [动态分享、评论与点赞](validation/dynamic-interactions.md) | Web 评论身份、共用评论区、复制/转发、单次写与会话隔离 |
 | [用户页、倍速与标签播放](validation/profile-playback-rates.md) | 紧凑资料/工具条、固定倍速档位和普通标签继续播放 |
 | [应用会话内继承倍速](validation/session-playback-rate.md) | 后续视频继承调速、长按隔离、重启默认值与验证边界 |
+| [触摸长按临时倍速](validation/touch-hold-playback-rate.md) | 画面长按使用已有延迟／倍速、松开恢复、全屏与取消边界 |
 | [首页刷新、自动分页与图片缓存](validation/feed-scroll-image-cache.md) | 悬浮刷新/回顶部、首屏补页、隐藏列表隔离和图片缓存设置 |
 | [列表滚动性能修复](validation/feed-scroll-performance.md) | Windows profile 对比、首页及搜索/历史虚拟化、局部重建和悬停生命周期 |
 | [全局桌面滚轮平滑过渡](validation/smooth-scrolling.md) | 统一滚轮动画、连续/反向输入、嵌套仲裁及验证边界 |

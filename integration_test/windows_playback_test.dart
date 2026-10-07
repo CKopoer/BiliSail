@@ -805,6 +805,43 @@ void main() {
           reason: 'Releasing a long press must not also perform a short seek',
         );
 
+        Future<void> touchHold({required bool cancel}) async {
+          final position = engine.currentSnapshot.position;
+          final gesture = await tester.startGesture(
+            tester.getTopLeft(surfaceTarget) + const Offset(30, 50),
+            kind: PointerDeviceKind.touch,
+          );
+          await _until(
+            tester,
+            () =>
+                engine.currentSnapshot.rate == 3 &&
+                find.text('长按倍速 3.0x').evaluate().isNotEmpty,
+          );
+          expect(find.text('长按倍速 3.0x'), findsOneWidget);
+          if (cancel) {
+            await gesture.cancel();
+          } else {
+            await gesture.up();
+          }
+          await _until(
+            tester,
+            () =>
+                engine.currentSnapshot.rate == 1.5 &&
+                find.textContaining('长按倍速').evaluate().isEmpty,
+          );
+          expect(find.textContaining('长按倍速'), findsNothing);
+          expect(find.byKey(const ValueKey('player-controls')), findsOneWidget);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(engine.currentSnapshot.generation, generation);
+          expect(
+            (engine.currentSnapshot.position - position).abs(),
+            lessThan(const Duration(milliseconds: 250)),
+          );
+        }
+
+        await touchHold(cancel: false);
+        await touchHold(cancel: true);
+
         await session.seek(const Duration(seconds: 5));
         await _until(
           tester,
@@ -881,6 +918,10 @@ void main() {
                 find.byTooltip('退出全屏（Esc）').evaluate().length == 1,
           );
           expect(find.byTooltip('退出全屏（Esc）'), findsOneWidget);
+          if (cycle == 0) {
+            await touchHold(cancel: false);
+            await touchHold(cancel: true);
+          }
           expectDanmakuPreserved();
           expect(engine.currentSnapshot.generation, generation);
           expect(tester.takeException(), isNull);

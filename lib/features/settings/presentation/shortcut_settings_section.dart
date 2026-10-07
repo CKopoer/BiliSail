@@ -106,6 +106,7 @@ class ShortcutSettingsSection extends StatelessWidget {
       ListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('长按临时倍速'),
+        subtitle: const Text('触摸长按视频画面或长按快进键，松开恢复原倍速。'),
         trailing: DropdownButton<double>(
           value: settings.holdRate,
           items: [

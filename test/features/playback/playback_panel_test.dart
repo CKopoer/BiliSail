@@ -1488,6 +1488,257 @@ void main() {
     },
   );
 
+  for (final fullscreen in [false, true]) {
+    for (final visible in [false, true]) {
+      testWidgets(
+        'touch hold uses configured delay and rate with ${visible ? 'visible' : 'hidden'} controls ${fullscreen ? 'fullscreen' : 'inline'}',
+        (tester) async {
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          final window = _FakeWindowService(desktop: false);
+          addTearDown(session.close);
+          final settings = const AppSettings.defaults().copyWith(
+            shortcuts: const ShortcutSettings.defaults()
+                .withEnabled(false)
+                .withPlayback(holdDelayMs: 700, holdRate: 2),
+          );
+          await tester.pumpWidget(_app(session, window, settings));
+          await _pumpFrames(tester);
+          await session.setRate(1.5);
+          await session.seek(const Duration(seconds: 12));
+          if (fullscreen) {
+            await tester.tap(find.byTooltip('全屏'));
+            await _pumpFrames(tester);
+          }
+          if (!visible) {
+            await tester.tapAt(_surfacePoint(tester));
+            await tester.pump(const Duration(milliseconds: 350));
+          }
+          // A hold changes speed without changing the user's pause intent.
+          if (visible) await session.pause();
+          final playing = engine.currentSnapshot.desiredPlaying;
+          final opens = engine.opens;
+          final generation = session.sourceGeneration;
+          final gesture = await tester.startGesture(_surfacePoint(tester));
+          await tester.pump(const Duration(milliseconds: 699));
+          expect(engine.currentSnapshot.rate, 1.5);
+          await tester.pump(const Duration(milliseconds: 2));
+          expect(engine.currentSnapshot.rate, 2);
+          expect(find.text('长按倍速 2.0x'), findsOneWidget);
+          await gesture.up();
+          await _pumpFrames(tester);
+          await tester.pump(const Duration(milliseconds: 350));
+          expect(engine.currentSnapshot.rate, 1.5);
+          expect(engine.currentSnapshot.desiredPlaying, playing);
+          expect(engine.currentSnapshot.position, const Duration(seconds: 12));
+          expect(engine.opens, opens);
+          expect(session.sourceGeneration, generation);
+          expect(engine.maxSurfaces, 1);
+          expect(find.byKey(const ValueKey('player-rate-hud')), findsNothing);
+          expect(
+            find.byKey(const ValueKey('player-controls')),
+            visible ? findsOneWidget : findsNothing,
+          );
+          expect(window.fullScreen, fullscreen);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  for (final started in [false, true]) {
+    for (final cancel in [
+      'pointer',
+      'hidden',
+      'background',
+      'modal',
+      'source',
+      'settings',
+      'disposed',
+    ]) {
+      testWidgets(
+        'touch hold ${started ? 'restores' : 'stays cancelled'} on $cancel cancellation',
+        (tester) async {
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          final window = _FakeWindowService(desktop: false);
+          var settings = const AppSettings.defaults();
+          addTearDown(session.close);
+          _resumeApp(tester);
+          addTearDown(() => _resumeApp(tester));
+          await tester.pumpWidget(_app(session, window, settings));
+          await _pumpFrames(tester);
+          await session.setRate(1.5);
+          final gesture = await tester.startGesture(_surfacePoint(tester));
+          await tester.pump(Duration(milliseconds: started ? 450 : 150));
+          expect(engine.currentSnapshot.rate, started ? 3 : 1.5);
+          switch (cancel) {
+            case 'pointer':
+              await gesture.cancel();
+            case 'hidden':
+              await tester.pumpWidget(
+                _app(session, window, settings, active: false),
+              );
+            case 'background':
+              tester.binding.handleAppLifecycleStateChanged(
+                AppLifecycleState.inactive,
+              );
+            case 'modal':
+              unawaited(
+                showDialog<void>(
+                  context: tester.element(find.byType(PlaybackPanel)),
+                  requestFocus: false,
+                  builder: (_) => const AlertDialog(content: Text('modal')),
+                ),
+              );
+            case 'source':
+              await session.retry();
+            case 'settings':
+              settings = settings.copyWith(
+                shortcuts: settings.shortcuts.withPlayback(
+                  holdDelayMs: 900,
+                  holdRate: 1.25,
+                ),
+              );
+              await tester.pumpWidget(_app(session, window, settings));
+            case 'disposed':
+              await tester.pumpWidget(const SizedBox());
+          }
+          await _pumpFrames(tester);
+          await tester.pump(const Duration(milliseconds: 600));
+          expect(engine.currentSnapshot.rate, 1.5);
+          if (cancel != 'pointer') await gesture.up();
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.rate, 1.5);
+          if (cancel == 'settings') {
+            final next = await tester.startGesture(_surfacePoint(tester));
+            await tester.pump(const Duration(milliseconds: 899));
+            expect(engine.currentSnapshot.rate, 1.5);
+            await tester.pump(const Duration(milliseconds: 2));
+            expect(engine.currentSnapshot.rate, 1.25);
+            await next.up();
+            await _pumpFrames(tester);
+            expect(engine.currentSnapshot.rate, 1.5);
+          }
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  for (final touchFirst in [false, true]) {
+    testWidgets(
+      'releasing ${touchFirst ? 'touch' : 'keyboard'} does not cancel the newer rate hold',
+      (tester) async {
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(session, _FakeWindowService(), const AppSettings.defaults()),
+        );
+        await _pumpFrames(tester);
+        await session.setRate(1.5);
+        late TestGesture touch;
+        if (touchFirst) {
+          touch = await tester.startGesture(_surfacePoint(tester));
+        } else {
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+        }
+        await tester.pump(const Duration(milliseconds: 450));
+        expect(engine.currentSnapshot.rate, 3);
+        if (touchFirst) {
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+          await touch.up();
+        } else {
+          touch = await tester.startGesture(_surfacePoint(tester));
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+        }
+        await tester.pump(const Duration(milliseconds: 450));
+        expect(engine.currentSnapshot.rate, 3);
+        if (touchFirst) {
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+        } else {
+          await touch.up();
+        }
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.rate, 1.5);
+        expect(engine.currentSnapshot.position, Duration.zero);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
+
+  testWidgets('touch hold released during pending native rate restores speed', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(session, _FakeWindowService(), const AppSettings.defaults()),
+    );
+    await _pumpFrames(tester);
+    await session.setRate(1.5);
+    final gate = Completer<void>();
+    engine.nextRate = gate;
+    final gesture = await tester.startGesture(_surfacePoint(tester));
+    await tester.pump(const Duration(milliseconds: 450));
+    expect(engine.currentSnapshot.rate, 1.5);
+    await gesture.up();
+    gate.complete();
+    await _pumpFrames(tester);
+    expect(engine.currentSnapshot.rate, 1.5);
+    expect(engine.currentSnapshot.position, Duration.zero);
+    expect(find.byKey(const ValueKey('player-rate-hud')), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
+  for (final action in ['drag', 'short touch', 'mouse', 'button', 'live']) {
+    testWidgets('$action does not trigger touch acceleration', (tester) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(
+          session,
+          _FakeWindowService(),
+          const AppSettings.defaults(),
+          target: action == 'live' ? const LivePlaybackTarget('12') : null,
+        ),
+      );
+      await _pumpFrames(tester);
+      final gesture = await tester.startGesture(
+        action == 'button'
+            ? tester.getCenter(find.byTooltip('暂停（空格）'))
+            : _surfacePoint(tester),
+        kind: action == 'mouse'
+            ? PointerDeviceKind.mouse
+            : PointerDeviceKind.touch,
+      );
+      if (action == 'drag') await gesture.moveBy(const Offset(60, 0));
+      await tester.pump(
+        Duration(milliseconds: action == 'short touch' ? 150 : 1700),
+      );
+      expect(engine.currentSnapshot.rate, 1);
+      await gesture.up();
+      await _pumpFrames(tester);
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(engine.currentSnapshot.rate, 1);
+      expect(find.byKey(const ValueKey('player-rate-hud')), findsNothing);
+      if (action == 'short touch') {
+        expect(find.byKey(const ValueKey('player-controls')), findsNothing);
+      }
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    });
+  }
+
   for (final kind in [PointerDeviceKind.mouse, PointerDeviceKind.touch]) {
     for (final visible in [true, false]) {
       testWidgets(
@@ -2425,6 +2676,10 @@ Widget _pageScope(Widget child, bool scoped) => scoped
       )
     : child;
 
+Offset _surfacePoint(WidgetTester tester) =>
+    tester.getTopLeft(find.byKey(const ValueKey('player-surface-tap-target'))) +
+    const Offset(30, 50);
+
 void _resumeApp(WidgetTester tester) {
   if (tester.binding.lifecycleState == AppLifecycleState.paused) {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
@@ -2509,6 +2764,7 @@ final class _FakeEngine implements PlayerEngine, VideoSurfaceSource {
   int pauses = 0;
   int activeSurfaces = 0;
   int maxSurfaces = 0;
+  Completer<void>? nextRate;
 
   @override
   Stream<PlaybackSnapshot> get snapshots => _snapshots.stream;
@@ -2534,6 +2790,8 @@ final class _FakeEngine implements PlayerEngine, VideoSurfaceSource {
         generation: opens,
         position: options.startPosition,
         duration: const Duration(minutes: 3),
+        rate: options.rate,
+        volume: options.volume,
       ),
     );
   }
@@ -2555,8 +2813,13 @@ final class _FakeEngine implements PlayerEngine, VideoSurfaceSource {
   Future<void> seek(Duration target) async =>
       _emit(_current.copyWith(position: target));
   @override
-  Future<void> setRate(double rate) async =>
-      _emit(_current.copyWith(rate: rate));
+  Future<void> setRate(double rate) async {
+    final gate = nextRate;
+    nextRate = null;
+    if (gate != null) await gate.future;
+    _emit(_current.copyWith(rate: rate));
+  }
+
   @override
   Future<void> setVolume(double volume) async =>
       _emit(_current.copyWith(volume: volume));

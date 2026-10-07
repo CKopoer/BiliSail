@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -173,6 +174,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _shortcuts.cancel();
     // A video can keep playing behind another workspace tab. System lifecycle
     // still applies to its owner even when the page has no visible surface.
     if (_session.ownsPlayback(this) &&
@@ -434,6 +436,7 @@ class _PlayerViewState extends State<_PlayerView> {
   @override
   void dispose() {
     widget.settings.removeListener(_onSettingsChanged);
+    widget.shortcuts.endTouchHold();
     _focusNode.dispose();
     super.dispose();
   }
@@ -547,20 +550,57 @@ class _PlayerViewState extends State<_PlayerView> {
                                 },
                               ),
                             Positioned.fill(
-                              child: GestureDetector(
-                                key: const ValueKey(
-                                  'player-surface-tap-target',
-                                ),
+                              child: RawGestureDetector(
+                                // The recognizer's deadline is fixed at creation.
+                                key: ValueKey(settings.shortcuts.holdDelayMs),
                                 behavior: HitTestBehavior.translucent,
-                                onTap: _toggleControls,
-                                onDoubleTap: () {
-                                  if (!widget.active) return;
-                                  _focusNode.requestFocus();
-                                  _toggleFullScreen();
+                                excludeFromSemantics: true,
+                                gestures: {
+                                  if (!session.isLive)
+                                    LongPressGestureRecognizer:
+                                        GestureRecognizerFactoryWithHandlers<
+                                          LongPressGestureRecognizer
+                                        >(
+                                          () => LongPressGestureRecognizer(
+                                            duration: Duration(
+                                              milliseconds: settings
+                                                  .shortcuts
+                                                  .holdDelayMs,
+                                            ),
+                                            supportedDevices: {
+                                              PointerDeviceKind.touch,
+                                            },
+                                          ),
+                                          (recognizer) {
+                                            recognizer.onLongPressDown = (_) =>
+                                                widget.shortcuts
+                                                    .prepareTouchHold();
+                                            recognizer.onLongPressStart = (_) =>
+                                                widget.shortcuts
+                                                    .beginTouchHold();
+                                            recognizer.onLongPressEnd = (_) =>
+                                                widget.shortcuts.endTouchHold();
+                                            recognizer.onLongPressCancel =
+                                                widget.shortcuts.endTouchHold;
+                                          },
+                                        ),
                                 },
+                                child: GestureDetector(
+                                  key: const ValueKey(
+                                    'player-surface-tap-target',
+                                  ),
+                                  behavior: HitTestBehavior.translucent,
+                                  onTap: _toggleControls,
+                                  onDoubleTap: () {
+                                    if (!widget.active) return;
+                                    _focusNode.requestFocus();
+                                    _toggleFullScreen();
+                                  },
+                                ),
                               ),
                             ),
-                            if (widget.shortcuts.rateFeedback)
+                            if (widget.shortcuts.rateFeedback ||
+                                widget.shortcuts.isHoldingRate)
                               Positioned(
                                 key: const ValueKey('player-rate-hud'),
                                 left: 16,
@@ -583,7 +623,9 @@ class _PlayerViewState extends State<_PlayerView> {
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        '播放速度 ${snapshot.rate}x',
+                                        widget.shortcuts.isHoldingRate
+                                            ? '长按倍速 ${snapshot.rate}x'
+                                            : '播放速度 ${snapshot.rate}x',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 13,
