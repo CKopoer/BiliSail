@@ -125,7 +125,8 @@ jobs:
           flutter-version: '3.47.6'
           channel: stable
           cache: true
-          pub-cache-key: flutter-pub-:os:-:arch:-:version:-${{ hashFiles('**/pubspec.lock') }}
+          # flutter-action appends the hash of all pubspec.lock files.
+          pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
       - name: Check root app and all packages
         shell: pwsh
         run: ./tool/check.ps1 -EnforceLockfile
@@ -149,16 +150,20 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+          # Flutter plugins and the SDK also affect Android native dependencies.
           cache-dependency-path: |
             android/**/*.gradle.kts
+            android/gradle.properties
             android/gradle/wrapper/gradle-wrapper.properties
+            **/pubspec.lock
+            .flutter-version
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.47.6'
           channel: stable
           architecture: ${{ matrix.arch }}
           cache: true
-          pub-cache-key: flutter-pub-:os:-:arch:-:version:-${{ hashFiles('**/pubspec.lock') }}
+          pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
       - name: Build and package preview
         shell: pwsh
         env:
