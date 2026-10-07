@@ -63,7 +63,7 @@ void main() {
       ]);
       expect(state().viewerCountText, '19357');
       expect(state().watchedCountText, '3万');
-      expect(state().room?.popularity, 80000);
+      expect(state().room?.popularity, isNull);
       rooms.events.add(const [LiveViewerCountChanged('1万+')]);
       expect(state().viewerCountText, '19357');
       rooms.events.add(const [LiveViewerCountChanged('20100')]);

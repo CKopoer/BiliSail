@@ -152,7 +152,7 @@ void main() {
     ]);
     expect(state().viewerCountText, '123');
     expect(state().watchedCountText, '1.2万');
-    expect(state().room?.popularity, 9999);
+    expect(state().room?.popularity, isNull);
     repository.events.add(const [LiveWatchedCountChanged('1.3万')]);
     expect(state().viewerCountText, '123');
     expect(state().watchedCountText, '1.3万');
@@ -179,6 +179,34 @@ void main() {
     expect(state().viewerCountText, isNull);
     expect(state().watchedCountText, isNull);
   });
+  test(
+    'room popularity keeps its load snapshot through heartbeats and reconnects',
+    () async {
+      for (final popularity in <int?>[34000, 0, null]) {
+        repository.roomPopularity = popularity;
+        await controller.load();
+        expect(state().room?.popularity, popularity);
+        for (final heartbeat in [1, 0, 99999]) {
+          repository.events.add([
+            LivePopularityChanged(heartbeat),
+            const LiveRoomStatusChanged(true),
+            const LiveViewerCountChanged('123'),
+            const LiveWatchedCountChanged('1.2万'),
+          ]);
+          expect(state().room?.popularity, popularity);
+          expect(state().viewerCountText, '123');
+          expect(state().watchedCountText, '1.2万');
+        }
+        controller.setActive(false);
+        controller.setActive(true);
+        repository.events.add(const [
+          LiveConnectionChanged(LiveConnectionPhase.connected),
+          LivePopularityChanged(1),
+        ]);
+        expect(state().room?.popularity, popularity);
+      }
+    },
+  );
   test('reloading a room clears both audience counts', () async {
     repository.events.add(const [
       LiveViewerCountChanged('123'),
@@ -309,6 +337,7 @@ final class _Repository implements LiveRepository, LiveChatRepository {
   );
   String scope = 'guest';
   int epoch = 0, watches = 0;
+  int? roomPopularity;
   RoomId? watched;
   RequestCancellation? cancellation;
   List<LiveChatMessage> history = [];
@@ -333,11 +362,12 @@ final class _Repository implements LiveRepository, LiveChatRepository {
   Future<LiveRoom> loadRoom(
     RoomId id, {
     required RequestCancellation cancellation,
-  }) async => const LiveRoom(
+  }) async => LiveRoom(
     id: canonical,
     title: '直播',
     anchorName: '主播',
     isLive: true,
+    popularity: roomPopularity,
   );
   @override
   Future<LivePlayInfo> loadPlayInfo(

@@ -619,13 +619,10 @@ class LiveController extends Notifier<LiveState> {
               clearConnectionMessage: true,
             );
           }
-        case LivePopularityChanged(:final popularity):
-          final room = next.room;
-          if (room != null) {
-            next = next.copyWith(
-              room: _withRoomStatus(room, popularity: popularity),
-            );
-          }
+        case LivePopularityChanged():
+          // Heartbeats may report a placeholder 1. Keep the room-load snapshot;
+          // the chat session still handles heartbeat liveness independently.
+          continue;
         case LiveViewerCountChanged(:final countText):
           ++_viewerRealtimeSequence;
           final count = int.tryParse(countText);
@@ -690,11 +687,7 @@ class LiveController extends Notifier<LiveState> {
     }
   }
 
-  static LiveRoom _withRoomStatus(
-    LiveRoom room, {
-    bool? isLive,
-    int? popularity,
-  }) => LiveRoom(
+  static LiveRoom _withRoomStatus(LiveRoom room, {bool? isLive}) => LiveRoom(
     id: room.id,
     title: room.title,
     anchorName: room.anchorName,
@@ -704,7 +697,7 @@ class LiveController extends Notifier<LiveState> {
     description: room.description,
     areaName: room.areaName,
     isLive: isLive ?? room.isLive,
-    popularity: popularity ?? room.popularity,
+    popularity: room.popularity,
   );
 
   void _pruneExpiredSuperChats() {

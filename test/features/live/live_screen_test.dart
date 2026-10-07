@@ -471,6 +471,7 @@ void main() {
       expect(find.text('在看人数暂无数据'), findsOneWidget);
       expect(find.text('看过人数暂无数据'), findsOneWidget);
       expect(find.text('当前34000人在看'), findsNothing);
+      expect(find.text('人气 3.4万'), findsOneWidget);
       final player = tester.state(find.byType(_PlayerProbe));
       realtime.events.add(const [LiveWatchedCountChanged('8.6万')]);
       await tester.pump();
@@ -479,11 +480,13 @@ void main() {
       expect(find.text('当前8.6万人在看'), findsNothing);
       realtime.events.add(const [
         LiveViewerCountChanged('2.3万'),
-        LivePopularityChanged(99),
+        LivePopularityChanged(1),
       ]);
       await tester.pump();
       expect(find.text('当前2.3万人在看'), findsOneWidget);
       expect(find.text('8.6万人看过'), findsOneWidget);
+      expect(find.text('人气 3.4万'), findsOneWidget);
+      expect(find.text('人气 1'), findsNothing);
       expect(
         tester.getTopLeft(find.byKey(const ValueKey('live-viewer-count'))).dx,
         greaterThan(
