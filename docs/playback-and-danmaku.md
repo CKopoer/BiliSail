@@ -25,6 +25,8 @@
 
 视频解码在原生后端内进行，不把每帧图像通过 Dart/Rust 来回传递。Flutter 在视频 surface 之上绘制弹幕、字幕和控制层；高频重绘局限在对应层。
 
+2026-10-07 Windows 悬停崩溃转储确认 mpv 核心销毁时渲染上下文仍存在。Windows 构建现在对锁定的 `media_kit_video 2.0.1` 应用可校验补丁：方法通道的 Dispose 回复必须晚于纹理注销、渲染队列排空和渲染上下文释放，随后才允许依赖销毁 mpv 核心。主应用接口不变，补丁来源、顺序约束与未实机验收范围见 [Windows 悬停预览销毁崩溃](validation/windows-preview-dispose.md)。
+
 `media_kit` 文档列出了三端、外部音轨、字幕和 HTTP headers 等能力，适合作为首选；这些能力组合后的行为仍需项目验证。[media_kit](https://pub.dev/packages/media_kit)
 
 ## 2. 通用播放契约

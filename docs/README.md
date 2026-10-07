@@ -47,6 +47,7 @@
 | [视频标签与搜索](validation/video-tags.md) | 简介中的真实标签、点击搜索、独立重试与导航保留 |
 | [合集订阅按钮](validation/collection-subscription.md) | 合集订阅态、粉色按钮、显式订阅/取消与账号隔离 |
 | [合集异常与播放崩溃](validation/collection-playback-crash.md) | 合集状态字段修正、Windows 原生转储与无障碍树更新规避 |
+| [Windows 悬停预览销毁崩溃](validation/windows-preview-dispose.md) | mpv 渲染资源释放顺序、可复现原生补丁与针对性检查 |
 | [关注用户分组](validation/follow-groups.md) | 已关注菜单、现有分组选择、特殊分组保留与单次保存 |
 | [快捷键与富评论](validation/shortcuts-rich-comments.md) | UWP 默认键位、悬浮控制栏、评论标识/表情/图片和资源来源 |
 | [快捷键体系重构方案](shortcut-system/refactor-design.md) | 设计基线：单一输入入口、完整功能清单、作用域、迁移及实键验收 |

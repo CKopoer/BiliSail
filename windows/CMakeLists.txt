@@ -57,6 +57,8 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+include(patches/media_kit_video/apply.cmake)
+bilisail_patch_video_target()
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can
@@ -71,6 +73,10 @@ endif()
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
+
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/patches/media_kit_video/LICENSE"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/media_kit_video"
+  COMPONENT Runtime)
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
