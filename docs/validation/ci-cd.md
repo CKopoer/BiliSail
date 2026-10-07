@@ -38,6 +38,8 @@ CI 在工作流顶层固定 `PUB_HOSTED_URL=https://pub.flutter-io.cn`，与根�
 
 CI 的 artifacts 保留 14 天；Release 从同一运行下载，所选平台失败时不创建新草稿。不使用参考仓库的 WebDAV、NuGet ZIP、UWP manifest、Chocolatey 或 TLS 验证绕过逻辑。
 
+Release 草稿及全部附件上传成功后，使用 GitHub 官方 [actions/github-script v8](https://github.com/actions/github-script/tree/ed597411d8f924073f98dfc5c65a23a2325f34cd) 清理旧版本，固定提交 `ed597411d8f924073f98dfc5c65a23a2325f34cd`。分页获取正式发布、预发布和草稿，合计保留按 `created_at` 排序的最新 **15 个 Release**；时间相同时按 Release ID 从新到旧排序。超出部分删除 Release 及其附件，保留 Git 标签与 Actions 运行记录。草稿没有 `published_at`，不能直接使用按发布时间排序或排除草稿的清理包。使用该 job 已有的 `contents: write` 和默认 `github.token`，不需额外 Secret；发布流程继续由 `release-preview` 并发组串行执行。删除请求失败立即停止，清理后再次分页查询并验证总数不超过 15，查询失败或仍超限会使流程失败。本地配置检查不代表已经执行远端删除。
+
 构建前先 `pub get --enforce-lockfile`，随后保留 Flutter build 默认的 pub 阶段，并检查构建后锁文件哈希不变。在 Flutter 3.47.6 中，`--no-pub` 还会跳过 release 原生插件注册文件的重生成：本轮 Android 初次构建因此错误引用 dev-only `integration_test`。修正采用 SDK 自身的重生成流程，不手改 `GeneratedPluginRegistrant.java`。
 
 仅指定 `--target-platform android-arm64` 时，该 SDK 仍会把插件的其他 ABI 库装入非 split APK。本轮检查发现 armeabi-v7a/x86_64 的 mpv/JNI 库，已增加 `--split-per-abi` 并在脚本中校验 APK 内只存在 `arm64-v8a`。

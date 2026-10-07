@@ -90,3 +90,33 @@ jobs:
           $notes | Set-Content release-notes.md -Encoding utf8
           gh release create $tag @assets THIRD_PARTY_NOTICES.md --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "BiliSail $env:RELEASE_VERSION preview" --notes-file release-notes.md --draft --prerelease
           if ($LASTEXITCODE -ne 0) { throw 'Creating the release draft failed.' }
+      - name: Keep the latest 15 releases
+        # Run only after the new draft and all assets have been uploaded successfully.
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const keepLatest = 15;
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              ...context.repo,
+              per_page: 100,
+            });
+            // Drafts have no published_at; include them using created_at.
+            releases.sort((a, b) =>
+              Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id);
+            for (const release of releases.slice(keepLatest)) {
+              await github.rest.repos.deleteRelease({
+                ...context.repo,
+                release_id: release.id,
+              });
+              core.info(`Deleted release ${release.tag_name} (${release.id}).`);
+            }
+      - name: Verify release retention limit
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseIds = @(gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --paginate --jq '.[].id')
+          if ($LASTEXITCODE -ne 0) { throw 'Could not verify release retention.' }
+          if ($releaseIds.Count -gt 15) { throw "Release cleanup incomplete: $($releaseIds.Count) releases remain (limit: 15)." }
+          Write-Output "Release retention verified: $($releaseIds.Count) releases remain."
