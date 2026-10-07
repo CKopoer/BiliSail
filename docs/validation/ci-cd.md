@@ -101,7 +101,7 @@ WiX 源码采用 MS-RL，固定版本来源和内嵌 Burn 的许可见 [第三�
 
 ## Windows MSIX 签名与安装
 
-[AppxManifest.xml](../../windows/packaging/AppxManifest.xml) 的 identity 为 `dev.bilisail.bilisail`，默认 publisher 为 `CN=BiliSail`；Windows 安装下限为 Windows 10 1809（build 17763）。`MakeAppx` 打包完整 Flutter Release 目录，`SignTool` 使用 SHA-256 签名。MSIX 图标在构建时从已有品牌 PNG 派生；生成普通、深色 `unplated`、浅色 `lightunplated` 的多尺寸图标，并使用同一 Windows SDK 的 `MakePri` 与 [PRI 配置](../../windows/packaging/priconfig.xml) 生成 `resources.pri`，供任务栏和开始菜单选择无底板图标。不引入新品牌资源或 Dart 依赖。
+[AppxManifest.xml](../../windows/packaging/AppxManifest.xml) 的 identity 为 `JerryHsu.BiliSail`，默认 publisher 为 `CN=D34F8E82-088B-4DC8-9296-620B8683A539`，PublisherDisplayName 为 `Jerry Hsu`；Windows 安装下限为 Windows 10 1809（build 17763）。`MakeAppx` 打包完整 Flutter Release 目录，`SignTool` 使用 SHA-256 签名。MSIX 图标在构建时从已有品牌 PNG 派生；生成普通、深色 `unplated`、浅色 `lightunplated` 的多尺寸图标，并使用同一 Windows SDK 的 `MakePri` 与 [PRI 配置](../../windows/packaging/priconfig.xml) 生成 `resources.pri`，供任务栏和开始菜单选择无底板图标。不引入新品牌资源或 Dart 依赖。
 
 无签名 Secrets 时生成一年有效的临时自签证书，产物标记 `self-signed-preview`。安装前需要在测试机器上把对应 `.cer` 信任到 **本地计算机 → 受信任人**，再打开 `.msix`；这一步需要管理员权限。工作流只导出公钥，不上传 PFX、私钥或密码，打包结束后清理本次临时证书/私钥。每次运行的测试证书不同，不能视为长期可升级的正式发行链路。
 
@@ -112,7 +112,7 @@ WiX 源码采用 MS-RL，固定版本来源和内嵌 Burn 的许可见 [第三�
 | `MSIX_CERTIFICATE_BASE64` | 带私钥的代码签名 PFX 的 Base64 |
 | `MSIX_CERTIFICATE_PASSWORD` | 该 PFX 的密码；无密码 PFX 可留空 |
 
-仓库 Actions Variable `MSIX_PUBLISHER` 可指定证书的完整 Subject，缺省为 `CN=BiliSail`；manifest Publisher 必须与证书 Subject 匹配。PR 构建始终使用临时测试证书，避免向 PR 提供正式私钥。已配置 PFX 无效、密码错误、证书过期或 publisher 不匹配时失败，不降级成测试签名。当前未接入可信时间戳；正式发行还需完善时间戳、证书续期与升级验证。参见 [Microsoft MSIX 证书](https://learn.microsoft.com/en-us/windows/msix/package/create-certificate-package-signing)、[SignTool 签名](https://learn.microsoft.com/en-us/windows/msix/package/sign-app-package-using-signtool)。
+仓库 Actions Variable `MSIX_PUBLISHER` 可指定证书的完整 Subject；未设置时，CI 与发布脚本直接使用源 manifest 的 Publisher（当前为 `CN=D34F8E82-088B-4DC8-9296-620B8683A539`）。若设置该变量，打包时会覆盖 manifest Publisher；使用上述包身份时需将变量与签名证书 Subject 同步为相同值。PR 构建始终使用临时测试证书，避免向 PR 提供正式私钥。已配置 PFX 无效、密码错误、证书过期或 publisher 不匹配时失败，不降级成测试签名。当前未接入可信时间戳；正式发行还需完善时间戳、证书续期与升级验证。参见 [Microsoft MSIX 证书](https://learn.microsoft.com/en-us/windows/msix/package/create-certificate-package-signing)、[SignTool 签名](https://learn.microsoft.com/en-us/windows/msix/package/sign-app-package-using-signtool)。
 
 macOS ad-hoc 签名不能替代 Developer ID / notarization。资源许可范围沿用 [第三方说明](../../THIRD_PARTY_NOTICES.md)，公开发布前仍需完成其待核实项。
 

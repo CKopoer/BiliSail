@@ -24,8 +24,8 @@ function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [stri
   $signTool = Join-Path $sdkTool.DirectoryName 'signtool.exe'
   $makePri = Join-Path $sdkTool.DirectoryName 'makepri.exe'
   if (!(Test-Path -LiteralPath $makePri)) { throw 'Windows SDK MakePri.exe was not found.' }
-  $publisher = if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { 'CN=BiliSail' }
   [xml]$manifest = Get-Content 'windows/packaging/AppxManifest.xml' -Raw
+  $publisher = if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { $manifest.Package.Identity.Publisher }
   $manifest.Package.Identity.Version = $Version.Replace('+', '.')
   $manifest.Package.Identity.Publisher = $publisher
   $manifest.Save((Join-Path $Staging 'AppxManifest.xml'))

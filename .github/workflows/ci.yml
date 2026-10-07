@@ -175,7 +175,7 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEY_ALIAS || '' }}
           ANDROID_KEY_PASSWORD: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEY_PASSWORD || '' }}
           ANDROID_SIGNING_CERTIFICATE_SHA256: ${{ matrix.target == 'android-arm64' && vars.ANDROID_SIGNING_CERTIFICATE_SHA256 || '' }}
-          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER || 'CN=BiliSail' }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
           MSIX_CERTIFICATE_BASE64: ${{ matrix.target == 'windows-x64' && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_BASE64 || '' }}
           MSIX_CERTIFICATE_PASSWORD: ${{ matrix.target == 'windows-x64' && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_PASSWORD || '' }}
         run: ./tool/build-release.ps1 -Target $env:BUILD_TARGET -Version $env:BUILD_VERSION -AndroidPreviewSigning:($env:ANDROID_PREVIEW_SIGNING -eq 'true')
