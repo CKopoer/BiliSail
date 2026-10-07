@@ -37,6 +37,70 @@ final class FeedScreen extends ConsumerStatefulWidget {
 }
 
 final class _FeedScreenState extends ConsumerState<FeedScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _selectChannel();
+  }
+
+  @override
+  void didUpdateWidget(FeedScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.channel != widget.channel) _selectChannel();
+  }
+
+  void _selectChannel() {
+    Future<void>.microtask(() {
+      if (mounted) {
+        ref.read(feedControllerProvider.notifier).selectChannel(widget.channel);
+      }
+    });
+  }
+
+  Widget _page(BuildContext context, HomeChannel channel, bool active) =>
+      _HomeChannelPage(
+        channel: channel,
+        active: active,
+        initialSection: channel == widget.channel
+            ? widget.initialSection
+            : null,
+        isSignedIn: widget.isSignedIn,
+        onLogin: widget.onLogin,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final onChanged = widget.onChannelChanged;
+    return onChanged == null
+        ? _page(context, widget.channel, true)
+        : HomeChannelSwipe(
+            channel: widget.channel,
+            onChanged: onChanged,
+            pageBuilder: _page,
+          );
+  }
+}
+
+final class _HomeChannelPage extends ConsumerStatefulWidget {
+  const _HomeChannelPage({
+    required this.channel,
+    required this.active,
+    required this.isSignedIn,
+    this.onLogin,
+    this.initialSection,
+  });
+
+  final HomeChannel channel;
+  final bool active;
+  final bool isSignedIn;
+  final VoidCallback? onLogin;
+  final String? initialSection;
+
+  @override
+  ConsumerState<_HomeChannelPage> createState() => _HomeChannelPageState();
+}
+
+final class _HomeChannelPageState extends ConsumerState<_HomeChannelPage> {
   final Map<HomeChannel, String> _sections = {};
   final Set<(HomeChannel, String)> _visitedSections = {};
   (List<VideoSummary>, HomeChannel, Set<VideoId>, Set<VideoId>, Set<VideoId>)?
@@ -163,7 +227,7 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
             key: ValueKey(entry),
             channel: entry.$1,
             section: entry.$2,
-            active: !channel.hasVideoFeed && entry == current,
+            active: widget.active && !channel.hasVideoFeed && entry == current,
             isSignedIn: widget.isSignedIn,
             onLogin: widget.onLogin,
           ),
@@ -175,25 +239,15 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
   void initState() {
     super.initState();
     _selectInitialSection();
-    _selectChannel();
   }
 
   @override
-  void didUpdateWidget(FeedScreen oldWidget) {
+  void didUpdateWidget(_HomeChannelPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialSection != widget.initialSection ||
         oldWidget.channel != widget.channel) {
       _selectInitialSection();
     }
-    if (oldWidget.channel != widget.channel) _selectChannel();
-  }
-
-  void _selectChannel() {
-    Future<void>.microtask(() {
-      if (mounted) {
-        ref.read(feedControllerProvider.notifier).selectChannel(widget.channel);
-      }
-    });
   }
 
   void _selectInitialSection() {
@@ -288,7 +342,7 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
       else
         for (final label in channel.sections) (label, label),
     ];
-    final content = Stack(
+    return Stack(
       children: [
         Column(
           children: [
@@ -358,7 +412,7 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
                 section: section,
                 videoFeed: PagedScrollViewport(
                   key: ValueKey(('video-feed', channel)),
-                  active: channel.hasVideoFeed,
+                  active: widget.active && channel.hasVideoFeed,
                   canLoadMore:
                       currentFeed.channel == channel &&
                       feed.hasMore &&
@@ -411,13 +465,5 @@ final class _FeedScreenState extends ConsumerState<FeedScreen> {
         ),
       ],
     );
-    final onChannelChanged = widget.onChannelChanged;
-    return onChannelChanged == null
-        ? content
-        : HomeChannelSwipe(
-            channel: channel,
-            onChanged: onChannelChanged,
-            child: content,
-          );
   }
 }

@@ -45,6 +45,15 @@ void main() {
           .position
           .pixels;
       expect(offset, greaterThan(100));
+      final gesture = await tester.startGesture(tester.getCenter(list));
+      await gesture.moveBy(const Offset(-120, 0));
+      await tester.pump();
+      expect(repository.calls, ['recommended:1']);
+      expect(channel.value, HomeChannel.recommended);
+      expect(tester.getRect(list).left, closeTo(-120, 1));
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+      expect(repository.calls, ['recommended:1']);
       await tester.drag(list, const Offset(-220, 0));
       await tester.pumpAndSettle();
       expect(channel.value, HomeChannel.popular);
@@ -238,7 +247,10 @@ void main() {
           home: Scaffold(
             body: ValueListenableBuilder(
               valueListenable: channel,
-              builder: (context, value, child) => FeedScreen(channel: value),
+              builder: (context, value, child) => FeedScreen(
+                channel: value,
+                onChannelChanged: (value) => channel.value = value,
+              ),
             ),
           ),
         ),
