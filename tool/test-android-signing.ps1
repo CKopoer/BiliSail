@@ -92,18 +92,34 @@ try {
     return $script:fakeReport
   }
   $fakeExitCode = 0
-  $fixedState = [pscustomobject]@{ Signing = 'configured-keystore'; ExpectedSha256 = 'a' * 64 }
-  $fakeReport = "Signer #1 certificate SHA-256 digest: $('a' * 64)"
-  Assert-True ((Confirm-AndroidApkSigning 'fixture.apk' $fixedState) -eq ('a' * 64)) 'Matching certificate was rejected.'
-  $fakeReport = "Signer #1 certificate SHA-256 digest: $('b' * 64)"
+  $fixtureRsa = [System.Security.Cryptography.RSA]::Create(2048)
+  try {
+    $request = [System.Security.Cryptography.X509Certificates.CertificateRequest]::new(
+      'CN=Android signing fixture', $fixtureRsa,
+      [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+      [System.Security.Cryptography.RSASignaturePadding]::Pkcs1
+    )
+    $fixtureCertificate = $request.CreateSelfSigned([DateTimeOffset]::UtcNow.AddMinutes(-5), [DateTimeOffset]::UtcNow.AddDays(1))
+    try {
+      $fixtureCertificateBytes = $fixtureCertificate.RawData
+      $fixtureSha256 = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($fixtureCertificateBytes)).ToLowerInvariant()
+      $fixturePem = @('-----BEGIN CERTIFICATE-----', [Convert]::ToBase64String($fixtureCertificateBytes), '-----END CERTIFICATE-----') -join [Environment]::NewLine
+    } finally { $fixtureCertificate.Dispose() }
+  } finally { $fixtureRsa.Dispose() }
+  $fixedState = [pscustomobject]@{ Signing = 'configured-keystore'; ExpectedSha256 = $fixtureSha256 }
+  # Different labels, indentation and duplicated human-readable digest lines
+  # must not affect the fingerprint extracted from the actual certificate.
+  $fakeReport = @('  Signer certificate digest (SDK-specific label): ignored', 'SHA-256 digest: ignored', $fixturePem)
+  Assert-True ((Confirm-AndroidApkSigning 'fixture.apk' $fixedState) -eq $fixtureSha256) 'Matching certificate was rejected.'
+  $fixedState.ExpectedSha256 = 'b' * 64
   Assert-Rejected { Confirm-AndroidApkSigning 'fixture.apk' $fixedState } 'does not match'
+  $fixedState.ExpectedSha256 = $fixtureSha256
   $fakeReport = 'No signing certificate'
   Assert-Rejected { Confirm-AndroidApkSigning 'fixture.apk' $fixedState } 'exactly one'
-  $fakeReport = @(
-    "Signer #1 certificate SHA-256 digest: $('a' * 64)",
-    "Signer #2 certificate SHA-256 digest: $('b' * 64)"
-  )
+  $fakeReport = @($fixturePem, $fixturePem)
   Assert-Rejected { Confirm-AndroidApkSigning 'fixture.apk' $fixedState } 'exactly one'
+  $fakeReport = @('-----BEGIN CERTIFICATE-----', 'AQID', '-----END CERTIFICATE-----') -join [Environment]::NewLine
+  Assert-Rejected { Confirm-AndroidApkSigning 'fixture.apk' $fixedState } 'Invalid APK signing certificate'
   $fakeExitCode = 1
   Assert-Rejected { Confirm-AndroidApkSigning 'fixture.apk' $fixedState } 'verification failed'
   Write-Output "Android signing boundary checks passed: $checks"

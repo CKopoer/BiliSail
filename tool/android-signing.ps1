@@ -84,11 +84,21 @@ function Get-AndroidApkSigner {
 
 function Confirm-AndroidApkSigning([string]$Package, $State) {
   $tool = Get-AndroidApkSigner
-  $report = & $tool verify --verbose --print-certs $Package
+  $report = & $tool verify --verbose --print-certs-pem $Package
   if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }
-  $certificates = [regex]::Matches(($report -join [Environment]::NewLine), '(?m)^Signer #\d+ certificate SHA-256 digest:\s*([0-9a-fA-F]{64})\s*$')
-  if ($certificates.Count -ne 1) { throw 'APK must have exactly one signing certificate.' }
-  $sha256 = $certificates[0].Groups[1].Value.ToLowerInvariant()
+  # PEM is a standard certificate encoding; human-readable digest labels can
+  # change between SDK versions and must not determine the signing identity.
+  $certificates = [regex]::Matches(($report -join [Environment]::NewLine), '-----BEGIN CERTIFICATE-----\s*([A-Za-z0-9+/=\s]+?)\s*-----END CERTIFICATE-----')
+  if ($certificates.Count -ne 1) {
+    throw "APK must have exactly one signing certificate (found $($certificates.Count); tool: $tool)."
+  }
+  try {
+    $certificateBytes = [Convert]::FromBase64String($certificates[0].Groups[1].Value)
+    $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certificateBytes)
+  } catch { throw 'Invalid APK signing certificate.' }
+  try {
+    $sha256 = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($certificate.RawData)).ToLowerInvariant()
+  } finally { $certificate.Dispose() }
   if ($State.Signing -eq 'configured-keystore' -and $sha256 -ne $State.ExpectedSha256.ToLowerInvariant()) {
     throw 'APK signing certificate does not match ANDROID_SIGNING_CERTIFICATE_SHA256.'
   }
