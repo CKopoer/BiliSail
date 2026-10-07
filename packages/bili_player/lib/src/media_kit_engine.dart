@@ -8,6 +8,7 @@ import 'player_contract.dart';
 import 'player_diagnostics.dart';
 import 'native_readiness.dart';
 import 'native_error_monitor.dart';
+import 'video_dimensions.dart';
 
 /// Call at application startup before creating an engine.
 void initializePlayerBackend() => mk.MediaKit.ensureInitialized();
@@ -608,6 +609,18 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
         active() &&
         _snapshot.phase != PlaybackPhase.failed &&
         _snapshot.phase != PlaybackPhase.ended;
+    _subscriptions.add(
+      player.stream.videoParams.listen((value) {
+        if (!active()) return;
+        final dimensions = videoDisplayDimensions(value);
+        final previous = _snapshot.videoDimensions;
+        if (dimensions != null &&
+            (dimensions.width != previous?.width ||
+                dimensions.height != previous?.height)) {
+          _publish(_snapshot.copyWith(videoDimensions: dimensions));
+        }
+      }),
+    );
     _subscriptions.add(
       player.stream.position.listen((value) {
         if (active()) _publish(_snapshot.copyWith(position: value));

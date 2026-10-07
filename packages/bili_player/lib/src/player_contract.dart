@@ -101,6 +101,14 @@ enum PlaybackPhase {
   disposed,
 }
 
+/// Display dimensions after pixel-aspect correction and metadata rotation.
+final class VideoDimensions {
+  const VideoDimensions(this.width, this.height);
+
+  final int width;
+  final int height;
+}
+
 final class PlaybackSnapshot {
   const PlaybackSnapshot({
     required this.phase,
@@ -113,6 +121,7 @@ final class PlaybackSnapshot {
     this.isSeeking = false,
     this.rate = 1,
     this.volume = 100,
+    this.videoDimensions,
   });
 
   final PlaybackPhase phase;
@@ -128,6 +137,9 @@ final class PlaybackSnapshot {
   /// Native backend scale: 0 to 100.
   final double volume;
 
+  /// Null until this source reports valid decoded video dimensions.
+  final VideoDimensions? videoDimensions;
+
   PlaybackSnapshot copyWith({
     PlaybackPhase? phase,
     int? generation,
@@ -139,6 +151,7 @@ final class PlaybackSnapshot {
     bool? isSeeking,
     double? rate,
     double? volume,
+    VideoDimensions? videoDimensions,
   }) => PlaybackSnapshot(
     phase: phase ?? this.phase,
     generation: generation ?? this.generation,
@@ -150,6 +163,7 @@ final class PlaybackSnapshot {
     isSeeking: isSeeking ?? this.isSeeking,
     rate: rate ?? this.rate,
     volume: volume ?? this.volume,
+    videoDimensions: videoDimensions ?? this.videoDimensions,
   );
 }
 

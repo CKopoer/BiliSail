@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
+enum FullScreenOrientation { portrait, landscape }
+
 class WindowService {
   bool get hasDesktopWindow =>
       Platform.isWindows || Platform.isMacOS || Platform.isLinux;
@@ -22,10 +24,26 @@ class WindowService {
     }
   }
 
-  Future<void> setFullScreen(bool value) async {
+  Future<void> setFullScreen(
+    bool value, {
+    FullScreenOrientation? orientation,
+  }) async {
     if (hasDesktopWindow) {
       await windowManager.setFullScreen(value);
     } else {
+      if (!value || orientation != null) {
+        await SystemChrome.setPreferredOrientations(
+          !value
+              ? const []
+              : switch (orientation) {
+                  FullScreenOrientation.landscape => const [
+                    DeviceOrientation.landscapeLeft,
+                    DeviceOrientation.landscapeRight,
+                  ],
+                  _ => const [DeviceOrientation.portraitUp],
+                },
+        );
+      }
       await SystemChrome.setEnabledSystemUIMode(
         value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
       );

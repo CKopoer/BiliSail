@@ -37,6 +37,189 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final live in [false, true]) {
+    for (final dimensions in [
+      const VideoDimensions(1920, 1080),
+      const VideoDimensions(1080, 1920),
+      const VideoDimensions(1080, 1080),
+    ]) {
+      testWidgets(
+        'mobile ${live ? 'live' : 'video'} fullscreen follows ${dimensions.width}x${dimensions.height}',
+        (tester) async {
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          final window = _FakeWindowService(desktop: false);
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(
+              session,
+              window,
+              const AppSettings.defaults(),
+              target: live ? const LivePlaybackTarget('12') : null,
+            ),
+          );
+          await _pumpFrames(tester);
+          expect(session.isLive, live);
+          await session.pause();
+          engine._emit(
+            engine.currentSnapshot.copyWith(videoDimensions: dimensions),
+          );
+          final generation = engine.currentSnapshot.generation;
+          final opens = engine.opens;
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+          expect(window.fullScreen, isTrue);
+          expect(
+            window.orientations.single,
+            dimensions.width > dimensions.height
+                ? FullScreenOrientation.landscape
+                : FullScreenOrientation.portrait,
+          );
+          for (var i = 0; i < 10; i++) {
+            engine._emit(engine.currentSnapshot.copyWith(volume: 50));
+          }
+          await _pumpFrames(tester);
+          expect(window.orientations, hasLength(1));
+          await tester.tap(find.byTooltip('退出全屏（Esc）'));
+          await _pumpFrames(tester);
+          expect(window.fullScreen, isFalse);
+          expect(window.orientations.last, isNull);
+          expect(engine.opens, opens);
+          expect(engine.currentSnapshot.generation, generation);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(engine.maxSurfaces, 1);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
+  testWidgets(
+    'mobile fullscreen follows delayed dimensions and source changes',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(400, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService(desktop: false);
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      await tester.tap(find.byTooltip('全屏（F）'));
+      await _pumpFrames(tester);
+      expect(window.orientations, [FullScreenOrientation.portrait]);
+      engine._emit(
+        engine.currentSnapshot.copyWith(
+          videoDimensions: const VideoDimensions(1920, 1080),
+        ),
+      );
+      await _pumpFrames(tester);
+      expect(window.orientations.last, FullScreenOrientation.landscape);
+      await session.retry();
+      await _pumpFrames(tester);
+      expect(engine.currentSnapshot.videoDimensions, isNull);
+      expect(window.orientations, hasLength(2));
+      engine._emit(
+        engine.currentSnapshot.copyWith(
+          videoDimensions: const VideoDimensions(1080, 1920),
+        ),
+      );
+      await _pumpFrames(tester);
+      expect(window.orientations.last, FullScreenOrientation.portrait);
+      expect(engine.maxSurfaces, 1);
+      // A system back closes only the presentation and releases orientation.
+      await tester.binding.handlePopRoute();
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      expect(window.orientations.last, isNull);
+      final calls = window.orientations.length;
+      engine._emit(
+        engine.currentSnapshot.copyWith(
+          videoDimensions: const VideoDimensions(1920, 1080),
+        ),
+      );
+      await _pumpFrames(tester);
+      expect(window.orientations, hasLength(calls));
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+  );
+
+  for (final dispose in [false, true]) {
+    testWidgets(
+      'mobile fullscreen releases orientation when ${dispose ? 'disposed' : 'hidden'}',
+      (tester) async {
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final window = _FakeWindowService(desktop: false);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(session, window, const AppSettings.defaults()),
+        );
+        await _pumpFrames(tester);
+        engine._emit(
+          engine.currentSnapshot.copyWith(
+            videoDimensions: const VideoDimensions(1920, 1080),
+          ),
+        );
+        await tester.tap(find.byTooltip('全屏（F）'));
+        await _pumpFrames(tester);
+        await tester.pumpWidget(
+          dispose
+              ? const SizedBox()
+              : _app(
+                  session,
+                  window,
+                  const AppSettings.defaults(),
+                  active: false,
+                ),
+        );
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isFalse);
+        expect(window.orientations.last, isNull);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
+
+  testWidgets('cancelled mobile fullscreen drops queued orientation updates', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    final window = _DelayedWindow(desktop: false);
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(session, window, const AppSettings.defaults()),
+    );
+    await _pumpFrames(tester);
+    await tester.tap(find.byTooltip('全屏（F）'));
+    await _pumpFrames(tester);
+    engine._emit(
+      engine.currentSnapshot.copyWith(
+        videoDimensions: const VideoDimensions(1080, 1920),
+      ),
+    );
+    await tester.pumpWidget(
+      _app(session, window, const AppSettings.defaults(), active: false),
+    );
+    await _pumpFrames(tester);
+    window.gate.complete();
+    await _pumpFrames(tester);
+    expect(window.fullScreen, isFalse);
+    expect(window.orientations, [FullScreenOrientation.landscape, null]);
+    expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
   testWidgets(
     'workspace close exits fullscreen and held repeats cannot close a new page',
     (tester) async {
@@ -2175,6 +2358,7 @@ Widget _app(
   bool active = true,
   bool scopedComposer = false,
   NavigatorObserver? navigatorObserver,
+  ContentPlaybackTarget? target,
 }) => ProviderScope(
   overrides: [
     playbackSessionProvider.overrideWithValue(session),
@@ -2214,8 +2398,9 @@ Widget _app(
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
                   child: PlaybackPanel(
-                    detail: _detail,
-                    part: _part,
+                    detail: target == null ? _detail : null,
+                    part: target == null ? _part : null,
+                    target: target,
                     settings: settings,
                     onToggleComments: () {},
                     window: window,
@@ -2259,6 +2444,7 @@ PlaybackSession _session(
 }) => PlaybackSession(
   engine: engine,
   repository: repository ?? _FakePlaybackRepository(),
+  contentRepository: _FakeContentPlaybackRepository(),
   progress: _FakeProgressStore(),
   accountScope: () => 'guest',
   danmakuNow: danmakuNow,
@@ -2286,13 +2472,18 @@ final class _FakeWindowService extends WindowService {
   _FakeWindowService({this.desktop = true});
   final bool desktop;
   bool fullScreen = false;
+  final orientations = <FullScreenOrientation?>[];
 
   @override
   bool get hasDesktopWindow => desktop;
 
   @override
-  Future<void> setFullScreen(bool value) async {
+  Future<void> setFullScreen(
+    bool value, {
+    FullScreenOrientation? orientation,
+  }) async {
     fullScreen = value;
+    orientations.add(value ? orientation : null);
   }
 }
 
@@ -2481,15 +2672,39 @@ final class _FakeProgressStore implements PlaybackProgressStore {
 }
 
 final class _DelayedWindow extends WindowService {
+  _DelayedWindow({this.desktop = true});
+  final bool desktop;
   final gate = Completer<void>();
   bool fullScreen = false;
+  final orientations = <FullScreenOrientation?>[];
   @override
-  bool get hasDesktopWindow => true;
+  bool get hasDesktopWindow => desktop;
   @override
-  Future<void> setFullScreen(bool value) async {
+  Future<void> setFullScreen(
+    bool value, {
+    FullScreenOrientation? orientation,
+  }) async {
     if (value) await gate.future;
     fullScreen = value;
+    orientations.add(value ? orientation : null);
   }
+}
+
+final class _FakeContentPlaybackRepository
+    implements ContentPlaybackRepository {
+  @override
+  Future<PlaybackMedia> resolve(
+    ContentPlaybackTarget target, {
+    required int quality,
+    VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
+    required RequestCancellation cancellation,
+  }) => _FakePlaybackRepository().resolve(
+    _detail.summary.id,
+    _part.cid,
+    quality: quality,
+    preferredCodec: preferredCodec,
+    cancellation: cancellation,
+  );
 }
 
 final class _Settings implements SettingsRepository {

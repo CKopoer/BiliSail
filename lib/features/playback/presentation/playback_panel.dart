@@ -65,6 +65,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   Route<void>? _fullScreenRoute;
   NavigatorState? _fullScreenNavigator;
   Object? _fullScreenRequest;
+  FullScreenOrientation? _fullScreenOrientation;
   static final _windowStates = Expando<_WindowFullScreenState>();
   _WindowFullScreenState get _windowState =>
       _windowStates[widget.window] ??= _WindowFullScreenState();
@@ -74,6 +75,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     super.initState();
     _settings = ValueNotifier(widget.settings);
     _session = ref.read(playbackSessionProvider)..attach(this);
+    _session.snapshots.addListener(_updateFullScreenOrientation);
     _shortcuts = PlaybackShortcutController(
       session: _session,
       settings: () => widget.settings.shortcuts,
@@ -184,6 +186,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _session.snapshots.removeListener(_updateFullScreenOrientation);
     _dismissFullScreen();
     _shortcuts.dispose();
     _session.detach(this);
@@ -194,7 +197,11 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
 
   void _dismissFullScreen() {
     _shortcuts.cancel();
+    final request = _fullScreenRequest;
     _fullScreenRequest = null;
+    // A disposed Navigator may never complete push(). Release platform state
+    // independently, still ordered behind any pending entry for this owner.
+    if (request != null) unawaited(_setWindowFullScreen(request, false));
     final route = _fullScreenRoute;
     final navigator = _fullScreenNavigator;
     if (route != null && navigator != null) {
@@ -234,7 +241,10 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
           return;
         }
         _windowState.owner = request;
-        await widget.window.setFullScreen(true);
+        await widget.window.setFullScreen(
+          true,
+          orientation: _fullScreenOrientation,
+        );
       } else if (identical(_windowState.owner, request)) {
         await widget.window.setFullScreen(false);
         if (identical(_windowState.owner, request)) _windowState.owner = null;
@@ -247,11 +257,42 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     return operation;
   }
 
+  FullScreenOrientation? get _videoOrientation {
+    final dimensions = _session.snapshots.value.videoDimensions;
+    if (dimensions == null || dimensions.width <= 0 || dimensions.height <= 0) {
+      return null;
+    }
+    return dimensions.width > dimensions.height
+        ? FullScreenOrientation.landscape
+        : FullScreenOrientation.portrait;
+  }
+
+  void _updateFullScreenOrientation() {
+    final request = _fullScreenRequest;
+    if (request == null ||
+        !_fullScreen ||
+        !_active ||
+        widget.window.hasDesktopWindow) {
+      return;
+    }
+    final orientation = _videoOrientation;
+    if (orientation == null || orientation == _fullScreenOrientation) return;
+    _fullScreenOrientation = orientation;
+    // The same owner/command queue also orders delayed dimensions against exit.
+    unawaited(_setWindowFullScreen(request, true));
+  }
+
   Future<void> _enterFullScreen() async {
     if (_fullScreen || !_active) return;
     _shortcuts.cancel();
     final request = Object();
     final providerContainer = ProviderScope.containerOf(context);
+    _fullScreenOrientation = widget.window.hasDesktopWindow
+        ? null
+        : _videoOrientation ??
+              (MediaQuery.orientationOf(context) == Orientation.landscape
+                  ? FullScreenOrientation.landscape
+                  : FullScreenOrientation.portrait);
     _fullScreenRequest = request;
     setState(() => _fullScreen = true);
     try {
@@ -306,12 +347,13 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       _fullScreenNavigator = navigator;
       await navigator.push(route);
     } finally {
+      if (identical(_fullScreenRequest, request)) _fullScreenRequest = null;
       _fullScreenRoute = null;
       _fullScreenNavigator = null;
       await WidgetsBinding.instance.endOfFrame;
       await _setWindowFullScreen(request, false);
+      _fullScreenOrientation = null;
       if (mounted) setState(() => _fullScreen = false);
-      if (identical(_fullScreenRequest, request)) _fullScreenRequest = null;
     }
   }
 

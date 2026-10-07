@@ -672,6 +672,10 @@ void main() {
         await session.pause();
         final generation = engine.currentSnapshot.generation;
         expect(generation, greaterThan(0));
+        final dimensions = engine.currentSnapshot.videoDimensions;
+        expect(dimensions, isNotNull);
+        expect(dimensions?.width, engine.inspectDiagnostics().videoWidth);
+        expect(dimensions?.height, engine.inspectDiagnostics().videoHeight);
         expect(tester.takeException(), isNull);
 
         final resizePosition = engine.currentSnapshot.position;
