@@ -85,6 +85,8 @@ flutter test integration_test/windows_video_card_hover_test.dart -d windows --no
 
 ## 15 秒向前预读窗口
 
+本节保留最初 15 秒实现和当时的验证记录；当前窗口已调整为 5 秒，见下一节。
+
 日期：2026-10-07。按用户要求，预览只维持当前位置之后 15 秒媒体时间的预读窗口，不再沿用普通播放的默认大窗口。视频仍从真实完整视频轨读取，窗口随播放推进继续补充；不是只播前 15 秒。鼠标移开沿用取消、停止和释放路径。
 
 - [预览编排](../../lib/features/video/application/video_card_preview_playback.dart) 每次打开（含 CDN 备用）显式传入 `OpenOptions.maxBufferAhead = Duration(seconds: 15)`。普通点播／影视／直播不传该选项，继续使用各自后端默认策略；每次打开创建新的 native Player，不将预览配置带入下一源。
@@ -104,3 +106,13 @@ flutter test integration_test/windows_preview_buffer_test.dart -d windows --no-p
 - `tool/check.ps1 -SkipPub` 已执行，但被同时进行的快捷键重构文件格式检查阻止，最终日志 `build/preview-buffer-check-final.log` 指向 `shortcut_settings.dart`。单独根分析、根全量测试和普通播放原生套件也受当时快捷键／页面编译错误影响：根测试为 852 项通过、7 个文件加载失败；原生普通播放未能启动，不能宣称全量回归通过。日志分别为 `build/preview-buffer-analyze.log`、`build/preview-buffer-root-tests.log`、`build/preview-buffer-windows-media.log`；未改动这些并行工作文件。
 
 Android/macOS 本轮未做原生验证，公网 CDN 的实际接收字节数未测；本地 HTTP 缓冲窗口验证不代表这两项已完成。
+
+## 5 秒向前预读窗口
+
+日期：2026-10-07。按用户后续要求，悬停预览的 `OpenOptions.maxBufferAhead` 由 15 秒改为 5 秒；每次打开及 CDN 备用都使用这个值。原生适配器继续在加载 URL 前设置 `cache-secs` 和 `demuxer-readahead-secs`，使用内存缓存；普通播放仍保持后端默认策略。窗口随当前位置推进，不将总播放时长截断到 5 秒。
+
+预览编排断言、Windows HTTP／Range 用例和静止窗口首帧探针同步改为 5 秒。原生用例检查初始窗口、播放推进、seek 与普通打开恢复默认缓存，保留 500 毫秒的帧／解码边界误差；不将媒体时间窗口解释为严格下载字节配额。
+
+- Windows 原生用例通过：初始向前 4.916 秒，播放推进和 seek 后均为 5.166 秒；普通打开仍缓存至 59.875 秒。约 0.17 秒超出来自原生帧／解码边界，属于媒体时间窗口验证，不是流量或性能基准。日志 `build/preview-buffer-5s-native.log`。
+- 本轮 `tool/check.ps1 -SkipPub` 全部通过：根应用 1110、API 包 291、播放器包 22、弹幕包 32，共 1455 项测试；根应用与三个包的格式、分析全部通过。日志 `build/preview-buffer-5s-check.log`；上节并行快捷键修改导致的全量检查阻断是之前快照的记录，不是本轮状态。
+- Windows 正常 `lib/main.dart` 入口 Release 构建通过，日志 `build/preview-buffer-5s-release.log`。5 秒配置的静止窗口首帧探针两次均完成视频解码和原生输出，约 530／380 毫秒，均在 3 秒打开预算内；日志 `build/preview-buffer-5s-idle.log`。Android/macOS 本轮原生未测，公网实际下载字节数未测。

@@ -10,7 +10,7 @@ void main() {
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
   testWidgets(
-    'Windows preview keeps a rolling 15-second buffer and regular opens reset it',
+    'Windows preview keeps a rolling 5-second buffer and regular opens reset it',
     (tester) async {
       initializePlayerBackend();
       final fixturePath = Platform.environment['BILI_TEST_MEDIA_DIR'];
@@ -76,7 +76,7 @@ void main() {
           play: true,
           volume: 0,
           openTimeout: Duration(seconds: 3),
-          maxBufferAhead: Duration(seconds: 15),
+          maxBufferAhead: Duration(seconds: 5),
         ),
       );
       expect(engine.inspectDiagnostics().hasVideoOutput, isTrue);
@@ -95,13 +95,13 @@ void main() {
           () =>
               engine.currentSnapshot.buffered -
                   engine.currentSnapshot.position >=
-              const Duration(seconds: 14),
+              const Duration(seconds: 4),
         );
         await tester.pump(const Duration(milliseconds: 600));
         final snapshot = engine.currentSnapshot;
         final ahead = snapshot.buffered - snapshot.position;
         // mpv bounds demuxed packet timestamps, with decoder/frame rounding.
-        expect(ahead, lessThanOrEqualTo(const Duration(milliseconds: 15500)));
+        expect(ahead, lessThanOrEqualTo(const Duration(milliseconds: 5500)));
         expect(snapshot.buffered, lessThan(snapshot.duration));
         debugPrint(
           'PREVIEW_BUFFER $stage positionMs=${snapshot.position.inMilliseconds} '

@@ -92,7 +92,7 @@ final class VideoCardPreviewPlayback {
                 play: true,
                 volume: 0,
                 openTimeout: openTimeout,
-                maxBufferAhead: const Duration(seconds: 15),
+                maxBufferAhead: const Duration(seconds: 5),
               ),
             )
             .timeout(openTimeout);

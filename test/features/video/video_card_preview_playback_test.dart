@@ -36,7 +36,7 @@ void main() {
     expect(engine.options?.volume, 0);
     expect(engine.options?.startPosition, Duration.zero);
     expect(engine.options?.openTimeout, const Duration(seconds: 3));
-    expect(engine.options?.maxBufferAhead, const Duration(seconds: 15));
+    expect(engine.options?.maxBufferAhead, const Duration(seconds: 5));
     token.cancel();
     expect(engine.currentSnapshot.phase, PlaybackPhase.idle);
     await previews.stop();
