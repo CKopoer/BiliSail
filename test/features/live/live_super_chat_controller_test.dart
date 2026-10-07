@@ -110,6 +110,96 @@ void main() {
     },
   );
 
+  testWidgets(
+    'duration-only SC expires once despite duplicate snapshots and failure',
+    (tester) async {
+      repository.superChats = const [
+        LiveSuperChatMessage(
+          id: 'duration',
+          userName: '观众',
+          text: '时长样本',
+          price: 30,
+          displayDuration: Duration(seconds: 5),
+        ),
+      ];
+      controller.setActive(true);
+      await tester.pump();
+      final expiry = now.add(const Duration(seconds: 5));
+      expect(current().superChats.single.expiresAt, expiry);
+      now = now.add(const Duration(seconds: 2));
+      await tester.pump(const Duration(seconds: 2));
+      await controller.refreshSuperChats();
+      expect(current().superChats.single.expiresAt, expiry);
+      repository.superChatFailure = const AppFailure(
+        AppFailureKind.network,
+        '暂不可用',
+      );
+      await controller.refreshSuperChats();
+      now = expiry;
+      await tester.pump(const Duration(seconds: 3));
+      expect(current().superChats, isEmpty);
+      repository.superChatFailure = null;
+      await controller.refreshSuperChats();
+      expect(current().superChats, isEmpty);
+      controller.setActive(false);
+      container.dispose();
+      containerDisposed = true;
+    },
+  );
+
+  testWidgets(
+    'hidden time counts toward expiry and resume prunes immediately',
+    (tester) async {
+      repository.superChats = [
+        LiveSuperChatMessage(
+          id: 'hidden',
+          userName: '观众',
+          text: '样本',
+          price: 30,
+          expiresAt: now.add(const Duration(seconds: 3)),
+        ),
+      ];
+      controller.setActive(true);
+      await tester.pump();
+      controller.setActive(false);
+      now = now.add(const Duration(seconds: 4));
+      await tester.pump(const Duration(seconds: 4));
+      controller.setActive(true);
+      expect(current().superChats, isEmpty);
+      await tester.pump();
+      expect(current().superChats, isEmpty);
+      controller.setActive(false);
+      container.dispose();
+      containerDisposed = true;
+    },
+  );
+
+  testWidgets(
+    'HTTP remaining time uses receipt instead of the original start',
+    (tester) async {
+      repository.superChats = [
+        LiveSuperChatMessage(
+          id: 'remaining',
+          userName: '观众',
+          text: '样本',
+          price: 30,
+          startedAt: now.subtract(const Duration(minutes: 10)),
+          remainingDuration: const Duration(seconds: 3),
+        ),
+      ];
+      controller.setActive(true);
+      await tester.pump();
+      final expiry = now.add(const Duration(seconds: 3));
+      expect(current().superChats.single.expiresAt, expiry);
+      now = expiry;
+      await tester.pump(const Duration(seconds: 3));
+      expect(current().superChats, isEmpty);
+      controller.setActive(false);
+      container.dispose();
+      containerDisposed = true;
+    },
+  );
+
   test('hiding cancels an SC read and rejects its late response', () async {
     final pending = Completer<List<LiveSuperChatMessage>>();
     repository.pendingSuperChats = pending;

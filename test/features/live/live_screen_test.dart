@@ -689,6 +689,51 @@ void main() {
     );
   });
 
+  testWidgets(
+    'SC expiry removes its bubble and expanded card while retaining player',
+    (tester) async {
+      var now = DateTime.utc(2026, 10, 7);
+      container.dispose();
+      container = ProviderContainer(
+        overrides: [
+          liveRepositoryProvider.overrideWithValue(repository),
+          liveChatRepositoryProvider.overrideWithValue(realtime),
+          authRepositoryProvider.overrideWithValue(_AuthRepository()),
+          liveClockProvider.overrideWithValue(() => now),
+        ],
+      );
+      repository.scMessages = [
+        LiveSuperChatMessage(
+          id: 'timed',
+          userName: '观众',
+          text: '即将到期',
+          price: 30,
+          expiresAt: now.add(const Duration(seconds: 3)),
+        ),
+      ];
+      await showPage(tester);
+      final player = tester.state(find.byType(_PlayerProbe));
+      await tester.tap(find.byKey(const ValueKey('live-sc-chip-timed')));
+      await tester.pump();
+      expect(find.text('即将到期'), findsOneWidget);
+      expect(find.text('3s'), findsNWidgets(2));
+      now = now.add(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('live-sc-chip-timed')), findsNothing);
+      expect(find.byKey(const ValueKey('live-sc-card-timed')), findsNothing);
+      expect(find.text('SC (0)'), findsOneWidget);
+      expect(tester.state(find.byType(_PlayerProbe)), same(player));
+      await tester.tap(find.byKey(const ValueKey('live-tab-1')));
+      await tester.pump();
+      expect(find.text('暂无 SC'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      container
+          .read(liveControllerProvider(const RoomId('12')).notifier)
+          .setActive(false);
+    },
+  );
+
   testWidgets('SC failure is visible in both tabs instead of an empty state', (
     tester,
   ) async {

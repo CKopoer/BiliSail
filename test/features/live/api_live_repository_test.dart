@@ -38,6 +38,9 @@ void main() {
         cancellation: RequestCancellation(),
       );
       expect(sc.single.userId, const UserId('9007199254740995'));
+      expect(sc.single.displayDuration, const Duration(seconds: 60));
+      expect(sc.single.startedAt?.millisecondsSinceEpoch, 1791180000000);
+      expect(sc.single.expiresAt?.millisecondsSinceEpoch, 1791180060000);
     },
   );
 }
@@ -81,6 +84,9 @@ final class _Transport implements ApiTransport {
                       'uid': '9007199254740995',
                       'price': 50,
                       'message': 'SC内容',
+                      'start_time': 1791180000,
+                      'ts': 1791180000,
+                      'time': 60,
                       'user_info': {'uname': '观众丙'},
                     },
                   ],

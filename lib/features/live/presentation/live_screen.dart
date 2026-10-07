@@ -191,6 +191,11 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
     }
     final state = ref.watch(liveControllerProvider(id));
     ref.listen(liveControllerProvider(id), (previous, next) {
+      if (!next.superChats.any(
+        (message) => message.id == _selectedSuperChatId,
+      )) {
+        _selectedSuperChatId = null;
+      }
       if (next.room == null || next.messages.isEmpty) {
         _chatStatusAfterMessageKey = null;
       } else if (previous?.connectionPhase != next.connectionPhase) {
@@ -361,8 +366,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
             child: IndexedStack(
               index: _tab,
               children: [
-                _chat(context, state, controller),
-                _superChats(context, state, controller),
+                TickerMode(
+                  enabled: _lastActive == true && _infoVisible && _tab == 0,
+                  child: _chat(context, state, controller),
+                ),
+                TickerMode(
+                  enabled: _lastActive == true && _infoVisible && _tab == 1,
+                  child: _superChats(context, state, controller),
+                ),
               ],
             ),
           ),
@@ -742,6 +753,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       key: ValueKey('live-sc-chip-${message.id}'),
       message: message,
       selected: selected,
+      clock: ref.read(liveClockProvider),
       onPressed: () {
         if (!selected && _chatScrollController.hasClients) {
           // Reset the old list anchor before inserting a full SC card at index 0.
@@ -772,6 +784,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       onOpenUser: userId == null || !userId.isValid || widget.onOpenUser == null
           ? null
           : () => widget.onOpenUser?.call(userId),
+      clock: ref.read(liveClockProvider),
     );
   }
 

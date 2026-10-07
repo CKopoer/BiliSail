@@ -202,6 +202,8 @@ final class ApiLiveSuperChatMessage {
     this.avatarUrl,
     this.startedAt,
     this.expiresAt,
+    this.displayDuration,
+    this.remainingDuration,
     this.backgroundColor,
     this.backgroundBottomColor,
     this.textColor,
@@ -213,6 +215,12 @@ final class ApiLiveSuperChatMessage {
   final int price;
   final Uri? avatarUrl;
   final DateTime? startedAt, expiresAt;
+
+  /// Total lifetime from the server interval or socket `time`.
+  final Duration? displayDuration;
+
+  /// HTTP remaining seconds when no absolute server expiry can be recovered.
+  final Duration? remainingDuration;
 
   /// ARGB colors, independent of Flutter's Color type.
   final int? backgroundColor, backgroundBottomColor, textColor;

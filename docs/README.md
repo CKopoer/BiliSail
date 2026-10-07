@@ -26,6 +26,7 @@
 | [排行榜分区参数](validation/ranking-regions.md) | 官网配置动态目录、新分区 ID、刷新撤下处理与风控验证边界 |
 | [影视与直播内置播放](validation/content-playback.md) | 四频道内置入口、三类播放页、影视选集、直播线路与原生验证 |
 | [影视侧栏与直播 SC](validation/pgc-live-sidebar.md) | 官方桌面式影视简介/选集/系列、直播聊天与 SC 气泡、读取边界 |
+| [直播 SC 时长与倒计时](validation/live-sc-lifetime.md) | HTTP／实时秒数语义、到期移除、气泡和卡片倒计时、生命周期及验证 |
 | [影视与直播弹幕修复](validation/pgc-live-danmaku.md) | 剧集弹幕/发送、直播实时消息与绘制、SC 卡片和分区列表协议 |
 | [密集番剧弹幕与选集子标签](validation/pgc-dense-danmaku.md) | 登录首集超量弹幕的有界抽样、横向滚轮与悬停拖动条 |
 | [直播表情与主页入口](validation/live-chat-profiles.md) | 精简房间信息、右上在看/看过人数、行内/大表情、弹幕及 SC 用户主页跳转 |

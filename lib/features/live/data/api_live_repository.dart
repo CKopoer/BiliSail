@@ -142,6 +142,8 @@ class ApiLiveRepository implements LiveRepository, LiveChatRepository {
         avatarUrl: message.avatarUrl,
         startedAt: message.startedAt,
         expiresAt: message.expiresAt,
+        displayDuration: message.displayDuration,
+        remainingDuration: message.remainingDuration,
         backgroundColor: message.backgroundColor,
         backgroundBottomColor: message.backgroundBottomColor,
         textColor: message.textColor,

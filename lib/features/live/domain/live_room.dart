@@ -107,6 +107,8 @@ final class LiveSuperChatMessage {
     this.avatarUrl,
     this.startedAt,
     this.expiresAt,
+    this.displayDuration,
+    this.remainingDuration,
     this.backgroundColor,
     this.backgroundBottomColor,
     this.textColor,
@@ -119,8 +121,31 @@ final class LiveSuperChatMessage {
   final Uri? avatarUrl;
   final DateTime? startedAt, expiresAt;
 
+  /// Total display lifetime; HTTP remaining seconds are kept separately.
+  final Duration? displayDuration;
+
+  /// Fallback remaining time when an HTTP snapshot has no absolute expiry.
+  final Duration? remainingDuration;
+
   /// ARGB values are kept free of any Flutter UI dependency.
   final int? backgroundColor, backgroundBottomColor, textColor;
+
+  LiveSuperChatMessage withTiming(DateTime? start, DateTime end) =>
+      LiveSuperChatMessage(
+        id: id,
+        userName: userName,
+        userId: userId,
+        text: text,
+        price: price,
+        avatarUrl: avatarUrl,
+        startedAt: start,
+        expiresAt: end,
+        displayDuration: displayDuration,
+        remainingDuration: remainingDuration,
+        backgroundColor: backgroundColor,
+        backgroundBottomColor: backgroundBottomColor,
+        textColor: textColor,
+      );
 }
 
 final class LivePlayInfo {

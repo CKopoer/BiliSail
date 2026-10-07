@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import '../models/live_models.dart';
 import 'live_message_content.dart';
+import 'live_super_chat_timing.dart';
 
 /// Bilibili packet framing inside a complete WebSocket binary message.
 /// Version 3 is deliberately unsupported: this client negotiates raw/zlib (2).
@@ -237,6 +238,7 @@ ApiLiveEvent? _parseCommand(Map<String, Object?> data) {
         name == null) {
       return null;
     }
+    final timing = parseLiveSuperChatTiming(payload);
     return ApiLiveSuperChatReceived(
       ApiLiveSuperChatMessage(
         id: id,
@@ -245,8 +247,9 @@ ApiLiveEvent? _parseCommand(Map<String, Object?> data) {
         text: text,
         price: price,
         avatarUrl: _image(user['face']),
-        startedAt: _seconds(payload['start_time']),
-        expiresAt: _seconds(payload['end_time']),
+        startedAt: timing.startedAt,
+        expiresAt: timing.expiresAt,
+        displayDuration: timing.displayDuration,
         backgroundColor: _color(payload['background_color']),
         backgroundBottomColor: _color(payload['background_bottom_color']),
         textColor: _color(payload['font_color']),
@@ -293,13 +296,6 @@ String? _id(Object? value) {
 String? _text(Object? value, int limit) => value is String && value.isNotEmpty
     ? value.substring(0, value.length.clamp(0, limit))
     : null;
-DateTime? _seconds(Object? value) {
-  final seconds = _int(value);
-  return seconds == null || seconds <= 0 || seconds > 253402300799
-      ? null
-      : DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
-}
-
 DateTime? _timestamp(Object? value) {
   final number = _int(value);
   if (number == null || number <= 0) return null;

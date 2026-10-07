@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const requested = RoomId('12'), canonical = RoomId('12345');
-final now = DateTime.utc(2026, 10, 5, 12);
+var now = DateTime.utc(2026, 10, 5, 12);
 LiveChatMessage chat(String id, {String text = '新消息'}) =>
     LiveChatMessage(id: id, userName: '测试观众', text: text, timestamp: now);
 LiveSuperChatMessage sc(String id) => LiveSuperChatMessage(
@@ -30,6 +30,7 @@ void main() {
   late ProviderContainer container;
   late LiveController controller;
   setUp(() async {
+    now = DateTime.utc(2026, 10, 5, 12);
     repository = _Repository();
     auth = _Auth();
     container = ProviderContainer(
@@ -52,6 +53,35 @@ void main() {
     await auth.events.close();
   });
   LiveState state() => container.read(liveControllerProvider(requested));
+
+  testWidgets('socket duration expires without waiting for HTTP polling', (
+    tester,
+  ) async {
+    // Register the stream listener inside the widget test's fake timer zone.
+    controller.setActive(false);
+    controller.setActive(true);
+    await tester.pump();
+    const message = LiveSuperChatMessage(
+      id: 'timed',
+      userName: '观众',
+      text: 'SC',
+      price: 30,
+      displayDuration: Duration(seconds: 3),
+    );
+    repository.events.add([const LiveSuperChatReceived(message)]);
+    final expiry = now.add(const Duration(seconds: 3));
+    expect(state().superChats.single.expiresAt, expiry);
+    now = now.add(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 2));
+    repository.events.add([const LiveSuperChatReceived(message)]);
+    expect(state().superChats.single.expiresAt, expiry);
+    now = expiry;
+    await tester.pump(const Duration(seconds: 1));
+    expect(state().superChats, isEmpty);
+    repository.events.add([const LiveSuperChatReceived(message)]);
+    expect(state().superChats, isEmpty);
+    controller.setActive(false);
+  });
 
   test(
     'canonical room socket adds typed chat, SC and connection in one batch',

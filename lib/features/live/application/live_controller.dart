@@ -121,6 +121,7 @@ class LiveController extends Notifier<LiveState> {
   int _realtimeVersion = 0, _liveSequence = 0;
   final Map<String, int> _realtimeSuperChats = {};
   final Map<String, int> _deletedSuperChats = {};
+  final Map<String, ({DateTime? start, DateTime end})> _superChatTimes = {};
   final Set<String> _receivedChatKeys = {};
   Stream<List<LiveChatMessage>> get receivedDanmaku =>
       _danmakuEmitter?.stream ?? const Stream.empty();
@@ -150,6 +151,7 @@ class LiveController extends Notifier<LiveState> {
     _stopRealtime();
     _realtimeSuperChats.clear();
     _deletedSuperChats.clear();
+    _superChatTimes.clear();
     _receivedChatKeys.clear();
     _liveSequence = 0;
     _roomRead?.cancel();
@@ -353,7 +355,8 @@ class LiveController extends Notifier<LiveState> {
       }
       final now = ref.read(liveClockProvider)();
       final unique = <String, LiveSuperChatMessage>{};
-      for (final message in incoming.take(maxSuperChats)) {
+      for (final incomingMessage in incoming.take(maxSuperChats)) {
+        final message = _resolveSuperChatTiming(incomingMessage, now);
         if (_deletedSuperChats.containsKey(message.id)) continue;
         if (message.expiresAt case final expiry?) {
           if (!expiry.isAfter(now)) continue;
@@ -482,11 +485,12 @@ class LiveController extends Notifier<LiveState> {
             danmaku.add(message);
           }
         case LiveSuperChatReceived(:final message):
+          final timed = _resolveSuperChatTiming(message, now);
           if (_deletedSuperChats.containsKey(message.id) ||
-              !(message.expiresAt?.isAfter(now) ?? true)) {
+              !(timed.expiresAt?.isAfter(now) ?? true)) {
             continue;
           }
-          superChats[message.id] = message;
+          superChats[message.id] = timed;
           _realtimeSuperChats[message.id] = _liveSequence;
         case LiveSuperChatDeleted(:final ids):
           for (final id in ids.take(maxSuperChats)) {
@@ -579,6 +583,35 @@ class LiveController extends Notifier<LiveState> {
       state = state.copyWith(superChats: List.unmodifiable(live));
     }
     _scheduleSuperChatExpiry();
+  }
+
+  LiveSuperChatMessage _resolveSuperChatTiming(
+    LiveSuperChatMessage message,
+    DateTime now,
+  ) {
+    final known = _superChatTimes[message.id];
+    var start = message.startedAt;
+    var end = message.expiresAt;
+    final duration = message.displayDuration;
+    if (end == null) {
+      // A duration-only fallback is anchored once. Repeated snapshots/socket
+      // delivery must not restart its lifetime or resurrect an expired SC.
+      start ??= known?.start;
+      end = known?.end;
+      final remaining = message.remainingDuration;
+      if (end == null && remaining != null && remaining >= Duration.zero) {
+        end = now.add(remaining);
+      } else if (end == null && duration != null && duration > Duration.zero) {
+        start ??= now;
+        end = start.add(duration);
+      }
+    }
+    if (end == null) return message;
+    _superChatTimes[message.id] = (start: start, end: end);
+    while (_superChatTimes.length > maxSuperChats * 2) {
+      _superChatTimes.remove(_superChatTimes.keys.first);
+    }
+    return message.withTiming(start, end);
   }
 
   void _scheduleSuperChatExpiry() {

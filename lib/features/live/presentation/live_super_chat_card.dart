@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../shared/ui/network_avatar.dart';
@@ -10,14 +12,22 @@ class LiveSuperChatBubble extends StatelessWidget {
     required this.message,
     required this.selected,
     required this.onPressed,
+    this.clock,
   });
 
   final LiveSuperChatMessage message;
   final bool selected;
   final VoidCallback onPressed;
+  final DateTime Function()? clock;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => _SuperChatCountdown(
+    message: message,
+    clock: clock,
+    builder: (seconds) => _bubble(seconds),
+  );
+
+  Widget _bubble(int? seconds) {
     final palette = _SuperChatPalette.from(message);
     return Semantics(
       button: true,
@@ -54,6 +64,16 @@ class LiveSuperChatBubble extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                if (seconds != null) ...[
+                  const SizedBox(width: 7),
+                  Text(
+                    '${seconds}s',
+                    style: TextStyle(
+                      color: palette.bubbleInk.withValues(alpha: 0.8),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -63,25 +83,37 @@ class LiveSuperChatBubble extends StatelessWidget {
   }
 }
 
-/// A compact, two-tone card matching the official desktop SC hierarchy.
+/// Two-tone SC card with the remaining lifetime beside its author and amount.
 class LiveSuperChatCard extends StatelessWidget {
-  const LiveSuperChatCard({super.key, required this.message, this.onOpenUser});
+  const LiveSuperChatCard({
+    super.key,
+    required this.message,
+    this.onOpenUser,
+    this.clock,
+  });
 
   final LiveSuperChatMessage message;
   final VoidCallback? onOpenUser;
+  final DateTime Function()? clock;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => _SuperChatCountdown(
+    message: message,
+    clock: clock,
+    builder: (seconds) => _card(context, seconds),
+  );
+
+  Widget _card(BuildContext context, int? seconds) {
     final palette = _SuperChatPalette.from(message);
     return Semantics(
       container: true,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: palette.body.withValues(alpha: 0.7)),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(7),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
@@ -142,12 +174,20 @@ class LiveSuperChatCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.diamond_outlined,
-                        color: palette.body,
-                        size: 28,
-                      ),
+                      if (seconds != null) ...[
+                        const SizedBox(width: 8),
+                        Semantics(
+                          label: '剩余 $seconds 秒',
+                          excludeSemantics: true,
+                          child: Text(
+                            '${seconds}s',
+                            style: TextStyle(
+                              color: palette.headerInk.withValues(alpha: 0.8),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -173,6 +213,73 @@ class LiveSuperChatCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Tick only this small view; the application controller owns SC removal.
+/// TickerMode also stops timers while the sidebar/tab/workspace is hidden.
+class _SuperChatCountdown extends StatefulWidget {
+  const _SuperChatCountdown({
+    required this.message,
+    required this.builder,
+    this.clock,
+  });
+
+  final LiveSuperChatMessage message;
+  final Widget Function(int? seconds) builder;
+  final DateTime Function()? clock;
+
+  @override
+  State<_SuperChatCountdown> createState() => _SuperChatCountdownState();
+}
+
+class _SuperChatCountdownState extends State<_SuperChatCountdown> {
+  Timer? _timer;
+  bool _enabled = false;
+
+  int? get _seconds {
+    final end = widget.message.expiresAt;
+    if (end == null) return null;
+    final remaining = end.difference((widget.clock ?? DateTime.now)());
+    return remaining <= Duration.zero
+        ? 0
+        : (remaining.inMicroseconds + Duration.microsecondsPerSecond - 1) ~/
+              Duration.microsecondsPerSecond;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _enabled = TickerMode.valuesOf(context).enabled;
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SuperChatCountdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _schedule();
+  }
+
+  void _schedule() {
+    _timer?.cancel();
+    _timer = null;
+    if (!_enabled || (_seconds ?? 0) == 0) return;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if ((_seconds ?? 0) == 0) {
+        _timer?.cancel();
+        _timer = null;
+      }
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(_seconds);
 }
 
 final class _SuperChatPalette {

@@ -3,6 +3,7 @@ import 'dart:async';
 import '../api_client.dart';
 import '../live/live_chat_session.dart';
 import '../live/live_message_content.dart';
+import '../live/live_super_chat_timing.dart';
 import '../models.dart';
 import '../models/live_models.dart';
 
@@ -420,6 +421,7 @@ final class LiveClient {
       }
       final text = _requiredText(entry['message'], endpoint);
       final name = _requiredText(user['uname'], endpoint);
+      final timing = parseLiveSuperChatTiming(entry, snapshot: true);
       messages.add(
         ApiLiveSuperChatMessage(
           id: _id(entry['id'], endpoint),
@@ -428,8 +430,10 @@ final class LiveClient {
           text: text.substring(0, text.length.clamp(0, 2000)),
           price: price,
           avatarUrl: _imageUri(user['face']),
-          startedAt: _unixSeconds(entry['start_time']),
-          expiresAt: _unixSeconds(entry['end_time']),
+          startedAt: timing.startedAt,
+          expiresAt: timing.expiresAt,
+          displayDuration: timing.displayDuration,
+          remainingDuration: timing.remainingDuration,
           backgroundColor: _argb(entry['background_color']),
           backgroundBottomColor: _argb(entry['background_bottom_color']),
           textColor: _argb(entry['font_color']),
@@ -473,12 +477,6 @@ final class LiveClient {
       : value is String
       ? int.tryParse(value)
       : null;
-  static DateTime? _unixSeconds(Object? value) {
-    final seconds = _int(value);
-    if (seconds == null || seconds <= 0 || seconds > 253402300799) return null;
-    return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
-  }
-
   static DateTime? _historyTimestamp(String? value) {
     if (value == null) return null;
     final iso = value.replaceFirst(' ', 'T');

@@ -117,6 +117,8 @@ ApiPage<T> { items, nextCursor, hasMore }
 
 观看历史页面另由 `WatchHistoryClient` / `ApiLibraryRepository` 读取 Web Cookie GET `/x/web-interface/history/cursor`，使用服务端三字段游标分页，以视频详情补齐统计并显示观看日期。该列表不读取本地续播记录；端点、容量、来源和验证边界见 [云端观看历史](validation/cloud-watch-history.md)。
 
+SC 快照 `time` 可为 `ts` 时刻的剩余秒数，实时事件的 `time` 通常为总时长；统一以 `end_time` 优先，在字段缺失时按来源补算。绝对到期计时与可见倒计时分开，重复消息不重置时长；字段与验证见 [直播 SC 时长与倒计时](validation/live-sc-lifetime.md)。
+
 ### 登录状态机
 
 ```mermaid
