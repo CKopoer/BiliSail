@@ -82,3 +82,25 @@ flutter test integration_test/windows_video_card_hover_test.dart -d windows --no
 - 在线 Windows 游客样本 `BV1rhHv6sEVm` 通过，在打开返回时断言视频输出已就绪；首次 / 再次悬停约 1111 / 716 毫秒，无音频、持续播放、移开释放，最大未释放引擎数 1。受控首地址 403 也通过，首地址释放后备用出画面约 3877 毫秒，再次悬停约 821 毫秒；首帧条件没有阻止备用恢复。日志 `build/hover-preview-frame-online.log`、`build/hover-preview-frame-fallback.log`。以上为 Debug 功能观测，不作前后性能比较。
 - `tool/check.ps1 -SkipPub` 最终通过：根应用 865、API 包 269、播放器包 22、弹幕包 32，共 1188 项；格式和分析通过。日志 `build/hover-preview-frame-check-final.log`。
 - Windows 正常 `lib/main.dart` 入口 Release 构建通过，完整 bundle 为 `artifacts/bilisail-hover-first-frame-windows-x64`，包含程序、原生 DLL、数据和许可；日志 `build/hover-preview-frame-release.log`。Android/macOS 本轮原生未验证，未做 Release 逐帧画面或性能验收。
+
+## 15 秒向前预读窗口
+
+日期：2026-10-07。按用户要求，预览只维持当前位置之后 15 秒媒体时间的预读窗口，不再沿用普通播放的默认大窗口。视频仍从真实完整视频轨读取，窗口随播放推进继续补充；不是只播前 15 秒。鼠标移开沿用取消、停止和释放路径。
+
+- [预览编排](../../lib/features/video/application/video_card_preview_playback.dart) 每次打开（含 CDN 备用）显式传入 `OpenOptions.maxBufferAhead = Duration(seconds: 15)`。普通点播／影视／直播不传该选项，继续使用各自后端默认策略；每次打开创建新的 native Player，不将预览配置带入下一源。
+- [原生适配器](../../packages/bili_player/lib/src/media_kit_engine.dart) 在初始化完成、打开 URL 之前设置 `cache-secs=15`、`demuxer-readahead-secs=15`，避免 mpv 取两个窗口中的较大值；同时设置 `cache-on-disk=no`，预览改用有界内存缓存，不累积 append-only 临时文件。设置与读取确认使用同一个打开预算，旧 generation 中止；锁定 SDK 不传播底层设置失败，因此读取确认失败会进入既有错误／释放路径，不静默回退后端默认大窗口。
+- 这里限制的是原生解复用的媒体时间窗口，不能作为精确网络下载字节配额。解码队列、帧时间戳和网络 I/O 缓冲有少量边界误差，不能通过夹紧界面 `buffered` 数值伪装成严格零超出。参数语义核对了锁定 Windows libmpv `652a1dd` 的 [选项说明](https://github.com/mpv-player/mpv/blob/652a1dd/DOCS/man/options.rst) 与本地 `media_kit 1.2.6` 源码。
+
+验证使用 FFmpeg 合成的 [60 秒无音轨测试图](../../test/fixtures/media/README.md)，不访问真实账号或公网媒体。[Windows 原生用例](../../integration_test/windows_preview_buffer_test.dart) 通过本地 HTTP／Range 打开，检查首帧及无音频、暂停时窗口、播放推进后补充、seek 后窗口、普通打开恢复默认缓存。Windows Debug 两次通过：初始向前 14.875 秒，播放推进后约 15.04～15.17 秒，seek 后约 15.13～15.17 秒；相同适配器未指定选项重开后缓存到 59.875 秒。测试允许 500 毫秒的原生帧／解码边界误差，不是 Release 性能或流量基准。日志 `build/preview-buffer-native.log`。
+
+```powershell
+$env:BILI_TEST_MEDIA_DIR = (Resolve-Path test/fixtures/media).Path
+flutter test integration_test/windows_preview_buffer_test.dart -d windows --no-pub
+```
+
+- 预览编排 12 项、播放器包 22 项、API 包 285 项、弹幕包 32 项测试通过。播放器包和受影响的预览／原生用例／静止探针文件分析通过；本轮改动格式及 `git diff --check` 通过。
+- 静止窗口首帧探针 `tool/test-video-preview-idle.ps1` 通过；两次均在 3 秒打开预算内完成视频解码及原生输出，记录约 526／375 毫秒，没有挂载 surface 或外部 pump 提供帧。新增缓存配置没有恢复先前初始化死等。日志 `build/preview-buffer-idle.log`，结果 `build/validation/video-preview-idle.json`；这是本地 Windows Debug 功能观测。
+- Windows 正常 `lib/main.dart` 入口 Release 构建通过，日志 `build/preview-buffer-release.log`。这是该次构建时的工作区快照，不代表之后其他并行修改的持续验收。
+- `tool/check.ps1 -SkipPub` 已执行，但被同时进行的快捷键重构文件格式检查阻止，最终日志 `build/preview-buffer-check-final.log` 指向 `shortcut_settings.dart`。单独根分析、根全量测试和普通播放原生套件也受当时快捷键／页面编译错误影响：根测试为 852 项通过、7 个文件加载失败；原生普通播放未能启动，不能宣称全量回归通过。日志分别为 `build/preview-buffer-analyze.log`、`build/preview-buffer-root-tests.log`、`build/preview-buffer-windows-media.log`；未改动这些并行工作文件。
+
+Android/macOS 本轮未做原生验证，公网 CDN 的实际接收字节数未测；本地 HTTP 缓冲窗口验证不代表这两项已完成。

@@ -1,19 +1,22 @@
 import '../../../domain/user.dart';
+import '../../../domain/comment_target.dart';
 
 import 'package:bili_api/bili_api.dart';
 
 import '../../../core/network/api_requests.dart';
 import '../../../domain/request_cancellation.dart';
-import '../domain/video_comments_repository.dart';
+import '../domain/comments_repository.dart';
 
-final class ApiVideoCommentsRepository
-    implements VideoCommentsRepository, CommentEmotesRepository {
-  ApiVideoCommentsRepository(
+final class ApiCommentsRepository
+    implements CommentsRepository, CommentEmotesRepository {
+  ApiCommentsRepository(
     this.api,
     this.requests, {
     required String Function() accountScope,
+    this.type = CommentTargetType.video,
   }) : _scope = accountScope;
   final BiliApiClient api;
+  final CommentTargetType type;
   final ApiRequests requests;
   final String Function() _scope;
   @override
@@ -68,14 +71,15 @@ final class ApiVideoCommentsRepository
       );
   @override
   Future<CommentPage> load(
-    String aid,
+    String oid,
     int page,
     CommentSort sort,
     RequestCancellation cancellation,
   ) => requests.run(
     (ctx) async => _page(
       await api.getVideoComments(
-        aid,
+        oid,
+        commentType: type.value,
         page: page,
         sort: sort == CommentSort.hot
             ? ApiCommentSort.hot
@@ -87,13 +91,20 @@ final class ApiVideoCommentsRepository
   );
   @override
   Future<CommentPage> replies(
-    String aid,
+    String oid,
     String rootId,
     int page,
     RequestCancellation cancellation,
   ) => requests.run(
-    (ctx) async =>
-        _page(await api.getVideoReplies(aid, rootId, page: page, context: ctx)),
+    (ctx) async => _page(
+      await api.getVideoReplies(
+        oid,
+        rootId,
+        page: page,
+        commentType: type.value,
+        context: ctx,
+      ),
+    ),
     cancellation: cancellation,
   );
   Future<T> _write<T>(
@@ -117,17 +128,23 @@ final class ApiVideoCommentsRepository
   }, cancellation: c);
   @override
   Future<void> like(
-    String aid,
+    String oid,
     String id,
     bool liked,
     RequestCancellation cancellation,
   ) => _write(
-    (ctx) => api.likeVideoComment(aid, id, liked, context: ctx),
+    (ctx) => api.likeVideoComment(
+      oid,
+      id,
+      liked,
+      commentType: type.value,
+      context: ctx,
+    ),
     cancellation,
   );
   @override
   Future<CommentEntry> send(
-    String aid,
+    String oid,
     String message, {
     String? rootId,
     String? parentId,
@@ -135,8 +152,9 @@ final class ApiVideoCommentsRepository
   }) => _write(
     (ctx) async => _entry(
       await api.addVideoComment(
-        aid,
+        oid,
         message,
+        commentType: type.value,
         rootId: rootId,
         parentId: parentId,
         context: ctx,

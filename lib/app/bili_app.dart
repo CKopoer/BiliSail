@@ -39,6 +39,8 @@ import '../features/settings/domain/app_settings.dart';
 import '../shared/ui/app_notice.dart';
 import '../shared/ui/video_card_interaction_scope.dart';
 import '../shared/ui/smooth_scroll_behavior.dart';
+import '../core/presentation/app_input_host.dart';
+import 'shortcut_coordinator.dart';
 import 'image_cache_binding.dart';
 import 'dependencies.dart';
 import 'router.dart';
@@ -73,12 +75,14 @@ VideoDetail _episodeDetail(PgcSeason season, PgcEpisode episode) => VideoDetail(
 
 class _BiliAppState extends ConsumerState<BiliApp> {
   late final GoRouter _router;
+  final _input = ShortcutCoordinator();
   late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
     super.initState();
     _router = createBiliRouter(
+      inputObserver: _input.routes,
       onOpenDownloadDirectory: widget.dependencies.files.canOpenDirectory
           ? widget.dependencies.files.openDirectory
           : null,
@@ -322,6 +326,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
     _lifecycle.dispose();
     _router.routeInformationProvider.removeListener(_routeChanged);
     _router.dispose();
+    _input.dispose();
     super.dispose();
   }
 
@@ -353,19 +358,24 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         ref.watch(settingsControllerProvider).value ??
         const AppSettings.defaults();
     final cardInteractions = ref.watch(videoCardControllerProvider);
+    _input.configure(settings.shortcuts);
     return ImageCacheBinding(
       cache: widget.dependencies.images,
       child: MaterialApp.router(
         title: 'BiliSail',
         debugShowCheckedModeBanner: false,
         scrollBehavior: const SmoothScrollBehavior(),
-        builder: (context, child) => AppUpdateHost(
-          navigatorKey: _router.routerDelegate.navigatorKey,
-          child: AppNoticeHost(
-            child: VideoCardInteractionScope(
-              interactions: cardInteractions,
-              onNotice: showAppNotice,
-              child: child ?? const SizedBox.shrink(),
+        builder: (context, child) => AppInputHost<Object>(
+          dispatcher: _input,
+          routes: _input.routes,
+          child: AppUpdateHost(
+            navigatorKey: _router.routerDelegate.navigatorKey,
+            child: AppNoticeHost(
+              child: VideoCardInteractionScope(
+                interactions: cardInteractions,
+                onNotice: showAppNotice,
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
         ),

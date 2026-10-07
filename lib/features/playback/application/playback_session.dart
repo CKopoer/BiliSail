@@ -1,3 +1,5 @@
+import 'media_command_pump.dart';
+
 import 'dart:async';
 
 import 'package:bili_danmaku/bili_danmaku.dart';
@@ -1326,12 +1328,47 @@ class PlaybackSession extends ChangeNotifier {
   double? _temporaryRateOriginal;
   int? _temporaryRateGeneration;
   int _temporaryRateRevision = 0;
+  double? _rateTarget, _volumeTarget;
+  int? _rateTargetGeneration, _volumeTargetGeneration;
+  int _rateTargetRevision = 0, _volumeTargetRevision = 0;
+  int? _pendingRateMemoryRevision;
+  final _rateCommands = MediaCommandPump();
+  final _volumeCommands = MediaCommandPump();
+  double get commandRate => _rateTargetGeneration == _generation
+      ? _rateTarget ?? _temporaryRateOriginal ?? snapshots.value.rate
+      : _temporaryRateOriginal ?? snapshots.value.rate;
+  double get commandVolume => _volumeTargetGeneration == _generation
+      ? _volumeTarget ?? snapshots.value.volume
+      : snapshots.value.volume;
+
+  Future<void> _serializeRate(Future<void> Function() action) {
+    final generation = _generation;
+    return _rateCommands.submit(() async {
+      if (_disposed || _closing || generation != _generation) return;
+      await action();
+      // Restoration can replace a queued permanent native call. Confirm and
+      // remember its latest target here as well as in setRate's direct path.
+      final target = _rateTarget;
+      final memoryRevision = _pendingRateMemoryRevision;
+      if (generation == _generation &&
+          target != null &&
+          memoryRevision != null &&
+          engine.currentSnapshot.rate == target) {
+        _rateMemory.remember(target, revision: memoryRevision);
+        _rateTarget = null;
+      }
+    });
+  }
+
   Future<void> beginTemporaryRate(double rate) {
     if (isLive) return Future.value();
-    _temporaryRateOriginal ??= snapshots.value.rate;
+    _temporaryRateOriginal ??= commandRate;
     _temporaryRateGeneration = snapshots.value.generation;
-    _temporaryRateRevision++;
-    return _command(() => engine.setRate(rate));
+    final revision = ++_temporaryRateRevision;
+    return _serializeRate(() async {
+      if (revision != _temporaryRateRevision) return;
+      await _command(() => engine.setRate(rate));
+    });
   }
 
   Future<void> endTemporaryRate({int? expectedGeneration}) async {
@@ -1342,8 +1379,6 @@ class PlaybackSession extends ChangeNotifier {
     final rate = _temporaryRateOriginal;
     final sameSource = _temporaryRateGeneration == snapshots.value.generation;
     final revision = ++_temporaryRateRevision;
-    // A source switch can capture a checkpoint before this native command
-    // completes. Keep its permanent rate available throughout restoration.
     if (rate != null && sameSource) await _applyRate(rate);
     if (_temporaryRateRevision == revision) {
       _temporaryRateOriginal = null;
@@ -1351,23 +1386,63 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  Future<void> _applyRate(double rate) =>
-      isLive ? Future.value() : _command(() => engine.setRate(rate));
+  Future<void> _applyRate(double rate) => isLive
+      ? Future.value()
+      : _serializeRate(() => _command(() => engine.setRate(rate)));
 
   Future<void> setRate(double rate) {
     if (isLive || _disposed || _closing) return Future.value();
     final generation = _generation;
-    final revision = _rateMemory.beginChange();
-    return _command(() async {
-      await engine.setRate(rate);
-      if (_disposed || _closing || generation != _generation) return;
-      _rateMemory.remember(rate, revision: revision);
-      if (_temporaryRateOriginal != null) _temporaryRateOriginal = rate;
-    });
+    final revision = ++_rateTargetRevision;
+    _rateTarget = rate;
+    _rateTargetGeneration = generation;
+    if (_temporaryRateOriginal != null) _temporaryRateOriginal = rate;
+    final memoryRevision = _rateMemory.beginChange();
+    _pendingRateMemoryRevision = memoryRevision;
+    return _serializeRate(
+      () => _command(() async {
+        try {
+          await engine.setRate(rate);
+          if (_disposed || _closing || generation != _generation) return;
+          _rateMemory.remember(rate, revision: memoryRevision);
+        } on PlayerFailure {
+          if (generation == _generation) {
+            _rateCommands.discardPending();
+            _rateTarget = null;
+            ++_rateTargetRevision;
+          }
+          rethrow;
+        } finally {
+          if (revision == _rateTargetRevision) _rateTarget = null;
+        }
+      }),
+    );
   }
 
-  Future<void> setVolume(double volume) =>
-      _command(() => engine.setVolume(volume));
+  Future<void> setVolume(double volume) {
+    final generation = _generation;
+    final revision = ++_volumeTargetRevision;
+    _volumeTargetGeneration = generation;
+    _volumeTarget = volume;
+    return _volumeCommands.submit(
+      () => _command(() async {
+        if (_disposed || _closing || generation != _generation) return;
+        try {
+          await engine.setVolume(volume);
+        } on PlayerFailure {
+          if (generation == _generation) {
+            _volumeCommands.discardPending();
+            _volumeTarget = null;
+            ++_volumeTargetRevision;
+          }
+          rethrow;
+        } finally {
+          if (revision == _volumeTargetRevision) _volumeTarget = null;
+        }
+      }),
+    );
+  }
+
   Future<void> _command(Future<void> Function() action) async {
     final generation = _generation;
     try {

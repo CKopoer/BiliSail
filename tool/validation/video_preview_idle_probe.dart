@@ -30,6 +30,7 @@ Future<void> main() async {
             play: true,
             volume: 0,
             openTimeout: Duration(seconds: 3),
+            maxBufferAhead: Duration(seconds: 15),
           ),
         )
         .then<void>(

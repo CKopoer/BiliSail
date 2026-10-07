@@ -1,7 +1,7 @@
 import '../../../domain/user.dart';
 import '../../../domain/dynamic_post.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
-import '../../../shared/ui/dynamic_post_card.dart';
+import '../../../shared/ui/dynamic_post_interactions.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
@@ -196,7 +196,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                                       padding: const EdgeInsets.only(
                                         bottom: 16,
                                       ),
-                                      child: DynamicPostCard(
+                                      child: InteractiveDynamicPostCard(
                                         key: ValueKey(item.id),
                                         post:
                                             item.dynamicPost ??
@@ -220,6 +220,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                                           '/video/${video.id.value}',
                                         ),
                                         onOpenLink: _openLink,
+                                        onLogin: widget.onLogin,
                                       ),
                                     ),
                                 ],

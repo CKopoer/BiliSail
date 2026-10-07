@@ -1,3 +1,5 @@
+import '../../support/input_test_app.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -16,7 +18,7 @@ import 'package:bilisail/features/video/presentation/video_collection_panel.dart
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
-import 'package:bilisail/core/presentation/playback_page_commands.dart';
+import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:bilisail/features/video/application/video_card_preview_playback.dart';
 import 'package:bilisail/features/video/domain/video_card_interactions.dart';
 import 'package:bilisail/shared/ui/video_card_cover.dart';
@@ -105,7 +107,7 @@ void main() {
               _ExtrasRepository(),
             ),
           ],
-          child: MaterialApp(
+          child: InputTestApp(
             theme: dark ? BiliTheme.dark() : BiliTheme.light(),
             home: Scaffold(
               body: RepaintBoundary(
@@ -175,7 +177,7 @@ void main() {
               _ExtrasRepository(tags: const [tag, '编程', '教程', '跨平台开发']),
             ),
           ],
-          child: MaterialApp(
+          child: InputTestApp(
             theme: BiliTheme.light(),
             builder: (context, child) => RepaintBoundary(
               key: const ValueKey('video-tags-preview'),
@@ -233,7 +235,7 @@ void main() {
                 _ExtrasRepository(),
               ),
             ],
-            child: MaterialApp(
+            child: InputTestApp(
               home: Scaffold(
                 body: VideoScreen(
                   id: const VideoId('BV1abc123456'),
@@ -330,7 +332,7 @@ void main() {
           overrides: [
             authControllerProvider.overrideWith(_GuestAuthController.new),
           ],
-          child: MaterialApp(
+          child: InputTestApp(
             home: Scaffold(
               body: Align(
                 alignment: Alignment.topLeft,
@@ -381,7 +383,7 @@ void main() {
           videoRepositoryProvider.overrideWithValue(_VideoRepository()),
           videoExtrasRepositoryProvider.overrideWithValue(extras),
         ],
-        child: MaterialApp(
+        child: InputTestApp(
           home: Scaffold(
             body: VideoScreen(
               id: const VideoId('BV1abc123456'),
@@ -609,7 +611,7 @@ void main() {
           videoRepositoryProvider.overrideWithValue(_VideoRepository()),
           videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
         ],
-        child: MaterialApp(
+        child: InputTestApp(
           home: Scaffold(
             body: VideoScreen(
               id: const VideoId('BV1abc123456'),
@@ -653,7 +655,7 @@ void main() {
           videoRepositoryProvider.overrideWithValue(_VideoRepository()),
           videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
         ],
-        child: MaterialApp(
+        child: InputTestApp(
           home: Scaffold(
             body: VideoScreen(
               id: const VideoId('BV1abc123456'),
@@ -684,7 +686,7 @@ void main() {
           videoRepositoryProvider.overrideWithValue(_VideoRepository()),
           videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
         ],
-        child: MaterialApp(
+        child: InputTestApp(
           home: Scaffold(
             body: VideoScreen(
               id: const VideoId('BV1abc123456'),
@@ -729,7 +731,7 @@ void main() {
           videoRepositoryProvider.overrideWithValue(_VideoRepository()),
           videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
         ],
-        child: MaterialApp(
+        child: InputTestApp(
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context)
                 .copyWith(textScaler: const TextScaler.linear(2)),
@@ -793,7 +795,7 @@ Widget _relatedCardApp(
     videoRepositoryProvider.overrideWithValue(_VideoRepository()),
     videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
   ],
-  child: MaterialApp(
+  child: InputTestApp(
     home: Scaffold(
       body: VideoCardInteractionScope(
         interactions: operations,

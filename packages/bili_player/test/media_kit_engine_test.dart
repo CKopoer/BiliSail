@@ -8,6 +8,8 @@ void main() {
       for (final options in [
         const OpenOptions(volume: 100),
         const OpenOptions(volume: 0, openTimeout: Duration.zero),
+        const OpenOptions(volume: 0, maxBufferAhead: Duration.zero),
+        const OpenOptions(volume: 0, maxBufferAhead: Duration(seconds: -1)),
       ]) {
         final engine = MediaKitEngine();
         await expectLater(

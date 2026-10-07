@@ -5,11 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/presentation/keyboard_shortcuts.dart';
-import '../../../core/presentation/playback_page_commands.dart';
+import '../../../core/input/input_stroke.dart';
+import '../../../core/input/shortcut_dispatcher.dart';
+import '../../../core/presentation/input_scope.dart';
+import '../../playback/application/playback_session.dart';
+import '../../../shared/ui/playback_page_commands.dart';
 import '../../../core/presentation/workspace_activity.dart';
-import '../../settings/application/settings_controller.dart';
-import '../../settings/domain/app_settings.dart';
 import '../../settings/domain/shortcut_settings.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/app_notice.dart';
@@ -126,31 +127,44 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => MouseShortcutListener(
-    onShortcut: _refreshShortcut,
-    child: Focus(
-      autofocus: true,
-      onKeyEvent: (_, event) =>
-          event is KeyDownEvent && _refreshShortcut(shortcutKey(event) ?? '')
-          ? KeyEventResult.handled
-          : KeyEventResult.ignored,
-      child: _buildPage(context),
-    ),
+  Widget build(BuildContext context) => CommandTargetScope<Object>(
+    scope: CommandScope.page,
+    active: WorkspaceActivity.isActive(context),
+    merge: const {ShortcutAction.refresh},
+    commands: {ShortcutAction.refresh: _refresh},
+    child: _buildPage(context),
   );
 
-  bool _refreshShortcut(String key) {
-    if (!WorkspaceActivity.isActive(context) || shortcutsBlocked(context)) {
-      return false;
+  Future<CommandOutcome> _refresh(InputStroke stroke) async {
+    if (stroke.phase != InputPhase.down) return CommandOutcome.noOp;
+    final locator = _locator;
+    final provider = pgcControllerProvider(locator);
+    final before = ref.read(provider).selectedEpisode;
+    final session = ref.exists(playbackSessionProvider)
+        ? ref.read(playbackSessionProvider)
+        : null;
+    final generation = session?.sourceGeneration;
+    await ref.read(provider.notifier).load();
+    if (!mounted ||
+        locator != _locator ||
+        !WorkspaceActivity.isActive(context)) {
+      return CommandOutcome.stale;
     }
-    final settings =
-        ref.read(settingsControllerProvider).value ??
-        const AppSettings.defaults();
-    if (settings.shortcuts.actionFor(key) != ShortcutAction.refresh ||
-        (_locator.seasonId == null && _locator.episodeId == null)) {
-      return false;
+    final state = ref.read(provider);
+    final after = state.selectedEpisode;
+    if (state.loading || state.message != null) return CommandOutcome.failed;
+    // A changed selection activates itself through PlaybackPanel. Only an
+    // unchanged source needs an explicit retry; never open both paths.
+    if (before != null &&
+        after != null &&
+        before.episodeId == after.episodeId &&
+        before.cid == after.cid &&
+        generation == session?.sourceGeneration &&
+        session != null) {
+      await session.retry();
+      if (session.error != null) return CommandOutcome.failed;
     }
-    unawaited(ref.read(pgcControllerProvider(_locator).notifier).load());
-    return true;
+    return CommandOutcome.completed;
   }
 
   Widget _buildPage(BuildContext context) {

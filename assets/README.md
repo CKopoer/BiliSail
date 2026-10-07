@@ -18,7 +18,7 @@ SHA-256 见 [来源哈希](fonts/alibaba_puhuiti/source_hashes.json)。用户目
 
 ## BiliSail 应用图标
 
-2026-10-07 按用户要求重新设计“哔帆 / BiliSail”应用图标，目前采用第二轮 C「船帆角标」：保留 B 站小电视的粉色圆角外框、天线与表情，仅在右下角加入蓝色小船帆。使用内置 `image_gen` 辅助生成，透明 PNG 位于 `branding/app_icon.png`，不再使用 UWP 启动图标。第二轮三个方案与第一版帆船方案均保留在项目中，路径见 [品牌资源说明](branding/README.md)。
+2026-10-07 按用户要求重新设计“哔帆 / BiliSail”应用图标，目前采用第二轮 C「船帆角标」：保留 B 站小电视的粉色圆角外框、天线与表情，仅在右下角加入蓝色小船帆。设计使用内置 `image_gen` 辅助生成，同日按用户要求在画布尺寸不变的情况下将主体几何放大 10%；透明 PNG 位于 `branding/app_icon.png`，不再使用 UWP 启动图标。第二轮三个方案、放大前 C 原图与预览、第一版帆船方案均保留在项目中，路径与放大前后对比见 [品牌资源说明](branding/README.md)。
 
 视觉参考取自 [Bilibili 官网](https://www.bilibili.com/)及其[官方下载中心](https://app.bilibili.com/)公开加载的图标，官网原图没有内置到应用。参考 URL、采用范围、生成提示词、最终 SHA-256 与浅色／深色多尺寸预览见 [品牌资源说明](branding/README.md)。本记录不表示取得 Bilibili 品牌授权。
 

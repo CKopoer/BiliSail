@@ -1,5 +1,10 @@
 import 'dart:async';
 
+import 'package:bilisail/domain/playback_rates.dart';
+import 'package:bilisail/core/input/input_stroke.dart';
+import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
+import 'package:bilisail/features/playback/application/playback_shortcut_controller.dart';
+
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
@@ -18,6 +23,134 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('relative media targets accumulate on a delayed engine with bounded pending work', () async {
+    final engine = _FakeEngine();
+    final session = PlaybackSession(
+      engine: engine,
+      repository: _FakeRepository(autoResolve: true),
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    await session.open(_detail('1'), _part('1'));
+    final gate = Completer<void>();
+    engine.nextRate = gate;
+    final first = session.setRate(PlaybackRates.faster(session.commandRate));
+    final second = session.setRate(PlaybackRates.faster(session.commandRate));
+    expect(session.commandRate, 1.5);
+    expect(engine.currentSnapshot.rate, 1);
+    gate.complete();
+    await Future.wait([first, second]);
+    expect(engine.currentSnapshot.rate, 1.5);
+    await session.setVolume(50);
+    final volumeGate = Completer<void>();
+    engine.nextVolume = volumeGate;
+    final changes = <Future<void>>[
+      session.setVolume(session.commandVolume + 5),
+    ];
+    for (var i = 0; i < 8; i++) {
+      changes.add(session.setVolume(session.commandVolume + 5));
+    }
+    expect(session.commandVolume, 95);
+    final calls = engine.volumeCalls;
+    volumeGate.complete();
+    await Future.wait(changes);
+    expect(engine.currentSnapshot.volume, 95);
+    expect(engine.volumeCalls, calls + 1);
+  });
+  testWidgets(
+    'long hold release during delayed begin restores without a short seek',
+    (tester) async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      await tester.runAsync(() => session.open(_detail('1'), _part('1')));
+      final shortcuts = PlaybackShortcutController(
+        session: session,
+        settings: () => const ShortcutSettings.defaults(),
+        active: () => true,
+        fullscreen: () => false,
+        toggleFullscreen: () {},
+        toggleDanmaku: () {},
+        volumeFeedback: (_) {},
+      );
+      final gate = Completer<void>();
+      engine.nextRate = gate;
+      const down = InputStroke(
+        identity: 'right',
+        device: InputDevice.keyboard,
+        phase: InputPhase.down,
+        sequence: 1,
+        chord: ShortcutChord('ArrowRight'),
+      );
+      await shortcuts.execute(ShortcutAction.seekForward, down);
+      await tester.pump(const Duration(milliseconds: 401));
+      await shortcuts.execute(
+        ShortcutAction.seekForward,
+        const InputStroke(
+          identity: 'right',
+          device: InputDevice.keyboard,
+          phase: InputPhase.up,
+          sequence: 2,
+        ),
+      );
+      gate.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(engine.currentSnapshot.rate, 1);
+      expect(engine.seekTargets, isEmpty);
+      shortcuts.dispose();
+      await tester.runAsync(session.close);
+    },
+  );
+  test('permanent rate chosen during pending temporary speed survives restoration and inheritance', () async {
+    final manager = _manager();
+    addTearDown(manager.close);
+    final session = manager.acquire('first');
+    await session.open(_detail('1'), _part('1'));
+    final gate = Completer<void>();
+    (session.engine as _FakeEngine).nextRate = gate;
+    final begin = session.beginTemporaryRate(3);
+    final permanent = session.setRate(2);
+    final end = session.endTemporaryRate();
+    gate.complete();
+    await Future.wait([begin, permanent, end]);
+    expect(session.snapshots.value.rate, 2);
+    final next = manager.acquire('next');
+    await next.open(_detail('2'), _part('2'));
+    expect(next.snapshots.value.rate, 2);
+  });
+  test('failed rate drains pending choices without replaying them', () async {
+    final engine = _FakeEngine();
+    final session = PlaybackSession(
+      engine: engine,
+      repository: _FakeRepository(autoResolve: true),
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    await session.open(_detail('1'), _part('1'));
+    final gate = Completer<void>();
+    engine.nextRate = gate;
+    final first = session.setRate(1.25);
+    final second = session.setRate(1.5);
+    gate.completeError(
+      PlayerFailure(
+        PlayerFailureKind.nativePlayback,
+        'rate failed',
+        engine.currentSnapshot.generation,
+      ),
+    );
+    await Future.wait([first, second]);
+    expect(engine.currentSnapshot.rate, 1);
+    expect(session.commandRate, 1);
+    expect(session.error, 'rate failed');
+  });
 
   test('offline content keeps local PGC progress without cloud reads, reports or sponsor requests', () async {
     final history = _FakeHistory();
@@ -2634,6 +2767,8 @@ final class _FakeEngine implements PlayerEngine {
   final sources = <ResolvedMediaSource>[];
   final seekTargets = <Duration>[];
   Completer<void>? nextRate;
+  Completer<void>? nextVolume;
+  int volumeCalls = 0;
   Completer<void>? nextPause;
 
   @override
@@ -2712,8 +2847,17 @@ final class _FakeEngine implements PlayerEngine {
   }
 
   @override
-  Future<void> setVolume(double volume) async =>
+  Future<void> setVolume(double volume) async {
+    volumeCalls++;
+    final generation = _current.generation;
+    final gate = nextVolume;
+    nextVolume = null;
+    if (gate != null) await gate.future;
+    if (generation == _current.generation) {
       emit(_current.copyWith(volume: volume));
+    }
+  }
+
   @override
   Future<void> stop() async {
     stopCount++;

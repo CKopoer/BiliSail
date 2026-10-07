@@ -161,7 +161,7 @@ flutter build windows --release
 
 设置 → 播放 → “允许多个标签页同时播放”默认开启，仅在多标签页模式下生效。开启时，不同视频、影视或直播标签可同时播放，打开新播放标签不会中止旧媒体流；每个标签内仍只有一个播放器。关闭开关或使用单标签模式时只允许一个会话播放，进入另一播放页会暂停旧会话并保留进度和播放意图。开关立即生效，恢复允许并发时继续被导航暂停的会话，手动暂停的会话保持暂停；单标签模式禁用开关并保留选择，关闭标签只释放该标签的播放器。详见[多标签并发播放](docs/validation/multi-tab-playback.md)。
 
-单击视频画面切换控制栏，双击切换全屏。快捷键可在设置中修改、停用或恢复默认；文本输入和模态弹窗期间不触发播放快捷键。更多操作见[快捷键与富评论](docs/validation/shortcuts-rich-comments.md)、[设置与侧键](docs/validation/settings-tabs-fonts.md)和[标签播放行为](docs/validation/profile-playback-rates.md)。
+单击视频画面切换控制栏，双击切换全屏。快捷键可在设置中修改、停用或恢复默认，支持组合键和鼠标侧键。输入时保留编辑，明确绑定的侧键或 Ctrl／Meta 关闭组合仍可关闭当前标签；普通弹窗隔离底层，全屏播放保留当前标签命令。固定标签循环和图片查看器操作不受快捷键总开关影响。设置中的本次运行诊断可查看输入匹配与拦截结果，关闭即清空。当前结构与验证边界见[快捷键重构实施记录](docs/shortcut-system/implementation-results.md)。历史操作见[快捷键与富评论](docs/validation/shortcuts-rich-comments.md)、[设置与侧键](docs/validation/settings-tabs-fonts.md)和[标签播放行为](docs/validation/profile-playback-rates.md)。
 
 ## 开发与文档
 

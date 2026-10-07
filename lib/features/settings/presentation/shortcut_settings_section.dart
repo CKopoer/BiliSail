@@ -1,5 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
+import '../../../core/input/input_stroke.dart';
+import '../../../core/input/shortcut_dispatcher.dart';
+import '../../../core/presentation/input_scope.dart';
+import '../../../core/presentation/workspace_activity.dart';
+import '../../../shared/ui/app_notice.dart';
 
 import '../domain/shortcut_settings.dart';
 import '../../../core/presentation/keyboard_shortcuts.dart';
@@ -13,12 +20,21 @@ class ShortcutSettingsSection extends StatelessWidget {
   });
   final ShortcutSettings settings;
   final Future<void> Function(ShortcutSettings) save;
+  Future<void> _save(BuildContext context, ShortcutSettings value) async {
+    try {
+      await save(value);
+    } catch (_) {
+      if (context.mounted) showAppNotice(context, '设置保存失败，请重试');
+    }
+  }
+
   Future<void> _edit(BuildContext context, ShortcutAction action) async {
-    final result = await showDialog<ShortcutSettings>(
+    await showDialog<ShortcutSettings>(
       context: context,
-      builder: (_) => _ShortcutEditor(settings: settings, action: action),
+      builder: (_) =>
+          _ShortcutEditor(settings: settings, action: action, save: save),
     );
-    if (result != null) await save(result);
+    // The editor persists before closing so a failed write retains its draft.
   }
 
   Widget _binding(BuildContext context, ShortcutAction action) => ListTile(
@@ -39,7 +55,8 @@ class ShortcutSettingsSection extends StatelessWidget {
         ),
         Switch(
           value: settings.isEnabled(action),
-          onChanged: (value) => save(settings.withActionEnabled(action, value)),
+          onChanged: (value) =>
+              _save(context, settings.withActionEnabled(action, value)),
         ),
       ],
     ),
@@ -52,10 +69,14 @@ class ShortcutSettingsSection extends StatelessWidget {
       SwitchListTile.adaptive(
         contentPadding: EdgeInsets.zero,
         title: const Text('启用快捷键'),
-        subtitle: const Text('文本输入和弹窗期间不触发；播放快捷键仅作用于当前播放器。'),
+        subtitle: const Text(
+          '仅控制当前活动页。输入时保留编辑；明确绑定的侧键或 Ctrl / Meta 关闭组合仍可关闭标签。弹窗隔离底层；固定标签循环和图片操作不受总开关影响。',
+        ),
         value: settings.enabled,
-        onChanged: (value) => save(settings.withEnabled(value)),
+        onChanged: (value) => _save(context, settings.withEnabled(value)),
       ),
+      for (final issue in settings.issues) Text(issue),
+      const _ShortcutDiagnostics(),
       const ListTile(contentPadding: EdgeInsets.zero, title: Text('标签页与页面')),
       for (final action in [
         ShortcutAction.closeTab,
@@ -71,7 +92,7 @@ class ShortcutSettingsSection extends StatelessWidget {
         max: 90,
         divisions: 89,
         save: (value) =>
-            save(settings.withPlayback(seekSeconds: value.round())),
+            _save(context, settings.withPlayback(seekSeconds: value.round())),
       ),
       _ShortcutSlider(
         label: '长按触发延迟（毫秒）',
@@ -80,7 +101,7 @@ class ShortcutSettingsSection extends StatelessWidget {
         max: 1500,
         divisions: 26,
         save: (value) =>
-            save(settings.withPlayback(holdDelayMs: value.round())),
+            _save(context, settings.withPlayback(holdDelayMs: value.round())),
       ),
       ListTile(
         contentPadding: EdgeInsets.zero,
@@ -92,7 +113,9 @@ class ShortcutSettingsSection extends StatelessWidget {
               DropdownMenuItem(value: rate, child: Text('${rate}x')),
           ],
           onChanged: (rate) {
-            if (rate != null) save(settings.withPlayback(holdRate: rate));
+            if (rate != null) {
+              _save(context, settings.withPlayback(holdRate: rate));
+            }
           },
         ),
       ),
@@ -107,7 +130,7 @@ class ShortcutSettingsSection extends StatelessWidget {
       Align(
         alignment: Alignment.centerLeft,
         child: TextButton(
-          onPressed: () => save(const ShortcutSettings.defaults()),
+          onPressed: () => _save(context, const ShortcutSettings.defaults()),
           child: const Text('恢复默认快捷键'),
         ),
       ),
@@ -160,7 +183,12 @@ class _ShortcutSliderState extends State<_ShortcutSlider> {
 }
 
 class _ShortcutEditor extends StatefulWidget {
-  const _ShortcutEditor({required this.settings, required this.action});
+  const _ShortcutEditor({
+    required this.settings,
+    required this.action,
+    required this.save,
+  });
+  final Future<void> Function(ShortcutSettings) save;
   final ShortcutSettings settings;
   final ShortcutAction action;
   @override
@@ -181,38 +209,8 @@ class _ShortcutEditorState extends State<_ShortcutEditor> {
   Future<void> _record() async {
     final key = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('按下键盘或鼠标侧键'),
-        content: MouseShortcutListener(
-          onShortcut: (key) {
-            Navigator.pop(context, key);
-            return true;
-          },
-          child: Focus(
-            autofocus: true,
-            onKeyEvent: (_, event) {
-              if (event is! KeyDownEvent) return KeyEventResult.handled;
-              final key = ShortcutSettings.canonicalKey(
-                shortcutKey(event) ?? '',
-              );
-              if (key != null) Navigator.pop(context, key);
-              return KeyEventResult.handled;
-            },
-            child: const Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                '按下键盘按键，或将鼠标移到此处点击侧键。支持 Ctrl / Alt / Shift / Meta 组合键。',
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (_) => const _ShortcutRecorder(),
     );
     if (mounted && key != null) {
       _text.text = key;
@@ -220,7 +218,7 @@ class _ShortcutEditorState extends State<_ShortcutEditor> {
     }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final raw = _text.text
         .split(',')
         .map((key) => key.trim())
@@ -240,7 +238,12 @@ class _ShortcutEditorState extends State<_ShortcutEditor> {
       setState(() => _error = candidate.conflict);
       return;
     }
-    Navigator.pop(context, candidate);
+    try {
+      await widget.save(candidate);
+      if (mounted) Navigator.pop(context, candidate);
+    } catch (_) {
+      if (mounted) setState(() => _error = '设置保存失败，请重试；当前键位尚未生效');
+    }
   }
 
   @override
@@ -282,6 +285,130 @@ class _ShortcutEditorState extends State<_ShortcutEditor> {
         child: const Text('取消'),
       ),
       FilledButton(onPressed: _submit, child: const Text('保存')),
+    ],
+  );
+}
+
+class _ShortcutRecorder extends StatefulWidget {
+  const _ShortcutRecorder();
+  @override
+  State<_ShortcutRecorder> createState() => _ShortcutRecorderState();
+}
+
+class _ShortcutRecorderState extends State<_ShortcutRecorder> {
+  ShortcutDispatcher<Object>? _dispatcher;
+  String? _candidate, _identity;
+  FutureOr<CommandOutcome> _capture(InputStroke stroke) {
+    if (stroke.phase == InputPhase.down &&
+        stroke.chord != null &&
+        _candidate == null) {
+      _candidate = stroke.chord.toString();
+      _identity = stroke.identity;
+      setState(() {});
+    }
+    if (stroke.phase == InputPhase.up && stroke.identity == _identity) {
+      Navigator.pop(context, _candidate);
+    }
+    return CommandOutcome.completed;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _dispatcher = InputScope.of<Object>(context)?.dispatcher;
+    _dispatcher?.recording = _capture;
+  }
+
+  @override
+  void dispose() {
+    if (_dispatcher?.recording == _capture) _dispatcher?.recording = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('按下键盘或鼠标侧键'),
+    content: Text(
+      _candidate == null
+          ? '按下键盘按键或鼠标侧键。支持 Ctrl / Alt / Shift / Meta 组合键；侧键在整个应用客户区均可录制。'
+          : '已识别 $_candidate，释放按键后完成录制。',
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+    ],
+  );
+}
+
+class _ShortcutDiagnostics extends StatefulWidget {
+  const _ShortcutDiagnostics();
+  @override
+  State<_ShortcutDiagnostics> createState() => _ShortcutDiagnosticsState();
+}
+
+class _ShortcutDiagnosticsState extends State<_ShortcutDiagnostics> {
+  ShortcutDispatcher<Object>? _input;
+  Timer? _poll;
+  bool _enabled = false;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _input = InputScope.of<Object>(context)?.dispatcher;
+    if (!WorkspaceActivity.isActive(context)) _stop();
+  }
+
+  void _stop() {
+    _poll?.cancel();
+    _poll = null;
+    _enabled = false;
+    _input?.diagnosticsEnabled = false;
+    _input?.diagnostics.clear();
+  }
+
+  void _toggle(bool value) {
+    if (!value) {
+      setState(_stop);
+      return;
+    }
+    _enabled = true;
+    _input?.diagnosticsEnabled = true;
+    _poll = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (mounted) setState(() {});
+    });
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _stop();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('快捷键诊断（本次运行）'),
+        subtitle: const Text('最多保留 256 条输入与分发结果。输入框只记录保护原因，关闭后清空。'),
+        value: _enabled,
+        onChanged: _input == null ? null : _toggle,
+      ),
+      if (_enabled) ...[
+        Text('已捕获 ${_input?.diagnostics.length ?? 0} 条'),
+        for (final entry
+            in (_input?.diagnostics.reversed.take(8) ?? <InputTrace<Object>>[]))
+          Text(
+            '#${entry.sequence} ${(entry.elapsedMicros ?? 0) ~/ 1000}ms ${entry.device.name} ${entry.phase.name} '
+            '${entry.chord ?? "输入保护"} ${entry.fallback ? "物理回退" : "逻辑匹配"} → '
+            '${entry.result.command ?? ""} ${entry.result.reason.name} '
+            '${entry.result.scope?.name ?? ""} ${entry.result.ownerGeneration ?? ""}'
+            '${entry.logicalKeyId == null ? "" : " logical=${entry.logicalKeyId} physical=${entry.physicalKeyId}"}'
+            '${entry.buttons == null ? "" : " buttons=${entry.buttons}"}',
+          ),
+      ],
     ],
   );
 }

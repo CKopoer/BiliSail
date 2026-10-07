@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
@@ -32,7 +33,18 @@ abstract interface class ApiFormTransport {
   });
 }
 
-final class DioApiTransport implements ApiTransport, ApiFormTransport {
+abstract interface class ApiJsonTransport {
+  Future<ApiHttpResponse> postJson(
+    Uri uri, {
+    required Map<String, Object?> body,
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  });
+}
+
+final class DioApiTransport
+    implements ApiTransport, ApiFormTransport, ApiJsonTransport {
   DioApiTransport({Dio? dio}) : _dio = dio ?? Dio();
   final Dio _dio;
 
@@ -70,6 +82,7 @@ final class DioApiTransport implements ApiTransport, ApiFormTransport {
     required Duration timeout,
     ApiCancellation? cancellation,
     String? body,
+    String contentType = Headers.formUrlEncodedContentType,
   }) async {
     if (cancellation?.isCancelled ?? false) {
       throw const ApiFailure(ApiFailureCategory.cancelled, 'transport');
@@ -84,9 +97,7 @@ final class DioApiTransport implements ApiTransport, ApiFormTransport {
             cancelToken: token,
             options: Options(
               method: body == null ? 'GET' : 'POST',
-              contentType: body == null
-                  ? null
-                  : Headers.formUrlEncodedContentType,
+              contentType: body == null ? null : contentType,
               headers: headers,
               responseType: ResponseType.bytes,
               followRedirects: false,
@@ -128,4 +139,20 @@ final class DioApiTransport implements ApiTransport, ApiFormTransport {
   }
 
   void close() => _dio.close(force: true);
+
+  @override
+  Future<ApiHttpResponse> postJson(
+    Uri uri, {
+    required Map<String, Object?> body,
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  }) => _send(
+    uri,
+    headers: headers,
+    timeout: timeout,
+    cancellation: cancellation,
+    body: jsonEncode(body),
+    contentType: Headers.jsonContentType,
+  );
 }

@@ -29,6 +29,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 
+import '../test/support/input_test_app.dart';
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
@@ -628,7 +630,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [playbackSessionProvider.overrideWithValue(session)],
-            child: MaterialApp(
+            child: InputTestApp(
               home: Scaffold(
                 body: Center(
                   child: ValueListenableBuilder<double>(
@@ -981,8 +983,10 @@ void main() {
         WorkspaceNavigationMode.multipleTabs,
       );
       final router = GoRouter(
+        observers: [],
         routes: [
           ShellRoute(
+            observers: [],
             builder: (context, state, child) => ValueListenableBuilder(
               valueListenable: navigationMode,
               builder: (context, mode, _) => BiliAppShell(
@@ -1049,7 +1053,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [playbackSessionProvider.overrideWithValue(session)],
-            child: MaterialApp.router(
+            child: InputTestApp.router(
               builder: AppNoticeHost.builder,
               theme: BiliTheme.light(),
               routerConfig: router,

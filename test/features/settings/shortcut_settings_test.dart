@@ -86,10 +86,7 @@ void main() {
       ]).conflict,
       contains('保留'),
     );
-    expect(
-      ShortcutSettings.fromJson(conflict.toJson()).actionFor('F'),
-      ShortcutAction.fullscreen,
-    );
+    expect(ShortcutSettings.fromJson(conflict.toJson()).actionFor('F'), isNull);
     final restored = ShortcutSettings.fromJson({
       'bindings': {
         'playPause': ['Unknown'],
@@ -97,7 +94,8 @@ void main() {
       'holdRate': double.nan,
       'seekSeconds': -3,
     });
-    expect(restored.actionFor('Space'), ShortcutAction.playPause);
+    expect(restored.actionFor('Space'), isNull);
+    expect(restored.issues, isNotEmpty);
     expect(restored.holdRate, 3);
     expect(restored.seekSeconds, 1);
     expect(ShortcutSettings.canonicalKey(' shift+ctrl+k '), 'Ctrl+Shift+K');

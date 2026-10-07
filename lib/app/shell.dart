@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/feed/domain/home_channel.dart';
@@ -7,7 +6,11 @@ import '../features/search/presentation/search_category_bar.dart';
 import '../core/presentation/workspace_activity.dart';
 import 'workspace_tabs.dart';
 import 'platform_defaults.dart';
-import '../core/presentation/keyboard_shortcuts.dart';
+import '../core/input/input_stroke.dart';
+import '../core/input/shortcut_dispatcher.dart';
+import '../core/presentation/input_scope.dart';
+import 'shortcut_coordinator.dart';
+import '../domain/shortcut_command.dart';
 import '../features/settings/domain/shortcut_settings.dart';
 import '../features/settings/domain/settings_category.dart';
 import '../features/settings/domain/app_settings.dart';
@@ -108,9 +111,6 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     _workspace.acceptRoute(Uri.parse(widget.location));
     _restoreSearch();
     _searchController.addListener(_saveSearch);
-    // Unfocusing search can return focus to the route scope outside this
-    // shell. Workspace commands must not depend on a focused descendant.
-    FocusManager.instance.addEarlyKeyEventHandler(_key);
   }
 
   @override
@@ -159,7 +159,6 @@ final class _BiliAppShellState extends State<BiliAppShell> {
 
   @override
   void dispose() {
-    FocusManager.instance.removeEarlyKeyEventHandler(_key);
     _searchController.dispose();
     super.dispose();
   }
@@ -242,23 +241,10 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     );
   }
 
-  bool _shortcut(String key) {
-    final action = widget.shortcuts.actionFor(key);
-    // Closing a page is a workspace command even while its composer owns
-    // focus. Explicit side-button bindings are also workspace commands;
-    // typing keys stay with the editor and dialogs protect the page below.
-    if (ModalRoute.of(context)?.isCurrent == false) return false;
-    final keyParts = key.split('+');
-    final modifiers = keyParts.take(keyParts.length - 1);
-    final sideButton =
-        keyParts.last == 'MouseBack' || keyParts.last == 'MouseForward';
-    final closeWhileEditing =
-        action == ShortcutAction.closeTab &&
-        (sideButton ||
-            modifiers.contains('Ctrl') ||
-            modifiers.contains('Meta'));
-    if (!closeWhileEditing && shortcutsBlocked(context)) return false;
-    switch (action) {
+  CommandOutcome _workspaceCommand(Object command, InputStroke stroke) {
+    if (stroke.phase == InputPhase.up) return CommandOutcome.noOp;
+    InputScope.of<Object>(context)?.dispatcher.beforeNavigation();
+    switch (command) {
       case ShortcutAction.newTab:
         _newTab();
       case ShortcutAction.closeTab:
@@ -267,41 +253,38 @@ final class _BiliAppShellState extends State<BiliAppShell> {
         } else {
           _closeTab(_workspace.activeId);
         }
-      default:
-        return false;
+      case ReservedShortcut.nextTab:
+        _cycleTabs();
+      case ReservedShortcut.previousTab:
+        _cycleTabs(backwards: true);
     }
-    return true;
-  }
-
-  KeyEventResult _key(KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final key = shortcutKey(event);
-    return key != null && _shortcut(key)
-        ? KeyEventResult.handled
-        : KeyEventResult.ignored;
+    return CommandOutcome.completed;
   }
 
   @override
-  Widget build(BuildContext context) => PopScope<Object?>(
-    canPop: !_workspace.canGoBack,
-    onPopInvokedWithResult: (didPop, _) {
-      if (!didPop) _goBack();
-    },
-    child: CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.tab, control: true):
-            _cycleTabs,
-        const SingleActivator(
-          LogicalKeyboardKey.tab,
-          control: true,
-          shift: true,
-        ): () =>
-            _cycleTabs(backwards: true),
+  Widget build(BuildContext context) {
+    final dispatcher = InputScope.of<Object>(context)?.dispatcher;
+    if (dispatcher is ShortcutCoordinator) {
+      dispatcher.configure(widget.shortcuts);
+    }
+    return CommandTargetScope<Object>(
+      scope: CommandScope.workspace,
+      commands: {
+        for (final command in <Object>[
+          ShortcutAction.newTab,
+          ShortcutAction.closeTab,
+          ReservedShortcut.nextTab,
+          ReservedShortcut.previousTab,
+        ])
+          command: (stroke) => _workspaceCommand(command, stroke),
       },
-      child: Focus(
-        autofocus: true,
-        child: MouseShortcutListener(
-          onShortcut: _shortcut,
+      child: PopScope<Object?>(
+        canPop: !_workspace.canGoBack,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _goBack();
+        },
+        child: Focus(
+          autofocus: true,
           child: Scaffold(
             body: SafeArea(
               child: LayoutBuilder(
@@ -329,8 +312,8 @@ final class _BiliAppShellState extends State<BiliAppShell> {
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _pages(BuildContext context) {
     final builder = widget.pageBuilder;

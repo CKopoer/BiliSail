@@ -1,4 +1,12 @@
 import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/core/platform/external_links.dart';
+import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/video/presentation/comment_rich_content.dart';
+import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bili_player/bili_player.dart';
+
+import '../../support/video_card_fake_engine.dart';
 
 import 'dart:async';
 
@@ -54,6 +62,145 @@ void main() {
     container.dispose();
     auth.changesController.close();
   });
+  testWidgets(
+    'main, preview and detailed replies open URLs and seek the local session',
+    (tester) async {
+      const url = 'https://daily.juya.uk/issues/2026-10-06/';
+      const timestampReply = CommentEntry(
+        id: '11',
+        author: '乙',
+        message: '$url 00:12',
+        rootId: '10',
+        parentId: '10',
+      );
+      repo.items = [
+        const CommentEntry(
+          id: '10',
+          author: '甲',
+          message: '$url 00:09 00:34',
+          replyCount: 3,
+          replies: [timestampReply],
+        ),
+      ];
+      repo.replyItems = [timestampReply];
+      final engine = CardFakeEngine()
+        ..snapshot = const PlaybackSnapshot(
+          phase: PlaybackPhase.paused,
+          generation: 1,
+          duration: Duration(seconds: 20),
+        );
+      final session =
+          PlaybackSession(
+              engine: engine,
+              repository: _UnusedPlaybackRepository(),
+              progress: _UnusedProgressStore(),
+              accountScope: () => 'user:7',
+            )
+            ..detail = _detail
+            ..media = cardPreviewMedia();
+      addTearDown(session.close);
+      final opened = <Uri>[];
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(auth),
+            videoCommentsRepositoryProvider.overrideWithValue(repo),
+            playbackSessionProvider.overrideWithValue(session),
+            webLinkOpenerProvider.overrideWithValue((uri) async {
+              opened.add(uri);
+              return true;
+            }),
+          ],
+          child: MaterialApp(
+            builder: AppNoticeHost.builder,
+            home: const Scaffold(body: VideoCommentsPanel(detail: _detail)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final (index, time, seconds) in [
+        (0, '00:09', 9),
+        (1, '00:12', 12),
+      ]) {
+        final richContent = find.byType(CommentRichContent).at(index);
+        await tester.tapOnText(
+          find.textRange.ofSubstring(url, descendentOf: richContent),
+        );
+        await tester.tapOnText(
+          find.textRange.ofSubstring(time, descendentOf: richContent),
+        );
+        await tester.pumpAndSettle();
+        expect(engine.currentSnapshot.position, Duration(seconds: seconds));
+        expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+        expect(find.text('详情'), findsNothing);
+      }
+      await tester.tap(find.text('共 3 条回复 ›'));
+      await tester.pumpAndSettle();
+      await tester.tapOnText(
+        find.textRange.ofSubstring(
+          url,
+          descendentOf: find.byType(CommentRichContent).at(1),
+        ),
+      );
+      await tester.tapOnText(find.textRange.ofSubstring('00:12'));
+      await tester.pumpAndSettle();
+      await tester.tapOnText(find.textRange.ofSubstring('00:34'));
+      await tester.pumpAndSettle();
+      expect(engine.currentSnapshot.position, const Duration(seconds: 20));
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(engine.seeks, 4);
+      expect(engine.opens, 0);
+      expect(opened, List.filled(3, Uri.parse(url)));
+      expect(repo.writes, 0);
+    },
+  );
+
+  testWidgets(
+    'unavailable player and launcher refusal show actionable notices',
+    (tester) async {
+      repo.items = [
+        const CommentEntry(
+          id: '10',
+          author: '甲',
+          message: '00:09 https://example.com/',
+        ),
+      ];
+      final engine = CardFakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _UnusedPlaybackRepository(),
+        progress: _UnusedProgressStore(),
+        accountScope: () => 'user:7',
+      );
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(auth),
+            videoCommentsRepositoryProvider.overrideWithValue(repo),
+            playbackSessionProvider.overrideWithValue(session),
+            webLinkOpenerProvider.overrideWithValue((_) async => false),
+          ],
+          child: MaterialApp(
+            builder: AppNoticeHost.builder,
+            home: const Scaffold(body: VideoCommentsPanel(detail: _detail)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tapOnText(find.textRange.ofSubstring('00:09'));
+      await tester.pump();
+      expect(find.text('播放器尚未就绪'), findsOneWidget);
+      expect(engine.seeks, 0);
+      await tester.tapOnText(
+        find.textRange.ofSubstring('https://example.com/'),
+      );
+      await tester.pump();
+      expect(find.text('无法打开浏览器，请稍后重试'), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
   test('comment copies preserve author IDs', () {
     expect(root.withLike(true).authorId, const UserId('100'));
     expect(root.withReplies([child]).authorId, const UserId('100'));
@@ -457,6 +604,7 @@ class _Repo implements VideoCommentsRepository, CommentEmotesRepository {
   }
 
   List<CommentEntry> items = [root];
+  List<CommentEntry> replyItems = [child];
   int epoch = 0, writes = 0;
   bool empty = false;
   final pages = <int>[];
@@ -489,7 +637,7 @@ class _Repo implements VideoCommentsRepository, CommentEmotesRepository {
     int page,
     RequestCancellation cancellation,
   ) async => replyPending == null
-      ? const CommentPage(items: [child], hasMore: false)
+      ? CommentPage(items: replyItems, hasMore: false)
       : replyPending!.future;
   Future<void> write() async {
     writes++;
@@ -526,6 +674,10 @@ class _Repo implements VideoCommentsRepository, CommentEmotesRepository {
     );
   }
 }
+
+class _UnusedPlaybackRepository extends Fake implements PlaybackRepository {}
+
+class _UnusedProgressStore extends Fake implements PlaybackProgressStore {}
 
 class _Auth implements AuthRepository {
   final changesController = StreamController<AuthState>.broadcast(sync: true);

@@ -98,6 +98,9 @@ ApiDynamicPost parseDynamicPost(
       : live;
   final counts = _map(modules['module_stat']);
   final original = _map(item['orig']);
+  final basic = _map(item['basic']);
+  final (commentOid, commentType) = _commentTarget(id, type, basic, major);
+  final like = _map(counts['like']);
   return ApiDynamicPost(
     id: id,
     title: _text(opus['title']),
@@ -148,6 +151,12 @@ ApiDynamicPost parseDynamicPost(
     linkCoverUrl: _uri(link['cover'] ?? (_list(article['covers']).firstOrNull)),
     linkUrl:
         _officialUri(link['jump_url']) ?? Uri.https('t.bilibili.com', '/$id'),
+    commentOid: unavailable ? null : commentOid,
+    commentType: unavailable ? null : commentType,
+    liked: like['status'] == true || like['status'] == 1,
+    commentForbidden: _map(counts['comment'])['forbidden'] == true,
+    repostForbidden: _map(counts['forward'])['forbidden'] == true,
+    likeForbidden: like['forbidden'] == true,
     unavailable: unavailable,
   );
 }
@@ -252,4 +261,33 @@ bool _hasReadableBody(Map<String, Object?> body) {
         node['type'] == 'RICH_TEXT_NODE_TYPE_EMOJI' &&
             _uri(emoji['icon_url']) != null;
   });
+}
+
+(String?, int?) _commentTarget(
+  String id,
+  String type,
+  Map<String, Object?> basic,
+  Map<String, Object?> major,
+) {
+  if (basic.containsKey('comment_id_str') ||
+      basic.containsKey('comment_type')) {
+    final oid = _id(basic['comment_id_str']);
+    final value = _number(basic['comment_type']);
+    return oid != null && const {1, 11, 12, 14, 17, 33}.contains(value)
+        ? (oid, value)
+        : (null, null);
+  }
+  final rid = _id(basic['rid_str']);
+  return switch (type) {
+    'DYNAMIC_TYPE_WORD' ||
+    'DYNAMIC_TYPE_FORWARD' ||
+    'DYNAMIC_TYPE_LIVE' ||
+    'DYNAMIC_TYPE_LIVE_RCMD' => (id, 17),
+    'DYNAMIC_TYPE_AV' => (_id(_map(major['archive'])['aid']) ?? rid, 1),
+    'DYNAMIC_TYPE_PGC' => (_id(_map(major['pgc'])['aid']) ?? rid, 1),
+    'DYNAMIC_TYPE_DRAW' => (_id(_map(major['draw'])['id']) ?? rid, 11),
+    'DYNAMIC_TYPE_ARTICLE' => (_id(_map(major['article'])['id']) ?? rid, 12),
+    'DYNAMIC_TYPE_MUSIC' => (_id(_map(major['music'])['id']) ?? rid, 14),
+    _ => (null, null),
+  };
 }

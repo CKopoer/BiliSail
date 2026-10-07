@@ -212,6 +212,56 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
       .map((track) => track.id)
       .toSet();
 
+  Future<void> _configureBufferAhead(
+    mk.Player player,
+    Duration? window,
+    int generation,
+    Stopwatch watch,
+    Duration budget,
+  ) async {
+    if (window == null) return;
+    final platform = player.platform;
+    if (platform is! mk.NativePlayer) {
+      throw PlayerFailure(
+        PlayerFailureKind.nativePlayback,
+        'The playback backend cannot limit forward buffering.',
+        generation,
+      );
+    }
+    final seconds = window.inMicroseconds / Duration.microsecondsPerSecond;
+    final properties = {
+      // media_kit enables disk caching by default. Keep a transient bounded
+      // window in memory instead of accumulating an append-only cache file.
+      'cache-on-disk': 'no',
+      // mpv uses the larger of these two windows when network cache is enabled.
+      'cache-secs': seconds.toString(),
+      'demuxer-readahead-secs': seconds.toString(),
+    };
+    for (final entry in properties.entries) {
+      if (generation != _generation || _disposed) {
+        throw const SourceSuperseded();
+      }
+      await platform
+          .setProperty(entry.key, entry.value)
+          .timeout(_remaining(watch, budget));
+      // The locked SDK does not propagate mpv_set_property_string errors.
+      // Verify the requested limit before any media URL can start loading.
+      final applied = await platform
+          .getProperty(entry.key)
+          .timeout(_remaining(watch, budget));
+      final matches = entry.key == 'cache-on-disk'
+          ? applied == 'no'
+          : double.tryParse(applied) == seconds;
+      if (!matches) {
+        throw PlayerFailure(
+          PlayerFailureKind.nativePlayback,
+          'The playback backend did not apply the forward buffer limit.',
+          generation,
+        );
+      }
+    }
+  }
+
   Future<void> _waitReady(
     mk.Player player,
     int generation,
@@ -285,6 +335,14 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
         // so an idle window otherwise waits forever for output initialization
         // (including dispose after timeout). Guarantee that callback can run.
         WidgetsBinding.instance.ensureVisualUpdate();
+        await _configureBufferAhead(
+          player,
+          options.maxBufferAhead,
+          generation,
+          watch,
+          openBudget,
+        );
+        if (generation != _generation || _disposed) return;
         await player
             .open(
               mk.Media(
@@ -440,13 +498,15 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
     OpenOptions options,
     int generation,
   ) {
+    final maxBufferAhead = options.maxBufferAhead;
     if (options.startPosition < Duration.zero ||
         !options.rate.isFinite ||
         options.rate <= 0 ||
         !options.volume.isFinite ||
         options.volume < 0 ||
         options.volume > 100 ||
-        options.openTimeout <= Duration.zero) {
+        options.openTimeout <= Duration.zero ||
+        (maxBufferAhead != null && maxBufferAhead <= Duration.zero)) {
       throw PlayerFailure(
         PlayerFailureKind.invalidSource,
         'Invalid playback options.',

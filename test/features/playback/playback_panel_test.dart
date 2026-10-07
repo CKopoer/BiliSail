@@ -1,4 +1,9 @@
+import '../../support/input_test_app.dart';
+
 import 'package:bilisail/core/presentation/workspace_activity.dart';
+import 'package:bilisail/core/presentation/input_scope.dart';
+import 'package:bilisail/core/input/input_stroke.dart';
+import 'package:bilisail/core/input/shortcut_dispatcher.dart';
 
 import 'dart:async';
 import 'dart:ui' show PointerDeviceKind, Tristate;
@@ -32,6 +37,34 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  testWidgets(
+    'workspace close exits fullscreen and held repeats cannot close a new page',
+    (tester) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      await _focusRecommendation(tester, session);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await _pumpFrames(tester);
+      expect(find.byTooltip('退出全屏（Esc）'), findsOneWidget);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyW);
+      await _pumpFrames(tester);
+      expect(find.byKey(const ValueKey('workspace-tab-tab-1')), findsNothing);
+      expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
+      await _pumpFrames(tester);
+      expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsOneWidget);
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.keyW);
+      await _pumpFrames(tester);
+      expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsOneWidget);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyW);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      expect(engine.maxSurfaces, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final (mode, concurrent) in [
     for (final mode in WorkspaceNavigationMode.values)
       for (final allowed in [false, true]) (mode, allowed),
@@ -97,7 +130,7 @@ void main() {
                 relatedVideosProvider(video.summary.id).overrideWith((_) => []),
               ],
             ],
-            child: MaterialApp.router(
+            child: InputTestApp.router(
               builder: AppNoticeHost.builder,
               routerConfig: router,
             ),
@@ -774,7 +807,7 @@ void main() {
     });
     Widget app(int active) => ProviderScope(
       overrides: [playbackSessionProvider.overrideWithValue(session)],
-      child: MaterialApp(
+      child: InputTestApp(
         home: Scaffold(
           body: Stack(
             children: [
@@ -1179,7 +1212,7 @@ void main() {
                 .overrideWith((_) => _detail),
             relatedVideosProvider(_detail.summary.id).overrideWith((_) => []),
           ],
-          child: MaterialApp.router(
+          child: InputTestApp.router(
             builder: AppNoticeHost.builder,
             routerConfig: router,
           ),
@@ -1661,7 +1694,7 @@ void main() {
       addTearDown(session.close);
       Widget app(int active) => ProviderScope(
         overrides: [playbackSessionProvider.overrideWithValue(session)],
-        child: MaterialApp(
+        child: InputTestApp(
           home: Scaffold(
             body: Stack(
               children: [
@@ -2064,7 +2097,9 @@ Future<FocusNode> _focusRecommendation(
     ProviderScope(
       overrides: [
         playbackSessionProvider.overrideWithValue(session),
-        settingsRepositoryProvider.overrideWithValue(_Settings()),
+        settingsRepositoryProvider.overrideWithValue(
+          _Settings()..value = settings,
+        ),
         videoDetailProvider(_detail.summary.id).overrideWith((_) => _detail),
         relatedVideosProvider(_detail.summary.id).overrideWith(
           (_) => List.generate(
@@ -2079,7 +2114,7 @@ Future<FocusNode> _focusRecommendation(
           ),
         ),
       ],
-      child: MaterialApp.router(
+      child: InputTestApp.router(
         builder: AppNoticeHost.builder,
         routerConfig: router,
       ),
@@ -2114,7 +2149,8 @@ Widget _app(
     playbackSessionProvider.overrideWithValue(session),
     settingsRepositoryProvider.overrideWithValue(_Settings()),
   ],
-  child: MaterialApp(
+  child: InputTestApp(
+    shortcuts: settings.shortcuts,
     theme: BiliTheme.light(),
     navigatorObservers: [?navigatorObserver],
     builder: (context, child) => AppNoticeHost(
@@ -2127,30 +2163,41 @@ Widget _app(
         ),
       ),
     ),
-    home: _pageScope(
-      Scaffold(
-        body: Column(
-          children: [
-            const TextField(key: Key('search-field')),
-            SizedBox(
-              width: width,
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: PlaybackPanel(
-                  detail: _detail,
-                  part: _part,
-                  settings: settings,
-                  onToggleComments: () {},
-                  window: window,
-                  danmakuComposerBuilder: composer,
-                  danmakuOverlayBuilder: overlay,
+    home: CommandTargetScope<Object>(
+      scope: CommandScope.page,
+      active: active,
+      commands: {
+        ShortcutAction.refresh: (stroke) async {
+          if (stroke.phase != InputPhase.down) return CommandOutcome.noOp;
+          await session.retry();
+          return CommandOutcome.completed;
+        },
+      },
+      child: _pageScope(
+        Scaffold(
+          body: Column(
+            children: [
+              const TextField(key: Key('search-field')),
+              SizedBox(
+                width: width,
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: PlaybackPanel(
+                    detail: _detail,
+                    part: _part,
+                    settings: settings,
+                    onToggleComments: () {},
+                    window: window,
+                    danmakuComposerBuilder: composer,
+                    danmakuOverlayBuilder: overlay,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+        scopedComposer,
       ),
-      scopedComposer,
     ),
   ),
 );

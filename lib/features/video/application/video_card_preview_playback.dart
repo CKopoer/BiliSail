@@ -88,7 +88,12 @@ final class VideoCardPreviewPlayback {
                   bandwidth: media.video.bandwidth,
                 ),
               ),
-              OpenOptions(play: true, volume: 0, openTimeout: openTimeout),
+              OpenOptions(
+                play: true,
+                volume: 0,
+                openTimeout: openTimeout,
+                maxBufferAhead: const Duration(seconds: 15),
+              ),
             )
             .timeout(openTimeout);
         opening = false;

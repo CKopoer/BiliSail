@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
+
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
@@ -7,6 +9,84 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'shortcut configuration becomes active only after a successful save',
+    () async {
+      final repository = _DeferredSettingsRepository();
+      final container = ProviderContainer(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+      await container.read(settingsControllerProvider.future);
+      final controller = container.read(settingsControllerProvider.notifier);
+      final custom = const ShortcutSettings.defaults().withKeys(
+        ShortcutAction.closeTab,
+        ['MouseBack'],
+      );
+      final failed = controller.setShortcuts(custom);
+      final assertion = expectLater(failed, throwsStateError);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        container
+            .read(settingsControllerProvider)
+            .requireValue
+            .shortcuts
+            .keysFor(ShortcutAction.closeTab),
+        ['Ctrl+W'],
+      );
+      repository.failNext();
+      await assertion;
+      final success = controller.setShortcuts(custom);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        container
+            .read(settingsControllerProvider)
+            .requireValue
+            .shortcuts
+            .keysFor(ShortcutAction.closeTab),
+        ['Ctrl+W'],
+      );
+      repository.completeNext();
+      await success;
+      expect(
+        container
+            .read(settingsControllerProvider)
+            .requireValue
+            .shortcuts
+            .keysFor(ShortcutAction.closeTab),
+        ['MouseBack'],
+      );
+    },
+  );
+
+  test(
+    'queued appearance save retains newly committed shortcut configuration',
+    () async {
+      final repository = _DeferredSettingsRepository();
+      final container = ProviderContainer(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+      await container.read(settingsControllerProvider.future);
+      final controller = container.read(settingsControllerProvider.notifier);
+      final shortcut = controller.setShortcuts(
+        const ShortcutSettings.defaults().withKeys(ShortcutAction.closeTab, [
+          'MouseBack',
+        ]),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final theme = controller.setTheme(AppThemePreference.dark);
+      repository.completeNext();
+      await shortcut;
+      await Future<void>.delayed(Duration.zero);
+      repository.completeNext();
+      await theme;
+      expect(repository.stored.shortcuts.keysFor(ShortcutAction.closeTab), [
+        'MouseBack',
+      ]);
+      expect(repository.stored.theme, AppThemePreference.dark);
+    },
+  );
   test('rapid changes remain visible and save in order', () async {
     final repository = _DeferredSettingsRepository();
     final container = ProviderContainer(

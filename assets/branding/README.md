@@ -4,19 +4,31 @@
 
 ## 设计与文件
 
-当前采用第二轮 C「船帆角标」。以 B 站小电视为主体，保留粉色圆角外框、双天线、斜眼与嘴形，右下角加入小型蓝色船帆。屏幕内部为白色，外围透明；小电视在小尺寸下保持主要辨识度。2026-10-07 按用户选择设为应用图标，根 README 顶部以 144 × 144 展示同一原图。
+当前采用第二轮 C「船帆角标」。以 B 站小电视为主体，保留粉色圆角外框、双天线、斜眼与嘴形，右下角加入小型蓝色船帆。屏幕内部为白色，外围透明；小电视在小尺寸下保持主要辨识度。2026-10-07 按用户选择设为应用图标，同日按要求在原画布中心等比放大主体 10%，保留造型和全部平台输出尺寸；根 README 顶部继续以 144 × 144 展示当前图稿。
 
-- [app_icon.png](app_icon.png)：最终生成原图，1254 × 1254，RGBA；透明边角与内部空隙。
+- [app_icon.png](app_icon.png)：主体放大 10% 后的图稿，仍为 1254 × 1254，RGBA；透明边角与内部空隙。
 - [icon_preview.png](icon_preview.png)：16、24、32、48、64、128 px 在浅色、深色背景上的预览。
-- [第二轮三个方案](candidates-v2/README.md)：A、B、C 原图及并排预览全部保留；当前图标与 [C 原图](candidates-v2/c-sail-corner.png)字节一致。
+- [icon_scale_comparison.png](icon_scale_comparison.png)：24、30、36、48、64 px 的放大前后对比，上行原图、下行放大 10%；浅色／深色背景上的图标按实际像素尺寸展示。
+- [第二轮三个方案](candidates-v2/README.md)：A、B、C 原图及并排预览全部保留；放大前图稿保存在 [C 原图](candidates-v2/c-sail-corner.png)，原多尺寸预览保存在 [icon_preview_v2.png](icon_preview_v2.png)。
 - [app_icon_v1.png](app_icon_v1.png) 与 [icon_preview_v1.png](icon_preview_v1.png)：保留第一版帆船图标与预览，生成提示词见下文历史记录。
 - [生成脚本](../../tool/generate_app_icons.py)：Android 五种密度、Windows 七种 ICO 尺寸、macOS 七种 AppIcon 尺寸。
+- [主体缩放脚本](../../tool/scale_app_icon.ps1)：从保留的 C 原图重建当前图稿，固定 1.10 倍，不会重复放大当前文件。
 
-当前原图 SHA-256：`9afcde924a2464fbfe0664b4a5d3e6d9eb32d98447da562c59d94a2239d39df8`。
+当前图稿 SHA-256：`8bfa0684f99c9a530abf155f480e4ca1ef1c7a57b7c7c463f602980397b5d3e9`。
+
+放大前 C 原图 SHA-256：`9afcde924a2464fbfe0664b4a5d3e6d9eb32d98447da562c59d94a2239d39df8`。
 
 第一版保留原图 SHA-256：`92011d5873166eb9e8eca38d032ff162ba95f05a103f293701e3ad8273f73df6`。
 
-当前版的完整提示词与编辑输入 URL 见 [第二轮 prompts.json](candidates-v2/prompts.json)中的 C 条目，使用内置 `image_gen`，透明背景参数为 `true`。本次采用已有 C 原图，没有再次生成或修改图形。
+当前设计的完整提示词与编辑输入 URL 见 [第二轮 prompts.json](candidates-v2/prompts.json)中的 C 条目，使用内置 `image_gen`，透明背景参数为 `true`。主体放大时先用内置 `image_gen` 生成预览；测量结果约为 11%，且有细微重绘，因此没有采用生成预览。最终资源直接从保留的 C 原图进行几何缩放，参数、预览提示词与结果说明见 [放大记录](scale-10-percent.json)。
+
+重建主体放大的图稿（Windows）：
+
+```text
+pwsh -NoProfile -File tool/scale_app_icon.ps1
+```
+
+画布中心为 `(627, 627)`，像素坐标按 `p' = center + 1.10 × (p - center)` 变换，使用 System.Drawing HighQualityBicubic 插值。可见轮廓按 alpha 大于 128 测量，从 1073 × 971 增至 1180 × 1068 px；边界取整产生的比例差异不足一个像素。天线、小船帆和脚部完整保留。
 
 生成平台资源的命令：
 
@@ -30,9 +42,15 @@ MSIX 的 `tool/build-release.ps1` 同样读取 `app_icon.png`，继续生成 tar
 
 ## 当前版验证
 
-- 当前原图与保留的 C 候选完全一致；A、B、C 原图及第一版原图都保留在项目内。
+- 画布保持 1254 × 1254，RGBA 与透明边角保留；最终图稿通过固定 1.10 倍几何缩放生成，A、B、C 原图及第一版原图都保留在项目内。
 - Android 5 个、macOS 7 个 PNG 和 Windows 7 个 ICO 尺寸已从同一原图重新生成，保留透明边角；MSIX 继续从同一路径生成普通、targetsize 和两种主题 unplated 资源。
 - 根 README 顶部使用本地相对路径 `assets/branding/app_icon.png` 展示图标。
+- 浅色／深色放大前后对比已生成，Windows 24 px ICO 的可见轮廓约为 23 × 20 px，放大前约为 21 × 18 px。
+- 资源检查通过：1254 px 画布、1.10 倍缩放轮廓、透明边角、保留候选、12 个平台 PNG 与 7 个 ICO 尺寸及像素、资源说明中的本地链接；`tool/check.ps1 -SkipPub` 全部通过，`git diff --check` 通过。
+- 系统已安装版本的图标缓存、Windows Shell、Android 真机和 macOS Dock 实际显示尚未实测；MSIX 需重新打包后安装才能检查任务栏。
+
+## C 版放大前验证（历史记录）
+
 - 资源检查通过：12 个平台 PNG 的像素与原图缩放一致，7 个 ICO 尺寸保留透明度；12 个原 UWP 业务资源哈希不变，264 条本地文档路径和 README 图片引用通过检查。
 - `tool/check.ps1 -SkipPub` 通过：根应用 881、`bili_api` 269、`bili_player` 22、`bili_danmaku` 32 项测试全部通过，各自格式与静态分析通过；`git diff --check` 通过。
 - 本轮未构建或安装应用；系统已安装版本的图标缓存、Windows Shell、Android 真机和 macOS Dock 实际显示尚未实测。

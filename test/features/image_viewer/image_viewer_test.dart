@@ -1,3 +1,5 @@
+import '../../support/input_test_app.dart';
+
 import 'dart:ui' as ui;
 
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -77,7 +79,7 @@ void main() {
             overrides: [
               originalImageRepositoryProvider.overrideWithValue(repository),
             ],
-            child: MaterialApp(
+            child: InputTestApp(
               home: Builder(
                 builder: (context) => Scaffold(
                   body: TextButton(

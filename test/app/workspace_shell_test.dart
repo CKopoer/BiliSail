@@ -1,3 +1,5 @@
+import '../support/input_test_app.dart';
+
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/app/workspace_tabs.dart';
@@ -17,6 +19,61 @@ import 'package:go_router/go_router.dart';
 
 void main() {
   testWidgets(
+    'window deactivation cancels held workspace repeats until release',
+    (tester) async {
+      final router = _router((_, tab) => Text('page ${tab.id}'));
+      addTearDown(router.dispose);
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
+      await tester.pumpAndSettle();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(find.text('page home'), findsOneWidget);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(find.text('page home'), findsOneWidget);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(find.text('page tab-1'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'fixed tab cycling repeats across page activation with master switch disabled',
+    (tester) async {
+      final router = _router(
+        (_, tab) => Text('page ${tab.id}'),
+        shortcuts: const ShortcutSettings.defaults().withEnabled(false),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
+      await tester.pumpAndSettle();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(find.text('page home'), findsOneWidget);
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(find.text('page tab-1'), findsOneWidget);
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(find.text('page tab-2'), findsOneWidget);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    },
+  );
+
+  testWidgets(
     'background page navigation updates its tab without selecting it',
     (tester) async {
       final navigation = <String, ValueChanged<Uri>>{};
@@ -31,7 +88,7 @@ void main() {
         initialLocation: '/video/BV1234567890?queue=fixture',
       );
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
       await tester.pumpAndSettle();
       router.go('/search?q=still-reading');
       await tester.pumpAndSettle();
@@ -71,7 +128,7 @@ void main() {
         navigationMode: WorkspaceNavigationMode.singlePage,
       );
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('single-page-header')), findsOneWidget);
       expect(find.byKey(const ValueKey('new-workspace-tab')), findsNothing);
@@ -112,7 +169,7 @@ void main() {
         initialLocation: '/video/BV1234567890',
       );
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
       await tester.pumpAndSettle();
       final context = tester.element(find.text('page tab-1'));
       final dialog = showDialog<void>(
@@ -153,7 +210,7 @@ void main() {
         customCaption: true,
       );
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
       await tester.pumpAndSettle();
       await tester.tap(find.text('count 0'));
       router.go('/search?q=test');
@@ -191,7 +248,7 @@ void main() {
     (tester) async {
       final router = _router((_, tab) => Text('page ${tab.id}'));
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
       await tester.pumpAndSettle();
       router.go('/search?q=test');
       await tester.pumpAndSettle();
@@ -225,7 +282,7 @@ void main() {
         );
         addTearDown(router.dispose);
         await tester.pumpWidget(
-          MaterialApp.router(
+          InputTestApp.router(
             theme: ThemeData(platform: TargetPlatform.windows),
             routerConfig: router,
           ),
@@ -269,7 +326,7 @@ void main() {
   ) async {
     final router = _router((context, tab) => Text('page ${tab.id}'));
     addTearDown(router.dispose);
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpWidget(InputTestApp.router(routerConfig: router));
     await tester.pumpAndSettle();
     for (var index = 0; index < 2; index++) {
       await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
@@ -320,7 +377,7 @@ void main() {
         shortcuts: settings,
       );
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
       await tester.pumpAndSettle();
@@ -351,7 +408,7 @@ void main() {
         ),
       );
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
       await tester.pumpAndSettle();
@@ -410,7 +467,7 @@ void main() {
       expect(find.text('page home'), findsOneWidget);
       expect(find.byKey(const ValueKey('workspace-tab-tab-3')), findsNothing);
 
-      await tester.pumpWidget(const MaterialApp(home: Text('replacement')));
+      await tester.pumpWidget(const InputTestApp(home: Text('replacement')));
       await tester.pumpAndSettle();
       await _shortcut(tester, LogicalKeyboardKey.keyT);
       await _shortcut(tester, LogicalKeyboardKey.keyW);
@@ -441,7 +498,7 @@ void main() {
           ),
         );
         addTearDown(router.dispose);
-        await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+        await tester.pumpWidget(InputTestApp.router(routerConfig: router));
         await tester.pumpAndSettle();
         router.go('/search?q=retained');
         await tester.pumpAndSettle();
@@ -508,7 +565,7 @@ void main() {
         shortcuts: const ShortcutSettings.defaults().withKeys(action, [key]),
       );
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
       await tester.pumpAndSettle();
@@ -545,7 +602,7 @@ void main() {
             .withActionEnabled(ShortcutAction.closeTab, enabled),
       );
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('new-workspace-tab')));
       await tester.pumpAndSettle();
@@ -578,7 +635,7 @@ void main() {
             Text('page ${tab.id} ${tab.location.queryParameters['section']}'),
       );
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
       await tester.pumpAndSettle();
       router.go('/settings');
       await tester.pumpAndSettle();
@@ -607,7 +664,7 @@ void main() {
     );
     addTearDown(router.dispose);
     await tester.pumpWidget(
-      MaterialApp.router(builder: AppNoticeHost.builder, routerConfig: router),
+      InputTestApp.router(builder: AppNoticeHost.builder, routerConfig: router),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('count 0'));
@@ -642,7 +699,7 @@ void main() {
     final router = _router((context, tab) => Text('page ${tab.id}'));
     addTearDown(router.dispose);
     await tester.pumpWidget(
-      MaterialApp.router(builder: AppNoticeHost.builder, routerConfig: router),
+      InputTestApp.router(builder: AppNoticeHost.builder, routerConfig: router),
     );
     await tester.pumpAndSettle();
     await _shortcut(tester, LogicalKeyboardKey.keyT);
@@ -671,7 +728,7 @@ void main() {
     );
     addTearDown(router.dispose);
     await tester.pumpWidget(
-      MaterialApp.router(builder: AppNoticeHost.builder, routerConfig: router),
+      InputTestApp.router(builder: AppNoticeHost.builder, routerConfig: router),
     );
     await tester.pumpAndSettle();
     router.go('/video/BV1234567890');
@@ -704,7 +761,7 @@ void main() {
       );
       addTearDown(router.dispose);
       await tester.pumpWidget(
-        MaterialApp.router(
+        InputTestApp.router(
           builder: AppNoticeHost.builder,
           routerConfig: router,
         ),
@@ -736,9 +793,11 @@ GoRouter _router(
       WorkspaceNavigationMode.multipleTabs,
   String initialLocation = '/',
 }) => GoRouter(
+  observers: [],
   initialLocation: initialLocation,
   routes: [
     ShellRoute(
+      observers: [],
       builder: (context, state, child) => BiliAppShell(
         shortcuts: shortcuts,
         navigationMode: navigationMode,

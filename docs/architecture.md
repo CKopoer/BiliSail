@@ -147,6 +147,8 @@ bilisail/                         # 工程名；本地检出目录目前仍为 b
 | live | 直播分类/房间、直播状态、消息连接管理 | LiveRepository、LiveChatSession、共享播放器 |
 | library | 收藏、稍后再看、历史、本地与云记录 | LibraryRepository、PlaybackProgressStore |
 | comments / dynamic / profile | 评论和动态阅读、用户资料 | 各自 Repository，不向全局状态塞原始响应 |
+
+2026-10-07 动态交互已提前接入：`features/comments` 统一管理视频和动态的评论领域、协议映射、排序/分页、楼中楼、点赞、回复与表情；`shared/ui` 提供共用评论区和动态交互组件，页面只消费控制器与领域状态。`CommentTarget(oid, type)` 区分服务端评论身份。视频页只包装播放时间跳转，动态页不依赖视频的 data/presentation。`features/dynamic` 持有按动态 ID、账号会话隔离的点赞/转发操作，首页与空间动态使用同一套交互；基础动态卡片只接收动作回调。旧视频 application/domain 入口和富评论组件保留薄导出用于现有调用。具体协议与验证边界见 [动态交互](validation/dynamic-interactions.md)。
 | downloads | 队列、断点、任务落盘、离线媒体索引 | DownloadRepository、TransferEngine、PlaybackResolver |
 | pgc | season/episode、权限与选集 | PgcRepository，共用 PlaybackSession |
 | settings | 播放、弹幕、主题、缓存与网络偏好 | SettingsRepository、类型化设置迁移 |
@@ -231,6 +233,8 @@ Riverpod 负责状态订阅和注入，不承担弹幕逐帧广播。路由 prov
 | 文件导出 | 系统文件选择/授权 | 用户目录/文件选择 | 沙盒授权/书签，按分发方式验证 |
 
 默认移动后台暂停视频；开启后台音频后才按平台允许方式持续播放。PiP/后台服务尚未实现时隐藏入口并明确能力，不假设播放器包会自动提供这些功能。
+
+快捷键由 MaterialApp builder 中、根 Navigator 外层的 `AppInputHost` 接收，整个窗口保留一个业务 early key handler 和一个侧键全局 pointer route。`core/input` 为纯 Dart 泛型分发器；公共 domain 持有命令目录；app 组合根编译设置和注册工作区，页面与 PlaybackPanel 注册各自能力。根与 Shell Navigator observer 共用路由账本，普通弹窗隔离底层，全屏标记为播放呈现。普通／全屏视图共享同一播放快捷键 owner，隐藏页不响应。设置保持原 JSON 格式，详细行为和实测边界见[快捷键重构实施记录](shortcut-system/implementation-results.md)。
 
 ## 9. 可观测性和故障边界
 

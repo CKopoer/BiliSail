@@ -1,9 +1,43 @@
 import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/domain/dynamic_post.dart';
+import 'package:bilisail/domain/comment_target.dart';
 import 'package:bilisail/shared/data/dynamic_post_mapper.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'dynamic actions retain typed comment identity and flags across originals',
+    () {
+      final post = mapDynamicPost(
+        ApiDynamicPost(
+          id: '9007199254740993123',
+          commentOid: '9007199254740993124',
+          commentType: 11,
+          liked: true,
+          commentForbidden: true,
+          repostForbidden: true,
+          original: ApiDynamicPost(id: '3', commentOid: '4', commentType: 1),
+        ),
+      );
+      expect(
+        post.commentTarget,
+        const CommentTarget('9007199254740993124', CommentTargetType.album),
+      );
+      expect(
+        post.original?.commentTarget,
+        const CommentTarget('4', CommentTargetType.video),
+      );
+      expect(post.liked, true);
+      expect(post.commentForbidden, true);
+      expect(post.repostForbidden, true);
+      expect(
+        mapDynamicPost(
+          ApiDynamicPost(id: '1', commentOid: '2', commentType: 99),
+        ).commentTarget,
+        isNull,
+      );
+    },
+  );
   test('shared mapping preserves rich content, original identity and video metadata', () {
     final stamp = DateTime.utc(2026, 10, 5);
     final image = Uri.https('i0.hdslb.com', '/emoji.png');

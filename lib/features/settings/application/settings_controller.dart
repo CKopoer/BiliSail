@@ -20,6 +20,7 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
   Future<void> _writeQueue = Future<void>.value();
   AppSettings? _persisted;
   int _revision = 0;
+  int _shortcutCommitRevision = 0;
 
   @override
   Future<AppSettings> build() async {
@@ -30,11 +31,25 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
     return loaded;
   }
 
-  Future<void> setShortcuts(ShortcutSettings value) {
+  Future<void> setShortcuts(ShortcutSettings value) async {
     if (value.conflict case final String conflict) {
       throw ArgumentError(conflict);
     }
-    return update((current) => current.copyWith(shortcuts: value));
+    await future;
+    final write = _writeQueue.then((_) async {
+      if (!ref.mounted) return;
+      final current = state.requireValue;
+      final next = current.copyWith(shortcuts: value);
+      await ref.read(settingsRepositoryProvider).save(next);
+      _persisted = next;
+      ++_shortcutCommitRevision;
+      if (ref.mounted) {
+        // Other settings can change while persistence is in flight.
+        state = AsyncData(state.requireValue.copyWith(shortcuts: value));
+      }
+    });
+    _writeQueue = write.then((_) {}, onError: (Object _, StackTrace _) {});
+    await write;
   }
 
   Future<void> setTheme(AppThemePreference value) =>
@@ -128,6 +143,7 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
     FutureOr<AppSettings> Function(Object, StackTrace)? onError,
   }) async {
     final previous = state.asData?.value ?? await future;
+    final shortcutRevision = _shortcutCommitRevision;
     final candidate = cb(previous);
     final next =
         (candidate is Future<AppSettings> ? await candidate : candidate)
@@ -136,8 +152,13 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
     state = AsyncData(next);
     final repository = ref.read(settingsRepositoryProvider);
     final write = _writeQueue.then((_) async {
-      await repository.save(next);
-      _persisted = next;
+      // A queued appearance/player setting must preserve a shortcut snapshot
+      // committed after this optimistic update was prepared.
+      final persisted = shortcutRevision == _shortcutCommitRevision
+          ? next
+          : next.copyWith(shortcuts: _persisted?.shortcuts ?? next.shortcuts);
+      await repository.save(persisted);
+      _persisted = persisted;
     });
     // A failed write must not prevent a newer setting from reaching storage.
     _writeQueue = write.then<void>(

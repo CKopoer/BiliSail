@@ -1,3 +1,4 @@
+import 'comment_target.dart';
 import 'user.dart';
 import 'video.dart';
 
@@ -42,6 +43,11 @@ final class DynamicPost {
     this.linkDescription = '',
     this.linkCoverUrl,
     this.linkUrl,
+    this.commentTarget,
+    this.liked = false,
+    this.commentForbidden = false,
+    this.repostForbidden = false,
+    this.likeForbidden = false,
     this.unavailable = false,
   }) : spans = List.unmodifiable(spans),
        imageUrls = List.unmodifiable(imageUrls);
@@ -62,5 +68,10 @@ final class DynamicPost {
   final VideoSummary? video;
   final DynamicPost? original;
   final int? repostCount, commentCount, likeCount;
-  final bool unavailable;
+  final CommentTarget? commentTarget;
+  final bool unavailable,
+      liked,
+      commentForbidden,
+      repostForbidden,
+      likeForbidden;
 }

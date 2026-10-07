@@ -45,3 +45,19 @@
 定向测试通过 43 项，覆盖主评论/预览/二级响应映射、Repository 转换、点赞/回复复制、属地缺省/异常降级、日期同行样式及 180/320px 双倍字号布局。游客只读样本 `BV1GLHE6hEFg` 的旧接口返回 3 条主评论、7 条预览及 1 条二级回复，均未携带属地；按参考实现签名请求 WBI main 返回 20 条主评论，同样未携带属地。此结果只说明该游客响应未提供字段，不能推断登录后的响应或其他视频行为。非空属地以脱敏 fixture/widget 测试验证，尚未完成真实登录响应及 Windows/Android/macOS 视觉验收。
 
 `tool/check.ps1 -SkipPub` 完整通过：根应用 994 项、`bili_api` 285 项、`bili_player` 22 项、`bili_danmaku` 32 项，共 1333 项；根应用及三个包的格式、静态分析通过。文档相对文件链接和 `git diff --check` 通过。
+
+## 正文实体、链接与进度（2026-10-07）
+
+评论正文通过共享评论模块的纯 Dart `lib/features/comments/domain/comment_text.dart` 分段。展示前仅解码一遍常用 HTML 实体（`amp/lt/gt/quot/apos/nbsp`）和合法 Unicode 十进制／十六进制字符引用，例如 `30tps -&gt; 50tps` 显示为 `30tps -> 50tps`。未知或非法实体保留原文，编码的标签显示为普通文字；原始 `CommentEntry.message`、编辑草稿和发送内容保持原样。视频原路径转为导出入口，定向测试经过该入口验证共享实现。
+
+主评论、楼中楼预览和完整回复共用 `CommentRichContent`：HTTP/HTTPS 链接以及 `分:秒`、`时:分:秒` 均使用主题链接色和鼠标手形，正文继续支持选择复制、行内表情、换行及图片预览。URL 先整体匹配，路径和查询中的 `00:09` 不会生成进度动作；中文标点、句尾标点和不配对的闭括号留在链接外。秒必须为 00–59，三段时间的分钟也必须为 00–59，非法时间不会部分匹配。
+
+链接由显式点击触发，经 `core/platform/external_links.dart` 的 `webLinkOpenerProvider` 用系统外部应用打开 HTTP/HTTPS 地址（桌面使用默认浏览器），不添加账号凭据。非 Web scheme、缺失 host、带 userInfo 的地址不能打开；既有官方入口继续使用原 `externalLinkOpenerProvider` 的目标范围。打开失败显示可重试提示。
+
+进度点击读取当前标签作用域内的 `PlaybackSession`，核对当前视频身份及已加载媒体后调用既有 `seek`，沿用弹幕重建与进度保存流程，保留播放／暂停意图。超过已知视频时长的时间点限制到视频末尾，播放器未就绪或视频身份不匹配时提示用户。点击回复预览中的链接／进度不会触发外层楼中楼展开。
+
+定向测试 42 项通过，覆盖用户提供的箭头／URL／三个时间点、单次实体解码与非法字符、URL 查询／标点、时间合法性、表情保留、实际文字点击、相同链接样式、180px 双倍字号、控件复用时回调更新、主评论／预览／完整回复路由、暂停意图、播放会话复用和打开失败提示。检查使用 fake 播放器及链接打开端口，没有提交真实账号写操作；真实评论、默认浏览器打开和原生播放跳转的 Windows/Android/macOS 实机验收尚未完成。
+
+Windows `flutter build windows --debug --no-pub` 构建成功。检查过程中共享评论模块迁移已保留本次解析、链接和 seek 交互；`CommentsPanel` 的 Provider getter 使用显式类型，避免评论排序枚举的扩展成员经动态调用导致列表构建失败，迁移后上述 42 项回归再次通过。
+
+本轮检查快照中，根应用完整测试 1035 项、`bili_api` 291 项、`bili_player` 22 项、`bili_danmaku` 32 项分别通过。根应用和协议包格式复核通过，三个包静态分析通过。`tool/check.ps1 -SkipPub` 已运行，但工作区持续有并行动态功能及其测试改动：最后一次执行停在新建 `test/features/dynamic/interactive_dynamic_post_card_test.dart` 的未使用 import 和 if 大括号 lint，完整脚本尚未整体通过。该新增动态测试不属于上面的 1035 项根测试快照；保留并行改动，未将早期检查结果当作当前完整工作区验收。本文相对链接、源码路径和本次改动的 `git diff --check` 通过。

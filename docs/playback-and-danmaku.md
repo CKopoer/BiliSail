@@ -14,6 +14,8 @@
 
 同日官网加载对照后，悬停改为独立 `DashVideoSource` 无音轨预览，自动模式优先服务端常规 CDN，每地址外层/原生统一 3 秒、最多三个地址；有效 cid 直传。普通点播/影视继续验证音视频分轨，预览不作为完整点播验收；现行预览策略与原因见 [悬停加载验证](validation/video-preview-loading.md)，覆盖上段早期策略。
 
+2026-10-07 悬停预览通过 `OpenOptions.maxBufferAhead` 设置 15 秒媒体时间的向前预读窗口；适配器在打开媒体之前设置两个原生时间窗口并关闭该预览的临时磁盘缓存。窗口随当前位置推进，不截断视频或限制总播放时长；原生分包、解码和网络 I/O 边界有少量超出，普通播放未指定该选项，保留后端默认策略。实现与 Windows 证据见 [悬停加载验证](validation/video-preview-loading.md#15-秒向前预读窗口)。
+
 | 组件 | 所属位置 | 职责 |
 | --- | --- | --- |
 | PlaybackResolver | 主应用 playback/application，依赖内容 Repository | bvid/cid/episode/roomId → 权限、可选轨道、URL 与请求上下文 |

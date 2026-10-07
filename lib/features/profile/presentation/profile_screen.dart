@@ -6,7 +6,7 @@ import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/state_view.dart';
-import '../../../shared/ui/dynamic_post_card.dart';
+import '../../../shared/ui/dynamic_post_interactions.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/video_card.dart';
 import 'profile_header.dart';
@@ -262,7 +262,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }) {
     final post = entry.dynamicPost;
     if (post != null && entry.kind == ProfileEntryKind.dynamic) {
-      return DynamicPostCard(
+      return InteractiveDynamicPostCard(
         post: post,
         onOpenUser: widget.onOpenUser,
         onOpenVideo: widget.onOpenVideo,

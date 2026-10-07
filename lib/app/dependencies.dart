@@ -52,7 +52,10 @@ import '../features/video/data/api_video_author_repository.dart';
 import '../features/video/application/collection_subscription_controller.dart';
 import '../features/video/data/api_collection_subscription_repository.dart';
 import '../features/video/application/video_comments_controller.dart';
-import '../features/video/data/api_video_comments_repository.dart';
+import '../features/comments/data/api_comments_repository.dart';
+import '../features/comments/application/comments_controller.dart';
+import '../features/dynamic/application/dynamic_actions_controller.dart';
+import '../features/dynamic/data/api_dynamic_repository.dart';
 import '../features/playback/data/api_sponsor_repository.dart';
 import '../features/video/data/api_video_repository.dart';
 import '../features/video/application/video_extras_controller.dart';
@@ -403,8 +406,23 @@ class AppDependencies {
           ApiVideoExtrasRepository(api, requests),
         ),
         videoCommentsRepositoryProvider.overrideWithValue(
-          ApiVideoCommentsRepository(
+          ApiCommentsRepository(
             api,
+            requests,
+            accountScope: () => session.accountScope,
+          ),
+        ),
+        commentsRepositoryProvider.overrideWith(
+          (ref, type) => ApiCommentsRepository(
+            api,
+            requests,
+            type: type,
+            accountScope: () => session.accountScope,
+          ),
+        ),
+        dynamicRepositoryProvider.overrideWithValue(
+          ApiDynamicRepository(
+            DynamicClient(api),
             requests,
             accountScope: () => session.accountScope,
           ),

@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-07",
+  "request": "保持尺寸，主体放大10%",
+  "source": "candidates-v2/c-sail-corner.png",
+  "sourceSha256": "9afcde924a2464fbfe0664b4a5d3e6d9eb32d98447da562c59d94a2239d39df8",
+  "output": "app_icon.png",
+  "outputSha256": "8bfa0684f99c9a530abf155f480e4ca1ef1c7a57b7c7c463f602980397b5d3e9",
+  "canvas": [
+    1254,
+    1254
+  ],
+  "production": {
+    "method": "System.Drawing HighQualityBicubic",
+    "scale": 1.1,
+    "center": [
+      627,
+      627
+    ],
+    "script": "../../tool/scale_app_icon.ps1",
+    "note": "Final artwork is geometrically resampled from the preserved original. All platform icon sizes are unchanged."
+  },
+  "imagegenPreview": {
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: precise-object-edit. Input image 1 is the EDIT TARGET: the current BiliSail transparent application icon. Perform ONLY a uniform geometric enlargement, with no redesign or redraw. Keep the original square canvas dimensions 1254 x 1254 pixels and genuine transparent RGBA background. Enlarge the ENTIRE existing colored artwork, including the TV, both antennas, feet, white screen and cyan sail corner badge, by exactly 1.10 around the center of the existing canvas, at (627, 627). Every visible landmark maps as x_new=627+1.10*(x_old-627), y_new=627+1.10*(y_old-627). Current substantial artwork bounding box is approximately x=113..1186, y=137..1108; target substantial artwork bounds should be approximately x=62..1242, y=88..1156, corresponding to about 94.1% canvas width and 85.2% height. Preserve the original artwork pixel appearance, proportions, exact colors, line weights RELATIVE TO THE SHAPE, expressions, soft color detail, TV rounded rectangle, angled eyes, mouth, antenna angles, cyan sail, white badge border, and relative placement. Change only its overall size and the resulting transparent margins. Do not crop any substantial artwork. No new elements, no shadows, no plate, no text, no visual cleanup or style changes. Return one single transparent enlarged icon only.",
+    "adopted": false,
+    "note": "The generated preview enlarged the visible bounds by approximately 11% and slightly redrew the artwork. It was not used as the final asset."
+  }
+}

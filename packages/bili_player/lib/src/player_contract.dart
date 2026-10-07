@@ -72,6 +72,7 @@ final class OpenOptions {
     this.volume = 100,
     this.videoDecoding = VideoDecodingMode.automatic,
     this.openTimeout = const Duration(seconds: 35),
+    this.maxBufferAhead,
   });
   final Duration startPosition;
   final bool play;
@@ -79,6 +80,10 @@ final class OpenOptions {
   final double volume;
   final VideoDecodingMode videoDecoding;
   final Duration openTimeout;
+
+  /// Optional forward demuxer window in media time. Null keeps backend defaults.
+  /// A bounded window uses memory caching; packet/I/O boundaries may overshoot.
+  final Duration? maxBufferAhead;
 }
 
 enum PlaybackPhase {

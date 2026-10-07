@@ -209,12 +209,40 @@ final class BiliApiClient {
     );
   }
 
+  /// Dynamic writes use JSON and query CSRF, as in the official Web client.
+  Future<Object?> submitDynamicJson(
+    String path,
+    String endpoint,
+    Map<String, Object?> body, {
+    ApiRequestContext? context,
+  }) {
+    if (!const {
+      '/x/dynamic/feed/dyn/thumb',
+      '/x/dynamic/feed/create/dyn',
+    }.contains(path)) {
+      throw ArgumentError('Unsupported dynamic mutation');
+    }
+    return _submitForm(
+      _api.replace(
+        path: path,
+        queryParameters: path == '/x/dynamic/feed/create/dyn'
+            ? const {'platform': 'web'}
+            : null,
+      ),
+      endpoint,
+      const {},
+      context,
+      jsonBody: body,
+    );
+  }
+
   Future<Object?> _submitForm(
     Uri uri,
     String endpoint,
     Map<String, String> fields,
-    ApiRequestContext? context,
-  ) async {
+    ApiRequestContext? context, {
+    Map<String, Object?>? jsonBody,
+  }) async {
     final live = uri.host == 'api.live.bilibili.com';
     final message = uri.host == 'api.vc.bilibili.com';
     final epoch = _sessionProvider?.sessionEpoch;
@@ -245,7 +273,9 @@ final class BiliApiClient {
       throw ApiFailure(ApiFailureCategory.authentication, endpoint);
     }
     final transport = _transport;
-    if (transport is! ApiFormTransport) {
+    if (jsonBody == null
+        ? transport is! ApiFormTransport
+        : transport is! ApiJsonTransport) {
       throw ApiFailure(ApiFailureCategory.unavailable, endpoint);
     }
     final remaining = context?.deadline?.difference(_clock()) ?? timeout;
@@ -255,33 +285,43 @@ final class BiliApiClient {
     final budget = remaining < timeout ? remaining : timeout;
     ApiHttpResponse response;
     try {
-      response = await (transport as ApiFormTransport)
-          .postForm(
-            uri,
-            fields: {
-              ...fields,
-              'csrf': csrf,
-              if (live || message) 'csrf_token': csrf,
-            },
-            headers: {
-              'Accept': 'application/json',
-              'User-Agent': 'BiliSail/0.1',
-              'Referer': message
-                  ? 'https://message.bilibili.com/'
-                  : live
-                  ? 'https://live.bilibili.com/'
-                  : 'https://www.bilibili.com/',
-              'Origin': message
-                  ? 'https://message.bilibili.com'
-                  : live
-                  ? 'https://live.bilibili.com'
-                  : 'https://www.bilibili.com',
-              'Cookie': cookie ?? '',
-            },
-            timeout: budget,
-            cancellation: context?.cancellation,
-          )
-          .timeout(budget);
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        'User-Agent': 'BiliSail/0.1',
+        'Referer': message
+            ? 'https://message.bilibili.com/'
+            : live
+            ? 'https://live.bilibili.com/'
+            : 'https://www.bilibili.com/',
+        'Origin': message
+            ? 'https://message.bilibili.com'
+            : live
+            ? 'https://live.bilibili.com'
+            : 'https://www.bilibili.com',
+        'Cookie': cookie ?? '',
+      };
+      final operation = jsonBody == null
+          ? (transport as ApiFormTransport).postForm(
+              uri,
+              fields: {
+                ...fields,
+                'csrf': csrf,
+                if (live || message) 'csrf_token': csrf,
+              },
+              headers: headers,
+              timeout: budget,
+              cancellation: context?.cancellation,
+            )
+          : (transport as ApiJsonTransport).postJson(
+              uri.replace(
+                queryParameters: {...uri.queryParameters, 'csrf': csrf},
+              ),
+              body: jsonBody,
+              headers: headers,
+              timeout: budget,
+              cancellation: context?.cancellation,
+            );
+      response = await operation.timeout(budget);
     } on TimeoutException {
       throw ApiFailure(ApiFailureCategory.timeout, endpoint);
     }
@@ -361,24 +401,40 @@ final class BiliApiClient {
     String aid, {
     int page = 1,
     ApiCommentSort sort = ApiCommentSort.hot,
+    int commentType = 1,
     ApiRequestContext? context,
-  }) => _comments(aid, page, sort: sort, context: context);
+  }) => _comments(
+    aid,
+    page,
+    sort: sort,
+    commentType: commentType,
+    context: context,
+  );
 
   Future<ApiPage<ApiVideoComment>> getVideoReplies(
     String aid,
     String rootId, {
     int page = 1,
+    int commentType = 1,
     ApiRequestContext? context,
-  }) => _comments(aid, page, rootId: rootId, context: context);
+  }) => _comments(
+    aid,
+    page,
+    rootId: rootId,
+    commentType: commentType,
+    context: context,
+  );
 
   Future<ApiPage<ApiVideoComment>> _comments(
     String aid,
     int page, {
     ApiCommentSort sort = ApiCommentSort.hot,
     String? rootId,
+    int commentType = 1,
     ApiRequestContext? context,
   }) async {
     _validateCommentId(aid);
+    _validateCommentType(commentType);
     if (rootId != null) _validateCommentId(rootId);
     if (page < 1) throw ArgumentError('Invalid comment page');
     final endpoint = rootId == null ? 'video_comments' : 'video_replies';
@@ -387,7 +443,7 @@ final class BiliApiClient {
         path: rootId == null ? '/x/v2/reply' : '/x/v2/reply/reply',
         queryParameters: {
           'oid': aid,
-          'type': '1',
+          'type': '$commentType',
           'pn': '$page',
           'ps': '20',
           'root': ?rootId,
@@ -582,14 +638,16 @@ final class BiliApiClient {
     String aid,
     String commentId,
     bool liked, {
+    int commentType = 1,
     ApiRequestContext? context,
   }) async {
     _validateCommentId(aid);
+    _validateCommentType(commentType);
     _validateCommentId(commentId);
     await submitForm('/x/v2/reply/action', 'comment_like', {
       'oid': aid,
       'rpid': commentId,
-      'type': '1',
+      'type': '$commentType',
       'action': liked ? '1' : '0',
     }, context: context);
   }
@@ -599,9 +657,11 @@ final class BiliApiClient {
     String message, {
     String? rootId,
     String? parentId,
+    int commentType = 1,
     ApiRequestContext? context,
   }) async {
     _validateCommentId(aid);
+    _validateCommentType(commentType);
     if (rootId != null) _validateCommentId(rootId);
     if (parentId != null) _validateCommentId(parentId);
     if (message.trim().isEmpty ||
@@ -612,7 +672,7 @@ final class BiliApiClient {
     final data = _map(
       await submitForm('/x/v2/reply/add', 'comment_add', {
         'oid': aid,
-        'type': '1',
+        'type': '$commentType',
         'message': message,
         'root': rootId ?? '0',
         'parent': parentId ?? rootId ?? '0',
@@ -620,6 +680,12 @@ final class BiliApiClient {
       'comment_add',
     );
     return _comment(_map(data['reply'], 'comment_add'), 'comment_add');
+  }
+
+  static void _validateCommentType(int type) {
+    if (!const {1, 11, 12, 14, 17, 33}.contains(type)) {
+      throw ArgumentError.value(type, 'commentType');
+    }
   }
 
   Future<ApiPage<ApiVideoSummary>> getPopular({

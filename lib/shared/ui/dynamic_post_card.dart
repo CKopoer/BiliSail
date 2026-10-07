@@ -11,7 +11,7 @@ import 'bili_icons.dart';
 import 'video_card.dart';
 import 'app_network_image.dart';
 
-/// Read-only dynamic content. Navigation is supplied by the owning page.
+/// Dynamic content; navigation and account actions belong to the owning feature.
 class DynamicPostCard extends StatelessWidget {
   const DynamicPostCard({
     super.key,
@@ -19,11 +19,22 @@ class DynamicPostCard extends StatelessWidget {
     this.onOpenUser,
     this.onOpenVideo,
     this.onOpenLink,
+    this.onShare,
+    this.onComment,
+    this.onLike,
+    this.liked,
+    this.likeCount,
+    this.repostCount,
+    this.busy = false,
   });
   final DynamicPost post;
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<VideoSummary>? onOpenVideo;
   final ValueChanged<Uri>? onOpenLink;
+  final VoidCallback? onShare, onComment, onLike;
+  final bool? liked;
+  final int? likeCount, repostCount;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -36,6 +47,16 @@ class DynamicPostCard extends StatelessWidget {
         onOpenUser: onOpenUser,
         onOpenVideo: onOpenVideo,
         onOpenLink: onOpenLink,
+        actions: _DynamicActions(
+          post: post,
+          onShare: onShare,
+          onComment: onComment,
+          onLike: onLike,
+          liked: liked ?? post.liked,
+          likeCount: likeCount ?? post.likeCount,
+          repostCount: repostCount ?? post.repostCount,
+          busy: busy,
+        ),
       ),
     ),
   );
@@ -48,12 +69,14 @@ class _PostBody extends StatelessWidget {
     this.onOpenVideo,
     this.onOpenLink,
     this.depth = 0,
+    this.actions,
   });
   final DynamicPost post;
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<VideoSummary>? onOpenVideo;
   final ValueChanged<Uri>? onOpenLink;
   final int depth;
+  final Widget? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -336,33 +359,91 @@ class _PostBody extends StatelessWidget {
             ),
           ),
         ],
-        if (depth == 0) ...[
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 28,
-            runSpacing: 8,
-            children: [
-              _stat(BiliIcons.share, '转发', post.repostCount),
-              _stat(BiliIcons.comment, '评论', post.commentCount),
-              _stat(BiliIcons.like, '点赞', post.likeCount),
-            ],
-          ),
-        ],
+        if (depth == 0) ...[const SizedBox(height: 16), ?actions],
       ],
     );
   }
+}
 
-  Widget _stat(IconData icon, String label, int? count) => Semantics(
-    label: '$label ${compactCount(count)}',
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
+class _DynamicActions extends StatelessWidget {
+  const _DynamicActions({
+    required this.post,
+    required this.liked,
+    required this.likeCount,
+    required this.repostCount,
+    required this.busy,
+    this.onShare,
+    this.onComment,
+    this.onLike,
+  });
+  final DynamicPost post;
+  final bool liked, busy;
+  final int? likeCount, repostCount;
+  final VoidCallback? onShare, onComment, onLike;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget action(
+      IconData icon,
+      String label,
+      int? count,
+      VoidCallback? callback, {
+      bool selected = false,
+    }) => Tooltip(
+      message: label,
+      child: Semantics(
+        label: '$label ${compactCount(count)}',
+        button: callback != null,
+        selected: selected,
+        child: InkWell(
+          onTap: busy ? null : callback,
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  count == null ? label : compactCount(count),
+                  style: selected
+                      ? TextStyle(color: Theme.of(context).colorScheme.primary)
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    return Wrap(
+      spacing: 12,
+      runSpacing: 4,
       children: [
-        Icon(icon, size: 18),
-        const SizedBox(width: 6),
-        Text(count == null ? label : compactCount(count)),
+        action(BiliIcons.share, '分享动态', repostCount, onShare),
+        action(
+          BiliIcons.comment,
+          post.commentForbidden ? '评论已关闭' : '查看评论',
+          post.commentCount,
+          onComment,
+        ),
+        action(
+          BiliIcons.like,
+          liked ? '取消点赞动态' : '点赞动态',
+          likeCount,
+          onLike,
+          selected: liked,
+        ),
       ],
-    ),
-  );
+    );
+  }
 }
 
 Widget _image(Uri? url, {BoxFit fit = BoxFit.contain, int decodeWidth = 256}) {

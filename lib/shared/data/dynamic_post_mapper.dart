@@ -1,3 +1,5 @@
+import '../../domain/comment_target.dart';
+
 import 'package:bili_api/bili_api.dart';
 
 import '../../domain/dynamic_post.dart';
@@ -53,6 +55,20 @@ DynamicPost mapDynamicPost(ApiDynamicPost p) {
     linkDescription: p.linkDescription,
     linkCoverUrl: p.linkCoverUrl,
     linkUrl: p.linkUrl,
+    commentTarget: p.commentOid == null || p.commentType == null
+        ? null
+        : _target(p.commentOid!, p.commentType!),
+    liked: p.liked,
+    commentForbidden: p.commentForbidden,
+    repostForbidden: p.repostForbidden,
+    likeForbidden: p.likeForbidden,
     unavailable: p.unavailable,
   );
+}
+
+CommentTarget? _target(String oid, int value) {
+  for (final type in CommentTargetType.values) {
+    if (type.value == value) return CommentTarget(oid, type);
+  }
+  return null;
 }

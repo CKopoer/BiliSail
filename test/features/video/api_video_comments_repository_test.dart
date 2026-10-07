@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
-import 'package:bilisail/features/video/data/api_video_comments_repository.dart';
+import 'package:bilisail/features/comments/data/api_comments_repository.dart';
 import 'package:bilisail/features/video/domain/video_comments_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,7 +18,7 @@ void main() {
         sessionProvider: requests,
       );
       addTearDown(api.close);
-      final repository = ApiVideoCommentsRepository(
+      final repository = ApiCommentsRepository(
         api,
         requests,
         accountScope: () => 'guest',

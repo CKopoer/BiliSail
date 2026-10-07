@@ -183,8 +183,7 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         _section('快捷键', [
                           ShortcutSettingsSection(
                             settings: s.shortcuts,
-                            save: (value) =>
-                                _save(() => controller.setShortcuts(value)),
+                            save: (value) => controller.setShortcuts(value),
                           ),
                         ]),
                       if (widget.category == SettingsCategory.cache)

@@ -1,3 +1,5 @@
+import '../../support/input_test_app.dart';
+
 import 'dart:ui' as ui;
 
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -14,6 +16,116 @@ import 'package:bilisail/features/video/presentation/comment_rich_content.dart';
 import 'package:bilisail/features/video/domain/video_comments_repository.dart';
 
 void main() {
+  testWidgets(
+    'inline links and timestamps share style and respond to real taps',
+    (tester) async {
+      final opened = <Uri>[], sought = <Duration>[];
+      final message =
+          '30tps -&gt; 50tps没有\nhttps://daily.juya.uk/issues/2026-10-06/\n00:09  内容\n00:34  内容\n00:52  内容';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              child: CommentRichContent(
+                comment: CommentEntry(id: '1', author: 'a', message: message),
+                onOpenLink: opened.add,
+                onSeek: sought.add,
+              ),
+            ),
+          ),
+        ),
+      );
+      final text = tester.widget<Text>(
+        find.descendant(
+          of: find.byType(CommentRichContent),
+          matching: find.byType(Text),
+        ),
+      );
+      expect(text.textSpan?.toPlainText(), contains('30tps -> 50tps没有'));
+      final children = (text.textSpan! as TextSpan).children!.cast<TextSpan>();
+      final interactive = children
+          .where((span) => span.recognizer != null)
+          .toList();
+      expect(interactive, hasLength(4));
+      expect(interactive.map((span) => span.style).toSet(), hasLength(1));
+      expect(find.byType(SelectionArea), findsOneWidget);
+      expect(opened, isEmpty);
+      expect(sought, isEmpty);
+      await tester.tapOnText(
+        find.textRange.ofSubstring('https://daily.juya.uk/issues/2026-10-06/'),
+      );
+      for (final time in ['00:09', '00:34', '00:52']) {
+        await tester.tapOnText(find.textRange.ofSubstring(time));
+      }
+      expect(opened, [Uri.parse('https://daily.juya.uk/issues/2026-10-06/')]);
+      expect(sought, [
+        const Duration(seconds: 9),
+        const Duration(seconds: 34),
+        const Duration(seconds: 52),
+      ]);
+    },
+  );
+
+  testWidgets(
+    'narrow scaled comments keep emotes, links and timecodes inline',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: Scaffold(
+              body: SizedBox(
+                width: 180,
+                child: CommentRichContent(
+                  compact: true,
+                  comment: CommentEntry(
+                    id: '1',
+                    author: 'a',
+                    message: '[笑] 00:09 https://example.com/a/b/c',
+                    emotes: {'[笑]': Uri.https('i0.hdslb.com', '/e.png')},
+                  ),
+                  onOpenLink: (_) {},
+                  onSeek: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(Image), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('reused rich content updates text and tap handlers', (
+    tester,
+  ) async {
+    final first = <Duration>[], second = <Duration>[];
+    Future<void> show(String message, ValueChanged<Duration> onSeek) =>
+        tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: CommentRichContent(
+                comment: CommentEntry(id: '1', author: 'a', message: message),
+                onSeek: onSeek,
+              ),
+            ),
+          ),
+        );
+    await show('00:09', first.add);
+    await tester.tapOnText(find.textRange.ofSubstring('00:09'));
+    await show('00:09', second.add);
+    await tester.tapOnText(find.textRange.ofSubstring('00:09'));
+    await show('00:34', second.add);
+    await tester.tapOnText(find.textRange.ofSubstring('00:34'));
+    expect(first, [const Duration(seconds: 9)]);
+    expect(second, [const Duration(seconds: 9), const Duration(seconds: 34)]);
+    await tester.pumpWidget(const SizedBox());
+    expect(tester.takeException(), isNull);
+  });
+
   for (final width in [180.0, 320.0]) {
     testWidgets('decoration image and fan serial fit $width pixel header', (
       tester,
@@ -259,7 +371,7 @@ void main() {
           overrides: [
             originalImageRepositoryProvider.overrideWithValue(originals),
           ],
-          child: MaterialApp(
+          child: InputTestApp(
             home: Scaffold(
               body: CommentRichContent(
                 comment: CommentEntry(

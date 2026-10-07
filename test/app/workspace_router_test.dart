@@ -1,3 +1,5 @@
+import '../support/input_test_app.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/app/router.dart';
@@ -80,7 +82,7 @@ void main() {
               feedRepositoryProvider.overrideWithValue(_FeedRepository()),
               homeRepositoryProvider.overrideWithValue(_HomeRepository()),
             ],
-            child: MaterialApp.router(routerConfig: router),
+            child: InputTestApp.router(routerConfig: router),
           ),
         );
         await tester.pumpAndSettle();
@@ -195,7 +197,7 @@ void main() {
               feedRepositoryProvider.overrideWithValue(_FeedRepository()),
               homeRepositoryProvider.overrideWithValue(_HomeRepository()),
             ],
-            child: MaterialApp.router(routerConfig: router),
+            child: InputTestApp.router(routerConfig: router),
           ),
         );
         await tester.pumpAndSettle();
@@ -240,7 +242,7 @@ void main() {
               feedRepositoryProvider.overrideWithValue(_FeedRepository()),
               homeRepositoryProvider.overrideWithValue(_HomeRepository()),
             ],
-            child: MaterialApp.router(routerConfig: router),
+            child: InputTestApp.router(routerConfig: router),
           ),
         );
         await tester.pump();
@@ -286,7 +288,7 @@ void main() {
             feedRepositoryProvider.overrideWithValue(_FeedRepository()),
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
           ],
-          child: MaterialApp.router(routerConfig: router),
+          child: InputTestApp.router(routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();
@@ -343,7 +345,7 @@ void main() {
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
             profileRepositoryProvider.overrideWithValue(_ProfileRepository()),
           ],
-          child: MaterialApp.router(routerConfig: router),
+          child: InputTestApp.router(routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();
@@ -399,7 +401,7 @@ void main() {
             pgcRepositoryProvider.overrideWithValue(_ContentPgcRepository()),
             liveRepositoryProvider.overrideWithValue(_ContentLiveRepository()),
           ],
-          child: MaterialApp.router(routerConfig: router),
+          child: InputTestApp.router(routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();
@@ -470,7 +472,7 @@ void main() {
           authRepositoryProvider.overrideWithValue(auth),
           pgcRepositoryProvider.overrideWithValue(_ContentPgcRepository()),
         ],
-        child: MaterialApp.router(routerConfig: router),
+        child: InputTestApp.router(routerConfig: router),
       ),
     );
     await tester.pumpAndSettle();
@@ -527,7 +529,7 @@ void main() {
                 _ContentLiveRepository(),
               ),
             ],
-            child: MaterialApp.router(routerConfig: router),
+            child: InputTestApp.router(routerConfig: router),
           ),
         );
         await tester.pumpAndSettle();
@@ -572,13 +574,12 @@ void main() {
             settingsRepositoryProvider.overrideWithValue(_SettingsRepository()),
             pgcRepositoryProvider.overrideWithValue(pgc),
           ],
-          child: MaterialApp.router(routerConfig: router),
+          child: InputTestApp.router(routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();
       expect(pgc.reads, 1);
       expect(find.text('影视播放器 123'), findsOneWidget);
-      Focus.of(tester.element(find.text('影视播放器 123'))).requestFocus();
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.f5);
       await tester.pumpAndSettle();
@@ -601,7 +602,7 @@ void main() {
             feedRepositoryProvider.overrideWithValue(_FeedRepository()),
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
           ],
-          child: MaterialApp.router(routerConfig: router),
+          child: InputTestApp.router(routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();
@@ -642,7 +643,7 @@ void main() {
             feedRepositoryProvider.overrideWithValue(_FeedRepository()),
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
           ],
-          child: MaterialApp.router(
+          child: InputTestApp.router(
             builder: AppNoticeHost.builder,
             routerConfig: router,
           ),
@@ -689,7 +690,7 @@ void main() {
           feedRepositoryProvider.overrideWithValue(_FeedRepository()),
           homeRepositoryProvider.overrideWithValue(_HomeRepository()),
         ],
-        child: MaterialApp.router(
+        child: InputTestApp.router(
           builder: AppNoticeHost.builder,
           routerConfig: router,
         ),
@@ -713,7 +714,7 @@ void main() {
             feedRepositoryProvider.overrideWithValue(_FeedRepository()),
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
           ],
-          child: MaterialApp.router(
+          child: InputTestApp.router(
             builder: AppNoticeHost.builder,
             routerConfig: router,
           ),
@@ -769,7 +770,7 @@ void main() {
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
             videoRepositoryProvider.overrideWithValue(_VideoRepository()),
           ],
-          child: MaterialApp.router(
+          child: InputTestApp.router(
             builder: AppNoticeHost.builder,
             routerConfig: router,
           ),
@@ -808,7 +809,7 @@ void main() {
           feedRepositoryProvider.overrideWithValue(_FeedRepository()),
           homeRepositoryProvider.overrideWithValue(_HomeRepository()),
         ],
-        child: MaterialApp.router(
+        child: InputTestApp.router(
           builder: AppNoticeHost.builder,
           routerConfig: router,
         ),
@@ -856,7 +857,7 @@ void main() {
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
             searchRepositoryProvider.overrideWithValue(search),
           ],
-          child: MaterialApp.router(
+          child: InputTestApp.router(
             builder: AppNoticeHost.builder,
             routerConfig: router,
           ),
@@ -905,7 +906,7 @@ void main() {
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
             searchRepositoryProvider.overrideWithValue(search),
           ],
-          child: MaterialApp.router(
+          child: InputTestApp.router(
             builder: AppNoticeHost.builder,
             routerConfig: router,
           ),
@@ -959,7 +960,7 @@ void main() {
             searchRepositoryProvider.overrideWithValue(search),
             authRepositoryProvider.overrideWithValue(auth),
           ],
-          child: MaterialApp.router(
+          child: InputTestApp.router(
             builder: AppNoticeHost.builder,
             routerConfig: router,
           ),

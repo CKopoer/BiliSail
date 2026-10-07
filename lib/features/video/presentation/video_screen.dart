@@ -5,17 +5,12 @@ import 'package:bili_player/bili_player.dart';
 import '../../../domain/user.dart';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
 import '../../../core/network/api_requests.dart';
-import '../../../core/presentation/keyboard_shortcuts.dart';
-import '../../../core/presentation/playback_page_commands.dart';
-import '../../../core/presentation/workspace_activity.dart';
-import '../../settings/application/settings_controller.dart';
-import '../../settings/domain/app_settings.dart';
-import '../../settings/domain/shortcut_settings.dart';
+
+import '../../../shared/ui/playback_page_commands.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/app_cover_image.dart';
@@ -238,306 +233,290 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
               previousPart: () => _changePart(video, selected, -1),
               nextPart: () => _changePart(video, selected, 1),
               toggleInfo: toggleInfo,
-              child: MouseShortcutListener(
-                onShortcut: (key) =>
-                    _shortcut(key, video, selected, toggleInfo),
-                child: Focus(
-                  onKeyEvent: (_, event) =>
-                      _key(event, video, selected, toggleInfo),
-                  child: Builder(
-                    builder: (context) {
-                      final player = Column(
-                        key: _playerKey,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            height: wide || !showInfo
-                                ? constraints.maxHeight
-                                : constraints.maxWidth * 9 / 16,
-                            width: double.infinity,
-                            child: ColoredBox(
-                              color: Colors.black,
-                              child: widget.playerBuilder(
-                                context,
-                                video,
-                                selected,
-                              ),
+              child: Focus(
+                child: Builder(
+                  builder: (context) {
+                    final player = Column(
+                      key: _playerKey,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          height: wide || !showInfo
+                              ? constraints.maxHeight
+                              : constraints.maxWidth * 9 / 16,
+                          width: double.infinity,
+                          child: ColoredBox(
+                            color: Colors.black,
+                            child: widget.playerBuilder(
+                              context,
+                              video,
+                              selected,
                             ),
                           ),
-                        ],
-                      );
-                      final content = Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            VideoAuthorHeader(
-                              video: video,
-                              onLogin: widget.onLogin,
-                              onOpenUser: widget.onOpenUser,
-                            ),
-                            const SizedBox(height: 18),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    video.summary.title,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(height: 1.4),
-                                  ),
-                                ),
-                                TextButton(
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                    ),
-                                    minimumSize: const Size(0, 30),
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  onPressed: () => setState(
-                                    () => _descriptionExpanded =
-                                        !_descriptionExpanded,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(_descriptionExpanded ? '收起' : '展开'),
-                                      Icon(
-                                        _descriptionExpanded
-                                            ? Icons.expand_less
-                                            : Icons.expand_more,
-                                        size: 16,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 6,
-                              children: [
-                                _Meta(
-                                  icon: BiliIcons.playCount,
-                                  label: compactCount(video.summary.playCount),
-                                ),
-                                _Meta(
-                                  icon: BiliIcons.comment,
-                                  label: compactCount(
-                                    video.summary.danmakuCount,
-                                  ),
-                                ),
-                                if (video.summary.publishedAt
-                                    case final DateTime date)
-                                  _Meta(
-                                    icon: Icons.schedule_outlined,
-                                    label: _date(date),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            if (widget.actionsBuilder != null)
-                              widget.actionsBuilder!(context, video, selected),
-                            if (_descriptionExpanded) ...[
-                              const SizedBox(height: 12),
-                              Text(
-                                video.description.isEmpty
-                                    ? 'UP 主还没有填写简介'
-                                    : video.description,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(height: 1.6),
-                              ),
-                            ],
-                            VideoTagsPanel(
-                              id: widget.id,
-                              onSearch: widget.onSearchTag,
-                            ),
-                            _separator('intro'),
-                            if (video.parts.length > 1 ||
-                                video.collection != null) ...[
-                              VideoCollectionPanel(
-                                key: ValueKey(video.summary.id),
-                                video: video,
-                                selected: selected,
-                                onLogin: widget.onLogin,
-                                onSelectPart: (part) {
-                                  setState(() => _selectedCid = part.cid);
-                                  widget.onPartChanged?.call(part);
-                                },
-                                onOpenVideoPart: widget.onOpenVideoPart,
-                              ),
-                              _separator('collection'),
-                            ],
-                            _related(),
-                          ],
                         ),
-                      );
-                      final info = Material(
-                        key: _infoKey,
-                        color: Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(6),
-                        clipBehavior: Clip.antiAlias,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (queue != null)
-                              if (_queueExpanded)
-                                Expanded(
-                                  child: WatchLaterQueuePanel(
-                                    queue: queue,
-                                    current: widget.id,
-                                    expanded: true,
-                                    onToggle: () =>
-                                        setState(() => _queueExpanded = false),
-                                    onSelect: _openQueueVideo,
-                                  ),
-                                )
-                              else
-                                WatchLaterQueuePanel(
-                                  queue: queue,
-                                  current: widget.id,
-                                  expanded: false,
-                                  onToggle: () =>
-                                      setState(() => _queueExpanded = true),
-                                  onSelect: _openQueueVideo,
-                                ),
-                            if (queue == null || !_queueExpanded) ...[
-                              Row(
-                                children: [
-                                  for (final (index, title) in [
-                                    '简介',
-                                    '评论',
-                                  ].indexed)
-                                    _Pivot(
-                                      title: title,
-                                      count: index == 1
-                                          ? video.replyCount
-                                          : null,
-                                      selected: _tab == index,
-                                      onTap: () => setState(() {
-                                        _tab = index;
-                                        _visitedTabs.add(index);
-                                      }),
-                                    ),
-                                  const Spacer(),
-                                  if (widget.menuBuilder != null)
-                                    widget.menuBuilder!(
-                                      context,
-                                      video,
-                                      selected,
-                                    ),
-                                ],
-                              ),
-                              const Divider(height: 1),
+                      ],
+                    );
+                    final content = Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          VideoAuthorHeader(
+                            video: video,
+                            onLogin: widget.onLogin,
+                            onOpenUser: widget.onOpenUser,
+                          ),
+                          const SizedBox(height: 18),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Expanded(
-                                child: IndexedStack(
-                                  index: _tab,
+                                child: Text(
+                                  video.summary.title,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(height: 1.4),
+                                ),
+                              ),
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                  ),
+                                  minimumSize: const Size(0, 30),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: () => setState(
+                                  () => _descriptionExpanded =
+                                      !_descriptionExpanded,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    ExcludeFocus(
-                                      excluding: _tab != 0,
-                                      child: TickerMode(
-                                        enabled: showInfo && _tab == 0,
-                                        child: SingleChildScrollView(
-                                          controller: _introScroll,
-                                          child: content,
-                                        ),
-                                      ),
+                                    Text(_descriptionExpanded ? '收起' : '展开'),
+                                    Icon(
+                                      _descriptionExpanded
+                                          ? Icons.expand_less
+                                          : Icons.expand_more,
+                                      size: 16,
                                     ),
-                                    if (_visitedTabs.contains(1))
-                                      ExcludeFocus(
-                                        excluding: _tab != 1,
-                                        child: VideoCommentsPanel(
-                                          detail: video,
-                                          onLogin: widget.onLogin,
-                                          onOpenUser: widget.onOpenUser,
-                                        ),
-                                      )
-                                    else
-                                      const SizedBox(),
                                   ],
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 6,
+                            children: [
+                              _Meta(
+                                icon: BiliIcons.playCount,
+                                label: compactCount(video.summary.playCount),
+                              ),
+                              _Meta(
+                                icon: BiliIcons.comment,
+                                label: compactCount(video.summary.danmakuCount),
+                              ),
+                              if (video.summary.publishedAt
+                                  case final DateTime date)
+                                _Meta(
+                                  icon: Icons.schedule_outlined,
+                                  label: _date(date),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (widget.actionsBuilder != null)
+                            widget.actionsBuilder!(context, video, selected),
+                          if (_descriptionExpanded) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              video.description.isEmpty
+                                  ? 'UP 主还没有填写简介'
+                                  : video.description,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(height: 1.6),
+                            ),
                           ],
-                        ),
-                      );
-                      final playerWithToggle = Stack(
+                          VideoTagsPanel(
+                            id: widget.id,
+                            onSearch: widget.onSearchTag,
+                          ),
+                          _separator('intro'),
+                          if (video.parts.length > 1 ||
+                              video.collection != null) ...[
+                            VideoCollectionPanel(
+                              key: ValueKey(video.summary.id),
+                              video: video,
+                              selected: selected,
+                              onLogin: widget.onLogin,
+                              onSelectPart: (part) {
+                                setState(() => _selectedCid = part.cid);
+                                widget.onPartChanged?.call(part);
+                              },
+                              onOpenVideoPart: widget.onOpenVideoPart,
+                            ),
+                            _separator('collection'),
+                          ],
+                          _related(),
+                        ],
+                      ),
+                    );
+                    final info = Material(
+                      key: _infoKey,
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(6),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          player,
-                          Positioned(
-                            right: 0,
-                            top:
-                                (wide || !showInfo
-                                        ? constraints.maxHeight
-                                        : constraints.maxWidth * 9 / 16) /
-                                    2 -
-                                PlaybackSidebarToggle.size.height / 2,
-                            child: PlaybackSidebarToggle(
-                              tooltip: showInfo ? '收起视频信息' : '展开视频信息',
-                              icon: wide
-                                  ? (showInfo
-                                        ? Icons.chevron_right
-                                        : Icons.chevron_left)
-                                  : (showInfo
-                                        ? Icons.expand_less
-                                        : Icons.expand_more),
-                              onPressed: toggleInfo,
+                          if (queue != null)
+                            if (_queueExpanded)
+                              Expanded(
+                                child: WatchLaterQueuePanel(
+                                  queue: queue,
+                                  current: widget.id,
+                                  expanded: true,
+                                  onToggle: () =>
+                                      setState(() => _queueExpanded = false),
+                                  onSelect: _openQueueVideo,
+                                ),
+                              )
+                            else
+                              WatchLaterQueuePanel(
+                                queue: queue,
+                                current: widget.id,
+                                expanded: false,
+                                onToggle: () =>
+                                    setState(() => _queueExpanded = true),
+                                onSelect: _openQueueVideo,
+                              ),
+                          if (queue == null || !_queueExpanded) ...[
+                            Row(
+                              children: [
+                                for (final (index, title) in [
+                                  '简介',
+                                  '评论',
+                                ].indexed)
+                                  _Pivot(
+                                    title: title,
+                                    count: index == 1 ? video.replyCount : null,
+                                    selected: _tab == index,
+                                    onTap: () => setState(() {
+                                      _tab = index;
+                                      _visitedTabs.add(index);
+                                    }),
+                                  ),
+                                const Spacer(),
+                                if (widget.menuBuilder != null)
+                                  widget.menuBuilder!(context, video, selected),
+                              ],
+                            ),
+                            const Divider(height: 1),
+                            Expanded(
+                              child: IndexedStack(
+                                index: _tab,
+                                children: [
+                                  ExcludeFocus(
+                                    excluding: _tab != 0,
+                                    child: TickerMode(
+                                      enabled: showInfo && _tab == 0,
+                                      child: SingleChildScrollView(
+                                        controller: _introScroll,
+                                        child: content,
+                                      ),
+                                    ),
+                                  ),
+                                  if (_visitedTabs.contains(1))
+                                    ExcludeFocus(
+                                      excluding: _tab != 1,
+                                      child: VideoCommentsPanel(
+                                        detail: video,
+                                        onLogin: widget.onLogin,
+                                        onOpenUser: widget.onOpenUser,
+                                      ),
+                                    )
+                                  else
+                                    const SizedBox(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                    final playerWithToggle = Stack(
+                      children: [
+                        player,
+                        Positioned(
+                          right: 0,
+                          top:
+                              (wide || !showInfo
+                                      ? constraints.maxHeight
+                                      : constraints.maxWidth * 9 / 16) /
+                                  2 -
+                              PlaybackSidebarToggle.size.height / 2,
+                          child: PlaybackSidebarToggle(
+                            tooltip: showInfo ? '收起视频信息' : '展开视频信息',
+                            icon: wide
+                                ? (showInfo
+                                      ? Icons.chevron_right
+                                      : Icons.chevron_left)
+                                : (showInfo
+                                      ? Icons.expand_less
+                                      : Icons.expand_more),
+                            onPressed: toggleInfo,
+                          ),
+                        ),
+                      ],
+                    );
+                    if (wide) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: playerWithToggle),
+                          ExcludeFocus(
+                            excluding: !showInfo,
+                            child: Offstage(
+                              offstage: !showInfo,
+                              child: SizedBox(
+                                width: 380,
+                                height: constraints.maxHeight,
+                                child: info,
+                              ),
                             ),
                           ),
                         ],
                       );
-                      if (wide) {
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(child: playerWithToggle),
-                            ExcludeFocus(
-                              excluding: !showInfo,
-                              child: Offstage(
-                                offstage: !showInfo,
-                                child: SizedBox(
-                                  width: 380,
-                                  height: constraints.maxHeight,
-                                  child: info,
-                                ),
+                    }
+                    return SingleChildScrollView(
+                      padding: EdgeInsets.zero,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          playerWithToggle,
+                          ExcludeFocus(
+                            excluding: !showInfo,
+                            child: Offstage(
+                              offstage: !showInfo,
+                              child: SizedBox(
+                                height: constraints.maxHeight.isFinite
+                                    ? (constraints.maxHeight -
+                                              constraints.maxWidth * 9 / 16)
+                                          .clamp(480.0, double.infinity)
+                                    : 600,
+                                child: info,
                               ),
                             ),
-                          ],
-                        );
-                      }
-                      return SingleChildScrollView(
-                        padding: EdgeInsets.zero,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            playerWithToggle,
-                            ExcludeFocus(
-                              excluding: !showInfo,
-                              child: Offstage(
-                                offstage: !showInfo,
-                                child: SizedBox(
-                                  height: constraints.maxHeight.isFinite
-                                      ? (constraints.maxHeight -
-                                                constraints.maxWidth * 9 / 16)
-                                            .clamp(480.0, double.infinity)
-                                      : 600,
-                                  child: info,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
             );
@@ -589,47 +568,6 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       return;
     }
     widget.onOpenQueueVideo?.call(id);
-  }
-
-  KeyEventResult _key(
-    KeyEvent event,
-    VideoDetail video,
-    VideoPart selected,
-    VoidCallback toggleInfo,
-  ) {
-    if (event is! KeyDownEvent ||
-        !WorkspaceActivity.isActive(context) ||
-        shortcutsBlocked(context)) {
-      return KeyEventResult.ignored;
-    }
-    final key = shortcutKey(event);
-    return key != null && _shortcut(key, video, selected, toggleInfo)
-        ? KeyEventResult.handled
-        : KeyEventResult.ignored;
-  }
-
-  bool _shortcut(
-    String key,
-    VideoDetail video,
-    VideoPart selected,
-    VoidCallback toggleInfo,
-  ) {
-    if (!WorkspaceActivity.isActive(context) || shortcutsBlocked(context)) {
-      return false;
-    }
-    final settings =
-        ref.read(settingsControllerProvider).value ??
-        const AppSettings.defaults();
-    final action = settings.shortcuts.actionFor(key);
-    if (action == ShortcutAction.fullWindow) {
-      toggleInfo();
-    } else if (action == ShortcutAction.previousPart ||
-        action == ShortcutAction.nextPart) {
-      _changePart(video, selected, action == ShortcutAction.nextPart ? 1 : -1);
-    } else {
-      return false;
-    }
-    return true;
   }
 
   Widget _related() => ref

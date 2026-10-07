@@ -1,6 +1,8 @@
+import '../../support/input_test_app.dart';
+
 import 'dart:async';
 
-import 'package:bilisail/core/presentation/playback_page_commands.dart';
+import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -154,7 +156,7 @@ void main() {
           pgcRepositoryProvider.overrideWithValue(repo),
           authRepositoryProvider.overrideWithValue(auth),
         ],
-        child: MaterialApp(
+        child: InputTestApp(
           home: Scaffold(
             body: PgcScreen(
               seasonId: 's1',
@@ -202,7 +204,7 @@ void main() {
             pgcRepositoryProvider.overrideWithValue(repo),
             authRepositoryProvider.overrideWithValue(auth),
           ],
-          child: MaterialApp(
+          child: InputTestApp(
             home: Scaffold(
               body: StatefulBuilder(
                 builder: (context, update) => PgcScreen(
@@ -245,7 +247,7 @@ void main() {
           pgcRepositoryProvider.overrideWithValue(repo),
           authRepositoryProvider.overrideWithValue(auth),
         ],
-        child: MaterialApp(
+        child: InputTestApp(
           home: Scaffold(
             body: PgcScreen(
               seasonId: 's1',
@@ -276,7 +278,7 @@ void main() {
             pgcRepositoryProvider.overrideWithValue(repo),
             authRepositoryProvider.overrideWithValue(auth),
           ],
-          child: MaterialApp(
+          child: InputTestApp(
             home: Scaffold(
               body: PgcScreen(
                 seasonId: 's1',
@@ -352,7 +354,7 @@ void main() {
       );
       var selected = season.episodes[1000];
       await tester.pumpWidget(
-        MaterialApp(
+        InputTestApp(
           home: Scaffold(
             body: StatefulBuilder(
               builder: (context, update) => PgcEpisodePanel(
@@ -393,7 +395,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
     await tester.pumpWidget(
-      MaterialApp(
+      InputTestApp(
         home: MediaQuery(
           data: const MediaQueryData(textScaler: TextScaler.linear(2)),
           child: Scaffold(
@@ -435,7 +437,7 @@ void main() {
           pgcRepositoryProvider.overrideWithValue(repo),
           authRepositoryProvider.overrideWithValue(auth),
         ],
-        child: MaterialApp(
+        child: InputTestApp(
           home: Scaffold(
             body: PgcScreen(
               seasonId: 's1',
@@ -520,7 +522,8 @@ void main() {
             authRepositoryProvider.overrideWithValue(auth),
             settingsRepositoryProvider.overrideWithValue(settings),
           ],
-          child: MaterialApp(
+          child: InputTestApp(
+            shortcuts: settings.value.shortcuts,
             home: Scaffold(
               body: Consumer(
                 builder: (context, ref, _) {
@@ -548,7 +551,6 @@ void main() {
       expect(repo.lastEpisodeId, const PgcEpisodeId('e3'));
       final oldCancellation = repo.lastCancellation;
       repo.pending = null;
-      Focus.of(tester.element(find.text('正在加载影视详情…'))).requestFocus();
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.f5);
       await tester.pump();
@@ -602,7 +604,7 @@ void main() {
           authRepositoryProvider.overrideWithValue(auth),
           settingsRepositoryProvider.overrideWithValue(settings),
         ],
-        child: MaterialApp(
+        child: InputTestApp(
           home: Scaffold(
             body: PgcScreen(
               seasonId: 's1',
@@ -615,7 +617,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('详情错误'), findsOneWidget);
     repo.failure = null;
-    Focus.of(tester.element(find.text('详情错误'))).requestFocus();
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.f5);
     await tester.pumpAndSettle();
