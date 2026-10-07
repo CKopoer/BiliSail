@@ -59,7 +59,13 @@ void main() {
         ),
       ],
       imageUrls: [image],
-      original: ApiDynamicPost(id: '3', text: '原动态'),
+      imageAspectRatios: {image: 1.5},
+      original: ApiDynamicPost(
+        id: '3',
+        text: '原动态',
+        imageUrls: [image],
+        imageAspectRatios: {image: 2 / 3},
+      ),
       video: ApiVideoSummary(
         bvid: 'BV1234567890',
         title: '视频',
@@ -86,6 +92,8 @@ void main() {
     expect(post.spans.first.emojiSize, 2);
     expect(post.spans.last.userId?.value, '2');
     expect(post.original?.id, '3');
+    expect(post.imageAspectRatios[image], 1.5);
+    expect(post.original?.imageAspectRatios[image], 2 / 3);
     expect(post.video?.danmakuCount, 4);
     expect(post.video?.publishedAt, stamp);
     expect(post.video?.authorId?.value, '2');
@@ -94,5 +102,6 @@ void main() {
     expect(post.linkDescription, '描述');
     expect(() => post.spans.clear(), throwsUnsupportedError);
     expect(() => post.imageUrls.clear(), throwsUnsupportedError);
+    expect(() => post.imageAspectRatios.clear(), throwsUnsupportedError);
   });
 }

@@ -59,6 +59,71 @@ Map<String, Object?> post({
 };
 void main() {
   for (final home in [true, false]) {
+    for (final opus in [true, false]) {
+      test(
+        '${home ? 'home' : 'space'} ${opus ? 'opus' : 'draw'} keeps valid picture ratios',
+        () async {
+          final pictures = [
+            {
+              'src': '//i0.hdslb.com/landscape.png',
+              'width': 2400,
+              'height': 1600,
+            },
+            {
+              'src': '//i0.hdslb.com/portrait.png',
+              'width': '1600',
+              'height': '2400',
+            },
+            {'src': '//i0.hdslb.com/long.png', 'width': 400, 'height': 4000},
+            {'src': '//i0.hdslb.com/missing.png'},
+            {'src': '//i0.hdslb.com/zero.png', 'width': 0, 'height': 100},
+            {'src': '//i0.hdslb.com/negative.png', 'width': 100, 'height': -1},
+            {'src': '//i0.hdslb.com/nan.png', 'width': 'NaN', 'height': 100},
+            {
+              'src': '//i0.hdslb.com/infinite.png',
+              'width': 'Infinity',
+              'height': 100,
+            },
+            {
+              'src': '//i0.hdslb.com/overflow.png',
+              'width': 1e308,
+              'height': 1e-308,
+            },
+          ];
+          final api = BiliApiClient(
+            transport: DynamicTransport([
+              post(
+                major: {
+                  if (opus)
+                    'opus': {'pics': pictures}
+                  else
+                    'draw': {'items': pictures},
+                },
+              ),
+            ]),
+          );
+          final value = home
+              ? (await HomeClient(api).load(
+                  channel: 'dynamic',
+                  section: '全部',
+                  page: 1,
+                )).items.single.dynamicPost
+              : (await ProfileClient(
+                  api,
+                ).loadDynamics('2')).items.single.dynamicPost;
+          expect(value, isNotNull);
+          expect(value!.imageUrls, hasLength(9));
+          expect(value.imageAspectRatios, {
+            Uri.parse('https://i0.hdslb.com/landscape.png'): 1.5,
+            Uri.parse('https://i0.hdslb.com/portrait.png'): 2 / 3,
+            Uri.parse('https://i0.hdslb.com/long.png'): .1,
+          });
+          expect(() => value.imageAspectRatios.clear(), throwsUnsupportedError);
+        },
+      );
+    }
+  }
+  for (final home in [true, false]) {
     test(
       '${home ? 'all' : 'space'} selects opus rich summary over placeholder desc',
       () async {

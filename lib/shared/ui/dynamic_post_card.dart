@@ -239,12 +239,18 @@ class _PostBody extends StatelessWidget {
                   maxWidth: 320,
                   maxHeight: 360,
                 ),
-                child: _picture(
-                  context,
-                  post.imageUrls.first,
-                  images: post.imageUrls,
-                  imageIndex: 0,
-                  decodeWidth: 960,
+                // Image loading and visibility must never change the sliver's
+                // geometry. Missing metadata keeps a square slot even after
+                // decoding; the contained image can still use its own ratio.
+                child: AspectRatio(
+                  aspectRatio: _pictureAspectRatio(post, post.imageUrls.first),
+                  child: _picture(
+                    context,
+                    post.imageUrls.first,
+                    images: post.imageUrls,
+                    imageIndex: 0,
+                    decodeWidth: 960,
+                  ),
                 ),
               ),
             )
@@ -457,6 +463,11 @@ Widget _image(Uri? url, {BoxFit fit = BoxFit.contain, int decodeWidth = 256}) {
     errorBuilder: (_, _, _) =>
         const Center(child: Icon(Icons.image_not_supported_outlined)),
   );
+}
+
+double _pictureAspectRatio(DynamicPost post, Uri image) {
+  final ratio = post.imageAspectRatios[image];
+  return ratio != null && ratio.isFinite && ratio > 0 ? ratio : 1;
 }
 
 Widget _picture(

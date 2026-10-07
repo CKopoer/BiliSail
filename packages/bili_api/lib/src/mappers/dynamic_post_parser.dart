@@ -71,12 +71,21 @@ ApiDynamicPost parseDynamicPost(
         )
       : null;
   final images = <Uri>[];
+  final imageAspectRatios = <Uri, double>{};
   for (final raw in _list(
     _map(major['draw'])['items'] ?? opus['pics'],
   ).take(9)) {
     final image = _map(raw);
     final uri = _uri(image['src'] ?? image['url']);
-    if (uri != null) images.add(uri);
+    if (uri != null) {
+      images.add(uri);
+      final width = _positiveDimension(image['width']);
+      final height = _positiveDimension(image['height']);
+      if (width != null && height != null) {
+        final ratio = width / height;
+        if (ratio.isFinite && ratio > 0) imageAspectRatios[uri] = ratio;
+      }
+    }
   }
   final type = _text(item['type']);
   // Web union members are commonly present with null values. Their presence
@@ -126,6 +135,7 @@ ApiDynamicPost parseDynamicPost(
           ),
     spans: spans,
     imageUrls: images,
+    imageAspectRatios: imageAspectRatios,
     video: video,
     original: original.isEmpty
         ? null
@@ -159,6 +169,17 @@ ApiDynamicPost parseDynamicPost(
     likeForbidden: like['forbidden'] == true,
     unavailable: unavailable,
   );
+}
+
+double? _positiveDimension(Object? value) {
+  final dimension = value is num
+      ? value.toDouble()
+      : value is String
+      ? double.tryParse(value)
+      : null;
+  return dimension != null && dimension.isFinite && dimension > 0
+      ? dimension
+      : null;
 }
 
 Map<String, Object?> _map(Object? v) =>

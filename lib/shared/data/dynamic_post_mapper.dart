@@ -32,6 +32,7 @@ DynamicPost mapDynamicPost(ApiDynamicPost p) {
         )
         .toList(),
     imageUrls: p.imageUrls,
+    imageAspectRatios: p.imageAspectRatios,
     video: v == null
         ? null
         : VideoSummary(

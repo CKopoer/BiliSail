@@ -31,6 +31,7 @@ final class ApiDynamicPost {
     this.text = '',
     List<ApiDynamicTextSpan> spans = const [],
     List<Uri> imageUrls = const [],
+    Map<Uri, double> imageAspectRatios = const {},
     this.video,
     this.original,
     this.repostCount,
@@ -49,7 +50,8 @@ final class ApiDynamicPost {
     this.likeForbidden = false,
     this.unavailable = false,
   }) : spans = List.unmodifiable(spans),
-       imageUrls = List.unmodifiable(imageUrls);
+       imageUrls = List.unmodifiable(imageUrls),
+       imageAspectRatios = Map.unmodifiable(imageAspectRatios);
   final String id,
       title,
       authorName,
@@ -64,6 +66,9 @@ final class ApiDynamicPost {
   final DateTime? publishedAt;
   final List<ApiDynamicTextSpan> spans;
   final List<Uri> imageUrls;
+
+  /// Width / height from the response, keyed by the original image URL.
+  final Map<Uri, double> imageAspectRatios;
   final ApiVideoSummary? video;
   final ApiDynamicPost? original;
   final int? repostCount, commentCount, likeCount;

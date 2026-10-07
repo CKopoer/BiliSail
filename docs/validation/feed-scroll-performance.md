@@ -56,3 +56,17 @@
 诊断完成后通过 `flutter build windows --profile --no-pub -t lib/main.dart` 恢复正常应用入口，输出 `build/windows/x64/runner/Profile/bilisail.exe` 及配套文件。四份改动文档的 100 个本地链接存在，`git diff --check` 通过。
 
 本轮性能证据只覆盖 Windows 原生 profile 的固定模拟数据和窄视口，说明全量组件遍历热点已消除。真实网络图片、长图动态、原生预览播放、低端移动设备、Android/macOS 的帧耗时与实际手感仍需单独实机测量。
+
+## 2026-10-07 动态单图滚动位移修复
+
+动态单图原来只有 `maxWidth: 320` / `maxHeight: 360`，高度由图片解码结果决定。`AppNetworkImage` 在图片离开视口前后 160 像素的加载区域后改用空占位，单图高度随之归零；滚回或懒列表重新创建卡片时，高度再次恢复。这会改变 `SliverList` 中后续条目的布局，与滚动输入无关。实际 `HomeContent` 的模拟图片探针复现了滚动位置保持 420 像素、相邻两帧内容额外上移 160 像素的现象。
+
+修复由 API 解析 `draw.items` / `opus.pics` 的 `width`、`height`，经不可变的 `imageAspectRatios` 传到共享动态卡片。单图使用 `AspectRatio` 在加载前预留空间，继续受 320×360 上限和可用宽度约束；缺少合法比例时始终使用方形占位，解码完成也不改变占位尺寸，图片按原比例完整显示。图片隐藏、失败或卡片重新创建时保留同样的布局。共用卡片同时覆盖首页、空间动态和转发引用；多图网格与原图预览沿用既有布局和加载边界。
+
+尺寸字段支持数字及数字字符串；零、负数、非有限值及除法溢出被忽略。本轮没有改变端点、请求次数、鉴权或分页策略。字段形态参考项目此前保存的脱敏 `artifacts/dynamic-schema-probe.log`：`draw` 使用字符串宽高，`opus` 使用数值宽高；该日志是前序在线证据，本轮未重新请求真实账号动态。
+
+行为回归覆盖“全部”／“图文”两子标签中的横图、竖图、长图、缺少尺寸、图片失败与转发图片，逐帧检查首次解码、离开加载区域、滚出缓存区后返回的卡片高度和后续卡片位置，同时检查屏幕外卡片仍被懒列表释放。协议测试覆盖首页／空间的两种图片格式、非法尺寸和不可变比例映射；共享映射验证转发原动态保留自己的图片比例。
+
+专项组件／交互测试 32 项、动态协议测试 15 项通过。`tool/check.ps1 -SkipPub` 通过：根应用 1,130、`bili_api` 302、`bili_player` 22、`bili_danmaku` 52 项，共 1,506 项测试；根应用与三个包的格式和静态分析通过。`flutter build windows --release --no-pub -t lib/main.dart` 成功，产物为 `build/windows/x64/runner/Release/bilisail.exe`。
+
+组件测试使用受控图片加载，不作为真实鼠标手感或帧耗时结论。本轮未进行真实账号／Windows 窗口滚动验收，也未构建或运行 Android/macOS。检查与构建日志保存在忽略目录 `artifacts/dynamic-scroll-investigation/`。

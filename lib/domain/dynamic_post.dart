@@ -33,6 +33,7 @@ final class DynamicPost {
     this.text = '',
     List<DynamicTextSpan> spans = const [],
     List<Uri> imageUrls = const [],
+    Map<Uri, double> imageAspectRatios = const {},
     this.video,
     this.original,
     this.repostCount,
@@ -50,7 +51,8 @@ final class DynamicPost {
     this.likeForbidden = false,
     this.unavailable = false,
   }) : spans = List.unmodifiable(spans),
-       imageUrls = List.unmodifiable(imageUrls);
+       imageUrls = List.unmodifiable(imageUrls),
+       imageAspectRatios = Map.unmodifiable(imageAspectRatios);
   final String id,
       title,
       authorName,
@@ -65,6 +67,9 @@ final class DynamicPost {
   final DateTime? publishedAt;
   final List<DynamicTextSpan> spans;
   final List<Uri> imageUrls;
+
+  /// Width / height of each original picture; absent values use a stable slot.
+  final Map<Uri, double> imageAspectRatios;
   final VideoSummary? video;
   final DynamicPost? original;
   final int? repostCount, commentCount, likeCount;
