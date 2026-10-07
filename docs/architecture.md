@@ -190,6 +190,8 @@ Riverpod 负责状态订阅和注入，不承担弹幕逐帧广播。路由 prov
 
 ## 7. 存储与缓存
 
+2026-10-07 已接入下载与离线播放：进程级 `SqliteDownloadRepository` 持有有界队列，SQLite schema 3 的 `download_tasks` 用一份任务记录事务保存内容身份与双轨断点；实际未创建下表目标设计中的 `download_tracks/download_ranges`。音视频文件、无 URL 的 manifest、字幕/弹幕正文和封面独立落盘，下载设置用 `downloads.v1` 保存。每个 PlaybackSession 注入独立本地/在线适配器，离线标签复用现有管理器与控件，关闭云端进度和空降助手查询，继续保存本地进度。方案、恢复规则及实测见 [下载与离线播放](downloads.md)。
+
 使用 Drift/SQLite 保存结构化记录，重查询通过数据库 isolate 执行；原生平台支持情况见 [Drift 平台文档](https://drift.simonbinder.eu/platforms/)。凭据经 `CredentialStore` 使用 [flutter_secure_storage](https://pub.dev/packages/flutter_secure_storage)，由 M0 验证各系统安装和权限要求。
 
 | 数据 | 位置与所有者 | 清理/恢复规则 |

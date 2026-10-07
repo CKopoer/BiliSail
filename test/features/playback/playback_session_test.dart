@@ -19,6 +19,38 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('offline content keeps local PGC progress without cloud reads, reports or sponsor requests', () async {
+    final history = _FakeHistory();
+    final progress = _FakeProgress()..readValue = null;
+    final sponsor = _FakeSponsor();
+    final session = PlaybackSession(
+      engine: _FakeEngine(),
+      repository: _FakeRepository(),
+      contentRepository: _FakeContentRepository(),
+      historyRepository: history,
+      sponsorRepository: sponsor,
+      progress: progress,
+      accountScope: () => 'user:1',
+    );
+    addTearDown(session.close);
+    session.configureSettings(
+      AppSettings(autoPlay: false, sponsorBlockMode: SponsorBlockMode.manual),
+    );
+    await session.open(
+      _detail('1'),
+      _part('101'),
+      target: const OfflinePlaybackTarget('local-task', episodeId: '7'),
+    );
+    expect(session.error, isNull);
+    await session.togglePlaying();
+    await session.seek(const Duration(seconds: 5));
+    await session.stop();
+    expect(history.reads, isEmpty);
+    expect(history.reports, isEmpty);
+    expect(sponsor.pending, isEmpty);
+    expect(progress.writes.last.episodeId, '7');
+  });
+
   for (final concurrent in [false, true]) {
     test(
       'new videos inherit the latest rate with concurrent playback: $concurrent',
@@ -2750,6 +2782,9 @@ final class _FakeContentRepository implements ContentPlaybackRepository {
     final gate = pending;
     pending = null;
     if (gate != null) return gate.future;
+    if (target is OfflinePlaybackTarget) {
+      return Future.value(_media('offline', quality, duration));
+    }
     if (target is PgcPlaybackTarget) {
       return Future.value(_media(target.episodeId, quality, duration));
     }

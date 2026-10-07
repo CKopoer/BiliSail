@@ -5,6 +5,14 @@ import 'package:bili_api/bili_api.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('PGC play info preserves preview entitlement marker', () async {
+    final transport = _Transport(['avc1.640028'], isPreview: true);
+    final api = BiliApiClient(transport: transport);
+    addTearDown(api.close);
+    final info = await PgcClient(api).getPlayInfo('123');
+    expect(info.isPreview, isTrue);
+  });
+
   test(
     'preview signs the browser profile and ignores missing companion audio',
     () async {
@@ -49,9 +57,10 @@ void main() {
 }
 
 final class _Transport implements ApiTransport {
-  _Transport(this.codecs, {this.includeAudio = true});
+  _Transport(this.codecs, {this.includeAudio = true, this.isPreview = false});
   final List<String> codecs;
   final bool includeAudio;
+  final bool isPreview;
   Uri? playRequest;
 
   @override
@@ -78,6 +87,7 @@ final class _Transport implements ApiTransport {
         'code': 0,
         uri.path.startsWith('/pgc/') ? 'result' : 'data': {
           'code': 0,
+          'is_preview': isPreview ? 1 : 0,
           'accept_quality': [80],
           'dash': {
             'duration': 3,

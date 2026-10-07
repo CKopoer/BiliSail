@@ -149,6 +149,8 @@
 
 ## 6. 尚待实测或决定的事项
 
+2026-10-07 下载能力另只读查看 U 的 `Controls/Dialogs/DownloadDialog.xaml.cs`、`ViewModels/Download/DownloadDialogViewModel.cs`、`Services/DownloadService.cs`、`Services/BackgroundDownloadService.cs` 与 `Models/Download/*`，以及 K 的 `Services/Services.Media/Core/PlayerClient.cs`。仅借鉴端点、分轨、选集、队列和附属文件职责，独立编写 Dart/Flutter；不参考下载 XAML 样式、不新增源码/资源复制、不修改相邻仓库。采用范围和验证见 [下载方案](downloads.md)。
+
 1. Web QR 与实际取得的 Cookie/refresh 信息是否满足 MVP 端点，游客可用范围如何。
 2. media_kit 分轨路径、外部音轨 headers、原生库版本及三端硬解/生命周期；失败时 fvp 的对照结果。
 3. HLS/HTTP-FLV 在目标设备上的稳定性、可用 codec、直播消息压缩版本。

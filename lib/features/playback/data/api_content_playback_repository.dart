@@ -33,6 +33,8 @@ final class ApiContentPlaybackRepository implements ContentPlaybackRepository {
     required RequestCancellation cancellation,
   }) => requests.run((context) async {
     switch (target) {
+      case OfflinePlaybackTarget():
+        throw const AppFailure(AppFailureKind.playback, '离线播放服务未配置');
       case PgcPlaybackTarget(:final episodeId):
         final info = await pgc.getPlayInfo(
           episodeId,

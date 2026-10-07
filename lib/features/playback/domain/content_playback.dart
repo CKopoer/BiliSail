@@ -32,6 +32,15 @@ final class LivePlaybackTarget extends ContentPlaybackTarget {
   String get key => 'live:$roomId';
 }
 
+/// An indexed, verified local task. It must never fall back to a network URL.
+final class OfflinePlaybackTarget extends ContentPlaybackTarget {
+  const OfflinePlaybackTarget(this.taskId, {this.episodeId});
+  final String taskId;
+  final String? episodeId;
+  @override
+  String get key => 'offline:$taskId';
+}
+
 abstract interface class ContentPlaybackRepository {
   Future<PlaybackMedia> resolve(
     ContentPlaybackTarget target, {

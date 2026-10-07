@@ -40,7 +40,7 @@ void main() {
         expect(reloaded.copyWith(cacheImages: false).mediaCdn, preference);
         expect(reloaded.theme, AppThemePreference.dark);
       }
-      expect(database.schemaVersion, 2);
+      expect(database.schemaVersion, 3);
     },
   );
   test('empty settings use the injected platform default', () async {
@@ -125,7 +125,7 @@ void main() {
       ) as Map<String, Object?>;
       expect(snapshot['schemaVersion'], 14);
       expect(snapshot['theme'], 'dark');
-      expect(database.schemaVersion, 2);
+      expect(database.schemaVersion, 3);
     },
   );
   test('navigation modes survive reload and unknown values use the injected default', () async {
@@ -176,7 +176,7 @@ void main() {
             .concurrentPlaybackEnabled,
         allowed,
       );
-      expect(database.schemaVersion, 2);
+      expect(database.schemaVersion, 3);
     }
   });
   test(
@@ -387,7 +387,7 @@ void main() {
       expect(reloaded.danmakuArea, .5);
       expect(reloaded.defaultVolume, 35.5);
       expect(reloaded.danmakuBlockedWords, ['spoiler']);
-      expect(database.schemaVersion, 2);
+      expect(database.schemaVersion, 3);
     },
   );
 }

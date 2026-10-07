@@ -19,11 +19,13 @@ class VideoActionsBar extends ConsumerStatefulWidget {
     required this.onLogin,
     this.menuOnly = false,
     this.onReload,
+    this.onDownload,
   });
   final VideoDetail detail;
   final VoidCallback onLogin;
   final bool menuOnly;
   final VoidCallback? onReload;
+  final VoidCallback? onDownload;
   @override
   ConsumerState<VideoActionsBar> createState() => _VideoActionsBarState();
 }
@@ -165,6 +167,7 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
       return PopupMenuButton<String>(
         tooltip: '更多',
         onSelected: (value) {
+          if (value == 'download') widget.onDownload?.call();
           if (value == 'watchLater') {
             _run((c) => c.watchLater());
           }
@@ -178,6 +181,8 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
           }
         },
         itemBuilder: (_) => [
+          if (widget.onDownload != null)
+            const PopupMenuItem(value: 'download', child: Text('下载视频')),
           PopupMenuItem(
             value: 'watchLater',
             enabled: enabled('watchLater') && !state.watchLaterAdded,
@@ -244,6 +249,8 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
               _notice('视频链接已复制');
             }),
             action(Icons.open_in_new, '官方页面', _openOfficial),
+            if (widget.onDownload != null)
+              action(Icons.download_outlined, '下载视频', widget.onDownload),
             if (state.message case final String message when !state.busy)
               Tooltip(
                 message: message,

@@ -20,7 +20,7 @@ class AppDatabase extends GeneratedDatabase {
   }
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   Iterable<TableInfo<Table, Object?>> get allTables => const [];
@@ -53,17 +53,33 @@ class AppDatabase extends GeneratedDatabase {
       await customStatement(
         'CREATE INDEX progress_scope_time ON playback_progress(scope, updated_at_ms DESC)',
       );
+      await _createDownloads();
     },
     onUpgrade: (migrator, from, to) async {
-      if (from == 1 && to == 2) {
+      if (from == 1) {
         await customStatement(
           'ALTER TABLE playback_progress ADD COLUMN pgc_episode_id TEXT',
         );
+      }
+      if (from <= 2 && to == 3) {
+        await _createDownloads();
         return;
       }
       throw StateError('Unsupported database migration $from → $to');
     },
   );
+
+  Future<void> _createDownloads() async {
+    await customStatement('''CREATE TABLE download_tasks (
+      id TEXT NOT NULL PRIMARY KEY,
+      scope TEXT NOT NULL,
+      item_key TEXT NOT NULL,
+      record_json TEXT NOT NULL
+    )''');
+    await customStatement(
+      'CREATE INDEX download_tasks_scope ON download_tasks(scope)',
+    );
+  }
 
   Future<String?> readSetting(String key) async {
     final row = await customSelect(

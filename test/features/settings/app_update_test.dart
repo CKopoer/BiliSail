@@ -294,7 +294,7 @@ void main() {
       await second.readSetting('preferences.v1'),
       '{"font":"harmonyOsSans"}',
     );
-    expect(second.schemaVersion, 2);
+    expect(second.schemaVersion, 3);
   });
   test(
     'automatic check runs once per local day, including failed attempts',

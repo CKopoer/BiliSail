@@ -262,11 +262,15 @@ final class ApiPlayInfo {
     required this.dashVideo,
     required this.dashAudio,
     required this.acceptQuality,
+    this.isPreview = false,
   });
   final Duration duration;
   final List<ApiMediaTrack> dashVideo;
   final List<ApiMediaTrack> dashAudio;
   final List<int> acceptQuality;
+
+  /// The server supplied only a preview clip, not a complete episode.
+  final bool isPreview;
 }
 
 final class ApiSubtitleTrack {

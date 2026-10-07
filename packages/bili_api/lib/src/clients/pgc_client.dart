@@ -143,6 +143,7 @@ final class PgcClient {
       duration: Duration(milliseconds: durationMs.clamp(0, 86400000)),
       dashVideo: List.unmodifiable(videos),
       dashAudio: List.unmodifiable(audios),
+      isPreview: data['is_preview'] == true || _int(data['is_preview']) == 1,
       acceptQuality: List.unmodifiable(
         _list(
           data['accept_quality'] ?? const [],

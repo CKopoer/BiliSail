@@ -112,7 +112,7 @@ class ShortcutSettingsSection extends StatelessWidget {
         ),
       ),
       const Text(
-        'Ctrl+Tab / Ctrl+Shift+Tab 保留用于切换标签。UWP 参考中的截图（F10）、小窗（T/F8）、下载（Ctrl+S）、重启（Alt+R）、开发模式（Ctrl+F12）尚无对应底层能力，暂未启用。左右方向键持续步进模式尚未移植；右方向键长按采用临时倍速。',
+        'Ctrl+Tab / Ctrl+Shift+Tab 保留用于切换标签。UWP 参考中的截图（F10）、小窗（T/F8）、重启（Alt+R）、开发模式（Ctrl+F12）尚无对应底层能力，暂未启用。下载可从视频或影视菜单进入，Ctrl+S 暂未接入。左右方向键持续步进模式尚未移植；右方向键长按采用临时倍速。',
       ),
     ],
   );

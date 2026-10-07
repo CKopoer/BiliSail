@@ -6,6 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../domain/video.dart';
+import '../features/downloads/domain/download_models.dart';
+import '../features/downloads/application/download_controller.dart';
+import '../features/downloads/presentation/downloads_screen.dart';
+import '../features/downloads/presentation/offline_screen.dart';
 import '../domain/user.dart';
 import '../core/platform/external_links.dart';
 import '../features/profile/domain/profile_repository.dart';
@@ -38,6 +42,7 @@ import '../features/video/presentation/video_screen.dart';
 import '../features/video/application/watch_later_queue_registry.dart';
 import '../core/network/api_requests.dart';
 import '../features/pgc/application/pgc_controller.dart';
+import '../features/pgc/domain/pgc_repository.dart';
 import '../features/pgc/presentation/pgc_screen.dart';
 import '../features/live/application/live_controller.dart';
 import '../features/live/presentation/live_screen.dart';
@@ -55,6 +60,11 @@ GoRouter createBiliRouter({
   LiveComposerBuilder? liveComposerBuilder,
   VideoPlayerBuilder? actionsBuilder,
   VideoPlayerBuilder? menuBuilder,
+  Widget Function(BuildContext, DownloadTask)? offlinePlayerBuilder,
+  void Function(BuildContext, PgcSeason, PgcEpisode?)? onDownloadSeason,
+  Future<void> Function(String)? onOpenDownloadDirectory,
+  bool allowCustomDownloadDirectory = false,
+  ImageProvider<Object>? Function(DownloadTask)? downloadCoverProvider,
   WidgetBuilder? accountBuilder,
   WidgetBuilder? windowControlsBuilder,
   DragRegionBuilder? dragRegionBuilder,
@@ -86,6 +96,11 @@ GoRouter createBiliRouter({
               liveComposerBuilder: liveComposerBuilder,
               actionsBuilder: actionsBuilder,
               menuBuilder: menuBuilder,
+              offlinePlayerBuilder: offlinePlayerBuilder,
+              onDownloadSeason: onDownloadSeason,
+              onOpenDownloadDirectory: onOpenDownloadDirectory,
+              allowCustomDownloadDirectory: allowCustomDownloadDirectory,
+              downloadCoverProvider: downloadCoverProvider,
               observeAccount: accountBuilder != null,
               allowConcurrentPlayback: settings.concurrentPlaybackEnabled,
             ),
@@ -108,6 +123,7 @@ GoRouter createBiliRouter({
           '/messages',
           '/settings',
           '/downloads',
+          '/offline/:taskId',
         ])
           GoRoute(
             path: path,
@@ -130,6 +146,11 @@ final class _WorkspacePage extends ConsumerWidget {
     this.liveComposerBuilder,
     this.actionsBuilder,
     this.menuBuilder,
+    this.offlinePlayerBuilder,
+    this.onDownloadSeason,
+    this.onOpenDownloadDirectory,
+    this.allowCustomDownloadDirectory = false,
+    this.downloadCoverProvider,
     required this.observeAccount,
     required this.allowConcurrentPlayback,
   });
@@ -141,6 +162,11 @@ final class _WorkspacePage extends ConsumerWidget {
   final LiveComposerBuilder? liveComposerBuilder;
   final VideoPlayerBuilder? actionsBuilder;
   final VideoPlayerBuilder? menuBuilder;
+  final Widget Function(BuildContext, DownloadTask)? offlinePlayerBuilder;
+  final void Function(BuildContext, PgcSeason, PgcEpisode?)? onDownloadSeason;
+  final Future<void> Function(String)? onOpenDownloadDirectory;
+  final bool allowCustomDownloadDirectory;
+  final ImageProvider<Object>? Function(DownloadTask)? downloadCoverProvider;
   final bool observeAccount;
   final bool allowConcurrentPlayback;
 
@@ -169,6 +195,10 @@ final class _WorkspacePage extends ConsumerWidget {
       container.invalidate(historyProvider);
     } else if (uri.path == '/messages') {
       unawaited(container.read(messagesControllerProvider.notifier).refresh());
+    } else if (uri.path == '/downloads') {
+      unawaited(container.read(downloadControllerProvider.notifier).refresh());
+    } else if (tab.isOffline) {
+      unawaited(container.read(playbackSessionProvider).retry());
     } else if (tab.isProfile) {
       final id = UserId(uri.pathSegments.last);
       if (!id.isValid) return false;
@@ -313,11 +343,26 @@ final class _WorkspacePage extends ConsumerWidget {
                       ),
                     );
                   case '/downloads':
-                    return const StateView.empty(
-                      message: '下载功能尚未接入',
-                      icon: Icons.download_outlined,
+                    return DownloadsScreen(
+                      key: PageStorageKey('downloads-${tab.id}'),
+                      onPlay: (task) => context.go('/offline/${task.id}'),
+                      onOpenDirectory: onOpenDownloadDirectory,
+                      allowCustomDirectory: allowCustomDownloadDirectory,
+                      coverProvider: downloadCoverProvider,
                     );
                   default:
+                    if (tab.isOffline) {
+                      return OfflineScreen(
+                        key: PageStorageKey('offline-${tab.id}'),
+                        taskId: uri.pathSegments.last,
+                        playerBuilder:
+                            offlinePlayerBuilder ??
+                            (_, _) =>
+                                const StateView.empty(message: '离线播放服务未配置'),
+                        onBackToDownloads: () => context.go('/downloads'),
+                        coverProvider: downloadCoverProvider,
+                      );
+                    }
                     if (tab.isPgc) {
                       final id = uri.pathSegments.last;
                       if (!RegExp(r'^[1-9][0-9]*$').hasMatch(id)) {
@@ -334,6 +379,13 @@ final class _WorkspacePage extends ConsumerWidget {
                             (_, _, _) =>
                                 const StateView.empty(message: '影视播放服务未配置'),
                         commentsBuilder: pgcCommentsBuilder,
+                        onDownload: onDownloadSeason == null
+                            ? null
+                            : (season, selected) => onDownloadSeason?.call(
+                                context,
+                                season,
+                                selected,
+                              ),
                         onOpenSeason: (season) =>
                             context.go('/pgc/season/${season.seasonId}'),
                         onEpisodeChanged: (episode) => context.go(

@@ -1,13 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as path;
 
 import '../core/platform/desktop_window_chrome.dart';
 import '../features/auth/application/auth_controller.dart';
+import '../features/downloads/domain/download_models.dart';
+import '../features/downloads/presentation/download_dialog.dart';
 import '../features/auth/presentation/account_button.dart';
 import '../features/feed/application/feed_controller.dart';
 import '../features/feed/application/watch_later_removal_controller.dart';
@@ -75,6 +79,59 @@ class _BiliAppState extends ConsumerState<BiliApp> {
   void initState() {
     super.initState();
     _router = createBiliRouter(
+      onOpenDownloadDirectory: widget.dependencies.files.canOpenDirectory
+          ? widget.dependencies.files.openDirectory
+          : null,
+      allowCustomDownloadDirectory:
+          widget.dependencies.files.canChooseDownloadDirectory,
+      downloadCoverProvider: (task) =>
+          FileImage(File(path.join(task.directory, 'cover.img'))),
+      onDownloadSeason: (context, season, selected) {
+        final settings =
+            ref.read(settingsControllerProvider).value ??
+            const AppSettings.defaults();
+        final items = DownloadItem.fromSeason(season);
+        final current = items
+            .where((item) => item.episodeId == selected?.episodeId)
+            .firstOrNull;
+        unawaited(
+          showDownloadDialog(
+            context,
+            items: items,
+            initialKey: current?.key,
+            initialSelection: DownloadSelection(
+              quality: settings.preferredQuality,
+              codec: settings.preferredVideoCodec,
+            ),
+          ),
+        );
+      },
+      offlinePlayerBuilder: (context, task) => Consumer(
+        builder: (context, ref, _) {
+          final settings =
+              ref.watch(settingsControllerProvider).value ??
+              const AppSettings.defaults();
+          return PlaybackPanel(
+            detail: VideoDetail(
+              summary: task.item.video,
+              description: '',
+              parts: [task.item.part],
+              aid: task.item.aid,
+            ),
+            part: task.item.part,
+            target: OfflinePlaybackTarget(
+              task.id,
+              episodeId: task.item.episodeId,
+            ),
+            title: '${task.item.video.title} · ${task.item.part.title}',
+            settings: settings,
+            window: widget.dependencies.window,
+            onToggleComments: () => ref
+                .read(settingsControllerProvider.notifier)
+                .setDanmakuEnabled(!settings.danmakuEnabled),
+          );
+        },
+      ),
       pgcPlayerBuilder: (context, season, episode) => Consumer(
         builder: (context, ref, _) {
           final settings =
@@ -154,6 +211,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
       ),
       actionsBuilder: (context, detail, part) => VideoActionsBar(
         detail: detail,
+        onDownload: () => _downloadVideo(context, detail, part),
         onLogin: () => showDialog<void>(
           context: context,
           builder: (_) => const AccountDialog(),
@@ -161,6 +219,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
       ),
       menuBuilder: (context, detail, part) => VideoActionsBar(
         detail: detail,
+        onDownload: () => _downloadVideo(context, detail, part),
         menuOnly: true,
         onLogin: () => showDialog<void>(
           context: context,
@@ -213,12 +272,43 @@ class _BiliAppState extends ConsumerState<BiliApp> {
     );
     _router.routeInformationProvider.addListener(_routeChanged);
     _lifecycle = AppLifecycleListener(
+      onStateChange: (state) {
+        if (state == AppLifecycleState.paused &&
+            widget.dependencies.files.pauseDownloadsInBackground) {
+          unawaited(widget.dependencies.downloads.pauseAll());
+        }
+      },
       onExitRequested: () async {
         await widget.dependencies.close();
         return AppExitResponse.exit;
       },
     );
     unawaited(widget.dependencies.session.restore());
+  }
+
+  void _downloadVideo(
+    BuildContext context,
+    VideoDetail detail,
+    VideoPart selected,
+  ) {
+    final settings =
+        ref.read(settingsControllerProvider).value ??
+        const AppSettings.defaults();
+    final items = DownloadItem.fromVideo(detail);
+    final current = items
+        .where((item) => item.part.cid == selected.cid)
+        .firstOrNull;
+    unawaited(
+      showDownloadDialog(
+        context,
+        items: items,
+        initialKey: current?.key,
+        initialSelection: DownloadSelection(
+          quality: settings.preferredQuality,
+          codec: settings.preferredVideoCodec,
+        ),
+      ),
+    );
   }
 
   void _routeChanged() {

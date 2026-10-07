@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bili_api/bili_api.dart';
@@ -11,6 +12,11 @@ import '../core/network/api_requests.dart';
 import '../domain/media_cdn.dart';
 import '../core/logging/playback_diagnostic_log.dart';
 import '../core/platform/window_service.dart';
+import '../core/platform/file_access_service.dart';
+import '../features/downloads/application/download_controller.dart';
+import '../features/downloads/data/api_download_source_repository.dart';
+import '../features/downloads/data/sqlite_download_repository.dart';
+import '../features/playback/data/offline_playback_repository.dart';
 import '../core/platform/external_links.dart';
 import '../core/platform/system_font_catalog.dart';
 import '../core/storage/app_database.dart';
@@ -94,6 +100,9 @@ class AppDependencies {
     this.updates,
     this.cardPreviews,
     this.settings,
+    this.downloads,
+    this.downloadSources,
+    this._downloadAccountSubscription,
   );
 
   final AppDatabase database;
@@ -109,6 +118,10 @@ class AppDependencies {
   final GitHubUpdateRepository updates;
   final VideoCardPreviewPlayback cardPreviews;
   final SqliteSettingsRepository settings;
+  final SqliteDownloadRepository downloads;
+  final ApiDownloadSourceRepository downloadSources;
+  final StreamSubscription<Object?> _downloadAccountSubscription;
+  final files = const FileAccessService();
   bool _closed = false;
 
   static Future<AppDependencies> create() async {
@@ -146,61 +159,97 @@ class AppDependencies {
       requests,
       cdnPreference: cdnPreference,
     );
+    final downloadSources = ApiDownloadSourceRepository(
+      api,
+      requests,
+      accountScope: () => session.accountScope,
+      cdnPreference: cdnPreference,
+    );
+    final downloads = SqliteDownloadRepository(
+      database,
+      downloadSources,
+      defaultDirectory: () async {
+        final root = await getApplicationDocumentsDirectory();
+        return path.join(root.path, 'BiliSail', 'offline');
+      },
+    );
     final cardPreviews = VideoCardPreviewPlayback(
       createEngine: () => MediaKitEngine(onDiagnostic: playbackLog?.record),
     );
     final playbackRateMemory = PlaybackRateMemory();
     final playback = PlaybackManager(
-      createSession: () => PlaybackSession(
-        rateMemory: playbackRateMemory,
-        sponsorRepository: ApiSponsorRepository(
-          SponsorBlockClient(sponsorTransport),
-        ),
-        engine: MediaKitEngine(onDiagnostic: playbackLog?.record),
-        repository: playbackRepository,
-        historyRepository: ApiPlaybackHistoryRepository(
-          PlaybackHistoryClient(api),
-          requests,
+      createSession: () {
+        final repository = OfflinePlaybackRepository(
+          downloads: downloads,
+          network: playbackRepository,
+          networkMetadata: playbackRepository,
+          networkContent: ApiContentPlaybackRepository(
+            PgcClient(api),
+            LiveClient(api),
+            requests,
+            cdnPreference: cdnPreference,
+          ),
+        );
+        return PlaybackSession(
+          rateMemory: playbackRateMemory,
+          sponsorRepository: ApiSponsorRepository(
+            SponsorBlockClient(sponsorTransport),
+          ),
+          engine: MediaKitEngine(onDiagnostic: playbackLog?.record),
+          repository: repository,
+          historyRepository: ApiPlaybackHistoryRepository(
+            PlaybackHistoryClient(api),
+            requests,
+            accountScope: () => session.accountScope,
+          ),
+          sessionEpoch: () => requests.sessionEpoch,
+          metadataRepository: repository,
+          contentRepository: repository.content,
           accountScope: () => session.accountScope,
-        ),
-        sessionEpoch: () => requests.sessionEpoch,
-        metadataRepository: playbackRepository,
-        contentRepository: ApiContentPlaybackRepository(
-          PgcClient(api),
-          LiveClient(api),
-          requests,
-          cdnPreference: cdnPreference,
-        ),
-        accountScope: () => session.accountScope,
-        progress: LocalProgressStore(
-          readProgress: library.resumePosition,
-          writeProgress:
-              (scope, video, part, position, duration, {episodeId}) =>
-                  library.saveProgress(
-                    scope: scope,
-                    video: video,
-                    part: part,
-                    position: position,
-                    duration: duration,
-                    episodeId: episodeId,
-                  ),
-        ),
-      ),
+          progress: LocalProgressStore(
+            readProgress: library.resumePosition,
+            writeProgress:
+                (scope, video, part, position, duration, {episodeId}) =>
+                    library.saveProgress(
+                      scope: scope,
+                      video: video,
+                      part: part,
+                      position: position,
+                      duration: duration,
+                      episodeId: episodeId,
+                    ),
+          ),
+        );
+      },
     );
     session = SessionRepository(
       api: api,
       requests: requests,
       credentials: SystemCredentialStore(),
       onSessionChanged: (scope) async {
-        await images.clearSession(scope);
         try {
-          await cardPreviews.stop();
-          await playback.stop();
+          await downloads.sessionChanged();
         } finally {
-          if (scope != 'guest') await database.clearPrivateHistory(scope);
+          await images.clearSession(scope);
+          try {
+            await cardPreviews.stop();
+            await playback.stop();
+          } finally {
+            if (scope != 'guest') await database.clearPrivateHistory(scope);
+          }
         }
       },
     );
+    await downloads.initialize();
+    var downloadAccount = (session.accountScope, requests.sessionEpoch);
+    final downloadAccountSubscription = session.changes.listen((_) {
+      final next = (session.accountScope, requests.sessionEpoch);
+      if (next != downloadAccount) {
+        downloadAccount = next;
+        // The repository publishes storage errors in the queue state.
+        unawaited(downloads.sessionChanged().catchError((Object _) {}));
+      }
+    });
     return AppDependencies._(
       database,
       requests,
@@ -215,6 +264,9 @@ class AppDependencies {
       GitHubUpdateRepository(versionLoader: loadInstalledAppVersion),
       cardPreviews,
       settings,
+      downloads,
+      downloadSources,
+      downloadAccountSubscription,
     );
   }
 
@@ -226,6 +278,8 @@ class AppDependencies {
     );
     return ProviderScope(
       overrides: [
+        downloadRepositoryProvider.overrideWithValue(downloads),
+        downloadSourceRepositoryProvider.overrideWithValue(downloadSources),
         sessionEpochProvider.overrideWithValue(() => requests.sessionEpoch),
         appUpdateRepositoryProvider.overrideWithValue(updates),
         updateCheckStoreProvider.overrideWithValue(
@@ -386,6 +440,8 @@ class AppDependencies {
     _closed = true;
     updates.close();
     try {
+      await _downloadAccountSubscription.cancel();
+      await downloads.close();
       await cardPreviews.close();
       // Flush the final history observation while its account epoch is valid.
       await playback.close();

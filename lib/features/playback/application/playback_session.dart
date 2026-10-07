@@ -690,6 +690,7 @@ class PlaybackSession extends ChangeNotifier {
         snapshot.duration,
         episodeId: switch (contentTarget) {
           PgcPlaybackTarget(:final episodeId) => episodeId,
+          OfflinePlaybackTarget(:final episodeId) => episodeId,
           _ => null,
         },
       );
@@ -705,6 +706,7 @@ class PlaybackSession extends ChangeNotifier {
     final video = detail;
     final selected = part;
     if (isLive ||
+        contentTarget is OfflinePlaybackTarget ||
         video == null ||
         selected == null ||
         !video.summary.id.isValid ||
@@ -858,7 +860,8 @@ class PlaybackSession extends ChangeNotifier {
     final repository = sponsorRepository;
     final video = detail;
     final selected = part;
-    if (_settings.sponsorBlockMode == SponsorBlockMode.disabled ||
+    if (contentTarget is OfflinePlaybackTarget ||
+        _settings.sponsorBlockMode == SponsorBlockMode.disabled ||
         repository == null ||
         video == null ||
         selected == null ||

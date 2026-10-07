@@ -40,6 +40,7 @@ final class PgcScreen extends ConsumerStatefulWidget {
     this.onEpisodeChanged,
     this.onOpenSeason,
     this.commentsBuilder,
+    this.onDownload,
   });
 
   final String? seasonId, episodeId;
@@ -47,6 +48,7 @@ final class PgcScreen extends ConsumerStatefulWidget {
   final ValueChanged<PgcEpisode>? onEpisodeChanged;
   final ValueChanged<PgcSeasonSummary>? onOpenSeason;
   final PgcCommentsBuilder? commentsBuilder;
+  final void Function(PgcSeason season, PgcEpisode? selected)? onDownload;
 
   @override
   ConsumerState<PgcScreen> createState() => _PgcScreenState();
@@ -214,7 +216,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                       ),
                     ],
                   ),
-                _tabs(context, selected, toggleInfo),
+                _tabs(context, season, selected, toggleInfo),
                 const Divider(height: 1),
                 Expanded(
                   child: IndexedStack(
@@ -335,6 +337,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
 
   Widget _tabs(
     BuildContext context,
+    PgcSeason season,
     PgcEpisode? episode,
     VoidCallback toggleInfo,
   ) {
@@ -375,7 +378,9 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
         PopupMenuButton<String>(
           tooltip: '更多影视操作',
           onSelected: (action) {
-            if (action == 'refresh') {
+            if (action == 'download') {
+              widget.onDownload?.call(season, episode);
+            } else if (action == 'refresh') {
               unawaited(
                 ref.read(pgcControllerProvider(_locator).notifier).load(),
               );
@@ -389,6 +394,8 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
             }
           },
           itemBuilder: (context) => [
+            if (widget.onDownload != null)
+              const PopupMenuItem(value: 'download', child: Text('下载剧集')),
             const PopupMenuItem(value: 'refresh', child: Text('刷新影视详情')),
             if (episode != null || _locator.seasonId != null)
               const PopupMenuItem(value: 'copy', child: Text('复制播放链接')),
