@@ -19,6 +19,10 @@ final liveChatRepositoryProvider = Provider<LiveChatRepository>(
   (ref) => const UnavailableLiveChatRepository(),
 );
 
+final liveViewerRepositoryProvider = Provider<LiveViewerRepository>(
+  (ref) => const UnavailableLiveViewerRepository(),
+);
+
 final _liveDanmakuEmitterProvider = Provider.autoDispose
     .family<StreamController<List<LiveChatMessage>>, RoomId>((ref, id) {
       final emitter = StreamController<List<LiveChatMessage>>.broadcast(
@@ -113,6 +117,13 @@ class LiveController extends Notifier<LiveState> {
   final RoomId requestedId;
   int _generation = 0, _roomVersion = 0, _chatVersion = 0;
   int _superChatVersion = 0;
+  int _viewerVersion = 0, _viewerRealtimeSequence = 0;
+  int _viewerPreciseSequence = 0;
+  int? _viewerLastLowerBound;
+  int? _viewerSnapshotCount;
+  DateTime? _viewerSnapshotAt;
+  bool _viewerRefreshSuppressed = false;
+  RequestCancellation? _viewerRead;
   RequestCancellation? _roomRead, _chatRead, _superChatRead;
   Timer? _chatTimer, _superChatExpiryTimer;
   RequestCancellation? _realtimeRead;
@@ -155,6 +166,10 @@ class LiveController extends Notifier<LiveState> {
     _receivedChatKeys.clear();
     _liveSequence = 0;
     _roomRead?.cancel();
+    _cancelViewerRead();
+    _viewerSnapshotCount = null;
+    _viewerSnapshotAt = null;
+    _viewerRefreshSuppressed = false;
     _chatRead?.cancel();
     _superChatRead?.cancel();
     _roomRead = null;
@@ -184,6 +199,7 @@ class LiveController extends Notifier<LiveState> {
     _chatTimer = null;
     if (!active) {
       _stopRealtime();
+      _cancelViewerRead();
       _chatRead?.cancel();
       _chatRead = null;
       _superChatRead?.cancel();
@@ -206,6 +222,7 @@ class LiveController extends Notifier<LiveState> {
       _startRealtime();
       refreshChat();
       refreshSuperChats();
+      refreshViewerCount();
     }
   }
 
@@ -214,11 +231,16 @@ class LiveController extends Notifier<LiveState> {
     _chatTimer = Timer.periodic(chatRefreshInterval, (_) {
       refreshChat();
       refreshSuperChats();
+      refreshViewerCount();
     });
   }
 
   Future<void> load() async {
     _stopRealtime();
+    _cancelViewerRead();
+    _viewerSnapshotCount = null;
+    _viewerSnapshotAt = null;
+    _viewerRefreshSuppressed = false;
     _realtimeSuperChats.clear();
     _deletedSuperChats.clear();
     _receivedChatKeys.clear();
@@ -250,7 +272,11 @@ class LiveController extends Notifier<LiveState> {
       state = LiveState(room: room);
       if (_active) {
         _startRealtime();
-        await Future.wait([refreshChat(), refreshSuperChats()]);
+        await Future.wait([
+          refreshChat(),
+          refreshSuperChats(),
+          refreshViewerCount(),
+        ]);
       }
     } on AppFailure catch (error) {
       if (_current(generation, scope, epoch) && version == _roomVersion) {
@@ -266,6 +292,89 @@ class LiveController extends Notifier<LiveState> {
         state = state.copyWith(loading: false, roomMessage: '直播间暂时无法加载，请重试');
       }
     }
+  }
+
+  void _cancelViewerRead() {
+    ++_viewerVersion;
+    _viewerRead?.cancel();
+    _viewerRead = null;
+  }
+
+  /// Refresh once per active-page interval; never overlap or replace a newer
+  /// precise socket event with a snapshot that began before that event.
+  Future<void> refreshViewerCount() async {
+    final room = state.room;
+    final anchor = room?.anchorId;
+    if (!_active ||
+        state.loading ||
+        room == null ||
+        !room.isLive ||
+        anchor == null ||
+        !anchor.isValid ||
+        _viewerRead != null ||
+        _viewerRefreshSuppressed) {
+      return;
+    }
+    final read = RequestCancellation();
+    _viewerRead = read;
+    final version = ++_viewerVersion, generation = _generation;
+    final repository = ref.read(liveRepositoryProvider);
+    final scope = repository.accountScope, epoch = repository.sessionEpoch;
+    final sequence = _viewerRealtimeSequence;
+    final preciseSequence = _viewerPreciseSequence;
+    bool current() =>
+        _active &&
+        _current(generation, scope, epoch) &&
+        version == _viewerVersion &&
+        state.room?.id == room.id &&
+        state.room?.isLive == true;
+    try {
+      final count = await ref
+          .read(liveViewerRepositoryProvider)
+          .loadViewerCount(room.id, anchor, cancellation: read);
+      if (!current() || count == null || count < 0) return;
+      final lowerBound = _viewerLastLowerBound;
+      if (preciseSequence == _viewerPreciseSequence &&
+          (sequence == _viewerRealtimeSequence ||
+              lowerBound == null ||
+              count >= lowerBound)) {
+        _viewerSnapshotCount = count;
+        _viewerSnapshotAt = ref.read(liveClockProvider)();
+        state = state.copyWith(viewerCountText: '$count');
+      }
+    } on AppFailure catch (error) {
+      if (current() &&
+          const {
+            AppFailureKind.rateLimited,
+            AppFailureKind.authentication,
+            AppFailureKind.permission,
+            AppFailureKind.protocol,
+          }.contains(error.kind)) {
+        // An optional statistic must not turn failure into an empty success,
+        // interrupt playback or repeatedly hit a blocked endpoint.
+        _viewerRefreshSuppressed = true;
+      }
+    } catch (_) {
+      if (current()) _viewerRefreshSuppressed = true;
+    } finally {
+      if (identical(_viewerRead, read)) _viewerRead = null;
+    }
+  }
+
+  static int? _viewerLowerBound(String? text) {
+    if (text == '9999') return 9999;
+    if (text == null || !text.endsWith('+')) return null;
+    final match = RegExp(r'^(\d+(?:\.\d+)?)([千万亿]?)\+$').firstMatch(text);
+    if (match == null) return null;
+    final number = double.tryParse(match.group(1) ?? '');
+    if (number == null || !number.isFinite) return null;
+    final unit = switch (match.group(2)) {
+      '千' => 1000,
+      '万' => 10000,
+      '亿' => 100000000,
+      _ => 1,
+    };
+    return (number * unit).ceil();
   }
 
   Future<void> refreshChat() async {
@@ -518,7 +627,29 @@ class LiveController extends Notifier<LiveState> {
             );
           }
         case LiveViewerCountChanged(:final countText):
-          next = next.copyWith(viewerCountText: countText);
+          ++_viewerRealtimeSequence;
+          final count = int.tryParse(countText);
+          final lowerBound = _viewerLowerBound(countText);
+          _viewerLastLowerBound = lowerBound;
+          final capped = lowerBound != null;
+          final snapshotAt = _viewerSnapshotAt;
+          final preciseSnapshot =
+              _viewerSnapshotCount != null &&
+              lowerBound != null &&
+              (_viewerSnapshotCount ?? 0) >= lowerBound &&
+              snapshotAt != null &&
+              now.difference(snapshotAt) <= chatRefreshInterval * 2;
+          if (!capped || !preciseSnapshot) {
+            next = next.copyWith(viewerCountText: countText);
+          }
+          if (!capped) {
+            ++_viewerPreciseSequence;
+            _viewerSnapshotCount = count;
+            _viewerSnapshotAt = count == null ? null : now;
+          } else if (!preciseSnapshot) {
+            _viewerSnapshotCount = null;
+            _viewerSnapshotAt = null;
+          }
         case LiveWatchedCountChanged(:final countText):
           next = next.copyWith(watchedCountText: countText);
       }
@@ -553,7 +684,10 @@ class LiveController extends Notifier<LiveState> {
       _danmakuEmitter?.add(List.unmodifiable(danmaku));
     }
     _scheduleSuperChatExpiry();
-    if (offline) _stopRealtime();
+    if (offline) {
+      _stopRealtime();
+      _cancelViewerRead();
+    }
   }
 
   static LiveRoom _withRoomStatus(

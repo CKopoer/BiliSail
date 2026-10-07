@@ -13,6 +13,32 @@ final class LiveClient {
   final BiliApiClient api;
   Future<String>? _deviceInFlight;
 
+  /// The room audience is separate from room `online`/heartbeat popularity.
+  /// The Web rank snapshot exposes an integer even when WS display text is capped.
+  Future<int> getViewerCount(
+    String roomId,
+    String anchorMid, {
+    ApiRequestContext? context,
+  }) async {
+    _validateId(roomId);
+    _validateId(anchorMid);
+    const endpoint = 'live_viewer_count';
+    final data = await api.requestJson(
+      Uri.https(
+        'api.live.bilibili.com',
+        '/xlive/general-interface/v1/rank/getOnlineGoldRank',
+        {'roomId': roomId, 'ruid': anchorMid, 'page': '1', 'pageSize': '1'},
+      ),
+      endpoint,
+      context: context,
+    );
+    final count = _int(data['onlineNum']);
+    if (count == null || count < 0) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    return count;
+  }
+
   Future<List<ApiLiveEmoticonPackage>> getEmoticons(
     String roomId, {
     ApiRequestContext? context,

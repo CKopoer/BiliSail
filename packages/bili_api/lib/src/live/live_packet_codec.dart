@@ -219,10 +219,18 @@ ApiLiveEvent? _parseCommand(Map<String, Object?> data) {
   }
   if (command == 'ONLINE_RANK_COUNT') {
     // ONLINE_RANK_COUNT.count is the ranked audience, not the room's viewers.
-    final display = _countText(
-      payload['online_count_text'],
-      payload['online_count'],
-    );
+    final text = _countText(payload['online_count_text'], null);
+    final count = _int(payload['online_count']);
+    final lowerBound = text == null ? null : _countLowerBound(text);
+    // Preserve a lower-bound suffix. When an exact integer accompanies a
+    // coarse `1万+` display, prefer the integer rather than discard precision.
+    final display =
+        (text?.endsWith('+') == true || text == '9999') &&
+            count != null &&
+            count > 9999 &&
+            (lowerBound == null || count >= lowerBound)
+        ? '$count'
+        : text ?? _countText(null, count);
     return display == null ? null : ApiLiveViewerCountChanged(display);
   }
   if (command == 'SUPER_CHAT_MESSAGE') {
@@ -271,7 +279,7 @@ Map<String, Object?> _map(Object? value) =>
 String? _countText(Object? display, Object? value) {
   if (display is String &&
       display.length <= 20 &&
-      RegExp(r'^\d+(\.\d+)?[万亿]?$').hasMatch(display)) {
+      RegExp(r'^\d+(\.\d+)?[千万亿]?\+?$').hasMatch(display)) {
     return display;
   }
   final count = _int(value);
@@ -279,6 +287,21 @@ String? _countText(Object? display, Object? value) {
 }
 
 List<Object?> _list(Object? value) => value is List<Object?> ? value : const [];
+int? _countLowerBound(String text) {
+  if (!text.endsWith('+')) return null;
+  final match = RegExp(r'^(\d+(?:\.\d+)?)([千万亿]?)\+$').firstMatch(text);
+  if (match == null) return null;
+  final number = double.tryParse(match.group(1) ?? '');
+  if (number == null || !number.isFinite) return null;
+  final unit = switch (match.group(2)) {
+    '千' => 1000,
+    '万' => 10000,
+    '亿' => 100000000,
+    _ => 1,
+  };
+  return (number * unit).ceil();
+}
+
 int? _int(Object? value) => value is int
     ? value
     : value is String

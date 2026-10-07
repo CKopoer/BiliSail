@@ -326,6 +326,7 @@ class AppDependencies {
           ),
         ),
         liveRepositoryProvider.overrideWithValue(live),
+        liveViewerRepositoryProvider.overrideWithValue(live),
         liveChatRepositoryProvider.overrideWithValue(live),
         liveDanmakuRepositoryProvider.overrideWithValue(
           ApiLiveDanmakuRepository(

@@ -8,7 +8,8 @@ import '../domain/live_repository.dart';
 import '../domain/live_chat_repository.dart';
 import '../domain/live_room.dart';
 
-class ApiLiveRepository implements LiveRepository, LiveChatRepository {
+class ApiLiveRepository
+    implements LiveRepository, LiveChatRepository, LiveViewerRepository {
   ApiLiveRepository(
     this.client,
     this.requests, {
@@ -23,6 +24,19 @@ class ApiLiveRepository implements LiveRepository, LiveChatRepository {
   String get accountScope => _scope();
   @override
   int get sessionEpoch => requests.sessionEpoch;
+
+  @override
+  Future<int?> loadViewerCount(
+    RoomId id,
+    UserId anchorId, {
+    required RequestCancellation cancellation,
+  }) => requests.run((context) {
+    _validate(id);
+    if (!anchorId.isValid) {
+      throw const AppFailure(AppFailureKind.notFound, '主播账号无效');
+    }
+    return client.getViewerCount(id.value, anchorId.value, context: context);
+  }, cancellation: cancellation);
 
   @override
   Stream<List<LiveRealtimeEvent>> watchRoom(

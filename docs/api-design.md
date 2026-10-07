@@ -89,6 +89,8 @@ ApiPage<T> { items, nextCursor, hasMore }
 | 直播播放 M0/M3 | `/xlive/web-room/v2/index/getRoomPlayInfo` | K PlayerClient | LiveRepository；真实 roomId、协议/格式/编码、线路、开播状态 |
 | 直播消息 M0/M3 | `/xlive/web-room/v1/index/getDanmuInfo`、EnterLiveRoomAsync | K PlayerClient | LiveChatSession；token/host、鉴权、分包/合包、心跳 |
 | 直播 SC M3 | `/av/v1/SuperChat/getMessageList` | U `LiveRoomAPI.RoomSuperChat` | Web GET、Cookie 可选、无签名；LiveRepository 读取快照，20 秒有界刷新与本地过期清理 |
+| 直播在看人数 M3 | `/xlive/general-interface/v1/rank/getOnlineGoldRank` | GitHub qydysky/biliApi + 本机游客响应 | Web GET、Cookie 可选、无签名；独立精确 `onlineNum` 快照、20 秒可见页面刷新；不从人气或累计看过补值，见 [人数精度](validation/live-viewer-precision.md) |
+| UP 空间直播入口 M3 | `/room/v1/Room/getRoomInfoOld` | U `LiveRoomAPI` / `UserInfoPage` | Web GET、Cookie 可选、无签名；以 `mid` 独立查询 `roomStatus`／`roomid`／`liveStatus`，见 [入口验证](validation/profile-live-entry.md) |
 | 收藏/稍后再看 M3 | `/x/v3/fav/resource/list`、`/x/v2/history/toview` | K `Services/Services.User/FavoriteService.cs`、Core/MyClient、Core/ViewLaterClient | LibraryRepository；账号隔离、分页、删除操作反馈 |
 | 历史/进度 M2/M3 | `/x/v2/history/report`、GetHistory 类接口 | K `Services/Services.User/Core/ViewHistoryClient.cs`、PlayerClient | 本地续播 M2；云读取/上报 M3，先核验 Web 或独立 App 通道 |
 | 评论 M3 | CommentClient 中的读取及写入方法 | K `Services/Services.Comment/Core/CommentClient.cs` | CommentRepository；root/rpid、游标，先读后写 |
