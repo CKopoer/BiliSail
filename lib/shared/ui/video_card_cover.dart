@@ -45,6 +45,50 @@ class _VideoCardCoverState extends State<VideoCardCover>
   Timer? _hoverDelay;
   int _writeGeneration = 0;
   bool _foreground = true;
+  final _scrollPositions = <ScrollPosition>{};
+
+  bool get _scrolling =>
+      _scrollPositions.any((position) => position.isScrollingNotifier.value);
+
+  void _syncScrollPositions() {
+    final positions = <ScrollPosition>{};
+    context.visitAncestorElements((element) {
+      if (element is StatefulElement && element.state is ScrollableState) {
+        positions.add((element.state as ScrollableState).position);
+      }
+      return true;
+    });
+    for (final position in _scrollPositions.difference(positions)) {
+      position.isScrollingNotifier.removeListener(_onScrollActivityChanged);
+    }
+    for (final position in positions.difference(_scrollPositions)) {
+      position.isScrollingNotifier.addListener(_onScrollActivityChanged);
+    }
+    _scrollPositions
+      ..clear()
+      ..addAll(positions);
+  }
+
+  void _onScrollActivityChanged() {
+    // A stationary mouse crosses many cards during smooth wheel scrolling.
+    // Cancel even an in-flight open; only restart after every enclosing list
+    // is idle and the normal hover delay has elapsed again.
+    _stopPreview();
+    if (_preview != null) setState(() => _preview = null);
+    _schedulePreview();
+  }
+
+  void _schedulePreview() {
+    if (!_coverHovered ||
+        !_active ||
+        !_foreground ||
+        _scrolling ||
+        _scope == null ||
+        !widget.video.id.isValid) {
+      return;
+    }
+    _hoverDelay = Timer(const Duration(milliseconds: 200), _loadPreview);
+  }
 
   @override
   void initState() {
@@ -69,6 +113,8 @@ class _VideoCardCoverState extends State<VideoCardCover>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    Scrollable.maybeOf(context);
+    _syncScrollPositions();
     final scope = VideoCardInteractionScope.maybeOf(context);
     final active =
         WorkspaceActivity.isActive(context) &&
@@ -124,13 +170,18 @@ class _VideoCardCoverState extends State<VideoCardCover>
       _coverHovered = hovered;
       _preview = null;
     });
-    if (!hovered || _scope == null || !widget.video.id.isValid) return;
-    _hoverDelay = Timer(const Duration(milliseconds: 200), _loadPreview);
+    _schedulePreview();
   }
 
   Future<void> _loadPreview() async {
     final scope = _scope;
-    if (scope == null || !_coverHovered || !_active || !_foreground) return;
+    if (scope == null ||
+        !_coverHovered ||
+        !_active ||
+        !_foreground ||
+        _scrolling) {
+      return;
+    }
     final token = RequestCancellation();
     _previewCancellation = token;
     try {
@@ -143,6 +194,7 @@ class _VideoCardCoverState extends State<VideoCardCover>
           token.isCancelled ||
           !_coverHovered ||
           !_active ||
+          _scrolling ||
           scope.interactions != _scope?.interactions) {
         return;
       }
@@ -178,6 +230,9 @@ class _VideoCardCoverState extends State<VideoCardCover>
   @override
   void dispose() {
     _stopPreview();
+    for (final position in _scrollPositions) {
+      position.isScrollingNotifier.removeListener(_onScrollActivityChanged);
+    }
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

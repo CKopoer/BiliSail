@@ -231,6 +231,81 @@ void main() {
     },
   );
 
+  testWidgets(
+    'outer scrolling cancels a pending preview and rejects its late result',
+    (tester) async {
+      final services = _Interactions()..pending = Completer<void>();
+      final pending = services.pending;
+      final outer = ScrollController();
+      final inner = ScrollController();
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        outer.dispose();
+        inner.dispose();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: VideoCardInteractionScope(
+              interactions: services,
+              onNotice: (_, _) {},
+              child: SingleChildScrollView(
+                controller: outer,
+                child: SizedBox(
+                  height: 1200,
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: SizedBox(
+                      width: 320,
+                      height: 400,
+                      child: SingleChildScrollView(
+                        controller: inner,
+                        child: VideoCard(video: _video, onTap: () {}),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final mouse = await _mouse(tester);
+      await mouse.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('video-card-cover-scale'))),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 210));
+      expect(services.reads, 1);
+      final token = services.token;
+      final scrolling = outer.animateTo(
+        30,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.linear,
+      );
+      expect(outer.position.isScrollingNotifier.value, true);
+      expect(inner.position.isScrollingNotifier.value, false);
+      expect(token?.isCancelled, true);
+      pending?.complete();
+      services.pending = null;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(services.reads, 1);
+      expect(services.engines, isEmpty);
+      expect(find.byKey(const ValueKey('video-card-preview')), findsNothing);
+      await tester.pump(const Duration(milliseconds: 200));
+      await scrolling;
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 210));
+      await tester.pump();
+      expect(services.reads, 2);
+      expect(services.engines, hasLength(1));
+      expect(find.byKey(const ValueKey('video-card-preview')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('watch-later cards hide cover add without changing other cards', (
     tester,
   ) async {

@@ -182,7 +182,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
             widget.queue?.scope == _queueSession?.accountScope()
         ? widget.queue
         : null;
-    ref.watch(relatedVideosProvider(widget.id));
+    // Start the related read alongside detail without rebuilding the player
+    // and intro header when only that read changes.
+    ref.listen(relatedVideosProvider(widget.id), (_, _) {});
     final detail = ref.watch(videoDetailProvider(widget.id));
     final loaded = detail.asData?.value;
     final transitioning =
@@ -257,7 +259,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                       ],
                     );
                     final content = Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
+                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -362,7 +364,6 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                             ),
                             _separator('collection'),
                           ],
-                          _related(),
                         ],
                       ),
                     );
@@ -425,9 +426,26 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                     excluding: _tab != 0,
                                     child: TickerMode(
                                       enabled: showInfo && _tab == 0,
-                                      child: SingleChildScrollView(
+                                      child: CustomScrollView(
+                                        key: const ValueKey(
+                                          'video-intro-scroll',
+                                        ),
                                         controller: _introScroll,
-                                        child: content,
+                                        slivers: [
+                                          SliverToBoxAdapter(child: content),
+                                          SliverPadding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                              12,
+                                              0,
+                                              12,
+                                              12,
+                                            ),
+                                            sliver: _RelatedVideosSliver(
+                                              id: widget.id,
+                                              onOpenVideo: widget.onOpenVideo,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -570,32 +588,6 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     widget.onOpenQueueVideo?.call(id);
   }
 
-  Widget _related() => ref
-      .watch(relatedVideosProvider(widget.id))
-      .when(
-        loading: () => const StateView.loading(message: '正在加载相关推荐…'),
-        error: (error, _) => StateView.error(
-          message: _failure(error, '相关推荐加载失败'),
-          onAction: () => ref.invalidate(relatedVideosProvider(widget.id)),
-        ),
-        data: (videos) => videos.isEmpty
-            ? const StateView.empty(message: '暂无相关推荐')
-            : Column(
-                children: [
-                  for (final video in videos)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _RelatedVideoCard(
-                        key: ValueKey(video.id),
-                        video: video,
-                        onTap: widget.onOpenVideo == null
-                            ? null
-                            : () => widget.onOpenVideo?.call(video),
-                      ),
-                    ),
-                ],
-              ),
-      );
   Widget _separator(String section) => Divider(
     key: ValueKey('video-info-separator-$section'),
     height: 36,
@@ -604,8 +596,81 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
   );
 }
 
+final class _RelatedVideosSliver extends ConsumerStatefulWidget {
+  const _RelatedVideosSliver({required this.id, this.onOpenVideo});
+  final VideoId id;
+  final ValueChanged<VideoSummary>? onOpenVideo;
+
+  @override
+  ConsumerState<_RelatedVideosSliver> createState() =>
+      _RelatedVideosSliverState();
+}
+
+final class _RelatedVideosSliverState
+    extends ConsumerState<_RelatedVideosSliver> {
+  ({
+    List<VideoSummary> videos,
+    ValueChanged<VideoSummary>? onOpen,
+    SliverList sliver,
+  })?
+  _cached;
+
+  Widget _state(Widget child) {
+    _cached = null;
+    return SliverToBoxAdapter(child: child);
+  }
+
+  @override
+  Widget build(BuildContext context) => ref
+      .watch(relatedVideosProvider(widget.id))
+      .when(
+        loading: () => _state(const StateView.loading(message: '正在加载相关推荐…')),
+        error: (error, _) => _state(
+          StateView.error(
+            message: _failure(error, '相关推荐加载失败'),
+            onAction: () => ref.invalidate(relatedVideosProvider(widget.id)),
+          ),
+        ),
+        data: (videos) {
+          if (videos.isEmpty) {
+            return _state(const StateView.empty(message: '暂无相关推荐'));
+          }
+          final cached = _cached;
+          final onOpen = widget.onOpenVideo;
+          if (cached != null &&
+              identical(cached.videos, videos) &&
+              cached.onOpen == onOpen) {
+            return cached.sliver;
+          }
+          final indexes = {
+            for (final (index, video) in videos.indexed) video.id: index,
+          };
+          final sliver = SliverList.builder(
+            itemCount: videos.length,
+            findChildIndexCallback: (key) =>
+                key is ValueKey<VideoId> ? indexes[key.value] : null,
+            itemBuilder: (_, index) {
+              final video = videos[index];
+              return Padding(
+                key: ValueKey(video.id),
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _RelatedVideoCard(
+                  video: video,
+                  onTap: onOpen == null ? null : () => onOpen(video),
+                ),
+              );
+            },
+          );
+          // Keep the delegate and per-row repaint boundaries through intro
+          // toggles. Scrolling only creates rows in the viewport/cache extent.
+          _cached = (videos: videos, onOpen: onOpen, sliver: sliver);
+          return sliver;
+        },
+      );
+}
+
 final class _RelatedVideoCard extends StatefulWidget {
-  const _RelatedVideoCard({super.key, required this.video, this.onTap});
+  const _RelatedVideoCard({required this.video, this.onTap});
 
   final VideoSummary video;
   final VoidCallback? onTap;

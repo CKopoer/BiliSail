@@ -23,6 +23,7 @@ import 'package:bilisail/features/video/application/video_card_preview_playback.
 import 'package:bilisail/features/video/domain/video_card_interactions.dart';
 import 'package:bilisail/shared/ui/video_card_cover.dart';
 import 'package:bilisail/shared/ui/video_card_interaction_scope.dart';
+import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -406,6 +407,11 @@ void main() {
     await tester.tap(find.text('简介').first);
     await tester.pumpAndSettle();
     expect(find.text('推荐'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('相关推荐视频'),
+      150,
+      scrollable: _introScrollable(),
+    );
     expect(find.text('相关推荐视频'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('video-info-separator-intro')),
@@ -417,6 +423,7 @@ void main() {
     );
     expect(extras.relatedRequests, 1);
     await tester.ensureVisible(find.text('相关推荐视频'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('相关推荐视频'));
     expect(opened?.id.value, 'BV1xyz123456');
     expect(created, 1);
@@ -438,6 +445,177 @@ void main() {
     expect(created, 1);
     expect(tester.takeException(), isNull);
   });
+  for (final size in [const Size(1100, 800), const Size(480, 800)]) {
+    testWidgets('related videos build lazily and retain player at $size', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final operations = _RelatedCardOperations();
+      addTearDown(() => unawaited(operations.previews.close()));
+      var created = 0;
+      var disposed = 0;
+      await tester.pumpWidget(
+        _relatedCardApp(
+          operations,
+          extras: _ExtrasRepository(related: _manyRelated()),
+          onOpen: () {},
+          playerBuilder: (_, _, _) => _TrackedPlayer(
+            onCreate: () => created++,
+            onDispose: () => disposed++,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(VideoCardCover).evaluate().length, lessThan(20));
+      expect(find.text('推荐视频 39'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text('推荐视频 39'),
+        500,
+        scrollable: _introScrollable(),
+      );
+      expect(find.text('推荐视频 0'), findsNothing);
+      expect(find.byType(VideoCardCover).evaluate().length, lessThan(20));
+      final position = tester
+          .state<ScrollableState>(_introScrollable())
+          .position;
+      final offset = position.pixels;
+      await tester.ensureVisible(find.text('评论'));
+      await tester.tap(find.text('评论'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('简介'));
+      await tester.pumpAndSettle();
+      expect(position.pixels, closeTo(offset, .01));
+      expect(find.text('推荐视频 39'), findsOneWidget);
+      expect(created, 1);
+      expect(disposed, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('wheel scrolling cancels preview and idle hover resumes it', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1100, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final operations = _RelatedCardOperations();
+    addTearDown(() => unawaited(operations.previews.close()));
+    await tester.pumpWidget(
+      _relatedCardApp(
+        operations,
+        extras: _ExtrasRepository(related: _manyRelated()),
+        smoothScrolling: true,
+        onOpen: () {},
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('推荐视频 0'),
+      100,
+      scrollable: _introScrollable(),
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(100, 100));
+    addTearDown(mouse.removePointer);
+    final location = tester.getCenter(find.text('推荐视频 0'));
+    await mouse.moveTo(location);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 210));
+    await tester.pump();
+    expect(operations.reads, 1);
+    final engine = operations.engines.single;
+    final token = operations.token;
+    final position = tester.state<ScrollableState>(_introScrollable()).position;
+    final start = position.pixels;
+    for (var frame = 0; frame < 192; frame++) {
+      if (frame % 6 == 0) {
+        await tester.sendEventToBinding(
+          PointerScrollEvent(
+            position: location,
+            scrollDelta: const Offset(0, 25),
+          ),
+        );
+      }
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(operations.reads, 1, reason: 'No new preview while rolling');
+    }
+    expect(position.pixels - start, greaterThan(700));
+    expect(token?.isCancelled, true);
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+    expect(engine.disposals, 1);
+    await tester.pumpAndSettle();
+    expect(position.isScrollingNotifier.value, false);
+    await tester.pump(const Duration(milliseconds: 210));
+    await tester.pump();
+    expect(operations.reads, 2);
+    expect(operations.engines, hasLength(2));
+    expect(find.byKey(const ValueKey('video-card-preview')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final pendingOpen in [false, true]) {
+    testWidgets(
+      'related eviction releases ${pendingOpen ? 'pending' : 'playing'} preview once',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1100, 800);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final operations = _RelatedCardOperations(
+          opening: pendingOpen ? Completer<void>() : null,
+        );
+        addTearDown(() => unawaited(operations.previews.close()));
+        await tester.pumpWidget(
+          _relatedCardApp(
+            operations,
+            extras: _ExtrasRepository(related: _manyRelated()),
+            onOpen: () {},
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('推荐视频 0'),
+          100,
+          scrollable: _introScrollable(),
+        );
+        final first = find.byWidgetPredicate(
+          (widget) =>
+              widget is VideoCardCover &&
+              widget.video.id == const VideoId('BV0000000000'),
+        );
+        final state = tester.state<State<VideoCardCover>>(first);
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        await mouse.addPointer(location: const Offset(100, 100));
+        addTearDown(mouse.removePointer);
+        await mouse.moveTo(tester.getCenter(find.text('推荐视频 0')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 210));
+        await tester.pump();
+        final token = operations.token;
+        final engine = operations.engines.single;
+        tester.state<ScrollableState>(_introScrollable()).position.jumpTo(3000);
+        await tester.pump();
+        await mouse.moveTo(const Offset(100, 100));
+        await tester.pump(const Duration(milliseconds: 150));
+        expect(state.mounted, false);
+        expect(token?.isCancelled, true);
+        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        await tester.pump();
+        expect(engine.disposals, 1);
+        operations.opening?.complete();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(engine.disposals, 1);
+        expect(operations.reads, 1);
+        expect(find.byKey(const ValueKey('video-card-preview')), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   testWidgets(
     'related card previews from title hover and adds without opening',
     (tester) async {
@@ -789,21 +967,33 @@ Widget _relatedCardApp(
   required VoidCallback onOpen,
   ValueChanged<String>? onNotice,
   VideoPlayerBuilder? playerBuilder,
+  VideoExtrasRepository? extras,
+  bool smoothScrolling = false,
 }) => ProviderScope(
   overrides: [
     authControllerProvider.overrideWith(_GuestAuthController.new),
     videoRepositoryProvider.overrideWithValue(_VideoRepository()),
-    videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
+    videoExtrasRepositoryProvider.overrideWithValue(
+      extras ?? _ExtrasRepository(),
+    ),
   ],
   child: InputTestApp(
+    theme: smoothScrolling
+        ? BiliTheme.light().copyWith(platform: TargetPlatform.windows)
+        : null,
     home: Scaffold(
       body: VideoCardInteractionScope(
         interactions: operations,
         onNotice: (_, message) => onNotice?.call(message),
-        child: VideoScreen(
-          id: const VideoId('BV1abc123456'),
-          onOpenVideo: (_) => onOpen(),
-          playerBuilder: playerBuilder ?? (_, _, _) => const SizedBox(),
+        child: ScrollConfiguration(
+          behavior: smoothScrolling
+              ? const SmoothScrollBehavior()
+              : const MaterialScrollBehavior(),
+          child: VideoScreen(
+            id: const VideoId('BV1abc123456'),
+            onOpenVideo: (_) => onOpen(),
+            playerBuilder: playerBuilder ?? (_, _, _) => const SizedBox(),
+          ),
         ),
       ),
     ),
@@ -811,10 +1001,12 @@ Widget _relatedCardApp(
 );
 
 final class _RelatedCardOperations implements VideoCardOperations {
+  _RelatedCardOperations({this.opening});
+  final Completer<void>? opening;
   final engines = <CardFakeEngine>[];
   late final previews = VideoCardPreviewPlayback(
     createEngine: () {
-      final engine = CardFakeEngine();
+      final engine = CardFakeEngine()..opening = opening;
       engines.add(engine);
       return engine;
     },
@@ -955,8 +1147,9 @@ final class _VideoRepository implements VideoRepository {
 }
 
 final class _ExtrasRepository implements VideoExtrasRepository {
-  _ExtrasRepository({this.tags = const []});
+  _ExtrasRepository({this.tags = const [], this.related});
   final List<String> tags;
+  final List<VideoSummary>? related;
   int relatedRequests = 0;
   final List<int> commentPages = [];
   @override
@@ -970,16 +1163,17 @@ final class _ExtrasRepository implements VideoExtrasRepository {
     required RequestCancellation cancellation,
   }) async {
     relatedRequests++;
-    return const [
-      VideoSummary(
-        id: VideoId('BV1xyz123456'),
-        title: '相关推荐视频',
-        coverUrl: '',
-        author: '推荐UP',
-        duration: Duration(minutes: 2),
-        previewCid: '42',
-      ),
-    ];
+    return related ??
+        const [
+          VideoSummary(
+            id: VideoId('BV1xyz123456'),
+            title: '相关推荐视频',
+            coverUrl: '',
+            author: '推荐UP',
+            duration: Duration(minutes: 2),
+            previewCid: '42',
+          ),
+        ];
   }
 
   @override
@@ -1003,3 +1197,22 @@ final class _ExtrasRepository implements VideoExtrasRepository {
     );
   }
 }
+
+Finder _introScrollable() => find
+    .descendant(
+      of: find.byKey(const ValueKey('video-intro-scroll')),
+      matching: find.byType(Scrollable),
+    )
+    .first;
+
+List<VideoSummary> _manyRelated() => [
+  for (var i = 0; i < 40; i++)
+    VideoSummary(
+      id: VideoId('BV${i.toString().padLeft(10, '0')}'),
+      title: '推荐视频 $i',
+      coverUrl: '',
+      author: 'UP 主',
+      duration: const Duration(minutes: 2),
+      previewCid: '${i + 100}',
+    ),
+];
