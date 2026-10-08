@@ -1,5 +1,9 @@
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/core/platform/external_links.dart';
+import 'package:bilisail/core/presentation/workspace_activity.dart';
+import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/features/comments/application/comment_link_resolver.dart';
+import 'package:bilisail/features/comments/domain/comment_video_link.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/video/presentation/comment_rich_content.dart';
@@ -66,10 +70,11 @@ void main() {
     'main, preview and detailed replies open URLs and seek the local session',
     (tester) async {
       const url = 'https://daily.juya.uk/issues/2026-10-06/';
+      const videoUrl = 'https://b23.tv/BV117BkBsEWw';
       const timestampReply = CommentEntry(
         id: '11',
         author: '乙',
-        message: '$url 00:12',
+        message: '$url $videoUrl 00:12',
         rootId: '10',
         parentId: '10',
       );
@@ -77,7 +82,7 @@ void main() {
         const CommentEntry(
           id: '10',
           author: '甲',
-          message: '$url 00:09 00:34',
+          message: '$url $videoUrl 00:09 00:34',
           replyCount: 3,
           replies: [timestampReply],
         ),
@@ -100,12 +105,14 @@ void main() {
             ..media = cardPreviewMedia();
       addTearDown(session.close);
       final opened = <Uri>[];
+      final videos = <VideoId>[];
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             authRepositoryProvider.overrideWithValue(auth),
             videoCommentsRepositoryProvider.overrideWithValue(repo),
             playbackSessionProvider.overrideWithValue(session),
+            commentVideoNavigatorProvider.overrideWithValue(videos.add),
             webLinkOpenerProvider.overrideWithValue((uri) async {
               opened.add(uri);
               return true;
@@ -127,6 +134,9 @@ void main() {
           find.textRange.ofSubstring(url, descendentOf: richContent),
         );
         await tester.tapOnText(
+          find.textRange.ofSubstring(videoUrl, descendentOf: richContent),
+        );
+        await tester.tapOnText(
           find.textRange.ofSubstring(time, descendentOf: richContent),
         );
         await tester.pumpAndSettle();
@@ -143,6 +153,12 @@ void main() {
         ),
       );
       await tester.tapOnText(find.textRange.ofSubstring('00:12'));
+      await tester.tapOnText(
+        find.textRange.ofSubstring(
+          videoUrl,
+          descendentOf: find.byType(CommentRichContent).at(1),
+        ),
+      );
       await tester.pumpAndSettle();
       await tester.tapOnText(find.textRange.ofSubstring('00:34'));
       await tester.pumpAndSettle();
@@ -151,9 +167,163 @@ void main() {
       expect(engine.seeks, 4);
       expect(engine.opens, 0);
       expect(opened, List.filled(3, Uri.parse(url)));
+      expect(videos, List.filled(3, const VideoId('BV117BkBsEWw')));
       expect(repo.writes, 0);
     },
   );
+
+  testWidgets('a newer link click cancels stale short-link navigation', (
+    tester,
+  ) async {
+    const short = 'https://b23.tv/randomToken';
+    const direct = 'https://b23.tv/BV117BkBsEWw';
+    repo.items = [
+      const CommentEntry(id: '10', author: '甲', message: '$short $direct'),
+    ];
+    final links = _LinkRepository();
+    final videos = <VideoId>[];
+    final external = <Uri>[];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(auth),
+          videoCommentsRepositoryProvider.overrideWithValue(repo),
+          commentVideoLinkRepositoryProvider.overrideWithValue(links),
+          commentVideoNavigatorProvider.overrideWithValue(videos.add),
+          webLinkOpenerProvider.overrideWithValue((uri) async {
+            external.add(uri);
+            return true;
+          }),
+        ],
+        child: MaterialApp(
+          builder: AppNoticeHost.builder,
+          home: const Scaffold(body: VideoCommentsPanel(detail: _detail)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tapOnText(find.textRange.ofSubstring(short));
+    await tester.pump();
+    expect(links.cancellation?.isCancelled, isFalse);
+    await tester.tapOnText(find.textRange.ofSubstring(direct));
+    await tester.pump();
+    expect(links.cancellation?.isCancelled, isTrue);
+    links.pending.complete(const VideoId('BV1234567890'));
+    await tester.pump();
+    expect(videos, [const VideoId('BV117BkBsEWw')]);
+    expect(external, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final transition in ['hidden', 'disposed', 'new account epoch']) {
+    testWidgets('pending link cannot navigate after $transition', (
+      tester,
+    ) async {
+      const short = 'https://b23.tv/randomToken';
+      repo.items = [const CommentEntry(id: '10', author: '甲', message: short)];
+      final links = _LinkRepository();
+      final videos = <VideoId>[];
+      var externalCalls = 0;
+      var active = true;
+      late StateSetter update;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(auth),
+            videoCommentsRepositoryProvider.overrideWithValue(repo),
+            commentVideoLinkRepositoryProvider.overrideWithValue(links),
+            commentVideoNavigatorProvider.overrideWithValue(videos.add),
+            webLinkOpenerProvider.overrideWithValue((_) async {
+              externalCalls++;
+              return true;
+            }),
+          ],
+          child: MaterialApp(
+            builder: AppNoticeHost.builder,
+            home: StatefulBuilder(
+              builder: (_, setState) {
+                update = setState;
+                return WorkspaceActivity(
+                  active: active,
+                  child: const Scaffold(
+                    body: VideoCommentsPanel(detail: _detail),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tapOnText(find.textRange.ofSubstring(short));
+      await tester.pump();
+      if (transition == 'hidden') {
+        update(() => active = false);
+        await tester.pump();
+      } else if (transition == 'disposed') {
+        await tester.pumpWidget(const SizedBox.shrink());
+      } else {
+        repo.epoch++;
+      }
+      if (transition != 'new account epoch') {
+        expect(links.cancellation?.isCancelled, isTrue);
+      }
+      links.pending.complete(const VideoId('BV117BkBsEWw'));
+      await tester.pump();
+      expect(videos, isEmpty);
+      expect(externalCalls, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final failed in [false, true]) {
+    testWidgets(
+      'short-link ${failed ? 'failure shows notice' : 'non-video opens browser'}',
+      (tester) async {
+        const short = 'https://b23.tv/randomToken';
+        repo.items = [
+          const CommentEntry(id: '10', author: '甲', message: short),
+        ];
+        final links = _LinkRepository();
+        final external = <Uri>[];
+        final videos = <VideoId>[];
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authRepositoryProvider.overrideWithValue(auth),
+              videoCommentsRepositoryProvider.overrideWithValue(repo),
+              commentVideoLinkRepositoryProvider.overrideWithValue(links),
+              commentVideoNavigatorProvider.overrideWithValue(videos.add),
+              webLinkOpenerProvider.overrideWithValue((uri) async {
+                external.add(uri);
+                return true;
+              }),
+            ],
+            child: MaterialApp(
+              builder: AppNoticeHost.builder,
+              home: const Scaffold(body: VideoCommentsPanel(detail: _detail)),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tapOnText(find.textRange.ofSubstring(short));
+        if (failed) {
+          links.pending.completeError(
+            const AppFailure(AppFailureKind.network, '视频链接解析失败，请检查网络后重试'),
+          );
+        } else {
+          links.pending.complete(null);
+        }
+        await tester.pump();
+        expect(videos, isEmpty);
+        expect(external, failed ? isEmpty : [Uri.parse(short)]);
+        await tester.pump();
+        if (failed) expect(find.text('视频链接解析失败，请检查网络后重试'), findsOneWidget);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets(
     'unavailable player and launcher refusal show actionable notices',
@@ -590,6 +760,19 @@ const _detail = VideoDetail(
   parts: [],
   aid: '42',
 );
+
+class _LinkRepository implements CommentVideoLinkRepository {
+  final pending = Completer<VideoId?>();
+  RequestCancellation? cancellation;
+  @override
+  Future<VideoId?> resolve(
+    Uri uri, {
+    required RequestCancellation cancellation,
+  }) {
+    this.cancellation = cancellation;
+    return pending.future;
+  }
+}
 
 class _Repo implements VideoCommentsRepository, CommentEmotesRepository {
   Completer<List<CommentEmotePackage>>? emotePending;

@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:bilisail/domain/comment_target.dart';
 import 'package:bilisail/domain/dynamic_post.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/comments/application/comment_link_resolver.dart';
+import 'package:bilisail/features/comments/domain/comments_repository.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/comments/application/comments_controller.dart';
@@ -47,12 +50,15 @@ void main() {
     double keyboardInset = 0,
     double scale = 1,
     DynamicPost? value,
+    void Function(VideoId)? onOpenCommentVideo,
   }) async {
     await tester.binding.setSurfaceSize(Size(width, height));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          if (onOpenCommentVideo != null)
+            commentVideoNavigatorProvider.overrideWithValue(onOpenCommentVideo),
           authRepositoryProvider.overrideWithValue(auth),
           dynamicRepositoryProvider.overrideWithValue(repository),
           commentsRepositoryProvider.overrideWith((ref, type) {
@@ -78,6 +84,26 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('video link in dynamic comments closes dialog and navigates', (
+    tester,
+  ) async {
+    const url = 'https://b23.tv/BV117BkBsEWw';
+    comments.items = const [
+      CommentEntry(id: '50', author: '评论作者', message: url),
+    ];
+    final videos = <VideoId>[];
+    await show(tester, onOpenCommentVideo: videos.add);
+    await tester.tap(find.byTooltip('查看评论'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CommentsPanel), findsOneWidget);
+    await tester.tapOnText(find.textRange.ofSubstring(url));
+    await tester.pumpAndSettle();
+    expect(videos, [const VideoId('BV117BkBsEWw')]);
+    expect(find.byType(CommentsPanel), findsNothing);
+    expect(find.byType(Dialog), findsNothing);
+    expect(comments.writes, isEmpty);
+  });
 
   testWidgets(
     'card likes and cancels, opens typed comments, and sends directed replies',

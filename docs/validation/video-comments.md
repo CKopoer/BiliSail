@@ -52,7 +52,15 @@
 
 主评论、楼中楼预览和完整回复共用 `CommentRichContent`：HTTP/HTTPS 链接以及 `分:秒`、`时:分:秒` 均使用主题链接色和鼠标手形，正文继续支持选择复制、行内表情、换行及图片预览。URL 先整体匹配，路径和查询中的 `00:09` 不会生成进度动作；中文标点、句尾标点和不配对的闭括号留在链接外。秒必须为 00–59，三段时间的分钟也必须为 00–59，非法时间不会部分匹配。
 
-链接由显式点击触发，经 `core/platform/external_links.dart` 的 `webLinkOpenerProvider` 用系统外部应用打开 HTTP/HTTPS 地址（桌面使用默认浏览器），不添加账号凭据。非 Web scheme、缺失 host、带 userInfo 的地址不能打开；既有官方入口继续使用原 `externalLinkOpenerProvider` 的目标范围。打开失败显示可重试提示。
+链接由显式点击触发。2026-10-08 起，共用评论入口优先识别 B 站视频：`b23.tv/BV…`、`bilibili.com/video/BV…`、`www.bilibili.com/video/BV…` 和移动版链接直接提取完整 BV 号；对应 AV 形式通过 `/x/web-interface/view?aid=…` 取得 BV 号。随机 b23.tv 短链读取 301/302/303/307/308 的 `Location` 后重复识别，整个解析限时 8 秒、最多 3 次重定向。域名精确匹配，要求 HTTP/HTTPS 默认端口、无 userInfo，并锚定完整视频路径；不会搜索任意网页的路径、查询或片段中的 BV 字符串。这里只定位视频，不解析链接中的分 P 或进度参数。
+
+识别成功由 app 注入的导航动作进入既有 `/video/:bvid` 工作区，共用评论面板因此覆盖主评论、回复预览、完整楼中楼，以及动态/影视使用的评论入口；动态评论弹窗先关闭再导航。短链使用独立无 Cookie/Authorization 传输，关闭自动跳转、不下载 HTML，只请求 b23.tv；离站目标不会由短链解析器继续请求。AV 转 BV 使用既有 API 会话和取消边界。新点击、换评论目标、页面隐藏/销毁、账号切换会取消旧解析或阻止旧结果导航，其他弹窗遮挡期间也不导航。网络解析失败显示重试提示，不自动打开浏览器。
+
+其他链接经 `core/platform/external_links.dart` 的 `webLinkOpenerProvider` 用系统外部应用打开 HTTP/HTTPS 地址（桌面使用默认浏览器），不添加账号凭据；短链成功解析为非视频时也沿用原地址的浏览器打开行为。非 Web scheme、缺失 host、带 userInfo 的地址不能打开；既有官方入口继续使用原 `externalLinkOpenerProvider` 的目标范围。打开失败显示可重试提示。
+
+本轮只读参考 `biliuwp-lite` 的 [MessageCenter.HandelUrl](../../../biliuwp-lite/src/BiliLite.UWP/Services/MessageCenter.cs) 与 [BiliExtensions.GetShortLinkLocation](../../../biliuwp-lite/src/BiliLite.UWP/Extensions/BiliExtensions.cs)，借鉴先还原短链、再识别视频身份的职责；独立编写 Dart，没有复制 C# 或新增资源。在线无凭据 HEAD 验证用户示例 `https://b23.tv/BV117BkBsEWw` 返回 302，目标为 `https://www.bilibili.com/video/BV117BkBsEWw`。
+
+验证：根应用完整测试快照 1377 项通过，之后新增的动态评论弹窗导航及视频评论回归共 36 项通过；三个包格式/分析和测试通过（API 325、player 32、danmaku 65）。本次涉及文件的定向静态分析通过。`tool/check.ps1 -SkipPub` 首轮通过签名/安装包边界和根格式检查，曾被并发任务的 `tool/validation/video_preview_contention_probe.dart:27` 缺少花括号告警阻断；该告警随后消除，最终单独执行 `flutter analyze --no-pub` 全仓通过，测试也已单独执行。首轮脚本及根测试日志为 `artifacts/comment-video-links-check.log`、`artifacts/comment-video-links-root-tests.log`。31 个文档相对链接和 `git diff --check` 通过。未构建，Windows/Android/macOS 实际点击、随机短链在线解析和 AV 在线转换尚未实机验收。
 
 进度点击读取当前标签作用域内的 `PlaybackSession`，核对当前视频身份及已加载媒体后调用既有 `seek`，沿用弹幕重建与进度保存流程，保留播放／暂停意图。超过已知视频时长的时间点限制到视频末尾，播放器未就绪或视频身份不匹配时提示用户。点击回复预览中的链接／进度不会触发外层楼中楼展开。
 

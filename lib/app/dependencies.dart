@@ -54,6 +54,8 @@ import '../features/video/data/api_collection_subscription_repository.dart';
 import '../features/video/application/video_comments_controller.dart';
 import '../features/comments/data/api_comments_repository.dart';
 import '../features/comments/application/comments_controller.dart';
+import '../features/comments/application/comment_link_resolver.dart';
+import '../features/comments/data/public_comment_video_link_repository.dart';
 import '../features/dynamic/application/dynamic_actions_controller.dart';
 import '../features/dynamic/data/api_dynamic_repository.dart';
 import '../features/playback/data/api_sponsor_repository.dart';
@@ -284,6 +286,9 @@ class AppDependencies {
     );
     return ProviderScope(
       overrides: [
+        commentVideoLinkRepositoryProvider.overrideWithValue(
+          PublicCommentVideoLinkRepository(api, requests),
+        ),
         downloadRepositoryProvider.overrideWithValue(downloads),
         downloadSourceRepositoryProvider.overrideWithValue(downloadSources),
         sessionEpochProvider.overrideWithValue(() => requests.sessionEpoch),

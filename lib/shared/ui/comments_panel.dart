@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/platform/external_links.dart';
+import '../../core/presentation/workspace_activity.dart';
+import '../../domain/app_failure.dart';
+import '../../domain/request_cancellation.dart';
 import '../../domain/user.dart';
 import '../../domain/comment_target.dart';
 import 'app_network_image.dart';
@@ -15,6 +18,7 @@ import 'bili_icons.dart';
 import 'comment_rich_content.dart';
 import 'comment_text_styles.dart';
 import '../../features/comments/application/comments_controller.dart';
+import '../../features/comments/application/comment_link_resolver.dart';
 import '../../features/comments/domain/comments_repository.dart';
 
 class CommentsPanel extends ConsumerStatefulWidget {
@@ -46,6 +50,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   final _replyScroll = ScrollController();
   double _topOffset = 0;
   String? _shownRoot;
+  RequestCancellation? _linkCancellation;
   @override
   void initState() {
     super.initState();
@@ -56,6 +61,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   void didUpdateWidget(covariant CommentsPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.target != widget.target) {
+      _linkCancellation?.cancel();
       _text.clear();
       _topOffset = 0;
       _shownRoot = null;
@@ -66,7 +72,14 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!WorkspaceActivity.isActive(context)) _linkCancellation?.cancel();
+  }
+
+  @override
   void dispose() {
+    _linkCancellation?.cancel();
     _text.dispose();
     _focus.dispose();
     _topScroll.dispose();
@@ -84,13 +97,48 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   }
 
   Future<void> _openLink(Uri uri) async {
+    _linkCancellation?.cancel();
+    final cancellation = RequestCancellation();
+    _linkCancellation = cancellation;
+    final target = widget.target;
+    final controller = ref.read(_provider.notifier);
+    final state = ref.read(_provider);
+    bool isCurrent() =>
+        mounted &&
+        !cancellation.isCancelled &&
+        widget.target == target &&
+        WorkspaceActivity.isActive(context) &&
+        (ModalRoute.of(context)?.isCurrent ?? true) &&
+        controller.isCurrentAccount(state.accountScope, state.sessionEpoch);
     var opened = false;
     try {
+      final navigate = ref.read(commentVideoNavigatorProvider);
+      if (navigate != null) {
+        final video = await ref
+            .read(commentLinkResolverProvider)
+            .resolve(uri, cancellation);
+        if (!mounted || !isCurrent()) return;
+        if (video != null) {
+          if (ModalRoute.of(context) is PopupRoute) Navigator.of(context).pop();
+          navigate(video);
+          return;
+        }
+      }
+      if (!isCurrent()) return;
       opened = await ref.read(webLinkOpenerProvider)(uri);
+    } on AppFailure catch (error) {
+      if (mounted && isCurrent() && error.kind != AppFailureKind.cancelled) {
+        showAppNotice(context, error.message);
+      }
+      return;
     } on PlatformException {
       opened = false;
+    } finally {
+      if (identical(_linkCancellation, cancellation)) _linkCancellation = null;
     }
-    if (mounted && !opened) showAppNotice(context, '无法打开浏览器，请稍后重试');
+    if (mounted && isCurrent() && !opened) {
+      showAppNotice(context, '无法打开浏览器，请稍后重试');
+    }
   }
 
   Future<void> _emotes(String oid) async {

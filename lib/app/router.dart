@@ -31,6 +31,7 @@ import '../features/video/application/video_extras_controller.dart';
 import '../features/playback/application/playback_session.dart';
 import '../features/playback/application/playback_manager.dart';
 import '../features/auth/application/auth_controller.dart';
+import '../features/comments/application/comment_link_resolver.dart';
 import '../features/auth/presentation/account_button.dart';
 import '../features/feed/application/feed_controller.dart';
 import '../features/feed/application/home_controller.dart';
@@ -258,6 +259,9 @@ final class _WorkspacePage extends ConsumerWidget {
       // guest. Include the epoch so cancelled pages restart in that case too.
       key: ValueKey(account),
       overrides: [
+        commentVideoNavigatorProvider.overrideWithValue(
+          (video) => context.go('/video/${video.value}'),
+        ),
         if (playback != null)
           playbackSessionProvider.overrideWith((ref) {
             final session = playback.acquire(tab.id);

@@ -824,6 +824,29 @@ final class BiliApiClient {
     );
   }
 
+  /// Resolve legacy AV links without changing the BV identity used by players.
+  Future<String> getVideoBvidByAid(
+    String aid, {
+    ApiRequestContext? context,
+  }) async {
+    if (!RegExp(r'^[1-9][0-9]*$').hasMatch(aid)) {
+      throw const ApiFailure(ApiFailureCategory.protocol, 'video_link');
+    }
+    final data = await _json(
+      _api.replace(
+        path: '/x/web-interface/view',
+        queryParameters: {'aid': aid},
+      ),
+      'video_link',
+      context,
+    );
+    final bvid = _requiredString(data['bvid'], 'video_link');
+    if (!RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid)) {
+      throw const ApiFailure(ApiFailureCategory.protocol, 'video_link');
+    }
+    return bvid;
+  }
+
   Future<ApiVideoDetail> getVideoDetail(
     String bvid, {
     ApiRequestContext? context,

@@ -33,6 +33,56 @@ ApiHttpResponse _jsonResponse(
 
 void main() {
   test(
+    'legacy AV links resolve using a decimal aid and validate the BV result',
+    () async {
+      var calls = 0;
+      final client = BiliApiClient(
+        transport: _FakeTransport((uri, _) async {
+          calls++;
+          expect(uri.host, 'api.bilibili.com');
+          expect(uri.path, '/x/web-interface/view');
+          expect(uri.queryParameters, {'aid': '170001'});
+          return _jsonResponse({
+            'code': 0,
+            'data': {'bvid': 'BV117BkBsEWw'},
+          });
+        }),
+      );
+      expect(await client.getVideoBvidByAid('170001'), 'BV117BkBsEWw');
+      for (final aid in ['0', '-1', '17.0', 'av170001', '170001&bvid=other']) {
+        await expectLater(
+          client.getVideoBvidByAid(aid),
+          throwsA(isA<ApiFailure>()),
+        );
+      }
+      expect(calls, 1);
+    },
+  );
+
+  for (final bvid in <Object?>[null, '', 170001, 'BVshort', 'BV117BkBsEWw0']) {
+    test('AV conversion rejects malformed BV result: $bvid', () async {
+      final client = BiliApiClient(
+        transport: _FakeTransport(
+          (_, _) async => _jsonResponse({
+            'code': 0,
+            'data': {'bvid': bvid},
+          }),
+        ),
+      );
+      await expectLater(
+        client.getVideoBvidByAid('170001'),
+        throwsA(
+          isA<ApiFailure>().having(
+            (e) => e.category,
+            'category',
+            ApiFailureCategory.protocol,
+          ),
+        ),
+      );
+    });
+  }
+
+  test(
     'recommendation reasons preserve optional text without invented labels',
     () async {
       final reasons = <Object?>[
