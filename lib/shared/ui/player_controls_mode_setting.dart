@@ -35,8 +35,8 @@ class PlayerControlsModeSetting extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           value == PlayerControlsMode.click
-              ? '默认模式：点击画面切换控件显示与隐藏。'
-              : '鼠标移入或移动时显示控件，静止 1 秒或移出画面时隐藏。点击视频画面播放／暂停；点击直播画面不暂停，也不切换控件。',
+              ? '点击画面切换控件显示与隐藏，显示后 5 秒自动淡出。操作控件后重新计时，拖动、输入或打开菜单时保持显示。'
+              : '鼠标移入或移动时淡入控件，静止 1 秒或移出画面时淡出。点击视频画面播放／暂停；点击直播画面不暂停，也不切换控件。',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],

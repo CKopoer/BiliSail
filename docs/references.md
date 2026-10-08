@@ -78,6 +78,12 @@
 
 ## 4. 许可与来源记录
 
+### 点击模式播放控件补充参考（2026-10-08）
+
+本轮按用户指定只读查看本地 `dart_simple_live` 提交 `ba828e6783b176ea5709fcd09f0eb01dfaceeb51` 的 [player_controller.dart](../../dart_simple_live/simple_live_app/lib/modules/live_room/player/player_controller.dart)（`PlayerStateMixin` / `PlayerGestureControlMixin`）和 [player_controls.dart](../../dart_simple_live/simple_live_app/lib/modules/live_room/player/player_controls.dart)。参考单击显隐、双击全屏、显示后 5 秒隐藏、控件操作重新计时，以及 200 毫秒过渡的职责；桌面悬停与滑动位置动画按本项目点击／动态模式及现有布局调整，两种模式均采用透明度过渡，其余交互调整仅用于点击模式。
+
+根 [LICENSE](../../dart_simple_live/LICENSE) 为 GPL-3.0 文本。本次只借鉴交互行为，独立编写 Flutter 控件与生命周期处理，没有复制源码、样式、图标或其他资源，也没有增加参考项目运行时依赖或修改相邻仓库。实现与验证边界见 [点击模式控件验证](validation/responsive-player.md#点击模式自动隐藏与淡入淡出2026-10-08)。
+
 2026-10-06 登录扩展另只读查看 K 的 BiliApis/TVAuthorizeClient，以及 U 的 AccountApi、LoginVM、LoginDialog 和 bili_gt.html。K 当前快照只有密码／App 登录常量，没有完整密码／短信客户端；U 有对应 App 协议与交互。最终采用内嵌官网登录页，独立编写 Flutter 适配和安全会话接入；未复制参考源码、22/33 图片或 gt.js，未把 App/TV token 混入 Web 会话。依赖、来源链接和验证边界见 [登录验证](validation/password-sms-login.md)。
 
 用户后续指定的 [dart_simple_live dev](https://github.com/xiaoyaocz/dart_simple_live/tree/dev)，本轮固定提交 `bccd2ba2e77bc34b3e3a0897f1cb5e0b402afd2b`，仅只读参考移动端完整网页登录与 Cookie 获取职责，未复制其 GPL-3.0 源码或资源。其网页登录入口只对 Android/iOS 开放，桌面使用扫码／手动 Cookie；不能由此推导 Windows 密码／短信已提供。源码链接与对比见 [登录验证](validation/password-sms-login.md)。

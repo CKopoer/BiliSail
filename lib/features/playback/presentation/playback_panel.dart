@@ -420,7 +420,6 @@ class _PlayerView extends StatefulWidget {
 class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   final FocusNode _focusNode = FocusNode(debugLabel: 'video player');
   final GlobalKey _playerBoundsKey = GlobalKey();
-  final GlobalKey _controlsBoundsKey = GlobalKey();
   bool _exitingFullScreen = false;
   bool _composeExpanded = false;
   final GlobalKey _composerKey = GlobalKey();
@@ -428,6 +427,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   final Set<int> _pressedPointers = {};
   bool _mouseInside = false;
   bool _appActive = true;
+  bool _controlEditorFocused = false;
+  int _openControlsMenus = 0;
+  late int _sourceGeneration;
+  late bool _hasError;
   late PlayerControlsMode _controlsMode;
 
   bool get _dynamicControls => _controlsMode == PlayerControlsMode.dynamic;
@@ -436,9 +439,38 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _controlsMode = widget.settings.value.playerControlsMode;
+    _sourceGeneration = widget.session.sourceGeneration;
+    _hasError = widget.session.error != null;
     widget.settings.addListener(_onSettingsChanged);
+    widget.session.addListener(_onSessionChanged);
+    FocusManager.instance.addListener(_onControlsFocusChanged);
     WidgetsBinding.instance.addObserver(this);
     _scheduleControlsHide();
+  }
+
+  void _onSessionChanged() {
+    final generation = widget.session.sourceGeneration;
+    final hasError = widget.session.error != null;
+    if (_sourceGeneration == generation && _hasError == hasError) return;
+    _sourceGeneration = generation;
+    _hasError = hasError;
+    if (!_dynamicControls) _scheduleControlsHide();
+  }
+
+  void _onControlsFocusChanged() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    final editing =
+        context?.findAncestorWidgetOfExactType<EditableText>() != null &&
+        context?.findAncestorStateOfType<_PlayerViewState>() == this;
+    if (_controlEditorFocused == editing) return;
+    _controlEditorFocused = editing;
+    if (!_dynamicControls) _scheduleControlsHide();
+  }
+
+  void _onControlsMenuChanged(bool open) {
+    if (!mounted) return;
+    _openControlsMenus += open ? 1 : -1;
+    if (!_dynamicControls) _scheduleControlsHide();
   }
 
   void _onSettingsChanged() {
@@ -475,8 +507,11 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   @override
   void dispose() {
     _controlsHideTimer?.cancel();
+    _pressedPointers.clear();
     WidgetsBinding.instance.removeObserver(this);
     widget.settings.removeListener(_onSettingsChanged);
+    widget.session.removeListener(_onSessionChanged);
+    FocusManager.instance.removeListener(_onControlsFocusChanged);
     widget.shortcuts.endTouchHold();
     _focusNode.dispose();
     super.dispose();
@@ -485,16 +520,18 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   void _scheduleControlsHide() {
     _controlsHideTimer?.cancel();
     _controlsHideTimer = null;
-    if (!_dynamicControls ||
+    if (!mounted ||
         !widget.active ||
         !_appActive ||
         !widget.controlsVisible.value ||
-        _pressedPointers.isNotEmpty) {
+        _pressedPointers.isNotEmpty ||
+        (!_dynamicControls &&
+            (_controlEditorFocused || _openControlsMenus > 0 || _hasError))) {
       return;
     }
-    _controlsHideTimer = Timer(const Duration(seconds: 1), () {
+    _controlsHideTimer = Timer(Duration(seconds: _dynamicControls ? 1 : 5), () {
       _controlsHideTimer = null;
-      if (mounted && widget.active && _appActive && _dynamicControls) {
+      if (mounted && widget.active && _appActive) {
         widget.controlsVisible.value = false;
       }
     });
@@ -520,19 +557,13 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   }
 
   void _onPointerDown(PointerDownEvent event) {
-    if (!_dynamicControls) return;
-    final bounds = _controlsBoundsKey.currentContext?.findRenderObject();
-    final onControls =
-        bounds is RenderBox &&
-        bounds.hasSize &&
-        (Offset.zero & bounds.size).contains(
-          bounds.globalToLocal(event.position),
-        );
     final touchHold =
         !widget.session.isLive && event.kind == PointerDeviceKind.touch;
-    // Keep drags and touch holds alive without changing a live surface click's
-    // hover deadline. Video and live controls use the same drag protection.
-    if (!onControls && !touchHold) return;
+    if (!touchHold) return;
+    _onControlPointerDown(event);
+  }
+
+  void _onControlPointerDown(PointerDownEvent event) {
     _pressedPointers.add(event.pointer);
     _scheduleControlsHide();
   }
@@ -557,12 +588,28 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
 
   Future<void> _openSettings(int tab) async {
     widget.shortcuts.cancel();
+    _onControlsMenuChanged(true);
     try {
       await showPlayerSettings(context, tab: tab);
     } finally {
       widget.shortcuts.cancel();
+      _onControlsMenuChanged(false);
     }
   }
+
+  Widget _controlsVisibility({
+    required bool visible,
+    required Widget child,
+    bool retainDynamicPress = false,
+  }) => _FadingPlayerControls(
+    visible: visible,
+    child: Listener(
+      onPointerDown: !_dynamicControls || retainDynamicPress
+          ? _onControlPointerDown
+          : null,
+      child: child,
+    ),
+  );
 
   void _toggleFullScreen() {
     if (!widget.fullScreen) {
@@ -762,50 +809,57 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
-                            if (controls &&
-                                layout.compact &&
+                            if (layout.compact &&
                                 !_composeExpanded &&
                                 session.error == null &&
                                 !session.isResolving &&
                                 snapshot.phase != PlaybackPhase.opening)
                               Center(
-                                child: Row(
-                                  key: const ValueKey(
-                                    'compact-playback-actions',
-                                  ),
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (widget.pageCommands != null &&
-                                        (session.detail?.parts.length ?? 0) > 1)
-                                      IconButton(
-                                        tooltip: '上一分 P',
-                                        onPressed:
-                                            widget.pageCommands?.previousPart,
-                                        icon: const Icon(
-                                          Icons.skip_previous,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    _PlayButton(
-                                      session: session,
-                                      snapshot: snapshot,
-                                      onFocus: _focusNode.requestFocus,
-                                      prominent: true,
-                                      shortcuts:
-                                          widget.settings.value.shortcuts,
+                                key: const ValueKey(
+                                  'player-control-actions-layer',
+                                ),
+                                child: _controlsVisibility(
+                                  visible: controls,
+                                  child: Row(
+                                    key: const ValueKey(
+                                      'compact-playback-actions',
                                     ),
-                                    if (widget.pageCommands != null &&
-                                        (session.detail?.parts.length ?? 0) > 1)
-                                      IconButton(
-                                        tooltip: '下一分 P',
-                                        onPressed:
-                                            widget.pageCommands?.nextPart,
-                                        icon: const Icon(
-                                          Icons.skip_next,
-                                          color: Colors.white,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (widget.pageCommands != null &&
+                                          (session.detail?.parts.length ?? 0) >
+                                              1)
+                                        IconButton(
+                                          tooltip: '上一分 P',
+                                          onPressed:
+                                              widget.pageCommands?.previousPart,
+                                          icon: const Icon(
+                                            Icons.skip_previous,
+                                            color: Colors.white,
+                                          ),
                                         ),
+                                      _PlayButton(
+                                        session: session,
+                                        snapshot: snapshot,
+                                        onFocus: _focusNode.requestFocus,
+                                        prominent: true,
+                                        shortcuts:
+                                            widget.settings.value.shortcuts,
                                       ),
-                                  ],
+                                      if (widget.pageCommands != null &&
+                                          (session.detail?.parts.length ?? 0) >
+                                              1)
+                                        IconButton(
+                                          tooltip: '下一分 P',
+                                          onPressed:
+                                              widget.pageCommands?.nextPart,
+                                          icon: const Icon(
+                                            Icons.skip_next,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             if (cue != null)
@@ -845,69 +899,76 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
-                            if (controls && session.error == null)
+                            if (session.error == null)
                               Positioned(
+                                key: const ValueKey(
+                                  'player-control-title-layer',
+                                ),
                                 left: 0,
                                 right: 0,
                                 top: 0,
-                                child: Container(
-                                  color: Colors.black54,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 8,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.play_circle_outline,
-                                        color: Colors.white70,
-                                        size: 18,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          session.title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 13,
+                                child: _controlsVisibility(
+                                  visible: controls,
+                                  child: Container(
+                                    color: Colors.black54,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 8,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.play_circle_outline,
+                                          color: Colors.white70,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            session.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      if (settings.sponsorBlockMode !=
-                                              SponsorBlockMode.disabled &&
-                                          (session.sponsorLoading ||
-                                              session.sponsorMessage != null))
-                                        Flexible(
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(
-                                              left: 10,
-                                            ),
-                                            child: Text(
-                                              session.sponsorLoading
-                                                  ? '正在查询空降片段…'
-                                                  : (session.sponsorMessage ??
-                                                        ''),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                color: Colors.white70,
-                                                fontSize: 11,
+                                        if (settings.sponsorBlockMode !=
+                                                SponsorBlockMode.disabled &&
+                                            (session.sponsorLoading ||
+                                                session.sponsorMessage != null))
+                                          Flexible(
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(
+                                                left: 10,
+                                              ),
+                                              child: Text(
+                                                session.sponsorLoading
+                                                    ? '正在查询空降片段…'
+                                                    : (session.sponsorMessage ??
+                                                          ''),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 11,
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                      if ((session.detail?.parts.length ?? 0) >
-                                          1)
-                                        Text(
-                                          'P${session.part?.page ?? 1}',
-                                          style: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 12,
+                                        if ((session.detail?.parts.length ??
+                                                0) >
+                                            1)
+                                          Text(
+                                            'P${session.part?.page ?? 1}',
+                                            style: const TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 12,
+                                            ),
                                           ),
-                                        ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1043,104 +1104,111 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
-                            if (controls && widget.active)
+                            if (widget.active)
                               Positioned(
+                                key: const ValueKey('player-control-bar-layer'),
                                 left: 0,
                                 right: 0,
                                 bottom: 0,
-                                child: Theme(
-                                  key: _controlsBoundsKey,
-                                  data: ThemeData.dark(useMaterial3: true)
-                                      .copyWith(
-                                        colorScheme: ColorScheme.fromSeed(
-                                          seedColor: const Color(0xffdf6589),
-                                          brightness: Brightness.dark,
+                                child: _controlsVisibility(
+                                  visible: controls,
+                                  retainDynamicPress: true,
+                                  child: Theme(
+                                    data: ThemeData.dark(useMaterial3: true)
+                                        .copyWith(
+                                          colorScheme: ColorScheme.fromSeed(
+                                            seedColor: const Color(0xffdf6589),
+                                            brightness: Brightness.dark,
+                                          ),
+                                        ),
+                                    child: Container(
+                                      key: const ValueKey('player-controls'),
+                                      padding: const EdgeInsets.only(
+                                        top: 12,
+                                        bottom: 6,
+                                      ),
+                                      decoration: const BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: [
+                                            Colors.transparent,
+                                            Color(0xe6000000),
+                                          ],
                                         ),
                                       ),
-                                  child: Container(
-                                    key: const ValueKey('player-controls'),
-                                    padding: const EdgeInsets.only(
-                                      top: 12,
-                                      bottom: 6,
-                                    ),
-                                    decoration: const BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [
-                                          Colors.transparent,
-                                          Color(0xe6000000),
-                                        ],
-                                      ),
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (session.auxiliaryMessage != null)
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (session.auxiliaryMessage != null)
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                  ),
+                                              child: Text(
+                                                session.auxiliaryMessage!,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ),
+                                          if (!session.isLive)
+                                            PlaybackTimelineBar(
+                                              key: ValueKey(
+                                                session.sourceGeneration,
+                                              ),
+                                              playerBoundsKey: _playerBoundsKey,
+                                              position: snapshot.position,
+                                              duration: snapshot.duration,
+                                              buffered: snapshot.buffered,
+                                              chapters: session.chapters,
+                                              storyboard: session.storyboard,
+                                              storyboardLoading:
+                                                  session.storyboardLoading,
+                                              storyboardMessage:
+                                                  session.storyboardMessage,
+                                              sourceGeneration:
+                                                  session.sourceGeneration,
+                                              onPreviewRequest: () => unawaited(
+                                                session.ensureStoryboard(),
+                                              ),
+                                              onSeek: (position) => unawaited(
+                                                session.seek(position),
+                                              ),
+                                            ),
                                           Padding(
                                             padding: const EdgeInsets.symmetric(
                                               horizontal: 10,
                                             ),
-                                            child: Text(
-                                              session.auxiliaryMessage!,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                color: Colors.white70,
-                                                fontSize: 11,
+                                            child: _ControlBar(
+                                              layout: layout,
+                                              composerKey: _composerKey,
+                                              composeExpanded: _composeExpanded,
+                                              onToggleComposer: () => setState(
+                                                () => _composeExpanded =
+                                                    !_composeExpanded,
                                               ),
+                                              session: session,
+                                              settings: settings,
+                                              snapshot: snapshot,
+                                              onToggleComments:
+                                                  widget.onToggleComments,
+                                              danmakuComposerBuilder:
+                                                  widget.danmakuComposerBuilder,
+                                              onFullScreen: _toggleFullScreen,
+                                              fullScreen: widget.fullScreen,
+                                              onFocus: _focusNode.requestFocus,
+                                              onSettings: _openSettings,
+                                              onMenuChanged:
+                                                  _onControlsMenuChanged,
                                             ),
                                           ),
-                                        if (!session.isLive)
-                                          PlaybackTimelineBar(
-                                            key: ValueKey(
-                                              session.sourceGeneration,
-                                            ),
-                                            playerBoundsKey: _playerBoundsKey,
-                                            position: snapshot.position,
-                                            duration: snapshot.duration,
-                                            buffered: snapshot.buffered,
-                                            chapters: session.chapters,
-                                            storyboard: session.storyboard,
-                                            storyboardLoading:
-                                                session.storyboardLoading,
-                                            storyboardMessage:
-                                                session.storyboardMessage,
-                                            sourceGeneration:
-                                                session.sourceGeneration,
-                                            onPreviewRequest: () => unawaited(
-                                              session.ensureStoryboard(),
-                                            ),
-                                            onSeek: (position) => unawaited(
-                                              session.seek(position),
-                                            ),
-                                          ),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                          ),
-                                          child: _ControlBar(
-                                            layout: layout,
-                                            composerKey: _composerKey,
-                                            composeExpanded: _composeExpanded,
-                                            onToggleComposer: () => setState(
-                                              () => _composeExpanded =
-                                                  !_composeExpanded,
-                                            ),
-                                            session: session,
-                                            settings: settings,
-                                            snapshot: snapshot,
-                                            onToggleComments:
-                                                widget.onToggleComments,
-                                            danmakuComposerBuilder:
-                                                widget.danmakuComposerBuilder,
-                                            onFullScreen: _toggleFullScreen,
-                                            fullScreen: widget.fullScreen,
-                                            onFocus: _focusNode.requestFocus,
-                                            onSettings: _openSettings,
-                                          ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1160,6 +1228,77 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   }
 }
 
+// Keep the subtree alive until fade-out finishes, while immediately releasing
+// input and semantics. Reversing a fade reuses the same controls and composer.
+class _FadingPlayerControls extends StatefulWidget {
+  const _FadingPlayerControls({required this.visible, required this.child});
+
+  final bool visible;
+  final Widget child;
+
+  @override
+  State<_FadingPlayerControls> createState() => _FadingPlayerControlsState();
+}
+
+class _FadingPlayerControlsState extends State<_FadingPlayerControls>
+    with SingleTickerProviderStateMixin {
+  late bool _renderChild = widget.visible;
+  late final _opacity = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 200),
+    value: widget.visible ? 1 : 0,
+  )..addStatusListener(_onOpacityStatus);
+  late final _curve = CurvedAnimation(
+    parent: _opacity,
+    curve: Curves.easeInOut,
+  );
+
+  void _onOpacityStatus(AnimationStatus status) {
+    if (status == AnimationStatus.dismissed &&
+        mounted &&
+        !widget.visible &&
+        _renderChild) {
+      setState(() => _renderChild = false);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _FadingPlayerControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.visible == oldWidget.visible) return;
+    if (widget.visible) {
+      _renderChild = true;
+      _opacity.forward();
+    } else {
+      _opacity.reverse();
+      // A reveal can be cancelled before its first animation frame.
+      if (_opacity.isDismissed) _renderChild = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _opacity.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    ignoring: !widget.visible,
+    child: ExcludeFocus(
+      excluding: !widget.visible,
+      child: ExcludeSemantics(
+        excluding: !widget.visible,
+        child: FadeTransition(
+          opacity: _curve,
+          child: _renderChild ? widget.child : const SizedBox.shrink(),
+        ),
+      ),
+    ),
+  );
+}
+
 class _ControlBar extends StatelessWidget {
   const _ControlBar({
     required this.layout,
@@ -1174,6 +1313,7 @@ class _ControlBar extends StatelessWidget {
     required this.fullScreen,
     required this.onFocus,
     required this.onSettings,
+    required this.onMenuChanged,
     this.danmakuComposerBuilder,
   });
 
@@ -1185,6 +1325,7 @@ class _ControlBar extends StatelessWidget {
   final bool fullScreen;
   final VoidCallback onFocus;
   final Future<void> Function(int) onSettings;
+  final ValueChanged<bool> onMenuChanged;
   final WidgetBuilder? danmakuComposerBuilder;
   final _ControlsLayout layout;
   final GlobalKey composerKey;
@@ -1240,6 +1381,9 @@ class _ControlBar extends StatelessWidget {
         size: 20,
       ),
       itemBuilder: (_) => [_VolumeSliderEntry(session: session)],
+      onOpened: () => onMenuChanged(true),
+      onCanceled: () => onMenuChanged(false),
+      onSelected: (_) => onMenuChanged(false),
     );
     Widget slot(Widget child, [double width = _ControlsLayout.buttonWidth]) =>
         SizedBox(width: width, height: 40, child: child);
@@ -1288,7 +1432,12 @@ class _ControlBar extends StatelessWidget {
           PopupMenuButton<int>(
             tooltip: '清晰度',
             initialValue: media.quality,
-            onSelected: session.changeQuality,
+            onOpened: () => onMenuChanged(true),
+            onCanceled: () => onMenuChanged(false),
+            onSelected: (quality) {
+              onMenuChanged(false);
+              unawaited(session.changeQuality(quality));
+            },
             itemBuilder: (_) => [
               for (final quality in media.qualities)
                 PopupMenuItem(
@@ -1317,7 +1466,12 @@ class _ControlBar extends StatelessWidget {
           PopupMenuButton<double>(
             tooltip: '播放速度',
             initialValue: snapshot.rate,
-            onSelected: session.setRate,
+            onOpened: () => onMenuChanged(true),
+            onCanceled: () => onMenuChanged(false),
+            onSelected: (rate) {
+              onMenuChanged(false);
+              unawaited(session.setRate(rate));
+            },
             itemBuilder: (_) => [
               for (final rate in PlaybackRates.values)
                 PopupMenuItem(value: rate, child: Text('${rate}x')),
@@ -1340,7 +1494,12 @@ class _ControlBar extends StatelessWidget {
         slot(
           PopupMenuButton<int>(
             tooltip: '字幕',
-            onSelected: session.selectSubtitle,
+            onOpened: () => onMenuChanged(true),
+            onCanceled: () => onMenuChanged(false),
+            onSelected: (track) {
+              onMenuChanged(false);
+              unawaited(session.selectSubtitle(track));
+            },
             icon: const Icon(Icons.closed_caption_outlined, size: 20),
             itemBuilder: (_) => [
               const PopupMenuItem(value: -1, child: Text('关闭字幕')),
@@ -1434,7 +1593,12 @@ class _ControlBar extends StatelessWidget {
   Widget _moreOptions() => PopupMenuButton<VoidCallback>(
     tooltip: '更多播放选项',
     icon: const Icon(Icons.more_horiz, size: 20),
-    onSelected: (action) => action(),
+    onOpened: () => onMenuChanged(true),
+    onCanceled: () => onMenuChanged(false),
+    onSelected: (action) {
+      onMenuChanged(false);
+      action();
+    },
     itemBuilder: (_) => [
       for (final (tab, title) in const [
         (0, '播放配置'),

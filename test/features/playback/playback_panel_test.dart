@@ -465,7 +465,7 @@ void main() {
         final target = find.byKey(const ValueKey('player-surface-tap-target'));
         for (final visible in [false, true, false, true]) {
           await tester.tapAt(tester.getTopLeft(target) + const Offset(30, 50));
-          await tester.pump(const Duration(milliseconds: 350));
+          await _pumpSurfaceTap(tester);
           await tester.pump();
           expect(controls, visible ? findsOneWidget : findsNothing);
           expect(
@@ -513,7 +513,7 @@ void main() {
         final target = find.byKey(const ValueKey('player-surface-tap-target'));
         if (!controlsVisible) {
           await tester.tapAt(tester.getTopLeft(target) + const Offset(30, 50));
-          await tester.pump(const Duration(milliseconds: 350));
+          await _pumpSurfaceTap(tester);
         }
         session.danmaku.replaceEvents(const [
           DanmakuEvent(
@@ -560,7 +560,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 50));
           await tester.tapAt(point);
           await _pumpFrames(tester);
-          await tester.pump(const Duration(milliseconds: 350));
+          await _pumpSurfaceTap(tester);
           expect(window.fullScreen, fullscreen);
           final controls = find.byKey(const ValueKey('player-controls'));
           expect(controls, controlsVisible ? findsOneWidget : findsNothing);
@@ -1519,7 +1519,7 @@ void main() {
           }
           if (!visible) {
             await tester.tapAt(_surfacePoint(tester));
-            await tester.pump(const Duration(milliseconds: 350));
+            await _pumpSurfaceTap(tester);
           }
           // A hold changes speed without changing the user's pause intent.
           if (visible) await session.pause();
@@ -1534,7 +1534,7 @@ void main() {
           expect(find.text('长按倍速 2.0x'), findsOneWidget);
           await gesture.up();
           await _pumpFrames(tester);
-          await tester.pump(const Duration(milliseconds: 350));
+          await _pumpSurfaceTap(tester);
           expect(engine.currentSnapshot.rate, 1.5);
           expect(engine.currentSnapshot.desiredPlaying, playing);
           expect(engine.currentSnapshot.position, const Duration(seconds: 12));
@@ -1735,7 +1735,7 @@ void main() {
       expect(engine.currentSnapshot.rate, 1);
       await gesture.up();
       await _pumpFrames(tester);
-      await tester.pump(const Duration(milliseconds: 350));
+      await _pumpSurfaceTap(tester);
       expect(engine.currentSnapshot.rate, 1);
       expect(find.byKey(const ValueKey('player-rate-hud')), findsNothing);
       if (action == 'short touch') {
@@ -1772,7 +1772,7 @@ void main() {
 
           Future<void> singleTap() async {
             await tester.tapAt(surfacePoint(), kind: kind);
-            await tester.pump(const Duration(milliseconds: 350));
+            await _pumpSurfaceTap(tester);
           }
 
           Future<void> doubleTap() async {
@@ -1781,7 +1781,7 @@ void main() {
             await tester.pump(const Duration(milliseconds: 50));
             await tester.tapAt(point, kind: kind);
             await _pumpFrames(tester);
-            await tester.pump(const Duration(milliseconds: 350));
+            await _pumpSurfaceTap(tester);
           }
 
           void expectControls(bool shown) =>
@@ -1849,6 +1849,17 @@ void main() {
           await mouse.addPointer(location: const Offset(-10, -10));
           final point = _surfacePoint(tester);
           final playing = engine.currentSnapshot.desiredPlaying;
+          double opacity() => tester
+              .widget<FadeTransition>(
+                find
+                    .ancestor(
+                      of: controls,
+                      matching: find.byType(FadeTransition),
+                    )
+                    .first,
+              )
+              .opacity
+              .value;
           await mouse.moveTo(point);
           await tester.pump();
           expect(controls, findsOneWidget);
@@ -1863,19 +1874,37 @@ void main() {
           }
           expect(controls, findsOneWidget);
           await tester.pump(const Duration(milliseconds: 1));
+          expect(controls.hitTestable(), findsNothing);
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(opacity(), inExclusiveRange(0, 1));
+          await tester.pump(const Duration(milliseconds: 116));
+          await tester.pump();
           expect(controls, findsNothing);
           await mouse.moveTo(point + const Offset(5, 0));
-          await tester.pump(const Duration(milliseconds: 700));
+          await tester.pump();
+          expect(opacity(), 0);
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(opacity(), inExclusiveRange(0, 1));
+          await tester.pump(const Duration(milliseconds: 600));
           expect(controls, findsOneWidget);
           await mouse.moveTo(point + const Offset(10, 0));
           await tester.pump(const Duration(milliseconds: 999));
           expect(controls, findsOneWidget);
           await tester.pump(const Duration(milliseconds: 1));
+          expect(controls.hitTestable(), findsNothing);
+          await tester.pump(const Duration(milliseconds: 216));
+          await tester.pump();
           expect(controls, findsNothing);
           await mouse.moveTo(point + const Offset(15, 0));
           await tester.pump();
           expect(controls, findsOneWidget);
+          await tester.pump(const Duration(milliseconds: 200));
           await mouse.moveTo(const Offset(-10, -10));
+          await tester.pump();
+          expect(controls.hitTestable(), findsNothing);
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(opacity(), inExclusiveRange(0, 1));
+          await tester.pump(const Duration(milliseconds: 116));
           await tester.pump();
           expect(controls, findsNothing);
           expect(engine.currentSnapshot.desiredPlaying, playing);
@@ -1918,17 +1947,19 @@ void main() {
               await tester.pump();
             }
             await tester.pump(const Duration(seconds: 1));
+            await tester.pump(const Duration(milliseconds: 216));
+            await tester.pump();
             expect(controls, findsNothing);
             final playing = engine.currentSnapshot.desiredPlaying;
             await tester.tapAt(_surfacePoint(tester), kind: kind);
-            await tester.pump(const Duration(milliseconds: 350));
+            await _pumpSurfaceTap(tester);
             expect(
               engine.currentSnapshot.desiredPlaying,
               live ? playing : !playing,
             );
             expect(controls, live ? findsNothing : findsOneWidget);
             await tester.tapAt(_surfacePoint(tester), kind: kind);
-            await tester.pump(const Duration(milliseconds: 350));
+            await _pumpSurfaceTap(tester);
             expect(engine.currentSnapshot.desiredPlaying, playing);
             expect(controls, live ? findsNothing : findsOneWidget);
 
@@ -1976,6 +2007,8 @@ void main() {
       expect(controls, findsOneWidget);
       await gesture.cancel();
       await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(milliseconds: 216));
+      await tester.pump();
       expect(controls, findsNothing);
       await gesture.removePointer();
       await tester.pumpWidget(const SizedBox());
@@ -1998,7 +2031,7 @@ void main() {
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: Offset.zero);
       await tester.tapAt(_surfacePoint(tester));
-      await tester.pump(const Duration(milliseconds: 350));
+      await _pumpSurfaceTap(tester);
       await mouse.moveTo(_surfacePoint(tester) + const Offset(5, 0));
       await tester.pump();
       expect(controls, findsNothing);
@@ -2068,13 +2101,267 @@ void main() {
       expect(engine.currentSnapshot.rate, 1);
       expect(engine.currentSnapshot.desiredPlaying, playing);
       await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(milliseconds: 216));
+      await tester.pump();
       expect(controls, findsNothing);
       await tester.pumpWidget(const SizedBox());
       await _pumpFrames(tester);
     },
   );
 
-  testWidgets('only surface clicks toggle controls, not hover, keys or time', (
+  for (final fullscreen in [false, true]) {
+    for (final width in [400.0, 1200.0]) {
+      testWidgets(
+        'click controls fade, release input and reverse at width=$width fullscreen=$fullscreen',
+        (tester) async {
+          tester.view.physicalSize = const Size(1280, 800);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          final window = _FakeWindowService();
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(session, window, const AppSettings.defaults(), width: width),
+          );
+          await _pumpFrames(tester);
+          await session.pause();
+          if (fullscreen) {
+            await tester.tap(find.byTooltip('全屏（F）'));
+            await _pumpFrames(tester);
+          }
+          final controls = find.byKey(const ValueKey('player-controls'));
+          final generation = session.sourceGeneration;
+          final opens = engine.opens;
+          // Invoke the accepted single tap to isolate animation timing from the
+          // double-tap recognizer's deadline (gestures have separate coverage).
+          void tapSurface() => tester
+              .widget<GestureDetector>(
+                find.byKey(const ValueKey('player-surface-tap-target')),
+              )
+              .onTap!();
+          double opacity() => tester
+              .widget<FadeTransition>(
+                find
+                    .ancestor(
+                      of: controls,
+                      matching: find.byType(FadeTransition),
+                    )
+                    .first,
+              )
+              .opacity
+              .value;
+
+          expect(opacity(), 1);
+          tapSurface();
+          await tester.pump();
+          expect(controls, findsOneWidget);
+          expect(controls.hitTestable(), findsNothing);
+          await tester.pump(const Duration(milliseconds: 100));
+          final fadingOut = opacity();
+          expect(fadingOut, inExclusiveRange(0, 1));
+          tapSurface();
+          await tester.pump();
+          expect(opacity(), closeTo(fadingOut, .001));
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(opacity(), greaterThan(fadingOut));
+          await tester.pump(const Duration(milliseconds: 200));
+          expect(opacity(), 1);
+
+          tapSurface();
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 216));
+          await tester.pump();
+          expect(controls, findsNothing);
+          tapSurface();
+          await tester.pump();
+          expect(opacity(), 0);
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(opacity(), inExclusiveRange(0, 1));
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(opacity(), 1);
+          expect(session.sourceGeneration, generation);
+          expect(engine.opens, opens);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(engine.maxSurfaces, 1);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+    for (final (content, target) in <(String, ContentPlaybackTarget?)>[
+      ('video', null),
+      ('pgc', const PgcPlaybackTarget('12', cid: '123')),
+      ('live', const LivePlaybackTarget('12')),
+    ]) {
+      testWidgets(
+        'click controls hide after five seconds content=$content fullscreen=$fullscreen',
+        (tester) async {
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(
+              session,
+              _FakeWindowService(),
+              const AppSettings.defaults(),
+              target: target,
+            ),
+          );
+          await _pumpFrames(tester);
+          if (fullscreen) {
+            await tester.tap(find.byTooltip('全屏（F）'));
+            await _pumpFrames(tester);
+          }
+          final controls = find.byKey(const ValueKey('player-controls'));
+          final playing = engine.currentSnapshot.desiredPlaying;
+          final surface = tester.widget<GestureDetector>(
+            find.byKey(const ValueKey('player-surface-tap-target')),
+          );
+          surface.onTap!();
+          surface.onTap!();
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 4999));
+          expect(controls, findsOneWidget);
+          expect(controls.hitTestable(), findsOneWidget);
+          await tester.pump(const Duration(milliseconds: 1));
+          expect(controls, findsOneWidget);
+          expect(controls.hitTestable(), findsNothing);
+          await tester.pump(const Duration(milliseconds: 100));
+          final fade = tester.widget<FadeTransition>(
+            find
+                .ancestor(of: controls, matching: find.byType(FadeTransition))
+                .first,
+          );
+          expect(fade.opacity.value, inExclusiveRange(0, 1));
+          await tester.pump(const Duration(milliseconds: 116));
+          await tester.pump();
+          expect(controls, findsNothing);
+          expect(engine.currentSnapshot.desiredPlaying, playing);
+          expect(engine.opens, 1);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
+  testWidgets(
+    'click controls wait for drags and menus, then restart the idle deadline',
+    (tester) async {
+      final session = _session(_FakeEngine());
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, _FakeWindowService(), const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      final controls = find.byKey(const ValueKey('player-controls'));
+      await tester.pump(const Duration(seconds: 4));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byTooltip('音量')),
+      );
+      await tester.pump(const Duration(seconds: 6));
+      expect(controls, findsOneWidget);
+      await gesture.up();
+      await _pumpFrames(tester);
+      await tester.tap(find.byTooltip('音量'));
+      await _pumpFrames(tester);
+      expect(
+        find.byKey(const ValueKey('player-volume-slider')),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 10));
+      expect(controls, findsOneWidget);
+      await tester.tapAt(const Offset(5, 5));
+      await _pumpFrames(tester);
+      await tester.pump(const Duration(seconds: 4));
+      expect(controls, findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(milliseconds: 216));
+      await tester.pump();
+      expect(controls, findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+  );
+
+  testWidgets(
+    'click controls retain the focused editor and release it when hidden',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final session = _session(_FakeEngine());
+      addTearDown(session.close);
+      final editorFocus = FocusNode();
+      addTearDown(editorFocus.dispose);
+      await tester.pumpWidget(
+        _app(
+          session,
+          _FakeWindowService(),
+          const AppSettings.defaults(),
+          width: 1200,
+          composer: (_) =>
+              TextField(key: const Key('click-editor'), focusNode: editorFocus),
+        ),
+      );
+      await _pumpFrames(tester);
+      final controls = find.byKey(const ValueKey('player-controls'));
+      await tester.tap(find.byKey(const Key('click-editor')));
+      await tester.enterText(find.byKey(const Key('click-editor')), '草稿');
+      await tester.pump(const Duration(seconds: 10));
+      expect(editorFocus.hasFocus, isTrue);
+      expect(controls, findsOneWidget);
+      await tester.tapAt(_surfacePoint(tester));
+      await _pumpSurfaceTap(tester);
+      expect(editorFocus.hasFocus, isFalse);
+      expect(editorFocus.canRequestFocus, isFalse);
+      await tester.pump(const Duration(milliseconds: 216));
+      await tester.pump();
+      expect(controls, findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+  );
+
+  testWidgets(
+    'click controls suspend idle hiding in background and hidden views',
+    (tester) async {
+      final session = _session(_FakeEngine());
+      addTearDown(session.close);
+      final window = _FakeWindowService();
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      final controls = find.byKey(const ValueKey('player-controls'));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump(const Duration(seconds: 10));
+      expect(controls, findsOneWidget);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump(const Duration(seconds: 4));
+      expect(controls, findsOneWidget);
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults(), active: false),
+      );
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      expect(controls, findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 216));
+      await tester.pump();
+      expect(controls, findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+  );
+
+  testWidgets('click controls ignore hover and keys, then hide after idle', (
     tester,
   ) async {
     final engine = _FakeEngine();
@@ -2090,7 +2377,7 @@ void main() {
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: Offset.zero);
     await tester.tapAt(point);
-    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpSurfaceTap(tester);
     expect(controls, findsNothing);
     await mouse.moveTo(point + const Offset(5, 0));
     await tester.pump();
@@ -2105,11 +2392,15 @@ void main() {
     expect(find.byKey(const ValueKey('player-rate-feedback')), findsNothing);
     expect(controls, findsNothing);
     await tester.tapAt(point);
-    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpSurfaceTap(tester);
     expect(controls, findsOneWidget);
     await mouse.moveTo(point + const Offset(10, 0));
-    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(seconds: 4));
     expect(controls, findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 216));
+    await tester.pump();
+    expect(controls, findsNothing);
     await mouse.removePointer();
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
@@ -2129,11 +2420,11 @@ void main() {
       final controls = find.byKey(const ValueKey('player-controls'));
       final playing = engine.currentSnapshot.desiredPlaying;
       await tester.tapAt(tester.getTopLeft(target) + const Offset(30, 50));
-      await tester.pump(const Duration(milliseconds: 350));
+      await _pumpSurfaceTap(tester);
       expect(engine.currentSnapshot.desiredPlaying, playing);
       expect(controls, findsNothing);
       await tester.tapAt(tester.getTopLeft(target) + const Offset(30, 50));
-      await tester.pump(const Duration(milliseconds: 350));
+      await _pumpSurfaceTap(tester);
       expect(engine.currentSnapshot.desiredPlaying, playing);
       expect(controls, findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
@@ -2155,7 +2446,7 @@ void main() {
       await _pumpFrames(tester);
       final target = find.byKey(const ValueKey('player-surface-tap-target'));
       await tester.tapAt(tester.getTopLeft(target) + const Offset(30, 50));
-      await tester.pump(const Duration(milliseconds: 350));
+      await _pumpSurfaceTap(tester);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await _pumpFrames(tester);
       expect(engine.currentSnapshot.position, const Duration(seconds: 3));
@@ -2196,7 +2487,7 @@ void main() {
           ) +
           const Offset(30, 50),
     );
-    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpSurfaceTap(tester);
     final pauses = engine.pauses;
     final context = tester.element(find.byType(PlaybackPanel));
     unawaited(
@@ -2208,7 +2499,7 @@ void main() {
     // Playback's interpolation ticker uses a real monotonic clock. Wait only
     // for the dialog transition instead of settling every playback frame.
     await _pumpFrames(tester);
-    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpSurfaceTap(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
     await _pumpFrames(tester);
@@ -2216,7 +2507,7 @@ void main() {
     expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
     Navigator.of(context).pop();
     await _pumpFrames(tester);
-    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpSurfaceTap(tester);
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
   });
@@ -2238,7 +2529,7 @@ void main() {
             ) +
             const Offset(30, 50),
       );
-      await tester.pump(const Duration(milliseconds: 350));
+      await _pumpSurfaceTap(tester);
       expect(find.byKey(const ValueKey('player-controls')), findsNothing);
       engine._failures.add(
         PlayerFailure(
@@ -2316,11 +2607,11 @@ void main() {
     expect(find.byKey(const ValueKey('player-controls')), findsOneWidget);
     await tester.tap(find.byTooltip('播放配置'));
     await _pumpFrames(tester);
-    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpSurfaceTap(tester);
     expect(find.byType(Dialog), findsWidgets);
     Navigator.of(tester.element(find.byType(TabBar))).pop();
     await _pumpFrames(tester);
-    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpSurfaceTap(tester);
     await tester.tap(find.byTooltip('退出全屏（Esc）'));
     await _pumpFrames(tester);
     expect(window.fullScreen, isFalse);
@@ -2795,6 +3086,13 @@ Future<void> _pumpFrames(WidgetTester tester) async {
   for (var i = 0; i < 5; i++) {
     await tester.pump(const Duration(milliseconds: 16));
   }
+}
+
+Future<void> _pumpSurfaceTap(WidgetTester tester) async {
+  // Accept the single tap after the double-tap deadline, then finish fading.
+  await tester.pump(const Duration(milliseconds: 350));
+  await tester.pump(const Duration(milliseconds: 216));
+  await tester.pump();
 }
 
 Future<FocusNode> _focusRecommendation(
