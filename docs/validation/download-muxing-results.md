@@ -34,6 +34,8 @@ CI 改为从组件已经校验的固定源码单独构建测试用 ffprobe，并
 
 提交前本机验证：`tool/check.ps1 -EnforceLockfile` 通过格式、分析及 1900 项测试，五份锁文件无差异；Windows 显式启用原生资产的 9 项回归全部通过。WSL Linux 实际构建组件和测试 ffprobe `9.0.2`，H.264／HEVC／AV1 + AAC 三组的包数、哈希、PTS/DTS、时长与相对起始偏移全部通过。两个工作流通过 actionlint，修改文档的 7 条本地链接通过。应用安装包和远端 Release 在此提交前尚未重新构建；这项修复不改变原生封装实现。
 
+后续 [Release preview #18](https://github.com/CKopoer/BiliSail/actions/runs/37814204461) 已通过全项目检查及原生 9 项回归，继续打包时暴露 macOS 组件构建失败。平台构建包装脚本增加失败时输出配置／编译／链接日志末尾，供远端定位，不再只提示检查已经不可访问的 runner 本地文件。
+
 ## 用户后续手动构建
 
 先按[组件构建说明](../../packages/bili_mux/README.md)准备对应目标的原生资产，再执行通常的 Flutter 构建。例如当前 Windows 主机：

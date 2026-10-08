@@ -38,5 +38,13 @@ if ($IsWindows) {
   & bash $buildScript $Target
 }
 if ($LASTEXITCODE -ne 0) {
+  $buildDirectory = Join-Path $repoRoot "build/download_mux/$Target"
+  foreach ($relativeLog in @('configure.log', 'ffbuild/config.log', 'build.log', 'link.log')) {
+    $logPath = Join-Path $buildDirectory $relativeLog
+    if (Test-Path -LiteralPath $logPath) {
+      Write-Host "MP4 build diagnostics: $relativeLog"
+      Get-Content -LiteralPath $logPath -Tail 80 | Write-Host
+    }
+  }
   throw "MP4 component build failed. Inspect build/download_mux/$Target/*.log."
 }
