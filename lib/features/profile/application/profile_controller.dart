@@ -30,6 +30,7 @@ final class ProfileListState {
 
 final class ProfileState {
   const ProfileState({
+    this.sessionGeneration = 0,
     this.profile,
     this.profileLoading = false,
     this.profileMessage,
@@ -43,6 +44,9 @@ final class ProfileState {
     this.folderTitle,
   });
   final UserProfile? profile;
+
+  /// Retained presentation state must be discarded when account state resets.
+  final int sessionGeneration;
   final ProfileLiveRoom? liveRoom;
   final String? liveRoomMessage;
   final bool profileLoading;
@@ -68,6 +72,7 @@ final class ProfileState {
     String? folderTitle,
     bool closeFolder = false,
   }) => ProfileState(
+    sessionGeneration: sessionGeneration,
     profile: profile ?? this.profile,
     profileLoading: profileLoading ?? this.profileLoading,
     profileMessage: clearProfileMessage
@@ -111,7 +116,7 @@ class ProfileController extends Notifier<ProfileState> {
         load();
       }
     });
-    return const ProfileState();
+    return ProfileState(sessionGeneration: generation);
   }
 
   void _cancel() {

@@ -9,6 +9,7 @@ import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/dynamic_post_interactions.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
+import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/user_follow_button.dart';
 import '../../auth/application/auth_controller.dart';
@@ -42,7 +43,6 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  final _keyword = TextEditingController();
   @override
   void initState() {
     super.initState();
@@ -71,25 +71,47 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   @override
-  void dispose() {
-    _keyword.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final state = ref.watch(profileControllerProvider(widget.id));
     final controller = ref.read(profileControllerProvider(widget.id).notifier);
     final account = ref.watch(authControllerProvider);
-    final isSelf = widget.isSelf || account.mid == widget.id.value;
+    final session = (widget.id, state.sessionGeneration);
+    return RetainedTabView<ProfileSection>(
+      key: ValueKey(session),
+      tabs: ProfileSection.values,
+      value: state.section,
+      onChanged: controller.select,
+      viewKey: const ValueKey('profile-section-swipe'),
+      pageBuilder: (context, section, active) => _sectionPage(
+        context,
+        state.copy(section: section),
+        controller,
+        session: session,
+        isSelf: widget.isSelf || account.mid == widget.id.value,
+        signedIn: account.isSignedIn,
+      ),
+    );
+  }
+
+  Widget _sectionPage(
+    BuildContext context,
+    ProfileState state,
+    ProfileController controller, {
+    required (UserId, int) session,
+    required bool isSelf,
+    required bool signedIn,
+  }) {
     final p = state.profile;
     return Column(
       children: [
         Expanded(
           child: CustomScrollView(
-            key: PageStorageKey(
-              'profile-${widget.id.value}-${state.section.name}-${state.folderId}',
-            ),
+            primary: false,
+            key: PageStorageKey((
+              session,
+              state.section,
+              state.section == ProfileSection.folders ? state.folderId : null,
+            )),
             slivers: [
               SliverPadding(
                 padding: const EdgeInsets.all(16),
@@ -119,7 +141,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       vertical: 8,
                                     ),
                                   ),
-                                  onPressed: account.isSignedIn
+                                  onPressed: signedIn
                                       ? widget.onMessage == null
                                             ? null
                                             : () => widget.onMessage?.call(p)
@@ -159,9 +181,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                       const SizedBox(height: 16),
                       if (state.section == ProfileSection.videos) ...[
-                        ProfileVideoToolbar(
+                        _ProfileVideoFilters(
                           order: state.order,
-                          keywordController: _keyword,
+                          keyword: state.keyword,
                           onOrderChanged: (value) =>
                               controller.filter(order: value),
                           onSearch: (value) =>
@@ -420,4 +442,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     video: video,
     onTap: () => widget.onOpenVideo?.call(video),
   );
+}
+
+/// The search draft lives with the retained video page, including its session.
+class _ProfileVideoFilters extends StatefulWidget {
+  const _ProfileVideoFilters({
+    required this.order,
+    required this.keyword,
+    required this.onOrderChanged,
+    required this.onSearch,
+  });
+
+  final String order, keyword;
+  final ValueChanged<String> onOrderChanged, onSearch;
+
+  @override
+  State<_ProfileVideoFilters> createState() => _ProfileVideoFiltersState();
+}
+
+class _ProfileVideoFiltersState extends State<_ProfileVideoFilters> {
+  late final _keyword = TextEditingController(text: widget.keyword);
+
+  @override
+  Widget build(BuildContext context) => ProfileVideoToolbar(
+    order: widget.order,
+    keywordController: _keyword,
+    onOrderChanged: widget.onOrderChanged,
+    onSearch: widget.onSearch,
+  );
+
+  @override
+  void dispose() {
+    _keyword.dispose();
+    super.dispose();
+  }
 }
