@@ -35,6 +35,7 @@ BiliSail（哔帆）是一个专注观看体验的跨平台 Bilibili 第三方�
 | API | 纯 Dart `bili_api` + `dio` | 便于单测和协议调整；HTTP 客户端不泄漏到界面 |
 | 数据模型 | Dart 不可变类型；复杂联合状态按需用 `freezed`，JSON 按需生成 | Domain 不依赖 JSON/Protobuf 字段；避免为简单类型强制生成 |
 | 播放 | `bili_player` 封装 `media_kit`、`media_kit_video`、视频原生库 | 首选后端，须通过 DASH/直播/请求头三端验证；`fvp` 是备选 |
+| 下载合并 | `bili_mux` 的精简原生 MP4 封装与 Dart FFI | 只读写已下载的本地文件，不访问播放器内部 ABI；三端验证见[合并记录](validation/download-muxing-results.md) |
 | 弹幕 | `bili_danmaku`：Dart 调度 + Flutter Canvas/TextPainter | 先实现滚动/顶部/底部；渲染适配器允许接入实测合格的现成包 |
 | 持久化 | Drift/SQLite、安全存储、文件缓存 | 结构化数据、凭据、媒体文件分别管理 |
 | 并发 | Dart async + 有界任务队列；重解析放 isolate | 不把异步网络请求等同于 CPU 并行 |
@@ -118,7 +119,8 @@ bilisail/                         # 工程名；本地检出目录目前仍为 b
 │   │   ├── proto/                 # 仅采用的 schema 及来源记录
 │   │   └── test/fixtures/
 │   ├── bili_player/               # 通用 source/engine 契约、media_kit、video surface
-│   └── bili_danmaku/              # 不含网络的事件、调度、轨道布局、Flutter painter
+│   ├── bili_danmaku/              # 不含网络的事件、调度、轨道布局、Flutter painter
+│   └── bili_mux/                  # 本地 MP4 文件封装、精简 FFmpeg 和独立 C ABI
 ├── test/                         # 镜像根应用的目录
 ├── integration_test/
 ├── tool/                         # 可复现检查、生成与基准脚本
@@ -135,6 +137,7 @@ bilisail/                         # 工程名；本地检出目录目前仍为 b
 - 主应用的 Repository：将 API 类型映射成产品领域模型，合并本地续播、用户偏好和缓存。无需对完全相同的简单值重复包装，DTO 的缺省语义必须在边界处理。
 - `bili_player`：只认识媒体源、轨道、控制命令、事件和播放面板，不认识 bvid、cid、扫码或 Bilibili API。
 - `bili_danmaku`：只接受时间戳事件和时钟，不发 HTTP，不读取账号或直接订阅某个播放器库。
+- `bili_mux`：只接受本地媒体路径、取消和进度，不认识 bvid/cid、账号、下载队列或播放器；任务持久化和原子提交由下载仓储负责。
 
 ## 5. 业务模块边界
 

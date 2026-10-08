@@ -53,6 +53,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
       widget.initialSelection?.codec ?? VideoCodecPreference.h264;
   late bool _danmaku = widget.initialSelection?.includeDanmaku ?? true;
   late bool _subtitles = widget.initialSelection?.includeSubtitles ?? true;
+  late bool _merge = widget.initialSelection?.output == DownloadOutput.mp4;
   List<int> _qualities = const [];
   bool _loading = false;
   bool _submitting = false;
@@ -217,6 +218,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
               codec: _codec,
               includeDanmaku: _danmaku,
               includeSubtitles: _subtitles,
+              output: _merge ? DownloadOutput.mp4 : DownloadOutput.separate,
             ),
           );
       if (!mounted) return;
@@ -241,7 +243,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(downloadControllerProvider);
+    final canMerge = ref.watch(downloadControllerProvider).canMerge;
     ref.watch(downloadSourceRepositoryProvider);
     final accountChanged = _accountChanged;
     final validCount = widget.items.where((item) => item.isValid).length;
@@ -369,6 +371,15 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                 Text(
                   '若所选编码没有对应轨道，任务会明确失败。',
                   style: Theme.of(context).textTheme.bodySmall,
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('合并为单个 MP4'),
+                  subtitle: Text(canMerge ? '保留原画质，字幕和弹幕单独保存' : '当前无法合并，可分轨保存'),
+                  value: _merge,
+                  onChanged: _submitting || !canMerge
+                      ? null
+                      : (value) => setState(() => _merge = value ?? false),
                 ),
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,

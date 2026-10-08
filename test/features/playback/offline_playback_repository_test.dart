@@ -122,6 +122,21 @@ void main() {
     },
   );
 
+  test(
+    'merged offline media opens one source with no external audio or network',
+    () async {
+      downloads.task = _task(directory.path, output: DownloadOutput.mp4);
+      final media = await repository.content.resolve(
+        const OfflinePlaybackTarget('task-1'),
+        quality: 80,
+        cancellation: RequestCancellation(),
+      );
+      expect(media.video.urls.single, File('${directory.path}/media.mp4').uri);
+      expect(media.audio, isNull);
+      expect(network.calls, isEmpty);
+    },
+  );
+
   test('two adapters keep offline and online content isolated', () async {
     await _writeExtras(directory, {
       'version': 1,
@@ -282,7 +297,10 @@ Future<void> _writeExtras(Directory directory, Map<String, Object?> body) =>
     File('${directory.path}${Platform.pathSeparator}extras.json')
         .writeAsString(jsonEncode(body));
 
-DownloadTask _task(String directory) {
+DownloadTask _task(
+  String directory, {
+  DownloadOutput output = DownloadOutput.separate,
+}) {
   final now = DateTime(2026, 10, 7);
   return DownloadTask(
     id: 'task-1',
@@ -303,7 +321,10 @@ DownloadTask _task(String directory) {
         duration: Duration(minutes: 12),
       ),
     ),
-    selection: const DownloadSelection(quality: 80),
+    selection: DownloadSelection(quality: 80, output: output),
+    mergedMedia: output == DownloadOutput.mp4
+        ? const DownloadMergedMedia(bytes: 8, sha256: 'digest')
+        : null,
     status: DownloadStatus.completed,
     createdAt: now,
     updatedAt: now,

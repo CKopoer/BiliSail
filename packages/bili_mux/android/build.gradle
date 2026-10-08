@@ -1,0 +1,35 @@
+group = 'dev.bilisail.mux'
+version = '0.1.0'
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace = 'dev.bilisail.mux'
+    compileSdk = 36
+    defaultConfig { minSdk = 24 }
+    sourceSets {
+        main.jniLibs.srcDirs = ['src/main/jniLibs']
+        main.assets.srcDirs = ['src/main/assets']
+    }
+}
+
+tasks.register('prepareMuxAssets', Copy) {
+    def nativeRoot = file('../native/prebuilt/android-arm64')
+    from(nativeRoot) {
+        include 'libbili_mux.so'
+        into 'jniLibs/arm64-v8a'
+    }
+    from(nativeRoot) {
+        include 'COPYING.LGPLv2.1', 'source.txt', 'configure.log'
+        into 'assets/bili_mux'
+    }
+    into layout.buildDirectory.dir('mux-assets')
+    doFirst {
+        if (!new File(nativeRoot, 'libbili_mux.so').isFile()) {
+            throw new GradleException('Build the MP4 component first: pwsh -File tool/build-download-mux.ps1 -Target android-arm64 -AndroidNdk <NDK 28.2.13676358>')
+        }
+    }
+}
+android.sourceSets.main.jniLibs.srcDirs = [layout.buildDirectory.dir('mux-assets/jniLibs')]
+android.sourceSets.main.assets.srcDirs = [layout.buildDirectory.dir('mux-assets/assets')]
+tasks.named('preBuild').configure { dependsOn 'prepareMuxAssets' }

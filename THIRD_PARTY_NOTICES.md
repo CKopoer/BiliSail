@@ -15,6 +15,8 @@
 
 ## 直接组件
 
+2026-10-09 下载可选合并引入独立 `bili_mux`：固定 FFmpeg [`n9.0.2`](https://github.com/FFmpeg/FFmpeg/tree/n9.0.2) 源码，归档 SHA-256 为 `6e374ed621e48faa40639307dff48ba6fe574a509977956d2cce9669b7cc27e9`。裁剪为本地 MP4 读取/写入和必要的码流处理，构建报告 LGPL 2.1 or later，没有启用 GPL / nonfree 组件或外部编解码库。原文、三端打包、构建配置和测试边界见 [组件说明](packages/bili_mux/README.md)与[原始许可](packages/bili_mux/LICENSE-FFmpeg.txt)。`tool/build-release.ps1` 在应用安装包旁保存对应源码归档、本项目原生包装源码和构建说明；包装接口独立编写，不修改或复用播放器内部 ABI。新增 Dart 绑定使用固定 `ffi 2.2.0`（BSD-3-Clause，已有解析版本），不是额外媒体引擎。
+
 Windows MSI/EXE 打包使用固定 [WiX Toolset 6.0.2](https://github.com/wixtoolset/wix/releases/tag/v6.0.2) 与同版本 `WixToolset.BootstrapperApplications.wixext`、`WixToolset.UI.wixext`、`WixToolset.Util.wixext`，来源为 NuGet 官方包；UI 扩展提供 MSI 目录向导，Util 扩展用于 EXE 读取先前安装目录。源码采用 [Microsoft Reciprocal License（MS-RL）](https://github.com/wixtoolset/wix/blob/v6.0.2/LICENSE.TXT)，二进制使用另适用 [Open Source Maintenance Fee](https://docs.firegiant.com/wix/osmf/)；没有采用 FireGiant 商业扩展。WiX CLI 和 .NET 仅用于构建，EXE 安装器内嵌原生 Burn 引擎与标准 Bootstrapper UI，用户机器无需 .NET。[原始许可](windows/licenses/wix/LICENSE.TXT) 与 [二进制条款](windows/licenses/wix/OSMFEULA.txt) 随 Windows 安装包一并保留于 `data/licenses/wix`。
 
 内嵌官网登录使用 [flutter_inappwebview 6.2.0-beta.3](https://pub.dev/packages/flutter_inappwebview/versions/6.2.0-beta.3)，Apache-2.0；选此固定预览版是因为工程 AGP 9 与其稳定版不兼容。官网页面与验证码按需通过 HTTPS 加载，未复制到应用资产。Windows 的 WebView2 SDK／Loader 使用 NuGet 包内 Microsoft BSD 类许可，WIL、CppWinRT 与 nlohmann.json 使用 MIT；这些原生许可另随 Windows 产物置于 `data/licenses/webview`。nlohmann.json 3.12.0 的 [原始许可](https://github.com/nlohmann/json/blob/v3.12.0/LICENSE.MIT)保留于 [本地许可](windows/licenses/nlohmann-json-LICENSE.txt)。平台 SDK 来源、锁定版本和实测边界见 [登录验证](docs/validation/password-sms-login.md)。

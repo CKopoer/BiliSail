@@ -133,7 +133,7 @@ jobs:
 
   build:
     name: Build ${{ matrix.target }}
-    needs: [prepare, check]
+    needs: [prepare, check, native-mux]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -164,6 +164,19 @@ jobs:
           architecture: ${{ matrix.arch }}
           cache: true
           pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
+      - name: Set up the Windows mux compiler
+        if: matrix.target == 'windows-x64'
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        with:
+          msystem: UCRT64
+          location: C:\msys64
+          install: make mingw-w64-ucrt-x86_64-gcc
+      - name: Set up the Android mux compiler
+        if: matrix.target == 'android-arm64'
+        shell: bash
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
       - name: Build and package preview
         shell: pwsh
         env:
@@ -187,3 +200,30 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+  native-mux:
+    name: MP4 native regression
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.6'
+          channel: stable
+          cache: true
+          pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
+      - name: Build and verify the isolated MP4 component
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          bash packages/bili_mux/tool/build.sh linux-x64
+          export BILI_MUX_LIBRARY="$PWD/packages/bili_mux/native/prebuilt/linux-x64/libbili_mux.so"
+          export BILI_MUX_FFPROBE="$(command -v ffprobe)"
+          cd packages/bili_mux
+          flutter pub get --enforce-lockfile
+          flutter test

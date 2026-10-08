@@ -20,7 +20,7 @@ try {
   if ($sdk.frameworkVersion -ne '3.47.6') { throw 'This checkout is verified with Flutter 3.47.6.' }
   $pubArgs = @('pub', 'get')
   if ($EnforceLockfile) { $pubArgs += '--enforce-lockfile' }
-  $packages = @('bili_api', 'bili_player', 'bili_danmaku')
+  $packages = @('bili_api', 'bili_player', 'bili_danmaku', 'bili_mux')
   if (!$SkipPub) {
     Invoke-Check flutter $pubArgs
     # Root analysis also scans local packages; their dev dependencies need their own configs.

@@ -128,9 +128,21 @@ final class OfflinePlaybackRepository
       );
     }
 
+    final merged = task.mergedMedia;
+    if (task.selection.output == DownloadOutput.mp4 && merged == null) {
+      throw const AppFailure(AppFailureKind.storage, '离线合并文件索引无效');
+    }
     final media = PlaybackMedia(
-      video: localTrack(video),
-      audio: localTrack(audio),
+      video: task.selection.output == DownloadOutput.mp4 && merged != null
+          ? PlaybackTrack(
+              urls: [File(path.join(task.directory, merged.fileName)).uri],
+              codec: video.codec,
+              bandwidth: video.bandwidth + audio.bandwidth,
+            )
+          : localTrack(video),
+      audio: task.selection.output == DownloadOutput.mp4
+          ? null
+          : localTrack(audio),
       quality: task.selection.quality,
       qualities: [task.selection.quality],
       duration: task.duration ?? task.item.part.duration,

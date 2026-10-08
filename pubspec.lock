@@ -39,6 +39,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  bili_mux:
+    dependency: "direct main"
+    description:
+      path: "packages/bili_mux"
+      relative: true
+    source: path
+    version: "0.1.0"
   bili_player:
     dependency: "direct main"
     description:

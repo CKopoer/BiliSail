@@ -157,6 +157,7 @@ try {
   $sourceDirty = [bool]$sourceChanges
   $lockHash = (Get-FileHash -LiteralPath 'pubspec.lock' -Algorithm SHA256).Hash
   Invoke-BuildCommand flutter @('pub', 'get', '--enforce-lockfile')
+  & (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Target $Target
   # Release builds must regenerate native registrants without dev-only plugins.
   # In Flutter 3.47.6 --no-pub skips that regeneration (not just dependency fetching).
   $versionArgs = @('--release', '--build-name', $buildName, '--build-number', $buildNumber, "--dart-define=BILISAIL_RELEASE_VERSION=$Version")
@@ -166,6 +167,24 @@ try {
   # Refuse to mix a new package with an earlier local build's staging/metadata.
   if (Test-Path -LiteralPath $outputRoot) { throw "$outputRoot already exists. Move it aside before rebuilding." }
   New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
+
+  # Corresponding FFmpeg source and our wrapper/build instructions accompany
+  # the release, without increasing the application installer size.
+  $muxSources = Join-Path $outputRoot 'mux-source'
+  $nativeSources = Join-Path $muxSources 'packages/bili_mux/native'
+  $muxToolSources = Join-Path $muxSources 'packages/bili_mux/tool'
+  $ffmpegSources = Join-Path $muxSources 'build/download_mux'
+  $buildToolSources = Join-Path $muxSources 'tool'
+  New-Item -ItemType Directory -Path $nativeSources, $muxToolSources, $ffmpegSources, $buildToolSources -Force | Out-Null
+  Get-ChildItem -LiteralPath 'packages/bili_mux/native' -File |
+    Copy-Item -Destination $nativeSources
+  Get-ChildItem -LiteralPath 'packages/bili_mux/tool' -File |
+    Copy-Item -Destination $muxToolSources
+  Copy-Item -LiteralPath 'packages/bili_mux/README.md', 'packages/bili_mux/LICENSE-FFmpeg.txt' -Destination (Join-Path $muxSources 'packages/bili_mux')
+  Copy-Item -LiteralPath 'build/download_mux/n9.0.2.tar.gz' -Destination $ffmpegSources
+  Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Destination $buildToolSources
+  Copy-Item -LiteralPath "packages/bili_mux/native/prebuilt/$Target/configure.log" -Destination $muxSources
+  Compress-Archive -Path (Join-Path $muxSources '*') -DestinationPath (Join-Path $releaseDir "$name.mux-source.zip") -CompressionLevel Optimal
 
   switch ($Target) {
     'android-arm64' {

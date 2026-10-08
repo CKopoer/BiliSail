@@ -1,0 +1,6 @@
+_bili_mux_abi
+_bili_mux_create
+_bili_mux_run
+_bili_mux_cancel
+_bili_mux_progress
+_bili_mux_destroy

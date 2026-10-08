@@ -29,6 +29,8 @@ dependencies:
     path: packages/bili_player
   bili_danmaku:
     path: packages/bili_danmaku
+  bili_mux:
+    path: packages/bili_mux
   flutter_inappwebview: 6.2.0-beta.3
 
 dev_dependencies:

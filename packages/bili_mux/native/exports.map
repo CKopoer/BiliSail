@@ -1,0 +1,4 @@
+BILI_MUX_1 {
+  global: bili_mux_*;
+  local: *;
+};

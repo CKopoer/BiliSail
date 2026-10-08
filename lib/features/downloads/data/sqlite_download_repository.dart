@@ -15,6 +15,7 @@ import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/video_codec.dart';
 import '../domain/download_repository.dart';
+import '../domain/download_muxer.dart';
 import 'download_file_store.dart';
 import 'http_download_transfer.dart';
 
@@ -26,10 +27,12 @@ final class SqliteDownloadRepository implements DownloadRepository {
     required Future<String> Function() defaultDirectory,
     HttpDownloadTransfer? transfer,
     DownloadFileStore? files,
+    DownloadMuxer? muxer,
     DateTime Function()? clock,
   }) : _defaultDirectory = defaultDirectory,
        _transfer = transfer ?? const HttpDownloadTransfer(),
        _files = files ?? const DownloadFileStore(),
+       _muxer = muxer ?? const _UnavailableDownloadMuxer(),
        _clock = clock ?? DateTime.now;
 
   final AppDatabase db;
@@ -37,6 +40,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
   final Future<String> Function() _defaultDirectory;
   final HttpDownloadTransfer _transfer;
   final DownloadFileStore _files;
+  final DownloadMuxer _muxer;
   final DateTime Function() _clock;
   final _changes = StreamController<DownloadQueueState>.broadcast();
   final Map<String, DownloadTask> _tasks = {};
@@ -65,6 +69,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
     preferences: _preferences,
     initialized: _initialized,
     failure: _failure,
+    canMerge: _muxer.available,
   );
 
   @override
@@ -132,6 +137,13 @@ final class SqliteDownloadRepository implements DownloadRepository {
         }
         _tasks[restored.id] = restored;
         if (!identical(restored, task)) await _save(restored);
+        if (restored.status == DownloadStatus.completed) {
+          try {
+            await _files.removeSourceTracks(restored);
+          } on FileSystemException {
+            /* Retaining committed originals is safe. */
+          }
+        }
       } on FormatException {
         // A corrupt record is left on disk for diagnostics, without exposing it.
       }
@@ -151,6 +163,23 @@ final class SqliteDownloadRepository implements DownloadRepository {
     bool verifyHashes = false,
   }) async {
     try {
+      if (task.selection.output == DownloadOutput.mp4 &&
+          task.mergedMedia != null) {
+        if (await _files.verifyMerged(task, verifyHash: verifyHashes)) {
+          if (await _files.verifyCompleted(task, verifyHashes: verifyHashes)) {
+            return task.copyWith(
+              status: DownloadStatus.completed,
+              clearFailure: true,
+              updatedAt: _clock(),
+            );
+          }
+          // Output metadata was committed before the manifest/complete stage.
+          // It is reusable without downloading the two original tracks again.
+          if (task.status != DownloadStatus.completed) return task;
+        } else {
+          task = task.copyWith(clearMergedMedia: true);
+        }
+      }
       if (task.status == DownloadStatus.completed) {
         if (!await _files.verifyCompleted(task, verifyHashes: verifyHashes)) {
           return task.copyWith(
@@ -226,6 +255,9 @@ final class SqliteDownloadRepository implements DownloadRepository {
     if (selection.quality <= 0) {
       throw ArgumentError.value(selection.quality, 'quality');
     }
+    if (selection.output == DownloadOutput.mp4 && !_muxer.available) {
+      throw const AppFailure(AppFailureKind.storage, '当前无法合并音视频，请选择分轨保存');
+    }
     final unique = <String, DownloadItem>{};
     for (final item in items) {
       if (!item.isValid) throw ArgumentError.value(item.key, 'item');
@@ -238,7 +270,8 @@ final class SqliteDownloadRepository implements DownloadRepository {
                 task.scope == scope &&
                 task.item.key == item.key &&
                 task.selection.quality == selection.quality &&
-                task.selection.codec == selection.codec,
+                task.selection.codec == selection.codec &&
+                task.selection.output == selection.output,
           ),
         )
         .toList();
@@ -331,6 +364,13 @@ final class SqliteDownloadRepository implements DownloadRepository {
   Future<void> _runTask(String id, _Run run) async {
     try {
       var task = _tasks[id]!;
+      if (task.selection.output == DownloadOutput.mp4 &&
+          (await _files.verifyMerged(task) ||
+              task.tracks.length == 2 && await _verifiedTracks(task))) {
+        if (!_valid(id, run)) return;
+        await _finishTask(task, id, run);
+        return;
+      }
       task = await _stage(task, DownloadStatus.resolving);
       if (!_valid(id, run)) return;
       var resolved = await sources.resolve(
@@ -428,44 +468,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
         index++;
       }
       if (!_valid(id, run)) return;
-      task = await _stage(_tasks[id]!, DownloadStatus.verifying);
-      for (final track in task.tracks) {
-        if (!await _files.verifyTrack(task, track)) {
-          throw const AppFailure(AppFailureKind.storage, '媒体文件校验失败');
-        }
-        if (!_valid(id, run)) return;
-      }
-      var warnings = <String>[];
-      try {
-        final extras = await sources.extras(
-          task.item,
-          task.selection,
-          cancellation: run.cancel,
-        );
-        if (!_valid(id, run)) return;
-        await _files.writeExtras(task, extras);
-        if (!_valid(id, run)) return;
-        warnings = extras.warnings;
-      } on AppFailure catch (error) {
-        if (error.kind == AppFailureKind.cancelled || !_valid(id, run)) return;
-        warnings = ['附属内容下载失败：${error.message}'];
-      } catch (_) {
-        if (!_valid(id, run)) return;
-        warnings = ['附属内容下载失败'];
-      }
-      if (!_valid(id, run)) return;
-      task = _tasks[id]!.copyWith(warnings: warnings, updatedAt: _clock());
-      await _files.writeManifest(task);
-      if (!_valid(id, run)) return;
-      task = task.copyWith(
-        status: DownloadStatus.completed,
-        bytesPerSecond: 0,
-        updatedAt: _clock(),
-        clearFailure: true,
-      );
-      _tasks[id] = task;
-      await _save(task);
-      _emit();
+      await _finishTask(_tasks[id]!, id, run);
     } catch (error) {
       final task = _tasks[id];
       if (task == null || run.scope != _scope || run.epoch != _epoch) return;
@@ -496,9 +499,103 @@ final class SqliteDownloadRepository implements DownloadRepository {
     }
   }
 
+  Future<bool> _verifiedTracks(DownloadTask task) async {
+    if (task.tracks.length != 2) return false;
+    for (final track in task.tracks) {
+      if (!await _files.verifyTrack(task, track)) return false;
+    }
+    return true;
+  }
+
+  Future<void> _finishTask(DownloadTask task, String id, _Run run) async {
+    task = await _stage(task, DownloadStatus.verifying);
+    if (!_valid(id, run)) return;
+    final reusedOutput =
+        task.selection.output == DownloadOutput.mp4 &&
+        await _files.verifyMerged(task);
+    if (!reusedOutput && !await _verifiedTracks(task)) {
+      throw const AppFailure(AppFailureKind.storage, '媒体文件校验失败');
+    }
+    if (!_valid(id, run)) return;
+    var warnings = task.warnings;
+    final extrasFile = await _files.taskFile(task, 'extras.json');
+    if (!await extrasFile.exists()) {
+      try {
+        final extras = await sources.extras(
+          task.item,
+          task.selection,
+          cancellation: run.cancel,
+        );
+        if (!_valid(id, run)) return;
+        await _files.writeExtras(task, extras);
+        warnings = extras.warnings;
+      } on AppFailure catch (error) {
+        if (error.kind == AppFailureKind.cancelled || !_valid(id, run)) return;
+        warnings = ['附属内容下载失败：${error.message}'];
+      } catch (_) {
+        if (!_valid(id, run)) return;
+        warnings = ['附属内容下载失败'];
+      }
+    }
+    if (!_valid(id, run)) return;
+    task = _tasks[id]!.copyWith(warnings: warnings, updatedAt: _clock());
+    if (task.selection.output == DownloadOutput.mp4 && !reusedOutput) {
+      task = await _stage(task, DownloadStatus.muxing);
+      if (!_valid(id, run)) return;
+      final output = await _files.taskFile(task, 'media.mp4.part');
+      try {
+        if (await output.exists()) await output.delete();
+        await _muxer.merge(
+          videoPath: (await _files.taskFile(task, 'video.m4s')).path,
+          audioPath: (await _files.taskFile(task, 'audio.m4s')).path,
+          outputPath: output.path,
+          cancellation: run.cancel,
+          onProgress: (progress) {
+            if (!_valid(id, run)) return;
+            _tasks[id] = _tasks[id]!.copyWith(
+              muxProgress: progress.clamp(0, 1),
+            );
+            _emit();
+          },
+        );
+        if (!_valid(id, run)) return;
+        final merged = await _files.completeMerged(task);
+        if (!_valid(id, run)) return;
+        task = _tasks[id]!.copyWith(mergedMedia: merged);
+        _tasks[id] = task;
+        // Persist output identity before the manifest and completion commit.
+        await _save(task);
+      } finally {
+        // Native merge has closed all handles, including after cancellation.
+        if (await output.exists()) await output.delete();
+      }
+    }
+    if (!_valid(id, run)) return;
+    await _files.writeManifest(task);
+    if (!_valid(id, run)) return;
+    task = task.copyWith(
+      status: DownloadStatus.completed,
+      bytesPerSecond: 0,
+      updatedAt: _clock(),
+      clearFailure: true,
+    );
+    // Keep the live state incomplete until the SQLite commit succeeds.
+    await _save(task);
+    if (!_valid(id, run)) return;
+    _tasks[id] = task;
+    _emit();
+    try {
+      await _files.removeSourceTracks(task, verifyHashes: false);
+    } on FileSystemException {
+      // Retaining originals after a successful commit is safe; retry cleanup
+      // on the next reconciliation. Never turn usable media into a failure.
+    }
+  }
+
   Future<DownloadTask> _stage(DownloadTask task, DownloadStatus status) async {
     final next = task.copyWith(
       status: status,
+      muxProgress: status == DownloadStatus.muxing ? 0 : task.muxProgress,
       updatedAt: _clock(),
       clearFailure: true,
     );
@@ -523,6 +620,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
     await _files.resetMedia(task);
     final next = task.copyWith(
       tracks: const [],
+      clearMergedMedia: true,
       bytesPerSecond: 0,
       updatedAt: _clock(),
     );
@@ -934,7 +1032,7 @@ final class _Run {
 }
 
 String _encodeTask(DownloadTask task) => jsonEncode({
-  'version': 1,
+  'version': 2,
   'id': task.id,
   'scope': task.scope,
   'directory': task.directory,
@@ -961,7 +1059,10 @@ String _encodeTask(DownloadTask task) => jsonEncode({
     'codec': task.selection.codec.name,
     'includeDanmaku': task.selection.includeDanmaku,
     'includeSubtitles': task.selection.includeSubtitles,
+    'output': task.selection.output.name,
   },
+  if (task.mergedMedia case final media?)
+    'mergedMedia': {'bytes': media.bytes, 'sha256': media.sha256},
   'tracks': task.tracks
       .map(
         (track) => {
@@ -990,6 +1091,7 @@ DownloadTask _decodeTask(String text) {
     final part = value['part'] as Map<String, dynamic>;
     final selection = value['selection'] as Map<String, dynamic>;
     final tracks = value['tracks'] as List<dynamic>;
+    final merged = value['mergedMedia'] as Map<String, dynamic>?;
     final kind = AppFailureKind.values
         .where((x) => x.name == value['failureKind'])
         .firstOrNull;
@@ -1027,7 +1129,16 @@ DownloadTask _decodeTask(String text) {
         codec: VideoCodecPreference.values.byName(selection['codec'] as String),
         includeDanmaku: selection['includeDanmaku'] as bool,
         includeSubtitles: selection['includeSubtitles'] as bool,
+        output: selection['output'] == null
+            ? DownloadOutput.separate
+            : DownloadOutput.values.byName(selection['output'] as String),
       ),
+      mergedMedia: merged == null
+          ? null
+          : DownloadMergedMedia(
+              bytes: merged['bytes'] as int,
+              sha256: merged['sha256'] as String,
+            ),
       tracks: tracks.map((raw) {
         final t = raw as Map<String, dynamic>;
         return DownloadTrackProgress(
@@ -1052,5 +1163,21 @@ DownloadTask _decodeTask(String text) {
     );
   } catch (_) {
     throw const FormatException('Invalid download record');
+  }
+}
+
+final class _UnavailableDownloadMuxer implements DownloadMuxer {
+  const _UnavailableDownloadMuxer();
+  @override
+  bool get available => false;
+  @override
+  Future<void> merge({
+    required String videoPath,
+    required String audioPath,
+    required String outputPath,
+    required RequestCancellation cancellation,
+    required void Function(double) onProgress,
+  }) async {
+    throw const AppFailure(AppFailureKind.storage, '当前无法合并音视频');
   }
 }

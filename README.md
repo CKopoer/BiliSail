@@ -111,7 +111,7 @@ BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多
 | Android arm64 | `.apk` | 旧版 0.3.0+1 包使用临时 debug 签名；后续非 PR 构建已改用固定 release 密钥，跨签名切换与覆盖升级说明见 [Android 签名](docs/validation/ci-cd.md#android-固定签名与覆盖升级) |
 | macOS arm64 | `.dmg` | 打开后将 `BiliSail.app` 拖到 `Applications`；当前配置使用 ad-hoc 签名，尚未完成 Developer ID 签名与公证 |
 
-GitHub Actions 的 **CI** 执行根应用和三个包的检查，并按平台构建预览产物；维护者可手动运行 **Release preview** 创建预览 Release 草稿，再公开发布。Release 和 CI 构建包的签名种类以各自的 `build-info.json` 为准。触发方式、产物校验与签名配置见 [CI/CD 说明](docs/validation/ci-cd.md)。
+GitHub Actions 的 **CI** 执行根应用和四个包的检查，并按平台构建预览产物；维护者可手动运行 **Release preview** 创建预览 Release 草稿，再公开发布。Release 和 CI 构建包的签名种类以各自的 `build-info.json` 为准。触发方式、产物校验与签名配置见 [CI/CD 说明](docs/validation/ci-cd.md)。
 
 CI 和 Release 构建的 Windows 产物同时包含 `.msix`、`.msi` 和 `.exe` 安装包，均附 SHA-256；MSI 与 EXE 使用同一安装链，任选一种安装。MSI 向导提供安装目录页，EXE 可通过 **Options → Browse** 选择目录，后续升级默认沿用原目录，详见 [Windows MSI 与 EXE](docs/validation/ci-cd.md#windows-msi-与-exe)。已发布版本的文件不会因工作流修改而自动补齐。
 
@@ -125,18 +125,22 @@ Windows 开发还需安装 **Visual Studio 2022** 的“使用 C++ 的桌面开�
 
 ### Windows 调试
 
+下载合并组件需先从固定源码准备原生资产；Windows 额外需要 MSYS2 UCRT64 GCC/G++ 和 make。Android 使用固定 NDK 28.2.13676358，macOS 使用 Xcode 工具链。三端准备命令见 [bili_mux 构建说明](packages/bili_mux/README.md)。
+
 在 PowerShell 中执行：
 
 ```powershell
 git clone https://github.com/CKopoer/BiliSail.git
 cd BiliSail
 flutter pub get
+.\tool\build-download-mux.ps1 -Target windows-x64
 flutter run -d windows
 ```
 
 ### Windows Release 构建
 
 ```powershell
+.\tool\build-download-mux.ps1 -Target windows-x64
 flutter build windows --release
 .\build\windows\x64\runner\Release\bilisail.exe
 ```
@@ -191,14 +195,15 @@ lib/
 packages/
 ├── bili_api/             # 纯 Dart 协议与 API 包
 ├── bili_player/          # 通用播放器契约、media_kit 适配与 VideoSurface
-└── bili_danmaku/         # 无网络的有界弹幕调度与绘制
+├── bili_danmaku/         # 无网络的有界弹幕调度与绘制
+└── bili_mux/             # 独立精简原生组件，仅处理本地 MP4 无损封装
 docs/                     # 设计、决策与验证记录
 tool/                     # 检查、原生测试与构建打包脚本
 ```
 
 ### 检查与调试
 
-根应用与三个包的格式、静态分析和离线测试：
+根应用与四个包的格式、静态分析和离线测试：
 
 ```powershell
 .\tool\check.ps1

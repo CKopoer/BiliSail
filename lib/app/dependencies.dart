@@ -16,6 +16,7 @@ import '../core/platform/file_access_service.dart';
 import '../features/downloads/application/download_controller.dart';
 import '../features/downloads/data/api_download_source_repository.dart';
 import '../features/downloads/data/sqlite_download_repository.dart';
+import '../features/downloads/data/native_download_muxer.dart';
 import '../features/playback/data/offline_playback_repository.dart';
 import '../core/platform/external_links.dart';
 import '../core/platform/system_font_catalog.dart';
@@ -176,6 +177,7 @@ class AppDependencies {
     final downloads = SqliteDownloadRepository(
       database,
       downloadSources,
+      muxer: NativeDownloadMuxer(),
       defaultDirectory: () async {
         final root = await getApplicationDocumentsDirectory();
         return path.join(root.path, 'BiliSail', 'offline');

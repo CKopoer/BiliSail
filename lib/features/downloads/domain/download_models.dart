@@ -10,12 +10,15 @@ enum DownloadStatus {
   resolving,
   downloading,
   verifying,
+  muxing,
   paused,
   failed,
   completed,
 }
 
 enum DownloadTrackKind { video, audio }
+
+enum DownloadOutput { separate, mp4 }
 
 /// Permanent content identity. Signed URLs and credentials are never stored.
 final class DownloadItem {
@@ -78,10 +81,20 @@ final class DownloadSelection {
     this.codec = VideoCodecPreference.h264,
     this.includeDanmaku = true,
     this.includeSubtitles = true,
+    this.output = DownloadOutput.separate,
   });
   final int quality;
   final VideoCodecPreference codec;
   final bool includeDanmaku, includeSubtitles;
+  final DownloadOutput output;
+}
+
+/// Verified local output; source track identities remain in the task index.
+final class DownloadMergedMedia {
+  const DownloadMergedMedia({required this.bytes, required this.sha256});
+  final int bytes;
+  final String sha256;
+  String get fileName => 'media.mp4';
 }
 
 final class DownloadPreferences {
@@ -199,6 +212,8 @@ final class DownloadTask {
     List<String> warnings = const [],
     this.bytesPerSecond = 0,
     this.duration,
+    this.mergedMedia,
+    this.muxProgress,
   }) : tracks = List.unmodifiable(tracks),
        warnings = List.unmodifiable(warnings);
   final String id, scope, directory;
@@ -211,6 +226,8 @@ final class DownloadTask {
   final List<String> warnings;
   final int bytesPerSecond;
   final Duration? duration;
+  final DownloadMergedMedia? mergedMedia;
+  final double? muxProgress;
   int get downloadedBytes => tracks.fold(0, (sum, track) => sum + track.bytes);
   int? get totalBytes =>
       tracks.length != 2 || tracks.any((track) => track.totalBytes == null)
@@ -224,6 +241,7 @@ final class DownloadTask {
     DownloadStatus.resolving,
     DownloadStatus.downloading,
     DownloadStatus.verifying,
+    DownloadStatus.muxing,
   ].contains(status);
   DownloadTask copyWith({
     DownloadStatus? status,
@@ -234,6 +252,9 @@ final class DownloadTask {
     int? bytesPerSecond,
     DateTime? updatedAt,
     Duration? duration,
+    DownloadMergedMedia? mergedMedia,
+    bool clearMergedMedia = false,
+    double? muxProgress,
   }) => DownloadTask(
     id: id,
     scope: scope,
@@ -248,6 +269,8 @@ final class DownloadTask {
     warnings: warnings ?? this.warnings,
     bytesPerSecond: bytesPerSecond ?? this.bytesPerSecond,
     duration: duration ?? this.duration,
+    mergedMedia: clearMergedMedia ? null : mergedMedia ?? this.mergedMedia,
+    muxProgress: muxProgress ?? this.muxProgress,
   );
 }
 
@@ -257,9 +280,11 @@ final class DownloadQueueState {
     this.preferences = const DownloadPreferences(),
     this.initialized = false,
     this.failure,
+    this.canMerge = false,
   }) : tasks = List.unmodifiable(tasks);
   final List<DownloadTask> tasks;
   final DownloadPreferences preferences;
   final bool initialized;
   final AppFailure? failure;
+  final bool canMerge;
 }

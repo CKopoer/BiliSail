@@ -81,6 +81,8 @@ final class DownloadFileStore {
       'extras.json',
       'cover.img',
       'manifest.json',
+      'media.mp4',
+      'media.mp4.part',
     }.contains(name)) {
       throw const AppFailure(AppFailureKind.storage, '下载文件名无效');
     }
@@ -183,16 +185,26 @@ final class DownloadFileStore {
         !task.tracks.every((track) => track.complete)) {
       throw const AppFailure(AppFailureKind.storage, '媒体轨道尚未完成');
     }
+    if (task.selection.output == DownloadOutput.mp4 &&
+        task.mergedMedia == null) {
+      throw const AppFailure(AppFailureKind.storage, '合并文件尚未完成');
+    }
     await _atomicWrite(
       await taskFile(task, 'manifest.json'),
       utf8.encode(
         jsonEncode({
-          'version': 1,
+          'version': task.selection.output == DownloadOutput.mp4 ? 2 : 1,
           'id': task.id,
           'scope': task.scope,
           'itemKey': task.item.key,
           'quality': task.selection.quality,
           'codec': task.selection.codec.name,
+          if (task.selection.output == DownloadOutput.mp4)
+            'merged': {
+              'fileName': task.mergedMedia?.fileName,
+              'bytes': task.mergedMedia?.bytes,
+              'sha256': task.mergedMedia?.sha256,
+            },
           'tracks': task.tracks
               .map(
                 (track) => {
@@ -219,7 +231,8 @@ final class DownloadFileStore {
     try {
       final Object? decoded = jsonDecode(await manifest.readAsString());
       if (decoded is! Map ||
-          decoded['version'] != 1 ||
+          decoded['version'] !=
+              (task.selection.output == DownloadOutput.mp4 ? 2 : 1) ||
           decoded['id'] != task.id ||
           decoded['scope'] != task.scope ||
           decoded['itemKey'] != task.item.key ||
@@ -239,13 +252,78 @@ final class DownloadFileStore {
         )) {
           return false;
         }
-        if (!await verifyTrack(task, track, verifyHash: verifyHashes)) {
+        if (task.selection.output == DownloadOutput.separate &&
+            !await verifyTrack(task, track, verifyHash: verifyHashes)) {
+          return false;
+        }
+      }
+      if (task.selection.output == DownloadOutput.mp4) {
+        final output = task.mergedMedia;
+        final merged = decoded['merged'];
+        if (output == null ||
+            merged is! Map ||
+            merged['fileName'] != output.fileName ||
+            merged['bytes'] != output.bytes ||
+            merged['sha256'] != output.sha256 ||
+            !await verifyMerged(task, verifyHash: verifyHashes)) {
           return false;
         }
       }
       return true;
     } on FormatException {
       return false;
+    }
+  }
+
+  Future<DownloadMergedMedia> completeMerged(DownloadTask task) async {
+    final part = await taskFile(task, 'media.mp4.part');
+    final length = await part.length();
+    if (length <= 0) {
+      throw const AppFailure(AppFailureKind.storage, '合并文件为空');
+    }
+    final handle = await part.open(mode: FileMode.append);
+    try {
+      await handle.flush();
+    } finally {
+      await handle.close();
+    }
+    final digest = await _sha256File(part.path);
+    final output = await taskFile(task, 'media.mp4');
+    if (await output.exists()) await output.delete();
+    await part.rename(output.path);
+    return DownloadMergedMedia(bytes: length, sha256: digest);
+  }
+
+  Future<bool> verifyMerged(DownloadTask task, {bool verifyHash = true}) async {
+    final media = task.mergedMedia;
+    if (media == null ||
+        media.bytes <= 0 ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(media.sha256)) {
+      return false;
+    }
+    final file = await taskFile(task, media.fileName);
+    if (!await file.exists() || await file.length() != media.bytes) {
+      return false;
+    }
+    return !verifyHash || await _sha256File(file.path) == media.sha256;
+  }
+
+  /// Call only after the merged file, manifest and SQLite commit succeeded.
+  Future<void> removeSourceTracks(
+    DownloadTask task, {
+    bool verifyHashes = true,
+  }) async {
+    if (task.selection.output != DownloadOutput.mp4) return;
+    final sources = [
+      await taskFile(task, 'video.m4s'),
+      await taskFile(task, 'audio.m4s'),
+    ];
+    if (!await sources[0].exists() && !await sources[1].exists()) return;
+    if (!await verifyCompleted(task, verifyHashes: verifyHashes)) {
+      return;
+    }
+    for (final file in sources) {
+      if (await file.exists()) await file.delete();
     }
   }
 
@@ -271,6 +349,8 @@ final class DownloadFileStore {
       'video.m4s.part',
       'audio.m4s.part',
       'manifest.json',
+      'media.mp4',
+      'media.mp4.part',
     ]) {
       final file = await taskFile(task, name);
       if (await file.exists()) await file.delete();

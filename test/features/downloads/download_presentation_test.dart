@@ -173,6 +173,47 @@ void main() {
     await repository.close();
   });
 
+  testWidgets('merge option is explicit and passed to the queue', (
+    tester,
+  ) async {
+    final repository = _DownloadRepository(canMerge: true);
+    await _pump(
+      tester,
+      DownloadDialog(items: [_item(1)]),
+      repository,
+      _SourceRepository(),
+    );
+    expect(repository.enqueued, isEmpty);
+    final checkbox = find.widgetWithText(CheckboxListTile, '合并为单个 MP4');
+    await tester.ensureVisible(checkbox);
+    await tester.tap(checkbox);
+    await tester.pump();
+    await tester.tap(find.text('开始下载'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(repository.selection?.output, DownloadOutput.mp4);
+    await repository.close();
+  });
+
+  testWidgets('unavailable native capability disables only the merge option', (
+    tester,
+  ) async {
+    final repository = _DownloadRepository();
+    await _pump(
+      tester,
+      DownloadDialog(items: [_item(1)]),
+      repository,
+      _SourceRepository(),
+    );
+    final checkbox = tester.widget<CheckboxListTile>(
+      find.widgetWithText(CheckboxListTile, '合并为单个 MP4'),
+    );
+    expect(checkbox.onChanged, isNull);
+    await tester.tap(find.text('开始下载'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(repository.selection?.output, DownloadOutput.separate);
+    await repository.close();
+  });
+
   testWidgets('account change disables an already opened download dialog', (
     tester,
   ) async {
@@ -450,8 +491,14 @@ final class _SourceRepository implements DownloadSourceRepository {
 }
 
 final class _DownloadRepository implements DownloadRepository {
-  _DownloadRepository({List<DownloadTask> tasks = const []})
-    : _state = DownloadQueueState(tasks: tasks, initialized: true);
+  _DownloadRepository({
+    List<DownloadTask> tasks = const [],
+    bool canMerge = false,
+  }) : _state = DownloadQueueState(
+         tasks: tasks,
+         initialized: true,
+         canMerge: canMerge,
+       );
   DownloadQueueState _state;
   final _stream = StreamController<DownloadQueueState>.broadcast();
   final List<List<DownloadItem>> enqueued = [];
@@ -460,7 +507,11 @@ final class _DownloadRepository implements DownloadRepository {
   final List<(String, bool)> removed = [];
   Future<DownloadTask>? offlineResult;
   void setTasks(List<DownloadTask> tasks) {
-    _state = DownloadQueueState(tasks: tasks, initialized: true);
+    _state = DownloadQueueState(
+      tasks: tasks,
+      initialized: true,
+      canMerge: _state.canMerge,
+    );
     _stream.add(_state);
   }
 

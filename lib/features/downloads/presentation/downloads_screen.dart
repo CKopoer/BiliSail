@@ -250,6 +250,7 @@ final class _DownloadTaskCard extends StatelessWidget {
       DownloadStatus.resolving => '解析中',
       DownloadStatus.downloading => '下载中',
       DownloadStatus.verifying => '校验中',
+      DownloadStatus.muxing => '合并中',
       DownloadStatus.paused => '已暂停',
       DownloadStatus.failed => '下载失败',
       DownloadStatus.completed => '已完成',
@@ -331,6 +332,11 @@ final class _DownloadTaskCard extends StatelessWidget {
                     ),
                     Text(downloadQualityText(task.selection.quality)),
                     Text(downloadCodecText(task.selection.codec)),
+                    Text(
+                      task.selection.output == DownloadOutput.mp4
+                          ? '合并 MP4'
+                          : '音视频分轨',
+                    ),
                     Text(bytes),
                     if (task.status == DownloadStatus.downloading &&
                         task.bytesPerSecond > 0)
@@ -364,11 +370,14 @@ final class _DownloadTaskCard extends StatelessWidget {
                   const SizedBox(height: 10),
                   LinearProgressIndicator(
                     value:
-                        task.progress ??
+                        (task.status == DownloadStatus.muxing
+                            ? task.muxProgress
+                            : task.progress) ??
                         switch (task.status) {
                           DownloadStatus.resolving ||
                           DownloadStatus.downloading ||
                           DownloadStatus.verifying => null,
+                          DownloadStatus.muxing => null,
                           _ => 0,
                         },
                   ),
