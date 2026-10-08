@@ -17,6 +17,8 @@ import '../features/settings/domain/app_settings.dart';
 import '../shared/ui/smooth_scroll_behavior.dart';
 import '../shared/ui/bili_icons.dart';
 import '../shared/ui/app_notice.dart';
+import '../shared/ui/paging_tab_strip.dart';
+import '../shared/ui/retained_tab_view.dart';
 
 typedef WorkspacePageBuilder = Widget Function(
   BuildContext context,
@@ -98,9 +100,27 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   final _workspace = WorkspaceTabs();
   final _searchController = TextEditingController();
   final _tabKeys = <String, GlobalKey>{};
-  final _channelKeys = <HomeChannel, GlobalKey>{};
   final _searchDrafts = <String, String>{};
   final _pageStorage = <String, PageStorageBucket>{};
+  final _pagingProgress = <(String, bool), TabPagingProgress>{};
+
+  TabPagingProgress _pagingFor(WorkspaceTab tab) {
+    final settings = tab.location.path == '/settings';
+    final index = settings
+        ? SettingsCategory.fromName(tab.location.queryParameters['section'])
+              .index
+        : HomeChannel.values
+              .indexWhere(
+                (channel) =>
+                    channel.name ==
+                    (tab.location.queryParameters['channel'] ?? 'recommended'),
+              )
+              .clamp(0, HomeChannel.values.length - 1);
+    return _pagingProgress.putIfAbsent((
+      tab.id,
+      settings,
+    ), () => TabPagingProgress(index.toDouble()));
+  }
 
   bool get _singlePage =>
       (widget.navigationMode ?? defaultWorkspaceNavigationMode) ==
@@ -147,6 +167,11 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     _tabKeys.removeWhere((id, _) => !liveIds.contains(id));
     _searchDrafts.removeWhere((id, _) => !liveIds.contains(id));
     _pageStorage.removeWhere((id, _) => !liveIds.contains(id));
+    _pagingProgress.removeWhere((key, progress) {
+      if (liveIds.contains(key.$1)) return false;
+      progress.dispose();
+      return true;
+    });
   }
 
   void _saveSearch() =>
@@ -161,6 +186,9 @@ final class _BiliAppShellState extends State<BiliAppShell> {
   @override
   void dispose() {
     _searchController.dispose();
+    for (final progress in _pagingProgress.values) {
+      progress.dispose();
+    }
     super.dispose();
   }
 
@@ -170,22 +198,6 @@ final class _BiliAppShellState extends State<BiliAppShell> {
       final tabContext = _tabKeys[_workspace.activeId]?.currentContext;
       if (tabContext != null) {
         Scrollable.ensureVisible(tabContext, alignment: 0.5);
-      }
-      final active = _workspace.active;
-      if (active.isBrowse) {
-        final channel =
-            HomeChannel.values
-                .where(
-                  (channel) =>
-                      channel.name ==
-                      active.location.queryParameters['channel'],
-                )
-                .firstOrNull ??
-            HomeChannel.recommended;
-        final channelContext = _channelKeys[channel]?.currentContext;
-        if (channelContext != null) {
-          Scrollable.ensureVisible(channelContext, alignment: 0.5);
-        }
       }
     });
   }
@@ -223,6 +235,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     _tabKeys.remove(id);
     _searchDrafts.remove(id);
     _pageStorage.remove(id);
+    _prunePages();
     setState(() {});
     if (wasActive) _commitWorkspace();
   }
@@ -362,7 +375,10 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                     child: WorkspacePageNavigation(
                       navigate: (location) =>
                           _updatePageLocation(tab.id, location),
-                      child: builder(context, tab),
+                      child: TabPagingScope(
+                        progress: _pagingFor(tab),
+                        child: builder(context, tab),
+                      ),
                     ),
                   ),
                 ),
@@ -567,57 +583,42 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     }
     if (active.location.path == '/settings') return _settingsBar(context);
     final selected = active.isBrowse
-        ? active.location.queryParameters['channel'] ?? 'recommended'
-        : '';
+        ? HomeChannel.values
+              .where(
+                (channel) =>
+                    channel.name ==
+                    (active.location.queryParameters['channel'] ??
+                        'recommended'),
+              )
+              .firstOrNull
+        : null;
     return SizedBox(
       height: 58,
       child: _horizontalTabs(
         key: const ValueKey('home-channel-strip'),
         padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Row(
-          children: [
-            for (final channel in HomeChannel.values)
-              Padding(
-                key: _channelKeys.putIfAbsent(channel, GlobalKey.new),
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                child: TextButton(
-                  key: ValueKey('channel-${channel.name}'),
-                  onPressed: () => _selectChannel(channel),
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(48, 42),
-                    padding: const EdgeInsets.symmetric(horizontal: 7),
-                    foregroundColor: selected == channel.name
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.onSurface,
-                    textStyle: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(_channelIcon(channel), size: 16),
-                          const SizedBox(width: 5),
-                          Text(channel.label),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        width: 20,
-                        height: 2,
-                        color: selected == channel.name
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.transparent,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
+        child: PagingTabStrip<HomeChannel>(
+          tabs: HomeChannel.values,
+          value: selected,
+          progress: _pagingFor(active),
+          onSelected: _selectChannel,
+          itemKey: (channel) => ValueKey('channel-${channel.name}'),
+          buttonStyle: TextButton.styleFrom(
+            minimumSize: const Size(48, 42),
+            padding: const EdgeInsets.symmetric(horizontal: 7),
+            textStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          labelBuilder: (context, channel) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_channelIcon(channel), size: 16),
+              const SizedBox(width: 5),
+              Text(channel.label),
+            ],
+          ),
         ),
       ),
     );
@@ -654,51 +655,27 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     final selected = SettingsCategory.fromName(
       _workspace.active.location.queryParameters['section'],
     );
-    final colors = Theme.of(context).colorScheme;
     return SizedBox(
       height: 58,
       child: _horizontalTabs(
         key: const ValueKey('settings-category-strip'),
         padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Row(
-          children: [
-            for (final category in SettingsCategory.values)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                child: TextButton(
-                  key: ValueKey('settings-category-${category.name}'),
-                  onPressed: () => context.go(
-                    Uri(
-                      path: '/settings',
-                      queryParameters: {
-                        'tab': _workspace.activeId,
-                        'section': category.name,
-                      },
-                    ).toString(),
-                  ),
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(48, 42),
-                    foregroundColor: selected == category
-                        ? colors.primary
-                        : colors.onSurface,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(category.label),
-                      const SizedBox(height: 4),
-                      Container(
-                        width: 20,
-                        height: 2,
-                        color: selected == category
-                            ? colors.primary
-                            : Colors.transparent,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
+        child: PagingTabStrip<SettingsCategory>(
+          tabs: SettingsCategory.values,
+          value: selected,
+          progress: _pagingFor(_workspace.active),
+          itemKey: (category) => ValueKey('settings-category-${category.name}'),
+          buttonStyle: TextButton.styleFrom(minimumSize: const Size(48, 42)),
+          labelBuilder: (context, category) => Text(category.label),
+          onSelected: (category) => context.go(
+            Uri(
+              path: '/settings',
+              queryParameters: {
+                'tab': _workspace.activeId,
+                'section': category.name,
+              },
+            ).toString(),
+          ),
         ),
       ),
     );

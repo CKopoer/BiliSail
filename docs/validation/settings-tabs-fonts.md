@@ -51,3 +51,11 @@
 - `tool/check.ps1 -SkipPub` 通过：根应用 788 项、bili_api 249 项、bili_player 16 项、bili_danmaku 32 项，共 1085 项；四部分的格式检查和静态分析均通过，日志为 `build/mouse-close-tab-check.log`。
 - `flutter build windows --release --no-pub` 成功，入口为 `build/windows/x64/runner/Release/bilisail.exe`，需保留同目录 DLL 与 data 资源；构建日志为 `build/mouse-close-tab-windows-build.log`。
 - 键盘和鼠标事件由 Flutter 测试框架注入；Windows 物理鼠标驱动与 Android/macOS 实机行为仍待验收。
+
+## 设置分类触摸分页（2026-10-09）
+
+当前八个分类“外观、缓存、快捷键、播放、弹幕、字幕、空降助手、关于”支持触摸／手写笔左右分页，跟手、吸附和短滑回弹，首尾不循环。顶部设置分类栏位于分页之外，并与内容共用连续动画进度。滑动落定后更新同一个工作区标签的 `/settings?section=<category>&tab=<workspace-id>`；外部路由选择、隐藏工作区和取消手势可以取代尚未完成的拖动。
+
+设置内容复用原有控件与全局设置控制器，首次选中的分类才挂载；已访问分类保留独立滚动位置和控件状态，关闭工作区时释放。进入或切换分类不会自动保存设置，滑块的水平拖动继续调整原设置，桌面鼠标不触发分类分页，列表仍保留滚轮与滚动条。
+
+新增 5 项设置页行为回归覆盖全部分类双向遍历／首尾边界、短滑／取消／鼠标拖动、滚动位置与正常保存、隐藏／外部选择以及桌面滚轮／滑块；另有真实路由回归确认分类更新与工作区页面复用。共享标签栏、完整自动检查与实机验收边界见 [子标签栏过渡验证](single-page-navigation.md)。

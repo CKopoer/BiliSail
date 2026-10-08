@@ -166,6 +166,34 @@ void main() {
     );
   }
 
+  testWidgets('profile tab colors follow a drag and return on cancellation', (
+    tester,
+  ) async {
+    await mount(tester);
+    final outgoing = find.byKey(const ValueKey('profile-tab-videos'));
+    final incoming = find.byKey(const ValueKey('profile-tab-dynamics'));
+    Color? color(Finder tab) =>
+        tester.widget<TextButton>(tab).style?.foregroundColor?.resolve({});
+    final selectedColor = color(outgoing);
+    final inactiveColor = color(incoming);
+    final headerRect = tester.getRect(find.byType(ProfileSectionNavigation));
+    final gesture = await tester.startGesture(tester.getCenter(_surface));
+    await gesture.moveBy(const Offset(-100, 0));
+    await tester.pump();
+    await tester.pump();
+    expect(state().section, ProfileSection.videos);
+    expect(color(outgoing), isNot(selectedColor));
+    expect(color(outgoing), isNot(inactiveColor));
+    expect(color(incoming), isNot(inactiveColor));
+    expect(tester.getRect(find.byType(ProfileSectionNavigation)), headerRect);
+    await gesture.cancel();
+    await tester.pumpAndSettle();
+    expect(color(outgoing), selectedColor);
+    expect(color(incoming), inactiveColor);
+    expect(state().section, ProfileSection.videos);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'vertical scrolling collapses the header without moving hidden tabs',
     (tester) async {
@@ -196,6 +224,26 @@ void main() {
       expect(_position(tester), same(videos));
       expect(videos.pixels, closeTo(saved, .1));
       expect(nested.innerController.positions, hasLength(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'revealing an enlarged tab strip does not reopen the vertical header',
+    (tester) async {
+      await mount(tester, width: 320, scale: 2);
+      final nested = tester.state<NestedScrollViewState>(
+        find.byType(NestedScrollView),
+      );
+      nested.outerController.jumpTo(
+        nested.outerController.position.maxScrollExtent,
+      );
+      await tester.pumpAndSettle();
+      final saved = nested.outerController.offset;
+      controller().select(ProfileSection.followers);
+      await tester.pumpAndSettle();
+      expect(nested.outerController.offset, closeTo(saved, .1));
+      expect(find.byType(ProfileHeader).hitTestable(), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

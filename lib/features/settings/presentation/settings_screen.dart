@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/ui/state_view.dart';
+import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/system_font_picker.dart';
 import '../../../shared/ui/danmaku_settings_controls.dart';
 import '../../../shared/ui/player_controls_mode_setting.dart';
@@ -24,17 +25,56 @@ const _usageNotice = <Widget>[
   Text('如果侵犯了您的合法权益，请及时联系开发者，我们会第一时间处理并删除相关内容。'),
 ];
 
-final class SettingsScreen extends ConsumerStatefulWidget {
+final class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     this.category = SettingsCategory.appearance,
+    this.onCategoryChanged,
   });
   final SettingsCategory category;
+  final ValueChanged<SettingsCategory>? onCategoryChanged;
+
   @override
-  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+  State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+final class _SettingsScreenState extends State<SettingsScreen> {
+  late SettingsCategory _category = widget.category;
+
+  @override
+  void didUpdateWidget(SettingsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.category != widget.category) _category = widget.category;
+  }
+
+  @override
+  Widget build(BuildContext context) => RetainedTabView<SettingsCategory>(
+    tabs: SettingsCategory.values,
+    value: _category,
+    viewKey: const ValueKey('settings-category-swipe'),
+    onChanged: (category) {
+      final onChanged = widget.onCategoryChanged;
+      if (onChanged == null) {
+        setState(() => _category = category);
+      } else {
+        onChanged(category);
+      }
+    },
+    pageBuilder: (context, category, active) =>
+        _SettingsCategoryPage(category: category),
+  );
+}
+
+final class _SettingsCategoryPage extends ConsumerStatefulWidget {
+  const _SettingsCategoryPage({required this.category});
+  final SettingsCategory category;
+  @override
+  ConsumerState<_SettingsCategoryPage> createState() =>
+      _SettingsCategoryPageState();
+}
+
+final class _SettingsCategoryPageState
+    extends ConsumerState<_SettingsCategoryPage> {
   Future<void> _save(Future<void> Function() action) async {
     try {
       await action();

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/ui/paging_tab_strip.dart';
+import '../../../shared/ui/retained_tab_view.dart';
+
 import '../../../shared/ui/bili_badges.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/video_card.dart';
@@ -243,10 +246,12 @@ class ProfileSectionNavigation extends StatelessWidget {
     super.key,
     required this.section,
     required this.onSelected,
+    this.progress,
   });
 
   final ProfileSection section;
   final ValueChanged<ProfileSection> onSelected;
+  final TabPagingProgress? progress;
 
   @override
   Widget build(BuildContext context) {
@@ -259,43 +264,24 @@ class ProfileSectionNavigation extends StatelessWidget {
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (final entry in ProfileSection.values)
-              Semantics(
-                selected: section == entry,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: section == entry
-                            ? theme.colorScheme.primary
-                            : Colors.transparent,
-                        width: 3,
-                      ),
-                    ),
-                  ),
-                  child: TextButton(
-                    key: ValueKey('profile-tab-${entry.name}'),
-                    style: TextButton.styleFrom(
-                      minimumSize: const Size(0, 44),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      foregroundColor: section == entry
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant,
-                      textStyle: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    onPressed: () => onSelected(entry),
-                    child: Text(profileSectionLabel(entry)),
-                  ),
-                ),
-              ),
-          ],
+        child: PagingTabStrip<ProfileSection>(
+          tabs: ProfileSection.values,
+          value: section,
+          progress: progress,
+          onSelected: onSelected,
+          spacing: 0,
+          fullWidthIndicator: true,
+          indicatorHeight: 3,
+          unselectedColor: theme.colorScheme.onSurfaceVariant,
+          itemKey: (entry) => ValueKey('profile-tab-${entry.name}'),
+          labelBuilder: (context, entry) => Text(profileSectionLabel(entry)),
+          buttonStyle: TextButton.styleFrom(
+            minimumSize: const Size(0, 44),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            textStyle: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ),
       ),
     );

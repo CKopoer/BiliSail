@@ -378,6 +378,15 @@ final class _WorkspacePage extends ConsumerWidget {
                     category: SettingsCategory.fromName(
                       uri.queryParameters['section'],
                     ),
+                    onCategoryChanged: (category) => context.go(
+                      Uri(
+                        path: '/settings',
+                        queryParameters: {
+                          'tab': tab.id,
+                          'section': category.name,
+                        },
+                      ).toString(),
+                    ),
                   );
                 case '/downloads':
                   return DownloadsScreen(

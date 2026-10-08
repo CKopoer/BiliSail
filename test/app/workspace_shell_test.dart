@@ -1,6 +1,8 @@
 import '../support/input_test_app.dart';
 
 import 'package:bilisail/app/shell.dart';
+import 'package:bilisail/features/feed/domain/home_channel.dart';
+import 'package:bilisail/features/feed/presentation/home_channel_swipe.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/app/workspace_tabs.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
@@ -18,6 +20,73 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  _workspaceTestWidgets(
+    'home strip follows paging before the channel route commits',
+    (tester) async {
+      tester.view.physicalSize = const Size(375, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final router = _router(
+        (context, tab) => HomeChannelSwipe(
+          channel:
+              HomeChannel.values
+                  .where(
+                    (channel) =>
+                        channel.name == tab.location.queryParameters['channel'],
+                  )
+                  .firstOrNull ??
+              HomeChannel.recommended,
+          onChanged: (channel) =>
+              context.go('/?channel=${channel.name}&tab=${tab.id}'),
+          pageBuilder: (_, channel, active) =>
+              SizedBox.expand(key: ValueKey('home-page-${channel.name}')),
+        ),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      final outgoing = find.byKey(const ValueKey('channel-recommended'));
+      final incoming = find.byKey(const ValueKey('channel-popular'));
+      Color? color(Finder tab) =>
+          tester.widget<TextButton>(tab).style?.foregroundColor?.resolve({});
+      final selectedColor = color(outgoing);
+      final inactiveColor = color(incoming);
+      final sourceElement = tester.element(outgoing);
+      final headerRect = tester.getRect(
+        find.byKey(const ValueKey('home-channel-strip')),
+      );
+      final drag = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('home-channel-swipe'))),
+      );
+      await drag.moveBy(const Offset(-100, 0));
+      await tester.pump();
+      await tester.pump();
+      expect(
+        router.routeInformationProvider.value.uri.queryParameters['channel'],
+        isNull,
+      );
+      expect(color(outgoing), isNot(selectedColor));
+      expect(color(incoming), isNot(inactiveColor));
+      expect(tester.element(outgoing), same(sourceElement));
+      expect(
+        tester.getRect(find.byKey(const ValueKey('home-channel-strip'))),
+        headerRect,
+      );
+      await drag.moveBy(const Offset(-140, 0));
+      await drag.up();
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.queryParameters['channel'],
+        'popular',
+      );
+      expect(color(incoming), selectedColor);
+      expect(tester.element(outgoing), same(sourceElement));
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
   for (final platform in [
     TargetPlatform.android,
     TargetPlatform.iOS,

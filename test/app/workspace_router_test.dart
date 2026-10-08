@@ -774,6 +774,72 @@ void main() {
     },
   );
   _workspaceTestWidgets(
+    'settings swipe updates the same workspace route and animated strip',
+    (tester) async {
+      tester.view.physicalSize = const Size(375, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final router = createBiliRouter(
+        initialLocation: '/settings',
+        playerBuilder: (_, _, _) => const SizedBox(),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsRepositoryProvider.overrideWithValue(_SettingsRepository()),
+            feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+            homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+          ],
+          child: InputTestApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final originalPager = tester.element(
+        find.byKey(const ValueKey('settings-category-swipe')),
+      );
+      final outgoing = find.byKey(
+        const ValueKey('settings-category-appearance'),
+      );
+      final incoming = find.byKey(const ValueKey('settings-category-cache'));
+      Color? color(Finder tab) =>
+          tester.widget<TextButton>(tab).style?.foregroundColor?.resolve({});
+      final selectedColor = color(outgoing);
+      final inactiveColor = color(incoming);
+      final surface = find.byKey(const ValueKey('settings-category-swipe'));
+      final drag = await tester.startGesture(
+        tester.getBottomRight(surface) - const Offset(5, 80),
+      );
+      await drag.moveBy(const Offset(-100, 0));
+      await tester.pump();
+      await tester.pump();
+      expect(color(outgoing), isNot(selectedColor));
+      expect(color(incoming), isNot(inactiveColor));
+      expect(
+        router.routeInformationProvider.value.uri.queryParameters['section'],
+        isNot('cache'),
+      );
+      await drag.moveBy(const Offset(-140, 0));
+      await drag.up();
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.queryParameters['section'],
+        'cache',
+      );
+      expect(
+        router.routeInformationProvider.value.uri.queryParameters['tab'],
+        isNotEmpty,
+      );
+      expect(tester.element(surface), same(originalPager));
+      expect(color(incoming), selectedColor);
+      expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+    platform: TargetPlatform.android,
+  );
+
+  _workspaceTestWidgets(
     'settings deep links and category changes show only their matching controls',
     (tester) async {
       final router = createBiliRouter(

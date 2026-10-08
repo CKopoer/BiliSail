@@ -43,6 +43,16 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  late final _pagingProgress = TabPagingProgress(
+    widget.initialSection.index.toDouble(),
+  );
+
+  @override
+  void dispose() {
+    _pagingProgress.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -150,6 +160,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: 4),
                   ProfileSectionNavigation(
                     section: state.section,
+                    progress: _pagingProgress,
                     onSelected: controller.select,
                   ),
                 ],
@@ -158,6 +169,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ],
         body: RetainedTabView<ProfileSection>(
+          progress: _pagingProgress,
           tabs: ProfileSection.values,
           value: state.section,
           onChanged: controller.select,
