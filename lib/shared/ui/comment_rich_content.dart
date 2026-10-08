@@ -34,12 +34,14 @@ class CommentRichContent extends StatefulWidget {
     this.compact = false,
     this.onOpenLink,
     this.onSeek,
+    this.onOpenUser,
   });
   final CommentEntry comment;
   final String prefix;
   final bool compact;
   final ValueChanged<Uri>? onOpenLink;
   final ValueChanged<Duration>? onSeek;
+  final ValueChanged<UserId>? onOpenUser;
   @override
   State<CommentRichContent> createState() => _CommentRichContentState();
 }
@@ -58,7 +60,11 @@ class _CommentRichContentState extends State<CommentRichContent> {
   void didUpdateWidget(covariant CommentRichContent oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.comment.message != widget.comment.message ||
-        !identical(oldWidget.comment.emotes, widget.comment.emotes)) {
+        !identical(oldWidget.comment.emotes, widget.comment.emotes) ||
+        !identical(
+          oldWidget.comment.mentionedUsers,
+          widget.comment.mentionedUsers,
+        )) {
       _parse();
     }
   }
@@ -68,11 +74,13 @@ class _CommentRichContentState extends State<CommentRichContent> {
     _parts = parseCommentText(
       widget.comment.message,
       emoteTokens: widget.comment.emotes.keys,
+      mentionedUsers: widget.comment.mentionedUsers,
     );
     for (var i = 0; i < _parts.length; i++) {
       final part = _parts[i];
       if (part.kind == CommentTextKind.link ||
-          part.kind == CommentTextKind.timestamp) {
+          part.kind == CommentTextKind.timestamp ||
+          part.kind == CommentTextKind.mention) {
         _recognizers[i] = TapGestureRecognizer();
       }
     }
@@ -102,16 +110,21 @@ class _CommentRichContentState extends State<CommentRichContent> {
         final recognizer = _recognizers[i];
         final url = part.url, position = part.position;
         final open = widget.onOpenLink, seek = widget.onSeek;
+        final userId = part.userId, openUser = widget.onOpenUser;
         final VoidCallback? onTap = url != null && open != null
             ? () => open(url)
             : position != null && seek != null
             ? () => seek(position)
+            : userId != null && openUser != null
+            ? () => openUser(userId)
             : null;
         recognizer?.onTap = onTap;
         spans.add(
           TextSpan(
             text: part.text,
-            style: recognizer == null
+            style:
+                recognizer == null ||
+                    (part.kind == CommentTextKind.mention && onTap == null)
                 ? null
                 : TextStyle(color: Theme.of(context).colorScheme.primary),
             recognizer: onTap == null ? null : recognizer,

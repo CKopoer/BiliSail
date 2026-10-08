@@ -1,7 +1,68 @@
 import 'package:bilisail/features/video/domain/comment_text.dart';
+import 'package:bilisail/domain/user.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'server-backed mentions match full names and preserve surrounding text',
+    () {
+      const message = '回复 @小迷糊陈 :看了 @名字.+ [笑] @名字 00:09 @A&amp;B';
+      final parts = parseCommentText(
+        message,
+        mentionedUsers: const {
+          '小迷糊陈': UserId('100'),
+          '名字': UserId('101'),
+          '名字.+': UserId('102'),
+          'A&B': UserId('9007199254740993'),
+        },
+        emoteTokens: ['[笑]'],
+      );
+      expect(
+        parts.map((part) => part.text).join(),
+        decodeCommentEntities(message),
+      );
+      expect(
+        parts
+            .where((part) => part.userId != null)
+            .map((part) => (part.text, part.userId)),
+        [
+          ('@小迷糊陈', const UserId('100')),
+          ('@名字.+', const UserId('102')),
+          ('@名字', const UserId('101')),
+          ('@A&B', const UserId('9007199254740993')),
+        ],
+      );
+      expect(
+        parts.where((part) => part.kind == CommentTextKind.emote),
+        hasLength(1),
+      );
+      expect(parts.where((part) => part.position != null), hasLength(1));
+    },
+  );
+
+  test('unknown, invalid, email and partial names stay plain text', () {
+    final parts = parseCommentText(
+      '@未知 @无效 @名字更长 @名字abc email@名字 @名字',
+      mentionedUsers: const {'无效': UserId('0'), '名字': UserId('100')},
+    );
+    expect(
+      parts.where((part) => part.userId != null).map((part) => part.text),
+      ['@名字'],
+    );
+  });
+
+  test('whole URLs retain ownership of mention-like path and query text', () {
+    final parts = parseCommentText(
+      'https://example.com/@名字?q=@名字 @名字',
+      mentionedUsers: const {'名字': UserId('100')},
+    );
+    expect(
+      parts.where((part) => part.url != null).single.text,
+      'https://example.com/@名字?q=@名字',
+    );
+    expect(parts.where((part) => part.userId != null).single.text, '@名字');
+  });
+
   test('decodes the reported arrows without changing line breaks', () {
     const message = '30tps -&gt; 50tps没有\n20tps -&gt; 30tps倒是差不多，看起来也确实是提升50%';
     expect(

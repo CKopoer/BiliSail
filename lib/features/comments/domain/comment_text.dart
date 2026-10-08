@@ -1,12 +1,21 @@
-enum CommentTextKind { plain, emote, link, timestamp }
+import '../../../domain/user.dart';
+
+enum CommentTextKind { plain, emote, link, timestamp, mention }
 
 final class CommentTextPart {
-  const CommentTextPart(this.text, this.kind, {this.url, this.position});
+  const CommentTextPart(
+    this.text,
+    this.kind, {
+    this.url,
+    this.position,
+    this.userId,
+  });
 
   final String text;
   final CommentTextKind kind;
   final Uri? url;
   final Duration? position;
+  final UserId? userId;
 }
 
 /// Decode once for display; the original comment remains available unchanged.
@@ -44,15 +53,26 @@ String decodeCommentEntities(String text) => text.replaceAllMapped(
 List<CommentTextPart> parseCommentText(
   String message, {
   Iterable<String> emoteTokens = const [],
+  Map<String, UserId> mentionedUsers = const {},
 }) {
   final text = decodeCommentEntities(message);
   final emotes = emoteTokens.where((token) => token.isNotEmpty).toSet().toList()
+    ..sort((a, b) => b.length.compareTo(a.length));
+  final mentions = <String, UserId>{
+    for (final entry in mentionedUsers.entries)
+      if (entry.key.isNotEmpty && entry.value.isValid)
+        '@${entry.key}': entry.value,
+  };
+  final mentionTokens = mentions.keys.toList()
     ..sort((a, b) => b.length.compareTo(a.length));
   final pattern = RegExp(
     [
       if (emotes.isNotEmpty) emotes.map(RegExp.escape).join('|'),
       // Consume a whole URL before looking for timestamps within its path/query.
       r'''[hH][tT][tT][pP][sS]?://[^\s<>"'，。！？；：、（）【】「」『』《》]+''',
+      if (mentionTokens.isNotEmpty)
+        '(?<![0-9A-Za-z_@])(?:${mentionTokens.map(RegExp.escape).join('|')})'
+            r'(?=$|[\s:：,，.。!?！？;；、()（）\[\]【】「」『』《》@])',
       r'(?<![0-9A-Za-z_:])(?:[0-9]{1,3}:[0-5][0-9]:[0-5][0-9]|[0-9]{1,4}:[0-5][0-9])(?![0-9A-Za-z_:])',
     ].join('|'),
   );
@@ -70,6 +90,11 @@ List<CommentTextPart> parseCommentText(
     final token = match[0] ?? '';
     if (emotes.contains(token)) {
       parts.add(CommentTextPart(token, CommentTextKind.emote));
+      cursor = match.end;
+    } else if (mentions[token] case final userId?) {
+      parts.add(
+        CommentTextPart(token, CommentTextKind.mention, userId: userId),
+      );
       cursor = match.end;
     } else if (token.toLowerCase().startsWith('http')) {
       final link = _trimLinkPunctuation(token);

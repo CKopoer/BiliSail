@@ -3,6 +3,7 @@ import '../../support/input_test_app.dart';
 import 'dart:ui' as ui;
 
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/image_viewer/application/image_viewer_controller.dart';
 import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:bilisail/shared/ui/app_network_image.dart';
@@ -16,6 +17,45 @@ import 'package:bilisail/features/video/presentation/comment_rich_content.dart';
 import 'package:bilisail/features/video/domain/video_comments_repository.dart';
 
 void main() {
+  testWidgets(
+    'mention taps update with user IDs, callbacks and missing metadata',
+    (tester) async {
+      final first = <UserId>[], second = <UserId>[];
+      Future<void> show(
+        Map<String, UserId> mentions,
+        ValueChanged<UserId>? onOpenUser,
+      ) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CommentRichContent(
+              comment: CommentEntry(
+                id: '1',
+                author: 'author',
+                message: '回复 @小迷糊陈 :看了',
+                mentionedUsers: mentions,
+              ),
+              onOpenUser: onOpenUser,
+            ),
+          ),
+        ),
+      );
+      await show(const {'小迷糊陈': UserId('100')}, first.add);
+      await tester.tapOnText(find.textRange.ofSubstring('@小迷糊陈'));
+      await show(const {'小迷糊陈': UserId('100')}, second.add);
+      await tester.tapOnText(find.textRange.ofSubstring('@小迷糊陈'));
+      await show(const {'小迷糊陈': UserId('101')}, second.add);
+      await tester.tapOnText(find.textRange.ofSubstring('@小迷糊陈'));
+      await show(const {}, second.add);
+      await tester.tapOnText(find.textRange.ofSubstring('@小迷糊陈'));
+      await show(const {'小迷糊陈': UserId('101')}, null);
+      await tester.tapOnText(find.textRange.ofSubstring('@小迷糊陈'));
+      expect(first, [const UserId('100')]);
+      expect(second, [const UserId('100'), const UserId('101')]);
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'inline links and timestamps share style and respond to real taps',
     (tester) async {

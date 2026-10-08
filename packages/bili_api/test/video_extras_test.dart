@@ -26,6 +26,134 @@ class _Transport implements ApiTransport {
 }
 
 void main() {
+  test(
+    'comment mentions preserve string IDs and fall back to members',
+    () async {
+      final content = {
+        'message': '回复 @reader :comment',
+        'at_name_to_mid_str': {'reader': '9007199254740993'},
+        'at_name_to_mid': {'reader': 42, 'numeric': 43},
+        'members': [
+          {'uname': 'reader', 'mid': '44'},
+          {'uname': 'member', 'mid': '45'},
+        ],
+      };
+      final api = BiliApiClient(
+        transport: _Transport(
+          (_) => {
+            'code': 0,
+            'data': {
+              'page': {'count': 1, 'size': 20},
+              'replies': [
+                {
+                  'rpid': '10',
+                  'member': {'uname': 'author'},
+                  'content': content,
+                  'replies': [
+                    {
+                      'rpid': '11',
+                      'member': {'uname': 'reply author'},
+                      'content': content,
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ),
+      );
+      addTearDown(api.close);
+      for (final page in [
+        await api.getVideoComments('42'),
+        await api.getVideoReplies('42', '10'),
+      ]) {
+        for (final comment in [
+          page.items.single,
+          page.items.single.replies.single,
+        ]) {
+          expect(comment.mentionedUsers, {
+            'reader': '9007199254740993',
+            'numeric': '43',
+            'member': '45',
+          });
+          expect(() => comment.mentionedUsers.clear(), throwsUnsupportedError);
+        }
+      }
+    },
+  );
+
+  test('optional malformed mention fields do not remove comments', () async {
+    for (final fields in <Map<String, Object?>>[
+      {},
+      {'at_name_to_mid_str': [], 'at_name_to_mid': 'invalid', 'members': {}},
+      {
+        'at_name_to_mid_str': {'zero': '0', 'float': 42.0, 'invalid': 'abc'},
+        'at_name_to_mid': {'': 42, ' \n ': 43, 'negative': -1, 'null': null},
+        'members': [
+          null,
+          'invalid',
+          {},
+          {'uname': 'reader', 'mid': 0},
+        ],
+      },
+    ]) {
+      final api = BiliApiClient(
+        transport: _Transport(
+          (_) => {
+            'code': 0,
+            'data': {
+              'page': {'count': 1, 'size': 20},
+              'replies': [
+                {
+                  'rpid': '10',
+                  'member': {'uname': 'author'},
+                  'content': {'message': 'reply', ...fields},
+                },
+              ],
+            },
+          },
+        ),
+      );
+      addTearDown(api.close);
+      final comment = (await api.getVideoComments('42')).items.single;
+      expect(comment.message, 'reply');
+      expect(comment.mentionedUsers, isEmpty);
+    }
+  });
+
+  test('comment mention metadata has a bounded size', () async {
+    final api = BiliApiClient(
+      transport: _Transport(
+        (_) => {
+          'code': 0,
+          'data': {
+            'page': {'count': 1, 'size': 20},
+            'replies': [
+              {
+                'rpid': '10',
+                'member': {'uname': 'author'},
+                'content': {
+                  'message': 'reply',
+                  'at_name_to_mid_str': {
+                    for (var i = 1; i <= 120; i++) 'user$i': '$i',
+                  },
+                  'members': [
+                    {'uname': 'extra', 'mid': '121'},
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ),
+    );
+    addTearDown(api.close);
+    expect(
+      (await api.getVideoComments('42')).items.single.mentionedUsers,
+      hasLength(100),
+    );
+  });
+
   test('comment locations map for roots, previews and reply pages', () async {
     final transport = _Transport(
       (_) => {

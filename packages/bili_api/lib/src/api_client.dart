@@ -521,6 +521,7 @@ final class BiliApiClient {
               _commentImage(_commentMap(e.value)['url']) != null)
             e.key: _commentImage(_commentMap(e.value)['url'])!,
       }),
+      mentionedUsers: _commentMentionedUsers(content),
       pictures: List.unmodifiable(
         (content['pictures'] is List<Object?>
                 ? content['pictures'] as List<Object?>
@@ -551,6 +552,37 @@ final class BiliApiClient {
       publishedAt: _publishedAt(entry['ctime']),
       ipLocation: location?.isNotEmpty == true ? location : null,
     );
+  }
+
+  static Map<String, String> _commentMentionedUsers(
+    Map<String, Object?> content,
+  ) {
+    final users = <String, String>{};
+    void add(Object? name, Object? value) {
+      final mid = _userMid(value);
+      if (name is String &&
+          name.trim().isNotEmpty &&
+          name.length <= 100 &&
+          mid != null &&
+          users.length < 100) {
+        users.putIfAbsent(name, () => mid);
+      }
+    }
+
+    // Prefer decimal strings; older Web responses may only supply members.
+    for (final field in ['at_name_to_mid_str', 'at_name_to_mid']) {
+      for (final entry in _commentMap(content[field]).entries.take(100)) {
+        add(entry.key, entry.value);
+      }
+    }
+    final members = content['members'];
+    if (members is List<Object?>) {
+      for (final value in members.take(100)) {
+        final member = _commentMap(value);
+        add(member['uname'], member['mid']);
+      }
+    }
+    return Map.unmodifiable(users);
   }
 
   /// Web reply panel, optional Cookie; bounded GET with the shared deadline.

@@ -16,6 +16,8 @@
 
 2026-10-07 评论 IP 属地只读参考 [CommentApi.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/CommentApi.cs)、[CommentItem.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Common/Comment/CommentItem.cs) 和 [CommentReplyControlModel.cs](../../biliuwp-lite/src/BiliLite.UWP/Models/Common/Comment/CommentReplyControlModel.cs) 的 `reply_control.location` 字段。仅借鉴协议语义，未复制源码、样式或资源；Flutter 展示沿用当前日期行的文字样式，结果与在线验证边界见 [评论验证](validation/video-comments.md#评论-ip-属地2026-10-07)。
 
+2026-10-08 评论被 @ 用户只读参考 [UWP 评论 schema](../../biliuwp-lite/src/BiliLite.gRPC/bilibili/main/community/reply/v1/reply.proto) 和 [bili-kernel 评论 schema](../../bili-kernel/src/BiliKernel.Grpc/bilibili/main/community/reply/v1.proto) 中的 `Content.at_name_to_mid` 字段，并以实际 Web JSON 返回的 `at_name_to_mid_str`、`at_name_to_mid` 和 `members[].uname/mid` 核对。仅借鉴字段职责，独立实现 Dart 解析与 Flutter 主页入口，未复制 schema、源码或资源，不新增运行时依赖；在线样例与验证边界见 [评论验证](validation/video-comments.md)。
+
 | 已查看入口 | 借鉴点 | Flutter 落点/调整 |
 | --- | --- | --- |
 | [App.xaml.cs](../../biliuwp-lite/src/BiliLite.UWP/App.xaml.cs) | 启动、服务注册、窗口/会话初始化 | `app/bootstrap` + Provider 组合根；避免任意访问静态 ServiceProvider |

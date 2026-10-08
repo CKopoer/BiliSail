@@ -28,6 +28,7 @@ final class CommentEntry {
     this.decorationFanNumber,
     this.decorationFanColor,
     this.emotes = const {},
+    this.mentionedUsers = const {},
     this.pictures = const [],
   });
   final int? level, verifyType, medalLevel;
@@ -38,6 +39,7 @@ final class CommentEntry {
   /// 24-bit RGB; Flutter colors are constructed only in presentation.
   final int? decorationFanColor;
   final Map<String, Uri> emotes;
+  final Map<String, UserId> mentionedUsers;
   final List<Uri> pictures;
   final String id, author, message;
   final Uri? avatarUrl;
@@ -62,6 +64,7 @@ final class CommentEntry {
     decorationFanNumber: decorationFanNumber,
     decorationFanColor: decorationFanColor,
     emotes: emotes,
+    mentionedUsers: mentionedUsers,
     pictures: pictures,
     avatarUrl: avatarUrl,
     authorId: authorId,
@@ -89,6 +92,7 @@ final class CommentEntry {
         decorationFanNumber: decorationFanNumber,
         decorationFanColor: decorationFanColor,
         emotes: emotes,
+        mentionedUsers: mentionedUsers,
         pictures: pictures,
         avatarUrl: avatarUrl,
         authorId: authorId,

@@ -4,13 +4,14 @@ import 'dart:typed_data';
 import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/comments/data/api_comments_repository.dart';
 import 'package:bilisail/features/video/domain/video_comments_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'repository retains IP locations in comments and nested replies',
+    'repository retains locations and mentions in comments and nested replies',
     () async {
       final requests = ApiRequests();
       final api = BiliApiClient(
@@ -30,6 +31,22 @@ void main() {
         final root = page.items.single;
         expect(root.ipLocation, 'IP属地：广东');
         expect(root.replies.single.ipLocation, 'IP属地：上海');
+        expect(root.mentionedUsers, {
+          'reader': const UserId('9007199254740993'),
+        });
+        expect(root.replies.single.mentionedUsers, {
+          'reader': const UserId('100'),
+        });
+        expect(root.withLike(true).mentionedUsers, root.mentionedUsers);
+        expect(
+          root.withReplies(root.replies).mentionedUsers,
+          root.mentionedUsers,
+        );
+        expect(
+          root.replies.single.withLike(true).mentionedUsers,
+          root.replies.single.mentionedUsers,
+        );
+        expect(() => root.mentionedUsers.clear(), throwsUnsupportedError);
         expect(root.withLike(true).ipLocation, 'IP属地：广东');
         expect(
           root.withReplies(root.replies).replies.single.ipLocation,
@@ -59,13 +76,21 @@ final class _Transport implements ApiTransport {
               {
                 'rpid': '10',
                 'member': {'uname': 'reader'},
-                'content': {'message': 'comment'},
+                'content': {
+                  'message': 'comment',
+                  'at_name_to_mid_str': {'reader': '9007199254740993'},
+                },
                 'reply_control': {'location': 'IP属地：广东'},
                 'replies': [
                   {
                     'rpid': '11',
                     'member': {'uname': 'reply author'},
-                    'content': {'message': 'reply'},
+                    'content': {
+                      'message': 'reply',
+                      'members': [
+                        {'uname': 'reader', 'mid': '100'},
+                      ],
+                    },
                     'reply_control': {'location': 'IP属地：上海'},
                   },
                 ],

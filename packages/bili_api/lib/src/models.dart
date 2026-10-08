@@ -147,6 +147,7 @@ final class ApiVideoComment {
     this.decorationFanNumber,
     this.decorationFanColor,
     this.emotes = const {},
+    this.mentionedUsers = const {},
     this.pictures = const [],
     this.authorMid,
   });
@@ -158,6 +159,9 @@ final class ApiVideoComment {
   /// Optional 24-bit RGB color of the decoration's fan serial number.
   final int? decorationFanColor;
   final Map<String, Uri> emotes;
+
+  /// Server-supplied mention names mapped to decimal user IDs.
+  final Map<String, String> mentionedUsers;
   final List<Uri> pictures;
   final bool liked;
   final int replyCount;

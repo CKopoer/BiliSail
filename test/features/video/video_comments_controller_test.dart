@@ -408,6 +408,55 @@ void main() {
     await tester.tap(find.text('乙').first);
     expect(opened.last, const UserId('101'));
   });
+  testWidgets('mentions open profiles in main, preview and detailed replies', (
+    tester,
+  ) async {
+    final opened = <UserId>[];
+    const mentionedReply = CommentEntry(
+      id: '11',
+      author: '乙',
+      authorId: UserId('101'),
+      message: '回复 @小迷糊陈 :看了',
+      mentionedUsers: {'小迷糊陈': UserId('102')},
+      rootId: '10',
+      parentId: '10',
+    );
+    repo.items = [
+      const CommentEntry(
+        id: '10',
+        author: '甲',
+        message: '@主评论用户',
+        mentionedUsers: {'主评论用户': UserId('103')},
+        replyCount: 3,
+        replies: [mentionedReply],
+      ),
+    ];
+    repo.replyItems = [mentionedReply];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(auth),
+          videoCommentsRepositoryProvider.overrideWithValue(repo),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: VideoCommentsPanel(detail: _detail, onOpenUser: opened.add),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tapOnText(find.textRange.ofSubstring('@主评论用户'));
+    await tester.tapOnText(find.textRange.ofSubstring('@小迷糊陈'));
+    await tester.pumpAndSettle();
+    expect(opened, [const UserId('103'), const UserId('102')]);
+    expect(find.text('详情'), findsNothing);
+    await tester.tap(find.text('共 3 条回复 ›'));
+    await tester.pumpAndSettle();
+    await tester.tapOnText(find.textRange.ofSubstring('@小迷糊陈'));
+    expect(opened.last, const UserId('102'));
+    expect(repo.writes, 0);
+  });
   test('emote loading discards response from previous session epoch', () async {
     repo.emotePending = Completer();
     final loading = controller.loadEmotes();

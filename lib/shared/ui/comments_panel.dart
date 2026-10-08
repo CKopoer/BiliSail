@@ -592,6 +592,7 @@ class _CommentTile extends StatelessWidget {
                 const SizedBox(height: 8),
                 CommentRichContent(
                   comment: c,
+                  onOpenUser: onOpenUser,
                   onOpenLink: onOpenLink,
                   onSeek: onSeek,
                 ),
@@ -656,6 +657,7 @@ class _CommentTile extends StatelessWidget {
                                       ),
                                       CommentRichContent(
                                         comment: r,
+                                        onOpenUser: onOpenUser,
                                         compact: true,
                                         onOpenLink: onOpenLink,
                                         onSeek: onSeek,
