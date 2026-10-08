@@ -20,12 +20,14 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
     this.onOpenVideo,
     this.onOpenLink,
     this.onLogin,
+    this.expansionState,
   });
   final DynamicPost post;
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<VideoSummary>? onOpenVideo;
   final ValueChanged<Uri>? onOpenLink;
   final VoidCallback? onLogin;
+  final DynamicPostExpansionState? expansionState;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -100,6 +102,7 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
       children: [
         DynamicPostCard(
           post: current,
+          expansionState: expansionState,
           onOpenUser: onOpenUser,
           onOpenVideo: onOpenVideo,
           onOpenLink: onOpenLink,

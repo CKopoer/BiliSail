@@ -8,6 +8,7 @@ import '../../live/domain/live_room.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/dynamic_post_interactions.dart';
+import '../../../shared/ui/sliver_dynamic_post_list.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/video_card.dart';
@@ -195,6 +196,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     required bool active,
     required ScrollBehavior scrollBehavior,
   }) {
+    final entries = state.current.items;
     return Column(
       children: [
         Expanded(
@@ -264,69 +266,84 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverLayoutBuilder(
-                  builder: (context, constraints) {
-                    final entries = state.current.items;
-                    if (state.section == ProfileSection.folders &&
-                        state.folderId != null) {
-                      return SliverResponsiveCardGrid(
-                        itemCount: entries.length,
-                        itemBuilder: (context, index) => _entry(
-                          entries[index],
-                          controller,
-                          sharedVideoCard: true,
-                        ),
-                      );
-                    }
-                    final isVideoList =
-                        entries.isNotEmpty &&
-                        entries.every(
-                          (e) =>
-                              e.kind == ProfileEntryKind.video &&
-                              e.video != null,
-                        );
-                    if (!isVideoList) {
-                      return SliverList.builder(
-                        itemCount: entries.length,
-                        itemBuilder: (context, index) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Align(
-                            alignment: Alignment.topCenter,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth:
-                                    state.section == ProfileSection.dynamics
-                                    ? 780
-                                    : double.infinity,
+                sliver:
+                    state.section == ProfileSection.dynamics &&
+                        entries.every((entry) => entry.dynamicPost != null)
+                    ? SliverDynamicPostList(
+                        posts: [
+                          for (final entry in entries) ?entry.dynamicPost,
+                        ],
+                        spacing: 12,
+                        onOpenUser: widget.onOpenUser,
+                        onOpenVideo: widget.onOpenVideo,
+                        onOpenLink: (uri) =>
+                            ref.read(externalLinkOpenerProvider)(uri),
+                      )
+                    : SliverLayoutBuilder(
+                        builder: (context, constraints) {
+                          if (state.section == ProfileSection.folders &&
+                              state.folderId != null) {
+                            return SliverResponsiveCardGrid(
+                              itemCount: entries.length,
+                              itemBuilder: (context, index) => _entry(
+                                entries[index],
+                                controller,
+                                sharedVideoCard: true,
                               ),
-                              child: _entry(entries[index], controller),
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-                    final columns = (constraints.crossAxisExtent / 560)
-                        .floor()
-                        .clamp(1, 3);
-                    final cardWidth =
-                        (constraints.crossAxisExtent - (columns - 1) * 24) /
-                        columns;
-                    return SliverGrid.builder(
-                      itemCount: entries.length,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        mainAxisExtent: ProfileVideoCard.heightFor(
-                          cardWidth,
-                          MediaQuery.textScalerOf(context),
-                        ),
-                        crossAxisSpacing: 24,
-                        mainAxisSpacing: 24,
+                            );
+                          }
+                          final isVideoList =
+                              entries.isNotEmpty &&
+                              entries.every(
+                                (e) =>
+                                    e.kind == ProfileEntryKind.video &&
+                                    e.video != null,
+                              );
+                          if (!isVideoList) {
+                            return SliverList.builder(
+                              itemCount: entries.length,
+                              itemBuilder: (context, index) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Align(
+                                  alignment: Alignment.topCenter,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth:
+                                          state.section ==
+                                              ProfileSection.dynamics
+                                          ? 780
+                                          : double.infinity,
+                                    ),
+                                    child: _entry(entries[index], controller),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          final columns = (constraints.crossAxisExtent / 560)
+                              .floor()
+                              .clamp(1, 3);
+                          final cardWidth =
+                              (constraints.crossAxisExtent -
+                                  (columns - 1) * 24) /
+                              columns;
+                          return SliverGrid.builder(
+                            itemCount: entries.length,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  mainAxisExtent: ProfileVideoCard.heightFor(
+                                    cardWidth,
+                                    MediaQuery.textScalerOf(context),
+                                  ),
+                                  crossAxisSpacing: 24,
+                                  mainAxisSpacing: 24,
+                                ),
+                            itemBuilder: (context, index) =>
+                                _video(entries[index].video!),
+                          );
+                        },
                       ),
-                      itemBuilder: (context, index) =>
-                          _video(entries[index].video!),
-                    );
-                  },
-                ),
               ),
               SliverToBoxAdapter(
                 child: Padding(

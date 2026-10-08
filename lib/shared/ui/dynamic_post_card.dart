@@ -11,6 +11,24 @@ import 'bili_icons.dart';
 import 'video_card.dart';
 import 'app_network_image.dart';
 
+/// Expansion belongs to the retained list, rather than to an evictable row.
+class DynamicPostExpansionState {
+  final _expanded = <String>{};
+
+  bool isExpanded(String id) => _expanded.contains(id);
+
+  void setExpanded(String id, bool expanded) {
+    if (expanded) {
+      _expanded.add(id);
+    } else {
+      _expanded.remove(id);
+    }
+  }
+
+  void retain(Set<String> ids) =>
+      _expanded.removeWhere((id) => !ids.contains(id));
+}
+
 /// Dynamic content; navigation and account actions belong to the owning feature.
 class DynamicPostCard extends StatelessWidget {
   const DynamicPostCard({
@@ -26,7 +44,29 @@ class DynamicPostCard extends StatelessWidget {
     this.likeCount,
     this.repostCount,
     this.busy = false,
-  });
+    this.expansionState,
+  }) : _layoutOnly = false;
+
+  /// Uses the same layout without image requests or account state subscriptions.
+  /// Only the detached extent measurement tree should use this constructor.
+  const DynamicPostCard.forLayout({
+    super.key,
+    required this.post,
+    this.onOpenLink,
+    this.expansionState,
+  }) : _layoutOnly = true,
+       onOpenUser = null,
+       onOpenVideo = null,
+       onShare = null,
+       onComment = null,
+       onLike = null,
+       liked = null,
+       likeCount = null,
+       repostCount = null,
+       busy = false;
+
+  final bool _layoutOnly;
+  final DynamicPostExpansionState? expansionState;
   final DynamicPost post;
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<VideoSummary>? onOpenVideo;
@@ -44,6 +84,8 @@ class DynamicPostCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: _PostBody(
         post: post,
+        layoutOnly: _layoutOnly,
+        expansionState: expansionState,
         onOpenUser: onOpenUser,
         onOpenVideo: onOpenVideo,
         onOpenLink: onOpenLink,
@@ -70,6 +112,8 @@ class _PostBody extends StatelessWidget {
     this.onOpenLink,
     this.depth = 0,
     this.actions,
+    this.layoutOnly = false,
+    this.expansionState,
   });
   final DynamicPost post;
   final ValueChanged<UserId>? onOpenUser;
@@ -77,6 +121,8 @@ class _PostBody extends StatelessWidget {
   final ValueChanged<Uri>? onOpenLink;
   final int depth;
   final Widget? actions;
+  final bool layoutOnly;
+  final DynamicPostExpansionState? expansionState;
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +147,7 @@ class _PostBody extends StatelessWidget {
                 child: Row(
                   children: [
                     NetworkAvatar(
-                      url: post.authorAvatarUrl,
+                      url: layoutOnly ? null : post.authorAvatarUrl,
                       name: post.authorName,
                       radius: depth == 0 ? 20 : 14,
                     ),
@@ -147,6 +193,8 @@ class _PostBody extends StatelessWidget {
           const SizedBox(height: 12),
           _DynamicText(
             post: post,
+            layoutOnly: layoutOnly,
+            expansionState: expansionState,
             onOpenUser: onOpenUser,
             onOpenLink: onOpenLink,
           ),
@@ -175,6 +223,7 @@ class _PostBody extends StatelessWidget {
                           children: [
                             _image(
                               Uri.tryParse(video.coverUrl),
+                              layoutOnly: layoutOnly,
                               fit: BoxFit.cover,
                               decodeWidth: 480,
                             ),
@@ -250,6 +299,7 @@ class _PostBody extends StatelessWidget {
                     images: post.imageUrls,
                     imageIndex: 0,
                     decodeWidth: 960,
+                    layoutOnly: layoutOnly,
                   ),
                 ),
               ),
@@ -284,6 +334,7 @@ class _PostBody extends StatelessWidget {
                                 imageIndex: index,
                                 fit: BoxFit.cover,
                                 decodeWidth: 520,
+                                layoutOnly: layoutOnly,
                               ),
                             ),
                           ),
@@ -308,7 +359,11 @@ class _PostBody extends StatelessWidget {
                   if (post.linkCoverUrl != null) ...[
                     SizedBox.square(
                       dimension: 64,
-                      child: _image(post.linkCoverUrl, fit: BoxFit.cover),
+                      child: _image(
+                        post.linkCoverUrl,
+                        fit: BoxFit.cover,
+                        layoutOnly: layoutOnly,
+                      ),
                     ),
                     const SizedBox(width: 10),
                   ],
@@ -358,6 +413,8 @@ class _PostBody extends StatelessWidget {
             ),
             child: _PostBody(
               post: original,
+              layoutOnly: layoutOnly,
+              expansionState: expansionState,
               onOpenUser: onOpenUser,
               onOpenVideo: onOpenVideo,
               onOpenLink: onOpenLink,
@@ -452,7 +509,13 @@ class _DynamicActions extends StatelessWidget {
   }
 }
 
-Widget _image(Uri? url, {BoxFit fit = BoxFit.contain, int decodeWidth = 256}) {
+Widget _image(
+  Uri? url, {
+  BoxFit fit = BoxFit.contain,
+  int decodeWidth = 256,
+  bool layoutOnly = false,
+}) {
+  if (layoutOnly) return const SizedBox.expand();
   if (url == null || !['http', 'https'].contains(url.scheme)) {
     return const Icon(Icons.image_outlined);
   }
@@ -477,26 +540,42 @@ Widget _picture(
   required int imageIndex,
   BoxFit fit = BoxFit.contain,
   int decodeWidth = 256,
+  bool layoutOnly = false,
 }) => Semantics(
   label: '查看动态图片',
   button: true,
   child: InkWell(
     onTap: () => showImageViewer(context, images, imageIndex),
-    child: _image(url, fit: fit, decodeWidth: decodeWidth),
+    child: _image(
+      url,
+      fit: fit,
+      decodeWidth: decodeWidth,
+      layoutOnly: layoutOnly,
+    ),
   ),
 );
 
 class _DynamicText extends StatefulWidget {
-  const _DynamicText({required this.post, this.onOpenUser, this.onOpenLink});
+  const _DynamicText({
+    required this.post,
+    this.onOpenUser,
+    this.onOpenLink,
+    this.layoutOnly = false,
+    this.expansionState,
+  });
   final DynamicPost post;
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<Uri>? onOpenLink;
+  final bool layoutOnly;
+  final DynamicPostExpansionState? expansionState;
   @override
   State<_DynamicText> createState() => _DynamicTextState();
 }
 
 class _DynamicTextState extends State<_DynamicText> {
-  bool _expanded = false;
+  bool _locallyExpanded = false;
+  bool get _expanded =>
+      widget.expansionState?.isExpanded(widget.post.id) ?? _locallyExpanded;
   final _recognizers = <TapGestureRecognizer>[];
   void _disposeRecognizers() {
     for (final recognizer in _recognizers) {
@@ -514,7 +593,7 @@ class _DynamicTextState extends State<_DynamicText> {
   @override
   void didUpdateWidget(_DynamicText oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.post.id != widget.post.id) _expanded = false;
+    if (oldWidget.post.id != widget.post.id) _locallyExpanded = false;
   }
 
   @override
@@ -548,12 +627,18 @@ class _DynamicTextState extends State<_DynamicText> {
             child: Semantics(
               label: part.text,
               image: true,
-              child: AppNetworkImage(
-                url: image.toString(),
-                width: size,
-                height: size,
-                cacheWidth: (size * 3).ceil(),
-                errorBuilder: (_, _, _) => Text(part.text, style: style),
+              child: SizedBox.square(
+                dimension: size,
+                child: widget.layoutOnly
+                    ? const SizedBox.expand()
+                    : AppNetworkImage(
+                        url: image.toString(),
+                        width: size,
+                        height: size,
+                        cacheWidth: (size * 3).ceil(),
+                        errorBuilder: (_, _, _) =>
+                            Text(part.text, style: style),
+                      ),
               ),
             ),
           ),
@@ -614,7 +699,13 @@ class _DynamicTextState extends State<_DynamicText> {
         ),
         if (canExpand)
           TextButton(
-            onPressed: () => setState(() => _expanded = !_expanded),
+            onPressed: () {
+              setState(() {
+                final expanded = !_expanded;
+                widget.expansionState?.setExpanded(widget.post.id, expanded);
+                _locallyExpanded = expanded;
+              });
+            },
             child: Text(_expanded ? '收起' : '展开全文'),
           ),
       ],

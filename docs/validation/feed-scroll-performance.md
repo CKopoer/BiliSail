@@ -70,3 +70,17 @@
 专项组件／交互测试 32 项、动态协议测试 15 项通过。`tool/check.ps1 -SkipPub` 通过：根应用 1,130、`bili_api` 302、`bili_player` 22、`bili_danmaku` 52 项，共 1,506 项测试；根应用与三个包的格式和静态分析通过。`flutter build windows --release --no-pub -t lib/main.dart` 成功，产物为 `build/windows/x64/runner/Release/bilisail.exe`。
 
 组件测试使用受控图片加载，不作为真实鼠标手感或帧耗时结论。本轮未进行真实账号／Windows 窗口滚动验收，也未构建或运行 Android/macOS。检查与构建日志保存在忽略目录 `artifacts/dynamic-scroll-investigation/`。
+
+## 2026-10-08 动态滚动条范围修复
+
+动态卡片本身保留自然高度，但普通 `SliverList.builder` 按当前已布局行的平均高度推算剩余内容。可见区域从短文本切到长图、多图或转发时，同一批数据的 `maxScrollExtent` 会改变，滚动条长度和拖动位置随之跳变。
+
+首页“动态”的全部／视频／图文及空间动态改用[共享动态列表](../../lib/shared/ui/sliver_dynamic_post_list.dart)。它用同一张动态卡片的布局测量已加载条目的自然高度，缓存后将准确总高度提供给 Sliver 委托。测量树逐条复用并销毁，只放置图片尺寸占位，不请求图片、不订阅账号交互状态，也不挂载到页面或绘制。实际交互卡片仍按视口懒创建、屏幕外释放。分页只测量新增或改变的条目；滚动复用高度和委托，窗口宽度、字体、主题、locale、文字缩放改变时重新测量。
+
+展开正文的状态由该列表保留，卡片被释放后返回仍沿用展开状态。真实内容高度变化会更新记录；分页追加、正文展开及布局条件改变允许滚动范围随内容更新。委托更新显式触发布局，避免只在尾部增加数据时沿用旧范围。另给行内表情固定尺寸容器，防止加载失败的文字回退改变行高。
+
+[六项滚动条回归](../../test/features/feed/dynamic_scrollbar_test.dart)覆盖三种动态子标签的高矮混排、跨首尾反复跳转、真实鼠标手势连续上下拖动、正文展开后释放／重建及宽度／文字缩放变化、追加分页后的原位置保留。逐帧检查同一批数据的总范围、滑块比例与位置，保留屏幕附近的卡片数量上限。测试使用模拟仓储，图片网络由 Flutter 组件测试环境返回失败，不请求真实账号或在线接口。
+
+`tool/check.ps1 -SkipPub` 通过：根应用 1,328、`bili_api` 319、`bili_player` 32、`bili_danmaku` 65 项，共 1,744 项测试；四处格式和静态分析通过，文档相对链接和 `git diff --check` 通过。专项六项回归包含在根应用检查中。
+
+本轮未进行 Windows 窗口人工拖动、Android/macOS 构建或实机运行，也未采样首屏测量或滚动的 profile 帧耗时；组件回归不能代替这些验收。检查日志保存在 `artifacts/dynamic-scrollbar-check-final.log`，专项回归在 `artifacts/dynamic-scrollbar-targeted.log`。

@@ -1,7 +1,7 @@
 import '../../../domain/user.dart';
 import '../../../domain/dynamic_post.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
-import '../../../shared/ui/dynamic_post_interactions.dart';
+import '../../../shared/ui/sliver_dynamic_post_list.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
@@ -292,42 +292,26 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
     _bodyLogin = widget.onLogin;
     _bodyCanUnsubscribe = canUnsubscribe;
     if (widget.channel == HomeChannel.dynamic) {
-      return _bodySliver = SliverList.builder(
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return Padding(
-            key: ValueKey(item.id),
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 780),
-                child: InteractiveDynamicPostCard(
-                  key: ValueKey(item.id),
-                  post:
-                      item.dynamicPost ??
-                      DynamicPost(
-                        id: item.id,
-                        authorName: item.authorName,
-                        authorId: UserId.tryParse(item.authorMid),
-                        authorAvatarUrl: item.authorAvatarUrl,
-                        publishText: item.publishText,
-                        publishedAt: item.publishedAt,
-                        text: item.description.isEmpty
-                            ? item.title
-                            : item.description,
-                      ),
-                  onOpenUser: (id) => context.go('/user/${id.value}'),
-                  onOpenVideo: (video) =>
-                      context.go('/video/${video.id.value}'),
-                  onOpenLink: _openLink,
-                  onLogin: widget.onLogin,
+      return _bodySliver = SliverDynamicPostList(
+        posts: [
+          for (final item in items)
+            item.dynamicPost ??
+                DynamicPost(
+                  id: item.id,
+                  authorName: item.authorName,
+                  authorId: UserId.tryParse(item.authorMid),
+                  authorAvatarUrl: item.authorAvatarUrl,
+                  publishText: item.publishText,
+                  publishedAt: item.publishedAt,
+                  text: item.description.isEmpty
+                      ? item.title
+                      : item.description,
                 ),
-              ),
-            ),
-          );
-        },
+        ],
+        onOpenUser: (id) => context.go('/user/${id.value}'),
+        onOpenVideo: (video) => context.go('/video/${video.id.value}'),
+        onOpenLink: _openLink,
+        onLogin: widget.onLogin,
       );
     }
     return _bodySliver = SliverResponsiveCardGrid(
