@@ -22,6 +22,26 @@
 - 保留 preferences.v1 快捷键 JSON 的动作 name、bindings 数组、disabled、enabled 和播放参数；没有新增依赖、偏好版本或 SQLite migration。空列表仍为解除绑定；合法旧设置 round-trip 不变。损坏项局部停用，冲突键从双方移除，设置列出待修复项；用户未确认快捷键设置前仍保留原快照供后续修复。
 - 设置提供默认关闭、只在当前进程内存在的诊断，最多 256 条，关闭／离开该设置页清空。记录相对时间、设备／view、phase、逻辑／物理标识或按钮位、归一化匹配方式、命令、作用域、目标注册代次及分发／完成原因；编辑器和普通模态区屏蔽具体键值及按钮位，没有字符／文本／凭据日志或上传。播放器提示从当前设置读取首个有效绑定。
 
+## Windows 修饰键失焦恢复（2026-10-08）
+
+按 [Flutter #177822 报告中的临时方案](https://github.com/flutter/flutter/issues/177822#issuecomment-3477313405)处理 Alt+Tab 后用鼠标切回时的修饰键残留，以及按 Alt 后下一次键盘输入被原生菜单截走的问题。Flutter SDK 仍固定为 3.47.6，没有新增插件、单例或系统键盘 Hook。
+
+- Windows 的 InputNormalizer 从实际交付的修饰键 Down／Repeat／Up 维护 Alt／Ctrl／Shift／Meta，左右键按物理身份分别保存。合成修饰键事件可以同步状态，但仍不执行快捷键；键盘、侧键、录制和诊断共用这份归一化结果。其他平台继续读取 HardwareKeyboard。
+- 滚轮补充修复：平滑滚动原先单独读取 HardwareKeyboard，残留 Alt／Ctrl／Meta 会退出平滑处理并落到原生即时滚动；残留 Shift 会错误切换滚动轴。AppInputHost 通过与命令类型无关的只读 InputModifierScope 共享实时状态，平滑滚动的组合键／轴判断及图片查看器的 Ctrl+滚轮都接入该入口。状态仍由 InputNormalizer 单独持有，按输入读取，不增加全局键盘监听或逐键 UI 重建。独立组件没有宿主时保留 Flutter 默认状态读取。
+- AppInputHost 在窗口失焦或应用失活时取消动作，清空修饰键、鼠标按钮，以及分发器的键盘／鼠标按下记录。释放发生在另一个窗口时，回到应用后的新 Down 不会被残留的 sequenceTail 吞掉；无 Down 的旧 Repeat／Up 不执行动作。失活时的输入不回填状态，生命周期恢复与 view focus 必须同时有效才接受输入。
+- [Windows runner](../../windows/runner/flutter_window.cpp) 消费 `WM_SYSCOMMAND / SC_KEYMENU`，阻止 Alt 激活原生菜单后截走下一键。命令比较按 [Win32 文档](https://learn.microsoft.com/en-us/windows/win32/menurc/wm-syscommand)屏蔽低四位。
+- 两处临时补丁均有 TODO，指向 #177822；修饰键补丁同时指向焦点状态同步问题 [#99330](https://github.com/flutter/flutter/issues/99330)。固定 SDK 升级后，先验证 Alt+Tab → 窗口外释放 Alt → 鼠标切回 → 侧键／键盘快捷键，以及按 Alt 后的下一键交付，再移除对应补丁。失焦清理分发器按下记录属于应用自身的生命周期修复，需要保留。
+
+该方案不读取失焦后的 Flutter 修饰键缓存。在其他窗口先按住修饰键再用鼠标切回时，需要重新按下修饰键或收到新的修饰键同步事件才能形成组合键；不能保证在 Flutter 未交付事件时还原物理状态，也不能修复原生 WebView 内的输入。
+
+[输入宿主回归](../../test/core/presentation/app_input_host_test.dart)模拟 HardwareKeyboard 仍残留 Alt／Ctrl 的窗口失焦与生命周期失活，验证侧键及键盘恢复、真正的 Alt 组合、旧按下记录清理、旧 Repeat 隔离，以及 lifecycle resume 不覆盖未聚焦 view。[归一化回归](../../test/core/presentation/keyboard_shortcuts_test.dart)覆盖四种修饰键左右独立释放、失焦重置和合成同步。物理 Windows Alt+Tab／鼠标侧键及输入法仍需实键验收，自动注入结果不能替代这些检查。
+
+首次修饰键补丁的定向静态分析通过；快捷键、工作区、播放和设置相关 336 项回归通过，三个包的格式／分析及 416 项测试通过（bili_api 319、bili_player 32、bili_danmaku 65）。Windows 播放／全屏／工作区集成测试 8 项通过；`flutter build windows --release --no-pub` 通过，产物为 `build/windows/x64/runner/Release/bilisail.exe`，既有 flutter_inappwebview_windows CMP0175 警告未阻止构建。本地文档链接与本次差异的空白检查通过。
+
+首次运行 `tool/check.ps1 -SkipPub` 时根格式与发布脚本检查通过，整仓分析停在同期个人主页改动的 `profile_screen.dart:221`／`use_null_aware_elements` 提示。另行尝试根全量测试时，同期 `dynamic_scrollbar_test.dart` 持续触发 Flutter 的 `!semantics.parentDataDirty` 渲染断言，因此停止该次运行；该测试未挂载 AppInputHost。首次修饰键补丁保留这些无关修改，当时没有将整仓检查或根全量测试记为通过。
+
+滚轮补充修复后，`tool/check.ps1 -SkipPub` 完整通过：根应用 1,397、bili_api 325、bili_player 32、bili_danmaku 65 项，共 1,819 项测试；根应用及三个包的格式和分析通过。新增六项滚轮／图片组合键回归包含在根应用检查中。验证日志位于 `build/input-investigation/wheel-modifier-check.log`；真实 Windows 鼠标与焦点切换体验由用户自行构建后验收。
+
 ## 页面刷新
 
 刷新只归活动页面，进行中重复触发合并；播放器不再独立解释 F5／侧键为 retry。首页保留频道，搜索使用 refresh 保留当前筛选，历史、消息、下载、用户页调用各自刷新。UGC 复用相关推荐／标签刷新与本页播放重试组合；PGC 先重新加载剧集，同一选择与源代次稳定才重试，变更选集由原激活路径开源；直播由房间 controller.load 驱动目标，不另发 retry。离线保留本地源 retry；设置等无能力页不注册空回调。页面销毁／账号和 source generation 继续由已有控制器及会话隔离。

@@ -1,10 +1,39 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../input/shortcut_dispatcher.dart';
 import '../input/input_stroke.dart';
 import 'app_input_host.dart';
+
+/// Read the host's current modifier state during input without rebuilding UI.
+/// Shared by pointer interactions and shortcuts, independent of command types.
+class InputModifierScope extends InheritedWidget {
+  const InputModifierScope({
+    super.key,
+    required this.isPressed,
+    required super.child,
+  });
+
+  final bool Function(LogicalKeyboardKey) isPressed;
+
+  static bool anyPressedOf(
+    BuildContext context,
+    Iterable<LogicalKeyboardKey> keys,
+  ) {
+    final read =
+        context
+            .getInheritedWidgetOfExactType<InputModifierScope>()
+            ?.isPressed ??
+        HardwareKeyboard.instance.isLogicalKeyPressed;
+    return keys.any(read);
+  }
+
+  @override
+  bool updateShouldNotify(InputModifierScope oldWidget) =>
+      isPressed != oldWidget.isPressed;
+}
 
 class InputScope<C> extends InheritedWidget {
   const InputScope({

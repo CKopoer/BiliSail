@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/presentation/input_scope.dart';
 import '../../core/presentation/workspace_activity.dart';
 
 /// Adds short wheel transitions without replacing a list's controller/physics.
@@ -93,10 +94,15 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
         !widget.scrollable.mounted) {
       return;
     }
-    final keyboard = HardwareKeyboard.instance;
-    if (keyboard.isControlPressed ||
-        keyboard.isAltPressed ||
-        keyboard.isMetaPressed) {
+    // Use the same blur-safe modifiers as shortcuts instead of Flutter's cache.
+    if (InputModifierScope.anyPressedOf(context, const [
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.controlRight,
+      LogicalKeyboardKey.altLeft,
+      LogicalKeyboardKey.altRight,
+      LogicalKeyboardKey.metaLeft,
+      LogicalKeyboardKey.metaRight,
+    ])) {
       return;
     }
     final position = widget.scrollable.position;
@@ -105,7 +111,7 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
         !position.physics.shouldAcceptUserOffset(position)) {
       return;
     }
-    final flip = keyboard.logicalKeysPressed.any(widget.axisModifiers.contains);
+    final flip = InputModifierScope.anyPressedOf(context, widget.axisModifiers);
     final axis = flip ? flipAxis(position.axis) : position.axis;
     var delta = axis == Axis.vertical
         ? event.scrollDelta.dy

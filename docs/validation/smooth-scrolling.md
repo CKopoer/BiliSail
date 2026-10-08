@@ -28,6 +28,16 @@ PageView、文本输入区域等自行覆盖滚动装饰的控件，以及不实
 
 此前使用 Computer Use 对本机官方哔哩哔哩与旧版 Bili Lite 做过短滚轮输入，但静态截图无法可靠量化逐帧平滑度，长滚动采样又混入用户操作。本项目参数不是测得的官方客户端参数，也不构成性能或等效手感结论。Widget 测试验证接续算法，无法排除真实列表图片解码、布局或绘制造成的掉帧；如仍卡顿，应使用 [Flutter profile 性能采样](https://docs.flutter.dev/perf/ui-performance) 分别检查 UI 和 raster 帧耗时。最终手感由用户在新版 Windows 窗口确认。
 
+## 2026-10-08 Windows 失焦后的修饰键与滚轮
+
+用户确认侧键和键盘快捷键恢复后，Alt+Tab → 在其他窗口释放 Alt → 鼠标切回仍会使滚轮变成即时跳动。原因是快捷键已经使用 InputNormalizer 的独立状态，而平滑层仍直接读取 HardwareKeyboard；缓存中残留的 Alt 令 `_onEvent` 提前返回，Flutter Scrollable 随后按 `pointerScroll` 立即更新位置。新增宿主回归在修复前复现单次 120 像素滚轮事件直接把位置从 0 改为 120。
+
+平滑层现在通过 [InputModifierScope](../../lib/core/presentation/input_scope.dart)读取输入宿主共享的状态，Ctrl／Alt／Meta 组合判断和 Shift 轴切换均不再旁路读取 Windows 缓存。[图片查看器](../../lib/shared/ui/image_viewer.dart)的 Ctrl+滚轮沿用同一入口；宿主缺失的独立组件与其他平台继续使用 Flutter 状态。修饰键按物理身份保存逻辑键和掩码，保留左右键同时按下／分别释放的语义。Windows 临时跟踪仍由 AppInputHost 原有 TODO 约束；没有改变滚动积分、衰减／跟随参数、信号仲裁、控制器或减少动画设置。
+
+[滚轮回归](../../test/shared/ui/smooth_scroll_behavior_test.dart)覆盖 Alt／Ctrl／Meta 缓存残留后的鼠标点击恢复、逐帧中间位置、真正重新按下修饰键仍使用即时处理、残留 Shift 不错误换轴，以及左右 Shift 分别释放时仍能横向平滑滚动。[图片回归](../../test/features/image_viewer/image_viewer_test.dart)比较普通滚轮与残留 Ctrl 后的缩放行为，并验证真正的右 Ctrl 组合仍生效。测试模拟焦点切换并保留 Flutter 缓存，不代表真实 Windows Alt+Tab／键鼠手感验收。
+
+完整检查 `tool/check.ps1 -SkipPub` 通过：根应用 1,397、bili_api 325、bili_player 32、bili_danmaku 65 项，共 1,819 项；根应用和三个包的格式及静态分析通过。六项新增滚轮／图片回归包含在根应用检查中。日志为 `build/input-investigation/wheel-modifier-check.log`。按用户要求以回归检查交付，真实 Windows 体验由用户自行构建实测。
+
 ## 验证
 
 - 2026-10-06 参数微调：用户试用确认 90ms/25ms 的速度驱动滚动方向正确，但认为过于平滑；衰减调为 75ms、跟随调为 20ms，积分模型与未限速/未到边界时的总距离不变。29 项共享滚动及共 92 项定向回归通过，日志 `artifacts/velocity-scroll-tuning-targeted.log`。`tool/check.ps1 -SkipPub` 的根格式/分析通过，根测试仍为 688/700 通过、同样的 12 项已有失败，与前轮失败名称对比没有新增；三个包独立格式/分析及 227/16/21 项测试全部通过。日志 `artifacts/velocity-scroll-tuning-check.log`、`artifacts/velocity-scroll-tuning-packages.log`。新参数的实际手感待用户再次确认。

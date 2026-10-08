@@ -7,6 +7,7 @@ import 'package:bilisail/features/image_viewer/application/image_viewer_controll
 import 'package:bilisail/features/image_viewer/data/network_original_image_repository.dart';
 import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +26,85 @@ Future<Uint8List> png() async {
 }
 
 void main() {
+  testWidgets(
+    'Windows image wheel uses normal zoom after refocus with stale Control',
+    (tester) async {
+      final bytes = await tester.runAsync(png);
+      if (bytes == null) throw StateError('PNG missing');
+      final repository = _Repository(
+        OriginalImage(bytes: bytes, width: 24, height: 16),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            originalImageRepositoryProvider.overrideWithValue(repository),
+          ],
+          child: InputTestApp(
+            home: ImageViewer(
+              request: ImageViewerRequest([
+                Uri.parse('https://i0.hdslb.com/a.png'),
+              ], 0),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      final viewer = find.byType(InteractiveViewer);
+      final transform = tester
+          .widget<InteractiveViewer>(viewer)
+          .transformationController;
+      if (transform == null) throw StateError('Viewer transform missing');
+      final initial = transform.value.clone();
+      Future<void> wheel() async {
+        await tester.sendEventToBinding(
+          PointerScrollEvent(
+            kind: PointerDeviceKind.mouse,
+            position: tester.getCenter(viewer),
+            scrollDelta: const Offset(0, -40),
+          ),
+        );
+        await tester.pump();
+      }
+
+      await wheel();
+      final normalScale = transform.value.getMaxScaleOnAxis();
+      expect(normalScale, greaterThan(initial.getMaxScaleOnAxis()));
+      transform.value = initial.clone();
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      for (final focused in [false, true]) {
+        tester.binding.handleViewFocusChanged(
+          ui.ViewFocusEvent(
+            viewId: tester.view.viewId,
+            state: focused
+                ? ui.ViewFocusState.focused
+                : ui.ViewFocusState.unfocused,
+            direction: ui.ViewFocusDirection.undefined,
+          ),
+        );
+        await tester.pump();
+      }
+      expect(HardwareKeyboard.instance.isControlPressed, isTrue);
+      await wheel();
+      expect(
+        transform.value.getMaxScaleOnAxis(),
+        closeTo(normalScale, .000001),
+      );
+
+      transform.value = initial.clone();
+      await tester.pump();
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlRight);
+      await wheel();
+      expect(transform.value.getMaxScaleOnAxis(), greaterThan(normalScale));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlRight);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
   testWidgets(
     'original data exceeds thumbnail cap, remains full size and is cancelled on close',
     (tester) async {

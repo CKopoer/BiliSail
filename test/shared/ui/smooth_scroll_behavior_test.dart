@@ -1,3 +1,5 @@
+import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
+
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
@@ -6,7 +8,104 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/input_test_app.dart';
+
 void main() {
+  for (final modifier in [
+    LogicalKeyboardKey.altLeft,
+    LogicalKeyboardKey.controlLeft,
+    LogicalKeyboardKey.metaLeft,
+  ]) {
+    testWidgets(
+      'Windows wheel stays smooth after mouse refocus with stale $modifier',
+      (tester) async {
+        final controller = ScrollController();
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(_hostedApp(_list(controller)));
+        await tester.pump();
+        await tester.sendKeyDownEvent(modifier);
+        _viewFocus(tester, false);
+        await tester.pump();
+        _viewFocus(tester, true);
+        await tester.pump();
+        await tester.tap(find.byType(ListView));
+        expect(HardwareKeyboard.instance.isLogicalKeyPressed(modifier), isTrue);
+
+        await _wheel(tester, find.byType(ListView), 120);
+        expect(controller.offset, 0);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(controller.offset, inExclusiveRange(0, 120));
+        await tester.pumpAndSettle();
+        expect(controller.offset, closeTo(120, .01));
+
+        // A real new modifier press still reserves the wheel for native handling.
+        await tester.sendKeyUpEvent(modifier);
+        await tester.sendKeyDownEvent(modifier);
+        await _wheel(tester, find.byType(ListView), 120);
+        expect(controller.offset, closeTo(240, .01));
+        await tester.sendKeyUpEvent(modifier);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.windows),
+    );
+  }
+  testWidgets(
+    'Windows stale Shift after refocus does not flip the wheel axis',
+    (tester) async {
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_hostedApp(_list(controller)));
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      _viewFocus(tester, false);
+      await tester.pump();
+      _viewFocus(tester, true);
+      await tester.pump();
+      await tester.tap(find.byType(ListView));
+      expect(HardwareKeyboard.instance.isShiftPressed, isTrue);
+      await _wheel(tester, find.byType(ListView), 120);
+      expect(controller.offset, 0);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(controller.offset, inExclusiveRange(0, 120));
+      await tester.pumpAndSettle();
+      expect(controller.offset, closeTo(120, .01));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
+  testWidgets(
+    'hosted horizontal wheel keeps left and right Shift independent',
+    (tester) async {
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        _hostedApp(
+          ListView(
+            controller: controller,
+            scrollDirection: Axis.horizontal,
+            children: const [SizedBox(width: 2400)],
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftRight);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await _wheel(tester, find.byType(ListView), 120);
+      expect(controller.offset, 0);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(controller.offset, inExclusiveRange(0, 120));
+      await tester.pumpAndSettle();
+      expect(controller.offset, closeTo(120, .01));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftRight);
+      await _wheel(tester, find.byType(ListView), 120);
+      await tester.pumpAndSettle();
+      expect(controller.offset, closeTo(120, .01));
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
   testWidgets('wheel moves through intermediate positions without a jump', (
     tester,
   ) async {
@@ -754,6 +853,25 @@ Widget _list(ScrollController controller, {Key? key}) => ListView(
   controller: controller,
   children: const [SizedBox(height: 2400)],
 );
+
+Widget _hostedApp(Widget child) => InputTestApp(
+  theme: ThemeData(platform: TargetPlatform.windows),
+  home: Scaffold(
+    body: ScrollConfiguration(
+      behavior: const SmoothScrollBehavior(),
+      child: child,
+    ),
+  ),
+);
+
+void _viewFocus(WidgetTester tester, bool focused) =>
+    tester.binding.handleViewFocusChanged(
+      ViewFocusEvent(
+        viewId: tester.view.viewId,
+        state: focused ? ViewFocusState.focused : ViewFocusState.unfocused,
+        direction: ViewFocusDirection.undefined,
+      ),
+    );
 
 Future<void> _wheel(
   WidgetTester tester,

@@ -188,7 +188,7 @@ void main() {
   }
 
   _workspaceTestWidgets(
-    'window deactivation cancels held workspace repeats until release',
+    'window deactivation cancels repeats and requires fresh modifiers',
     (tester) async {
       final router = _router((_, tab) => Text('page ${tab.id}'));
       addTearDown(router.dispose);
@@ -207,6 +207,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('page home'), findsOneWidget);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.tab);
+      // The Windows workaround clears modifiers on blur; a fresh press resumes
+      // the shortcut instead of trusting the potentially stale framework cache.
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pumpAndSettle();

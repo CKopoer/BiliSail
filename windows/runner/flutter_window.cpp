@@ -65,6 +65,14 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
+    case WM_SYSCOMMAND:
+      if ((wparam & 0xFFF0) == SC_KEYMENU) {
+        // TODO(flutter/flutter#177822): Remove once the pinned Flutter SDK
+        // delivers Alt and the following key without activating the native menu.
+        // https://github.com/flutter/flutter/issues/177822#issuecomment-3477313405
+        return 0;
+      }
+      break;
     case WM_FONTCHANGE:
       if (flutter_controller_) {
         flutter_controller_->engine()->ReloadSystemFonts();

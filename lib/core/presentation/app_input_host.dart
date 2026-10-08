@@ -1,5 +1,6 @@
 import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,16 +10,52 @@ import '../input/shortcut_dispatcher.dart';
 import 'input_scope.dart';
 
 final class InputNormalizer {
+  InputNormalizer({TargetPlatform? platform})
+    : _trackModifiers =
+          (platform ?? defaultTargetPlatform) == TargetPlatform.windows;
+
   final _clock = Stopwatch()..start();
   int _sequence = 0;
   final _buttons = <(int, int), int>{};
+  // TODO(flutter/flutter#177822, flutter/flutter#99330): Remove the Windows
+  // modifier bookkeeping once the pinned SDK synchronizes modifiers on focus
+  // changes, including mouse refocus after Alt+Tab. Do not seed from its stale
+  // HardwareKeyboard cache after blur.
+  final bool _trackModifiers;
+  final _modifierKeys =
+      <PhysicalKeyboardKey, ({LogicalKeyboardKey key, int mask})>{};
   int get modifiers {
+    if (_trackModifiers) {
+      return _modifierKeys.values.fold(
+        0,
+        (mask, modifier) => mask | modifier.mask,
+      );
+    }
     final keyboard = HardwareKeyboard.instance;
     return (keyboard.isControlPressed ? ShortcutChord.control : 0) |
         (keyboard.isAltPressed ? ShortcutChord.alt : 0) |
         (keyboard.isShiftPressed ? ShortcutChord.shift : 0) |
         (keyboard.isMetaPressed ? ShortcutChord.meta : 0);
   }
+
+  bool isKeyPressed(LogicalKeyboardKey key) {
+    if (_trackModifiers && _modifierMask(key) != 0) {
+      return _modifierKeys.values.any((modifier) => modifier.key == key);
+    }
+    return HardwareKeyboard.instance.isLogicalKeyPressed(key);
+  }
+
+  static int _modifierMask(LogicalKeyboardKey key) => switch (key) {
+    LogicalKeyboardKey.controlLeft ||
+    LogicalKeyboardKey.controlRight => ShortcutChord.control,
+    LogicalKeyboardKey.altLeft ||
+    LogicalKeyboardKey.altRight => ShortcutChord.alt,
+    LogicalKeyboardKey.shiftLeft ||
+    LogicalKeyboardKey.shiftRight => ShortcutChord.shift,
+    LogicalKeyboardKey.metaLeft ||
+    LogicalKeyboardKey.metaRight => ShortcutChord.meta,
+    _ => 0,
+  };
 
   static final _keys = <LogicalKeyboardKey, String>{
     LogicalKeyboardKey.space: 'Space',
@@ -57,6 +94,20 @@ final class InputNormalizer {
     LogicalKeyboardKey.f12: 'F12',
   };
   InputStroke key(KeyEvent event, {int? viewId}) {
+    if (_trackModifiers) {
+      if (event is KeyUpEvent) {
+        _modifierKeys.remove(event.physicalKey);
+      } else {
+        final modifier = _modifierMask(event.logicalKey);
+        // Synthesized modifier events reconcile state without executing actions.
+        if (modifier != 0) {
+          _modifierKeys[event.physicalKey] = (
+            key: event.logicalKey,
+            mask: modifier,
+          );
+        }
+      }
+    }
     var name = _keys[event.logicalKey];
     var fallback = false;
     // Only unknown/non-layout logical identities may use US punctuation positions.
@@ -87,6 +138,7 @@ final class InputNormalizer {
     );
   }
 
+  void resetKeyboard() => _modifierKeys.clear();
   void resetMouse() => _buttons.clear();
   List<InputStroke> pointer(PointerEvent event) {
     if (event.kind != PointerDeviceKind.mouse || event is PointerSignalEvent) {
@@ -199,7 +251,9 @@ class AppInputHost<C> extends StatefulWidget {
 class _AppInputHostState<C> extends State<AppInputHost<C>>
     with WidgetsBindingObserver {
   final _normalizer = InputNormalizer();
-  bool _active = true;
+  bool _lifecycleActive = true;
+  bool _viewFocused = true;
+  bool get _active => _lifecycleActive && _viewFocused;
   @override
   void initState() {
     super.initState();
@@ -213,24 +267,27 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
   void _cancel() => widget.dispatcher.cancel(keepWorkspace: true);
   void _routesChanged() =>
       widget.dispatcher.cancel(keepWorkspace: !widget.routes.modal);
+
+  void _resetInput() {
+    widget.dispatcher.cancel();
+    _normalizer.resetKeyboard();
+    _normalizer.resetMouse();
+    // Releases may occur in another window. A cancelled keyboard press must not
+    // swallow the next real Down as the tail of the old sequence.
+    widget.dispatcher.resetDevice(InputDevice.keyboard);
+    widget.dispatcher.resetDevice(InputDevice.mouse);
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _active = state == AppLifecycleState.resumed;
-    if (!_active) {
-      widget.dispatcher.cancel();
-      _normalizer.resetMouse();
-      widget.dispatcher.resetDevice(InputDevice.mouse);
-    }
+    _lifecycleActive = state == AppLifecycleState.resumed;
+    if (!_active) _resetInput();
   }
 
   @override
   void didChangeViewFocus(ViewFocusEvent event) {
-    _active = event.state == ViewFocusState.focused;
-    if (!_active) {
-      widget.dispatcher.cancel();
-      _normalizer.resetMouse();
-      widget.dispatcher.resetDevice(InputDevice.mouse);
-    }
+    _viewFocused = event.state == ViewFocusState.focused;
+    if (!_active) _resetInput();
   }
 
   ShortcutContext _context() {
@@ -257,16 +314,20 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
     );
   }
 
-  KeyEventResult _key(KeyEvent event) =>
-      widget.dispatcher
-          .dispatch(
-            _normalizer.key(event, viewId: View.maybeOf(context)?.viewId),
-            _context(),
-          )
-          .claimed
-      ? KeyEventResult.handled
-      : KeyEventResult.ignored;
+  KeyEventResult _key(KeyEvent event) {
+    if (!_active) return KeyEventResult.ignored;
+    return widget.dispatcher
+            .dispatch(
+              _normalizer.key(event, viewId: View.maybeOf(context)?.viewId),
+              _context(),
+            )
+            .claimed
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored;
+  }
+
   void _pointer(PointerEvent event) {
+    if (!_active) return;
     for (final stroke in _normalizer.pointer(event)) {
       widget.dispatcher.dispatch(stroke, _context());
     }
@@ -284,9 +345,12 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
   }
 
   @override
-  Widget build(BuildContext context) => InputScope<C>(
-    dispatcher: widget.dispatcher,
-    routes: widget.routes,
-    child: FocusScope(autofocus: true, child: widget.child),
+  Widget build(BuildContext context) => InputModifierScope(
+    isPressed: _normalizer.isKeyPressed,
+    child: InputScope<C>(
+      dispatcher: widget.dispatcher,
+      routes: widget.routes,
+      child: FocusScope(autofocus: true, child: widget.child),
+    ),
   );
 }

@@ -238,7 +238,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                         return Listener(
                           onPointerSignal: (event) {
                             if (event is PointerScrollEvent &&
-                                HardwareKeyboard.instance.isControlPressed) {
+                                InputModifierScope.anyPressedOf(context, const [
+                                  LogicalKeyboardKey.controlLeft,
+                                  LogicalKeyboardKey.controlRight,
+                                ])) {
                               GestureBinding.instance.pointerSignalResolver
                                   .register(
                                     event,
