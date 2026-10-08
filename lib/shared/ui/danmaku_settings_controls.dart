@@ -163,7 +163,7 @@ final class _DanmakuSettingsControlsState
           '字号缩放',
           'danmaku-font-scale',
           s.danmakuFontScale,
-          .7,
+          .2,
           1.5,
           (s, v) => s.copyWith(danmakuFontScale: v),
           suffix: '×',

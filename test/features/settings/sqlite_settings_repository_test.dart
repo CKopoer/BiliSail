@@ -328,7 +328,7 @@ void main() {
       defaultVolume: 35,
       danmakuEnabled: false,
       danmakuOpacity: .6,
-      danmakuFontScale: 1.3,
+      danmakuFontScale: .2,
       danmakuArea: .5,
       danmakuTopMargin: 48,
       danmakuLineSpacing: 80,
@@ -359,6 +359,7 @@ void main() {
     await repository.save(reloaded);
     expect(await database.readSetting('preferences.v1'), first);
     expect(reloaded.defaultVolume, 35);
+    expect(reloaded.danmakuFontScale, .2);
     expect(reloaded.allowConcurrentPlayback, isFalse);
     expect(reloaded.danmakuTopMargin, 48);
     expect(reloaded.danmakuLineSpacing, 80);

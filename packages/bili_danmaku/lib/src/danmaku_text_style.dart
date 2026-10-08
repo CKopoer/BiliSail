@@ -27,6 +27,8 @@ final class DanmakuTextStyle {
 /// Both clocks share bounded text layout and painting, never scheduling state.
 final class DanmakuTextLayouts {
   DanmakuTextLayouts(this.capacity);
+  // Scaled text can be smaller than the protocol's unscaled font sizes.
+  static const minFontSize = 1.0;
   final int capacity;
   DanmakuTextStyle style = const DanmakuTextStyle();
   final _cache = <String, _TextLayout>{};
@@ -36,7 +38,7 @@ final class DanmakuTextLayouts {
       _entry(text, color, fontSize).fill;
 
   _TextLayout _entry(String text, Color color, double fontSize) {
-    final size = fontSize.clamp(12.0, 54.0);
+    final size = fontSize.clamp(minFontSize, 54.0);
     final key = '$size|${color.toARGB32()}|$text';
     final cached = _cache.remove(key);
     if (cached != null) {

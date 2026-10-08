@@ -6,6 +6,21 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'small scaled text keeps its requested font size and measured width',
+    () {
+      final layouts = DanmakuTextLayouts(8);
+      addTearDown(layouts.clear);
+      final normal = layouts.layout('Text', const Color(0xffffffff), 24);
+      for (final size in [2.4, 4.8]) {
+        final small = layouts.layout('Text', const Color(0xffffffff), size);
+        final span = small.text as TextSpan;
+        expect(span.style?.fontSize, size);
+        expect(small.width, lessThan(normal.width));
+        expect(small.height, lessThan(normal.height));
+      }
+    },
+  );
   test('same-screen density is independent from arrival rate and keeps safety bounds', () {
     final vod = DanmakuController(monotonicNow: () => Duration.zero);
     final live = LiveDanmakuController(monotonicNow: () => Duration.zero);

@@ -2,6 +2,23 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('danmaku font scale supports one fifth size and normalizes bounds', () {
+    for (final entry in <double, double>{
+      .1: .2,
+      .2: .2,
+      .5: .5,
+      .7: .7,
+      1.5: 1.5,
+      2: 1.5,
+      double.nan: 1,
+      double.infinity: 1,
+    }.entries) {
+      expect(
+        AppSettings(danmakuFontScale: entry.key).normalized().danmakuFontScale,
+        entry.value,
+      );
+    }
+  });
   test('player controls default to click and preserve the chosen mode', () {
     expect(AppSettings().playerControlsMode, PlayerControlsMode.click);
     expect(

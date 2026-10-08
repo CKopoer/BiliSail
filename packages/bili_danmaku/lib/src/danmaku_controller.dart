@@ -332,8 +332,8 @@ final class DanmakuController extends ChangeNotifier {
       _layouts.layout(event.text, event.color, event.fontSize);
 
   void _updateLaneHeight() {
-    // The renderer clamps font size to at least 12; keep empty layouts valid.
-    var textHeight = 12.0;
+    // Keep empty layouts valid without imposing a floor on scaled text height.
+    var textHeight = DanmakuTextLayouts.minFontSize;
     for (final event in _events) {
       final height = _layout(event).height;
       if (height > textHeight) textHeight = height;

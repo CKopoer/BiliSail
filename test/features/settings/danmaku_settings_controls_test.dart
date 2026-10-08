@@ -88,6 +88,7 @@ void main() {
           const Duration(milliseconds: -500),
         );
         for (final entry in {
+          'danmaku-font-scale': 0.0,
           'danmaku-density': 0.0,
           'danmaku-on-screen': .1,
           'danmaku-weight': .5,
@@ -107,6 +108,7 @@ void main() {
           );
           await tester.pumpAndSettle();
         }
+        expect(repository.value.danmakuFontScale, .2);
         expect(repository.value.danmakuMaxPerSecond, 0);
         expect(repository.value.danmakuMaxOnScreen, 12);
         expect(repository.value.danmakuMinimumWeight, 5);

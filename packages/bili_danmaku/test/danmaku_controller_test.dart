@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   for (final mode in DanmakuMode.values) {
-    for (final fontSize in [12.0, 24.0, 54.0]) {
+    for (final fontSize in [2.4, 4.8, 12.0, 24.0, 54.0]) {
       test(
         'VOD ${mode.name} row gaps follow measured text at size $fontSize',
         () {
@@ -22,7 +22,7 @@ void main() {
           addTearDown(text.dispose);
           controller.setViewport(width: 600, height: 400, bottomInset: 40);
           controller.replaceEvents([
-            for (var i = 0; i < 20; i++)
+            for (var i = 0; i < 24; i++)
               DanmakuEvent(
                 id: '$i',
                 at: Duration.zero,
@@ -34,7 +34,10 @@ void main() {
           // Omitting the option uses the five-pixel gap at every font size.
           controller.configure(area: .5, speed: 1, topInset: 40);
           final defaultHeight = text.height + 5;
-          expect(controller.frame(), hasLength((160 / defaultHeight).floor()));
+          expect(
+            controller.frame(),
+            hasLength((160 / defaultHeight).floor().clamp(0, 24)),
+          );
           for (final spacing in [0.0, 8.0, 40.0, 0.0]) {
             controller.configure(
               area: .5,
@@ -44,9 +47,12 @@ void main() {
             );
             final frame = controller.frame();
             final laneHeight = text.height + spacing;
-            expect(frame, hasLength((160 / laneHeight).floor()));
+            expect(frame, hasLength((160 / laneHeight).floor().clamp(0, 24)));
             if (frame.length > 1) {
-              expect((frame[1].y - frame[0].y).abs() - text.height, spacing);
+              expect(
+                (frame[1].y - frame[0].y).abs() - text.height,
+                closeTo(spacing, 1e-8),
+              );
             }
             for (var lane = 0; lane < frame.length; lane++) {
               expect(
@@ -58,7 +64,10 @@ void main() {
             }
           }
           controller.configure(area: .5, speed: 1, topInset: 40);
-          expect(controller.frame(), hasLength((160 / defaultHeight).floor()));
+          expect(
+            controller.frame(),
+            hasLength((160 / defaultHeight).floor().clamp(0, 24)),
+          );
         },
       );
     }

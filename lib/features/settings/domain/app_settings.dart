@@ -337,7 +337,7 @@ final class AppSettings {
       defaultPlaybackRate: PlaybackRates.nearest(defaultPlaybackRate),
       defaultVolume: bounded(defaultVolume, 0, 100, 100),
       danmakuOpacity: bounded(danmakuOpacity, .2, 1, .8),
-      danmakuFontScale: bounded(danmakuFontScale, .7, 1.5, 1),
+      danmakuFontScale: bounded(danmakuFontScale, .2, 1.5, 1),
       danmakuArea: bounded(danmakuArea, .25, 1, .75),
       danmakuTopMargin: bounded(danmakuTopMargin, 0, 200, 0),
       danmakuLineSpacing: bounded(danmakuLineSpacing, 0, 100, 5),

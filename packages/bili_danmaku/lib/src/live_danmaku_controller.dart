@@ -72,7 +72,7 @@ final class LiveDanmakuController extends ChangeNotifier {
   int _maxOnScreen = 0;
   double get _top => _topInset.clamp(0, _height - _bottomInset);
   double get _availableHeight => (_height - _bottomInset - _top) * _area;
-  double _laneHeight = 17;
+  double _laneHeight = DanmakuTextLayouts.minFontSize + 5;
   int _maxPerSecond = 20, _windowCount = 0;
   Duration _windowAt = Duration.zero;
   int dropped = 0;
@@ -123,7 +123,7 @@ final class LiveDanmakuController extends ChangeNotifier {
       _mergeDuplicates = mergeDuplicates;
       _maxOnScreen = maxOnScreen.clamp(0, maxVisible);
       _maxPerSecond = nextMaxPerSecond;
-      _laneHeight = 12 + _lineSpacing;
+      _laneHeight = DanmakuTextLayouts.minFontSize + _lineSpacing;
       _clearLayouts();
       _layouts.style = textStyle;
       clear();
