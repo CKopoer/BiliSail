@@ -52,6 +52,119 @@ Widget _app(AppImageCache cache, Widget child) => AppImageCacheScope(
 
 void main() {
   testWidgets(
+    'retained hidden frames stop listening and clear on URL or account changes',
+    (tester) async {
+      final bytes = await tester.runAsync(_png);
+      if (bytes == null) throw StateError('Missing PNG');
+      var calls = 0;
+      final cache = AppImageCache(
+        ImageByteCache(
+          enabled: false,
+          directory: () async => throw const FileSystemException('optional'),
+          loader: (_, _) async {
+            calls++;
+            return bytes;
+          },
+        ),
+      );
+      Widget page(bool active, int image) =>
+          _app(cache, WorkspaceActivity(active: active, child: _image(image)));
+      Future<void> loaded() => _until(
+        tester,
+        () => tester
+            .widgetList<RawImage>(find.byType(RawImage))
+            .any((image) => image.image != null),
+      );
+
+      await tester.pumpWidget(page(true, 1));
+      await loaded();
+      final frame = tester.widget<RawImage>(find.byType(RawImage)).image;
+      await tester.pumpWidget(page(false, 1));
+      await tester.pumpAndSettle();
+      expect(tester.widget<RawImage>(find.byType(RawImage)).image, same(frame));
+      expect(calls, 1);
+      final ticker = find
+          .ancestor(
+            of: find.byType(RawImage),
+            matching: find.byType(TickerMode),
+          )
+          .first;
+      expect(tester.widget<TickerMode>(ticker).enabled, isFalse);
+
+      await tester.pumpWidget(page(false, 2));
+      await tester.pumpAndSettle();
+      expect(find.byType(RawImage), findsNothing);
+      expect(calls, 1);
+      await tester.pumpWidget(page(true, 2));
+      await loaded();
+      expect(calls, 2);
+      await tester.pumpWidget(page(false, 2));
+      await tester.pumpAndSettle();
+      expect(find.byType(RawImage), findsOneWidget);
+      await tester.runAsync(() => cache.changeScope('next-account'));
+      await tester.pumpAndSettle();
+      expect(find.byType(RawImage), findsNothing);
+      expect(calls, 2);
+      await tester.pumpWidget(page(true, 2));
+      await loaded();
+      expect(calls, 3);
+      await tester.pumpWidget(const SizedBox());
+      await cache.close();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('active offscreen images release their retained frame', (
+    tester,
+  ) async {
+    final bytes = await tester.runAsync(_png);
+    if (bytes == null) throw StateError('Missing PNG');
+    var calls = 0;
+    final cache = AppImageCache(
+      ImageByteCache(
+        enabled: false,
+        directory: () async => throw const FileSystemException('optional'),
+        loader: (_, _) async {
+          calls++;
+          return bytes;
+        },
+      ),
+    );
+    final scroll = ScrollController();
+    await tester.pumpWidget(
+      _app(
+        cache,
+        SingleChildScrollView(
+          controller: scroll,
+          child: Column(children: [_image(1), const SizedBox(height: 2000)]),
+        ),
+      ),
+    );
+    await _until(
+      tester,
+      () => tester
+          .widgetList<RawImage>(find.byType(RawImage))
+          .any((image) => image.image != null),
+    );
+    scroll.jumpTo(scroll.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(find.byType(RawImage), findsNothing);
+    scroll.jumpTo(0);
+    await tester.pumpAndSettle();
+    await _until(
+      tester,
+      () => tester
+          .widgetList<RawImage>(find.byType(RawImage))
+          .any((image) => image.image != null),
+    );
+    expect(calls, 2);
+    await tester.pumpWidget(const SizedBox());
+    scroll.dispose();
+    await cache.close();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
     'outer and inner scrolling both admit images in nested viewports',
     (tester) async {
       final bytes = await tester.runAsync(_png);

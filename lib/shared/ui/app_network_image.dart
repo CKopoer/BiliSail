@@ -60,6 +60,8 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
   bool _visible = false;
   bool _checkScheduled = false;
   bool _retryScheduled = false;
+  bool _hasFrame = false;
+  _RetainedImageProvider? _source;
   int _attempt = 0;
 
   @override
@@ -87,6 +89,8 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
         oldWidget.cacheWidth != widget.cacheWidth ||
         oldWidget.cacheHeight != widget.cacheHeight) {
       _stopWaiting();
+      _hasFrame = false;
+      _releaseSource();
       ++_attempt;
     }
     _scheduleVisibilityCheck();
@@ -147,9 +151,13 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
           ancestor = ancestor.parent;
         }
       }
-      if (visible != _visible) {
+      final releaseFrame = _active && !visible && _hasFrame;
+      if (visible != _visible || releaseFrame) {
         if (!visible) _stopWaiting();
-        setState(() => _visible = visible);
+        setState(() {
+          _visible = visible;
+          if (releaseFrame) _hasFrame = false;
+        });
       }
     });
     WidgetsBinding.instance.ensureVisualUpdate();
@@ -190,7 +198,11 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
       _stopWaiting();
       // The failed completer was evicted by AppImageProvider. A fresh Image
       // state resolves the same URL again; ordinary rebuilds keep their stream.
-      setState(() => ++_attempt);
+      setState(() {
+        _hasFrame = false;
+        _releaseSource();
+        ++_attempt;
+      });
     });
     WidgetsBinding.instance.ensureVisualUpdate();
   }
@@ -198,6 +210,11 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
   Widget _placeholder(BuildContext context) {
     final child = SizedBox(width: widget.width, height: widget.height);
     return widget.frameBuilder?.call(context, child, null, false) ?? child;
+  }
+
+  void _releaseSource() {
+    _source?.release();
+    _source = null;
   }
 
   @override
@@ -219,46 +236,73 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
           ) ??
           const SizedBox.shrink();
     }
+    final provider = cache == null || !ImageByteCache.isPublicImageUri(uri)
+        ? ResizeImage.resizeIfNeeded(
+            widget.cacheWidth,
+            widget.cacheHeight,
+            NetworkImage(
+              normalized,
+              headers: const {'Referer': 'https://www.bilibili.com/'},
+            ),
+          )
+        : AppImageProvider(
+            cache: cache,
+            url: normalized,
+            cacheWidth: widget.cacheWidth,
+            cacheHeight: widget.cacheHeight,
+          );
+    if (_source case final previous? when previous.provider != provider) {
+      _releaseSource();
+      _hasFrame = false;
+      ++_attempt;
+    }
+    final showImage = (_visible && _active) || _hasFrame;
+    final retained = showImage
+        ? (_source ??= _RetainedImageProvider(provider))
+        : null;
+    if (!showImage) _releaseSource();
     return _ImageViewportProbe(
       onLayout: _scheduleVisibilityCheck,
-      child: !_visible || !_active
-          ? _placeholder(context)
-          : Image(
-              key: ValueKey(_attempt),
-              image: cache == null || !ImageByteCache.isPublicImageUri(uri)
-                  ? ResizeImage.resizeIfNeeded(
-                      widget.cacheWidth,
-                      widget.cacheHeight,
-                      NetworkImage(
-                        normalized,
-                        headers: const {'Referer': 'https://www.bilibili.com/'},
-                      ),
-                    )
-                  : AppImageProvider(
-                      cache: cache,
-                      url: normalized,
-                      cacheWidth: widget.cacheWidth,
-                      cacheHeight: widget.cacheHeight,
-                    ),
-              width: widget.width,
-              height: widget.height,
-              fit: widget.fit,
-              alignment: widget.alignment,
-              excludeFromSemantics: widget.excludeFromSemantics,
-              semanticLabel: widget.semanticLabel,
-              errorBuilder: (context, error, stack) {
-                if (error is ImageQueueFull && cache != null) {
-                  _waitForCapacity(cache);
-                  return _placeholder(context);
-                }
-                final builder = widget.errorBuilder;
-                if (builder != null) return builder(context, error, stack);
-                Error.throwWithStackTrace(error, stack ?? StackTrace.current);
-              },
-              loadingBuilder: widget.loadingBuilder,
-              frameBuilder: widget.frameBuilder,
-              gaplessPlayback: true,
-            ),
+      // A retained page can still be painted by the horizontal pager before
+      // its routed selection changes. Keep its ready frame, while TickerMode
+      // pauses the stream listener. Offscreen images on active lists still
+      // release their frames, so retention is limited to the departing view.
+      child: TickerMode(
+        enabled: _active,
+        child: retained == null
+            ? _placeholder(context)
+            : Image(
+                key: ValueKey(_attempt),
+                image: retained.image,
+                width: widget.width,
+                height: widget.height,
+                fit: widget.fit,
+                alignment: widget.alignment,
+                excludeFromSemantics: widget.excludeFromSemantics,
+                semanticLabel: widget.semanticLabel,
+                errorBuilder: (context, error, stack) {
+                  if (error is ImageQueueFull && cache != null) {
+                    _waitForCapacity(cache);
+                    return _placeholder(context);
+                  }
+                  final builder = widget.errorBuilder;
+                  if (builder != null) return builder(context, error, stack);
+                  Error.throwWithStackTrace(error, stack ?? StackTrace.current);
+                },
+                loadingBuilder: widget.loadingBuilder,
+                frameBuilder: (context, child, frame, synchronous) {
+                  _hasFrame = frame != null;
+                  return widget.frameBuilder?.call(
+                        context,
+                        child,
+                        frame,
+                        synchronous,
+                      ) ??
+                      child;
+                },
+                gaplessPlayback: true,
+              ),
+      ),
     );
   }
 
@@ -268,8 +312,60 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
       position.removeListener(_scheduleVisibilityCheck);
     }
     _stopWaiting();
+    _releaseSource();
     super.dispose();
   }
+}
+
+/// Image resolves again when TickerMode changes. Reuse this widget's admitted
+/// stream even with caching disabled, so hiding a ready frame cannot initiate
+/// another transfer. The lease ends with the image's viewport/source lifetime.
+final class _RetainedImageProvider extends ImageProvider<Object> {
+  _RetainedImageProvider(this.provider);
+
+  final ImageProvider<Object> provider;
+  final _lease = _ImageStreamLease();
+
+  // NetworkImage already reuses Flutter's decoded cache. The app provider
+  // needs a widget lease because its cache can be explicitly disabled.
+  ImageProvider<Object> get image =>
+      provider is AppImageProvider ? this : provider;
+
+  @override
+  Future<Object> obtainKey(ImageConfiguration configuration) =>
+      provider.obtainKey(configuration);
+
+  @override
+  void resolveStreamForKey(
+    ImageConfiguration configuration,
+    ImageStream stream,
+    Object key,
+    ImageErrorListener handleError,
+  ) {
+    if (stream.completer != null) return;
+    final completer = _lease.completer;
+    if (completer != null) {
+      stream.setCompleter(completer);
+      return;
+    }
+    provider.resolveStreamForKey(configuration, stream, key, handleError);
+    final resolved = stream.completer;
+    if (resolved != null) {
+      _lease.completer = resolved;
+      _lease.handle = resolved.keepAlive();
+    }
+  }
+
+  void release() {
+    _lease.handle?.dispose();
+    _lease.handle = null;
+    _lease.completer = null;
+  }
+}
+
+final class _ImageStreamLease {
+  ImageStreamCompleter? completer;
+  ImageStreamCompleterHandle? handle;
 }
 
 /// Forward intrinsic/dry layout like the original Image. LayoutBuilder would
