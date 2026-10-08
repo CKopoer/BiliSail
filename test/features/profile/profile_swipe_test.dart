@@ -14,13 +14,17 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/profile/application/profile_controller.dart';
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/profile/presentation/profile_screen.dart';
+import 'package:bilisail/features/profile/presentation/profile_header.dart';
+import 'package:bilisail/features/video/application/video_author_controller.dart';
 import 'package:bilisail/shared/ui/app_network_image.dart';
+import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../messages/message_fakes.dart';
+import '../../support/follow_repository_fake.dart';
 
 const _id = UserId('7');
 final _surface = find.byKey(const ValueKey('profile-section-swipe'));
@@ -40,6 +44,7 @@ void main() {
       overrides: [
         profileRepositoryProvider.overrideWithValue(repository),
         authRepositoryProvider.overrideWithValue(auth),
+        videoAuthorRepositoryProvider.overrideWithValue(FollowRepositoryFake()),
       ],
     );
   });
@@ -58,12 +63,16 @@ void main() {
     double width = 375,
     double scale = 1,
     TargetPlatform platform = TargetPlatform.android,
+    bool isSelf = true,
+    ValueChanged<UserProfile>? onMessage,
+    ScrollBehavior? scrollBehavior,
   }) async {
     tester.view.physicalSize = Size(width, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     Widget child = MaterialApp(
+      scrollBehavior: scrollBehavior,
       theme: ThemeData(platform: platform),
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(
@@ -77,7 +86,8 @@ void main() {
           active: active,
           child: ProfileScreen(
             id: _id,
-            isSelf: true,
+            isSelf: isSelf,
+            onMessage: onMessage,
             initialSection: initialSection,
           ),
         ),
@@ -89,6 +99,128 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  for (final (width, scale) in [(320.0, 2.0), (375.0, 1.0), (900.0, 1.0)]) {
+    testWidgets(
+      'shared profile header stays still during paging at $width/$scale',
+      (tester) async {
+        var messages = 0;
+        await mount(
+          tester,
+          width: width,
+          scale: scale,
+          isSelf: false,
+          onMessage: (_) => messages++,
+        );
+        final shared = [
+          find.byType(ProfileHeader),
+          find.byType(ProfileSectionNavigation),
+          find.byKey(const ValueKey('profile-follow')),
+          find.byKey(const ValueKey('profile-message')),
+        ];
+        final rects = [for (final widget in shared) tester.getRect(widget)];
+        void unchanged() {
+          for (final (index, widget) in shared.indexed) {
+            expect(widget, findsOneWidget);
+            expect(tester.getRect(widget), rects[index]);
+            expect(
+              find.descendant(of: _surface, matching: widget),
+              findsNothing,
+            );
+          }
+        }
+
+        await tester.dragFrom(
+          tester.getTopLeft(shared.first) + const Offset(32, 32),
+          const Offset(-220, 0),
+        );
+        await tester.pumpAndSettle();
+        expect(state().section, ProfileSection.videos);
+        final outgoing = _currentList(tester);
+        final drag = await tester.startGesture(tester.getCenter(_surface));
+        await drag.moveBy(const Offset(-80, 0));
+        await tester.pump();
+        unchanged();
+        expect(tester.getRect(outgoing).left, closeTo(-80, 1));
+        await drag.moveBy(Offset(-width * .65 + 80, 0));
+        await tester.pump();
+        unchanged();
+        await drag.up();
+        for (var frame = 0; frame < 12; frame++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          unchanged();
+        }
+        await tester.pumpAndSettle();
+        expect(state().section, ProfileSection.dynamics);
+        unchanged();
+        await tester.tap(shared.last);
+        expect(messages, 1);
+        controller().select(ProfileSection.followers);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        unchanged();
+        await tester.pumpAndSettle();
+        unchanged();
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'vertical scrolling collapses the header without moving hidden tabs',
+    (tester) async {
+      await mount(tester);
+      final nested = tester.state<NestedScrollViewState>(
+        find.byType(NestedScrollView),
+      );
+      final header = find.byType(ProfileHeader);
+      expect(header, findsOneWidget);
+      final initialContentTop = tester.getRect(_surface).top;
+      final videos = _position(tester);
+      await tester.drag(_surface, const Offset(0, -420));
+      await tester.pumpAndSettle();
+      expect(nested.outerController.offset, greaterThan(0));
+      expect(tester.getRect(_surface).top, lessThan(initialContentTop));
+      expect(header.hitTestable(), findsNothing);
+      final saved = videos.pixels;
+      controller().select(ProfileSection.dynamics);
+      await tester.pumpAndSettle();
+      expect(nested.innerController.positions, hasLength(1));
+      final dynamics = _position(tester);
+      await tester.drag(_surface, const Offset(0, -260));
+      await tester.pumpAndSettle();
+      expect(dynamics.pixels, greaterThan(0));
+      expect(videos.pixels, closeTo(saved, .1));
+      controller().select(ProfileSection.videos);
+      await tester.pumpAndSettle();
+      expect(_position(tester), same(videos));
+      expect(videos.pixels, closeTo(saved, .1));
+      expect(nested.innerController.positions, hasLength(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a long enlarged introduction scrolls away to expose the content',
+    (tester) async {
+      repository.signature = List.filled(60, '这是一段较长的简介。').join();
+      await mount(tester, width: 320, scale: 2);
+      final nested = tester.state<NestedScrollViewState>(
+        find.byType(NestedScrollView),
+      );
+      expect(nested.outerController.position.maxScrollExtent, greaterThan(800));
+      await tester.dragFrom(const Offset(160, 650), const Offset(0, -2000));
+      await tester.pumpAndSettle();
+      expect(nested.outerController.offset, greaterThan(0));
+      nested.outerController.jumpTo(
+        nested.outerController.position.maxScrollExtent,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getRect(_surface).top, closeTo(0, 1));
+      expect(_currentList(tester).hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'touch paging visits each section lazily and stops at both ends',
@@ -271,6 +403,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'desktop wheel coordinates the shared header and active content',
+    (tester) async {
+      await mount(
+        tester,
+        platform: TargetPlatform.windows,
+        scrollBehavior: const SmoothScrollBehavior(),
+      );
+      final nested = tester.state<NestedScrollViewState>(
+        find.byType(NestedScrollView),
+      );
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: tester.getCenter(_surface),
+          scrollDelta: const Offset(0, 240),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(nested.outerController.offset, greaterThan(0));
+      expect(state().section, ProfileSection.videos);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final enabled in [true, false]) {
     for (final target in [ProfileSection.dynamics, ProfileSection.folders]) {
       testWidgets(
@@ -361,10 +517,13 @@ void main() {
 
 Finder _currentList(WidgetTester tester) {
   final viewport = tester.getRect(_surface);
-  final lists = find.byType(CustomScrollView).evaluate().where((element) {
-    final rect = tester.getRect(find.byWidget(element.widget));
-    return (rect.left - viewport.left).abs() < .1;
-  });
+  final lists = find
+      .descendant(of: _surface, matching: find.byType(CustomScrollView))
+      .evaluate()
+      .where((element) {
+        final rect = tester.getRect(find.byWidget(element.widget));
+        return (rect.left - viewport.left).abs() < .1;
+      });
   return find.byWidget(lists.single.widget);
 }
 
@@ -439,13 +598,14 @@ final class _Profile implements ProfileRepository {
   @override
   int sessionEpoch = 1;
   bool covers = false;
+  String signature = '';
   final calls = <ProfileSection>[];
 
   @override
   Future<UserProfile> loadProfile(
     UserId id, {
     required RequestCancellation cancellation,
-  }) async => UserProfile(id: id, name: '主页');
+  }) async => UserProfile(id: id, name: '主页', signature: signature);
 
   @override
   Future<ProfileLiveRoom?> loadLiveRoom(

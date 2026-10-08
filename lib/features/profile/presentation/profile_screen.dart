@@ -76,19 +76,101 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final controller = ref.read(profileControllerProvider(widget.id).notifier);
     final account = ref.watch(authControllerProvider);
     final session = (widget.id, state.sessionGeneration);
-    return RetainedTabView<ProfileSection>(
-      key: ValueKey(session),
-      tabs: ProfileSection.values,
-      value: state.section,
-      onChanged: controller.select,
-      viewKey: const ValueKey('profile-section-swipe'),
-      pageBuilder: (context, section, active) => _sectionPage(
-        context,
-        state.copy(section: section),
-        controller,
-        session: session,
-        isSelf: widget.isSelf || account.mid == widget.id.value,
-        signedIn: account.isSignedIn,
+    final p = state.profile;
+    final isSelf = widget.isSelf || account.mid == widget.id.value;
+    final signedIn = account.isSignedIn;
+    // Native pointer scrolling coordinates the header and content together.
+    // The application's wheel activity moves only an individual position.
+    final scrollBehavior = ScrollConfiguration.of(context)
+        .copyWith(overscroll: false);
+    return ScrollConfiguration(
+      // Only inner lists own desktop scrollbars, with one position per tab.
+      behavior: scrollBehavior.copyWith(scrollbars: false),
+      child: NestedScrollView(
+        key: ValueKey(session),
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (p != null)
+                    ProfileHeader(
+                      profile: p,
+                      isSelf: isSelf,
+                      followAction: isSelf
+                          ? null
+                          : UserFollowButton(
+                              key: const ValueKey('profile-follow'),
+                              id: widget.id,
+                              onLogin: widget.onLogin,
+                            ),
+                      messageAction: isSelf
+                          ? null
+                          : OutlinedButton.icon(
+                              key: const ValueKey('profile-message'),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(80, 40),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                              ),
+                              onPressed: signedIn
+                                  ? widget.onMessage == null
+                                        ? null
+                                        : () => widget.onMessage?.call(p)
+                                  : widget.onLogin,
+                              icon: const Icon(Icons.mail_outline, size: 18),
+                              label: const Text('私信'),
+                            ),
+                      onSelectSection: controller.select,
+                      liveRoom: state.liveRoom,
+                      onOpenLiveRoom: switch ((
+                        state.liveRoom,
+                        widget.onOpenLiveRoom,
+                      )) {
+                        (final room?, final open?) => () => open(room.id),
+                        _ => null,
+                      },
+                    )
+                  else if (state.profileLoading)
+                    const LinearProgressIndicator(),
+                  if (state.profileMessage case final message?)
+                    StateView.error(
+                      message: message,
+                      onAction: controller.loadProfile,
+                    ),
+                  if (state.liveRoomMessage case final message?)
+                    StateView.error(
+                      message: '直播间：$message',
+                      onAction: controller.loadLiveRoom,
+                    ),
+                  const SizedBox(height: 4),
+                  ProfileSectionNavigation(
+                    section: state.section,
+                    onSelected: controller.select,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        body: RetainedTabView<ProfileSection>(
+          tabs: ProfileSection.values,
+          value: state.section,
+          onChanged: controller.select,
+          viewKey: const ValueKey('profile-section-swipe'),
+          pageBuilder: (context, section, active) => _sectionPage(
+            context,
+            state.copy(section: section),
+            controller,
+            session: session,
+            active: active,
+            scrollBehavior: scrollBehavior,
+          ),
+        ),
       ),
     );
   }
@@ -98,15 +180,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     ProfileState state,
     ProfileController controller, {
     required (UserId, int) session,
-    required bool isSelf,
-    required bool signedIn,
+    required bool active,
+    required ScrollBehavior scrollBehavior,
   }) {
-    final p = state.profile;
     return Column(
       children: [
         Expanded(
-          child: CustomScrollView(
-            primary: false,
+          child: _ProfileSectionScrollView(
+            active: active,
+            scrollBehavior: scrollBehavior,
             key: PageStorageKey((
               session,
               state.section,
@@ -119,67 +201,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (p != null)
-                        ProfileHeader(
-                          profile: p,
-                          isSelf: isSelf,
-                          followAction: isSelf
-                              ? null
-                              : UserFollowButton(
-                                  key: const ValueKey('profile-follow'),
-                                  id: widget.id,
-                                  onLogin: widget.onLogin,
-                                ),
-                          messageAction: isSelf
-                              ? null
-                              : OutlinedButton.icon(
-                                  key: const ValueKey('profile-message'),
-                                  style: OutlinedButton.styleFrom(
-                                    minimumSize: const Size(80, 40),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                  ),
-                                  onPressed: signedIn
-                                      ? widget.onMessage == null
-                                            ? null
-                                            : () => widget.onMessage?.call(p)
-                                      : widget.onLogin,
-                                  icon: const Icon(
-                                    Icons.mail_outline,
-                                    size: 18,
-                                  ),
-                                  label: const Text('私信'),
-                                ),
-                          onSelectSection: controller.select,
-                          liveRoom: state.liveRoom,
-                          onOpenLiveRoom: switch ((
-                            state.liveRoom,
-                            widget.onOpenLiveRoom,
-                          )) {
-                            (final room?, final open?) => () => open(room.id),
-                            _ => null,
-                          },
-                        )
-                      else if (state.profileLoading)
-                        const LinearProgressIndicator(),
-                      if (state.profileMessage case final message?)
-                        StateView.error(
-                          message: message,
-                          onAction: controller.loadProfile,
-                        ),
-                      if (state.liveRoomMessage case final message?)
-                        StateView.error(
-                          message: '直播间：$message',
-                          onAction: controller.loadLiveRoom,
-                        ),
-                      const SizedBox(height: 4),
-                      ProfileSectionNavigation(
-                        section: state.section,
-                        onSelected: controller.select,
-                      ),
-                      const SizedBox(height: 16),
                       if (state.section == ProfileSection.videos) ...[
                         _ProfileVideoFilters(
                           order: state.order,
@@ -475,5 +496,99 @@ class _ProfileVideoFiltersState extends State<_ProfileVideoFilters> {
   void dispose() {
     _keyword.dispose();
     super.dispose();
+  }
+}
+
+/// Only the selected list participates in shared vertical header scrolling.
+class _ProfileSectionScrollView extends StatefulWidget {
+  const _ProfileSectionScrollView({
+    super.key,
+    required this.active,
+    required this.scrollBehavior,
+    required this.slivers,
+  });
+
+  final bool active;
+  final ScrollBehavior scrollBehavior;
+  final List<Widget> slivers;
+
+  @override
+  State<_ProfileSectionScrollView> createState() =>
+      _ProfileSectionScrollViewState();
+}
+
+class _ProfileSectionScrollViewState extends State<_ProfileSectionScrollView> {
+  _ProfileSectionScrollController? _controller;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _controller ??= _ProfileSectionScrollController(
+      PrimaryScrollController.of(context),
+      widget.active,
+    );
+  }
+
+  @override
+  void didUpdateWidget(_ProfileSectionScrollView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _controller?.setActive(widget.active);
+  }
+
+  @override
+  Widget build(BuildContext context) => ScrollConfiguration(
+    behavior: widget.scrollBehavior,
+    child: CustomScrollView(
+      controller: _controller,
+      primary: false,
+      slivers: widget.slivers,
+    ),
+  );
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+}
+
+/// Create coordinated positions through Flutter's public controller API while
+/// keeping each retained tab's position and scrollbar separate. Hidden tabs
+/// detach from the coordinator so vertical drags cannot change their offsets.
+class _ProfileSectionScrollController extends ScrollController {
+  _ProfileSectionScrollController(this.parent, this._active);
+
+  final ScrollController parent;
+  bool _active;
+
+  void setActive(bool active) {
+    if (_active == active) return;
+    _active = active;
+    for (final position in positions) {
+      if (active) {
+        parent.attach(position);
+      } else {
+        parent.detach(position);
+      }
+    }
+  }
+
+  @override
+  ScrollPosition createScrollPosition(
+    ScrollPhysics physics,
+    ScrollContext context,
+    ScrollPosition? oldPosition,
+  ) => parent.createScrollPosition(physics, context, oldPosition);
+
+  @override
+  void attach(ScrollPosition position) {
+    super.attach(position);
+    if (_active) parent.attach(position);
+  }
+
+  @override
+  void detach(ScrollPosition position) {
+    if (_active) parent.detach(position);
+    super.detach(position);
   }
 }
