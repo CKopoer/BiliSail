@@ -12,8 +12,14 @@ class SystemCredentialStore implements CredentialStore {
   SystemCredentialStore({
     FlutterSecureStorage? storage,
     String keyPrefix = 'bilisail.web_session.v1',
-  }) : _storage = storage ?? const FlutterSecureStorage(),
+  }) : _storage = storage ?? defaultStorage,
        _prefix = keyPrefix;
+
+  // Ad-hoc macOS distribution cannot authorize Keychain Sharing. Keep secrets
+  // in the system Keychain without requiring a provisioning profile.
+  static const defaultStorage = FlutterSecureStorage(
+    mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+  );
 
   final FlutterSecureStorage _storage;
   final String _prefix;

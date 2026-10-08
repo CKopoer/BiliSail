@@ -13,6 +13,7 @@ Push-Location $repoRoot
 try {
   & (Join-Path $PSScriptRoot 'test-android-signing.ps1')
   & (Join-Path $PSScriptRoot 'test-windows-installers.ps1')
+  & (Join-Path $PSScriptRoot 'test-macos-release-validation.ps1')
   # A cold Windows SDK can emit pub bootstrap output before the machine JSON.
   Invoke-Check flutter @('--version')
   $sdk = (& flutter --version --machine | ConvertFrom-Json)

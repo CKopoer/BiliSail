@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'android-signing.ps1')
 . (Join-Path $PSScriptRoot 'windows-installers.ps1')
+. (Join-Path $PSScriptRoot 'macos-release-validation.ps1')
 
 function Invoke-BuildCommand([string]$Executable, [string[]]$Parameters) {
   & $Executable @Parameters
@@ -134,6 +135,7 @@ $oldMacSigningIdentity = $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY
 $oldMacSigningStyle = $env:FLUTTER_XCODE_CODE_SIGN_STYLE
 $androidSigning = $null
 $androidCertificateSha256 = $null
+$macosValidation = $null
 Push-Location $repoRoot
 try {
   if ($AndroidPreviewSigning -and $Target -ne 'android-arm64') {
@@ -215,6 +217,7 @@ try {
       $staging = Join-Path $outputRoot $name
       New-Item -ItemType Directory -Path $staging -Force | Out-Null
       Invoke-BuildCommand ditto @('build/macos/Build/Products/Release/BiliSail.app', (Join-Path $staging 'BiliSail.app'))
+      $macosValidation = Test-MacOSReleaseApp (Join-Path $staging 'BiliSail.app') (Join-Path $outputRoot 'validation')
       Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination $staging
       # A root-level Applications link gives Finder a drag-to-install destination.
       Invoke-BuildCommand ln @('-s', '/Applications', (Join-Path $staging 'Applications'))
@@ -241,6 +244,7 @@ try {
     engineRevision = $sdk.engineRevision
     dartVersion = $sdk.dartSdkVersion
     signing = $signing
+    macosValidation = $macosValidation
     windowsMsiVersion = if ($Target -eq 'windows-x64') { $msiVersion } else { $null }
     windowsInstallerToolVersion = if ($Target -eq 'windows-x64') { $script:WindowsWixVersion } else { $null }
     runnerImage = $env:ImageVersion

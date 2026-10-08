@@ -297,3 +297,11 @@ FRB 支持跨平台是可行性依据，但平台构建、取消、错误和流�
 **评论归属**：评论业务移至 `features/comments`，呈现移至 `shared/ui`；原视频入口保留薄包装/导出。优先使用 `basic.comment_id_str/comment_type` 构造 `CommentTarget`，不把动态 ID 当成所有评论区的 oid；视频的时间跳转由外部回调提供。不同 `(oid,type)` 的评论状态隔离，账号 scope/epoch 改变清理草稿和旧请求。
 
 **写边界与验证**：写请求执行一次，成功后更新操作态；点赞未知结果先读取详情确认，转发/评论未知结果需人工核对后再允许发送。共用编辑区按实际高度测量，短窗口/键盘下允许草稿控件滚动。协议来源、自动回归、登录态只读探测及未执行的真实账号写入见 [动态交互验证](validation/dynamic-interactions.md)。
+
+## D37：macOS ad-hoc 分发使用传统 Keychain，并运行同产物发布验证
+
+**决定（2026-10-08）**：继续现有 arm64 ad-hoc 预览 DMG；两份 macOS entitlements 删除 `keychain-access-groups`，默认凭据存储使用 `MacOsOptions(usesDataProtectionKeychain: false)`。凭据仍在系统 Keychain，其他平台默认配置、登录 key 和双快照协议保持，锁定依赖不升级。
+
+**发布门槛**：构建脚本必须验证待打包 bundle 的签名／最终权限，再用该 Release 应用验证首帧、隔离合成 key 的写读、重启读取、删除与重启后不存在。任一步失败或超时停止打包／上传；探测使用内存数据库与独立空凭据前缀，不恢复真实账号，日志只存脱敏结果。普通启动不启用探测。
+
+**兼容边界**：不自动迁移或清理原 Data Protection Keychain 条目；同一 runner 的新 key 成功不能证明旧登录恢复、不同 ad-hoc 构建升级授权、其他 Mac 或 Gatekeeper 接受。方案、验收场景与 Windows 实施边界见 [macOS 发布启动与安全存储](validation/macos-release-startup.md)。

@@ -127,11 +127,14 @@ class AppDependencies {
   final files = const FileAccessService();
   bool _closed = false;
 
-  static Future<AppDependencies> create() async {
+  static Future<AppDependencies> create({
+    CredentialStore? credentials,
+    AppDatabase? databaseOverride,
+  }) async {
     initializePlayerBackend();
     final window = WindowService();
     await window.initialize();
-    final database = await AppDatabase.open();
+    final database = databaseOverride ?? await AppDatabase.open();
     await database.readSetting('schema_probe');
     final requests = ApiRequests();
     final images = AppImageCache(
@@ -228,7 +231,7 @@ class AppDependencies {
     session = SessionRepository(
       api: api,
       requests: requests,
-      credentials: SystemCredentialStore(),
+      credentials: credentials ?? SystemCredentialStore(),
       onSessionChanged: (scope) async {
         try {
           await downloads.sessionChanged();
