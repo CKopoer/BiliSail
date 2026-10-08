@@ -41,7 +41,8 @@ function(bilisail_patch_video_sources source output)
   foreach(file IN LISTS inputs)
     configure_file("${source}/${file}" "${output}/${file}" COPYONLY)
   endforeach()
-  foreach(file video_output_dispose.inc video_output_manager_dispose.inc)
+  foreach(file video_output_dispose.inc video_output_manager_dispose.inc
+    video_output_dimensions.inc)
     configure_file("${BILISAIL_VIDEO_PATCH_DIR}/${file}" "${output}/${file}" COPYONLY)
   endforeach()
 
@@ -66,8 +67,88 @@ function(bilisail_patch_video_sources source output)
   string(SUBSTRING "${text}" ${begin} ${count} old_dispose)
   bilisail_replace_once("${output}/video_output.cc" "${old_dispose}"
     "#include \"video_output_dispose.inc\"\n\n")
+  file(READ "${output}/video_output.cc" text)
+  string(FIND "${text}" "int64_t VideoOutput::GetVideoWidth() {" dimensions_begin)
+  if(dimensions_begin LESS 0)
+    message(FATAL_ERROR "media_kit_video dimension method boundaries changed")
+  endif()
+  string(SUBSTRING "${text}" ${dimensions_begin} -1 old_dimensions)
+  bilisail_replace_once("${output}/video_output.cc" "${old_dimensions}"
+    "#include \"video_output_dimensions.inc\"\n")
+  bilisail_replace_once("${output}/video_output.cc" [=[    } else {
+      height_ = std::nullopt;
+    }
+  });]=] [=[    } else {
+      height_ = std::nullopt;
+    }
+    // A paused/first frame may have already consumed its update notification.
+    // Apply the size event immediately on the same serialized render thread.
+    CheckAndResize();
+    Render();
+  });]=])
   bilisail_replace_once("${output}/video_output.cc"
     "registrar_->texture_registrar()->UnregisterTexture(" "UnregisterTexture(")
+  if("$ENV{BILISAIL_VIDEO_RENDER_TRACE}" STREQUAL "1")
+    # Opt-in Profile probe only; regular builds have no per-frame trace work.
+    bilisail_replace_once("${output}/video_output.h" "#include <optional>"
+      "#include <optional>\n#include <chrono>\n#include <iostream>")
+    bilisail_replace_once("${output}/video_output.h" "class VideoOutput {" [=[
+class VideoRenderOperationTrace {
+ public:
+  VideoRenderOperationTrace(const char* name, int64_t handle)
+      : name_(name), handle_(handle), start_(std::chrono::steady_clock::now()) {}
+  ~VideoRenderOperationTrace() {
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start_).count();
+    if (elapsed > 40) {
+      std::cout << "VIDEO_RENDER_OPERATION name=" << name_ << " handle=" << handle_
+                << " elapsedMs=" << elapsed << std::endl;
+    }
+  }
+ private:
+  const char* name_;
+  int64_t handle_;
+  std::chrono::steady_clock::time_point start_;
+};
+class VideoOutput {]=])
+    bilisail_replace_once("${output}/video_output.cc"
+      "  auto future = thread_pool_ref_->Post([&]() {" [=[
+  auto future = thread_pool_ref_->Post([&]() {
+    VideoRenderOperationTrace trace("create", reinterpret_cast<int64_t>(handle_));]=])
+    foreach(method Render CheckAndResize)
+      bilisail_replace_once("${output}/video_output.cc" "void VideoOutput::${method}() {"
+        "void VideoOutput::${method}() {\n  VideoRenderOperationTrace trace(\"${method}\", reinterpret_cast<int64_t>(handle_));")
+    endforeach()
+    bilisail_replace_once("${output}/video_output.h" "  std::mutex render_tasks_mutex_;" [=[
+  std::chrono::steady_clock::time_point trace_last_render_{};
+  int64_t trace_frames_ = 0;
+  int64_t trace_max_gap_ms_ = 0;
+  std::mutex render_tasks_mutex_;]=])
+    bilisail_replace_once("${output}/video_output.cc" "void VideoOutput::Render() {" [=[
+void VideoOutput::Render() {
+  const auto now = std::chrono::steady_clock::now();
+  if (trace_frames_ > 4) {
+    const auto gap = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now - trace_last_render_).count();
+    trace_max_gap_ms_ = std::max<int64_t>(trace_max_gap_ms_, gap);
+    if (gap > 50) {
+      std::cout << "VIDEO_RENDER_GAP handle=" << reinterpret_cast<int64_t>(handle_)
+                << " gapMs=" << gap << " atMs="
+                << std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count()
+                << std::endl;
+    }
+  }
+  trace_last_render_ = now;
+  ++trace_frames_;]=])
+    bilisail_replace_once("${output}/video_output_dispose.inc"
+      "  thread_pool_ref_->Post([] {}).get();" [=[
+  thread_pool_ref_->Post([] {}).get();
+  std::cout << "VIDEO_RENDER_TRACE frames=" << trace_frames_
+            << " maxGapMs=" << trace_max_gap_ms_
+            << " hardware=" << configuration_.enable_hardware_acceleration
+            << std::endl;]=])
+  endif()
   foreach(method Render CheckAndResize)
     bilisail_replace_once("${output}/video_output.cc" "void VideoOutput::${method}() {"
       "void VideoOutput::${method}() {\n  if (destroyed_) return;")

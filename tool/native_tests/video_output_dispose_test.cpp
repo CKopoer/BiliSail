@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
@@ -100,12 +101,20 @@ public:
   void NotifyRender();
   void CheckAndResize() {}
   void Render() {}
+  int64_t GetVideoWidth();
+  int64_t GetVideoHeight();
+  void SetDisplaySize(std::optional<int64_t> width,
+                      std::optional<int64_t> height) {
+    width_ = width;
+    height_ = height;
+  }
 
 private:
   RenderState *render_context_;
   int64_t texture_id_;
   Registrar *registrar_;
   ThreadPool *thread_pool_ref_;
+  std::optional<int64_t> width_, height_;
   std::atomic<bool> destroyed_{false};
   std::mutex render_tasks_mutex_;
   std::mutex texture_release_mutex_;
@@ -127,6 +136,7 @@ public:
 // Same method bodies included by the patched upstream translation units.
 #include "video_output_dispose.inc"
 #include "video_output_manager_dispose.inc"
+#include "video_output_dimensions.inc"
 
 void texture_callbacks_gate_dispose() {
   ThreadPool pool(1);
@@ -195,10 +205,31 @@ void missing_output_acknowledges_dispose() {
           "missing output did not acknowledge Dispose");
 }
 
+void dimensions_use_events_without_querying_mpv_core() {
+  ThreadPool pool(1);
+  Registrar registrar;
+  RenderState state;
+  VideoOutput output(pool, registrar, state, 0);
+  require(output.GetVideoWidth() == 0 && output.GetVideoHeight() == 0,
+          "unknown dimensions should keep the placeholder texture");
+  output.SetDisplaySize(854, 480);
+  require(output.GetVideoWidth() == 854 && output.GetVideoHeight() == 480,
+          "display size event was not applied");
+  output.SetDisplaySize(480, 854);
+  require(output.GetVideoWidth() == 480 && output.GetVideoHeight() == 854,
+          "updated/rotated dimensions were not applied");
+  output.SetDisplaySize(std::nullopt, std::nullopt);
+  require(output.GetVideoWidth() == 0 && output.GetVideoHeight() == 0,
+          "cleared dimensions triggered a synchronous core query");
+  // This fixture deliberately has no mpv_get_property declaration: the actual
+  // production methods above must compile without any synchronous core API.
+}
+
 int main() {
   texture_callbacks_gate_dispose();
   render_queue_gates_dispose();
   software_output_without_texture();
   missing_output_acknowledges_dispose();
-  std::cout << "PASS: 4 native video disposal lifecycle tests\n";
+  dimensions_use_events_without_querying_mpv_core();
+  std::cout << "PASS: 5 native video lifecycle and dimension event tests\n";
 }
