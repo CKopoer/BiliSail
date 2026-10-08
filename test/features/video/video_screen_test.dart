@@ -1,4 +1,5 @@
 import '../../support/input_test_app.dart';
+import '../../support/text_selection.dart';
 
 import 'dart:async';
 import 'dart:io';
@@ -34,6 +35,45 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/video_card_fake_engine.dart';
 
 void main() {
+  testWidgets('video title and expanded description support drag copy', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1100, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var created = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(_GuestAuthController.new),
+          videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+          videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
+        ],
+        child: InputTestApp(
+          theme: BiliTheme.light().copyWith(platform: TargetPlatform.windows),
+          home: Scaffold(
+            body: VideoScreen(
+              id: const VideoId('BV1abc123456'),
+              playerBuilder: (_, _, _) =>
+                  _TrackedPlayer(onCreate: () => created++, onDispose: () {}),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(await selectAndCopyText(tester, find.text('测试视频')), '测试视频');
+    await tester.tap(find.text('展开'));
+    await tester.pumpAndSettle();
+    expect(await selectAndCopyText(tester, find.text('测试简介')), '测试简介');
+    await tester.tap(find.text('收起'));
+    await tester.pumpAndSettle();
+    expect(find.text('测试简介'), findsNothing);
+    expect(created, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   setUpAll(() async {
     if (!const bool.fromEnvironment('VIDEO_TAGS_PREVIEW') &&
         const String.fromEnvironment('WATCH_LATER_PAGE_PREVIEW_CASE').isEmpty) {

@@ -6,6 +6,9 @@ import 'package:bilisail/features/profile/presentation/profile_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/input_test_app.dart';
+import '../../support/text_selection.dart';
+
 const profile = UserProfile(
   id: UserId('3493276401272849'),
   name: '这是一个较长的用户名称用于验证放大文字与窄窗口',
@@ -25,12 +28,13 @@ Future<void> pumpLayout(
   Widget child, {
   double width = 900,
   double scale = 1,
+  TargetPlatform? platform,
 }) async {
   await tester.binding.setSurfaceSize(Size(width, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
-    MaterialApp(
-      theme: BiliTheme.light(),
+    InputTestApp(
+      theme: BiliTheme.light().copyWith(platform: platform),
       home: MediaQuery(
         data: MediaQueryData(textScaler: TextScaler.linear(scale)),
         child: Scaffold(
@@ -46,6 +50,55 @@ Future<void> pumpLayout(
 }
 
 void main() {
+  testWidgets('profile name UID signature and verification support drag copy', (
+    tester,
+  ) async {
+    ProfileSection? selected;
+    await pumpLayout(
+      tester,
+      ProfileHeader(
+        profile: profile,
+        onSelectSection: (value) => selected = value,
+      ),
+      width: 320,
+      scale: 2,
+      platform: TargetPlatform.windows,
+    );
+    for (final value in [
+      profile.name,
+      'UID ${profile.id.value}',
+      profile.signature,
+      '个人认证信息',
+    ]) {
+      expect(await selectAndCopyText(tester, find.text(value)), value);
+    }
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('profile-following-stat')),
+    );
+    await tester.tap(find.byKey(const ValueKey('profile-following-stat')));
+    expect(selected, ProfileSection.following);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('profile UID supports touch long press and toolbar copy', (
+    tester,
+  ) async {
+    await pumpLayout(
+      tester,
+      ProfileHeader(profile: profile, onSelectSection: (_) {}),
+      platform: TargetPlatform.android,
+    );
+    expect(
+      await selectAndCopyText(
+        tester,
+        find.text('UID ${profile.id.value}'),
+        touch: true,
+      ),
+      profile.id.value,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   for (final width in [320.0, 375.0, 900.0]) {
     for (final scale in [1.0, 2.0]) {
       testWidgets('profile header fits width $width at text scale $scale', (

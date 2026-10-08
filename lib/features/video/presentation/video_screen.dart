@@ -273,10 +273,14 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
-                                child: Text(
-                                  video.summary.title,
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(height: 1.4),
+                                child: SelectionArea(
+                                  child: Text(
+                                    video.summary.title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(height: 1.4),
+                                  ),
                                 ),
                               ),
                               TextButton(
@@ -336,12 +340,14 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                             widget.actionsBuilder!(context, video, selected),
                           if (_descriptionExpanded) ...[
                             const SizedBox(height: 12),
-                            Text(
-                              video.description.isEmpty
-                                  ? 'UP 主还没有填写简介'
-                                  : video.description,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(height: 1.6),
+                            SelectionArea(
+                              child: Text(
+                                video.description.isEmpty
+                                    ? 'UP 主还没有填写简介'
+                                    : video.description,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(height: 1.6),
+                              ),
                             ),
                           ],
                           VideoTagsPanel(

@@ -67,10 +67,12 @@ class ProfileHeader extends StatelessWidget {
                     runSpacing: 6,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(
-                        profile.name,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
+                      SelectionArea(
+                        child: Text(
+                          profile.name,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       if (profile.level case final level?)
@@ -93,9 +95,11 @@ class ProfileHeader extends StatelessWidget {
                     runSpacing: 4,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(
-                        'UID ${profile.id.value}',
-                        style: theme.textTheme.bodySmall,
+                      SelectionArea(
+                        child: Text(
+                          'UID ${profile.id.value}',
+                          style: theme.textTheme.bodySmall,
+                        ),
                       ),
                       if (isSelf)
                         Text(
@@ -110,21 +114,25 @@ class ProfileHeader extends StatelessWidget {
                       when description.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        description,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: muted,
+                      child: SelectionArea(
+                        child: Text(
+                          description,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: muted,
+                          ),
                         ),
                       ),
                     ),
                   if (profile.signature.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        profile.signature,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: muted,
-                          height: 1.4,
+                      child: SelectionArea(
+                        child: Text(
+                          profile.signature,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: muted,
+                            height: 1.4,
+                          ),
                         ),
                       ),
                     ),

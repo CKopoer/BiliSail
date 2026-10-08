@@ -1,4 +1,5 @@
 import '../../support/input_test_app.dart';
+import '../../support/text_selection.dart';
 
 import 'dart:async';
 
@@ -55,6 +56,44 @@ final _season = PgcSeason(
 );
 
 void main() {
+  testWidgets('season title and description support drag copy', (tester) async {
+    final auth = _Auth();
+    addTearDown(auth.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          pgcRepositoryProvider.overrideWithValue(_Repo()),
+          authRepositoryProvider.overrideWithValue(auth),
+        ],
+        child: InputTestApp(
+          theme: ThemeData(platform: TargetPlatform.windows),
+          home: Scaffold(
+            body: PgcScreen(
+              seasonId: 's1',
+              playerBuilder: (_, _, _) => const SizedBox(),
+              commentsBuilder: (_, _, _) => const Text('评论区'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      await selectAndCopyText(tester, find.text(_season.title)),
+      _season.title,
+    );
+    await tester.tap(find.text('展开'));
+    await tester.pumpAndSettle();
+    expect(
+      await selectAndCopyText(tester, find.text(_season.description)),
+      _season.description,
+    );
+    await tester.tap(find.byKey(const ValueKey('pgc-tab-评论')));
+    await tester.pumpAndSettle();
+    expect(find.text(_season.description), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   test('new request cancels and rejects a late season response', () async {
     final repo = _Repo();
     final auth = _Auth();

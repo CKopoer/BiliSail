@@ -445,9 +445,11 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          season.title,
-          style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        SelectionArea(
+          child: Text(
+            season.title,
+            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
         ),
         if (season.publishText?.isNotEmpty == true) ...[
           const SizedBox(height: 5),
@@ -488,11 +490,13 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
         ),
         if (season.description.isNotEmpty) ...[
           const SizedBox(height: 8),
-          Text(
-            season.description,
-            maxLines: _descriptionExpanded ? null : 2,
-            overflow: _descriptionExpanded ? null : TextOverflow.ellipsis,
-            style: text.bodySmall?.copyWith(height: 1.4, color: muted),
+          SelectionArea(
+            child: Text(
+              season.description,
+              maxLines: _descriptionExpanded ? null : 2,
+              overflow: _descriptionExpanded ? null : TextOverflow.ellipsis,
+              style: text.bodySmall?.copyWith(height: 1.4, color: muted),
+            ),
           ),
           Align(
             alignment: Alignment.centerRight,
