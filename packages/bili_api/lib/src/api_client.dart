@@ -992,8 +992,17 @@ final class BiliApiClient {
     String bvid,
     String cid, {
     int qn = 80,
+    String language = '',
+    int productionType = 0,
     ApiRequestContext? context,
-  }) => _getPlayInfo(bvid, cid, qn: qn, context: context);
+  }) => _getPlayInfo(
+    bvid,
+    cid,
+    qn: qn,
+    language: language,
+    productionType: productionType,
+    context: context,
+  );
 
   /// Homepage inline playback uses the same endpoint with a browser profile.
   /// Missing audio is allowed here because the caller explicitly requests video.
@@ -1008,10 +1017,18 @@ final class BiliApiClient {
     String cid, {
     required int qn,
     bool preview = false,
+    String language = '',
+    int productionType = 0,
     ApiRequestContext? context,
   }) async {
     _validateBvid(bvid);
-    if (int.tryParse(cid) == null || qn < 1) {
+    if (int.tryParse(cid) == null ||
+        qn < 1 ||
+        !const [0, 1, 2].contains(productionType) ||
+        (productionType == 0) != language.isEmpty ||
+        language.length > 32 ||
+        (language.isNotEmpty &&
+            !RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(language))) {
       throw ArgumentError('Invalid play target');
     }
     final data = await _wbiJson(
@@ -1022,6 +1039,11 @@ final class BiliApiClient {
         'qn': '$qn',
         'fnval': preview ? '2000' : '4048',
         'fourk': '1',
+        if (!preview) ...{
+          'cur_language': language,
+          'cur_production_type': '$productionType',
+          'client_attr': '1',
+        },
         if (preview) ...{
           'fnver': '0',
           'from_client': 'BROWSER',
@@ -1062,6 +1084,9 @@ final class BiliApiClient {
           'playurl',
         )).map((v) => _int(v)).whereType<int>(),
       ),
+      voices: _playbackVoices(data['language']),
+      currentLanguage: _string(data['cur_language']) ?? '',
+      productionType: _int(data['cur_production_type']) ?? 0,
     );
   }
 
@@ -1094,6 +1119,10 @@ final class BiliApiClient {
           languageCode: _string(entry['lan']) ?? '',
           label: _string(entry['lan_doc']) ?? '',
           url: url,
+          id: _string(entry['id_str']) ?? _int(entry['id'])?.toString() ?? '',
+          type: _int(entry['type']),
+          aiType: _int(entry['ai_type']),
+          aiStatus: _int(entry['ai_status']),
         );
       }),
     );
@@ -1112,20 +1141,64 @@ final class BiliApiClient {
     }
     final data = await _json(url, 'subtitle_body', context);
     return List.unmodifiable(
-      _list(data['body'], 'subtitle_body').map((v) {
-        final cue = _map(v, 'subtitle_body');
-        final from = _num(cue['from']);
-        final to = _num(cue['to']);
-        if (from == null || to == null || to < from) {
-          throw const ApiFailure(ApiFailureCategory.protocol, 'subtitle_body');
-        }
-        return ApiSubtitleCue(
-          start: Duration(milliseconds: (from * 1000).round()),
-          end: Duration(milliseconds: (to * 1000).round()),
-          text: _requiredString(cue['content'], 'subtitle_body'),
-        );
-      }),
+      _list(data['body'], 'subtitle_body')
+          .map((v) {
+            final cue = _map(v, 'subtitle_body');
+            final from = _num(cue['from']);
+            final to = _num(cue['to']);
+            if (from == null ||
+                to == null ||
+                !from.isFinite ||
+                !to.isFinite ||
+                from < 0 ||
+                to < from ||
+                cue['content'] is! String) {
+              throw const ApiFailure(
+                ApiFailureCategory.protocol,
+                'subtitle_body',
+              );
+            }
+            return ApiSubtitleCue(
+              start: Duration(milliseconds: (from * 1000).round()),
+              end: Duration(milliseconds: (to * 1000).round()),
+              text: cue['content'] as String,
+            );
+          })
+          .where((cue) => cue.text.trim().isNotEmpty),
     );
+  }
+
+  static List<ApiPlaybackVoice> _playbackVoices(Object? value) {
+    final language = _optionalMap(value);
+    if (language == null || language['support'] != true) return const [];
+    final items = language['items'];
+    if (items is! List<Object?>) return const [];
+    final voices = <ApiPlaybackVoice>[];
+    final keys = <String>{};
+    for (final value in items.take(32)) {
+      final item = _optionalMap(value);
+      if (item == null) continue;
+      final code = _string(item['lang']);
+      final type = _int(item['production_type']);
+      if (code == null ||
+          code.isEmpty ||
+          type == null ||
+          !const [1, 2].contains(type) ||
+          !keys.add('$type:$code')) {
+        continue;
+      }
+      voices.add(
+        ApiPlaybackVoice(
+          languageCode: code,
+          label: _string(item['title']) ?? code,
+          productionType: type,
+          subtitleLanguage: _string(item['subtitle_lang']) ?? '',
+          videoDetext: item['video_detext'] == true,
+          videoMouthShapeChange: item['video_mouth_shape_change'] == true,
+        ),
+      );
+    }
+    return List.unmodifiable(voices);
   }
 
   Future<List<ApiDanmakuItem>> getDanmakuSegment(

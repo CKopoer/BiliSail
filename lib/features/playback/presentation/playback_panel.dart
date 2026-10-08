@@ -17,6 +17,7 @@ import '../../../core/input/shortcut_dispatcher.dart';
 import '../../../core/presentation/input_scope.dart';
 import '../application/playback_shortcut_controller.dart';
 import '../application/playback_session.dart';
+import '../domain/playback_repository.dart';
 import '../domain/content_playback.dart';
 import 'player_settings_dialog.dart';
 import 'playback_timeline_bar.dart';
@@ -469,8 +470,13 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
 
   void _onControlsMenuChanged(bool open) {
     if (!mounted) return;
-    _openControlsMenus += open ? 1 : -1;
-    if (!_dynamicControls) _scheduleControlsHide();
+    if (open) {
+      _openControlsMenus++;
+    } else if (_openControlsMenus > 0) {
+      _openControlsMenus--;
+    }
+    if (open) widget.controlsVisible.value = true;
+    _scheduleControlsHide();
   }
 
   void _onSettingsChanged() {
@@ -525,8 +531,9 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         !_appActive ||
         !widget.controlsVisible.value ||
         _pressedPointers.isNotEmpty ||
-        (!_dynamicControls &&
-            (_controlEditorFocused || _openControlsMenus > 0 || _hasError))) {
+        // PopupMenuButton must stay mounted until its route returns a selection.
+        _openControlsMenus > 0 ||
+        (!_dynamicControls && (_controlEditorFocused || _hasError))) {
       return;
     }
     _controlsHideTimer = Timer(Duration(seconds: _dynamicControls ? 1 : 5), () {
@@ -550,7 +557,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
 
   void _onMouseExit(PointerExitEvent event) {
     _mouseInside = false;
-    if (!_dynamicControls || !widget.active) return;
+    if (!_dynamicControls || !widget.active || _openControlsMenus > 0) return;
     _controlsHideTimer?.cancel();
     _controlsHideTimer = null;
     widget.controlsVisible.value = false;
@@ -899,6 +906,36 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
+                            if (session.subtitleLoading ||
+                                session.subtitleMessage != null)
+                              Positioned(
+                                left: 20,
+                                right: 20,
+                                bottom:
+                                    (controls ? 104 : 12) +
+                                    settings.subtitleBottomPadding,
+                                child: IgnorePointer(
+                                  child: Center(
+                                    child: Text(
+                                      session.subtitleLoading
+                                          ? '字幕加载中…'
+                                          : session.subtitleMessage!,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                        shadows: [
+                                          Shadow(
+                                            color: Colors.black,
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             if (session.error == null)
                               Positioned(
                                 key: const ValueKey(
@@ -1179,6 +1216,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                               onSeek: (position) => unawaited(
                                                 session.seek(position),
                                               ),
+                                              onMenuChanged:
+                                                  _onControlsMenuChanged,
                                             ),
                                           Padding(
                                             padding: const EdgeInsets.symmetric(
@@ -1494,6 +1533,7 @@ class _ControlBar extends StatelessWidget {
         slot(
           PopupMenuButton<int>(
             tooltip: '字幕',
+            initialValue: session.selectedSubtitle,
             onOpened: () => onMenuChanged(true),
             onCanceled: () => onMenuChanged(false),
             onSelected: (track) {
@@ -1502,11 +1542,41 @@ class _ControlBar extends StatelessWidget {
             },
             icon: const Icon(Icons.closed_caption_outlined, size: 20),
             itemBuilder: (_) => [
-              const PopupMenuItem(value: -1, child: Text('关闭字幕')),
+              CheckedPopupMenuItem(
+                value: -1,
+                checked: session.selectedSubtitle == -1,
+                child: const Text('关闭字幕'),
+              ),
               for (var i = 0; i < session.subtitleTracks.length; i++)
-                PopupMenuItem(
+                CheckedPopupMenuItem(
                   value: i,
-                  child: Text(session.subtitleTracks[i].label),
+                  checked: session.selectedSubtitle == i,
+                  child: Text(_subtitleLabel(session.subtitleTracks[i])),
+                ),
+            ],
+          ),
+        ),
+      if (session.voiceTracks.isNotEmpty)
+        slot(
+          PopupMenuButton<String>(
+            tooltip: '语音翻译',
+            initialValue: session.selectedVoice.key,
+            onOpened: () => onMenuChanged(true),
+            onCanceled: () => onMenuChanged(false),
+            onSelected: (key) {
+              onMenuChanged(false);
+              final voice = _voices
+                  .where((voice) => voice.key == key)
+                  .firstOrNull;
+              if (voice != null) unawaited(session.changeVoice(voice));
+            },
+            icon: const Icon(Icons.record_voice_over_outlined, size: 20),
+            itemBuilder: (_) => [
+              for (final voice in _voices)
+                CheckedPopupMenuItem(
+                  value: voice.key,
+                  checked: voice.key == session.selectedVoice.key,
+                  child: Text(_voiceLabel(voice)),
                 ),
             ],
           ),
@@ -1633,19 +1703,45 @@ class _ControlBar extends StatelessWidget {
         ),
       if (session.subtitleTracks.isNotEmpty) ...[
         const PopupMenuDivider(),
-        PopupMenuItem(
+        CheckedPopupMenuItem(
           value: () => unawaited(session.selectSubtitle(-1)),
+          checked: session.selectedSubtitle == -1,
           child: const Text('关闭字幕'),
         ),
         for (var i = 0; i < session.subtitleTracks.length; i++)
-          PopupMenuItem(
+          CheckedPopupMenuItem(
             value: () => unawaited(session.selectSubtitle(i)),
-            child: Text(session.subtitleTracks[i].label),
+            checked: session.selectedSubtitle == i,
+            child: Text(_subtitleLabel(session.subtitleTracks[i])),
+          ),
+      ],
+      if (session.voiceTracks.isNotEmpty) ...[
+        const PopupMenuDivider(),
+        for (final voice in _voices)
+          CheckedPopupMenuItem(
+            value: () => unawaited(session.changeVoice(voice)),
+            checked: voice.key == session.selectedVoice.key,
+            child: Text('语音 ${_voiceLabel(voice)}'),
           ),
       ],
     ],
   );
+
+  List<PlaybackVoice> get _voices => [
+    const PlaybackVoice.original(),
+    ...session.voiceTracks,
+  ];
 }
+
+String _subtitleLabel(SubtitleTrack track) {
+  final label = track.label.isNotEmpty ? track.label : track.languageCode;
+  return track.type == 1
+      ? '$label · ${track.aiType == 1 ? 'AI 翻译' : 'AI'}'
+      : label;
+}
+
+String _voiceLabel(PlaybackVoice voice) =>
+    voice.productionType == 2 ? '${voice.label} · AI 翻译' : voice.label;
 
 class _VolumeSliderEntry extends PopupMenuEntry<void> {
   const _VolumeSliderEntry({required this.session});
@@ -1751,7 +1847,10 @@ class _ControlsLayout {
     composerMinWidth = 200 * MediaQuery.textScalerOf(context).scale(12) / 12;
     compact =
         width <
-        buttonWidth * (8 + (session.subtitleTracks.isNotEmpty ? 1 : 0)) +
+        buttonWidth *
+                (8 +
+                    (session.subtitleTracks.isNotEmpty ? 1 : 0) +
+                    (session.voiceTracks.isNotEmpty ? 1 : 0)) +
             timeWidth +
             rateWidth +
             qualityWidth +

@@ -177,6 +177,14 @@ final class PlaybackMetadataClient {
           languageCode: row['lan'] is String ? row['lan'] as String : '',
           label: row['lan_doc'] is String ? row['lan_doc'] as String : '',
           url: _image(row['subtitle_url'], endpoint),
+          id: row['id_str'] is String
+              ? row['id_str'] as String
+              : row['id'] is int
+              ? (row['id'] as int).toString()
+              : '',
+          type: row['type'] is int ? row['type'] as int : null,
+          aiType: row['ai_type'] is int ? row['ai_type'] as int : null,
+          aiStatus: row['ai_status'] is int ? row['ai_status'] as int : null,
         );
       }),
     );

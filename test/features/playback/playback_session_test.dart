@@ -24,6 +24,162 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('voice switching preserves playback options, subtitle intent, refresh and owner checkpoints', () async {
+    final engine = _FakeEngine();
+    final repository = _VoiceRepository();
+    final session = PlaybackSession(
+      engine: engine,
+      repository: repository,
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    session.configureSettings(AppSettings(subtitlesEnabled: true));
+    final first = Object(), second = Object();
+    session.attach(first);
+    session.attach(second);
+    await session.activate(first, _detail('one'), _part('one'));
+    await _flush();
+    await session.pause();
+    await session.seek(const Duration(seconds: 35));
+    await session.setRate(1.5);
+    await session.setVolume(30);
+    await session.changeVoice(_VoiceRepository.english);
+    await _flush();
+    expect(session.selectedVoice.key, '2:en');
+    expect(session.selectedSubtitle, 1);
+    expect(engine.sources.last, isA<DashPairSource>());
+    expect(engine.currentSnapshot.position, const Duration(seconds: 35));
+    expect(engine.currentSnapshot.rate, 1.5);
+    expect(engine.currentSnapshot.volume, 30);
+    expect(engine.currentSnapshot.desiredPlaying, isFalse);
+    await session.selectSubtitle(0);
+    await session.changeQuality(64);
+    await _flush();
+    expect(session.media?.quality, 64);
+    expect(session.selectedVoice.key, '2:en');
+    expect(session.selectedSubtitle, 0);
+    await session.retry();
+    await _flush();
+    expect(session.selectedVoice.key, '2:en');
+    await session.activate(second, _detail('two'), _part('two'));
+    expect(session.selectedVoice.isOriginal, isTrue);
+    await session.activate(first, _detail('one'), _part('one'));
+    await _flush();
+    expect(session.selectedVoice.key, '2:en');
+    expect(engine.currentSnapshot.position, const Duration(seconds: 35));
+    expect(engine.currentSnapshot.desiredPlaying, isFalse);
+    await session.selectSubtitle(-1);
+    await session.changeVoice(_VoiceRepository.japanese);
+    await _flush();
+    expect(session.selectedSubtitle, -1);
+    await session.changeVoice(const PlaybackVoice.original());
+    await _flush();
+    expect(session.selectedVoice.isOriginal, isTrue);
+    expect(session.selectedSubtitle, -1);
+    expect(engine.maxSimultaneousPlayers, 1);
+  });
+
+  test('late voice responses cannot replace a newer language or lose the pending position', () async {
+    final engine = _FakeEngine();
+    final repository = _VoiceRepository()..delayVoices = true;
+    final session = PlaybackSession(
+      engine: engine,
+      repository: repository,
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    await session.open(_detail('one'), _part('one'));
+    await session.pause();
+    await session.seek(const Duration(seconds: 35));
+    await session.setRate(1.5);
+    await _flush();
+    await session.selectSubtitle(0);
+    final english = session.changeVoice(_VoiceRepository.english);
+    await _flush();
+    final japanese = session.changeVoice(_VoiceRepository.japanese);
+    await _flush();
+    expect(repository.voiceCancellations['en']?.isCancelled, isTrue);
+    repository.completeVoice('ja');
+    await japanese;
+    repository.completeVoice('en');
+    await english;
+    await _flush();
+    expect(session.selectedVoice.key, '2:ja');
+    expect(session.selectedSubtitle, 2);
+    expect(engine.openedUris.last.path, '/video/ja');
+    expect(engine.currentSnapshot.position, const Duration(seconds: 35));
+    expect(engine.currentSnapshot.rate, 1.5);
+    expect(engine.currentSnapshot.desiredPlaying, isFalse);
+  });
+
+  test(
+    'voice response from an old account epoch does not open media',
+    () async {
+      var epoch = 1;
+      final engine = _FakeEngine();
+      final repository = _VoiceRepository()..delayVoices = true;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: repository,
+        progress: _FakeProgress(),
+        accountScope: () => 'same-account',
+        sessionEpoch: () => epoch,
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      final voice = session.changeVoice(_VoiceRepository.english);
+      await _flush();
+      epoch++;
+      repository.completeVoice('en');
+      await voice;
+      expect(engine.openedUris, hasLength(1));
+      expect(session.media, isNull);
+    },
+  );
+
+  test('subtitle loading, failure, empty body, retry and stale responses have distinct states', () async {
+    final repository = _VoiceRepository()..delayCues = true;
+    final session = PlaybackSession(
+      engine: _FakeEngine(),
+      repository: repository,
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    await session.open(_detail('one'), _part('one'));
+    await _flush();
+    final first = session.selectSubtitle(0);
+    expect(session.subtitleLoading, isTrue);
+    repository.cues.last.completeError(
+      const AppFailure(AppFailureKind.network, 'failed'),
+    );
+    await first;
+    expect(session.subtitleLoading, isFalse);
+    expect(session.subtitleMessage, contains('加载失败'));
+    final retry = session.selectSubtitle(0);
+    expect(session.subtitleMessage, isNull);
+    repository.cues.last.complete([]);
+    await retry;
+    expect(session.subtitleMessage, contains('没有可显示'));
+    final stale = session.selectSubtitle(0);
+    final fresh = session.selectSubtitle(1);
+    repository.cues.last.complete([
+      const SubtitleCue(Duration.zero, Duration(seconds: 3), 'fresh'),
+    ]);
+    await fresh;
+    repository.cues[2].completeError(
+      const AppFailure(AppFailureKind.network, 'stale'),
+    );
+    await stale;
+    expect(session.subtitleMessage, isNull);
+    expect(session.subtitleCues.single.text, 'fresh');
+    await session.selectSubtitle(-1);
+    expect(session.subtitleCues, isEmpty);
+    expect(session.subtitleMessage, isNull);
+  });
+
   test('relative media targets accumulate on a delayed engine with bounded pending work', () async {
     final engine = _FakeEngine();
     final session = PlaybackSession(
@@ -2689,6 +2845,114 @@ final class _FakeRepository implements PlaybackRepository {
     SubtitleTrack track, {
     required RequestCancellation cancellation,
   }) => Future.value(const []);
+}
+
+final class _VoiceRepository extends Fake
+    implements PlaybackRepository, VoicePlaybackRepository {
+  static const english = PlaybackVoice(
+    languageCode: 'en',
+    label: 'English',
+    productionType: 2,
+    subtitleLanguage: 'ai-en',
+  );
+  static const japanese = PlaybackVoice(
+    languageCode: 'ja',
+    label: '日本語',
+    productionType: 2,
+    subtitleLanguage: 'ai-ja',
+  );
+  bool delayVoices = false, delayCues = false;
+  final pending = <String, Completer<PlaybackMedia>>{};
+  final voiceCancellations = <String, RequestCancellation>{};
+  final requestedQualities = <String, int>{};
+  final cues = <Completer<List<SubtitleCue>>>[];
+  PlaybackMedia _resolved(int quality, PlaybackVoice voice) => PlaybackMedia(
+    video: PlaybackTrack(
+      urls: [Uri.https('example.test', '/video/${voice.languageCode}')],
+      codec: 'avc1',
+      bandwidth: 1000,
+    ),
+    audio: PlaybackTrack(
+      urls: [Uri.https('example.test', '/audio/${voice.languageCode}')],
+      codec: 'mp4a',
+      bandwidth: 128,
+    ),
+    quality: quality,
+    qualities: const [64, 80],
+    duration: const Duration(minutes: 2),
+    headers: const {},
+    voices: const [english, japanese],
+    voice: voice,
+  );
+  void completeVoice(String language) => pending[language]!.complete(
+    _resolved(
+      requestedQualities[language]!,
+      language == 'en' ? english : japanese,
+    ),
+  );
+  @override
+  Future<PlaybackMedia> resolve(
+    VideoId video,
+    String cid, {
+    required int quality,
+    VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
+    required RequestCancellation cancellation,
+  }) async => _resolved(quality, const PlaybackVoice.original());
+  @override
+  Future<PlaybackMedia> resolveVoice(
+    VideoId video,
+    String cid, {
+    required PlaybackVoice voice,
+    required int quality,
+    required VideoCodecPreference preferredCodec,
+    required RequestCancellation cancellation,
+  }) {
+    voiceCancellations[voice.languageCode] = cancellation;
+    requestedQualities[voice.languageCode] = quality;
+    if (!delayVoices) return Future.value(_resolved(quality, voice));
+    final gate = Completer<PlaybackMedia>();
+    pending[voice.languageCode] = gate;
+    return gate.future;
+  }
+
+  @override
+  Future<List<TimedComment>> comments(
+    String cid,
+    int segment, {
+    required RequestCancellation cancellation,
+  }) async => [];
+  @override
+  Future<List<SubtitleTrack>> subtitles(
+    VideoId video,
+    String cid, {
+    required RequestCancellation cancellation,
+  }) async => [
+    SubtitleTrack(
+      '中文',
+      Uri.https('example.test', '/zh'),
+      languageCode: 'ai-zh',
+    ),
+    SubtitleTrack(
+      'English',
+      Uri.https('example.test', '/en'),
+      languageCode: 'ai-en',
+    ),
+    SubtitleTrack(
+      '日本語',
+      Uri.https('example.test', '/ja'),
+      languageCode: 'ai-ja',
+    ),
+  ];
+  @override
+  Future<List<SubtitleCue>> subtitleCues(
+    SubtitleTrack track, {
+    required RequestCancellation cancellation,
+  }) {
+    if (!delayCues) return Future.value([]);
+    final gate = Completer<List<SubtitleCue>>();
+    cues.add(gate);
+    return gate.future;
+  }
 }
 
 final class _ProgressWrite {

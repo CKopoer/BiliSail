@@ -55,6 +55,15 @@ PlaybackMedia selectDashMedia(
     codec: track.codecs,
     bandwidth: track.bandwidth,
   );
+  PlaybackVoice mapVoice(ApiPlaybackVoice voice) => PlaybackVoice(
+    languageCode: voice.languageCode,
+    label: voice.label,
+    productionType: voice.productionType,
+    subtitleLanguage: voice.subtitleLanguage,
+    videoDetext: voice.videoDetext,
+    videoMouthShapeChange: voice.videoMouthShapeChange,
+  );
+  final voices = List<PlaybackVoice>.unmodifiable(info.voices.map(mapVoice));
   return PlaybackMedia(
     video: map(candidates.first),
     audio: videoOnly ? null : map(audios.first),
@@ -62,5 +71,15 @@ PlaybackMedia selectDashMedia(
     qualities: videos.map((track) => track.id).toSet().toList()..sort(),
     duration: info.duration,
     headers: headers,
+    voices: voices,
+    voice:
+        voices
+            .where(
+              (voice) =>
+                  voice.languageCode == info.currentLanguage &&
+                  voice.productionType == info.productionType,
+            )
+            .firstOrNull ??
+        const PlaybackVoice.original(),
   );
 }

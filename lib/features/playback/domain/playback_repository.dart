@@ -30,6 +30,8 @@ final class PlaybackMedia {
     required this.headers,
     this.kind = PlaybackMediaKind.dash,
     this.qualityLabels = const {},
+    this.voices = const [],
+    this.voice = const PlaybackVoice.original(),
   });
   final PlaybackTrack video;
   final PlaybackTrack? audio;
@@ -39,6 +41,31 @@ final class PlaybackMedia {
   final List<int> qualities;
   final Duration duration;
   final Map<String, String> headers;
+  final List<PlaybackVoice> voices;
+  final PlaybackVoice voice;
+}
+
+final class PlaybackVoice {
+  const PlaybackVoice({
+    required this.languageCode,
+    required this.label,
+    required this.productionType,
+    this.subtitleLanguage = '',
+    this.videoDetext = false,
+    this.videoMouthShapeChange = false,
+  });
+  const PlaybackVoice.original()
+    : languageCode = '',
+      label = '原声',
+      productionType = 0,
+      subtitleLanguage = '',
+      videoDetext = false,
+      videoMouthShapeChange = false;
+  final String languageCode, label, subtitleLanguage;
+  final int productionType;
+  final bool videoDetext, videoMouthShapeChange;
+  bool get isOriginal => productionType == 0 && languageCode.isEmpty;
+  String get key => '$productionType:$languageCode';
 }
 
 final class TimedComment {
@@ -61,9 +88,32 @@ final class TimedComment {
 }
 
 final class SubtitleTrack {
-  const SubtitleTrack(this.label, this.uri);
+  const SubtitleTrack(
+    this.label,
+    this.uri, {
+    this.id = '',
+    this.languageCode = '',
+    this.type,
+    this.aiType,
+    this.aiStatus,
+  });
   final String label;
   final Uri uri;
+  final String id, languageCode;
+  final int? type, aiType, aiStatus;
+  String get preferenceKey => languageCode.isEmpty ? label : languageCode;
+}
+
+/// Optional online capability; offline and content resolvers keep their contract.
+abstract interface class VoicePlaybackRepository {
+  Future<PlaybackMedia> resolveVoice(
+    VideoId video,
+    String cid, {
+    required PlaybackVoice voice,
+    required int quality,
+    required VideoCodecPreference preferredCodec,
+    required RequestCancellation cancellation,
+  });
 }
 
 final class SubtitleCue {

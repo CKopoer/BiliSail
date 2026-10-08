@@ -63,6 +63,7 @@
 | [悬停预览加载延迟](validation/video-preview-loading.md) | 官网无音轨预览、cid 直传、CDN 顺序、启动预算、静止窗口与首帧切换 |
 | [播放控件与小窗布局](validation/responsive-player.md) | 单行工具栏、弹幕输入自适应、窄窗口布局和播放状态保留 |
 | [视频章节与悬停缩略图](validation/playback-timeline.md) | 自适应分段、雪碧图裁剪、预览生命周期与真实视频验证 |
+| [字幕与 AI 原声翻译](validation/subtitles-translated-audio.md) | 动态菜单选择修复、空文本字幕、AI 标识与语音双轨切换、登录态 Windows 验证及新版 Protobuf 调查 |
 | [用户主页](validation/user-profile.md) | 个人/UP 主空间、头像入口、投稿与动态/收藏/关注列表、会话隔离和实测边界 |
 | [账号菜单与消息](validation/account-messages.md) | 头像资料/入口、五类收件箱、私信分页/发送/已读、账号隔离与 Windows 只读实测 |
 | [主页卡片与富动态](validation/profile-dynamic-style.md) | UWP 横向投稿卡、居中动态列表、行内表情与转发内容、验证边界 |

@@ -13,7 +13,10 @@ import '../domain/playback_repository.dart';
 
 /// One adapter per PlaybackSession keeps offline reads isolated between tabs.
 final class OfflinePlaybackRepository
-    implements PlaybackRepository, PlaybackMetadataRepository {
+    implements
+        PlaybackRepository,
+        PlaybackMetadataRepository,
+        VoicePlaybackRepository {
   OfflinePlaybackRepository({
     required this.downloads,
     required this.network,
@@ -48,6 +51,30 @@ final class OfflinePlaybackRepository
     return network.resolve(
       video,
       cid,
+      quality: quality,
+      preferredCodec: preferredCodec,
+      cancellation: cancellation,
+    );
+  }
+
+  @override
+  Future<PlaybackMedia> resolveVoice(
+    VideoId video,
+    String cid, {
+    required PlaybackVoice voice,
+    required int quality,
+    required VideoCodecPreference preferredCodec,
+    required RequestCancellation cancellation,
+  }) {
+    _beginSource();
+    final resolver = network;
+    if (resolver is! VoicePlaybackRepository) {
+      throw const AppFailure(AppFailureKind.playback, '当前播放源不支持语音选择');
+    }
+    return (resolver as VoicePlaybackRepository).resolveVoice(
+      video,
+      cid,
+      voice: voice,
       quality: quality,
       preferredCodec: preferredCodec,
       cancellation: cancellation,

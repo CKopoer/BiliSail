@@ -5,6 +5,35 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('DASH mapping preserves voice options, associated subtitles and selected voice', () {
+    final media = selectDashMedia(
+      ApiPlayInfo(
+        duration: const Duration(minutes: 2),
+        dashVideo: [_track(80, 'avc1')],
+        dashAudio: [_track(30280, 'mp4a.40.2')],
+        acceptQuality: const [80],
+        currentLanguage: 'en',
+        productionType: 2,
+        voices: const [
+          ApiPlaybackVoice(
+            languageCode: 'en',
+            label: 'English',
+            productionType: 2,
+            subtitleLanguage: 'ai-en',
+            videoDetext: true,
+          ),
+        ],
+      ),
+      quality: 80,
+      preferredCodec: VideoCodecPreference.h264,
+      headers: const {},
+    );
+    expect(media.voices.single.key, '2:en');
+    expect(media.voice.subtitleLanguage, 'ai-en');
+    expect(media.voice.videoDetext, isTrue);
+    expect(media.voice.videoMouthShapeChange, isFalse);
+    expect(media.voice.isOriginal, isFalse);
+  });
   test('explicit video preview accepts video without weakening normal DASH selection', () {
     final info = ApiPlayInfo(
       duration: const Duration(seconds: 20),

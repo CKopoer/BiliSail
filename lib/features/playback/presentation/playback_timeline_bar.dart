@@ -23,6 +23,7 @@ class PlaybackTimelineBar extends StatefulWidget {
     this.storyboard,
     this.storyboardLoading = false,
     this.storyboardMessage,
+    this.onMenuChanged,
   });
   final Duration position, duration, buffered;
   final List<VideoChapter> chapters;
@@ -33,6 +34,7 @@ class PlaybackTimelineBar extends StatefulWidget {
   final VideoStoryboard? storyboard;
   final bool storyboardLoading;
   final String? storyboardMessage;
+  final ValueChanged<bool>? onMenuChanged;
 
   @override
   State<PlaybackTimelineBar> createState() => _PlaybackTimelineBarState();
@@ -153,8 +155,14 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
                                   color: Colors.white70,
                                   size: 17,
                                 ),
-                                onOpened: _hide,
+                                onOpened: () {
+                                  _hide();
+                                  widget.onMenuChanged?.call(true);
+                                },
+                                onCanceled: () =>
+                                    widget.onMenuChanged?.call(false),
                                 onSelected: (chapter) {
+                                  widget.onMenuChanged?.call(false);
                                   if (mounted) widget.onSeek(chapter.start);
                                 },
                                 itemBuilder: (_) => [

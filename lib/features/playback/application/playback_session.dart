@@ -125,6 +125,8 @@ class PlaybackSession extends ChangeNotifier {
   double _openingVolume = 100;
   int _quality = 80;
   String? _subtitlePreference;
+  PlaybackVoice _voice = const PlaybackVoice.original();
+  List<PlaybackVoice> _voices = const [];
   final snapshots = ValueNotifier(
     const PlaybackSnapshot(phase: PlaybackPhase.idle, generation: 0),
   );
@@ -160,6 +162,13 @@ class PlaybackSession extends ChangeNotifier {
   String? auxiliaryMessage;
   List<SubtitleTrack> subtitleTracks = const [];
   List<SubtitleCue> subtitleCues = const [];
+  bool subtitleLoading = false;
+  String? subtitleMessage;
+  PlaybackVoice get selectedVoice => _voice;
+  List<PlaybackVoice> get voiceTracks =>
+      contentTarget == null && repository is VoicePlaybackRepository
+      ? _voices
+      : const [];
   List<VideoChapter> chapters = const [];
   VideoStoryboard? storyboard;
   bool storyboardLoading = false;
@@ -247,6 +256,7 @@ class PlaybackSession extends ChangeNotifier {
       quality: _quality,
       desiredPlaying: _desiredPlaying,
       subtitleLabel: _subtitlePreference,
+      voice: _voice,
     );
   }
 
@@ -316,6 +326,7 @@ class PlaybackSession extends ChangeNotifier {
           (sameOwner ? snapshots.value.volume : _settings.defaultVolume),
       target: target,
       title: title,
+      voice: restored?.voice ?? const PlaybackVoice.original(),
     );
   }
 
@@ -371,6 +382,7 @@ class PlaybackSession extends ChangeNotifier {
     double? volume,
     ContentPlaybackTarget? target,
     String? title,
+    PlaybackVoice? voice,
   }) async {
     if (_disposed || _closing) return;
     if (target == null && (video == null || selected == null)) return;
@@ -412,6 +424,10 @@ class PlaybackSession extends ChangeNotifier {
         detail?.summary.id == video?.summary.id &&
         part?.cid == selected?.cid &&
         contentTarget == target;
+    _voice = target == null
+        ? voice ?? (samePart ? _voice : const PlaybackVoice.original())
+        : const PlaybackVoice.original();
+    if (!samePart) _voices = const [];
     if (desiredPlaying != null) {
       _desiredPlaying = desiredPlaying;
     } else if (!samePart) {
@@ -440,6 +456,8 @@ class PlaybackSession extends ChangeNotifier {
     auxiliaryMessage = null;
     subtitleTracks = const [];
     subtitleCues = const [];
+    subtitleLoading = false;
+    subtitleMessage = null;
     _clearTimeline();
     selectedSubtitle = -1;
     _scope = accountScope();
@@ -465,13 +483,25 @@ class PlaybackSession extends ChangeNotifier {
           cancellation: cancellation,
         );
       } else if (video != null && selected != null) {
-        resolved = await repository.resolve(
-          video.summary.id,
-          selected.cid,
-          quality: quality,
-          preferredCodec: preferredCodec,
-          cancellation: cancellation,
-        );
+        final resolver = repository;
+        if (!_voice.isOriginal && resolver is VoicePlaybackRepository) {
+          resolved = await (resolver as VoicePlaybackRepository).resolveVoice(
+            video.summary.id,
+            selected.cid,
+            voice: _voice,
+            quality: quality,
+            preferredCodec: preferredCodec,
+            cancellation: cancellation,
+          );
+        } else {
+          resolved = await repository.resolve(
+            video.summary.id,
+            selected.cid,
+            quality: quality,
+            preferredCodec: preferredCodec,
+            cancellation: cancellation,
+          );
+        }
       } else {
         return;
       }
@@ -571,6 +601,10 @@ class PlaybackSession extends ChangeNotifier {
       if (lastFailure != null) throw lastFailure;
       if (generation != _generation) return;
       media = resolved;
+      if (target == null) {
+        _voice = resolved.voice;
+        _voices = resolved.voices;
+      }
       _mediaGeneration = generation;
       _resolving = false;
       danmaku.seekConfirmed(engine.currentSnapshot.position);
@@ -1109,6 +1143,7 @@ class PlaybackSession extends ChangeNotifier {
         );
         chaptersMessage = metadata.chapterFailure?.message;
         tracks = metadata.subtitles;
+        subtitleMessage = metadata.subtitleFailure?.message;
       } else {
         tracks = await repository.subtitles(
           video.summary.id,
@@ -1125,7 +1160,9 @@ class PlaybackSession extends ChangeNotifier {
           tracks.isNotEmpty) {
         await selectSubtitle(0);
       } else if (preference != null) {
-        final index = tracks.indexWhere((track) => track.label == preference);
+        final index = tracks.indexWhere(
+          (track) => track.preferenceKey == preference,
+        );
         if (index >= 0) await selectSubtitle(index);
       }
     } on AppFailure catch (failure) {
@@ -1143,7 +1180,8 @@ class PlaybackSession extends ChangeNotifier {
       !_closing &&
       generation == _generation &&
       !token.isCancelled &&
-      _scope == accountScope();
+      _scope == accountScope() &&
+      _epoch == sessionEpoch();
 
   void _clearTimeline() {
     _storyboardCancellation?.cancel();
@@ -1200,14 +1238,19 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> selectSubtitle(int index) async {
+    if (_disposed || _closing || index < -1 || index >= subtitleTracks.length) {
+      return;
+    }
     final sourceGeneration = _generation;
     final generation = ++_subtitleGeneration;
     _subtitleCancellation?.cancel();
     selectedSubtitle = index;
     _subtitlePreference = index >= 0 && index < subtitleTracks.length
-        ? subtitleTracks[index].label
+        ? subtitleTracks[index].preferenceKey
         : '__off__';
     subtitleCues = const [];
+    subtitleLoading = index >= 0;
+    subtitleMessage = null;
     _notify();
     if (index < 0 || index >= subtitleTracks.length) return;
     final token = RequestCancellation();
@@ -1218,18 +1261,30 @@ class PlaybackSession extends ChangeNotifier {
         cancellation: token,
       );
       if (generation != _subtitleGeneration ||
-          sourceGeneration != _generation) {
+          !_acceptMetadata(sourceGeneration, token)) {
         return;
       }
       subtitleCues = cues;
-      _notify();
-    } catch (_) {
+      subtitleMessage = cues.isEmpty ? '这条字幕没有可显示的内容' : null;
+    } on AppFailure catch (failure) {
       if (generation != _subtitleGeneration ||
-          sourceGeneration != _generation) {
+          !_acceptMetadata(sourceGeneration, token) ||
+          failure.kind == AppFailureKind.cancelled) {
         return;
       }
-      auxiliaryMessage = '字幕加载失败，请重新选择';
-      _notify();
+      subtitleMessage = '字幕加载失败，请重新选择重试';
+    } catch (_) {
+      if (generation != _subtitleGeneration ||
+          !_acceptMetadata(sourceGeneration, token)) {
+        return;
+      }
+      subtitleMessage = '字幕加载失败，请重新选择重试';
+    } finally {
+      if (generation == _subtitleGeneration &&
+          _acceptMetadata(sourceGeneration, token)) {
+        subtitleLoading = false;
+        _notify();
+      }
     }
   }
 
@@ -1465,9 +1520,48 @@ class PlaybackSession extends ChangeNotifier {
       selected,
       quality: quality,
       force: true,
-      position: snapshots.value.position,
+      position: media == null ? _openingPosition : snapshots.value.position,
+      rate:
+          _temporaryRateOriginal ??
+          (media == null ? _openingRate : snapshots.value.rate),
+      volume: media == null ? _openingVolume : snapshots.value.volume,
       target: contentTarget,
       title: contentTitle,
+    );
+  }
+
+  Future<void> changeVoice(PlaybackVoice voice) async {
+    final video = detail;
+    final selected = part;
+    if (_disposed ||
+        _closing ||
+        contentTarget != null ||
+        video == null ||
+        selected == null ||
+        repository is! VoicePlaybackRepository) {
+      return;
+    }
+    final option = voice.isOriginal
+        ? const PlaybackVoice.original()
+        : voiceTracks.where((track) => track.key == voice.key).firstOrNull;
+    if (option == null || (option.key == _voice.key && media != null)) return;
+    if (_subtitlePreference != '__off__' &&
+        (_subtitlePreference != null || _settings.subtitlesEnabled) &&
+        option.subtitleLanguage.isNotEmpty) {
+      _subtitlePreference = option.subtitleLanguage;
+    }
+    await open(
+      video,
+      selected,
+      voice: option,
+      quality: _quality,
+      force: true,
+      position: media == null ? _openingPosition : snapshots.value.position,
+      rate:
+          _temporaryRateOriginal ??
+          (media == null ? _openingRate : snapshots.value.rate),
+      volume: media == null ? _openingVolume : snapshots.value.volume,
+      desiredPlaying: _desiredPlaying,
     );
   }
 
@@ -1501,7 +1595,14 @@ class PlaybackSession extends ChangeNotifier {
     _temporaryRateGeneration = null;
     _temporaryRateRevision++;
     _subtitlePreference = null;
+    _voice = const PlaybackVoice.original();
+    _voices = const [];
+    subtitleLoading = false;
+    subtitleMessage = null;
     final generation = ++_generation;
+    subtitleTracks = const [];
+    subtitleCues = const [];
+    selectedSubtitle = -1;
     _clearTimeline();
     _sponsorCancellation?.cancel();
     sponsorSegments = const [];
@@ -1576,6 +1677,7 @@ final class _PlaybackCheckpoint {
     required this.desiredPlaying,
     this.subtitleLabel,
     this.target,
+    this.voice = const PlaybackVoice.original(),
   });
   final VideoId? videoId;
   final String? cid;
@@ -1587,6 +1689,7 @@ final class _PlaybackCheckpoint {
   final int quality;
   final bool desiredPlaying;
   final String? subtitleLabel;
+  final PlaybackVoice voice;
 }
 
 String sponsorCategoryLabel(String category) => switch (category) {

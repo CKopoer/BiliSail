@@ -271,6 +271,9 @@ final class ApiPlayInfo {
     required this.dashAudio,
     required this.acceptQuality,
     this.isPreview = false,
+    this.voices = const [],
+    this.currentLanguage = '',
+    this.productionType = 0,
   });
   final Duration duration;
   final List<ApiMediaTrack> dashVideo;
@@ -279,6 +282,23 @@ final class ApiPlayInfo {
 
   /// The server supplied only a preview clip, not a complete episode.
   final bool isPreview;
+  final List<ApiPlaybackVoice> voices;
+  final String currentLanguage;
+  final int productionType;
+}
+
+final class ApiPlaybackVoice {
+  const ApiPlaybackVoice({
+    required this.languageCode,
+    required this.label,
+    required this.productionType,
+    this.subtitleLanguage = '',
+    this.videoDetext = false,
+    this.videoMouthShapeChange = false,
+  });
+  final String languageCode, label, subtitleLanguage;
+  final int productionType;
+  final bool videoDetext, videoMouthShapeChange;
 }
 
 final class ApiSubtitleTrack {
@@ -286,10 +306,16 @@ final class ApiSubtitleTrack {
     required this.languageCode,
     required this.label,
     required this.url,
+    this.id = '',
+    this.type,
+    this.aiType,
+    this.aiStatus,
   });
   final String languageCode;
   final String label;
   final Uri url;
+  final String id;
+  final int? type, aiType, aiStatus;
 }
 
 final class ApiSubtitleCue {

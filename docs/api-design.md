@@ -102,6 +102,8 @@ ApiPage<T> { items, nextCursor, hasMore }
 
 每个实际接入的端点必须记录：host/method、参数、profile、鉴权/签名、脱敏响应 fixture、最后验证期期、失败码、降级策略。文件名中出现 Web 或 BiliApis 常量存在都不足以证明某种登录态能使用它。
 
+2026-10-09 已接入字幕 AI 字段和在线点播语音选择：字幕 `type=1` 表示 AI，`ai_type=0/1` 区分普通识别/翻译；合法空文本 cue 被跳过，协议损坏仍失败。WBI GET `/x/player/wbi/playurl` 的 `language.items` 提供语音能力，使用 `cur_language`、`cur_production_type` 和 `client_attr=1` 重新签名请求；Repository 校验回传语言，PlaybackSession 复用完整 DASH 双轨切换。英、日语音、恢复原声及实际菜单已通过登录态 Windows 原生验证。新版 GET `/x/v2/subtitle/web/view` 是 Web Cookie HTTP Protobuf，仍仅用于独立调查；生产字幕沿用 `/x/player/wbi/v2` 和 JSON 正文。端点、字段、样本与接入边界见 [字幕与 AI 原声翻译](validation/subtitles-translated-audio.md)。
+
 我的收藏现有五类子标签和主页收藏视频读取，仍由现有 HomeRepository/ProfileRepository 编排。自建收藏夹元信息与编辑由 FavoriteFolderRepository 编排，Web Cookie/CSRF 单次提交，未知结果通过读取核对。默认收藏夹 ID、收藏/订阅合集类型、Web 追番/追剧、私密/创建日期及读写验证边界见 [收藏子标签与视频卡片](validation/favorites-tabs.md)。
 
 “我的收藏与订阅”的卡片支持用户确认后取消普通收藏夹收藏或 UGC 合集订阅，分别使用 `/x/v3/fav/folder/unfav` 与 `/x/v3/fav/season/unfav` 的 Web Cookie/CSRF 单次 POST。写操作不自动重试，成功后隔离迟到列表响应并重新协调分页；协议、确认交互及未实测边界见 [收藏与订阅取消操作](validation/favorites-unsubscribe.md)。

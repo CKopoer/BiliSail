@@ -1340,6 +1340,43 @@ void main() {
     },
   );
 
+  testWidgets('dynamic menu selection survives idle and pointer exit', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1400, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(
+        session,
+        _FakeWindowService(),
+        AppSettings(playerControlsMode: PlayerControlsMode.dynamic),
+        width: 1200,
+      ),
+    );
+    await _pumpFrames(tester);
+    await session.pause();
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: _surfacePoint(tester));
+    await tester.pump();
+    await tester.tap(find.byTooltip('播放速度'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await mouse.moveTo(const Offset(-10, -10));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.widgetWithText(PopupMenuItem<double>, '3.0x'));
+    await _pumpFrames(tester);
+    expect(engine.currentSnapshot.rate, 3);
+    expect(engine.opens, 1);
+    await mouse.removePointer();
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
   testWidgets('compact menu keeps quality and playback rate available', (
     tester,
   ) async {
@@ -1367,6 +1404,94 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
   });
+
+  for (final compact in [false, true]) {
+    for (final fullscreen in [false, true]) {
+      for (final menu in ['quality', 'rate', 'subtitle', 'voice']) {
+        testWidgets(
+          'dynamic $menu menu applies after idle compact=$compact fullscreen=$fullscreen',
+          (tester) async {
+            tester.view.devicePixelRatio = 1;
+            tester.view.physicalSize = Size(compact ? 500 : 1400, 900);
+            addTearDown(tester.view.resetPhysicalSize);
+            addTearDown(tester.view.resetDevicePixelRatio);
+            final engine = _FakeEngine();
+            final session = _session(engine, repository: _MenuRepository());
+            addTearDown(session.close);
+            await tester.pumpWidget(
+              _app(
+                session,
+                _FakeWindowService(),
+                AppSettings(playerControlsMode: PlayerControlsMode.dynamic),
+                width: compact ? 400 : 1200,
+              ),
+            );
+            await _pumpFrames(tester);
+            await session.pause();
+            if (fullscreen) {
+              await tester.tap(find.byTooltip('全屏（F）'));
+              await _pumpFrames(tester);
+            }
+            final mouse = await tester.createGesture(
+              kind: PointerDeviceKind.mouse,
+            );
+            await mouse.addPointer(location: _surfacePoint(tester));
+            await tester.pump();
+            final tooltip = compact
+                ? '更多播放选项'
+                : switch (menu) {
+                    'quality' => '清晰度',
+                    'rate' => '播放速度',
+                    'subtitle' => '字幕',
+                    _ => '语音翻译',
+                  };
+            await tester.tap(find.byTooltip(tooltip));
+            await tester.pump(const Duration(milliseconds: 300));
+            await mouse.moveTo(const Offset(-10, -10));
+            await tester.pump(const Duration(seconds: 2));
+            await tester.pump(const Duration(milliseconds: 300));
+            final label = switch (menu) {
+              'quality' => compact ? '清晰度 720P' : '720P',
+              'rate' => compact ? '播放速度 3.0x' : '3.0x',
+              'subtitle' => '中文 · AI',
+              _ => compact ? '语音 English · AI 翻译' : 'English · AI 翻译',
+            };
+            final item = find
+                .ancestor(
+                  of: find.text(label),
+                  matching: find.byWidgetPredicate(
+                    (widget) => widget is PopupMenuEntry,
+                  ),
+                )
+                .last;
+            await tester.ensureVisible(item);
+            await tester.tap(item);
+            await _pumpFrames(tester);
+            switch (menu) {
+              case 'quality':
+                expect(session.media?.quality, 64);
+              case 'rate':
+                expect(engine.currentSnapshot.rate, 3);
+              case 'subtitle':
+                expect(session.selectedSubtitle, 0);
+                expect(session.subtitleCues.single.text, '字幕回归');
+                expect(find.text('字幕回归'), findsOneWidget);
+              case 'voice':
+                expect(session.selectedVoice.languageCode, 'en');
+                expect(session.media?.video.urls.single.path, '/video/en');
+                expect(session.media?.audio?.urls.single.path, '/audio/en');
+            }
+            expect(engine.currentSnapshot.desiredPlaying, isFalse);
+            expect(engine.maxSurfaces, 1);
+            expect(tester.takeException(), isNull);
+            await mouse.removePointer();
+            await tester.pumpWidget(const SizedBox());
+            await _pumpFrames(tester);
+          },
+        );
+      }
+    }
+  }
 
   testWidgets('full toolbar exposes and applies the 3.0x menu step', (
     tester,
@@ -3474,6 +3599,83 @@ final class _FakePlaybackRepository implements PlaybackRepository {
     SubtitleTrack track, {
     required RequestCancellation cancellation,
   }) async => [];
+}
+
+final class _MenuRepository extends Fake
+    implements PlaybackRepository, VoicePlaybackRepository {
+  static const voice = PlaybackVoice(
+    languageCode: 'en',
+    label: 'English',
+    productionType: 2,
+    subtitleLanguage: 'ai-en',
+  );
+  PlaybackMedia _media(int quality, PlaybackVoice selected) => PlaybackMedia(
+    video: PlaybackTrack(
+      urls: [Uri.https('example.test', '/video/${selected.languageCode}')],
+      codec: 'avc1',
+      bandwidth: 1000,
+    ),
+    audio: PlaybackTrack(
+      urls: [Uri.https('example.test', '/audio/${selected.languageCode}')],
+      codec: 'mp4a',
+      bandwidth: 128,
+    ),
+    quality: quality,
+    qualities: const [64, 80],
+    duration: const Duration(minutes: 3),
+    headers: const {},
+    voices: const [voice],
+    voice: selected,
+  );
+  @override
+  Future<PlaybackMedia> resolve(
+    VideoId video,
+    String cid, {
+    required int quality,
+    VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
+    required RequestCancellation cancellation,
+  }) async => _media(quality, const PlaybackVoice.original());
+  @override
+  Future<PlaybackMedia> resolveVoice(
+    VideoId video,
+    String cid, {
+    required PlaybackVoice voice,
+    required int quality,
+    required VideoCodecPreference preferredCodec,
+    required RequestCancellation cancellation,
+  }) async => _media(quality, voice);
+  @override
+  Future<List<TimedComment>> comments(
+    String cid,
+    int segment, {
+    required RequestCancellation cancellation,
+  }) async => [];
+  @override
+  Future<List<SubtitleTrack>> subtitles(
+    VideoId video,
+    String cid, {
+    required RequestCancellation cancellation,
+  }) async => [
+    SubtitleTrack(
+      '中文',
+      Uri.https('example.test', '/zh'),
+      languageCode: 'ai-zh',
+      type: 1,
+      aiType: 0,
+    ),
+    SubtitleTrack(
+      'English',
+      Uri.https('example.test', '/en'),
+      languageCode: 'ai-en',
+      type: 1,
+      aiType: 1,
+    ),
+  ];
+  @override
+  Future<List<SubtitleCue>> subtitleCues(
+    SubtitleTrack track, {
+    required RequestCancellation cancellation,
+  }) async => [const SubtitleCue(Duration.zero, Duration(minutes: 3), '字幕回归')];
 }
 
 final class _FakeProgressStore implements PlaybackProgressStore {

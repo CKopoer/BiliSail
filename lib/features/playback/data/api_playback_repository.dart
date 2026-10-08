@@ -4,11 +4,15 @@ import '../../../core/network/api_requests.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/media_cdn.dart';
+import '../../../domain/app_failure.dart';
 import '../domain/playback_repository.dart';
 import 'dash_media_selection.dart';
 
 class ApiPlaybackRepository
-    implements PlaybackRepository, PlaybackMetadataRepository {
+    implements
+        PlaybackRepository,
+        PlaybackMetadataRepository,
+        VoicePlaybackRepository {
   ApiPlaybackRepository(this.api, this.requests, {this.cdnPreference});
   final BiliApiClient api;
   final ApiRequests requests;
@@ -29,9 +33,7 @@ class ApiPlaybackRepository
     final data = await PlaybackMetadataClient(api)
         .load(aid, part.cid, context: context);
     return PlaybackMetadata(
-      subtitles: List.unmodifiable(
-        data.subtitles.map((s) => SubtitleTrack(s.label, s.url)),
-      ),
+      subtitles: List.unmodifiable(data.subtitles.map(_subtitle)),
       chapters: List.unmodifiable(
         data.chapters.map(
           (c) => VideoChapter(start: c.start, end: c.end, title: c.title),
@@ -74,13 +76,58 @@ class ApiPlaybackRepository
     required int quality,
     VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
     required RequestCancellation cancellation,
+  }) => _resolve(
+    video,
+    cid,
+    quality: quality,
+    preferredCodec: preferredCodec,
+    cancellation: cancellation,
+    voice: const PlaybackVoice.original(),
+  );
+
+  @override
+  Future<PlaybackMedia> resolveVoice(
+    VideoId video,
+    String cid, {
+    required PlaybackVoice voice,
+    required int quality,
+    required VideoCodecPreference preferredCodec,
+    required RequestCancellation cancellation,
+  }) => _resolve(
+    video,
+    cid,
+    quality: quality,
+    preferredCodec: preferredCodec,
+    cancellation: cancellation,
+    voice: voice,
+  );
+
+  Future<PlaybackMedia> _resolve(
+    VideoId video,
+    String cid, {
+    required PlaybackVoice voice,
+    required int quality,
+    required VideoCodecPreference preferredCodec,
+    required RequestCancellation cancellation,
   }) => requests.run((context) async {
     final info = await api.getPlayInfo(
       video.value,
       cid,
       qn: quality,
+      language: voice.languageCode,
+      productionType: voice.productionType,
       context: context,
     );
+    if (!voice.isOriginal &&
+        (info.currentLanguage != voice.languageCode ||
+            info.productionType != voice.productionType ||
+            !info.voices.any(
+              (option) =>
+                  option.languageCode == voice.languageCode &&
+                  option.productionType == voice.productionType,
+            ))) {
+      throw const AppFailure(AppFailureKind.playback, '所选语音暂不可用，请切回原声');
+    }
     return selectDashMedia(
       info,
       quality: quality,
@@ -133,9 +180,7 @@ class ApiPlaybackRepository
       cid,
       context: context,
     );
-    return tracks
-        .map((track) => SubtitleTrack(track.label, track.url))
-        .toList(growable: false);
+    return tracks.map(_subtitle).toList(growable: false);
   }, cancellation: cancellation);
 
   @override
@@ -148,4 +193,14 @@ class ApiPlaybackRepository
         .map((cue) => SubtitleCue(cue.start, cue.end, cue.text))
         .toList(growable: false);
   }, cancellation: cancellation);
+
+  static SubtitleTrack _subtitle(ApiSubtitleTrack track) => SubtitleTrack(
+    track.label,
+    track.url,
+    id: track.id,
+    languageCode: track.languageCode,
+    type: track.type,
+    aiType: track.aiType,
+    aiStatus: track.aiStatus,
+  );
 }
