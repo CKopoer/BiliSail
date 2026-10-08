@@ -36,6 +36,8 @@ CI 改为从组件已经校验的固定源码单独构建测试用 ffprobe，并
 
 后续 [Release preview #18](https://github.com/CKopoer/BiliSail/actions/runs/37814204461) 已通过全项目检查及原生 9 项回归，继续打包时暴露 macOS 组件构建失败。平台构建包装脚本增加失败时输出配置／编译／链接日志末尾，供远端定位，不再只提示检查已经不可访问的 runner 本地文件。
 
+[补充日志后的运行](https://github.com/CKopoer/BiliSail/actions/runs/37815695054/job/113446824340) 确认 Xcode clang 的链接测试报 `library 'System' not found`：直接编译器路径未携带 macOS SDK。构建脚本从 `xcrun --sdk macosx --show-sdk-path` 解析 SDK，传给 FFmpeg configure 的 sysroot 和包装库编译／链接命令；同时让 macOS 的 C++ 参数数组非空，兼容系统 Bash 3.2 的 nounset 行为。后续平台构建结果由修复后的发布运行验证。
+
 ## 用户后续手动构建
 
 先按[组件构建说明](../../packages/bili_mux/README.md)准备对应目标的原生资产，再执行通常的 Flutter 构建。例如当前 Windows 主机：

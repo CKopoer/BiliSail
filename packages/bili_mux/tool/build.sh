@@ -74,10 +74,15 @@ case "$target" in
     cc="$(xcrun -f clang)"
     cxx="$(xcrun -f clang++)"
     strip_tool="$(xcrun -f strip)"
+    macos_sdk="$(xcrun --sdk macosx --show-sdk-path)"
     configure_flags+=(--target-os=darwin --arch=aarch64 --enable-cross-compile
-      "--cc=$cc" "--extra-cflags=-arch arm64 -mmacosx-version-min=12.0"
+      "--cc=$cc" "--sysroot=$macos_sdk"
+      "--extra-cflags=-arch arm64 -mmacosx-version-min=12.0"
       "--extra-ldflags=-arch arm64 -mmacosx-version-min=12.0")
-    link_flags+=(-arch arm64 -mmacosx-version-min=12.0
+    # Direct Xcode compiler paths need an explicit SDK for headers and libSystem.
+    # Keep this array populated for macOS Bash 3.2 with nounset enabled.
+    cxx_flags+=(-arch arm64 -mmacosx-version-min=12.0 -isysroot "$macos_sdk")
+    link_flags+=(
       -Wl,-install_name,@rpath/BiliMux.framework/BiliMux
       "-Wl,-exported_symbols_list,$package_dir/native/exports.macos")
     output_name=BiliMux
