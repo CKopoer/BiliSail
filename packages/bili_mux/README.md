@@ -49,5 +49,5 @@ cd packages/bili_mux
 flutter test
 ```
 
-`ffprobe` 只用作测试 oracle，不进入应用资产。提交的[合成样片](test/fixtures/README.md)覆盖 H.264/HEVC/AV1 + AAC、B 帧、250 ms 音频偏移和 UTF-8 文件路径；检查数据包 SHA-256、数量、PTS/DTS、时长与相对起始偏移，以及取消、输入错误和并发。
+`ffprobe` 只用作测试 oracle，不进入应用资产；手动回归使用与组件一致的 FFmpeg `9.0.2`，旧版本可能遗漏 AV1 分片输入的 `duration_time`。CI 在组件构建后运行 [build-test-ffprobe.sh](tool/build-test-ffprobe.sh)，从同一份已校验源码构建仅供测试的 ffprobe，不使用系统包中的版本。提交的[合成样片](test/fixtures/README.md)覆盖 H.264/HEVC/AV1 + AAC、B 帧、250 ms 音频偏移和 UTF-8 文件路径；检查数据包 SHA-256、数量、PTS/DTS、时长与相对起始偏移，以及取消、输入错误和并发。
 Windows 测试与 Android ELF 构建不替代 Android/macOS 实机或真实 DASH 长视频验收。

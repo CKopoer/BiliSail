@@ -203,8 +203,18 @@ Future<List<Map<String, Object?>>> _packets(
   return (value['packets'] as List).cast<Map<String, Object?>>();
 }
 
-double _time(Map<String, Object?> packet, String key) =>
-    double.parse(packet[key] as String);
+double _time(Map<String, Object?> packet, String key) {
+  final value = packet[key];
+  final time = value is String ? double.tryParse(value) : null;
+  if (time == null || !time.isFinite) {
+    fail(
+      'ffprobe returned a missing or invalid $key ($value). '
+      'Use the FFmpeg version pinned by bili_mux for native regression tests.',
+    );
+  }
+  return time;
+}
+
 void _compare(
   List<Map<String, Object?>> before,
   List<Map<String, Object?>> after,

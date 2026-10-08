@@ -219,11 +219,10 @@ jobs:
       - name: Build and verify the isolated MP4 component
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
           bash packages/bili_mux/tool/build.sh linux-x64
+          bash packages/bili_mux/tool/build-test-ffprobe.sh
           export BILI_MUX_LIBRARY="$PWD/packages/bili_mux/native/prebuilt/linux-x64/libbili_mux.so"
-          export BILI_MUX_FFPROBE="$(command -v ffprobe)"
+          export BILI_MUX_FFPROBE="$PWD/build/download_mux/test-ffprobe-linux-x64/ffprobe"
           cd packages/bili_mux
           flutter pub get --enforce-lockfile
           flutter test
