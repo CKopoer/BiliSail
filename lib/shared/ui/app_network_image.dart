@@ -19,6 +19,19 @@ final class AppImageCacheScope extends InheritedNotifier<AppImageCache> {
       ?.notifier;
 }
 
+/// A retained page keeps ready frames while an ancestor horizontal pager moves
+/// it offscreen. Its own scroll viewports still release offscreen frames, and
+/// image requests still require visibility in every ancestor viewport.
+final class AppImagePageViewport extends SingleChildRenderObjectWidget {
+  const AppImagePageViewport({super.key, required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderAppImagePageViewport();
+}
+
+final class _RenderAppImagePageViewport extends RenderProxyBox {}
+
 /// Public covers and avatars share one provider across tabs. No caller headers
 /// are accepted, so account credentials cannot leak to CDN image requests.
 final class AppNetworkImage extends StatefulWidget {
@@ -123,12 +136,15 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
       if (!mounted) return;
       final box = context.findRenderObject();
       var visible = _active && box is RenderBox && box.hasSize;
+      var visibleInPage = visible;
       if (visible) {
         // Eager Wrap/Column lists still lay out offscreen children. Admit their
         // images only when they intersect a viewport, with 160 logical pixels
         // of prefetch. Check all ancestors for nested scrollable lists.
         RenderObject? ancestor = box.parent;
+        var insidePage = true;
         while (ancestor != null) {
+          if (ancestor is _RenderAppImagePageViewport) insidePage = false;
           if (ancestor is RenderAbstractViewport) {
             final bounds = MatrixUtils.transformRect(
               box.getTransformTo(ancestor),
@@ -143,15 +159,23 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
                     )
                   : box.paintBounds,
             );
-            if (!bounds.overlaps(ancestor.paintBounds.inflate(160))) {
-              visible = false;
-              break;
+            final viewport = ancestor.paintBounds.inflate(160);
+            if (!bounds.overlaps(viewport)) visible = false;
+            // A swipe keeps the outgoing page active until settling. Ignore
+            // horizontal clipping outside its page for frame retention, even
+            // in an outer vertical viewport such as the profile's header.
+            // Inner viewports and outer vertical clipping still release it.
+            if (insidePage
+                ? !bounds.overlaps(viewport)
+                : bounds.bottom <= viewport.top ||
+                      bounds.top >= viewport.bottom) {
+              visibleInPage = false;
             }
           }
           ancestor = ancestor.parent;
         }
       }
-      final releaseFrame = _active && !visible && _hasFrame;
+      final releaseFrame = _active && !visibleInPage && _hasFrame;
       if (visible != _visible || releaseFrame) {
         if (!visible) _stopWaiting();
         setState(() {

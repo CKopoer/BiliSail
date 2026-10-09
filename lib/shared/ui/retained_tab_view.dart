@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../core/presentation/workspace_activity.dart';
+import 'app_network_image.dart';
 import 'state_view.dart';
 
 typedef RetainedTabPageBuilder<T extends Object> = Widget Function(
@@ -311,9 +312,11 @@ final class _RetainedTabPageState<T extends Object>
               excluding: !active,
               child: IgnorePointer(
                 ignoring: !active,
-                child: _visited
-                    ? widget.pageBuilder(context, widget.tab, active)
-                    : const StateView.loading(),
+                child: AppImagePageViewport(
+                  child: _visited
+                      ? widget.pageBuilder(context, widget.tab, active)
+                      : const StateView.loading(),
+                ),
               ),
             ),
           );

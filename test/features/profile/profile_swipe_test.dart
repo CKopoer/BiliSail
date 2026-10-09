@@ -475,91 +475,106 @@ void main() {
     },
   );
 
-  for (final enabled in [true, false]) {
-    for (final target in [ProfileSection.dynamics, ProfileSection.folders]) {
-      testWidgets(
-        'profile $target covers remain painted during paging with cache=$enabled',
-        (tester) async {
-          final bytes = await tester.runAsync(_png);
-          if (bytes == null) throw StateError('Missing PNG');
-          var downloads = 0;
-          final cache = AppImageCache(
-            ImageByteCache(
-              enabled: enabled,
-              directory: () async =>
-                  throw const FileSystemException('optional'),
-              loader: (_, _) async {
-                downloads++;
-                return bytes;
-              },
-            ),
-          );
-          repository.covers = true;
-          await mount(tester, cache: cache);
-          await _loaded(tester);
-          final source = target == ProfileSection.dynamics
-              ? ProfileSection.videos
-              : ProfileSection.dynamics;
-          if (source != ProfileSection.videos) {
-            controller().select(source);
-            await tester.pumpAndSettle();
-            await _loaded(tester);
-          }
-          if (target == ProfileSection.folders) {
-            controller().openFolder(
-              const ProfileEntry(
-                id: '42',
-                kind: ProfileEntryKind.folder,
-                title: '夹子',
-              ),
-            );
-          } else {
-            controller().select(target);
-          }
-          await tester.pumpAndSettle();
-          await _loaded(tester);
+  for (final (enabled, width, target) in [
+    for (final enabled in [true, false])
+      for (final width in [375.0, 1000.0])
+        for (final target in [ProfileSection.dynamics, ProfileSection.folders])
+          (enabled, width, target),
+  ]) {
+    testWidgets(
+      'profile $target covers remain painted during repeated paging at width=$width with cache=$enabled',
+      (tester) async {
+        final bytes = await tester.runAsync(_png);
+        if (bytes == null) throw StateError('Missing PNG');
+        var downloads = 0;
+        final cache = AppImageCache(
+          ImageByteCache(
+            enabled: enabled,
+            directory: () async => throw const FileSystemException('optional'),
+            loader: (_, _) async {
+              downloads++;
+              return bytes;
+            },
+          ),
+        );
+        repository.covers = true;
+        await mount(tester, cache: cache, width: width);
+        await _loaded(tester);
+        final source = target == ProfileSection.dynamics
+            ? ProfileSection.videos
+            : ProfileSection.dynamics;
+        if (source != ProfileSection.videos) {
           controller().select(source);
           await tester.pumpAndSettle();
           await _loaded(tester);
-          final before = downloads;
-          final outgoing = _currentList(tester);
-          final gesture = await tester.startGesture(tester.getCenter(_surface));
-          await gesture.moveBy(const Offset(-80, 0));
-          await tester.pump();
-          expect(tester.getRect(outgoing).left, closeTo(-80, 1));
-          _expectPainted(tester);
-          await gesture.moveBy(const Offset(-140, 0));
-          await tester.pump();
-          expect(state().section, source);
-          _expectPainted(tester);
-          await gesture.up();
-          await tester.pump();
-          for (var frame = 0; frame < 8; frame++) {
-            await tester.pump(const Duration(milliseconds: 16));
-            _expectPainted(tester);
-          }
-          await tester.pumpAndSettle();
-          expect(state().section, target);
-          _expectPainted(tester);
-          final back = await tester.startGesture(tester.getCenter(_surface));
-          await back.moveBy(const Offset(80, 0));
-          await tester.pump();
-          _expectPainted(tester);
-          await back.cancel();
-          await tester.pumpAndSettle();
-          expect(state().section, target);
-          _expectPainted(tester);
-          expect(downloads, before);
-          expect(
-            repository.calls,
-            ProfileSection.values.take(target.index + 1),
+        }
+        if (target == ProfileSection.folders) {
+          controller().openFolder(
+            const ProfileEntry(
+              id: '42',
+              kind: ProfileEntryKind.folder,
+              title: '夹子',
+            ),
           );
-          expect(tester.takeException(), isNull);
-          await tester.pumpWidget(const SizedBox());
-          await cache.close();
-        },
-      );
-    }
+        } else {
+          controller().select(target);
+        }
+        await tester.pumpAndSettle();
+        await _loaded(tester);
+        controller().select(source);
+        await tester.pumpAndSettle();
+        await _loaded(tester);
+        final before = downloads;
+        final outgoing = _currentList(tester);
+        final gesture = await tester.startGesture(tester.getCenter(_surface));
+        await gesture.moveBy(Offset(-width * .2, 0));
+        await tester.pump();
+        expect(tester.getRect(outgoing).left, closeTo(-width * .2, 1));
+        _expectPainted(tester);
+        await gesture.moveBy(Offset(-width * .4, 0));
+        await tester.pump();
+        expect(state().section, source);
+        _expectPainted(tester);
+        await gesture.up();
+        await tester.pump();
+        for (var frame = 0; frame < 8; frame++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          _expectPainted(tester);
+        }
+        await tester.pumpAndSettle();
+        expect(state().section, target);
+        _expectPainted(tester);
+        final reverse = await tester.startGesture(tester.getCenter(_surface));
+        await reverse.moveBy(Offset(width * .75, 0));
+        await tester.pump();
+        _expectPainted(tester);
+        await reverse.up();
+        await tester.pump();
+        for (var frame = 0; frame < 8; frame++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          _expectPainted(tester);
+        }
+        await tester.pumpAndSettle();
+        expect(state().section, source);
+        _expectPainted(tester);
+        final back = await tester.startGesture(tester.getCenter(_surface));
+        await back.moveBy(Offset(-width * .75, 0));
+        await tester.pump();
+        _expectPainted(tester);
+        await back.moveBy(Offset(width * .5, 0));
+        await tester.pump();
+        _expectPainted(tester);
+        await back.cancel();
+        await tester.pumpAndSettle();
+        expect(state().section, source);
+        _expectPainted(tester);
+        expect(downloads, before);
+        expect(repository.calls, ProfileSection.values.take(target.index + 1));
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await cache.close();
+      },
+    );
   }
 }
 

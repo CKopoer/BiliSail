@@ -114,7 +114,7 @@ void main() {
     },
   );
 
-  testWidgets('active offscreen images release their retained frame', (
+  testWidgets('active page images release frames after vertical scrolling', (
     tester,
   ) async {
     final bytes = await tester.runAsync(_png);
@@ -134,9 +134,11 @@ void main() {
     await tester.pumpWidget(
       _app(
         cache,
-        SingleChildScrollView(
-          controller: scroll,
-          child: Column(children: [_image(1), const SizedBox(height: 2000)]),
+        AppImagePageViewport(
+          child: SingleChildScrollView(
+            controller: scroll,
+            child: Column(children: [_image(1), const SizedBox(height: 2000)]),
+          ),
         ),
       ),
     );
@@ -191,15 +193,17 @@ void main() {
                 const SizedBox(height: 900),
                 SizedBox(
                   height: 60,
-                  child: SingleChildScrollView(
-                    controller: inner,
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _image(1),
-                        const SizedBox(width: 1200),
-                        _image(2),
-                      ],
+                  child: AppImagePageViewport(
+                    child: SingleChildScrollView(
+                      controller: inner,
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _image(1),
+                          const SizedBox(width: 1200),
+                          _image(2),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -227,6 +231,10 @@ void main() {
             loaded.contains('/visibility-2.jpg') &&
             cache.decoded.pendingImageCount == 0,
       );
+      expect(find.byType(RawImage), findsOneWidget);
+      outer.jumpTo(0);
+      await tester.pumpAndSettle();
+      expect(find.byType(RawImage), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       outer.dispose();
