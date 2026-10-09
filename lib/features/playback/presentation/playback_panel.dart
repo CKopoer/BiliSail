@@ -607,6 +607,28 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     }
   }
 
+  void _onSurfacePointerSignal(PointerSignalEvent event) {
+    if (!widget.active ||
+        !_appActive ||
+        event is! PointerScrollEvent ||
+        event.kind != PointerDeviceKind.mouse ||
+        !event.scrollDelta.dy.isFinite ||
+        event.scrollDelta.dy == 0) {
+      return;
+    }
+    final input = InputScope.of<Object>(context);
+    if (input?.routes.modal == true || (input?.dispatcher.barriers ?? 0) != 0) {
+      return;
+    }
+    // Claim only the picture's wheel event so enclosing pages do not scroll.
+    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+      if (!mounted || !widget.active || !_appActive) return;
+      unawaited(
+        widget.shortcuts.adjustVolume(event.scrollDelta.dy < 0 ? 5 : -5),
+      );
+    });
+  }
+
   Future<void> _openSettings(int tab) async {
     widget.shortcuts.cancel();
     _onControlsMenuChanged(true);
@@ -668,6 +690,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
       onHover: (_) => _onMouseActivity(),
       onExit: _onMouseExit,
       child: Listener(
+        onPointerSignal: _onSurfacePointerSignal,
         onPointerDown: _onPointerDown,
         onPointerMove: (event) {
           if (event.kind == PointerDeviceKind.mouse && _mouseInside) {

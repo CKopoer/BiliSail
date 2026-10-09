@@ -749,6 +749,210 @@ void main() {
     });
   }
 
+  for (final (content, target) in <(String, ContentPlaybackTarget?)>[
+    ('video', null),
+    ('pgc', const PgcPlaybackTarget('12', cid: '123')),
+    ('live', const LivePlaybackTarget('12')),
+    ('offline', const OfflinePlaybackTarget('local-task')),
+  ]) {
+    testWidgets('$content player wheel adjusts volume inline and fullscreen', (
+      tester,
+    ) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(
+          session,
+          _FakeWindowService(),
+          AppSettings(shortcuts: ShortcutSettings(enabled: false)),
+          target: target,
+        ),
+      );
+      await _pumpFrames(tester);
+      await session.pause();
+      final generation = engine.currentSnapshot.generation;
+      final position = engine.currentSnapshot.position;
+      for (final fullscreen in [false, true]) {
+        if (fullscreen) {
+          await tester.tap(find.byTooltip('全屏'));
+          await _pumpFrames(tester);
+        }
+        final point = tester.getCenter(
+          find.byKey(const ValueKey('player-surface-tap-target')),
+        );
+        await session.setVolume(50);
+        _wheel(tester, point, const Offset(0, -120));
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.volume, 55);
+        expect(find.text('音量 55%'), findsOneWidget);
+        _wheel(tester, point, const Offset(0, 120));
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.volume, 50);
+        await session.setVolume(98);
+        _wheel(tester, point, const Offset(0, -120));
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.volume, 100);
+        await session.setVolume(2);
+        _wheel(tester, point, const Offset(0, 120));
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.volume, 0);
+        expect(engine.currentSnapshot.position, position);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(engine.currentSnapshot.generation, generation);
+        expect(engine.opens, 1);
+        expect(engine.maxSurfaces, 1);
+      }
+      await tester.tap(find.byTooltip('退出全屏'));
+      await _pumpFrames(tester);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    });
+  }
+
+  testWidgets('player wheel consumes scrolling only inside the picture', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    final scroll = ScrollController();
+    addTearDown(session.close);
+    addTearDown(scroll.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [playbackSessionProvider.overrideWithValue(session)],
+        child: InputTestApp(
+          builder: AppNoticeHost.builder,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              controller: scroll,
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: 600,
+                    height: 340,
+                    child: PlaybackPanel(
+                      detail: _detail,
+                      part: _part,
+                      settings: const AppSettings.defaults(),
+                      onToggleComments: () {},
+                      window: _FakeWindowService(),
+                    ),
+                  ),
+                  const SizedBox(height: 1200),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpFrames(tester);
+    await session.pause();
+    final point = tester.getCenter(find.byType(PlaybackPanel));
+    _wheel(tester, point, const Offset(0, 120));
+    await _pumpFrames(tester);
+    expect(engine.currentSnapshot.volume, 95);
+    expect(scroll.offset, 0);
+    _wheel(tester, const Offset(400, 500), const Offset(0, 120));
+    await _pumpFrames(tester);
+    expect(scroll.offset, greaterThan(0));
+    expect(engine.currentSnapshot.volume, 95);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
+  testWidgets('player wheel respects modal, lifecycle and hidden-page guards', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    addTearDown(() => _resumeApp(tester));
+    await tester.pumpWidget(
+      _app(session, _FakeWindowService(), const AppSettings.defaults()),
+    );
+    await _pumpFrames(tester);
+    await session.pause();
+    final surface = find.byKey(const ValueKey('player-surface-tap-target'));
+    final point = tester.getCenter(surface);
+    _wheel(tester, point, const Offset(-120, 0));
+    _wheel(
+      tester,
+      point,
+      const Offset(0, 120),
+      kind: PointerDeviceKind.trackpad,
+    );
+    await _pumpFrames(tester);
+    expect(engine.currentSnapshot.volume, 100);
+    final context = tester.element(surface);
+    unawaited(
+      showDialog<void>(
+        context: context,
+        requestFocus: false,
+        builder: (_) => const AlertDialog(content: Text('wheel guard')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    _wheel(tester, point, const Offset(0, 120));
+    await _pumpFrames(tester);
+    expect(engine.currentSnapshot.volume, 100);
+    Navigator.of(context).pop();
+    await tester.pumpAndSettle();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    _wheel(tester, point, const Offset(0, 120));
+    await _pumpFrames(tester);
+    expect(engine.currentSnapshot.volume, 100);
+    _resumeApp(tester);
+    _wheel(tester, point, const Offset(0, 120));
+    await _pumpFrames(tester);
+    expect(engine.currentSnapshot.volume, 95);
+    await tester.pumpWidget(
+      _app(
+        session,
+        _FakeWindowService(),
+        const AppSettings.defaults(),
+        active: false,
+      ),
+    );
+    await _pumpFrames(tester);
+    _wheel(tester, point, const Offset(0, 120));
+    await _pumpFrames(tester);
+    expect(engine.currentSnapshot.volume, 95);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
+  testWidgets('rapid player wheel input accumulates pending volume targets', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(session, _FakeWindowService(), const AppSettings.defaults()),
+    );
+    await _pumpFrames(tester);
+    await session.pause();
+    await session.setVolume(50);
+    final gate = Completer<void>();
+    engine.nextVolume = gate;
+    final point = tester.getCenter(
+      find.byKey(const ValueKey('player-surface-tap-target')),
+    );
+    for (var i = 0; i < 5; i++) {
+      _wheel(tester, point, const Offset(0, -120));
+    }
+    expect(session.commandVolume, 75);
+    expect(engine.currentSnapshot.volume, 50);
+    gate.complete();
+    await _pumpFrames(tester);
+    expect(engine.currentSnapshot.volume, 75);
+    expect(find.text('音量 75%'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
   testWidgets('fullscreen composers retain the owning page provider scope', (
     tester,
   ) async {
@@ -3338,6 +3542,15 @@ Future<void> _pumpFrames(WidgetTester tester) async {
   }
 }
 
+void _wheel(
+  WidgetTester tester,
+  Offset position,
+  Offset delta, {
+  PointerDeviceKind kind = PointerDeviceKind.mouse,
+}) => tester.binding.handlePointerEvent(
+  PointerScrollEvent(kind: kind, position: position, scrollDelta: delta),
+);
+
 Future<void> _pumpSurfaceTap(WidgetTester tester) async {
   // Accept the single tap after the double-tap deadline, then finish fading.
   await tester.pump(const Duration(milliseconds: 350));
@@ -3573,6 +3786,7 @@ final class _FakeEngine implements PlayerEngine, VideoSurfaceSource {
   int activeSurfaces = 0;
   int maxSurfaces = 0;
   Completer<void>? nextRate;
+  Completer<void>? nextVolume;
 
   @override
   Stream<PlaybackSnapshot> get snapshots => _snapshots.stream;
@@ -3629,8 +3843,13 @@ final class _FakeEngine implements PlayerEngine, VideoSurfaceSource {
   }
 
   @override
-  Future<void> setVolume(double volume) async =>
-      _emit(_current.copyWith(volume: volume));
+  Future<void> setVolume(double volume) async {
+    final gate = nextVolume;
+    nextVolume = null;
+    if (gate != null) await gate.future;
+    _emit(_current.copyWith(volume: volume));
+  }
+
   @override
   Future<void> stop() async =>
       _emit(_current.copyWith(phase: PlaybackPhase.idle));

@@ -111,6 +111,19 @@ final class PlaybackShortcutController extends ChangeNotifier {
     if (_holdInput == _RateHoldInput.touch) cancel();
   }
 
+  /// Shared by configurable keys and the fixed player-surface wheel gesture.
+  Future<CommandOutcome> adjustVolume(double delta) async {
+    if (_disposed || !active()) return CommandOutcome.stale;
+    final generation = session.sourceGeneration;
+    await session.setVolume((session.commandVolume + delta).clamp(0, 100));
+    if (_disposed || !active() || session.sourceGeneration != generation) {
+      return CommandOutcome.stale;
+    }
+    if (session.error != null) return CommandOutcome.failed;
+    volumeFeedback(session.snapshots.value.volume);
+    return CommandOutcome.completed;
+  }
+
   Future<CommandOutcome> execute(
     ShortcutAction action,
     InputStroke stroke,
@@ -173,9 +186,9 @@ final class PlaybackShortcutController extends ChangeNotifier {
           session.snapshots.value.position + const Duration(seconds: 90),
         );
       case ShortcutAction.volumeUp:
-        await session.setVolume((session.commandVolume + 5).clamp(0, 100));
+        return adjustVolume(5);
       case ShortcutAction.volumeDown:
-        await session.setVolume((session.commandVolume - 5).clamp(0, 100));
+        return adjustVolume(-5);
       case ShortcutAction.mute:
         final volume = session.commandVolume;
         if (volume > 0) _savedVolume = volume;
@@ -201,11 +214,7 @@ final class PlaybackShortcutController extends ChangeNotifier {
       return CommandOutcome.stale;
     }
     if (session.error != null) return CommandOutcome.failed;
-    if ({
-      ShortcutAction.volumeUp,
-      ShortcutAction.volumeDown,
-      ShortcutAction.mute,
-    }.contains(action)) {
+    if (action == ShortcutAction.mute) {
       volumeFeedback(session.snapshots.value.volume);
     }
     if ({
