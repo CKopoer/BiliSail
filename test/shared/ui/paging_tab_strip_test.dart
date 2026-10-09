@@ -94,7 +94,7 @@ void main() {
   );
 
   testWidgets(
-    'narrow enlarged strip reveals only obscured selection smoothly',
+    'narrow enlarged strip scrolls during paging before selection settles',
     (tester) async {
       final selected = await _mount(tester, width: 180, scale: 2);
       final horizontal = tester
@@ -110,23 +110,297 @@ void main() {
         tester.getCenter(find.byKey(_surface)),
       );
       await gesture.moveBy(const Offset(-130, 0));
+      await tester.pump();
+      await tester.pump();
+      expect(selected.value, 0);
+      expect(horizontal.pixels, greaterThan(before));
+      expect(horizontal.pixels, lessThan(horizontal.maxScrollExtent));
       await gesture.up();
       for (var frame = 0; selected.value != 1 && frame < 60; frame++) {
         await tester.pump(const Duration(milliseconds: 16));
       }
       expect(selected.value, 1);
-      await tester.pump();
-      expect(horizontal.pixels, closeTo(before, .1));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(horizontal.pixels, greaterThan(before));
-      expect(horizontal.pixels, lessThan(horizontal.maxScrollExtent));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('tab-1')).hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final rtl in [false, true]) {
+    for (final fullWidth in [false, true]) {
+      testWidgets(
+        'strip follows both swipe directions continuously: rtl=$rtl full=$fullWidth',
+        (tester) async {
+          final selected = await _mount(
+            tester,
+            width: 300,
+            scale: 1.5,
+            tabCount: 8,
+            initialIndex: 3,
+            rtl: rtl,
+            fullWidth: fullWidth,
+          );
+          final horizontal = _horizontalPosition(tester);
+          final viewport = tester.getRect(find.byKey(_boundary));
+          expect(
+            tester.getCenter(find.byKey(const ValueKey('tab-3'))).dx,
+            closeTo(viewport.center.dx, 1),
+          );
+          for (final forward in [true, false]) {
+            final source = forward ? 3 : 4;
+            final target = forward ? 4 : 3;
+            final sign = (rtl ? 1.0 : -1.0) * (forward ? 1 : -1);
+            final gesture = await tester.startGesture(
+              tester.getCenter(find.byKey(_surface)),
+            );
+            var previous = horizontal.pixels;
+            for (var step = 1; step <= 3; step++) {
+              await gesture.moveBy(Offset(sign * 60, 0));
+              await tester.pump();
+              await tester.pump();
+              expect(selected.value, source);
+              expect(
+                horizontal.pixels,
+                forward ? greaterThan(previous) : lessThan(previous),
+              );
+              previous = horizontal.pixels;
+              // The moving indicator stays centered while labels slide past it.
+              expect(
+                (await _line(tester, fullWidth)).center.dx,
+                closeTo(viewport.center.dx, 1),
+              );
+            }
+            await gesture.up();
+            await tester.pumpAndSettle();
+            expect(selected.value, target);
+            expect(
+              tester.getCenter(find.byKey(ValueKey('tab-$target'))).dx,
+              closeTo(viewport.center.dx, 1),
+            );
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
+    testWidgets('consecutive swipes center tabs and clamp ends: rtl=$rtl', (
+      tester,
+    ) async {
+      final selected = await _mount(
+        tester,
+        width: 300,
+        scale: 1.5,
+        tabCount: 8,
+        rtl: rtl,
+      );
+      final horizontal = _horizontalPosition(tester);
+      for (final index in [
+        ...List.generate(7, (i) => i + 1),
+        6,
+        5,
+        4,
+        3,
+        2,
+        1,
+        0,
+      ]) {
+        final forward = index > selected.value;
+        await tester.drag(
+          find.byKey(_surface),
+          Offset((rtl ? 1 : -1) * (forward ? 220.0 : -220.0), 0),
+        );
+        await tester.pumpAndSettle();
+        expect(selected.value, index);
+        final tab = tester.getRect(find.byKey(ValueKey('tab-$index')));
+        final viewport = tester.getRect(find.byKey(_boundary));
+        expect(tab.left, greaterThanOrEqualTo(viewport.left - 1));
+        expect(tab.right, lessThanOrEqualTo(viewport.right + 1));
+        if (index >= 2 && index <= 5) {
+          expect(tab.center.dx, closeTo(viewport.center.dx, 1));
+        }
+        if (index == 7) {
+          expect(horizontal.pixels, closeTo(horizontal.maxScrollExtent, .1));
+        } else if (index == 0) {
+          expect(horizontal.pixels, closeTo(horizontal.minScrollExtent, .1));
+        }
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('strip returns with a short or cancelled page drag', (
+    tester,
+  ) async {
+    final selected = await _mount(
+      tester,
+      width: 300,
+      scale: 1.5,
+      tabCount: 8,
+      initialIndex: 3,
+    );
+    final horizontal = _horizontalPosition(tester);
+    final initial = horizontal.pixels;
+    for (final cancel in [false, true]) {
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(_surface)),
+      );
+      await gesture.moveBy(const Offset(-80, 0));
+      await tester.pump();
+      await tester.pump();
+      expect(horizontal.pixels, greaterThan(initial));
+      if (cancel) {
+        await gesture.cancel();
+      } else {
+        await gesture.up();
+      }
+      await tester.pumpAndSettle();
+      expect(selected.value, 3);
+      expect(horizontal.pixels, closeTo(initial, .1));
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'idle strip drag stays independent and paging resumes centering',
+    (tester) async {
+      final selected = await _mount(
+        tester,
+        width: 300,
+        scale: 1.5,
+        tabCount: 8,
+        initialIndex: 3,
+      );
+      final horizontal = _horizontalPosition(tester);
+      final initial = horizontal.pixels;
+      await tester.drag(
+        find.byType(SingleChildScrollView),
+        const Offset(-130, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(selected.value, 3);
+      expect(horizontal.pixels, greaterThan(initial + 100));
+      await tester.drag(find.byKey(_surface), const Offset(-220, 0));
+      await tester.pumpAndSettle();
+      expect(selected.value, 4);
+      expect(
+        tester.getCenter(find.byKey(const ValueKey('tab-4'))).dx,
+        closeTo(tester.getRect(find.byKey(_boundary)).center.dx, 1),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'reduced motion external selection centers and clamps immediately',
+    (tester) async {
+      final selected = await _mount(
+        tester,
+        width: 300,
+        scale: 1.5,
+        tabCount: 8,
+        disableAnimations: true,
+      );
+      final horizontal = _horizontalPosition(tester);
+      for (final index in [3, 7, 0]) {
+        selected.value = index;
+        await tester.pump();
+        await tester.pump();
+        if (index == 3) {
+          expect(
+            tester.getCenter(find.byKey(const ValueKey('tab-3'))).dx,
+            closeTo(tester.getRect(find.byKey(_boundary)).center.dx, 1),
+          );
+        } else {
+          expect(
+            horizontal.pixels,
+            closeTo(
+              index == 0
+                  ? horizontal.minScrollExtent
+                  : horizontal.maxScrollExtent,
+              .1,
+            ),
+          );
+        }
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('fallback selection animation scrolls and can be retargeted', (
+    tester,
+  ) async {
+    final selected = await _mount(
+      tester,
+      width: 300,
+      scale: 1.5,
+      tabCount: 8,
+      initialIndex: 3,
+      connectProgress: false,
+    );
+    final horizontal = _horizontalPosition(tester);
+    final initial = horizontal.pixels;
+    selected.value = 4;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(horizontal.pixels, greaterThan(initial));
+    expect(horizontal.pixels, lessThan(horizontal.maxScrollExtent));
+    selected.value = 0;
+    await tester.pumpAndSettle();
+    expect(horizontal.pixels, closeTo(horizontal.minScrollExtent, .1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('resizing the viewport keeps the active tab centered', (
+    tester,
+  ) async {
+    await _mount(tester, width: 300, scale: 1.5, tabCount: 8, initialIndex: 3);
+    tester.view.physicalSize = const Size(420, 800);
+    await tester.pumpAndSettle();
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('tab-3'))).dx,
+      closeTo(tester.getRect(find.byKey(_boundary)).center.dx, 1),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a fully visible strip stays still during page swipes', (
+    tester,
+  ) async {
+    final selected = await _mount(tester, width: 1000, scale: 1.5, tabCount: 8);
+    final horizontal = _horizontalPosition(tester);
+    final original = [
+      for (var tab = 0; tab < 8; tab++)
+        tester.getRect(find.byKey(ValueKey('tab-$tab'))),
+    ];
+    expect(horizontal.maxScrollExtent, 0);
+    for (final forward in [true, false]) {
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(_surface)),
+      );
+      await gesture.moveBy(Offset(forward ? -700 : 700, 0));
+      await tester.pump();
+      await tester.pump();
+      expect(horizontal.pixels, 0);
+      for (var tab = 0; tab < 8; tab++) {
+        expect(tester.getRect(find.byKey(ValueKey('tab-$tab'))), original[tab]);
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(selected.value, forward ? 1 : 0);
+      expect(horizontal.pixels, 0);
+    }
+    expect(tester.takeException(), isNull);
+  });
 }
+
+ScrollPosition _horizontalPosition(WidgetTester tester) => tester
+    .state<ScrollableState>(
+      find.descendant(
+        of: find.byKey(_boundary),
+        matching: find.byType(Scrollable),
+      ),
+    )
+    .position;
 
 Future<ValueNotifier<int>> _mount(
   WidgetTester tester, {
@@ -135,13 +409,17 @@ Future<ValueNotifier<int>> _mount(
   double width = 375,
   double scale = 1,
   bool disableAnimations = false,
+  int tabCount = 3,
+  int initialIndex = 0,
+  bool connectProgress = true,
 }) async {
   tester.view.physicalSize = Size(width, 800);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
-  final selected = ValueNotifier(0);
-  final progress = TabPagingProgress(0);
+  final tabs = List.generate(tabCount, (index) => index);
+  final selected = ValueNotifier(initialIndex);
+  final progress = TabPagingProgress(initialIndex.toDouble());
   addTearDown(selected.dispose);
   addTearDown(progress.dispose);
   await tester.pumpWidget(
@@ -170,26 +448,28 @@ Future<ValueNotifier<int>> _mount(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: PagingTabStrip<int>(
-                    tabs: const [0, 1, 2],
+                    tabs: tabs,
                     value: value,
                     onSelected: (value) => selected.value = value,
-                    progress: progress,
+                    progress: connectProgress ? progress : null,
                     fullWidthIndicator: fullWidth,
                     indicatorHeight: fullWidth ? 3 : 2,
                     buttonStyle: TextButton.styleFrom(
                       minimumSize: const Size(48, 44),
                     ),
                     itemKey: (tab) => ValueKey('tab-$tab'),
-                    labelBuilder: (_, tab) => Text(['一', '更长分类', '三'][tab]),
+                    labelBuilder: (_, tab) => Text(
+                      ['一', '更长分类', '三', '第四项', '第五项', '六', '第七项', '八'][tab],
+                    ),
                   ),
                 ),
               ),
               Expanded(
                 child: RetainedTabView<int>(
-                  tabs: const [0, 1, 2],
+                  tabs: tabs,
                   value: value,
                   onChanged: (value) => selected.value = value,
-                  progress: progress,
+                  progress: connectProgress ? progress : null,
                   viewKey: _surface,
                   pageBuilder: (_, tab, active) =>
                       ColoredBox(color: Colors.grey.shade100),

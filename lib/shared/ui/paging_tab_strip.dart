@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 
 import 'retained_tab_view.dart';
 
-/// One continuous indicator follows the same progress as the content pages.
+/// The indicator and horizontal strip follow the content pages' progress.
 final class PagingTabStrip<T extends Object> extends StatefulWidget {
   const PagingTabStrip({
     super.key,
@@ -40,6 +41,7 @@ final class _PagingTabStripState<T extends Object>
     with SingleTickerProviderStateMixin {
   final _rowKey = GlobalKey();
   final _itemKeys = <T, GlobalKey>{};
+  bool _scrollPending = false;
   int _indexOf(T? value) => value == null
       ? 0
       : widget.tabs.indexOf(value).clamp(0, widget.tabs.length - 1);
@@ -48,51 +50,88 @@ final class _PagingTabStripState<T extends Object>
     value: _indexOf(widget.value).toDouble(),
   );
 
+  double get _position => widget.progress?.isAttached == true
+      ? widget.progress?.value ?? _fallback.value
+      : _fallback.value;
+
+  @override
+  void initState() {
+    super.initState();
+    _fallback.addListener(_onProgressChanged);
+    widget.progress?.addListener(_onProgressChanged);
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _revealSelection();
+    // Invalidate on window/font changes; offsets use the strip's own viewport.
+    MediaQuery.sizeOf(context);
+    MediaQuery.textScalerOf(context);
+    _followProgress();
   }
 
-  void _revealSelection() {
+  void _onProgressChanged() {
+    if (WidgetsBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      _followProgress();
+    } else {
+      _scrollToProgress();
+    }
+  }
+
+  void _followProgress() {
+    if (_scrollPending) return;
+    _scrollPending = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || widget.value == null) return;
-      final itemContext = _itemKeys[widget.value]?.currentContext;
-      final item = itemContext?.findRenderObject();
-      if (itemContext == null || item == null) return;
-      final scrollable = Scrollable.maybeOf(itemContext);
-      if (scrollable == null || scrollable.position.axis != Axis.horizontal) {
-        return;
-      }
-      final viewport = RenderAbstractViewport.of(item);
-      final start = viewport.getOffsetToReveal(item, 0).offset;
-      final end = viewport.getOffsetToReveal(item, 1).offset;
-      final pixels = scrollable.position.pixels;
-      if (pixels >= end && pixels <= start) return;
-      final position = scrollable.position;
-      final target = (pixels < end ? end : start).clamp(
-        position.minScrollExtent,
-        position.maxScrollExtent,
-      );
-      // Reveal only this horizontal strip, without scrolling a profile's
-      // surrounding vertical header back into view.
-      if (MediaQuery.disableAnimationsOf(context)) {
-        position.jumpTo(target);
-      } else {
-        position.animateTo(
-          target,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.ease,
-        );
-      }
+      _scrollPending = false;
+      _scrollToProgress();
     });
+  }
+
+  void _scrollToProgress() {
+    if (!mounted || widget.value == null || widget.tabs.isEmpty) return;
+    final value = _position.clamp(0, widget.tabs.length - 1).toDouble();
+    final itemContext = _itemKeys[widget.tabs[value.floor()]]?.currentContext;
+    final item = itemContext?.findRenderObject();
+    final next = _itemKeys[widget.tabs[value.ceil()]]?.currentContext
+        ?.findRenderObject();
+    if (itemContext == null ||
+        item is! RenderBox ||
+        !item.hasSize ||
+        next is! RenderBox ||
+        !next.hasSize) {
+      return;
+    }
+    final scrollable = Scrollable.maybeOf(itemContext);
+    if (scrollable == null || scrollable.position.axis != Axis.horizontal) {
+      return;
+    }
+    final position = scrollable.position;
+    if (!position.hasContentDimensions ||
+        position.maxScrollExtent <= position.minScrollExtent) {
+      return;
+    }
+    final viewport = RenderAbstractViewport.of(item);
+    final start = viewport.getOffsetToReveal(item, .5).offset;
+    final end = viewport.getOffsetToReveal(next, .5).offset;
+    final target = (start + (end - start) * (value - value.floor())).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    // Paging already supplies the animation, including rebound and reduced
+    // motion. A second scroll animation would trail behind the finger.
+    // Move only this strip, leaving the surrounding vertical header alone.
+    if ((position.pixels - target).abs() > .01) position.jumpTo(target);
   }
 
   @override
   void didUpdateWidget(PagingTabStrip<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.progress, widget.progress)) {
+      oldWidget.progress?.removeListener(_onProgressChanged);
+      widget.progress?.addListener(_onProgressChanged);
+    }
     if (oldWidget.value != widget.value && widget.value != null) {
-      _revealSelection();
       final target = _indexOf(widget.value).toDouble();
       if (widget.progress?.isAttached == true) {
         _fallback.value = target;
@@ -112,11 +151,9 @@ final class _PagingTabStripState<T extends Object>
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([_fallback, widget.progress]),
     builder: (context, _) {
+      _followProgress();
       final colors = Theme.of(context).colorScheme;
-      final progress = widget.progress;
-      final position = progress != null && progress.isAttached
-          ? progress.value
-          : _fallback.value;
+      final position = _position;
       final inactive = widget.unselectedColor ?? colors.onSurface;
       return CustomPaint(
         foregroundPainter: _PagingIndicatorPainter(
@@ -179,6 +216,7 @@ final class _PagingTabStripState<T extends Object>
 
   @override
   void dispose() {
+    widget.progress?.removeListener(_onProgressChanged);
     _fallback.dispose();
     super.dispose();
   }
