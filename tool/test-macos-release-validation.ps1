@@ -18,6 +18,8 @@ foreach ($invalid in @(
   $valid.Replace('</dict>', '<key>keychain-access-groups</key><array/></dict>'),
   $valid.Replace('</dict>', '<key>com.apple.application-identifier</key><string>TEAM.app</string></dict>'),
   $valid.Replace('</dict>', '<key>com.apple.security.cs.allow-jit</key><true/></dict>'),
+  $valid.Replace('</dict>', '<key>com.apple.security.get-task-allow</key><true/></dict>'),
+  $valid.Replace('</dict>', '<key>com.apple.security.get-task-allow</key><false/></dict>'),
   $valid.Replace('</dict>', '<key>com.apple.security.app-sandbox</key><true/></dict>'),
   $valid.Replace('</dict>', '<key>com.apple.security.network.server</key></dict>')
 )) { Assert-Rejected { Confirm-MacOSReleaseEntitlements $invalid } }
@@ -33,4 +35,4 @@ Assert-Rejected { Confirm-MacOSSmokeResult 0 '' 'write' $runId }
 Assert-Rejected { Confirm-MacOSSmokeResult 0 "prefix $marker" 'write' $runId }
 Assert-Rejected { Confirm-MacOSSmokeResult 0 $marker 'read-delete' $runId }
 Assert-Rejected { Confirm-MacOSSmokeResult 0 $marker 'write' 'fedcba9876543210fedcba9876543210' }
-Write-Output 'macOS release entitlement and smoke acknowledgement checks passed (20 cases).'
+Write-Output 'macOS release entitlement and smoke acknowledgement checks passed (22 cases).'

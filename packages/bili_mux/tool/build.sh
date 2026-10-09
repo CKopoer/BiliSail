@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+make_tool=make
 if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == mingw* ]]; then
   export PATH="/ucrt64/bin:/usr/bin:$PATH"
+  # FFmpeg Makefiles contain MSYS paths; native Windows make cannot read them.
+  make_tool=/usr/bin/make
+  [[ -x "$make_tool" ]] || { echo 'Install the MSYS2 make package in this MSYS root' >&2; exit 1; }
 fi
 
 target="${1:?usage: build.sh windows-x64|android-arm64|macos-arm64|linux-x64}"
@@ -106,7 +110,7 @@ cd "$cache/$target"
   --enable-bsf=aac_adtstoasc,extract_extradata \
   --extra-cflags='-Os -fvisibility=hidden -ffunction-sections -fdata-sections' \
   "${configure_flags[@]}" > configure.log 2>&1
-make -j"${BILI_MUX_JOBS:-4}" > build.log 2>&1
+"$make_tool" -j"${BILI_MUX_JOBS:-4}" > build.log 2>&1
 
 gc_flag=-Wl,--gc-sections
 shared_flag=-shared

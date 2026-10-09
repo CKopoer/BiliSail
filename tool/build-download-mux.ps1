@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory)][ValidateSet('windows-x64', 'android-arm64', 'macos-arm64', 'linux-x64')][string]$Target,
-  [string]$MsysRoot = 'C:\msys64',
+  [string]$MsysRoot = $(if ($env:BILI_MUX_MSYS_ROOT) { $env:BILI_MUX_MSYS_ROOT } else { 'C:\msys64' }),
   [string]$AndroidNdk
 )
 $ErrorActionPreference = 'Stop'

@@ -165,11 +165,11 @@ jobs:
           cache: true
           pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
       - name: Set up the Windows mux compiler
+        id: windows-mux
         if: matrix.target == 'windows-x64'
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
         with:
           msystem: UCRT64
-          location: C:\msys64
           install: make mingw-w64-ucrt-x86_64-gcc
       - name: Set up the Android mux compiler
         if: matrix.target == 'android-arm64'
@@ -182,6 +182,7 @@ jobs:
         env:
           BUILD_TARGET: ${{ matrix.target }}
           BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux.outputs.msys2-location }}
           ANDROID_PREVIEW_SIGNING: ${{ matrix.target == 'android-arm64' && github.event_name == 'pull_request' }}
           ANDROID_KEYSTORE_BASE64: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
           ANDROID_KEYSTORE_PASSWORD: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}

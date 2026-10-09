@@ -38,6 +38,12 @@ CI 改为从组件已经校验的固定源码单独构建测试用 ffprobe，并
 
 [补充日志后的运行](https://github.com/CKopoer/BiliSail/actions/runs/37815695054/job/113446824340) 确认 Xcode clang 的链接测试报 `library 'System' not found`：直接编译器路径未携带 macOS SDK。构建脚本从 `xcrun --sdk macosx --show-sdk-path` 解析 SDK，传给 FFmpeg configure 的 sysroot 和包装库编译／链接命令；同时让 macOS 的 C++ 参数数组非空，兼容系统 Bash 3.2 的 nounset 行为。后续平台构建结果由修复后的发布运行验证。
 
+[Release preview #20](https://github.com/CKopoer/BiliSail/actions/runs/37817020565) 的全项目检查、9 项原生回归和 Android APK 打包通过；macOS 组件和应用编译也通过。Windows 在 make 阶段报源码 Makefile 不存在：`setup-msys2` 的 `location` 是安装父目录，实际工具在 `C:\msys64\msys64`，脚本却调用 runner 已有的 `C:\msys64`，随后混用不能识别 `/d/a/...` 的 make。CI 现将安装步骤的 `msys2-location` 输出传给构建包装脚本，原生脚本显式调用同一 MSYS 根的 `/usr/bin/make`。本机继续支持 `-MsysRoot`，未指定时优先读取 `BILI_MUX_MSYS_ROOT`，再使用默认目录。
+
+macOS 在已签名产物检查中发现额外的 `com.apple.security.get-task-allow`。Runner 的 Release 配置设置 `CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO`，阻止 Xcode 注入调试权限；依据 [Apple 发布签名说明](https://developer.apple.com/documentation/security/resolving-common-notarization-issues)。仍要求实际签名只含 Sandbox 和网络客户端权限，不放宽校验，补充拒绝调试权限为 true／false 的离线用例。此轮修复的完整平台发布结果由后续 Actions 验证。
+
+本机修复验证：通过环境指定 MSYS 根实际重建 Windows 组件，9 项原生 FFI 回归全部通过；`tool/check.ps1 -SkipPub` 的全项目格式、分析及 1900 项测试通过，macOS 离线边界用例增加为 22 项。两个工作流通过 actionlint，Bash／PowerShell 语法检查及 `git diff --check` 通过。完整安装包、实际签名权限和 macOS 启动／凭据 smoke 仍以远端构建结果为准。
+
 ## 用户后续手动构建
 
 先按[组件构建说明](../../packages/bili_mux/README.md)准备对应目标的原生资产，再执行通常的 Flutter 构建。例如当前 Windows 主机：
