@@ -1,10 +1,69 @@
 import 'package:bilisail/app/shell.dart';
+import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final dark in [false, true]) {
+    testWidgets('home labels follow font changes in dark=$dark', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      for (final width in [375.0, 1280.0]) {
+        tester.view.physicalSize = Size(width, 800);
+        Element? firstTab;
+        for (final (font, family) in [
+          (AppFontPreference.harmonyOsSans, ''),
+          (AppFontPreference.installed, 'Microsoft YaHei'),
+          (AppFontPreference.installed, 'Segoe UI'),
+          (AppFontPreference.system, ''),
+          (AppFontPreference.harmonyOsSans, ''),
+        ]) {
+          final theme = (dark ? BiliTheme.dark : BiliTheme.light)(
+            font: font,
+            systemFontFamily: family,
+          );
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: theme,
+              home: const BiliAppShell(location: '/', child: SizedBox.expand()),
+            ),
+          );
+          await tester.pumpAndSettle();
+          for (final channel in HomeChannel.values) {
+            final tab = find.byKey(ValueKey('channel-${channel.name}'));
+            final label = find.descendant(
+              of: find.descendant(of: tab, matching: find.text(channel.label)),
+              matching: find.byType(RichText),
+            );
+            final style = tester
+                .renderObject<RenderParagraph>(label)
+                .text
+                .style;
+            expect(
+              style?.fontFamily,
+              theme.textTheme.labelLarge?.fontFamily,
+              reason: '${channel.name} font=$font family=$family width=$width',
+            );
+            expect(style?.fontSize, 14);
+            expect(style?.fontWeight, FontWeight.w500);
+          }
+          final element = tester.element(
+            find.byKey(const ValueKey('channel-recommended')),
+          );
+          firstTab ??= element;
+          expect(element, same(firstTab));
+          expect(tester.takeException(), isNull);
+        }
+      }
+    });
+  }
   for (final mode in WorkspaceNavigationMode.values) {
     testWidgets(
       'messages hide home navigation across resizing in $mode',

@@ -606,10 +606,8 @@ final class _BiliAppShellState extends State<BiliAppShell> {
           buttonStyle: TextButton.styleFrom(
             minimumSize: const Size(48, 42),
             padding: const EdgeInsets.symmetric(horizontal: 7),
-            textStyle: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+            textStyle: Theme.of(context).textTheme.labelLarge
+                ?.copyWith(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           labelBuilder: (context, channel) => Row(
             mainAxisSize: MainAxisSize.min,
