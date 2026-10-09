@@ -910,7 +910,7 @@ void main() {
     },
   );
 
-  test('optional timeline failures preserve ready media and do not repeat on hover', () async {
+  test('optional timeline failures preserve ready media and do not immediately repeat on hover', () async {
     final metadata = _FakeMetadataRepository();
     final session = PlaybackSession(
       engine: _FakeEngine(),
@@ -940,6 +940,201 @@ void main() {
     await session.ensureStoryboard();
     expect(metadata.storyboardPending['one'], same(firstRequest));
   });
+
+  for (final kind in [AppFailureKind.network, AppFailureKind.timeout]) {
+    test('storyboard $kind recovers on hover after cooldown', () async {
+      var now = Duration.zero;
+      final engine = _FakeEngine();
+      final metadata = _FakeMetadataRepository();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        metadataRepository: metadata,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+        storyboardNow: () => now,
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      final first = session.ensureStoryboard();
+      metadata.storyboardPending['one']?.completeError(
+        AppFailure(kind, 'preview unavailable'),
+      );
+      await first;
+      expect(session.storyboardMessage, '缩略图暂时不可用');
+      expect(session.media, isNotNull);
+      expect(session.error, isNull);
+
+      now = const Duration(milliseconds: 4999);
+      await session.ensureStoryboard();
+      expect(metadata.storyboardCalls, ['one']);
+      now = const Duration(seconds: 5);
+      final retry = session.ensureStoryboard();
+      expect(metadata.storyboardCalls, ['one', 'one']);
+      expect(session.storyboardLoading, isTrue);
+      expect(session.storyboardMessage, isNull);
+      now = const Duration(minutes: 1);
+      await session.ensureStoryboard();
+      expect(metadata.storyboardCalls, hasLength(2));
+      metadata.storyboardPending['one']?.complete(_storyboard);
+      await retry;
+      expect(session.storyboard, same(_storyboard));
+      expect(session.storyboardLoading, isFalse);
+      await session.ensureStoryboard();
+      expect(metadata.storyboardCalls, hasLength(2));
+      expect(engine.seekTargets, isEmpty);
+    });
+  }
+
+  test(
+    'storyboard retries back off and stop after three logical reads',
+    () async {
+      var now = Duration.zero;
+      final metadata = _FakeMetadataRepository();
+      final session = PlaybackSession(
+        engine: _FakeEngine(),
+        repository: _FakeRepository(autoResolve: true),
+        metadataRepository: metadata,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+        storyboardNow: () => now,
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      for (var attempt = 0; attempt < 3; attempt++) {
+        final pending = session.ensureStoryboard();
+        expect(metadata.storyboardCalls, hasLength(attempt + 1));
+        metadata.storyboardPending['one']?.completeError(
+          const AppFailure(AppFailureKind.timeout, 'preview unavailable'),
+        );
+        await pending;
+        now +=
+            Duration(seconds: 5 * (attempt + 1)) -
+            const Duration(milliseconds: 1);
+        await session.ensureStoryboard();
+        expect(metadata.storyboardCalls, hasLength(attempt + 1));
+        now += const Duration(milliseconds: 1);
+      }
+      now += const Duration(hours: 1);
+      await session.ensureStoryboard();
+      expect(metadata.storyboardCalls, hasLength(3));
+      expect(session.storyboardLoading, isFalse);
+      expect(session.error, isNull);
+    },
+  );
+
+  for (final kind in [
+    null,
+    AppFailureKind.authentication,
+    AppFailureKind.permission,
+    AppFailureKind.rateLimited,
+    AppFailureKind.notFound,
+    AppFailureKind.protocol,
+  ]) {
+    test('storyboard empty result or $kind does not retry on hover', () async {
+      var now = Duration.zero;
+      final metadata = _FakeMetadataRepository();
+      final session = PlaybackSession(
+        engine: _FakeEngine(),
+        repository: _FakeRepository(autoResolve: true),
+        metadataRepository: metadata,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+        storyboardNow: () => now,
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      final pending = session.ensureStoryboard();
+      if (kind == null) {
+        metadata.storyboardPending['one']?.complete(null);
+      } else {
+        metadata.storyboardPending['one']?.completeError(
+          AppFailure(kind, 'preview unavailable'),
+        );
+      }
+      await pending;
+      now = const Duration(hours: 1);
+      await session.ensureStoryboard();
+      expect(metadata.storyboardCalls, ['one']);
+      expect(session.storyboard, isNull);
+      expect(session.storyboardLoading, isFalse);
+      expect(session.error, isNull);
+    });
+  }
+
+  test(
+    'source changes reset storyboard retries and reject late retry failures',
+    () async {
+      var now = Duration.zero;
+      final metadata = _FakeMetadataRepository();
+      final session = PlaybackSession(
+        engine: _FakeEngine(),
+        repository: _FakeRepository(autoResolve: true),
+        metadataRepository: metadata,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+        storyboardNow: () => now,
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      final first = session.ensureStoryboard();
+      metadata.storyboardPending['one']?.completeError(
+        const AppFailure(AppFailureKind.timeout, 'preview unavailable'),
+      );
+      await first;
+      now = const Duration(seconds: 5);
+      final oldRetry = session.ensureStoryboard();
+      await session.open(_detail('two'), _part('two'));
+      expect(metadata.storyboardTokens['one']?.isCancelled, isTrue);
+      final newRequest = session.ensureStoryboard();
+      metadata.storyboardPending['one']?.completeError(
+        const AppFailure(AppFailureKind.timeout, 'late preview failure'),
+      );
+      await oldRetry;
+      expect(session.storyboardLoading, isTrue);
+      expect(session.storyboardMessage, isNull);
+      metadata.storyboardPending['two']?.completeError(
+        const AppFailure(AppFailureKind.network, 'preview unavailable'),
+      );
+      await newRequest;
+      now = const Duration(seconds: 10);
+      final newRetry = session.ensureStoryboard();
+      expect(metadata.storyboardCalls, ['one', 'one', 'two', 'two']);
+      metadata.storyboardPending['two']?.complete(_storyboard);
+      await newRetry;
+      expect(session.storyboard, same(_storyboard));
+      expect(session.storyboardMessage, isNull);
+    },
+  );
+
+  test(
+    'storyboard cooldown cannot start reads after account epoch changes',
+    () async {
+      var now = Duration.zero;
+      var epoch = 0;
+      final metadata = _FakeMetadataRepository();
+      final session = PlaybackSession(
+        engine: _FakeEngine(),
+        repository: _FakeRepository(autoResolve: true),
+        metadataRepository: metadata,
+        progress: _FakeProgress(),
+        accountScope: () => 'account',
+        sessionEpoch: () => epoch,
+        storyboardNow: () => now,
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      final pending = session.ensureStoryboard();
+      metadata.storyboardPending['one']?.completeError(
+        const AppFailure(AppFailureKind.timeout, 'preview unavailable'),
+      );
+      await pending;
+      epoch++;
+      now = const Duration(seconds: 5);
+      await session.ensureStoryboard();
+      expect(metadata.storyboardCalls, ['one']);
+    },
+  );
 
   test(
     'timeline loads metadata once and lazily loads storyboard without seek',
@@ -2717,6 +2912,7 @@ final class _FakeMetadataRepository implements PlaybackMetadataRepository {
   final metadataPending = <String, Completer<PlaybackMetadata>>{};
   final storyboardPending = <String, Completer<VideoStoryboard?>>{};
   final storyboardTokens = <String, RequestCancellation>{};
+  final storyboardCalls = <String>[];
   @override
   Future<PlaybackMetadata> metadata(
     VideoDetail video,
@@ -2734,6 +2930,7 @@ final class _FakeMetadataRepository implements PlaybackMetadataRepository {
     String cid, {
     required RequestCancellation cancellation,
   }) {
+    storyboardCalls.add(cid);
     final gate = Completer<VideoStoryboard?>();
     storyboardPending[cid] = gate;
     storyboardTokens[cid] = cancellation;

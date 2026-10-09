@@ -38,10 +38,12 @@ class PlaybackSession extends ChangeNotifier {
     int Function()? sessionEpoch,
     Duration Function()? historyNow,
     Duration Function()? danmakuNow,
+    Duration Function()? storyboardNow,
     PlaybackRateMemory? rateMemory,
   }) : sessionEpoch = sessionEpoch ?? _zeroEpoch,
        _rateMemory = rateMemory ?? PlaybackRateMemory() {
     _clock.start();
+    _storyboardNow = storyboardNow ?? () => _clock.elapsed;
     final history = historyRepository;
     _historyReporter = history == null
         ? null
@@ -173,6 +175,11 @@ class PlaybackSession extends ChangeNotifier {
   VideoStoryboard? storyboard;
   bool storyboardLoading = false;
   bool _storyboardRequested = false;
+  // Each logical read already has bounded transport retries and a deadline.
+  static const _maxStoryboardAttempts = 3;
+  int _storyboardAttempts = 0;
+  Duration? _storyboardRetryAt;
+  late final Duration Function() _storyboardNow;
   String? storyboardMessage;
   String? chaptersMessage;
   RequestCancellation? _storyboardCancellation;
@@ -1192,6 +1199,8 @@ class PlaybackSession extends ChangeNotifier {
     storyboardLoading = false;
     storyboardMessage = null;
     _storyboardRequested = false;
+    _storyboardAttempts = 0;
+    _storyboardRetryAt = null;
   }
 
   /// Hover loads only metadata/images; the active engine never seeks for preview.
@@ -1206,11 +1215,20 @@ class PlaybackSession extends ChangeNotifier {
         repository == null ||
         video == null ||
         cid == null ||
+        _scope != accountScope() ||
+        _epoch != sessionEpoch() ||
         _storyboardRequested) {
       return;
     }
+    if (_storyboardRetryAt case final retryAt?
+        when _storyboardNow() < retryAt) {
+      return;
+    }
     _storyboardRequested = true;
+    _storyboardAttempts++;
+    _storyboardRetryAt = null;
     storyboardLoading = true;
+    storyboardMessage = null;
     final generation = _generation;
     final token = RequestCancellation();
     _storyboardCancellation = token;
@@ -1229,8 +1247,18 @@ class PlaybackSession extends ChangeNotifier {
         return;
       }
       storyboardMessage = '缩略图暂时不可用';
+      if (_storyboardAttempts < _maxStoryboardAttempts &&
+          (failure.kind == AppFailureKind.network ||
+              failure.kind == AppFailureKind.timeout)) {
+        // Retry only on a later preview interaction, with 5s/10s cooldowns.
+        // Empty data and non-transient failures remain terminal for this source.
+        _storyboardRetryAt =
+            _storyboardNow() + Duration(seconds: 5 * _storyboardAttempts);
+        _storyboardRequested = false;
+      }
     } finally {
       if (_acceptMetadata(generation, token)) {
+        _storyboardCancellation = null;
         storyboardLoading = false;
         _notify();
       }
