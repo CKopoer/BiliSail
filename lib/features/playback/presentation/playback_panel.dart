@@ -539,12 +539,15 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         (!_dynamicControls && (_controlEditorFocused || _hasError))) {
       return;
     }
-    _controlsHideTimer = Timer(Duration(seconds: _dynamicControls ? 3 : 5), () {
-      _controlsHideTimer = null;
-      if (mounted && widget.active && _appActive) {
-        widget.controlsVisible.value = false;
-      }
-    });
+    _controlsHideTimer = Timer(
+      Duration(milliseconds: _dynamicControls ? 2500 : 5000),
+      () {
+        _controlsHideTimer = null;
+        if (mounted && widget.active && _appActive) {
+          widget.controlsVisible.value = false;
+        }
+      },
+    );
   }
 
   void _showDynamicControls() {

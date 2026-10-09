@@ -1949,7 +1949,7 @@ void main() {
   for (final live in [false, true]) {
     for (final fullscreen in [false, true]) {
       testWidgets(
-        'dynamic controls reveal on hover and hide after three seconds or exit live=$live fullscreen=$fullscreen',
+        'dynamic controls reveal on hover and hide after 2.5 seconds or exit live=$live fullscreen=$fullscreen',
         (tester) async {
           final engine = _FakeEngine();
           final session = _session(engine);
@@ -1993,9 +1993,9 @@ void main() {
             await mouse.down(point);
             await mouse.up();
             // A live surface click must not restart the hover deadline.
-            await tester.pump(const Duration(milliseconds: 2399));
+            await tester.pump(const Duration(milliseconds: 1899));
           } else {
-            await tester.pump(const Duration(milliseconds: 2999));
+            await tester.pump(const Duration(milliseconds: 2499));
           }
           expect(controls, findsOneWidget);
           await tester.pump(const Duration(milliseconds: 1));
@@ -2013,7 +2013,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 600));
           expect(controls, findsOneWidget);
           await mouse.moveTo(point + const Offset(10, 0));
-          await tester.pump(const Duration(milliseconds: 2999));
+          await tester.pump(const Duration(milliseconds: 2499));
           expect(controls, findsOneWidget);
           await tester.pump(const Duration(milliseconds: 1));
           expect(controls.hitTestable(), findsNothing);
@@ -2071,7 +2071,7 @@ void main() {
               await mouse.moveTo(_surfacePoint(tester));
               await tester.pump();
             }
-            await tester.pump(const Duration(seconds: 3));
+            await tester.pump(const Duration(milliseconds: 2500));
             await tester.pump(const Duration(milliseconds: 216));
             await tester.pump();
             expect(controls, findsNothing);
@@ -2132,7 +2132,7 @@ void main() {
       expect(controls, findsOneWidget);
       await gesture.cancel();
       await gesture.moveTo(_surfacePoint(tester));
-      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 2500));
       await tester.pump(const Duration(milliseconds: 216));
       await tester.pump();
       expect(controls, findsNothing);
@@ -2226,7 +2226,7 @@ void main() {
       await _pumpFrames(tester);
       expect(engine.currentSnapshot.rate, 1);
       expect(engine.currentSnapshot.desiredPlaying, playing);
-      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 2500));
       await tester.pump(const Duration(milliseconds: 216));
       await tester.pump();
       expect(controls, findsNothing);
@@ -2410,7 +2410,7 @@ void main() {
               final playing = engine.currentSnapshot.desiredPlaying;
               final generation = session.sourceGeneration;
               final idleMilliseconds = mode == PlayerControlsMode.dynamic
-                  ? 3000
+                  ? 2500
                   : 5000;
               for (var i = 0; i < 3; i++) {
                 await mouse.moveTo(_surfacePoint(tester) + Offset(i * 5, 0));

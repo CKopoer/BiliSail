@@ -36,7 +36,7 @@ class PlayerControlsModeSetting extends StatelessWidget {
         Text(
           value == PlayerControlsMode.click
               ? '点击画面切换控件显示与隐藏，鼠标在播放器内移动或操作控件后重新计时，静止 5 秒自动淡出。悬停在控件上、拖动、输入或打开菜单时保持显示，结束后重新计时。'
-              : '鼠标移入或移动时淡入控件，静止 3 秒或移出画面时淡出。悬停在控件上时保持显示，移开控件后重新计时。点击视频画面播放／暂停；点击直播画面不暂停，也不切换控件。',
+              : '鼠标移入或移动时淡入控件，静止 2.5 秒或移出画面时淡出。悬停在控件上时保持显示，移开控件后重新计时。点击视频画面播放／暂停；点击直播画面不暂停，也不切换控件。',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
