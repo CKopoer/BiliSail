@@ -61,13 +61,14 @@ void main() {
     bool disableAnimations = false,
     ProfileSection initialSection = ProfileSection.videos,
     double width = 375,
+    double height = 800,
     double scale = 1,
     TargetPlatform platform = TargetPlatform.android,
     bool isSelf = true,
     ValueChanged<UserProfile>? onMessage,
     ScrollBehavior? scrollBehavior,
   }) async {
-    tester.view.physicalSize = Size(width, 800);
+    tester.view.physicalSize = Size(width, height);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -195,25 +196,24 @@ void main() {
   });
 
   testWidgets(
-    'vertical scrolling collapses the header without moving hidden tabs',
+    'vertical scrolling keeps the header and tabs fixed without moving hidden lists',
     (tester) async {
       await mount(tester);
-      final nested = tester.state<NestedScrollViewState>(
-        find.byType(NestedScrollView),
-      );
       final header = find.byType(ProfileHeader);
-      expect(header, findsOneWidget);
-      final initialContentTop = tester.getRect(_surface).top;
+      final navigation = find.byType(ProfileSectionNavigation);
+      final headerRect = tester.getRect(header);
+      final navigationRect = tester.getRect(navigation);
+      final contentRect = tester.getRect(_surface);
       final videos = _position(tester);
       await tester.drag(_surface, const Offset(0, -420));
       await tester.pumpAndSettle();
-      expect(nested.outerController.offset, greaterThan(0));
-      expect(tester.getRect(_surface).top, lessThan(initialContentTop));
-      expect(header.hitTestable(), findsNothing);
+      expect(videos.pixels, greaterThan(0));
+      expect(tester.getRect(header), headerRect);
+      expect(tester.getRect(navigation), navigationRect);
+      expect(tester.getRect(_surface), contentRect);
       final saved = videos.pixels;
       controller().select(ProfileSection.dynamics);
       await tester.pumpAndSettle();
-      expect(nested.innerController.positions, hasLength(1));
       final dynamics = _position(tester);
       await tester.drag(_surface, const Offset(0, -260));
       await tester.pumpAndSettle();
@@ -223,52 +223,80 @@ void main() {
       await tester.pumpAndSettle();
       expect(_position(tester), same(videos));
       expect(videos.pixels, closeTo(saved, .1));
-      expect(nested.innerController.positions, hasLength(1));
+      expect(tester.getRect(header), headerRect);
+      expect(tester.getRect(navigation), navigationRect);
       expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    'revealing an enlarged tab strip does not reopen the vertical header',
+    'revealing an enlarged tab strip keeps the fixed header and list position',
     (tester) async {
       await mount(tester, width: 320, scale: 2);
-      final nested = tester.state<NestedScrollViewState>(
-        find.byType(NestedScrollView),
-      );
-      nested.outerController.jumpTo(
-        nested.outerController.position.maxScrollExtent,
-      );
+      final videos = _position(tester);
+      videos.jumpTo(260);
       await tester.pumpAndSettle();
-      final saved = nested.outerController.offset;
+      final headerRect = tester.getRect(find.byType(ProfileHeader));
+      final navigationRect = tester.getRect(
+        find.byType(ProfileSectionNavigation),
+      );
       controller().select(ProfileSection.followers);
       await tester.pumpAndSettle();
-      expect(nested.outerController.offset, closeTo(saved, .1));
-      expect(find.byType(ProfileHeader).hitTestable(), findsNothing);
+      expect(videos.pixels, closeTo(260, .1));
+      expect(tester.getRect(find.byType(ProfileHeader)), headerRect);
+      expect(
+        tester.getRect(find.byType(ProfileSectionNavigation)),
+        navigationRect,
+      );
+      expect(
+        find.byKey(const ValueKey('profile-tab-followers')).hitTestable(),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets(
-    'a long enlarged introduction scrolls away to expose the content',
-    (tester) async {
-      repository.signature = List.filled(60, '这是一段较长的简介。').join();
-      await mount(tester, width: 320, scale: 2);
-      final nested = tester.state<NestedScrollViewState>(
-        find.byType(NestedScrollView),
-      );
-      expect(nested.outerController.position.maxScrollExtent, greaterThan(800));
-      await tester.dragFrom(const Offset(160, 650), const Offset(0, -2000));
-      await tester.pumpAndSettle();
-      expect(nested.outerController.offset, greaterThan(0));
-      nested.outerController.jumpTo(
-        nested.outerController.position.maxScrollExtent,
-      );
-      await tester.pumpAndSettle();
-      expect(tester.getRect(_surface).top, closeTo(0, 1));
-      expect(_currentList(tester).hitTestable(), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  for (final height in [800.0, 360.0]) {
+    testWidgets(
+      'a long enlarged introduction leaves usable content at height=$height',
+      (tester) async {
+        repository.signature = List.filled(60, '这是一段较长的简介。').join();
+        await mount(tester, width: 320, height: height, scale: 2);
+        final introduction = find.byKey(
+          const ValueKey('profile-header-scroll'),
+        );
+        final position = tester
+            .state<ScrollableState>(
+              find.descendant(
+                of: introduction,
+                matching: find.byType(Scrollable),
+              ),
+            )
+            .position;
+        expect(position.maxScrollExtent, greaterThan(0));
+        final navigationRect = tester.getRect(
+          find.byType(ProfileSectionNavigation),
+        );
+        final contentRect = tester.getRect(_surface);
+        expect(contentRect.height, greaterThan(height * .25));
+        final list = _position(tester);
+        await tester.drag(introduction, const Offset(0, -260));
+        await tester.pumpAndSettle();
+        expect(position.pixels, greaterThan(0));
+        expect(list.pixels, 0);
+        expect(
+          tester.getRect(find.byType(ProfileSectionNavigation)),
+          navigationRect,
+        );
+        await tester.drag(_surface, const Offset(0, -180));
+        await tester.pumpAndSettle();
+        expect(list.pixels, greaterThan(0));
+        expect(tester.getRect(_surface), contentRect);
+        expect(_currentList(tester).hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets(
     'touch paging visits each section lazily and stops at both ends',
@@ -351,7 +379,11 @@ void main() {
       kind: PointerDeviceKind.mouse,
     );
     await tester.pumpAndSettle();
-    final strip = find.byType(SingleChildScrollView);
+    final strip = find.byWidgetPredicate(
+      (widget) =>
+          widget is SingleChildScrollView &&
+          widget.scrollDirection == Axis.horizontal,
+    );
     await tester.drag(strip, const Offset(-650, 0));
     await tester.pumpAndSettle();
     expect(state().section, ProfileSection.videos);
@@ -485,29 +517,73 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'desktop wheel coordinates the shared header and active content',
-    (tester) async {
+  for (final section in ProfileSection.values) {
+    testWidgets('desktop wheel smoothly scrolls $section with a fixed header', (
+      tester,
+    ) async {
       await mount(
         tester,
         platform: TargetPlatform.windows,
         scrollBehavior: const SmoothScrollBehavior(),
       );
-      final nested = tester.state<NestedScrollViewState>(
-        find.byType(NestedScrollView),
+      controller().select(section);
+      await tester.pumpAndSettle();
+      final position = _position(tester);
+      final headerRect = tester.getRect(find.byType(ProfileHeader));
+      final navigationRect = tester.getRect(
+        find.byType(ProfileSectionNavigation),
       );
       await tester.sendEventToBinding(
         PointerScrollEvent(
           position: tester.getCenter(_surface),
+          kind: PointerDeviceKind.mouse,
           scrollDelta: const Offset(0, 240),
         ),
       );
+      expect(position.pixels, 0);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      final first = position.pixels;
+      expect(first, greaterThan(0));
+      expect(first, lessThan(240));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(position.pixels, greaterThan(first));
+      expect(position.pixels, lessThan(240));
       await tester.pumpAndSettle();
-      expect(nested.outerController.offset, greaterThan(0));
-      expect(state().section, ProfileSection.videos);
+      expect(position.pixels, closeTo(240, .5));
+      expect(tester.getRect(find.byType(ProfileHeader)), headerRect);
+      expect(
+        tester.getRect(find.byType(ProfileSectionNavigation)),
+        navigationRect,
+      );
+      expect(state().section, section);
       expect(tester.takeException(), isNull);
-    },
-  );
+    });
+  }
+
+  testWidgets('profile reduced motion keeps instant wheel scrolling', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      platform: TargetPlatform.windows,
+      scrollBehavior: const SmoothScrollBehavior(),
+      disableAnimations: true,
+    );
+    final position = _position(tester);
+    final headerRect = tester.getRect(find.byType(ProfileHeader));
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(_surface),
+        kind: PointerDeviceKind.mouse,
+        scrollDelta: const Offset(0, 240),
+      ),
+    );
+    expect(position.pixels, 240);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.byType(ProfileHeader)), headerRect);
+    expect(tester.takeException(), isNull);
+  });
 
   for (final (enabled, width, target) in [
     for (final enabled in [true, false])
