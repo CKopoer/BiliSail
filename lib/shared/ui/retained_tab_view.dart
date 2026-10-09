@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import '../../core/presentation/workspace_activity.dart';
 import 'app_network_image.dart';
 import 'state_view.dart';
+import 'tab_paging_motion.dart';
 
 typedef RetainedTabPageBuilder<T extends Object> = Widget Function(
   BuildContext context,
@@ -108,7 +109,7 @@ final class _RetainedTabViewState<T extends Object>
 
   Duration get _duration => MediaQuery.disableAnimationsOf(context)
       ? Duration.zero
-      : const Duration(milliseconds: 300);
+      : TabPagingMotion.duration;
 
   void _replaceController() {
     _generation++;
@@ -235,7 +236,7 @@ final class _RetainedTabViewState<T extends Object>
           key: widget.viewKey,
           controller: _tabs,
           physics: _active
-              ? const ClampingScrollPhysics()
+              ? TabPagingMotion.physics
               : const NeverScrollableScrollPhysics(),
           dragStartBehavior: DragStartBehavior.down,
           children: [

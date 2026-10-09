@@ -11,6 +11,81 @@ const _boundary = ValueKey('strip-pixels');
 const _surface = ValueKey('test-pager');
 
 void main() {
+  testWidgets('page and tab strip complete a 200ms tap transition together', (
+    tester,
+  ) async {
+    await _mount(tester);
+    await tester.tap(find.byKey(const ValueKey('tab-1')));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    final position = _pagePosition(tester);
+    expect(position.pixels, inExclusiveRange(0, position.viewportDimension));
+    await _expectPagingSync(
+      tester,
+      position.pixels / position.viewportDimension,
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+    // The driven scroll ends on the first frame after its duration expires.
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(position.isScrollingNotifier.value, isFalse);
+    expect(position.pixels, closeTo(position.viewportDimension, .1));
+    await _expectPagingSync(tester, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('standalone tab strip completes a selection within 200ms', (
+    tester,
+  ) async {
+    final selected = await _mount(tester, connectProgress: false);
+    selected.value = 1;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+    await _expectPagingSync(tester, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final rtl in [false, true]) {
+    for (final pixelRatio in [1.0, 3.0]) {
+      for (final complete in [false, true]) {
+        testWidgets(
+          'page and tab strip settle together within 320ms: rtl=$rtl dpr=$pixelRatio complete=$complete',
+          (tester) async {
+            final selected = await _mount(
+              tester,
+              rtl: rtl,
+              pixelRatio: pixelRatio,
+            );
+            final position = _pagePosition(tester);
+            final gesture = await tester.startGesture(
+              tester.getCenter(find.byKey(_surface)),
+            );
+            await gesture.moveBy(
+              Offset((rtl ? 1 : -1) * (complete ? 220 : 80), 0),
+            );
+            await tester.pump();
+            await gesture.up();
+            await tester.pump();
+            for (var frame = 0; frame < 20; frame++) {
+              await tester.pump(const Duration(milliseconds: 16));
+              final progress = position.pixels / position.viewportDimension;
+              expect(progress, inInclusiveRange(0, 1));
+              await _expectPagingSync(tester, progress);
+            }
+            expect(position.isScrollingNotifier.value, isFalse);
+            expect(selected.value, complete ? 1 : 0);
+            expect(
+              position.pixels,
+              closeTo(complete ? position.viewportDimension : 0, .1),
+            );
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  }
+
   testWidgets(
     'reduced motion moves the tab and underline directly to the target',
     (tester) async {
@@ -393,6 +468,33 @@ void main() {
   });
 }
 
+ScrollPosition _pagePosition(WidgetTester tester) => tester
+    .state<ScrollableState>(
+      find.descendant(
+        of: find.byType(PageView),
+        matching: find.byType(Scrollable),
+      ),
+    )
+    .position;
+
+Future<void> _expectPagingSync(WidgetTester tester, double progress) async {
+  final first = tester.getRect(find.byKey(const ValueKey('tab-0')));
+  final second = tester.getRect(find.byKey(const ValueKey('tab-1')));
+  expect(
+    (await _line(tester, false)).center.dx,
+    closeTo(
+      first.center.dx + (second.center.dx - first.center.dx) * progress,
+      1,
+    ),
+  );
+  final button = tester.widget<TextButton>(find.byKey(const ValueKey('tab-1')));
+  final colors = Theme.of(tester.element(find.byKey(_surface))).colorScheme;
+  expect(
+    button.style?.foregroundColor?.resolve({})?.toARGB32(),
+    Color.lerp(colors.onSurface, _primary, progress)?.toARGB32(),
+  );
+}
+
 ScrollPosition _horizontalPosition(WidgetTester tester) => tester
     .state<ScrollableState>(
       find.descendant(
@@ -408,13 +510,14 @@ Future<ValueNotifier<int>> _mount(
   bool rtl = false,
   double width = 375,
   double scale = 1,
+  double pixelRatio = 1,
   bool disableAnimations = false,
   int tabCount = 3,
   int initialIndex = 0,
   bool connectProgress = true,
 }) async {
-  tester.view.physicalSize = Size(width, 800);
-  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = Size(width * pixelRatio, 800 * pixelRatio);
+  tester.view.devicePixelRatio = pixelRatio;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   final tabs = List.generate(tabCount, (index) => index);

@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 
 import 'retained_tab_view.dart';
+import 'tab_paging_motion.dart';
 
 /// The indicator and horizontal strip follow the content pages' progress.
 final class PagingTabStrip<T extends Object> extends StatefulWidget {
@@ -140,7 +141,7 @@ final class _PagingTabStripState<T extends Object>
           target,
           duration: MediaQuery.disableAnimationsOf(context)
               ? Duration.zero
-              : const Duration(milliseconds: 300),
+              : TabPagingMotion.duration,
           curve: Curves.ease,
         );
       }
