@@ -27,7 +27,7 @@ void main() {
           (HomeChannel.recommended, HomeChannel.popular),
           (HomeChannel.dynamic, HomeChannel.videoDynamic),
           (HomeChannel.bangumi, HomeChannel.guochuang),
-          (HomeChannel.live, HomeChannel.cinema),
+          (HomeChannel.live, HomeChannel.bangumi),
         ])
           (enabled, width, source, target),
   ]) {
