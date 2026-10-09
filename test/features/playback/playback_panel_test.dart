@@ -2372,6 +2372,120 @@ void main() {
     }
   }
 
+  for (final width in [320.0, 1200.0]) {
+    for (final fullscreen in [false, true]) {
+      for (final live in [false, true]) {
+        testWidgets(
+          'click controls stay visible during mouse activity and hover width=$width live=$live fullscreen=$fullscreen',
+          (tester) async {
+            tester.view.physicalSize = Size(width, 800);
+            tester.view.devicePixelRatio = 1;
+            addTearDown(tester.view.resetPhysicalSize);
+            addTearDown(tester.view.resetDevicePixelRatio);
+            final engine = _FakeEngine();
+            final session = _session(engine);
+            addTearDown(session.close);
+            await tester.pumpWidget(
+              _app(
+                session,
+                _FakeWindowService(),
+                const AppSettings.defaults(),
+                width: width,
+                target: live ? const LivePlaybackTarget('12') : null,
+              ),
+            );
+            await _pumpFrames(tester);
+            if (fullscreen) {
+              await tester.tap(find.byTooltip('全屏（F）'));
+              await _pumpFrames(tester);
+            }
+            final controls = find.byKey(const ValueKey('player-controls'));
+            final barPoint = tester.getCenter(controls);
+            final mouse = await tester.createGesture(
+              kind: PointerDeviceKind.mouse,
+            );
+            await mouse.addPointer(location: const Offset(-10, -10));
+            final playing = engine.currentSnapshot.desiredPlaying;
+            final generation = session.sourceGeneration;
+            for (var i = 0; i < 3; i++) {
+              await mouse.moveTo(_surfacePoint(tester) + Offset(i * 5, 0));
+              await tester.pump(const Duration(seconds: 4));
+              expect(controls.hitTestable(), findsOneWidget);
+            }
+            for (final region in [
+              controls,
+              find.byKey(const ValueKey('player-control-title-layer')),
+              if (width == 320)
+                find.byKey(const ValueKey('compact-playback-actions')),
+              controls,
+            ]) {
+              await mouse.moveTo(tester.getCenter(region));
+              await tester.pump(const Duration(seconds: 6));
+              expect(controls.hitTestable(), findsOneWidget);
+            }
+            await mouse.moveTo(_surfacePoint(tester));
+            await tester.pump(const Duration(milliseconds: 4999));
+            expect(controls.hitTestable(), findsOneWidget);
+            await tester.pump(const Duration(milliseconds: 1));
+            expect(controls.hitTestable(), findsNothing);
+            await tester.pump(const Duration(milliseconds: 216));
+            await tester.pump();
+            expect(controls, findsNothing);
+            await mouse.moveTo(barPoint);
+            await tester.pump(const Duration(seconds: 6));
+            expect(controls, findsNothing);
+            expect(engine.currentSnapshot.desiredPlaying, playing);
+            expect(session.sourceGeneration, generation);
+            expect(engine.opens, 1);
+            expect(engine.maxSurfaces, 1);
+            await mouse.removePointer();
+            await tester.pumpWidget(const SizedBox());
+            await _pumpFrames(tester);
+          },
+        );
+      }
+    }
+  }
+
+  testWidgets(
+    'click controls release hover when resizing removes compact actions',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService();
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults(), width: 320),
+      );
+      await _pumpFrames(tester);
+      final controls = find.byKey(const ValueKey('player-controls'));
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(-10, -10));
+      await mouse.moveTo(
+        tester.getCenter(
+          find.byKey(const ValueKey('compact-playback-actions')),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 6));
+      expect(controls.hitTestable(), findsOneWidget);
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults(), width: 1200),
+      );
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 216));
+      await tester.pump();
+      expect(controls, findsNothing);
+      expect(engine.opens, 1);
+      await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+  );
+
   testWidgets(
     'click controls wait for drags and menus, then restart the idle deadline',
     (tester) async {
@@ -2486,7 +2600,7 @@ void main() {
     },
   );
 
-  testWidgets('click controls ignore hover and keys, then hide after idle', (
+  testWidgets('click controls stay hidden during mouse activity and keys', (
     tester,
   ) async {
     final engine = _FakeEngine();

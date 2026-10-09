@@ -426,6 +426,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   final GlobalKey _composerKey = GlobalKey();
   Timer? _controlsHideTimer;
   final Set<int> _pressedPointers = {};
+  final Set<String> _hoveredControlRegions = {};
   bool _mouseInside = false;
   bool _appActive = true;
   bool _controlEditorFocused = false;
@@ -499,6 +500,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     if (oldWidget.active != widget.active) {
       _mouseInside = false;
       _pressedPointers.clear();
+      _hoveredControlRegions.clear();
       _scheduleControlsHide();
     }
   }
@@ -533,7 +535,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         _pressedPointers.isNotEmpty ||
         // PopupMenuButton must stay mounted until its route returns a selection.
         _openControlsMenus > 0 ||
-        (!_dynamicControls && (_controlEditorFocused || _hasError))) {
+        (!_dynamicControls &&
+            (_hoveredControlRegions.isNotEmpty ||
+                _controlEditorFocused ||
+                _hasError))) {
       return;
     }
     _controlsHideTimer = Timer(Duration(seconds: _dynamicControls ? 1 : 5), () {
@@ -550,9 +555,17 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     _scheduleControlsHide();
   }
 
+  void _onMouseActivity() {
+    if (_dynamicControls) {
+      _showDynamicControls();
+    } else {
+      _scheduleControlsHide();
+    }
+  }
+
   void _onMouseEnter(PointerEnterEvent event) {
     _mouseInside = true;
-    _showDynamicControls();
+    _onMouseActivity();
   }
 
   void _onMouseExit(PointerExitEvent event) {
@@ -606,10 +619,19 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
 
   Widget _controlsVisibility({
     required bool visible,
+    required String hoverRegion,
     required Widget child,
     bool retainDynamicPress = false,
   }) => _FadingPlayerControls(
     visible: visible,
+    onHoverChanged: (hovered) {
+      if (hovered) {
+        _hoveredControlRegions.add(hoverRegion);
+      } else {
+        _hoveredControlRegions.remove(hoverRegion);
+      }
+      if (!_dynamicControls) _scheduleControlsHide();
+    },
     child: Listener(
       onPointerDown: !_dynamicControls || retainDynamicPress
           ? _onControlPointerDown
@@ -642,13 +664,13 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     if (!widget.active) return const ColoredBox(color: Colors.black);
     return MouseRegion(
       onEnter: _onMouseEnter,
-      onHover: (_) => _showDynamicControls(),
+      onHover: (_) => _onMouseActivity(),
       onExit: _onMouseExit,
       child: Listener(
         onPointerDown: _onPointerDown,
         onPointerMove: (event) {
           if (event.kind == PointerDeviceKind.mouse && _mouseInside) {
-            _showDynamicControls();
+            _onMouseActivity();
           }
         },
         onPointerUp: _onPointerEnd,
@@ -827,6 +849,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                 ),
                                 child: _controlsVisibility(
                                   visible: controls,
+                                  hoverRegion: 'actions',
                                   child: Row(
                                     key: const ValueKey(
                                       'compact-playback-actions',
@@ -946,6 +969,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                 top: 0,
                                 child: _controlsVisibility(
                                   visible: controls,
+                                  hoverRegion: 'title',
                                   child: Container(
                                     color: Colors.black54,
                                     padding: const EdgeInsets.symmetric(
@@ -1149,6 +1173,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                 bottom: 0,
                                 child: _controlsVisibility(
                                   visible: controls,
+                                  hoverRegion: 'bar',
                                   retainDynamicPress: true,
                                   child: Theme(
                                     data: ThemeData.dark(useMaterial3: true)
@@ -1270,9 +1295,14 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
 // Keep the subtree alive until fade-out finishes, while immediately releasing
 // input and semantics. Reversing a fade reuses the same controls and composer.
 class _FadingPlayerControls extends StatefulWidget {
-  const _FadingPlayerControls({required this.visible, required this.child});
+  const _FadingPlayerControls({
+    required this.visible,
+    required this.onHoverChanged,
+    required this.child,
+  });
 
   final bool visible;
+  final ValueChanged<bool> onHoverChanged;
   final Widget child;
 
   @override
@@ -1282,6 +1312,7 @@ class _FadingPlayerControls extends StatefulWidget {
 class _FadingPlayerControlsState extends State<_FadingPlayerControls>
     with SingleTickerProviderStateMixin {
   late bool _renderChild = widget.visible;
+  bool _hovered = false;
   late final _opacity = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 200),
@@ -1291,6 +1322,12 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
     parent: _opacity,
     curve: Curves.easeInOut,
   );
+
+  void _setHovered(bool hovered) {
+    if (_hovered == hovered) return;
+    _hovered = hovered;
+    widget.onHoverChanged(hovered);
+  }
 
   void _onOpacityStatus(AnimationStatus status) {
     if (status == AnimationStatus.dismissed &&
@@ -1309,6 +1346,7 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
       _renderChild = true;
       _opacity.forward();
     } else {
+      _setHovered(false);
       _opacity.reverse();
       // A reveal can be cancelled before its first animation frame.
       if (_opacity.isDismissed) _renderChild = false;
@@ -1317,6 +1355,8 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
 
   @override
   void dispose() {
+    // MouseRegion does not send an exit when a hovered control is removed.
+    _setHovered(false);
     _curve.dispose();
     _opacity.dispose();
     super.dispose();
@@ -1331,7 +1371,13 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
         excluding: !widget.visible,
         child: FadeTransition(
           opacity: _curve,
-          child: _renderChild ? widget.child : const SizedBox.shrink(),
+          child: _renderChild
+              ? MouseRegion(
+                  onEnter: (_) => _setHovered(true),
+                  onExit: (_) => _setHovered(false),
+                  child: widget.child,
+                )
+              : const SizedBox.shrink(),
         ),
       ),
     ),
