@@ -190,9 +190,20 @@ final class _RetainedTabViewState<T extends Object>
     }
     if (notification is ScrollStartNotification &&
         notification.dragDetails != null) {
+      _generation++;
       _dragging = true;
     }
     if (notification is ScrollEndNotification && _dragging) {
+      final metrics = notification.metrics;
+      if (metrics is! PageMetrics) return false;
+      final page = metrics.page;
+      // A new pointer holds the unfinished snap and emits ScrollEnd too. Keep
+      // that swipe pending until a page boundary is reached; committing here
+      // would let the route update reset the next drag's controller.
+      if (page == null ||
+          (page - page.round()).abs() > precisionErrorTolerance) {
+        return false;
+      }
       _dragging = false;
       final generation = _generation;
       final index = _tabs?.index;

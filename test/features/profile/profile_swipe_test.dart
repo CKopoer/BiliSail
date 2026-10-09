@@ -296,6 +296,40 @@ void main() {
     },
   );
 
+  testWidgets('continuous swipes only load the final settled profile section', (
+    tester,
+  ) async {
+    await mount(tester);
+    final first = await tester.startGesture(tester.getCenter(_surface));
+    await first.moveBy(const Offset(-220, 0));
+    await tester.pump();
+    await first.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 30));
+    final position = tester
+        .state<ScrollableState>(
+          find
+              .descendant(of: _surface, matching: find.byType(Scrollable))
+              .first,
+        )
+        .position;
+    final interruptedPixels = position.pixels;
+    final second = await tester.startGesture(tester.getCenter(_surface));
+    await tester.pump();
+    await tester.pump();
+    expect(state().section, ProfileSection.videos);
+    expect(repository.calls, [ProfileSection.videos]);
+    expect(position.pixels, closeTo(interruptedPixels, .1));
+    await second.moveBy(const Offset(-350, 0));
+    await tester.pump();
+    expect(position.pixels, closeTo(interruptedPixels + 350, 1));
+    await second.up();
+    await tester.pumpAndSettle();
+    expect(state().section, ProfileSection.folders);
+    expect(repository.calls, [ProfileSection.videos, ProfileSection.folders]);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('short, cancelled, mouse and tab-strip drags keep selection', (
     tester,
   ) async {

@@ -47,6 +47,41 @@ void main() {
   });
 
   for (final rtl in [false, true]) {
+    testWidgets('the tab strip follows a snap takeover: rtl=$rtl', (
+      tester,
+    ) async {
+      final selected = await _mount(tester, rtl: rtl);
+      final position = _pagePosition(tester);
+      final surface = find.byKey(_surface);
+      final direction = rtl ? 1.0 : -1.0;
+      final first = await tester.startGesture(tester.getCenter(surface));
+      await first.moveBy(Offset(direction * 220, 0));
+      await tester.pump();
+      await first.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 30));
+      final heldPixels = position.pixels;
+      final second = await tester.startGesture(tester.getCenter(surface));
+      await tester.pump();
+      await tester.pump();
+      expect(selected.value, 0);
+      expect(position.pixels, closeTo(heldPixels, .1));
+      await _expectPagingSync(tester, heldPixels / position.viewportDimension);
+      await second.moveBy(Offset(-direction * 180, 0));
+      await tester.pump();
+      await _expectPagingSync(
+        tester,
+        position.pixels / position.viewportDimension,
+      );
+      await second.up();
+      await tester.pumpAndSettle();
+      expect(selected.value, 0);
+      await _expectPagingSync(tester, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final rtl in [false, true]) {
     for (final pixelRatio in [1.0, 3.0]) {
       for (final complete in [false, true]) {
         testWidgets(

@@ -123,6 +123,43 @@ void main() {
     },
   );
 
+  testWidgets('continuous swipes only commit the final settings category', (
+    tester,
+  ) async {
+    await mount(tester);
+    final start = tester.getBottomRight(_surface) - const Offset(5, 80);
+    final first = await tester.startGesture(start);
+    await first.moveBy(const Offset(-220, 0));
+    await tester.pump();
+    await first.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 30));
+    final position = tester
+        .state<ScrollableState>(
+          find
+              .descendant(of: _surface, matching: find.byType(Scrollable))
+              .first,
+        )
+        .position;
+    final interruptedPixels = position.pixels;
+    final second = await tester.startGesture(start);
+    await tester.pump();
+    await tester.pump();
+    expect(category.value, SettingsCategory.appearance);
+    expect(changes, isEmpty);
+    expect(position.pixels, closeTo(interruptedPixels, .1));
+    await second.moveBy(const Offset(-350, 0));
+    await tester.pump();
+    expect(position.pixels, closeTo(interruptedPixels + 350, 1));
+    await second.up();
+    await tester.pumpAndSettle();
+    expect(category.value, SettingsCategory.shortcuts);
+    expect(changes, [SettingsCategory.shortcuts]);
+    expect(repository.loads, 1);
+    expect(repository.writes, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'each category retains its own scroll and settings controls still save',
     (tester) async {

@@ -128,6 +128,107 @@ void main() {
     expect(changes, isEmpty);
   });
 
+  for (final reverse in [false, true]) {
+    testWidgets('a new swipe takes over an unfinished snap: reverse=$reverse', (
+      tester,
+    ) async {
+      _viewport(tester);
+      final channel = ValueNotifier(HomeChannel.recommended);
+      addTearDown(channel.dispose);
+      final changes = <HomeChannel>[];
+      await tester.pumpWidget(_app(channel, changes.add));
+      final surface = find.byKey(const ValueKey('home-channel-swipe'));
+      final position = _pagePosition(tester);
+      final first = await tester.startGesture(tester.getCenter(surface));
+      await first.moveBy(const Offset(-220, 0));
+      await tester.pump();
+      await first.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 30));
+      expect(position.isScrollingNotifier.value, isTrue);
+      final interruptedPixels = position.pixels;
+      final second = await tester.startGesture(tester.getCenter(surface));
+      await tester.pump();
+      await tester.pump();
+      expect(changes, isEmpty);
+      expect(position.pixels, closeTo(interruptedPixels, .1));
+      final dx = reverse ? 220.0 : -350.0;
+      await second.moveBy(Offset(dx, 0));
+      await tester.pump();
+      expect(position.pixels, closeTo(interruptedPixels - dx, 1));
+      await second.up();
+      await tester.pumpAndSettle();
+      expect(
+        channel.value,
+        reverse ? HomeChannel.recommended : HomeChannel.dynamic,
+      );
+      expect(changes, reverse ? isEmpty : [HomeChannel.dynamic]);
+    });
+  }
+
+  for (final cancel in [false, true]) {
+    testWidgets(
+      'holding an unfinished snap then releasing or cancelling: cancel=$cancel',
+      (tester) async {
+        _viewport(tester);
+        final channel = ValueNotifier(HomeChannel.recommended);
+        addTearDown(channel.dispose);
+        final changes = <HomeChannel>[];
+        await tester.pumpWidget(_app(channel, changes.add));
+        final surface = find.byKey(const ValueKey('home-channel-swipe'));
+        await tester.drag(surface, const Offset(-220, 0));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 30));
+        final position = _pagePosition(tester);
+        final interruptedPixels = position.pixels;
+        final hold = await tester.startGesture(tester.getCenter(surface));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(changes, isEmpty);
+        expect(position.pixels, closeTo(interruptedPixels, .1));
+        if (cancel) {
+          await hold.cancel();
+        } else {
+          await hold.up();
+        }
+        await tester.pumpAndSettle();
+        expect(
+          channel.value,
+          cancel ? HomeChannel.recommended : HomeChannel.popular,
+        );
+        expect(changes, cancel ? isEmpty : [HomeChannel.popular]);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('a new drag supersedes a queued settled selection', (
+    tester,
+  ) async {
+    _viewport(tester);
+    final channel = ValueNotifier(HomeChannel.recommended);
+    addTearDown(channel.dispose);
+    final changes = <HomeChannel>[];
+    await tester.pumpWidget(_app(channel, changes.add));
+    final surface = find.byKey(const ValueKey('home-channel-swipe'));
+    final first = await tester.startGesture(tester.getCenter(surface));
+    await first.moveBy(const Offset(-375, 0));
+    await tester.pump();
+    await first.up();
+    // The first selection is queued for the next frame; a new drag starts
+    // before that callback can update the route and reset its controller.
+    final second = await tester.startGesture(tester.getCenter(surface));
+    await second.moveBy(const Offset(-220, 0));
+    await tester.pump();
+    await tester.pump();
+    expect(changes, isEmpty);
+    expect(_pagePosition(tester).pixels, closeTo(595, 1));
+    await second.up();
+    await tester.pumpAndSettle();
+    expect(channel.value, HomeChannel.dynamic);
+    expect(changes, [HomeChannel.dynamic]);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'reduced motion skips tap animation and rapid taps end on target',
     (tester) async {
@@ -355,3 +456,14 @@ void _viewport(WidgetTester tester) {
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 }
+
+ScrollPosition _pagePosition(WidgetTester tester) => tester
+    .state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('home-channel-swipe')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    )
+    .position;
