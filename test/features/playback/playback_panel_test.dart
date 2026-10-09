@@ -1366,7 +1366,7 @@ void main() {
     await tester.tap(find.byTooltip('播放速度'));
     await tester.pump(const Duration(milliseconds: 300));
     await mouse.moveTo(const Offset(-10, -10));
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 6));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.widgetWithText(PopupMenuItem<double>, '3.0x'));
     await _pumpFrames(tester);
@@ -1448,7 +1448,7 @@ void main() {
             await tester.tap(find.byTooltip(tooltip));
             await tester.pump(const Duration(milliseconds: 300));
             await mouse.moveTo(const Offset(-10, -10));
-            await tester.pump(const Duration(seconds: 2));
+            await tester.pump(const Duration(seconds: 6));
             await tester.pump(const Duration(milliseconds: 300));
             final label = switch (menu) {
               'quality' => compact ? '清晰度 720P' : '720P',
@@ -1949,7 +1949,7 @@ void main() {
   for (final live in [false, true]) {
     for (final fullscreen in [false, true]) {
       testWidgets(
-        'dynamic controls reveal on hover and hide after one second or exit live=$live fullscreen=$fullscreen',
+        'dynamic controls reveal on hover and hide after three seconds or exit live=$live fullscreen=$fullscreen',
         (tester) async {
           final engine = _FakeEngine();
           final session = _session(engine);
@@ -1993,9 +1993,9 @@ void main() {
             await mouse.down(point);
             await mouse.up();
             // A live surface click must not restart the hover deadline.
-            await tester.pump(const Duration(milliseconds: 399));
+            await tester.pump(const Duration(milliseconds: 2399));
           } else {
-            await tester.pump(const Duration(milliseconds: 999));
+            await tester.pump(const Duration(milliseconds: 2999));
           }
           expect(controls, findsOneWidget);
           await tester.pump(const Duration(milliseconds: 1));
@@ -2013,7 +2013,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 600));
           expect(controls, findsOneWidget);
           await mouse.moveTo(point + const Offset(10, 0));
-          await tester.pump(const Duration(milliseconds: 999));
+          await tester.pump(const Duration(milliseconds: 2999));
           expect(controls, findsOneWidget);
           await tester.pump(const Duration(milliseconds: 1));
           expect(controls.hitTestable(), findsNothing);
@@ -2071,7 +2071,7 @@ void main() {
               await mouse.moveTo(_surfacePoint(tester));
               await tester.pump();
             }
-            await tester.pump(const Duration(seconds: 1));
+            await tester.pump(const Duration(seconds: 3));
             await tester.pump(const Duration(milliseconds: 216));
             await tester.pump();
             expect(controls, findsNothing);
@@ -2128,10 +2128,11 @@ void main() {
         tester.getCenter(find.byTooltip('音量')),
         kind: PointerDeviceKind.mouse,
       );
-      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(seconds: 4));
       expect(controls, findsOneWidget);
       await gesture.cancel();
-      await tester.pump(const Duration(seconds: 1));
+      await gesture.moveTo(_surfacePoint(tester));
+      await tester.pump(const Duration(seconds: 3));
       await tester.pump(const Duration(milliseconds: 216));
       await tester.pump();
       expect(controls, findsNothing);
@@ -2171,7 +2172,7 @@ void main() {
         _app(session, window, const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
-      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(seconds: 4));
       expect(controls, findsOneWidget);
       await tester.pumpWidget(_app(session, window, dynamicSettings));
       await _pumpFrames(tester);
@@ -2179,7 +2180,7 @@ void main() {
         _app(session, window, dynamicSettings, active: false),
       );
       await _pumpFrames(tester);
-      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(seconds: 4));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(_app(session, window, dynamicSettings));
       await _pumpFrames(tester);
@@ -2187,7 +2188,7 @@ void main() {
       await tester.pump();
       expect(controls, findsOneWidget);
       await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(seconds: 4));
       expect(tester.takeException(), isNull);
       await mouse.removePointer();
     },
@@ -2219,13 +2220,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 250));
       await _pumpFrames(tester);
       expect(engine.currentSnapshot.rate, 3);
-      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(seconds: 4));
       expect(controls, findsOneWidget);
       await touch.up();
       await _pumpFrames(tester);
       expect(engine.currentSnapshot.rate, 1);
       expect(engine.currentSnapshot.desiredPlaying, playing);
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 3));
       await tester.pump(const Duration(milliseconds: 216));
       await tester.pump();
       expect(controls, findsNothing);
@@ -2372,119 +2373,129 @@ void main() {
     }
   }
 
-  for (final width in [320.0, 1200.0]) {
-    for (final fullscreen in [false, true]) {
-      for (final live in [false, true]) {
-        testWidgets(
-          'click controls stay visible during mouse activity and hover width=$width live=$live fullscreen=$fullscreen',
-          (tester) async {
-            tester.view.physicalSize = Size(width, 800);
-            tester.view.devicePixelRatio = 1;
-            addTearDown(tester.view.resetPhysicalSize);
-            addTearDown(tester.view.resetDevicePixelRatio);
-            final engine = _FakeEngine();
-            final session = _session(engine);
-            addTearDown(session.close);
-            await tester.pumpWidget(
-              _app(
-                session,
-                _FakeWindowService(),
-                const AppSettings.defaults(),
-                width: width,
-                target: live ? const LivePlaybackTarget('12') : null,
-              ),
-            );
-            await _pumpFrames(tester);
-            if (fullscreen) {
-              await tester.tap(find.byTooltip('全屏（F）'));
+  for (final mode in PlayerControlsMode.values) {
+    for (final width in [320.0, 1200.0]) {
+      for (final fullscreen in [false, true]) {
+        for (final live in [false, true]) {
+          testWidgets(
+            '${mode.name} controls stay visible during mouse activity and hover width=$width live=$live fullscreen=$fullscreen',
+            (tester) async {
+              tester.view.physicalSize = Size(width, 800);
+              tester.view.devicePixelRatio = 1;
+              addTearDown(tester.view.resetPhysicalSize);
+              addTearDown(tester.view.resetDevicePixelRatio);
+              final engine = _FakeEngine();
+              final session = _session(engine);
+              addTearDown(session.close);
+              await tester.pumpWidget(
+                _app(
+                  session,
+                  _FakeWindowService(),
+                  AppSettings(playerControlsMode: mode),
+                  width: width,
+                  target: live ? const LivePlaybackTarget('12') : null,
+                ),
+              );
               await _pumpFrames(tester);
-            }
-            final controls = find.byKey(const ValueKey('player-controls'));
-            final barPoint = tester.getCenter(controls);
-            final mouse = await tester.createGesture(
-              kind: PointerDeviceKind.mouse,
-            );
-            await mouse.addPointer(location: const Offset(-10, -10));
-            final playing = engine.currentSnapshot.desiredPlaying;
-            final generation = session.sourceGeneration;
-            for (var i = 0; i < 3; i++) {
-              await mouse.moveTo(_surfacePoint(tester) + Offset(i * 5, 0));
-              await tester.pump(const Duration(seconds: 4));
+              if (fullscreen) {
+                await tester.tap(find.byTooltip('全屏（F）'));
+                await _pumpFrames(tester);
+              }
+              final controls = find.byKey(const ValueKey('player-controls'));
+              final barPoint = tester.getCenter(controls);
+              final mouse = await tester.createGesture(
+                kind: PointerDeviceKind.mouse,
+              );
+              await mouse.addPointer(location: const Offset(-10, -10));
+              final playing = engine.currentSnapshot.desiredPlaying;
+              final generation = session.sourceGeneration;
+              final idleMilliseconds = mode == PlayerControlsMode.dynamic
+                  ? 3000
+                  : 5000;
+              for (var i = 0; i < 3; i++) {
+                await mouse.moveTo(_surfacePoint(tester) + Offset(i * 5, 0));
+                await tester.pump(
+                  Duration(milliseconds: idleMilliseconds - 1000),
+                );
+                expect(controls.hitTestable(), findsOneWidget);
+              }
+              for (final region in [
+                controls,
+                find.byKey(const ValueKey('player-control-title-layer')),
+                if (width == 320)
+                  find.byKey(const ValueKey('compact-playback-actions')),
+                controls,
+              ]) {
+                await mouse.moveTo(tester.getCenter(region));
+                await tester.pump(const Duration(seconds: 6));
+                expect(controls.hitTestable(), findsOneWidget);
+              }
+              await mouse.moveTo(_surfacePoint(tester));
+              await tester.pump(Duration(milliseconds: idleMilliseconds - 1));
               expect(controls.hitTestable(), findsOneWidget);
-            }
-            for (final region in [
-              controls,
-              find.byKey(const ValueKey('player-control-title-layer')),
-              if (width == 320)
-                find.byKey(const ValueKey('compact-playback-actions')),
-              controls,
-            ]) {
-              await mouse.moveTo(tester.getCenter(region));
+              await tester.pump(const Duration(milliseconds: 1));
+              expect(controls.hitTestable(), findsNothing);
+              await tester.pump(const Duration(milliseconds: 216));
+              await tester.pump();
+              expect(controls, findsNothing);
+              await mouse.moveTo(barPoint);
+              await tester.pump();
               await tester.pump(const Duration(seconds: 6));
-              expect(controls.hitTestable(), findsOneWidget);
-            }
-            await mouse.moveTo(_surfacePoint(tester));
-            await tester.pump(const Duration(milliseconds: 4999));
-            expect(controls.hitTestable(), findsOneWidget);
-            await tester.pump(const Duration(milliseconds: 1));
-            expect(controls.hitTestable(), findsNothing);
-            await tester.pump(const Duration(milliseconds: 216));
-            await tester.pump();
-            expect(controls, findsNothing);
-            await mouse.moveTo(barPoint);
-            await tester.pump(const Duration(seconds: 6));
-            expect(controls, findsNothing);
-            expect(engine.currentSnapshot.desiredPlaying, playing);
-            expect(session.sourceGeneration, generation);
-            expect(engine.opens, 1);
-            expect(engine.maxSurfaces, 1);
-            await mouse.removePointer();
-            await tester.pumpWidget(const SizedBox());
-            await _pumpFrames(tester);
-          },
-        );
+              expect(
+                controls,
+                mode == PlayerControlsMode.dynamic
+                    ? findsOneWidget
+                    : findsNothing,
+              );
+              expect(engine.currentSnapshot.desiredPlaying, playing);
+              expect(session.sourceGeneration, generation);
+              expect(engine.opens, 1);
+              expect(engine.maxSurfaces, 1);
+              await mouse.removePointer();
+              await tester.pumpWidget(const SizedBox());
+              await _pumpFrames(tester);
+            },
+          );
+        }
       }
     }
-  }
 
-  testWidgets(
-    'click controls release hover when resizing removes compact actions',
-    (tester) async {
-      tester.view.physicalSize = const Size(1280, 800);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final engine = _FakeEngine();
-      final session = _session(engine);
-      final window = _FakeWindowService();
-      addTearDown(session.close);
-      await tester.pumpWidget(
-        _app(session, window, const AppSettings.defaults(), width: 320),
-      );
-      await _pumpFrames(tester);
-      final controls = find.byKey(const ValueKey('player-controls'));
-      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      await mouse.addPointer(location: const Offset(-10, -10));
-      await mouse.moveTo(
-        tester.getCenter(
-          find.byKey(const ValueKey('compact-playback-actions')),
-        ),
-      );
-      await tester.pump(const Duration(seconds: 6));
-      expect(controls.hitTestable(), findsOneWidget);
-      await tester.pumpWidget(
-        _app(session, window, const AppSettings.defaults(), width: 1200),
-      );
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pump(const Duration(milliseconds: 216));
-      await tester.pump();
-      expect(controls, findsNothing);
-      expect(engine.opens, 1);
-      await mouse.removePointer();
-      await tester.pumpWidget(const SizedBox());
-      await _pumpFrames(tester);
-    },
-  );
+    testWidgets(
+      '${mode.name} controls release hover when resizing removes compact actions',
+      (tester) async {
+        tester.view.physicalSize = const Size(1280, 800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final window = _FakeWindowService();
+        final settings = AppSettings(playerControlsMode: mode);
+        addTearDown(session.close);
+        await tester.pumpWidget(_app(session, window, settings, width: 320));
+        await _pumpFrames(tester);
+        final controls = find.byKey(const ValueKey('player-controls'));
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        await mouse.addPointer(location: const Offset(-10, -10));
+        await mouse.moveTo(
+          tester.getCenter(
+            find.byKey(const ValueKey('compact-playback-actions')),
+          ),
+        );
+        await tester.pump(const Duration(seconds: 6));
+        expect(controls.hitTestable(), findsOneWidget);
+        await tester.pumpWidget(_app(session, window, settings, width: 1200));
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump(const Duration(milliseconds: 216));
+        await tester.pump();
+        expect(controls, findsNothing);
+        expect(engine.opens, 1);
+        await mouse.removePointer();
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
 
   testWidgets(
     'click controls wait for drags and menus, then restart the idle deadline',

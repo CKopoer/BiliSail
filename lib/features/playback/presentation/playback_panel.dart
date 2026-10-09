@@ -533,15 +533,13 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         !_appActive ||
         !widget.controlsVisible.value ||
         _pressedPointers.isNotEmpty ||
+        _hoveredControlRegions.isNotEmpty ||
         // PopupMenuButton must stay mounted until its route returns a selection.
         _openControlsMenus > 0 ||
-        (!_dynamicControls &&
-            (_hoveredControlRegions.isNotEmpty ||
-                _controlEditorFocused ||
-                _hasError))) {
+        (!_dynamicControls && (_controlEditorFocused || _hasError))) {
       return;
     }
-    _controlsHideTimer = Timer(Duration(seconds: _dynamicControls ? 1 : 5), () {
+    _controlsHideTimer = Timer(Duration(seconds: _dynamicControls ? 3 : 5), () {
       _controlsHideTimer = null;
       if (mounted && widget.active && _appActive) {
         widget.controlsVisible.value = false;
@@ -630,7 +628,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
       } else {
         _hoveredControlRegions.remove(hoverRegion);
       }
-      if (!_dynamicControls) _scheduleControlsHide();
+      _scheduleControlsHide();
     },
     child: Listener(
       onPointerDown: !_dynamicControls || retainDynamicPress
