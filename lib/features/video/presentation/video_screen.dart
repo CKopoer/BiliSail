@@ -331,7 +331,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                   case final DateTime date)
                                 _Meta(
                                   icon: Icons.schedule_outlined,
-                                  label: _date(date),
+                                  label: _publicationTime(date),
                                 ),
                             ],
                           ),
@@ -889,5 +889,5 @@ final class _Meta extends StatelessWidget {
 
 String _failure(Object error, String fallback) =>
     error is AppFailure ? error.message : fallback;
-String _date(DateTime date) =>
-    '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+String _publicationTime(DateTime date) =>
+    date.toLocal().toString().split('.').first;
