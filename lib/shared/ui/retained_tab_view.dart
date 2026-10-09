@@ -83,12 +83,15 @@ final class RetainedTabView<T extends Object> extends StatefulWidget {
     required this.pageBuilder,
     this.viewKey,
     this.progress,
+    this.preloadPages = false,
   });
 
   final List<T> tabs;
   final T value;
   final Key? viewKey;
   final TabPagingProgress? progress;
+  // Ready local data can appear on the first drag without a loading placeholder.
+  final bool preloadPages;
   final ValueChanged<T> onChanged;
   final RetainedTabPageBuilder<T> pageBuilder;
 
@@ -257,6 +260,7 @@ final class _RetainedTabViewState<T extends Object>
                 tab: tab,
                 selection: _selection,
                 pageBuilder: widget.pageBuilder,
+                preload: widget.preloadPages,
                 scrollBehavior: ScrollConfiguration.of(context),
               ),
           ],
@@ -281,12 +285,14 @@ final class _RetainedTabPage<T extends Object> extends StatefulWidget {
     required this.tab,
     required this.selection,
     required this.pageBuilder,
+    required this.preload,
     required this.scrollBehavior,
   });
 
   final T tab;
   final ValueNotifier<T> selection;
   final RetainedTabPageBuilder<T> pageBuilder;
+  final bool preload;
   final ScrollBehavior scrollBehavior;
 
   @override
@@ -314,7 +320,7 @@ final class _RetainedTabPageState<T extends Object>
         valueListenable: widget.selection,
         builder: (context, selected, _) {
           final active = selected == widget.tab;
-          if (active && !_visited) {
+          if ((active || widget.preload) && !_visited) {
             _visited = true;
             updateKeepAlive();
           }

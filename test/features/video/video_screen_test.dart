@@ -25,6 +25,7 @@ import 'package:bilisail/features/video/domain/video_card_interactions.dart';
 import 'package:bilisail/shared/ui/video_card_cover.dart';
 import 'package:bilisail/shared/ui/video_card_interaction_scope.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
+import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -35,6 +36,62 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/video_card_fake_engine.dart';
 
 void main() {
+  for (final width in [390.0, 1100.0]) {
+    testWidgets('video info swipes retain scroll and player at $width', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = Size(width, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      var created = 0;
+      var disposed = 0;
+      final extras = _ExtrasRepository();
+      await tester.pumpWidget(
+        _relatedCardApp(
+          _RelatedCardOperations(),
+          onOpen: () {},
+          extras: extras,
+          playerBuilder: (_, _, _) => _TrackedPlayer(
+            onCreate: () => created++,
+            onDispose: () => disposed++,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final pager = find.byKey(const ValueKey('video-info-swipe'));
+      final player = tester.state(find.byType(_TrackedPlayer));
+      final playerRect = tester.getRect(find.byType(_TrackedPlayer));
+      final intro = tester.state<ScrollableState>(_introScrollable()).position;
+      intro.jumpTo(intro.maxScrollExtent);
+      await tester.pumpAndSettle();
+      final offset = intro.pixels;
+      final pageWidth = tester.getSize(pager).width;
+      final drag = await tester.startGesture(tester.getCenter(pager));
+      await drag.moveBy(Offset(-pageWidth * .3, 0));
+      await tester.pump();
+      await tester.pump();
+      final strip = tester.widget<PagingTabStrip<int>>(
+        find.byType(PagingTabStrip<int>),
+      );
+      expect(strip.value, 0);
+      expect(strip.progress?.value, inExclusiveRange(0, 1));
+      expect(extras.commentPages, isEmpty);
+      expect(tester.getRect(find.byType(_TrackedPlayer)), playerRect);
+      await drag.moveBy(Offset(-pageWidth * .35, 0));
+      await drag.up();
+      await tester.pumpAndSettle();
+      expect(find.text('暂无评论信息').hitTestable(), findsOneWidget);
+      await tester.drag(pager, Offset(pageWidth * .7, 0));
+      await tester.pumpAndSettle();
+      expect(intro.pixels, offset);
+      expect(tester.state(find.byType(_TrackedPlayer)), same(player));
+      expect(created, 1);
+      expect(disposed, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('video title and expanded description support drag copy', (
     tester,
   ) async {

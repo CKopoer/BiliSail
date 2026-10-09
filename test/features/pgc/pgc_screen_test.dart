@@ -4,6 +4,7 @@ import '../../support/text_selection.dart';
 import 'dart:async';
 
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
+import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -56,6 +57,96 @@ final _season = PgcSeason(
 );
 
 void main() {
+  for (final width in [390.0, 1200.0]) {
+    testWidgets('PGC info swipes retain comment scroll and player at $width', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = Size(width, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final auth = _Auth();
+      addTearDown(auth.dispose);
+      var created = 0;
+      var disposed = 0;
+      var commentBuilds = 0;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            pgcRepositoryProvider.overrideWithValue(_Repo()),
+            authRepositoryProvider.overrideWithValue(auth),
+          ],
+          child: InputTestApp(
+            home: Scaffold(
+              body: PgcScreen(
+                seasonId: 's1',
+                playerBuilder: (_, _, episode) => _TrackedPlayer(
+                  title: episode.displayTitle,
+                  onCreate: () => created++,
+                  onDispose: () => disposed++,
+                ),
+                commentsBuilder: (_, _, _) {
+                  commentBuilds++;
+                  return ListView.builder(
+                    key: const ValueKey('test-pgc-comments'),
+                    itemCount: 50,
+                    itemBuilder: (_, index) =>
+                        SizedBox(height: 60, child: Text('评论 $index')),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      if (width < 700) {
+        await tester.tap(find.byTooltip('展开影视信息'));
+        await tester.pumpAndSettle();
+      }
+      expect(commentBuilds, 0);
+      final pager = find.byKey(const ValueKey('pgc-info-swipe'));
+      final player = tester.state(find.byType(_TrackedPlayer));
+      final pageWidth = tester.getSize(pager).width;
+      final drag = await tester.startGesture(tester.getCenter(pager));
+      await drag.moveBy(Offset(-pageWidth * .3, 0));
+      await tester.pump();
+      await tester.pump();
+      final strip = tester.widget<PagingTabStrip<int>>(
+        find.byType(PagingTabStrip<int>),
+      );
+      expect(strip.value, 0);
+      expect(strip.progress?.value, inExclusiveRange(0, 1));
+      expect(commentBuilds, 0);
+      await drag.moveBy(Offset(-pageWidth * .35, 0));
+      await drag.up();
+      await tester.pumpAndSettle();
+      final comments = find.byKey(const ValueKey('test-pgc-comments'));
+      final scrollable = find.descendant(
+        of: comments,
+        matching: find.byType(Scrollable),
+      );
+      final position = tester.state<ScrollableState>(scrollable).position;
+      await tester.drag(comments, const Offset(0, -250));
+      await tester.pumpAndSettle();
+      final offset = position.pixels;
+      expect(offset, greaterThan(0));
+      await tester.drag(pager, Offset(pageWidth * .7, 0));
+      await tester.pumpAndSettle();
+      await tester.drag(pager, Offset(-pageWidth * .7, 0));
+      await tester.pumpAndSettle();
+      expect(
+        tester.state<ScrollableState>(scrollable).position,
+        same(position),
+      );
+      expect(position.pixels, offset);
+      expect(tester.state(find.byType(_TrackedPlayer)), same(player));
+      expect(created, 1);
+      expect(disposed, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('season title and description support drag copy', (tester) async {
     final auth = _Auth();
     addTearDown(auth.dispose);

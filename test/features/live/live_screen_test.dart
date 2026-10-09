@@ -12,6 +12,7 @@ import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/live/presentation/live_screen.dart';
 import 'package:bilisail/features/live/presentation/live_player_danmaku.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
+import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -134,6 +135,80 @@ void main() {
     );
   }
 
+  for (final width in [390.0, 1280.0]) {
+    testWidgets('live chat and SC swipes retain scroll and player at $width', (
+      tester,
+    ) async {
+      repository.scMessages = List.generate(
+        20,
+        (index) => LiveSuperChatMessage(
+          id: 'sc-$index',
+          userName: 'SC 观众 $index',
+          text: '付费留言 $index',
+          price: 50,
+        ),
+      );
+      repository.chatMessages = List.generate(
+        80,
+        (index) => LiveChatMessage(userName: '观众', text: '历史消息 $index'),
+      );
+      await showPage(tester, width: width);
+      await tester.pumpAndSettle();
+      final player = tester.state(find.byType(_PlayerProbe));
+      final playerRect = tester.getRect(find.byType(_PlayerProbe));
+      final chat = find.byKey(const ValueKey('live-chat-list'));
+      final position = chatPosition(tester);
+      await tester.drag(chat, const Offset(0, 240));
+      await tester.pumpAndSettle();
+      final offset = position.pixels;
+      final pager = find.byKey(const ValueKey('live-info-swipe'));
+      final pageWidth = tester.getSize(pager).width;
+      final drag = await tester.startGesture(tester.getCenter(chat));
+      await drag.moveBy(Offset(-pageWidth * .3, 0));
+      await tester.pump();
+      await tester.pump();
+      final strip = tester.widget<PagingTabStrip<int>>(
+        find.byType(PagingTabStrip<int>),
+      );
+      expect(strip.value, 0);
+      expect(strip.progress?.value, inExclusiveRange(0, 1));
+      expect(find.text('共 20 条 SC'), findsOneWidget);
+      expect(tester.getRect(find.byType(_PlayerProbe)), playerRect);
+      await drag.moveBy(Offset(-pageWidth * .35, 0));
+      await drag.up();
+      await tester.pumpAndSettle();
+      expect(find.text('共 20 条 SC').hitTestable(), findsOneWidget);
+      final scList = find
+          .descendant(of: pager, matching: find.byType(ListView))
+          .hitTestable();
+      final scScrollable = find.descendant(
+        of: scList,
+        matching: find.byType(Scrollable),
+      );
+      final scPosition = tester.state<ScrollableState>(scScrollable).position;
+      await tester.drag(scList, const Offset(0, -240));
+      await tester.pumpAndSettle();
+      final scOffset = scPosition.pixels;
+      expect(scOffset, greaterThan(0));
+      receiveMessages(0, 8);
+      await tester.pumpAndSettle();
+      await tester.drag(pager, Offset(pageWidth * .7, 0));
+      await tester.pumpAndSettle();
+      expect(chatPosition(tester), same(position));
+      expect(position.pixels, offset);
+      await tester.drag(pager, Offset(-pageWidth * .7, 0));
+      await tester.pumpAndSettle();
+      expect(
+        tester.state<ScrollableState>(scScrollable).position,
+        same(scPosition),
+      );
+      expect(scPosition.pixels, scOffset);
+      expect(tester.state(find.byType(_PlayerProbe)), same(player));
+      expect(realtime.opens, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'opening chat follows variable-height messages and bounded batches',
     (tester) async {
@@ -248,10 +323,16 @@ void main() {
     await tester.pumpAndSettle();
     final position = chatPosition(tester);
     final player = tester.state(find.byType(_PlayerProbe));
-    await tester.tap(find.byKey(const ValueKey('live-tab-1')));
+    await tester.drag(
+      find.byKey(const ValueKey('live-info-swipe')),
+      const Offset(-260, 0),
+    );
     receiveMessages(0, 12);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('live-tab-0')));
+    await tester.drag(
+      find.byKey(const ValueKey('live-info-swipe')),
+      const Offset(260, 0),
+    );
     await tester.pumpAndSettle();
     expect(position.extentAfter, 0);
     await tester.tap(find.byTooltip('收起直播信息'));
@@ -542,7 +623,7 @@ void main() {
     expect(find.text('第二条完整的 SC 内容'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('live-tab-1')));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('共 2 条 SC'), findsOneWidget);
     expect(find.text('第一条完整的 SC 内容'), findsOneWidget);
     expect(find.text('第二条完整的 SC 内容'), findsOneWidget);
@@ -652,7 +733,7 @@ void main() {
     await tester.pump();
     expect(find.text('第一条完整的 SC 内容'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('live-tab-1')));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('共 2 条 SC'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -728,7 +809,7 @@ void main() {
       expect(find.text('SC (0)'), findsOneWidget);
       expect(tester.state(find.byType(_PlayerProbe)), same(player));
       await tester.tap(find.byKey(const ValueKey('live-tab-1')));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.text('暂无 SC'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       container

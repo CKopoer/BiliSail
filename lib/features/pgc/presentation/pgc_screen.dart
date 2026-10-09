@@ -15,6 +15,7 @@ import '../../settings/domain/shortcut_settings.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
+import '../../../shared/ui/playback_info_tabs.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/video_card.dart';
 import '../application/pgc_controller.dart';
@@ -60,7 +61,6 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
   int _tab = 0;
   bool _descriptionExpanded = false;
   bool? _infoVisible;
-  bool _commentsVisited = false;
   final ScrollController _introScroll = ScrollController();
 
   @override
@@ -95,7 +95,6 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     if (oldWidget.seasonId != widget.seasonId) {
       _locator = next;
       _tab = 0;
-      _commentsVisited = false;
       _descriptionExpanded = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _introScroll.hasClients) _introScroll.jumpTo(0);
@@ -111,7 +110,6 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
               null) {
         _locator = next;
         _tab = 0;
-        _commentsVisited = false;
         return;
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -230,38 +228,48 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                       ),
                     ],
                   ),
-                _tabs(context, season, selected, toggleInfo),
-                const Divider(height: 1),
                 Expanded(
-                  child: IndexedStack(
-                    index: _tab.clamp(
-                      0,
-                      widget.commentsBuilder != null && selected != null
-                          ? 1
-                          : 0,
-                    ),
-                    children: [
-                      ExcludeFocus(
-                        excluding:
-                            _tab == 1 &&
-                            selected != null &&
-                            widget.commentsBuilder != null,
-                        child: SingleChildScrollView(
-                          key: const ValueKey('pgc-intro'),
-                          controller: _introScroll,
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                          child: _details(context, season, selected),
-                        ),
+                  child: WorkspaceActivity(
+                    active: showInfo && WorkspaceActivity.isActive(context),
+                    child: PlaybackInfoTabs(
+                      key: ValueKey(season.id),
+                      value: _tab.clamp(
+                        0,
+                        widget.commentsBuilder != null && selected != null
+                            ? 1
+                            : 0,
                       ),
-                      if (widget.commentsBuilder case final builder?)
-                        if (selected != null)
-                          ExcludeFocus(
-                            excluding: _tab != 1,
-                            child: _commentsVisited
-                                ? builder(context, season, selected)
-                                : const SizedBox(),
+                      onChanged: (tab) => setState(() => _tab = tab),
+                      viewKey: const ValueKey('pgc-info-swipe'),
+                      labels: [
+                        const Text('简介'),
+                        if (widget.commentsBuilder != null && selected != null)
+                          const Text('评论'),
+                      ],
+                      itemKey: (tab) =>
+                          ValueKey('pgc-tab-${tab == 0 ? '简介' : '评论'}'),
+                      trailing: _menu(context, season, selected, toggleInfo),
+                      pageBuilder: (context, tab, active) => TickerMode(
+                        enabled: showInfo && active,
+                        child: switch ((
+                          tab,
+                          widget.commentsBuilder,
+                          selected,
+                        )) {
+                          (1, final builder?, final episode?) => builder(
+                            context,
+                            season,
+                            episode,
                           ),
-                    ],
+                          _ => SingleChildScrollView(
+                            key: const ValueKey('pgc-intro'),
+                            controller: _introScroll,
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                            child: _details(context, season, selected),
+                          ),
+                        },
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -349,73 +357,35 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     }
   }
 
-  Widget _tabs(
+  Widget _menu(
     BuildContext context,
     PgcSeason season,
     PgcEpisode? episode,
     VoidCallback toggleInfo,
   ) {
-    final primary = Theme.of(context).colorScheme.primary;
-    return Row(
-      children: [
-        for (final (index, label) in [
-          '简介',
-          if (widget.commentsBuilder != null && episode != null) '评论',
-        ].indexed)
-          InkWell(
-            key: ValueKey('pgc-tab-$label'),
-            onTap: () => setState(() {
-              _tab = index;
-              if (index == 1) _commentsVisited = true;
-            }),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(18, 15, 18, 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    width: 3,
-                    color: _tab == index ? primary : Colors.transparent,
-                  ),
-                ),
-              ),
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: _tab == index
-                      ? primary
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ),
-        const Spacer(),
-        PopupMenuButton<String>(
-          tooltip: '更多影视操作',
-          onSelected: (action) {
-            if (action == 'download') {
-              widget.onDownload?.call(season, episode);
-            } else if (action == 'refresh') {
-              unawaited(
-                ref.read(pgcControllerProvider(_locator).notifier).load(),
-              );
-            } else if (action == 'copy') {
-              final url = episode == null
-                  ? 'https://www.bilibili.com/bangumi/play/ss${_locator.seasonId?.value ?? ''}'
-                  : 'https://www.bilibili.com/bangumi/play/ep${episode.episodeId}';
-              unawaited(_copyLink(context, url));
-            } else if (action == 'collapse') {
-              toggleInfo();
-            }
-          },
-          itemBuilder: (context) => [
-            if (widget.onDownload != null)
-              const PopupMenuItem(value: 'download', child: Text('下载剧集')),
-            const PopupMenuItem(value: 'refresh', child: Text('刷新影视详情')),
-            if (episode != null || _locator.seasonId != null)
-              const PopupMenuItem(value: 'copy', child: Text('复制播放链接')),
-            const PopupMenuItem(value: 'collapse', child: Text('收起影视信息')),
-          ],
-        ),
+    return PopupMenuButton<String>(
+      tooltip: '更多影视操作',
+      onSelected: (action) {
+        if (action == 'download') {
+          widget.onDownload?.call(season, episode);
+        } else if (action == 'refresh') {
+          unawaited(ref.read(pgcControllerProvider(_locator).notifier).load());
+        } else if (action == 'copy') {
+          final url = episode == null
+              ? 'https://www.bilibili.com/bangumi/play/ss${_locator.seasonId?.value ?? ''}'
+              : 'https://www.bilibili.com/bangumi/play/ep${episode.episodeId}';
+          unawaited(_copyLink(context, url));
+        } else if (action == 'collapse') {
+          toggleInfo();
+        }
+      },
+      itemBuilder: (context) => [
+        if (widget.onDownload != null)
+          const PopupMenuItem(value: 'download', child: Text('下载剧集')),
+        const PopupMenuItem(value: 'refresh', child: Text('刷新影视详情')),
+        if (episode != null || _locator.seasonId != null)
+          const PopupMenuItem(value: 'copy', child: Text('复制播放链接')),
+        const PopupMenuItem(value: 'collapse', child: Text('收起影视信息')),
       ],
     );
   }

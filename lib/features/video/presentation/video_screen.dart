@@ -15,6 +15,8 @@ import '../../../domain/video.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
+import '../../../shared/ui/playback_info_tabs.dart';
+import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/video_card_cover.dart';
 import 'video_author_header.dart';
@@ -82,7 +84,6 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
   WatchLaterQueueRegistry? _retainedRegistry;
   PlaybackSession? _queueSession;
   final WatchLaterQueuePlayback _queuePlayback = WatchLaterQueuePlayback();
-  final Set<int> _visitedTabs = {0};
   final ScrollController _introScroll = ScrollController();
   final GlobalKey _infoKey = GlobalKey();
   final GlobalKey _playerKey = GlobalKey();
@@ -403,70 +404,74 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                 onSelect: _openQueueVideo,
                               ),
                           if (queue == null || !_queueExpanded) ...[
-                            Row(
-                              children: [
-                                for (final (index, title) in [
-                                  '简介',
-                                  '评论',
-                                ].indexed)
-                                  _Pivot(
-                                    title: title,
-                                    count: index == 1 ? video.replyCount : null,
-                                    selected: _tab == index,
-                                    onTap: () => setState(() {
-                                      _tab = index;
-                                      _visitedTabs.add(index);
-                                    }),
-                                  ),
-                                const Spacer(),
-                                if (widget.menuBuilder != null)
-                                  widget.menuBuilder!(context, video, selected),
-                              ],
-                            ),
-                            const Divider(height: 1),
                             Expanded(
-                              child: IndexedStack(
-                                index: _tab,
-                                children: [
-                                  ExcludeFocus(
-                                    excluding: _tab != 0,
-                                    child: TickerMode(
-                                      enabled: showInfo && _tab == 0,
-                                      child: CustomScrollView(
-                                        key: const ValueKey(
-                                          'video-intro-scroll',
+                              child: WorkspaceActivity(
+                                active:
+                                    showInfo &&
+                                    WorkspaceActivity.isActive(context),
+                                child: PlaybackInfoTabs(
+                                  value: _tab,
+                                  onChanged: (tab) =>
+                                      setState(() => _tab = tab),
+                                  viewKey: const ValueKey('video-info-swipe'),
+                                  labels: [
+                                    const Text('简介'),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Text('评论'),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          compactCount(video.replyCount),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall,
                                         ),
-                                        controller: _introScroll,
-                                        slivers: [
-                                          SliverToBoxAdapter(child: content),
-                                          SliverPadding(
-                                            padding: const EdgeInsets.fromLTRB(
-                                              12,
-                                              0,
-                                              12,
-                                              12,
-                                            ),
-                                            sliver: _RelatedVideosSliver(
-                                              id: widget.id,
-                                              onOpenVideo: widget.onOpenVideo,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                      ],
                                     ),
+                                  ],
+                                  trailing: widget.menuBuilder?.call(
+                                    context,
+                                    video,
+                                    selected,
                                   ),
-                                  if (_visitedTabs.contains(1))
-                                    ExcludeFocus(
-                                      excluding: _tab != 1,
-                                      child: VideoCommentsPanel(
-                                        detail: video,
-                                        onLogin: widget.onLogin,
-                                        onOpenUser: widget.onOpenUser,
+                                  pageBuilder: (context, tab, active) =>
+                                      TickerMode(
+                                        enabled: showInfo && active,
+                                        child: tab == 0
+                                            ? CustomScrollView(
+                                                key: const ValueKey(
+                                                  'video-intro-scroll',
+                                                ),
+                                                controller: _introScroll,
+                                                slivers: [
+                                                  SliverToBoxAdapter(
+                                                    child: content,
+                                                  ),
+                                                  SliverPadding(
+                                                    padding:
+                                                        const EdgeInsets.fromLTRB(
+                                                          12,
+                                                          0,
+                                                          12,
+                                                          12,
+                                                        ),
+                                                    sliver:
+                                                        _RelatedVideosSliver(
+                                                          id: widget.id,
+                                                          onOpenVideo: widget
+                                                              .onOpenVideo,
+                                                        ),
+                                                  ),
+                                                ],
+                                              )
+                                            : VideoCommentsPanel(
+                                                detail: video,
+                                                onLogin: widget.onLogin,
+                                                onOpenUser: widget.onOpenUser,
+                                              ),
                                       ),
-                                    )
-                                  else
-                                    const SizedBox(),
-                                ],
+                                ),
                               ),
                             ),
                           ],
@@ -812,60 +817,6 @@ final class _RelatedVideoCardState extends State<_RelatedVideoCard> {
       ),
     );
   }
-}
-
-final class _Pivot extends StatelessWidget {
-  const _Pivot({
-    required this.title,
-    required this.selected,
-    required this.onTap,
-    this.count,
-  });
-  final int? count;
-  final String title;
-  final bool selected;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => Semantics(
-    selected: selected,
-    button: true,
-    child: InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(17, 15, 17, 12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              width: 3,
-              color: selected
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.transparent,
-            ),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: selected
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (count != null) ...[
-              const SizedBox(width: 4),
-              Text(
-                compactCount(count),
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-            ],
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 final class _Meta extends StatelessWidget {

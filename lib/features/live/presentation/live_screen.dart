@@ -9,6 +9,7 @@ import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/user.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
+import '../../../shared/ui/playback_info_tabs.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/state_view.dart';
 import '../application/live_controller.dart';
@@ -329,52 +330,45 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
             ),
           ),
           const Divider(height: 1),
-          Row(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _tabButton('聊天', 0),
-                      _tabButton('SC (${state.superChats.length})', 1),
-                    ],
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: _tab == 0
-                    ? (state.connectionPhase == LiveConnectionPhase.failed
-                          ? '重新连接弹幕'
-                          : '刷新消息')
-                    : '刷新 SC',
-                onPressed: _tab == 0
-                    ? (state.connectionPhase == LiveConnectionPhase.failed
-                          ? controller.retryRealtime
-                          : state.chatLoading
-                          ? null
-                          : controller.refreshChat)
-                    : (state.superChatLoading
-                          ? null
-                          : controller.refreshSuperChats),
-                icon: const Icon(Icons.refresh_rounded, size: 20),
-              ),
-            ],
-          ),
-          const Divider(height: 1),
           Expanded(
-            child: IndexedStack(
-              index: _tab,
-              children: [
-                TickerMode(
-                  enabled: _lastActive == true && _infoVisible && _tab == 0,
-                  child: _chat(context, state, controller),
+            child: WorkspaceActivity(
+              active: _lastActive == true && _infoVisible,
+              child: PlaybackInfoTabs(
+                key: ValueKey(widget.roomId),
+                value: _tab,
+                onChanged: (tab) => setState(() => _tab = tab),
+                viewKey: const ValueKey('live-info-swipe'),
+                labels: [
+                  const Text('聊天'),
+                  Text('SC (${state.superChats.length})'),
+                ],
+                itemKey: (tab) => ValueKey('live-tab-$tab'),
+                compact: true,
+                preloadPages: true,
+                trailing: IconButton(
+                  tooltip: _tab == 0
+                      ? (state.connectionPhase == LiveConnectionPhase.failed
+                            ? '重新连接弹幕'
+                            : '刷新消息')
+                      : '刷新 SC',
+                  onPressed: _tab == 0
+                      ? (state.connectionPhase == LiveConnectionPhase.failed
+                            ? controller.retryRealtime
+                            : state.chatLoading
+                            ? null
+                            : controller.refreshChat)
+                      : (state.superChatLoading
+                            ? null
+                            : controller.refreshSuperChats),
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
                 ),
-                TickerMode(
-                  enabled: _lastActive == true && _infoVisible && _tab == 1,
-                  child: _superChats(context, state, controller),
+                pageBuilder: (context, tab, active) => TickerMode(
+                  enabled: _lastActive == true && _infoVisible && active,
+                  child: tab == 0
+                      ? _chat(context, state, controller)
+                      : _superChats(context, state, controller),
                 ),
-              ],
+              ),
             ),
           ),
           if (widget.composerBuilder case final builder?) ...[
@@ -486,39 +480,6 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _tabButton(String label, int index) {
-    final theme = Theme.of(context);
-    return Semantics(
-      button: true,
-      selected: _tab == index,
-      child: InkWell(
-        key: ValueKey('live-tab-$index'),
-        onTap: () => setState(() => _tab = index),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 11, 16, 9),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                width: 2,
-                color: _tab == index
-                    ? theme.colorScheme.primary
-                    : Colors.transparent,
-              ),
-            ),
-          ),
-          child: Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: _tab == index
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
       ),
     );
   }
