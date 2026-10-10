@@ -769,6 +769,81 @@ void main() {
       },
     );
   }
+  testWidgets('related title tooltip only shows truncated names on hover', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1100, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final operations = _RelatedCardOperations();
+    addTearDown(() => unawaited(operations.previews.close()));
+    const videos = [
+      VideoSummary(
+        id: VideoId('BV0000000000'),
+        title:
+            '相关推荐视频的完整长标题需要在鼠标悬停时显示，'
+            '超出两行的这部分内容也必须完整展示，不能继续被省略',
+        coverUrl: '',
+        author: '推荐UP',
+        duration: Duration(minutes: 2),
+      ),
+      VideoSummary(
+        id: VideoId('BV0000000001'),
+        title: '短标题',
+        coverUrl: '',
+        author: '推荐UP',
+        duration: Duration(minutes: 2),
+      ),
+    ];
+    var opened = 0;
+    await tester.pumpWidget(
+      _relatedCardApp(
+        operations,
+        extras: _ExtrasRepository(related: videos),
+        onOpen: () => opened++,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(100, 100));
+    addTearDown(mouse.removePointer);
+    for (final video in videos) {
+      final title = find.byWidgetPredicate(
+        (widget) =>
+            widget is Text &&
+            widget.maxLines == 2 &&
+            widget.data == video.title,
+      );
+      await tester.ensureVisible(title);
+      await tester.pumpAndSettle();
+      final overflowing = video == videos.first;
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.descendant(of: title, matching: find.byType(RichText)),
+      );
+      expect(paragraph.didExceedMaxLines, overflowing);
+      expect(
+        find.byTooltip(video.title),
+        overflowing ? findsOneWidget : findsNothing,
+      );
+      await mouse.moveTo(tester.getCenter(title));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is RichText && widget.text.toPlainText() == video.title,
+        ),
+        overflowing ? findsNWidgets(2) : findsOneWidget,
+      );
+      await tester.tap(title);
+      await mouse.moveTo(const Offset(100, 100));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
+    expect(opened, 2);
+  });
+
   testWidgets(
     'related card previews from title hover and adds without opening',
     (tester) async {

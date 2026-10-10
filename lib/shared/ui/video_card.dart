@@ -281,6 +281,7 @@ final class _VideoCardState extends State<VideoCard> {
                               video.title,
                               query: widget.highlightQuery,
                               maxLines: 2,
+                              showOverflowTooltip: true,
                               style: titleStyle?.copyWith(
                                 color: highlighted
                                     ? scheme.primary

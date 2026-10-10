@@ -14,6 +14,7 @@ import '../../../shared/ui/playback_page_commands.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/app_cover_image.dart';
+import '../../../shared/ui/highlighted_text.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../../../shared/ui/playback_info_tabs.dart';
 import '../../../core/presentation/workspace_activity.dart';
@@ -766,10 +767,11 @@ final class _RelatedVideoCardState extends State<_RelatedVideoCard> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  HighlightedText(
                     video.title,
+                    query: '',
                     maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                    showOverflowTooltip: true,
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   Padding(

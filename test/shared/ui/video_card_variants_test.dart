@@ -2,6 +2,7 @@ import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -280,6 +281,7 @@ void main() {
         );
         expect(titleParagraph.maxLines, 2);
         expect(titleParagraph.overflow, TextOverflow.ellipsis);
+        expect(find.byTooltip(video.title), findsOneWidget);
         expect(authorParagraph.didExceedMaxLines, isTrue);
         expect(authorParagraph.maxLines, 1);
         expect(authorParagraph.overflow, TextOverflow.ellipsis);
@@ -295,6 +297,73 @@ void main() {
         expect(tester.takeException(), isNull, reason: '$width, scale=$scale');
       }
     }
+  });
+
+  testWidgets('title tooltip follows overflow, hover and font scaling', (
+    tester,
+  ) async {
+    const video = VideoSummary(
+      id: VideoId('BV1234567890'),
+      title: '测试视频标题完整名称随着窗口大小和文字缩放变化',
+      coverUrl: '',
+      author: '测试UP',
+      duration: Duration(minutes: 3),
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(700, 500));
+    addTearDown(mouse.removePointer);
+    var opened = 0;
+    for (final query in ['', '视频']) {
+      for (final (width, scale, overflowing) in [
+        (300.0, 1.0, false),
+        (160.0, 1.0, true),
+        (300.0, 1.0, false),
+        (300.0, 2.0, true),
+      ]) {
+        await tester.pumpWidget(
+          _app(
+            width: width,
+            scale: scale,
+            query: query,
+            video: video,
+            menu: const VideoCardMenu(
+              actions: [VideoCardMenuAction.watchLater],
+            ),
+            onTap: () => opened++,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final title = find.byWidgetPredicate(
+          (widget) =>
+              widget is Text &&
+              widget.maxLines == 2 &&
+              (widget.data ?? widget.textSpan?.toPlainText()) == video.title,
+        );
+        final paragraph = tester.renderObject<RenderParagraph>(
+          find.descendant(of: title, matching: find.byType(RichText)),
+        );
+        expect(paragraph.didExceedMaxLines, overflowing);
+        expect(
+          find.byTooltip(video.title),
+          overflowing ? findsOneWidget : findsNothing,
+        );
+        await mouse.moveTo(tester.getCenter(title));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is RichText && widget.text.toPlainText() == video.title,
+          ),
+          overflowing ? findsNWidgets(2) : findsOneWidget,
+        );
+        await tester.tap(title);
+        await mouse.moveTo(const Offset(700, 500));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+    }
+    expect(opened, 8);
   });
 
   testWidgets('search highlights titles with UP badge and hides feed reasons', (
@@ -373,6 +442,8 @@ Widget _app({
   String playCountText = '',
   String danmakuCountText = '',
   String publishText = '今天投稿',
+  VideoCardMenu? menu,
+  VoidCallback? onTap,
 }) => MaterialApp(
   theme: dark ? BiliTheme.dark() : BiliTheme.light(),
   home: Scaffold(
@@ -400,7 +471,8 @@ Widget _app({
             playCountText: playCountText,
             danmakuCountText: danmakuCountText,
             progress: .4,
-            onTap: () {},
+            menu: menu,
+            onTap: onTap ?? () {},
           ),
         ),
       ),
