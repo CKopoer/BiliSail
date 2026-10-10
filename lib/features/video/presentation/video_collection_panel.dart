@@ -5,6 +5,7 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/state_view.dart';
+import '../../../shared/ui/scroll_boundary_handoff.dart';
 import '../../../shared/ui/video_card.dart';
 import '../application/collection_subscription_controller.dart';
 import '../application/video_controller.dart';
@@ -107,14 +108,16 @@ final class _VideoCollectionPanelState
             if (_partsExpanded)
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 224),
-                child: ListView.builder(
-                  primary: false,
-                  shrinkWrap: true,
-                  padding: EdgeInsets.zero,
-                  itemCount: widget.video.parts.length,
-                  itemBuilder: (_, index) => _partRow(
-                    widget.video.summary.id,
-                    widget.video.parts[index],
+                child: ScrollBoundaryHandoff(
+                  child: ListView.builder(
+                    primary: false,
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: widget.video.parts.length,
+                    itemBuilder: (_, index) => _partRow(
+                      widget.video.summary.id,
+                      widget.video.parts[index],
+                    ),
                   ),
                 ),
               ),
@@ -145,16 +148,18 @@ final class _VideoCollectionPanelState
             if (_expanded)
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 224),
-                child: Scrollbar(
-                  controller: _scroll,
-                  child: ListView.builder(
+                child: ScrollBoundaryHandoff(
+                  child: Scrollbar(
                     controller: _scroll,
-                    primary: false,
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.only(bottom: 4),
-                    itemCount: collection.entries.length,
-                    itemBuilder: (_, index) =>
-                        _entry(collection.entries[index]),
+                    child: ListView.builder(
+                      controller: _scroll,
+                      primary: false,
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.only(bottom: 4),
+                      itemCount: collection.entries.length,
+                      itemBuilder: (_, index) =>
+                          _entry(collection.entries[index]),
+                    ),
                   ),
                 ),
               ),

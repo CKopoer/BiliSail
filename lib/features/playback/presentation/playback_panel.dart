@@ -59,6 +59,8 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   late final PlaybackSession _session;
   late final PlaybackShortcutController _shortcuts;
   late final ValueNotifier<AppSettings> _settings;
+  final _pageCommands = ValueNotifier<PlaybackPageCommands?>(null);
+  int? _handledCompletionGeneration;
   // Inline and fullscreen views are recreated, but share the page's intent.
   final _controlsVisible = ValueNotifier(true);
   bool _fullScreen = false;
@@ -79,6 +81,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _settings = ValueNotifier(widget.settings);
     _session = ref.read(playbackSessionProvider)..attach(this);
     _session.snapshots.addListener(_updateFullScreenOrientation);
+    _session.snapshots.addListener(_onPlaybackCompleted);
     _shortcuts = PlaybackShortcutController(
       session: _session,
       settings: () => widget.settings.shortcuts,
@@ -102,6 +105,10 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final commands = PlaybackPageCommands.maybeOf(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _pageCommands.value = commands;
+    });
     final active = WorkspaceActivity.isActive(context);
     if (_active == active) return;
     _active = active;
@@ -140,6 +147,38 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   }
 
   void _configure() => _session.configureSettings(widget.settings);
+
+  void _onPlaybackCompleted() {
+    final snapshot = _session.snapshots.value;
+    if (snapshot.phase == PlaybackPhase.playing) {
+      _handledCompletionGeneration = null;
+    }
+    final generation = _session.sourceGeneration;
+    if (snapshot.phase != PlaybackPhase.ended ||
+        _handledCompletionGeneration == generation ||
+        _session.isResolving ||
+        _session.media == null) {
+      return;
+    }
+    _handledCompletionGeneration = generation;
+    scheduleMicrotask(() {
+      final commands = _pageCommands.value;
+      if (!mounted ||
+          !widget.settings.continuousPlayback ||
+          !_session.ownsPlayback(this) ||
+          _session.isLive ||
+          _session.contentTarget is OfflinePlaybackTarget ||
+          _session.sourceGeneration != generation ||
+          _session.snapshots.value.phase != PlaybackPhase.ended ||
+          _session.detail?.summary.id != widget.detail?.summary.id ||
+          _session.part?.cid != widget.part?.cid ||
+          _session.contentTarget != widget.target ||
+          commands?.hasNext != true) {
+        return;
+      }
+      commands?.onCompleted?.call();
+    });
+  }
 
   @override
   void didUpdateWidget(covariant PlaybackPanel oldWidget) {
@@ -191,11 +230,13 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _session.snapshots.removeListener(_updateFullScreenOrientation);
+    _session.snapshots.removeListener(_onPlaybackCompleted);
     _dismissFullScreen();
     _shortcuts.dispose();
     _session.detach(this);
     _settings.dispose();
     _controlsVisible.dispose();
+    _pageCommands.dispose();
     super.dispose();
   }
 
@@ -335,7 +376,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
                   : (context) =>
                         widget.danmakuOverlayBuilder?.call(context) ??
                         const SizedBox.shrink(),
-              pageCommands: PlaybackPageCommands.maybeOf(context),
+              pageCommands: _pageCommands,
               fullScreen: true,
               onFullScreen: () {
                 if (identical(_fullScreenRoute, ModalRoute.of(dialogContext))) {
@@ -383,7 +424,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             danmakuComposerBuilder: widget.danmakuComposerBuilder,
             danmakuOverlayBuilder: widget.danmakuOverlayBuilder,
             onFullScreen: _enterFullScreen,
-            pageCommands: PlaybackPageCommands.maybeOf(context),
+            pageCommands: _pageCommands,
             fullScreen: false,
             active: _active && _surfaceReady,
           ),
@@ -399,7 +440,7 @@ class _PlayerView extends StatefulWidget {
     required this.onToggleComments,
     required this.onFullScreen,
     required this.fullScreen,
-    this.pageCommands,
+    required this.pageCommands,
     this.active = true,
     this.danmakuComposerBuilder,
     this.danmakuOverlayBuilder,
@@ -411,7 +452,7 @@ class _PlayerView extends StatefulWidget {
   final VoidCallback onToggleComments;
   final VoidCallback onFullScreen;
   final bool fullScreen;
-  final PlaybackPageCommands? pageCommands;
+  final ValueListenable<PlaybackPageCommands?> pageCommands;
   final bool active;
   final WidgetBuilder? danmakuComposerBuilder;
   final WidgetBuilder? danmakuOverlayBuilder;
@@ -733,6 +774,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
       hasComposer: widget.danmakuComposerBuilder != null,
       hasSubtitles: session.subtitleTracks.isNotEmpty,
       hasVoices: session.voiceTracks.isNotEmpty,
+      hasNextButton:
+          !session.isLive && session.contentTarget is! OfflinePlaybackTarget,
       textStyle: DefaultTextStyle.of(context).style,
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
@@ -768,6 +811,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                 session,
                 widget.controlsVisible,
                 widget.shortcuts,
+                widget.pageCommands,
               ]),
               builder: (context, _) => ValueListenableBuilder<PlaybackSnapshot>(
                 valueListenable: session.snapshots,
@@ -918,13 +962,15 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                     ),
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      if (widget.pageCommands != null &&
+                                      if (widget.pageCommands.value != null &&
                                           (session.detail?.parts.length ?? 0) >
                                               1)
                                         IconButton(
                                           tooltip: '上一分 P',
-                                          onPressed:
-                                              widget.pageCommands?.previousPart,
+                                          onPressed: widget
+                                              .pageCommands
+                                              .value
+                                              ?.previousPart,
                                           icon: const Icon(
                                             Icons.skip_previous,
                                             color: Colors.white,
@@ -938,17 +984,12 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                         shortcuts:
                                             widget.settings.value.shortcuts,
                                       ),
-                                      if (widget.pageCommands != null &&
-                                          (session.detail?.parts.length ?? 0) >
-                                              1)
-                                        IconButton(
-                                          tooltip: '下一分 P',
-                                          onPressed:
-                                              widget.pageCommands?.nextPart,
-                                          icon: const Icon(
-                                            Icons.skip_next,
-                                            color: Colors.white,
-                                          ),
+                                      if (!session.isLive &&
+                                          session.contentTarget
+                                              is! OfflinePlaybackTarget)
+                                        _NextButton(
+                                          session: session,
+                                          commands: widget.pageCommands.value,
                                         ),
                                     ],
                                   ),
@@ -1321,6 +1362,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                               session: session,
                                               settings: settings,
                                               snapshot: snapshot,
+                                              pageCommands:
+                                                  widget.pageCommands.value,
                                               onToggleComments:
                                                   widget.onToggleComments,
                                               danmakuComposerBuilder:
@@ -1462,11 +1505,13 @@ class _ControlBar extends StatelessWidget {
     required this.onSettings,
     required this.onMenuChanged,
     this.danmakuComposerBuilder,
+    this.pageCommands,
   });
 
   final PlaybackSession session;
   final AppSettings settings;
   final PlaybackSnapshot snapshot;
+  final PlaybackPageCommands? pageCommands;
   final VoidCallback onToggleComments;
   final VoidCallback onFullScreen;
   final bool fullScreen;
@@ -1726,6 +1771,9 @@ class _ControlBar extends StatelessWidget {
             ]
           : [
               slot(play),
+              if (!session.isLive &&
+                  session.contentTarget is! OfflinePlaybackTarget)
+                slot(_NextButton(session: session, commands: pageCommands)),
               SizedBox(width: layout.timeWidth, child: time),
               const SizedBox(width: 12),
               if (composer != null)
@@ -1921,6 +1969,7 @@ typedef _ControlsLayoutInputs = ({
   bool hasComposer,
   bool hasSubtitles,
   bool hasVoices,
+  bool hasNextButton,
   TextStyle textStyle,
   TextDirection textDirection,
   TextScaler textScaler,
@@ -1958,6 +2007,7 @@ class _ControlsLayout {
         inputs.width <
         buttonWidth *
                 (8 +
+                    (inputs.hasNextButton ? 1 : 0) +
                     (inputs.hasSubtitles ? 1 : 0) +
                     (inputs.hasVoices ? 1 : 0)) +
             timeWidth +
@@ -1970,6 +2020,26 @@ class _ControlsLayout {
   static const buttonWidth = 40.0;
   late final double timeWidth, rateWidth, qualityWidth, composerMinWidth;
   late final bool compact;
+}
+
+class _NextButton extends StatelessWidget {
+  const _NextButton({required this.session, required this.commands});
+  final PlaybackSession session;
+  final PlaybackPageCommands? commands;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: const ValueKey('player-next-episode'),
+    tooltip: '下一集',
+    style: IconButton.styleFrom(
+      foregroundColor: Colors.white,
+      disabledForegroundColor: Colors.white38,
+    ),
+    onPressed: commands?.hasNext == true && !session.isResolving
+        ? commands?.nextPart
+        : null,
+    icon: const Icon(Icons.skip_next, size: 20),
+  );
 }
 
 class _PlayButton extends StatelessWidget {

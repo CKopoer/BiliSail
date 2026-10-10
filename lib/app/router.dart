@@ -433,20 +433,26 @@ final class _WorkspacePage extends ConsumerWidget {
                             ),
                       onOpenSeason: (season) =>
                           context.go('/pgc/season/${season.seasonId}'),
-                      onEpisodeChanged: (episode) => context.go(
-                        uri
-                            .replace(
-                              path: uri.pathSegments[1] == 'episode'
-                                  ? '/pgc/episode/${episode.episodeId}'
-                                  : uri.path,
-                              queryParameters: {
-                                ...uri.queryParameters,
-                                'ep': episode.episodeId,
-                                'tab': tab.id,
-                              },
-                            )
-                            .toString(),
-                      ),
+                      onEpisodeChanged: (episode) {
+                        final target = uri.replace(
+                          path: uri.pathSegments[1] == 'episode'
+                              ? '/pgc/episode/${episode.episodeId}'
+                              : uri.path,
+                          queryParameters: {
+                            ...uri.queryParameters,
+                            'ep': episode.episodeId,
+                            'tab': tab.id,
+                          },
+                        );
+                        final navigation = WorkspacePageNavigation.maybeOf(
+                          context,
+                        );
+                        if (navigation != null) {
+                          navigation.navigate(target);
+                        } else {
+                          context.go(target.toString());
+                        }
+                      },
                     );
                   }
                   if (tab.isLive) {
@@ -547,6 +553,30 @@ final class _WorkspacePage extends ConsumerWidget {
                             ),
                             onOpenVideo: (video) =>
                                 context.go('/video/${video.id.value}'),
+                            onAdvanceVideo: (video, cid) {
+                              final target = Uri(
+                                path: '/video/${video.value}',
+                                queryParameters: cid == null
+                                    ? null
+                                    : {'cid': cid},
+                              );
+                              final navigation =
+                                  WorkspacePageNavigation.maybeOf(context);
+                              if (navigation != null) {
+                                navigation.navigate(target);
+                              } else {
+                                context.go(
+                                  target
+                                      .replace(
+                                        queryParameters: {
+                                          ...target.queryParameters,
+                                          'tab': tab.id,
+                                        },
+                                      )
+                                      .toString(),
+                                );
+                              }
+                            },
                             onOpenQueueVideo: queue == null
                                 ? null
                                 : (video) {

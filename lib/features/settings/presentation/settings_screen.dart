@@ -258,6 +258,12 @@ final class _SettingsCategoryPageState
                             '打开视频后开始播放',
                           ),
                           _toggle(
+                            '连续播放',
+                            s.continuousPlayback,
+                            controller.setContinuousPlayback,
+                            '播放完毕后自动播放下一 P、合集中下一个视频或影视下一集；到末尾停止',
+                          ),
+                          _toggle(
                             '允许多个标签页同时播放',
                             s.allowConcurrentPlayback,
                             s.navigationMode ==

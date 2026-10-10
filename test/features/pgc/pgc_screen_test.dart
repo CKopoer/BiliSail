@@ -57,6 +57,86 @@ final _season = PgcSeason(
 );
 
 void main() {
+  for (final width in [390.0, 1200.0]) {
+    testWidgets(
+      'episode drag reaches the real intro top and retains player at $width',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 844);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final repo = _Repo()
+          ..value = PgcSeason(
+            id: _season.id,
+            title: _season.title,
+            description: _season.description,
+            episodes: [
+              for (var i = 0; i < 100; i++)
+                PgcEpisode(
+                  id: PgcEpisodeId('e$i'),
+                  title: '第 $i 集',
+                  bvid: 'BV1ab411c7mD',
+                  cid: '${i + 1}',
+                ),
+            ],
+            relatedSeasons: [
+              for (var i = 0; i < 20; i++)
+                PgcSeasonSummary(id: PgcSeasonId('r$i'), title: '系列 $i'),
+            ],
+          );
+        final auth = _Auth();
+        addTearDown(auth.dispose);
+        var created = 0;
+        var disposed = 0;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              pgcRepositoryProvider.overrideWithValue(repo),
+              authRepositoryProvider.overrideWithValue(auth),
+            ],
+            child: InputTestApp(
+              home: Scaffold(
+                body: PgcScreen(
+                  seasonId: 's1',
+                  playerBuilder: (_, _, episode) => _TrackedPlayer(
+                    title: episode.displayTitle,
+                    onCreate: () => created++,
+                    onDispose: () => disposed++,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (width < 700) {
+          await tester.tap(find.byTooltip('展开影视信息'));
+          await tester.pumpAndSettle();
+        }
+        final player = tester.state(find.byType(_TrackedPlayer));
+        final intro = tester
+            .widget<SingleChildScrollView>(
+              find.byKey(const ValueKey('pgc-intro')),
+            )
+            .controller!;
+        final list = find.byKey(const ValueKey('pgc-episode-list'));
+        final inner = tester.widget<ListView>(list).controller!;
+        intro.jumpTo(150);
+        inner.jumpTo(35);
+        await tester.pump();
+        await tester.drag(list, const Offset(0, 450));
+        await tester.pumpAndSettle();
+        expect(intro.offset, 0);
+        expect(inner.offset, 0);
+        expect(tester.state(find.byType(_TrackedPlayer)), same(player));
+        expect(created, 1);
+        expect(disposed, 0);
+        expect(repo.reads, 1);
+        expect(tester.takeException(), isNull);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+  }
   for (final dimensions in [const Size(390, 844), const Size(844, 390)]) {
     testWidgets(
       'PGC keyboard resize retains player and editor at $dimensions',
@@ -831,6 +911,7 @@ void main() {
 }
 
 final class _Repo implements PgcRepository {
+  PgcSeason value = _season;
   String scope = 'guest';
   int epoch = 0;
   int reads = 0;
@@ -852,7 +933,7 @@ final class _Repo implements PgcRepository {
     lastCancellation = cancellation;
     lastEpisodeId = episodeId;
     if (failure case final Object error) return Future<PgcSeason>.error(error);
-    return pending?.future ?? Future.value(_season);
+    return pending?.future ?? Future.value(value);
   }
 }
 

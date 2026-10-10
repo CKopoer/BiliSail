@@ -63,6 +63,7 @@ class SqliteSettingsRepository implements SettingsRepository {
       danmakuOpacity: number('danmakuOpacity', 0.8),
       danmakuFontScale: number('danmakuFontScale', 1.0),
       autoPlay: boolean('autoPlay', true),
+      continuousPlayback: boolean('continuousPlayback', false),
       resumePlayback: boolean('resumePlayback', true),
       showCollapsedProgress: boolean('showCollapsedProgress', true),
       playerControlsMode:
@@ -146,7 +147,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 16,
+        'schemaVersion': 17,
         'navigationMode': value.navigationMode.name,
         'allowConcurrentPlayback': value.allowConcurrentPlayback,
         'cacheImages': value.cacheImages,
@@ -159,6 +160,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'danmakuOpacity': value.danmakuOpacity,
         'danmakuFontScale': value.danmakuFontScale,
         'autoPlay': value.autoPlay,
+        'continuousPlayback': value.continuousPlayback,
         'resumePlayback': value.resumePlayback,
         'showCollapsedProgress': value.showCollapsedProgress,
         'playerControlsMode': value.playerControlsMode.name,

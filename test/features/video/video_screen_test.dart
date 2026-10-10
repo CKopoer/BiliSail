@@ -37,6 +37,88 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/video_card_fake_engine.dart';
 
 void main() {
+  for (final width in [390.0, 1200.0]) {
+    testWidgets(
+      'part drag reaches the real intro top and retains player at $width',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 844);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        var created = 0;
+        var disposed = 0;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authControllerProvider.overrideWith(_GuestAuthController.new),
+              videoRepositoryProvider.overrideWithValue(
+                _VideoRepository(
+                  parts: [
+                    for (var i = 0; i < 100; i++)
+                      VideoPart(
+                        cid: '${i + 1}',
+                        page: i + 1,
+                        title: '第 $i P',
+                        duration: const Duration(minutes: 1),
+                      ),
+                  ],
+                ),
+              ),
+              videoExtrasRepositoryProvider.overrideWithValue(
+                _ExtrasRepository(related: _manyRelated()),
+              ),
+            ],
+            child: InputTestApp(
+              home: Scaffold(
+                body: VideoScreen(
+                  id: const VideoId('BV1abc123456'),
+                  onOpenVideo: (_) {},
+                  playerBuilder: (_, _, _) => _TrackedPlayer(
+                    onCreate: () => created++,
+                    onDispose: () => disposed++,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (find.byTooltip('展开视频信息').evaluate().isNotEmpty) {
+          await tester.tap(find.byTooltip('展开视频信息'));
+          await tester.pumpAndSettle();
+        }
+        final player = tester.state(find.byType(_TrackedPlayer));
+        final outer = tester
+            .state<ScrollableState>(_introScrollable())
+            .position;
+        final list = find
+            .descendant(
+              of: find.byType(VideoCollectionPanel),
+              matching: find.byType(ListView),
+            )
+            .first;
+        final inner = tester
+            .state<ScrollableState>(
+              find
+                  .descendant(of: list, matching: find.byType(Scrollable))
+                  .first,
+            )
+            .position;
+        outer.jumpTo(150);
+        inner.jumpTo(35);
+        await tester.pump();
+        await tester.drag(list, const Offset(0, 450));
+        await tester.pumpAndSettle();
+        expect(outer.pixels, 0);
+        expect(inner.pixels, 0);
+        expect(tester.state(find.byType(_TrackedPlayer)), same(player));
+        expect(created, 1);
+        expect(disposed, 0);
+        expect(tester.takeException(), isNull);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+  }
   testWidgets(
     'charging video retains detail and player with an official access action',
     (tester) async {
@@ -1320,8 +1402,9 @@ final class _TrackedPlayerState extends State<_TrackedPlayer> {
 }
 
 final class _VideoRepository implements VideoRepository {
-  const _VideoRepository({this.access = const VideoAccess()});
+  const _VideoRepository({this.access = const VideoAccess(), this.parts});
   final VideoAccess access;
+  final List<VideoPart>? parts;
   @override
   Future<VideoDetail> loadDetail(
     VideoId id, {
@@ -1360,20 +1443,22 @@ final class _VideoRepository implements VideoRepository {
         ),
       ],
     ),
-    parts: [
-      VideoPart(
-        cid: '1',
-        page: 1,
-        title: '第一集',
-        duration: Duration(minutes: 3),
-      ),
-      VideoPart(
-        cid: '2',
-        page: 2,
-        title: '第二集',
-        duration: Duration(minutes: 3),
-      ),
-    ],
+    parts:
+        parts ??
+        [
+          VideoPart(
+            cid: '1',
+            page: 1,
+            title: '第一集',
+            duration: Duration(minutes: 3),
+          ),
+          VideoPart(
+            cid: '2',
+            page: 2,
+            title: '第二集',
+            duration: Duration(minutes: 3),
+          ),
+        ],
   );
 }
 

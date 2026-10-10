@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/input/input_stroke.dart';
+import '../../../domain/video.dart';
 import '../../../core/input/shortcut_dispatcher.dart';
 import '../../../core/presentation/input_scope.dart';
 import '../../playback/application/playback_session.dart';
@@ -21,6 +23,7 @@ import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/video_card.dart';
 import '../application/pgc_controller.dart';
 import '../domain/pgc_repository.dart';
+import '../domain/pgc_playback_sequence.dart';
 import 'pgc_episode_panel.dart';
 
 typedef PgcPlayerBuilder = Widget Function(
@@ -186,6 +189,9 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     return PlaybackPageCommands(
       previousPart: () => _stepEpisode(season, selected, -1),
       nextPart: () => _stepEpisode(season, selected, 1),
+      hasNext:
+          selected != null && adjacentPgcEpisode(season, selected, 1) != null,
+      onCompleted: () => _stepEpisode(season, selected, 1, completed: true),
       toggleInfo: () => setState(
         () => _infoVisible =
             !(_infoVisible ?? MediaQuery.sizeOf(context).width >= 700),
@@ -346,24 +352,42 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     );
   }
 
-  void _stepEpisode(PgcSeason season, PgcEpisode? selected, int direction) {
+  void _stepEpisode(
+    PgcSeason season,
+    PgcEpisode? selected,
+    int direction, {
+    bool completed = false,
+  }) {
     if (selected == null) return;
-    final index = season.episodes.indexWhere(
-      (entry) => entry.id == selected.id,
-    );
-    for (
-      var next = index + direction;
-      next >= 0 && next < season.episodes.length;
-      next += direction
-    ) {
-      final episode = season.episodes[next];
-      if (!episode.playable) continue;
-      final changed = ref
-          .read(pgcControllerProvider(_locator).notifier)
-          .selectEpisode(episode.id);
-      if (changed) widget.onEpisodeChanged?.call(episode);
-      return;
+    final current = ref.read(pgcControllerProvider(_locator)).selectedEpisode;
+    if (current == null) return;
+    final episode = adjacentPgcEpisode(season, current, direction);
+    if (episode == null) return;
+    final session = ref.exists(playbackSessionProvider)
+        ? ref.read(playbackSessionProvider)
+        : null;
+    if (session != null) {
+      final video = session.detail;
+      final part = session.part;
+      if (video == null ||
+          part == null ||
+          session.danmakuCid != current.cid ||
+          !session.prepareNextVideo(
+            video.summary.id,
+            part.cid,
+            nextId: VideoId(episode.bvid ?? ''),
+            nextCid: episode.cid,
+            completed:
+                completed ||
+                session.snapshots.value.phase == PlaybackPhase.ended,
+          )) {
+        return;
+      }
     }
+    final changed = ref
+        .read(pgcControllerProvider(_locator).notifier)
+        .selectEpisode(episode.id);
+    if (changed) widget.onEpisodeChanged?.call(episode);
   }
 
   Widget _menu(

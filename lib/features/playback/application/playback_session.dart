@@ -149,7 +149,14 @@ class PlaybackSession extends ChangeNotifier {
   bool _closing = false;
   bool _resolving = false;
   bool _desiredPlaying = true;
-  ({VideoId id, String? cid, bool playing, String scope, int epoch})?
+  ({
+    VideoId id,
+    String? cid,
+    bool playing,
+    Duration? position,
+    String scope,
+    int epoch,
+  })?
   _nextSourceIntent;
   bool _playbackAllowed = true;
   Future<void>? _playbackCommands;
@@ -214,6 +221,7 @@ class PlaybackSession extends ChangeNotifier {
       id: nextId,
       cid: nextCid,
       playing: completed ? true : _desiredPlaying,
+      position: completed ? Duration.zero : null,
       scope: _scope,
       epoch: _epoch,
     );
@@ -324,7 +332,7 @@ class PlaybackSession extends ChangeNotifier {
           restored?.quality ??
           (sameOwner && sameKind ? _quality : null) ??
           (target is LivePlaybackTarget ? 10000 : _settings.preferredQuality),
-      position: restored?.position,
+      position: nextPlaying != null ? nextIntent?.position : restored?.position,
       desiredPlaying:
           nextPlaying ??
           restored?.desiredPlaying ??

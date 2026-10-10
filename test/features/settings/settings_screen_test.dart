@@ -11,6 +11,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('continuous playback toggle saves and reloads independently', (
+    tester,
+  ) async {
+    final repository = _SettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SettingsScreen(category: SettingsCategory.playback),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final toggle = find.widgetWithText(SwitchListTile, '连续播放');
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(repository.settings.continuousPlayback, isTrue);
+    expect(repository.settings.autoPlay, isTrue);
+    ProviderScope.containerOf(tester.element(toggle))
+        .invalidate(settingsControllerProvider);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+  });
   for (final inPlayer in [false, true]) {
     testWidgets('player control modes save and reload (player: $inPlayer)', (
       tester,

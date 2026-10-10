@@ -46,6 +46,7 @@ void main() {
       );
       final settings = AppSettings(
         autoPlay: false,
+        continuousPlayback: true,
         resumePlayback: false,
         defaultVolume: 0,
       );

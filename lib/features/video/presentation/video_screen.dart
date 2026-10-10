@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:bili_player/bili_player.dart';
 
 import '../../../domain/user.dart';
@@ -30,6 +28,7 @@ import 'video_tags_panel.dart';
 import 'video_access_notice.dart';
 import 'watch_later_queue_panel.dart';
 import '../domain/watch_later_queue.dart';
+import '../domain/video_playback_sequence.dart';
 import '../application/watch_later_queue_registry.dart';
 import '../application/watch_later_queue_playback.dart';
 import '../../playback/application/playback_session.dart';
@@ -57,6 +56,7 @@ final class VideoScreen extends ConsumerStatefulWidget {
     this.onSearchTag,
     this.queue,
     this.onOpenQueueVideo,
+    this.onAdvanceVideo,
   });
   final VideoId id;
   final String? initialCid;
@@ -71,6 +71,7 @@ final class VideoScreen extends ConsumerStatefulWidget {
   final ValueChanged<String>? onSearchTag;
   final WatchLaterQueue? queue;
   final ValueChanged<VideoId>? onOpenQueueVideo;
+  final void Function(VideoId, String?)? onAdvanceVideo;
   @override
   ConsumerState<VideoScreen> createState() => _VideoScreenState();
 }
@@ -81,8 +82,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
   bool _infoVisible = true;
   bool _descriptionExpanded = false;
   bool _queueExpanded = true;
-  VideoDetail? _lastQueueVideo;
-  String? _lastQueueCid;
+  VideoDetail? _lastVideo;
+  String? _lastCid;
+  ({VideoId id, String scope, int epoch})? _pendingAdvance;
   String? _retainedQueueId;
   WatchLaterQueueRegistry? _retainedRegistry;
   PlaybackSession? _queueSession;
@@ -113,46 +115,14 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       }
     }
     if (queue == null && _queueSession != null) {
-      _queueSession!.snapshots.removeListener(_onQueueSnapshot);
       _queueSession = null;
     } else if (queue != null && _queueSession == null) {
       _queueSession = ref.read(playbackSessionProvider);
-      _queueSession!.snapshots.addListener(_onQueueSnapshot);
     }
-  }
-
-  void _onQueueSnapshot() {
-    final session = _queueSession;
-    final queue = widget.queue;
-    if (session != null &&
-        session.snapshots.value.phase != PlaybackPhase.ended) {
-      _queuePlayback.reset();
-    }
-    if (session == null ||
-        queue == null ||
-        session.snapshots.value.phase != PlaybackPhase.ended) {
-      return;
-    }
-    final generation = session.sourceGeneration;
-    scheduleMicrotask(() {
-      if (!mounted ||
-          widget.queue?.id != queue.id ||
-          session.sourceGeneration != generation) {
-        return;
-      }
-      final next = _queuePlayback.completed(queue, session, widget.id);
-      if (next?.part case final VideoPart part) {
-        setState(() => _selectedCid = part.cid);
-        widget.onPartChanged?.call(part);
-      } else if (next?.video case final VideoId video) {
-        widget.onOpenQueueVideo?.call(video);
-      }
-    });
   }
 
   @override
   void dispose() {
-    _queueSession?.snapshots.removeListener(_onQueueSnapshot);
     if (_retainedQueueId case final String id) {
       _retainedRegistry?.release(id);
     }
@@ -166,8 +136,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     if (oldWidget.queue?.id != widget.queue?.id) {
       _queueExpanded = true;
       _queuePlayback.reset();
-      _lastQueueVideo = null;
-      _lastQueueCid = null;
+      _lastVideo = null;
+      _lastCid = null;
+      _pendingAdvance = null;
       if (widget.queue == null) _queueSession?.discardNextVideo();
     }
     _syncQueue();
@@ -191,12 +162,18 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     ref.listen(relatedVideosProvider(widget.id), (_, _) {});
     final detail = ref.watch(videoDetailProvider(widget.id));
     final loaded = detail.asData?.value;
+    final pending = _pendingAdvance;
+    final session = ref.exists(playbackSessionProvider)
+        ? ref.read(playbackSessionProvider)
+        : null;
     final transitioning =
-        queue != null &&
         loaded == null &&
         detail.isLoading &&
-        _lastQueueVideo != null;
-    final video = loaded ?? (transitioning ? _lastQueueVideo : null);
+        _lastVideo != null &&
+        pending?.id == widget.id &&
+        pending?.scope == session?.accountScope() &&
+        pending?.epoch == session?.sessionEpoch();
+    final video = loaded ?? (transitioning ? _lastVideo : null);
     if (video == null) {
       return detail.when(
         loading: () => const StateView.loading(message: '正在加载视频详情…'),
@@ -219,14 +196,15 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
               (part) =>
                   part.cid ==
                   (transitioning
-                      ? _lastQueueCid
+                      ? _lastCid
                       : _selectedCid ?? widget.initialCid),
             )
             .firstOrNull ??
         video.parts.first;
-    if (!transitioning && queue != null) {
-      _lastQueueVideo = video;
-      _lastQueueCid = selected.cid;
+    if (!transitioning) {
+      _lastVideo = video;
+      _lastCid = selected.cid;
+      _pendingAdvance = null;
     }
     return Stack(
       children: [
@@ -238,6 +216,10 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
             return PlaybackPageCommands(
               previousPart: () => _changePart(video, selected, -1),
               nextPart: () => _changePart(video, selected, 1),
+              hasNext:
+                  !transitioning && _adjacentSource(video, selected, 1) != null,
+              onCompleted: () =>
+                  _changePart(video, selected, 1, completed: true),
               toggleInfo: toggleInfo,
               child: Focus(
                 child: Builder(
@@ -571,29 +553,80 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     );
   }
 
-  void _changePart(VideoDetail video, VideoPart selected, int direction) {
+  VideoSequenceTarget? _adjacentSource(
+    VideoDetail video,
+    VideoPart selected,
+    int direction,
+  ) {
+    final queue = widget.queue;
+    if (queue != null &&
+        (queue.scope != _queueSession?.accountScope() ||
+            queue.sessionEpoch != _queueSession?.sessionEpoch())) {
+      return null;
+    }
+    final next = adjacentVideoSource(
+      video,
+      selected.cid,
+      direction,
+      queue: queue,
+    );
+    if (next != null &&
+        next.id != video.summary.id &&
+        (queue != null
+            ? widget.onOpenQueueVideo == null
+            : widget.onAdvanceVideo == null)) {
+      return null;
+    }
+    return next;
+  }
+
+  void _changePart(
+    VideoDetail video,
+    VideoPart selected,
+    int direction, {
+    bool completed = false,
+  }) {
+    if (widget.id != video.summary.id) return;
     // The fullscreen route retains these callbacks across page rebuilds.
     final current =
         video.parts
             .where((part) => part.cid == (_selectedCid ?? widget.initialCid))
             .firstOrNull ??
         selected;
-    final next = video.parts.indexOf(current) + direction;
-    if (next < 0 || next >= video.parts.length) {
-      _openAdjacentQueueVideo(video.summary.id, direction);
+    final next = _adjacentSource(video, current, direction);
+    if (next == null) return;
+    final session = ref.exists(playbackSessionProvider)
+        ? ref.read(playbackSessionProvider)
+        : null;
+    if (session != null &&
+        !session.prepareNextVideo(
+          video.summary.id,
+          current.cid,
+          nextId: next.id,
+          nextCid: next.cid,
+          completed:
+              completed || session.snapshots.value.phase == PlaybackPhase.ended,
+        )) {
       return;
     }
-    final part = video.parts[next];
+    if (next.id != video.summary.id) {
+      if (session != null) {
+        _pendingAdvance = (
+          id: next.id,
+          scope: session.accountScope(),
+          epoch: session.sessionEpoch(),
+        );
+      }
+      if (widget.queue != null) {
+        widget.onOpenQueueVideo?.call(next.id);
+      } else {
+        widget.onAdvanceVideo?.call(next.id, next.cid);
+      }
+      return;
+    }
+    final part = video.parts.firstWhere((part) => part.cid == next.cid);
     setState(() => _selectedCid = part.cid);
     widget.onPartChanged?.call(part);
-  }
-
-  void _openAdjacentQueueVideo(VideoId id, int direction) {
-    final queue = widget.queue;
-    final session = _queueSession;
-    if (queue == null || session == null) return;
-    final adjacent = _queuePlayback.adjacent(queue, session, id, direction);
-    if (adjacent != null) _openQueueVideo(adjacent);
   }
 
   void _openQueueVideo(VideoId id) {
@@ -605,6 +638,11 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
         !_queuePlayback.select(queue, session, id)) {
       return;
     }
+    _pendingAdvance = (
+      id: id,
+      scope: session.accountScope(),
+      epoch: session.sessionEpoch(),
+    );
     widget.onOpenQueueVideo?.call(id);
   }
 

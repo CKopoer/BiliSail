@@ -51,6 +51,7 @@ final class AppSettings {
     this.danmakuOpacity = 0.8,
     this.danmakuFontScale = 1.0,
     this.autoPlay = true,
+    this.continuousPlayback = false,
     this.resumePlayback = true,
     this.showCollapsedProgress = true,
     this.playerControlsMode = PlayerControlsMode.click,
@@ -100,6 +101,7 @@ final class AppSettings {
        danmakuOpacity = 0.8,
        danmakuFontScale = 1.0,
        autoPlay = true,
+       continuousPlayback = false,
        resumePlayback = true,
        showCollapsedProgress = true,
        playerControlsMode = PlayerControlsMode.click,
@@ -149,6 +151,7 @@ final class AppSettings {
   final double danmakuOpacity;
   final double danmakuFontScale;
   final bool autoPlay;
+  final bool continuousPlayback;
   final bool resumePlayback;
   final bool showCollapsedProgress;
   final PlayerControlsMode playerControlsMode;
@@ -209,6 +212,7 @@ final class AppSettings {
     double? danmakuOpacity,
     double? danmakuFontScale,
     bool? autoPlay,
+    bool? continuousPlayback,
     bool? resumePlayback,
     bool? showCollapsedProgress,
     PlayerControlsMode? playerControlsMode,
@@ -255,6 +259,7 @@ final class AppSettings {
     danmakuOpacity: danmakuOpacity ?? this.danmakuOpacity,
     danmakuFontScale: danmakuFontScale ?? this.danmakuFontScale,
     autoPlay: autoPlay ?? this.autoPlay,
+    continuousPlayback: continuousPlayback ?? this.continuousPlayback,
     resumePlayback: resumePlayback ?? this.resumePlayback,
     showCollapsedProgress: showCollapsedProgress ?? this.showCollapsedProgress,
     playerControlsMode: playerControlsMode ?? this.playerControlsMode,

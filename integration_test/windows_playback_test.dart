@@ -794,7 +794,13 @@ void main() {
           const ValueKey('player-surface-tap-target'),
         );
         await tester.tapAt(tester.getTopLeft(tapTarget) + const Offset(30, 50));
-        await tester.pump(const Duration(milliseconds: 400));
+        // Native animation ticks follow rendered frames rather than pump's
+        // requested delay; wait for the fade to actually remove the controls.
+        await _until(
+          tester,
+          () =>
+              find.byKey(const ValueKey('player-controls')).evaluate().isEmpty,
+        );
         expect(find.byKey(const ValueKey('player-controls')), findsNothing);
         expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
         expect(engine.currentSnapshot.generation, generation);
@@ -971,14 +977,14 @@ void main() {
         }
 
         for (final visible in [true, false]) {
+          final controls = find.byKey(const ValueKey('player-controls'));
           if (!visible) {
             await tester.tapAt(
               tester.getTopLeft(surfaceTarget) + const Offset(30, 50),
               kind: PointerDeviceKind.mouse,
             );
-            await tester.pump(const Duration(milliseconds: 400));
+            await _until(tester, () => controls.evaluate().isEmpty);
           }
-          final controls = find.byKey(const ValueKey('player-controls'));
           final expectedControls = visible ? findsOneWidget : findsNothing;
           expect(controls, expectedControls);
           await doubleClickSurface();
@@ -986,7 +992,7 @@ void main() {
             tester,
             () => window.isFullScreen && surfaceTarget.evaluate().length == 1,
           );
-          await tester.pump(const Duration(milliseconds: 400));
+          await _until(tester, () => controls.evaluate().isNotEmpty == visible);
           expect(controls, expectedControls);
           expectDanmakuPreserved();
           await doubleClickSurface();
@@ -994,7 +1000,7 @@ void main() {
             tester,
             () => !window.isFullScreen && surfaceTarget.evaluate().length == 1,
           );
-          await tester.pump(const Duration(milliseconds: 400));
+          await _until(tester, () => controls.evaluate().isNotEmpty == visible);
           expect(controls, expectedControls);
           expectDanmakuPreserved();
           expect(find.byType(VideoSurface), findsOneWidget);

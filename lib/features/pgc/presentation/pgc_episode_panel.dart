@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../shared/ui/smooth_scroll_behavior.dart';
+import '../../../shared/ui/scroll_boundary_handoff.dart';
 import '../domain/pgc_repository.dart';
 
 /// A bounded episode viewport keeps long seasons cheap to lay out.
@@ -209,28 +210,31 @@ final class _PgcEpisodePanelState extends State<PgcEpisodePanel> {
               const SizedBox(height: 4),
               SizedBox(
                 height: 232,
-                child: _grid
-                    ? GridView.builder(
-                        key: const ValueKey('pgc-episode-grid'),
-                        controller: _scroll,
-                        itemCount: episodes.length,
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          mainAxisExtent: gridRowHeight,
-                          crossAxisSpacing: 5,
-                          mainAxisSpacing: 5,
+                child: ScrollBoundaryHandoff(
+                  child: _grid
+                      ? GridView.builder(
+                          key: const ValueKey('pgc-episode-grid'),
+                          controller: _scroll,
+                          itemCount: episodes.length,
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                mainAxisExtent: gridRowHeight,
+                                crossAxisSpacing: 5,
+                                mainAxisSpacing: 5,
+                              ),
+                          itemBuilder: (context, index) =>
+                              _tile(context, episodes[index], grid: true),
+                        )
+                      : ListView.builder(
+                          key: const ValueKey('pgc-episode-list'),
+                          controller: _scroll,
+                          itemExtent: listRowHeight,
+                          itemCount: episodes.length,
+                          itemBuilder: (context, index) =>
+                              _tile(context, episodes[index], grid: false),
                         ),
-                        itemBuilder: (context, index) =>
-                            _tile(context, episodes[index], grid: true),
-                      )
-                    : ListView.builder(
-                        key: const ValueKey('pgc-episode-list'),
-                        controller: _scroll,
-                        itemExtent: listRowHeight,
-                        itemCount: episodes.length,
-                        itemBuilder: (context, index) =>
-                            _tile(context, episodes[index], grid: false),
-                      ),
+                ),
               ),
             ] else
               const Padding(
