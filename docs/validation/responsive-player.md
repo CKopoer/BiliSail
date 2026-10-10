@@ -72,6 +72,14 @@
 - 回归覆盖视频／直播、普通／全屏、320／1200 宽度的悬停保持、控件区域之间移动、移开后 2499／2500 毫秒边界，以及移除小窗按钮后的计时恢复。菜单与长按测试等待时间同步超过新的 2.5 秒期限，直播画面点击仍不延后期限。未进行构建或各平台实机鼠标验收。
 - `tool/check.ps1 -SkipPub` 的格式、静态分析与离线测试通过：根应用 1532、`bili_api` 336、`bili_player` 32、`bili_danmaku` 65、`bili_mux` 2 项，共 1967 项；`bili_mux` 的 7 项原生库测试因未配置 `BILI_MUX_LIBRARY` 跳过。播放器单文件 152 项通过，包含新增的 9 项动态模式回归；计时调整为 2.5 秒后再次通过相同检查和边界回归。日志：`artifacts/player-dynamic-2500ms-check.log`、`artifacts/player-dynamic-2500ms-widget.log`。
 
+## 窗口失焦时的动态控件悬停（2026-10-10）
+
+- 原因：[播放面板](../../lib/features/playback/presentation/playback_panel.dart) 只在 `AppLifecycleState.resumed` 时允许鼠标活动显示动态控件。桌面窗口可见但失去输入焦点时进入 `inactive`，因而悬停事件到达后仍被应用自身拦截。该状态与最小化的 `hidden` 不同，语义见 [Flutter 生命周期文档](https://api.flutter.dev/flutter/dart-ui/AppLifecycleState.html)。
+- 动态模式改为在窗口可见的 `resumed/inactive` 状态下响应鼠标移入和移动，继续使用 2.5 秒静止隐藏、控件区域悬停保持和移出立即淡出。初始化读取当前生命周期，避免在失焦状态创建普通／全屏视图时错误假定窗口已激活。
+- 点击模式保留失焦时暂停隐藏计时、悬停不主动显示控件的规则；滚轮调音量和快捷键继续要求窗口焦点。`hidden/paused/detached` 及隐藏工作区页面继续禁止悬停显示并取消隐藏计时，不改变播放会话和媒体源。
+- 回归覆盖视频／直播、普通／全屏、挂载前已失焦与运行中失焦、静止 2499／2500 毫秒边界、控件悬停、移出、不可见状态及恢复到可见失焦状态，并检查播放意图、源 generation 和单一 surface。旧代码在新增的运行中失焦测试上失败，证明应用拦截可复现。
+- 播放器专项 171 项测试通过，包含新增的 12 项回归。`tool/check.ps1 -SkipPub` 的格式、静态分析及 2126 项离线测试通过：根应用 1639、`bili_api` 379、`bili_player` 34、`bili_danmaku` 72、`bili_mux` 2 项；`bili_mux` 的 7 项原生库测试因未配置 `BILI_MUX_LIBRARY` 跳过。日志：`artifacts/player-unfocused-hover-widget.log`、`artifacts/player-unfocused-hover-check.log`。本轮未进行构建或真实 Windows 窗口失焦鼠标验收，其他平台实机交互也未验证。
+
 ## 连续音量滑条（2026-10-05）
 
 - 视频、影视和直播共用的音量按钮打开带百分比的横向滑条，连续调节 0–100%，移除原有五档选择菜单。拖动时实时调整当前播放音量，弹层保持打开；拖动结束后继续同步确认的播放快照，0% 显示静音图标。

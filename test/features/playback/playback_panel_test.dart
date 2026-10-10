@@ -2346,6 +2346,169 @@ void main() {
     });
   }
 
+  for (final live in [false, true]) {
+    for (final fullscreen in [false, true]) {
+      for (final inactiveAtMount in [false, true]) {
+        testWidgets(
+          'dynamic controls respond without window focus live=$live fullscreen=$fullscreen inactiveAtMount=$inactiveAtMount',
+          (tester) async {
+            _resumeApp(tester);
+            addTearDown(() => _resumeApp(tester));
+            if (inactiveAtMount) {
+              tester.binding.handleAppLifecycleStateChanged(
+                AppLifecycleState.inactive,
+              );
+            }
+            final engine = _FakeEngine();
+            final session = _session(engine);
+            addTearDown(session.close);
+            await tester.pumpWidget(
+              _app(
+                session,
+                _FakeWindowService(),
+                AppSettings(playerControlsMode: PlayerControlsMode.dynamic),
+                target: live ? const LivePlaybackTarget('12') : null,
+              ),
+            );
+            await _pumpFrames(tester);
+            if (fullscreen) {
+              await tester.tap(find.byTooltip('全屏（F）'));
+              await _pumpFrames(tester);
+            }
+            final controls = find.byKey(const ValueKey('player-controls'));
+            final barPoint = tester.getCenter(controls);
+            final playing = engine.currentSnapshot.desiredPlaying;
+            final generation = session.sourceGeneration;
+            await tester.pump(const Duration(seconds: 3));
+            await tester.pump(const Duration(milliseconds: 216));
+            await tester.pump();
+            expect(controls, findsNothing);
+            if (!inactiveAtMount) {
+              tester.binding.handleAppLifecycleStateChanged(
+                AppLifecycleState.inactive,
+              );
+            }
+            final mouse = await tester.createGesture(
+              kind: PointerDeviceKind.mouse,
+            );
+            await mouse.addPointer(location: const Offset(-10, -10));
+            final point = _surfacePoint(tester);
+            await mouse.moveTo(point);
+            await tester.pump();
+            expect(controls.hitTestable(), findsOneWidget);
+            await tester.pump(const Duration(milliseconds: 2499));
+            expect(controls.hitTestable(), findsOneWidget);
+            await tester.pump(const Duration(milliseconds: 1));
+            expect(controls.hitTestable(), findsNothing);
+            await tester.pump(const Duration(milliseconds: 216));
+            await tester.pump();
+            expect(controls, findsNothing);
+
+            // Moving within the unfocused window reveals controls again.
+            await mouse.moveTo(point + const Offset(5, 0));
+            await tester.pump();
+            expect(controls.hitTestable(), findsOneWidget);
+            await mouse.moveTo(barPoint);
+            await tester.pump(const Duration(seconds: 6));
+            expect(controls.hitTestable(), findsOneWidget);
+            await mouse.moveTo(const Offset(-10, -10));
+            await tester.pump();
+            expect(controls.hitTestable(), findsNothing);
+            expect(tester.binding.lifecycleState, AppLifecycleState.inactive);
+            expect(engine.currentSnapshot.desiredPlaying, playing);
+            expect(session.sourceGeneration, generation);
+            expect(engine.opens, 1);
+            expect(engine.maxSurfaces, 1);
+            await mouse.removePointer();
+            await tester.pumpWidget(const SizedBox());
+            await _pumpFrames(tester);
+          },
+        );
+      }
+    }
+  }
+
+  for (final state in [
+    AppLifecycleState.hidden,
+    AppLifecycleState.paused,
+    AppLifecycleState.detached,
+  ]) {
+    testWidgets('dynamic controls ignore hover while $state', (tester) async {
+      _resumeApp(tester);
+      addTearDown(() => _resumeApp(tester));
+      final session = _session(_FakeEngine());
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(
+          session,
+          _FakeWindowService(),
+          AppSettings(playerControlsMode: PlayerControlsMode.dynamic),
+        ),
+      );
+      await _pumpFrames(tester);
+      final controls = find.byKey(const ValueKey('player-controls'));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 216));
+      await tester.pump();
+      expect(controls, findsNothing);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      if (state != AppLifecycleState.hidden) {
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      }
+      if (state == AppLifecycleState.detached) {
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      }
+      tester.binding.handleAppLifecycleStateChanged(state);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(-10, -10));
+      final point = _surfacePoint(tester);
+      await mouse.moveTo(point);
+      await tester.pump();
+      expect(controls, findsNothing);
+      if (state == AppLifecycleState.paused) {
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      } else if (state == AppLifecycleState.detached) {
+        _resumeApp(tester);
+      }
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await mouse.moveTo(point + const Offset(5, 0));
+      await tester.pump();
+      expect(controls.hitTestable(), findsOneWidget);
+      await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    });
+  }
+
+  testWidgets(
+    'click controls mounted without focus suspend idle hiding and stay hidden after a click',
+    (tester) async {
+      _resumeApp(tester);
+      addTearDown(() => _resumeApp(tester));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      final session = _session(_FakeEngine());
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, _FakeWindowService(), const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      final controls = find.byKey(const ValueKey('player-controls'));
+      await tester.pump(const Duration(seconds: 6));
+      expect(controls.hitTestable(), findsOneWidget);
+      await tester.tapAt(_surfacePoint(tester));
+      await _pumpSurfaceTap(tester);
+      expect(controls, findsNothing);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(-10, -10));
+      await mouse.moveTo(_surfacePoint(tester));
+      await tester.pump();
+      expect(controls, findsNothing);
+      await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+  );
+
   testWidgets(
     'changing modes cancels hide timers and hidden views dispose them',
     (tester) async {

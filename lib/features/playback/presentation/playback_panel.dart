@@ -428,7 +428,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   final Set<int> _pressedPointers = {};
   final Set<String> _hoveredControlRegions = {};
   bool _mouseInside = false;
-  bool _appActive = true;
+  late AppLifecycleState? _appLifecycleState;
   bool _controlEditorFocused = false;
   int _openControlsMenus = 0;
   late int _sourceGeneration;
@@ -436,10 +436,18 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   late PlayerControlsMode _controlsMode;
 
   bool get _dynamicControls => _controlsMode == PlayerControlsMode.dynamic;
+  bool get _appActive =>
+      _appLifecycleState == null ||
+      _appLifecycleState == AppLifecycleState.resumed;
+  // An inactive desktop window is still visible and receives mouse hover.
+  bool get _appVisible =>
+      _appActive || _appLifecycleState == AppLifecycleState.inactive;
+  bool get _canAutoHideControls => _dynamicControls ? _appVisible : _appActive;
 
   @override
   void initState() {
     super.initState();
+    _appLifecycleState = WidgetsBinding.instance.lifecycleState;
     _controlsMode = widget.settings.value.playerControlsMode;
     _sourceGeneration = widget.session.sourceGeneration;
     _hasError = widget.session.error != null;
@@ -507,7 +515,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _appActive = state == AppLifecycleState.resumed;
+    _appLifecycleState = state;
     _pressedPointers.clear();
     _scheduleControlsHide();
   }
@@ -530,7 +538,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     _controlsHideTimer = null;
     if (!mounted ||
         !widget.active ||
-        !_appActive ||
+        !_canAutoHideControls ||
         !widget.controlsVisible.value ||
         _pressedPointers.isNotEmpty ||
         _hoveredControlRegions.isNotEmpty ||
@@ -543,7 +551,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
       Duration(milliseconds: _dynamicControls ? 2500 : 5000),
       () {
         _controlsHideTimer = null;
-        if (mounted && widget.active && _appActive) {
+        if (mounted && widget.active && _canAutoHideControls) {
           widget.controlsVisible.value = false;
         }
       },
@@ -551,7 +559,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   }
 
   void _showDynamicControls() {
-    if (!_dynamicControls || !widget.active || !_appActive) return;
+    if (!_dynamicControls || !widget.active || !_appVisible) return;
     widget.controlsVisible.value = true;
     _scheduleControlsHide();
   }
