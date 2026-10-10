@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:bili_api/bili_api.dart';
 
 import '../../../core/network/api_requests.dart';
+import '../../../core/storage/image_byte_cache.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/media_cdn.dart';
@@ -13,10 +17,16 @@ class ApiPlaybackRepository
         PlaybackRepository,
         PlaybackMetadataRepository,
         VoicePlaybackRepository {
-  ApiPlaybackRepository(this.api, this.requests, {this.cdnPreference});
+  ApiPlaybackRepository(
+    this.api,
+    this.requests, {
+    this.cdnPreference,
+    this.imageDimensions,
+  });
   final BiliApiClient api;
   final ApiRequests requests;
   final Future<MediaCdnPreference> Function()? cdnPreference;
+  final Future<({int width, int height})> Function(Uri)? imageDimensions;
 
   @override
   Future<PlaybackMetadata> metadata(
@@ -59,15 +69,81 @@ class ApiPlaybackRepository
     final data = await PlaybackMetadataClient(api)
         .storyboard(video.value, cid, context: context);
     if (data == null) return null;
+    var width = data.tileWidth;
+    var height = data.tileHeight;
+    if (data.needsImageDimensions) {
+      final size = await _storyboardImageDimensions(data.images.first, context);
+      // Every page uses the declared grid. Do not guess a standard tile size:
+      // older PGC sheets can differ from newer videos and from one another.
+      if (size.width % data.columns != 0 || size.height % data.rows != 0) {
+        throw const ApiFailure(ApiFailureCategory.protocol, 'video_storyboard');
+      }
+      final measuredWidth = size.width ~/ data.columns;
+      final measuredHeight = size.height ~/ data.rows;
+      if (measuredWidth < 1 ||
+          measuredHeight < 1 ||
+          measuredWidth > 4096 ||
+          measuredHeight > 4096 ||
+          (width != 0 && width != measuredWidth) ||
+          (height != 0 && height != measuredHeight)) {
+        throw const ApiFailure(ApiFailureCategory.protocol, 'video_storyboard');
+      }
+      width = measuredWidth;
+      height = measuredHeight;
+    }
     return VideoStoryboard(
       columns: data.columns,
       rows: data.rows,
-      tileWidth: data.tileWidth,
-      tileHeight: data.tileHeight,
+      tileWidth: width,
+      tileHeight: height,
       images: data.images,
       times: data.times,
     );
   }, cancellation: cancellation);
+
+  Future<({int width, int height})> _storyboardImageDimensions(
+    Uri image,
+    ApiRequestContext context,
+  ) async {
+    const endpoint = 'video_storyboard';
+    final loader = imageDimensions;
+    if (loader == null) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    final signal = context.cancellation;
+    if (signal?.isCancelled == true) {
+      throw const ApiFailure(ApiFailureCategory.cancelled, endpoint);
+    }
+    final remaining =
+        context.deadline?.difference(DateTime.now()) ??
+        const Duration(seconds: 25);
+    if (remaining <= Duration.zero) {
+      throw const ApiFailure(ApiFailureCategory.timeout, endpoint);
+    }
+    try {
+      // Cancelling this consumer must not abort a shared image-cache request
+      // used by another widget. The cache owns its bounded transport lifetime.
+      return await Future.any([
+        loader(image),
+        if (signal != null)
+          signal.whenCancelled.then<({int width, int height})>((_) {
+            throw const ApiFailure(ApiFailureCategory.cancelled, endpoint);
+          }),
+      ]).timeout(remaining);
+    } on ApiFailure {
+      rethrow;
+    } on ImageLoadCancelled {
+      throw const ApiFailure(ApiFailureCategory.cancelled, endpoint);
+    } on TimeoutException {
+      throw const ApiFailure(ApiFailureCategory.timeout, endpoint);
+    } on SocketException {
+      throw const ApiFailure(ApiFailureCategory.network, endpoint);
+    } on HttpException {
+      throw const ApiFailure(ApiFailureCategory.network, endpoint);
+    } on Exception {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+  }
 
   @override
   Future<PlaybackMedia> resolve(

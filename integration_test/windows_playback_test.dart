@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show PointerDeviceKind;
 
@@ -506,7 +507,8 @@ void main() {
       final fixturePath = Platform.environment['BILI_TEST_MEDIA_DIR'];
       expect(fixturePath, isNotNull, reason: 'Use tool/test-windows-media.ps1');
       final engine = MediaKitEngine();
-      final history = _FixtureHistory();
+      final history = _FixtureHistory()..nextRead = Completer<Duration?>();
+      final cloudReady = history.nextRead!;
       final progress = _FixtureProgress();
       final session = PlaybackSession(
         engine: engine,
@@ -547,6 +549,28 @@ void main() {
           () =>
               engine.inspectDiagnostics().hasDecodedVideo &&
               engine.inspectDiagnostics().hasDecodedAudio &&
+              engine.currentSnapshot.position >
+                  const Duration(milliseconds: 200),
+        );
+        expect(history.reports, isEmpty);
+        expect(progress.position, isNull);
+        await session.pause();
+        final generation = engine.currentSnapshot.generation;
+        cloudReady.complete(const Duration(seconds: 2));
+        await _until(
+          tester,
+          () =>
+              engine.currentSnapshot.position >= const Duration(seconds: 2) &&
+              engine.currentSnapshot.phase == PlaybackPhase.paused,
+        );
+        expect(engine.currentSnapshot.generation, generation);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        await session.togglePlaying();
+        await _until(
+          tester,
+          () =>
+              engine.inspectDiagnostics().hasDecodedVideo &&
+              engine.inspectDiagnostics().hasDecodedAudio &&
               engine.currentSnapshot.position >= const Duration(seconds: 3),
         );
         await session.pause();
@@ -575,7 +599,7 @@ void main() {
         expect(history.reads, 1);
         expect(session.error, isNull);
         debugPrint(
-          'NATIVE_PROGRESS cloudFallback=true localPrecedence=true rememberOff=true heartbeat=true',
+          'NATIVE_PROGRESS cloudFallback=true nonBlocking=true preservesPause=true localPrecedence=true rememberOff=true heartbeat=true',
         );
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
@@ -1328,6 +1352,7 @@ final class _FakePlaybackRepository implements PlaybackRepository {
 
 final class _FixtureHistory implements PlaybackHistoryRepository {
   int reads = 0;
+  Completer<Duration?>? nextRead;
   final reports = <PlaybackHistoryRecord>[];
   @override
   Future<Duration?> read(
@@ -1336,7 +1361,9 @@ final class _FixtureHistory implements PlaybackHistoryRepository {
     required RequestCancellation cancellation,
   }) async {
     reads++;
-    return const Duration(seconds: 2);
+    final pending = nextRead;
+    nextRead = null;
+    return pending == null ? const Duration(seconds: 2) : await pending.future;
   }
 
   @override

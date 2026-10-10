@@ -41,6 +41,33 @@ void main() {
     ]);
   });
 
+  test('automatic recovery skips another PCDN for a returned regular CDN', () {
+    final edge = Uri.parse('https://node.edge.mountaintoys.cn/v.m4s?k=test');
+    final backup = backupMediaCdnUrl([
+      pcdn,
+      pcdn,
+      edge,
+      tencent,
+    ], MediaCdnPreference.automatic);
+    expect(identical(backup, tencent), true);
+    expect(backupMediaCdnUrl([pcdn, edge], MediaCdnPreference.automatic), edge);
+    expect(
+      backupMediaCdnUrl([pcdn, pcdn], MediaCdnPreference.automatic),
+      isNull,
+    );
+    expect(backupMediaCdnUrl([], MediaCdnPreference.automatic), isNull);
+  });
+
+  test('explicit CDN recovery preserves vendor preference and full URI', () {
+    final backup = backupMediaCdnUrl([
+      alibaba,
+      tencent,
+      huawei,
+    ], MediaCdnPreference.huawei);
+    expect(identical(backup, huawei), true);
+    expect(backup?.toString(), huawei.toString());
+  });
+
   for (final (preference, preferred) in [
     (MediaCdnPreference.tencent, tencent),
     (MediaCdnPreference.huawei, huawei),

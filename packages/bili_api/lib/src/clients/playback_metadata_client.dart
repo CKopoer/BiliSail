@@ -31,6 +31,10 @@ final class ApiVideoStoryboard {
   }) : images = List.unmodifiable(images),
        times = List.unmodifiable(times);
   final int columns, rows, tileWidth, tileHeight;
+
+  /// Some PGC responses use zero for an unspecified tile dimension. The app
+  /// must resolve it from the encoded sheet before constructing a UI model.
+  bool get needsImageDimensions => tileWidth == 0 || tileHeight == 0;
   final List<Uri> images;
   final List<Duration> times;
 }
@@ -105,8 +109,8 @@ final class PlaybackMetadataClient {
         rows < 1 ||
         columns > 20 ||
         rows > 20 ||
-        width < 1 ||
-        height < 1 ||
+        width < 0 ||
+        height < 0 ||
         width > 4096 ||
         height > 4096) {
       throw const ApiFailure(ApiFailureCategory.protocol, endpoint);

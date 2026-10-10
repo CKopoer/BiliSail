@@ -41,12 +41,14 @@
 | [播放器与标签保留](validation/player-workspace.md) | UWP 播放页、只读子标签和未关闭页面的生命周期修正 |
 | [多标签并发播放](validation/multi-tab-playback.md) | 标签独立播放器、单标签互斥、模式切换与资源释放 |
 | [云端进度与续播](validation/cloud-playback-progress.md) | 播放进度上报、本地优先/云端补充、账号和源隔离、Windows 验证边界 |
+| [点播打开优化](validation/playback-startup.md) | CDN 对照、共享准备预算、可取消外部音轨加载和 Windows 竞态验证 |
 | [云端观看历史](validation/cloud-watch-history.md) | 当前账号云列表、游标分页、统计补齐与观看日期、离线验证边界 |
 | [界面控件与设置](validation/ui-controls.md) | 播放配置、头像、动态/直播卡、空降助手和账户交互验证 |
 | [播放页与评论交互](validation/video-comments.md) | 官方桌面风格双标签、折叠合集、评论与楼中楼验证 |
 | [播放页信息区滑动](validation/playback-info-swipe.md) | 视频／影视简介评论、直播聊天／SC 共用分页、状态保留与手势验证 |
 | [评论图片与作者装扮](validation/comment-images-decorations.md) | 共用动态原图预览、右侧装扮图片与粉丝编号、验证边界 |
 | [播放页简介侧栏](validation/video-sidebar.md) | UP 统计与关注、合集卡片、常驻推荐与分隔线 |
+| [合作视频创作团队](validation/video-collaboration.md) | Web staff 成员、正式桌面客户端式头像／角色／展开与共享关注入口 |
 | [视频标签与搜索](validation/video-tags.md) | 简介中的真实标签、点击搜索、独立重试与导航保留 |
 | [合集订阅按钮](validation/collection-subscription.md) | 合集订阅态、粉色按钮、显式订阅/取消与账号隔离 |
 | [合集异常与播放崩溃](validation/collection-playback-crash.md) | 合集状态字段修正、Windows 原生转储与无障碍树更新规避 |
@@ -91,6 +93,7 @@
 | [弹幕样式与过滤配置](validation/danmaku-style-settings.md) | 字体/加粗/效果、时间偏移、重复合并、同屏密度与本地过滤 |
 | [全屏弹幕保留](validation/danmaku-fullscreen.md) | 点播视口变更保留活动弹幕、调度游标和滚动进度，Windows 全屏回归 |
 | [弹幕速度与播放倍速](validation/danmaku-playback-rate.md) | 按播放时间加载／触发，独立动画时间控制滚动和停留，暂停／seek／时间窗回归 |
+| [密集弹幕性能优化](validation/danmaku-performance.md) | Windows Profile 热点、分帧准备、阴影图像缓存、参考实现比较与验证边界 |
 | [播放错误排查](validation/native-playback-errors.md) | 原生日志误判、错误态控制栏与本地脱敏日志 |
 | [开发协作约定](../AGENTS.md) | 后续开发与自动化代理必须遵守的仓库规则 |
 

@@ -9,6 +9,7 @@ import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/user_follow_button.dart';
 import '../application/video_author_controller.dart';
 import '../domain/video_author_repository.dart';
+import 'video_staff_panel.dart';
 
 final class VideoAuthorHeader extends ConsumerWidget {
   const VideoAuthorHeader({
@@ -23,6 +24,14 @@ final class VideoAuthorHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (video.staff.isNotEmpty) {
+      return VideoStaffPanel(
+        key: ValueKey(video.summary.id),
+        members: video.staff,
+        onLogin: onLogin,
+        onOpenUser: onOpenUser,
+      );
+    }
     final mid = video.authorMid;
     final provider = mid == null
         ? null

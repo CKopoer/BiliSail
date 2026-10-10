@@ -26,7 +26,7 @@ final class _DanmakuOverlayState extends State<DanmakuOverlay>
   void initState() {
     super.initState();
     _ticker = createTicker((_) {
-      if (widget.controller.isAnimating) {
+      if (widget.controller.needsFrame) {
         _repaint.value++;
       } else {
         _ticker.stop();
@@ -37,7 +37,7 @@ final class _DanmakuOverlayState extends State<DanmakuOverlay>
   }
 
   void _onControllerChanged() {
-    if (widget.controller.isAnimating) {
+    if (widget.controller.needsFrame) {
       if (!_ticker.isActive) _ticker.start();
     } else {
       _ticker.stop();
@@ -83,6 +83,7 @@ final class _DanmakuOverlayState extends State<DanmakuOverlay>
             painter: _DanmakuPainter(
               widget.controller,
               Listenable.merge([widget.controller, _repaint]),
+              View.of(context).devicePixelRatio,
             ),
             size: Size.infinite,
           ),
@@ -93,9 +94,10 @@ final class _DanmakuOverlayState extends State<DanmakuOverlay>
 }
 
 final class _DanmakuPainter extends CustomPainter {
-  _DanmakuPainter(this.controller, Listenable repaint)
+  _DanmakuPainter(this.controller, Listenable repaint, this.pixelRatio)
     : super(repaint: repaint);
   final DanmakuController controller;
+  final double pixelRatio;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -105,11 +107,13 @@ final class _DanmakuPainter extends CustomPainter {
         placement.event,
         canvas,
         Offset(placement.x, placement.y),
+        pixelRatio: pixelRatio,
       );
     }
   }
 
   @override
   bool shouldRepaint(_DanmakuPainter oldDelegate) =>
-      !identical(controller, oldDelegate.controller);
+      !identical(controller, oldDelegate.controller) ||
+      pixelRatio != oldDelegate.pixelRatio;
 }

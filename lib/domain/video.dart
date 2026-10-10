@@ -76,6 +76,23 @@ final class VideoPart {
   final Duration duration;
 }
 
+final class VideoStaffMember {
+  const VideoStaffMember({
+    required this.name,
+    required this.title,
+    this.id,
+    this.avatarUrl,
+    this.highlightedRole = false,
+    this.nicknameColor,
+  });
+
+  final String name, title;
+  final UserId? id;
+  final Uri? avatarUrl;
+  final bool highlightedRole;
+  final String? nicknameColor;
+}
+
 final class VideoDetail {
   const VideoDetail({
     required this.summary,
@@ -89,6 +106,7 @@ final class VideoDetail {
     this.favoriteCount,
     this.replyCount,
     this.collection,
+    this.staff = const [],
   });
 
   final VideoSummary summary;
@@ -102,6 +120,7 @@ final class VideoDetail {
   final int? favoriteCount;
   final int? replyCount;
   final VideoCollection? collection;
+  final List<VideoStaffMember> staff;
 }
 
 final class VideoCollection {

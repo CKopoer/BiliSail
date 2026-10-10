@@ -1,12 +1,18 @@
+import 'dart:convert';
 import 'dart:ui';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:bili_api/bili_api.dart';
+import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/core/presentation/app_image_provider.dart';
 import 'package:bilisail/core/storage/image_byte_cache.dart';
 import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/features/playback/domain/playback_timeline.dart';
+import 'package:bilisail/features/playback/data/api_playback_repository.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/presentation/playback_timeline_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -22,109 +28,168 @@ const _chapters = [
 ];
 
 void main() {
-  testWidgets('sprite crop selects every tile and reuses the decoded sheet', (
-    tester,
-  ) async {
-    final encoded = await tester.runAsync(() async {
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      for (var i = 0; i < 4; i++) {
-        canvas.drawRect(
-          Rect.fromLTWH((i % 2) * 20, (i ~/ 2) * 20, 20, 20),
-          Paint()
-            ..color = [Colors.red, Colors.green, Colors.blue, Colors.yellow][i],
-        );
-      }
-      final picture = recorder.endRecording();
-      final image = await picture.toImage(40, 40);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
-      picture.dispose();
-      if (bytes == null) throw StateError('Missing synthetic PNG');
-      return bytes.buffer.asUint8List();
-    });
-    if (encoded == null) throw StateError('Missing synthetic PNG');
-    var loads = 0;
-    final cache = AppImageCache(
-      ImageByteCache(
-        directory: () async =>
-            throw const FileSystemException('optional cache'),
-        loader: (_, _) async {
-          loads++;
-          return encoded;
-        },
-      ),
-    );
-    final storyboard = VideoStoryboard(
-      columns: 2,
-      rows: 2,
-      tileWidth: 20,
-      tileHeight: 20,
-      images: [Uri.parse('https://i0.hdslb.com/synthetic-sprite.jpg')],
-      times: List.generate(4, (i) => Duration(seconds: i * 5)),
-    );
-    final boundaryKey = GlobalKey();
-    for (var index = 0; index < 4; index++) {
-      final frame = storyboard.frameAt(Duration(seconds: index * 5));
-      if (frame == null) throw StateError('Missing frame');
-      await tester.pumpWidget(
-        AppImageCacheScope(
-          cache: cache,
-          child: MaterialApp(
-            home: Center(
-              child: RepaintBoundary(
-                key: boundaryKey,
-                child: StoryboardThumbnail(
-                  storyboard: storyboard,
-                  frame: frame,
-                  width: 40,
-                  height: 40,
-                ),
-              ),
-            ),
+  testWidgets(
+    'zero-size sprite metadata resolves every crop and reuses the sheet',
+    (tester) async {
+      final encoded = await tester.runAsync(() async {
+        final recorder = ui.PictureRecorder();
+        final canvas = Canvas(recorder);
+        for (var i = 0; i < 4; i++) {
+          canvas.drawRect(
+            Rect.fromLTWH((i % 2) * 20, (i ~/ 2) * 20, 20, 20),
+            Paint()
+              ..color = [
+                Colors.red,
+                Colors.green,
+                Colors.blue,
+                Colors.yellow,
+              ][i],
+          );
+        }
+        final picture = recorder.endRecording();
+        final image = await picture.toImage(40, 40);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        image.dispose();
+        picture.dispose();
+        if (bytes == null) throw StateError('Missing synthetic PNG');
+        return bytes.buffer.asUint8List();
+      });
+      if (encoded == null) throw StateError('Missing synthetic PNG');
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('bilisail-storyboard-'),
+      );
+      if (directory == null) throw StateError('Missing cache directory');
+      var loads = 0;
+      // Disk operations and image-header inspection run in the real async zone.
+      final cache = await tester.runAsync(
+        () async => AppImageCache(
+          ImageByteCache(
+            directory: () async => directory,
+            loader: (_, _) async {
+              loads++;
+              return encoded;
+            },
           ),
         ),
       );
-      for (var attempt = 0; attempt < 20; attempt++) {
+      if (cache == null) throw StateError('Missing image cache');
+      final requests = ApiRequests();
+      final api = BiliApiClient(
+        transport: const _SpriteTransport(),
+        sessionProvider: requests,
+      );
+      addTearDown(api.close);
+      addTearDown(() => directory.deleteSync(recursive: true));
+      VideoStoryboard? loaded;
+      Object? failure;
+      final load =
+          ApiPlaybackRepository(
+                api,
+                requests,
+                imageDimensions: cache.dimensions,
+              )
+              .storyboard(
+                const VideoId('BV1abc123456'),
+                '2',
+                cancellation: RequestCancellation(),
+              )
+              .then(
+                (value) => loaded = value,
+                onError: (Object error) {
+                  failure = error;
+                  return null;
+                },
+              );
+      for (
+        var attempt = 0;
+        attempt < 100 && loaded == null && failure == null;
+        attempt++
+      ) {
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 10)),
         );
         await tester.pump();
-        if (tester.widget<RawImage>(find.byType(RawImage)).image != null) break;
       }
-      final boundary = boundaryKey.currentContext?.findRenderObject();
-      if (boundary is! RenderRepaintBoundary) {
-        throw StateError('Missing boundary');
+      expect(failure, isNull);
+      final storyboard = loaded;
+      if (storyboard == null) throw StateError('Missing inferred storyboard');
+      await load;
+      expect(storyboard.tileWidth, 20);
+      expect(storyboard.tileHeight, 20);
+      final boundaryKey = GlobalKey();
+      for (var index = 0; index < 4; index++) {
+        final frame = storyboard.frameAt(Duration(seconds: index * 5));
+        if (frame == null) throw StateError('Missing frame');
+        await tester.pumpWidget(
+          AppImageCacheScope(
+            cache: cache,
+            child: MaterialApp(
+              home: Center(
+                child: RepaintBoundary(
+                  key: boundaryKey,
+                  child: StoryboardThumbnail(
+                    storyboard: storyboard,
+                    frame: frame,
+                    width: 40,
+                    height: 40,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        for (var attempt = 0; attempt < 20; attempt++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await tester.pump();
+          if (tester.widget<RawImage>(find.byType(RawImage)).image != null) {
+            break;
+          }
+        }
+        final boundary = boundaryKey.currentContext?.findRenderObject();
+        if (boundary is! RenderRepaintBoundary) {
+          throw StateError('Missing boundary');
+        }
+        final pixels = await tester.runAsync(() async {
+          final image = await boundary.toImage();
+          final bytes = await image.toByteData();
+          image.dispose();
+          return bytes;
+        });
+        if (pixels == null) throw StateError('Missing pixels');
+        final rgba = Uint8List.view(pixels.buffer);
+        final offset = (20 * 40 + 20) * 4;
+        final color = Color.fromARGB(
+          rgba[offset + 3],
+          rgba[offset],
+          rgba[offset + 1],
+          rgba[offset + 2],
+        );
+        expect(
+          color.toARGB32(),
+          [
+            Colors.red,
+            Colors.green,
+            Colors.blue,
+            Colors.yellow,
+          ][index].toARGB32(),
+        );
       }
-      final pixels = await tester.runAsync(() async {
-        final image = await boundary.toImage();
-        final bytes = await image.toByteData();
-        image.dispose();
-        return bytes;
-      });
-      if (pixels == null) throw StateError('Missing pixels');
-      final rgba = Uint8List.view(pixels.buffer);
-      final offset = (20 * 40 + 20) * 4;
-      final color = Color.fromARGB(
-        rgba[offset + 3],
-        rgba[offset],
-        rgba[offset + 1],
-        rgba[offset + 2],
-      );
-      expect(
-        color.toARGB32(),
-        [
-          Colors.red,
-          Colors.green,
-          Colors.blue,
-          Colors.yellow,
-        ][index].toARGB32(),
-      );
-    }
-    expect(loads, 1);
-    await tester.pumpWidget(const SizedBox());
-    await cache.close();
-  });
+      expect(loads, 1);
+      await tester.pumpWidget(const SizedBox());
+      var closed = false;
+      final cleanup = cache.close().then((_) => closed = true);
+      for (var attempt = 0; attempt < 100 && !closed; attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+      expect(closed, isTrue);
+      await cleanup;
+    },
+  );
   testWidgets('hover shows chapter and time within player without seeking', (
     tester,
   ) async {
@@ -228,6 +293,35 @@ void main() {
       await mouse.removePointer();
       expect(tester.takeException(), isNull);
     },
+  );
+}
+
+final class _SpriteTransport implements ApiTransport {
+  const _SpriteTransport();
+  @override
+  Future<ApiHttpResponse> get(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  }) async => ApiHttpResponse(
+    200,
+    Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'code': 0,
+          'data': {
+            'img_x_len': 2,
+            'img_y_len': 2,
+            'img_x_size': 0,
+            'img_y_size': 0,
+            'image': ['https://i0.hdslb.com/synthetic-sprite.jpg'],
+            'index': [0, 0, 5, 10, 15],
+          },
+        }),
+      ),
+    ),
+    const {},
   );
 }
 

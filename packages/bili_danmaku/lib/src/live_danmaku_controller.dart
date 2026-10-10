@@ -1,5 +1,4 @@
 import 'dart:collection';
-import 'dart:math' show max;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
@@ -36,10 +35,11 @@ final class _Received {
 }
 
 final class _Visible {
-  const _Visible(this.event, this.at, this.width, this.lane);
+  const _Visible(this.event, this.at, this.width, this.height, this.lane);
   final LiveDanmakuEvent event;
   final Duration at;
   final double width;
+  final double height;
   final int lane;
 }
 
@@ -51,13 +51,16 @@ final class LiveDanmakuController extends ChangeNotifier {
     this.maxPending = 500,
     this.maxVisible = 120,
     this.maxTextLayouts = 256,
+    this.maxAdmissionsPerFrame = 32,
     this.scrollDuration = const Duration(seconds: 8),
     this.fixedDuration = const Duration(seconds: 4),
     this.maxPendingAge = const Duration(seconds: 2),
-  }) : _now = monotonicNow;
+  }) : assert(maxAdmissionsPerFrame > 0),
+       _now = monotonicNow;
 
   final Duration Function() _now;
   final int maxPending, maxVisible, maxTextLayouts;
+  final int maxAdmissionsPerFrame;
   final Duration scrollDuration, fixedDuration, maxPendingAge;
   final Queue<_Received> _pending = Queue();
   final List<_Visible> _visible = [];
@@ -79,6 +82,8 @@ final class LiveDanmakuController extends ChangeNotifier {
   int get pendingCount => _pending.length;
   int get visibleCount => _visible.length;
   int get textLayoutCount => _layouts.length;
+  int get textLayoutBuildCount => _layouts.buildCount;
+  int get textRasterBytes => _layouts.rasterBytes;
   bool get isAnimating =>
       _enabled && (_pending.isNotEmpty || _visible.isNotEmpty);
   Duration get _scrollLifetime =>
@@ -204,8 +209,19 @@ final class LiveDanmakuController extends ChangeNotifier {
   TextPainter _layout(LiveDanmakuEvent event) =>
       _layouts.layout(event.text, event.color, event.fontSize);
 
-  void paintText(LiveDanmakuEvent event, Canvas canvas, Offset offset) =>
-      _layouts.paint(event.text, event.color, event.fontSize, canvas, offset);
+  void paintText(
+    LiveDanmakuEvent event,
+    Canvas canvas,
+    Offset offset, {
+    double pixelRatio = 1,
+  }) => _layouts.paint(
+    event.text,
+    event.color,
+    event.fontSize,
+    canvas,
+    offset,
+    pixelRatio: pixelRatio,
+  );
 
   void _clearLayouts() => _layouts.clear();
 
@@ -220,15 +236,12 @@ final class LiveDanmakuController extends ChangeNotifier {
               : fixedDuration),
     );
     if (_width <= 0 || _height <= 0) return const [];
-    final priorLaneHeight = _laneHeight;
-    for (final received in _pending.takeWhile((item) => item.at <= now)) {
-      _laneHeight = max(
-        _laneHeight,
-        _layout(received.event).height + _lineSpacing,
-      );
-    }
-    if (_laneHeight != priorLaneHeight) _visible.clear();
+    final prepared = <(LiveDanmakuEvent, double, double)>[];
+    final texts = _mergeDuplicates
+        ? {for (final item in _visible) (item.event.mode, item.event.text)}
+        : <(DanmakuMode, String)>{};
     while (_pending.isNotEmpty && _pending.first.at <= now) {
+      if (prepared.length >= maxAdmissionsPerFrame) break;
       final received = _pending.removeFirst();
       if (now - received.at > maxPendingAge ||
           _visible.length >= (_maxOnScreen == 0 ? maxVisible : _maxOnScreen)) {
@@ -236,21 +249,50 @@ final class LiveDanmakuController extends ChangeNotifier {
         continue;
       }
       if (_mergeDuplicates &&
-          _visible.any(
-            (item) =>
-                item.event.text == received.event.text &&
-                item.event.mode == received.event.mode,
-          )) {
+          !texts.add((received.event.mode, received.event.text))) {
         continue;
       }
       final layout = _layout(received.event);
-      final lane = _findLane(received.event, layout.width, now);
+      prepared.add((received.event, layout.width, layout.height));
+    }
+    var textHeight = _visible.isEmpty
+        ? DanmakuTextLayouts.minFontSize
+        : _laneHeight - _lineSpacing;
+    for (final item in _visible) {
+      if (item.height > textHeight) textHeight = item.height;
+    }
+    for (final item in prepared) {
+      if (item.$3 > textHeight) textHeight = item.$3;
+    }
+    _laneHeight = textHeight + _lineSpacing;
+    final laneCount = (_availableHeight / _laneHeight).floor().clamp(0, 24);
+    _visible.removeWhere((item) => item.lane >= laneCount);
+    final lanes = List.generate(
+      DanmakuMode.values.length,
+      (_) => List.generate(laneCount, (_) => <_Visible>[]),
+    );
+    for (final item in _visible) {
+      lanes[item.event.mode.index][item.lane].add(item);
+    }
+    for (final (event, width, height) in prepared) {
+      if (_visible.length >= (_maxOnScreen == 0 ? maxVisible : _maxOnScreen)) {
+        dropped++;
+        continue;
+      }
+      final lane = _findLane(event, width, now, lanes[event.mode.index]);
       if (lane < 0) {
         dropped++;
         continue;
       }
-      _visible.add(_Visible(received.event, now, layout.width, lane));
+      final item = _Visible(event, now, width, height, lane);
+      _visible.add(item);
+      lanes[event.mode.index][lane].add(item);
     }
+    _layouts.protectRasters(
+      _visible.map(
+        (item) => (item.event.text, item.event.color, item.event.fontSize),
+      ),
+    );
     return [
       for (final item in _visible)
         LiveDanmakuPlacement(
@@ -268,12 +310,15 @@ final class LiveDanmakuController extends ChangeNotifier {
     ];
   }
 
-  int _findLane(LiveDanmakuEvent event, double textWidth, Duration now) {
-    final count = (_availableHeight / _laneHeight).floor().clamp(0, 24);
-    for (var lane = 0; lane < count; lane++) {
+  int _findLane(
+    LiveDanmakuEvent event,
+    double textWidth,
+    Duration now,
+    List<List<_Visible>> lanes,
+  ) {
+    for (var lane = 0; lane < lanes.length; lane++) {
       var free = true;
-      for (final prior in _visible) {
-        if (prior.event.mode != event.mode || prior.lane != lane) continue;
+      for (final prior in lanes[lane]) {
         if (event.mode != DanmakuMode.scroll) {
           free = false;
           break;

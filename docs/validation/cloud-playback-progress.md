@@ -8,6 +8,10 @@
 
 开启“记住播放进度”后，打开点播按当前账号、bvid、cid 先查询本地 SQLite；只有本地记录不存在时才读取云端。已有的 0 秒记录和本地已完成记录都优先保留，不能被云端旧进度覆盖。云端只使用与当前 cid 一致的记录，不自动切换分 P；记录缺失则从头播放。沿用结束前 5 秒内重新从头播放的规则，云端完成标记也从头播放。关闭设置后不读取两种历史，首次打开从头播放；工作区内未关闭页面的精确位置和换清晰度的播放意图仍按原有会话规则保留。
 
+2026-10-10 云端读取改为与原生媒体准备并行：本地记录存在时仍直接按本地位置打开；没有本地记录时立即从零打开媒体，云端有效进度返回后，在同一媒体源就绪时 seek，不阻塞打开或创建第二个播放器。等待期间保留当前播放/暂停意图；云端位置不大于已播放位置、接近结尾、缺失或已完成时，不回退或跳转。
+
+独立云端续播取消信号绑定 source generation、账号 scope/session epoch 与续播操作 revision。手动 seek（包括读取本地进度期间）、空降跳过、重播、关闭续播设置、换源、停止和关闭会取消旧操作；设置重新开启也不恢复已取消的结果。提前返回的云端结果等待媒体就绪，打开失败/被替换时释放等待；迟到的读失败不更新已关闭或其他账号/源的提示。等待云端结果期间暂缓本地保存和云端上报，防止从零开始的临时位置覆盖既有云进度；读取结束后恢复正常保存/上报，用户手动 seek 则立即采用用户位置。
+
 登录后的普通视频和具有真实 bvid/cid 的影视剧集，在准备完成后提交当前进度，播放中每 15 秒提交新位置；暂停、seek、换视频/分 P、停止和关闭时补交最新观察，结束使用完成标记。记住播放进度开关只控制续播，上报不随该开关关闭。游客和直播不发点播历史请求。本地写入保持 5 秒节流，并在暂停、seek、结束、停止和关闭时保存。
 
 云端读失败不使播放器进入错误态，显示读取失败提示并从头播放。云端上报失败不阻塞媒体控制和本地保存；提示不包含账号信息或服务端原文。账号作用域、session epoch、源 generation 和取消信号隔离旧响应。换账号取消在途请求、清空待发记录；同账号退出后重新登录也不能复用旧 epoch。
@@ -40,3 +44,26 @@ Windows `tool/test-windows-media.ps1` 已通过：播放套件报告 6 项、原
 最终 `tool/check.ps1 -SkipPub` 通过：根应用 668、API 包 225、播放器包 16、弹幕包 21 项，共 930 项；根应用和三个包格式检查、静态分析均通过。新增 API 协议测试 18 项、上报队列测试 8 项、续播/上报会话测试 12 项，以及 SQLite null/0/完成记录区分测试 1 项。日志为 `build/cloud-progress-check.log`。
 
 `flutter build windows --release` 成功，产物为 `build/windows/x64/runner/Release/bilisail.exe`，日志为 `build/cloud-progress-release.log`。文档相对链接与差异检查通过。本轮真实账号云端 GET/POST 及 Android/macOS 实机播放尚未验证。
+
+## 2026-10-10 非阻塞续播与打开耗时检查
+
+本轮使用 Windows / Flutter 3.47.6 Profile、默认 H.264/自动解码，探针直接调用实际 `ApiPlaybackRepository` 和 `MediaKitEngine`；独立分段探针复现同一 native 打开顺序。两段在线视频为游客实际获得的 480P 双轨，不使用保存的凭据，不发账号写请求。原始脱敏结果与可复现入口分别保存于本地 `artifacts/playback-open-analysis/results.jsonl`、`artifacts/playback-open-analysis/main.dart`；它们不进入版本控制。
+
+| 阶段 | 本轮观察 |
+| --- | --- |
+| 本地双轨原生打开，3 次 | 155–248 ms；实际硬解 `d3d11va-copy` |
+| 在线详情，2 个样本 | 77 / 86 ms |
+| 在线播放地址解析，4 次 | 37–103 ms；首次包含 44 ms WBI key 读取 |
+| 在线实际 engine 打开，4 次 | 512–1490 ms |
+| 同路径分段观察 | 视频轨道等待 102–258 ms；`audio-add` 132–2104 ms；最长一轮总计 2465 ms，其中音轨加载占约 85% |
+| 原生初始化及缓存配置 | 约 73–78 ms；本地释放约 34–38 ms，在线释放约 38–65 ms |
+
+当前文案同时覆盖解析、原生打开和 buffering，不能仅根据文案判定为 CPU 热点。视频就绪后才 `audio-add` 的串行网络加载，以及自动选出的 `mcdn.bilivideo.cn` 线路长尾，是本轮主要优化方向；原生调用仍须保留两轨就绪与源隔离，不能直接删除等待。下一步可比较同响应内普通 CDN 备选与分阶段回退预算，再评估后端同时调度双轨的适配方案。
+
+普通播放五分钟预读是后台媒体时间窗口，原生读回 `cache-pause-initial=no`、`cache-pause-wait=1`、demuxer 内存容量 32 MiB；没有等待五分钟缓存填满。相同源的 5 秒预读对照分别约 460 / 872 ms，与 300 秒窗口结果相比未出现稳定改善，保持普通播放配置。本轮样本很少、测量顺序与 CDN 热缓存会影响结果，不能作为统计分位数；探针窗口简化，不能代替完整页面的 UI/raster 或真实账号高清播放验收。
+
+新增/更新的会话测试 112 项通过，根应用整套 1604 项通过；API、播放器、弹幕和合并包分别 345 / 32 / 72 / 2 项通过（合并包 7 项因未设置原生库跳过）。本次 3 个 Dart 文件专项分析、格式与差异检查通过。实际 Windows 原生云进度用例输出 `NATIVE_PROGRESS cloudFallback=true nonBlocking=true preservesPause=true localPrecedence=true rememberOff=true heartbeat=true`，验证延后响应、媒体先播放、暂停保持、同播放器 seek、本地优先与关闭续播。
+
+本次代码的 Windows 应用 Profile 构建成功，并已将默认 Profile 输出恢复为 `lib/main.dart` 应用入口；构建日志为 `artifacts/playback-open-analysis/app-profile-build.log`。没有改动生产播放器适配器或五分钟缓冲配置。
+
+完整 `tool/check.ps1 -SkipPub` 本轮被其他并行改动中的两处 `curly_braces_in_flow_control_structures` 提示阻断（`windows_pgc_storyboard_test.dart:52`、`playback_timeline_bar_test.dart:147`）；全部原生播放用例另有控件隐藏断言失败（`windows_playback_test.dart:798`，点击后仍找到 `player-controls`）。该控件用例使用游客和本地进度，不执行云端续播，本轮保留相关实现。未验证真实账号云端 GET/POST、Android/macOS 和其他 CDN/设备；没有提交或发布。

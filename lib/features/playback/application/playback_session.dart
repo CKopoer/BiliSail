@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
+import '../../../domain/media_cdn.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../domain/playback_repository.dart';
@@ -138,6 +139,8 @@ class PlaybackSession extends ChangeNotifier {
   final _failedSegments = <int>{};
   final _prefetchFailedSegments = <int>{};
   RequestCancellation? _sourceCancellation;
+  RequestCancellation? _cloudResumeCancellation;
+  int _resumeRevision = 0;
   RequestCancellation? _subtitleCancellation;
   int _generation = 0;
   int _mediaGeneration = 0;
@@ -404,6 +407,7 @@ class PlaybackSession extends ChangeNotifier {
     // Capture source settings together; a preference change during resolution
     // applies to the next open rather than half of this source generation.
     final preferredCodec = _settings.preferredVideoCodec;
+    final mediaCdn = _settings.mediaCdn;
     final videoDecoding = switch (_settings.videoDecoding) {
       VideoDecodingPreference.automatic => VideoDecodingMode.automatic,
       VideoDecodingPreference.software => VideoDecodingMode.software,
@@ -425,6 +429,9 @@ class PlaybackSession extends ChangeNotifier {
     _prefetchFailedSegments.clear();
     _lastCommentWindow = -1;
     final savedProgress = _saveProgress();
+    _cancelCloudResume();
+    final resumeRevision = _resumeRevision;
+    final mediaReady = Completer<bool>();
     final cancellation = RequestCancellation();
     _sourceCancellation = cancellation;
     final samePart =
@@ -523,6 +530,8 @@ class PlaybackSession extends ChangeNotifier {
                         resolved.duration,
                         generation,
                         cancellation,
+                        mediaReady.future,
+                        resumeRevision,
                       )
                     : Duration.zero);
       if (generation != _generation ||
@@ -539,50 +548,67 @@ class PlaybackSession extends ChangeNotifier {
       if (resolved.kind == PlaybackMediaKind.dash && audio == null) {
         throw const AppFailure(AppFailureKind.playback, '未取得点播音频轨道');
       }
+      final videoBackup = isLive
+          ? resolved.video.urls.skip(1).firstOrNull
+          : backupMediaCdnUrl(resolved.video.urls, mediaCdn);
+      final audioBackup = audio == null
+          ? null
+          : backupMediaCdnUrl(audio.urls, mediaCdn);
+      final hasBackup = videoBackup != null || audioBackup != null;
+      final openingWatch = Stopwatch()..start();
+      const totalOpenBudget = Duration(seconds: 35);
       // At most two opens in one resolution, using only server-provided backups.
       for (var attempt = 0; attempt < 2; attempt++) {
-        if (generation != _generation) return;
+        if (generation != _generation ||
+            _disposed ||
+            cancellation.isCancelled ||
+            _scope != accountScope() ||
+            _epoch != sessionEpoch()) {
+          return;
+        }
+        final remaining = isLive || !hasBackup
+            ? totalOpenBudget
+            : totalOpenBudget - openingWatch.elapsed;
+        if (remaining <= Duration.zero) break;
+        // Leave time for a different returned CDN when the primary stalls.
+        // Single-URL and live sources retain their existing startup budget.
+        final attemptBudget =
+            !isLive &&
+                hasBackup &&
+                attempt == 0 &&
+                remaining > const Duration(seconds: 8)
+            ? const Duration(seconds: 8)
+            : remaining;
+        final videoUri = attempt == 0
+            ? resolved.video.urls.first
+            : videoBackup ?? resolved.video.urls.first;
+        final audioUri = audio == null
+            ? null
+            : attempt == 0
+            ? audio.urls.first
+            : audioBackup ?? audio.urls.first;
         try {
           await engine.open(
             resolved.kind == PlaybackMediaKind.liveHls
                 ? ManifestSource(
-                    MediaTrack(
-                      uri:
-                          resolved.video.urls[attempt.clamp(
-                            0,
-                            resolved.video.urls.length - 1,
-                          )],
-                      requestPolicy: policy,
-                    ),
+                    MediaTrack(uri: videoUri, requestPolicy: policy),
                     isLive: true,
                   )
                 : resolved.kind == PlaybackMediaKind.liveFlv
                 ? ProgressiveSource(
-                    MediaTrack(
-                      uri:
-                          resolved.video.urls[attempt.clamp(
-                            0,
-                            resolved.video.urls.length - 1,
-                          )],
-                      requestPolicy: policy,
-                    ),
+                    MediaTrack(uri: videoUri, requestPolicy: policy),
                   )
                 : DashPairSource(
                     video: MediaTrack(
-                      uri:
-                          resolved.video.urls[attempt.clamp(
-                            0,
-                            resolved.video.urls.length - 1,
-                          )],
+                      uri: videoUri,
                       requestPolicy: policy,
                       codec: resolved.video.codec,
                       bandwidth: resolved.video.bandwidth,
                     ),
-                    audio: audio == null
+                    audio: audio == null || audioUri == null
                         ? null
                         : MediaTrack(
-                            uri: audio
-                                .urls[attempt.clamp(0, audio.urls.length - 1)],
+                            uri: audioUri,
                             requestPolicy: policy,
                             codec: audio.codec,
                             bandwidth: audio.bandwidth,
@@ -594,13 +620,14 @@ class PlaybackSession extends ChangeNotifier {
               rate: isLive ? 1 : oldRate,
               volume: oldVolume,
               videoDecoding: videoDecoding,
+              openTimeout: attemptBudget,
             ),
           );
           lastFailure = null;
           break;
         } on PlayerFailure catch (failure) {
           lastFailure = failure;
-          if (resolved.video.urls.length < 2 && (audio?.urls.length ?? 0) < 2) {
+          if (!hasBackup || failure.kind != PlayerFailureKind.nativePlayback) {
             break;
           }
         }
@@ -619,6 +646,7 @@ class PlaybackSession extends ChangeNotifier {
       if (generation != _generation) return;
       _reportProgress();
       _notify();
+      mediaReady.complete(true);
       _ensureComments(engine.currentSnapshot.position);
       if (!isLive && video != null && selected != null) {
         unawaited(
@@ -645,6 +673,8 @@ class PlaybackSession extends ChangeNotifier {
         _resolving = false;
         _notify();
       }
+    } finally {
+      if (!mediaReady.isCompleted) mediaReady.complete(false);
     }
   }
 
@@ -711,6 +741,8 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> _saveProgress({bool report = true}) async {
+    // A temporary start-at-zero position must not replace the resume record.
+    if (_cloudResumeCancellation != null) return;
     if (report) _reportProgress(force: true);
     final generation = _generation;
     final video = detail;
@@ -776,6 +808,8 @@ class PlaybackSession extends ChangeNotifier {
     Duration duration,
     int generation,
     RequestCancellation cancellation,
+    Future<bool> mediaReady,
+    int resumeRevision,
   ) async {
     final scope = _scope;
     final epoch = _epoch;
@@ -789,26 +823,111 @@ class PlaybackSession extends ChangeNotifier {
     }
     final history = historyRepository;
     final target = _historyTarget;
-    if (history == null || target == null || !scope.startsWith('user:')) {
+    if (history == null ||
+        target == null ||
+        !scope.startsWith('user:') ||
+        !_settings.resumePlayback ||
+        resumeRevision != _resumeRevision) {
       return Duration.zero;
     }
+    final cloudCancellation = RequestCancellation();
+    cancellation.onCancel(cloudCancellation.cancel);
+    _cloudResumeCancellation = cloudCancellation;
+    unawaited(
+      _resumeFromCloud(
+        history,
+        target,
+        duration,
+        generation,
+        scope,
+        epoch,
+        cloudCancellation,
+        mediaReady,
+        resumeRevision,
+      ),
+    );
+    return Duration.zero;
+  }
+
+  void _cancelCloudResume() {
+    _resumeRevision++;
+    _cloudResumeCancellation?.cancel();
+    _cloudResumeCancellation = null;
+  }
+
+  Future<void> _resumeFromCloud(
+    PlaybackHistoryRepository history,
+    PlaybackHistoryTarget target,
+    Duration duration,
+    int generation,
+    String scope,
+    int epoch,
+    RequestCancellation cancellation,
+    Future<bool> mediaReady,
+    int resumeRevision,
+  ) async {
+    bool current() =>
+        !_disposed &&
+        !_closing &&
+        generation == _generation &&
+        scope == accountScope() &&
+        epoch == sessionEpoch() &&
+        _settings.resumePlayback &&
+        resumeRevision == _resumeRevision &&
+        !cancellation.isCancelled &&
+        identical(_cloudResumeCancellation, cancellation);
     try {
       final remote = await history.read(
         target,
         scope: scope,
         cancellation: cancellation,
       );
-      if (remote == null ||
-          remote < Duration.zero ||
+      if (!current() ||
+          remote == null ||
+          remote <= Duration.zero ||
           duration > Duration.zero &&
               remote >= duration - const Duration(seconds: 5)) {
-        return Duration.zero;
+        return;
       }
-      return remote;
+      if (!await mediaReady ||
+          !current() ||
+          _mediaGeneration != generation ||
+          media == null ||
+          error != null ||
+          snapshots.value.phase == PlaybackPhase.ended ||
+          remote <= snapshots.value.position) {
+        return;
+      }
+      final confirmedDuration = snapshots.value.duration;
+      if (confirmedDuration > Duration.zero &&
+          remote >= confirmedDuration - const Duration(seconds: 5)) {
+        return;
+      }
+      // Seeking preserves the latest play/pause intent. Manual seeks cancel
+      // this request before entering the engine's serial command queue.
+      await engine.seek(remote);
+      if (!current()) return;
+      danmaku.seekConfirmed(engine.currentSnapshot.position);
+      _lastCommentWindow = -1;
+      _ensureComments(engine.currentSnapshot.position);
     } on AppFailure catch (failure) {
-      if (failure.kind == AppFailureKind.cancelled) rethrow;
-      if (generation == _generation) auxiliaryMessage = '云端进度读取失败，本次从头播放';
-      return Duration.zero;
+      if (current() && failure.kind != AppFailureKind.cancelled) {
+        auxiliaryMessage = '云端进度读取失败，本次从头播放';
+      }
+    } on PlayerFailure {
+      if (current()) auxiliaryMessage = '云端续播定位失败，继续当前播放';
+    } catch (_) {
+      if (current()) auxiliaryMessage = '云端进度读取失败，本次从头播放';
+    } finally {
+      if (identical(_cloudResumeCancellation, cancellation)) {
+        final stillCurrent = current();
+        _cloudResumeCancellation = null;
+        if (stillCurrent) {
+          _reportProgress();
+          if (media != null) unawaited(_saveProgress(report: false));
+          _notify();
+        }
+      }
     }
   }
 
@@ -819,6 +938,7 @@ class PlaybackSession extends ChangeNotifier {
         media == null ||
         snapshot.duration <= Duration.zero ||
         _resolving ||
+        _cloudResumeCancellation != null ||
         snapshot.isSeeking ||
         _epoch != sessionEpoch() ||
         _scope != accountScope()) {
@@ -845,6 +965,7 @@ class PlaybackSession extends ChangeNotifier {
   void configureSettings(AppSettings settings) {
     final previous = _settings;
     _settings = settings.normalized();
+    if (!_settings.resumePlayback) _cancelCloudResume();
     danmaku.configure(
       area: _settings.danmakuArea,
       speed: _settings.danmakuSpeed,
@@ -958,6 +1079,7 @@ class PlaybackSession extends ChangeNotifier {
       return;
     }
     _skippedSponsors.add(segment.id);
+    _cancelCloudResume();
     _sponsorSeeking = true;
     try {
       await engine.seek(segment.end);
@@ -1324,6 +1446,7 @@ class PlaybackSession extends ChangeNotifier {
         return;
       }
       final generation = _generation;
+      _cancelCloudResume();
       _desiredPlaying = true;
       try {
         await engine.seek(Duration.zero);
@@ -1402,6 +1525,7 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> seek(Duration target) async {
     if (isLive) return;
+    _cancelCloudResume();
     await _command(() => engine.seek(target));
     danmaku.seekConfirmed(engine.currentSnapshot.position);
     _lastCommentWindow = -1;
@@ -1647,6 +1771,7 @@ class PlaybackSession extends ChangeNotifier {
     // Capture the old progress before invalidating the source. A same-source
     // reopen during the write must advance generation instead of reusing it.
     final savedProgress = _saveProgress();
+    _cancelCloudResume();
     media = null;
     _resolving = false;
     await savedProgress;

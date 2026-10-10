@@ -24,6 +24,102 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  for (final failure in [
+    PlayerFailureKind.nativePlayback,
+    PlayerFailureKind.invalidSource,
+  ]) {
+    test('CDN startup budget and recovery classify $failure', () async {
+      final engine = _FakeEngine()..nextOpenFailure = failure;
+      final repository = _FakeRepository();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: repository,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      final opening = session.open(
+        _detail('one'),
+        _part('one'),
+        position: const Duration(seconds: 17),
+        desiredPlaying: false,
+      );
+      await _flush();
+      repository.pendingResolves['one']!.complete(_backupMedia());
+      await opening;
+      expect(engine.openOptions.first.openTimeout, const Duration(seconds: 8));
+      if (failure == PlayerFailureKind.nativePlayback) {
+        expect(engine.openedUris, [
+          _backupMedia().video.urls.first,
+          _backupMedia().video.urls.last,
+        ]);
+        expect(
+          (engine.sources.last as DashPairSource).audio?.uri,
+          _backupMedia().audio?.urls.last,
+        );
+        expect(
+          engine.openOptions.last.openTimeout,
+          lessThanOrEqualTo(const Duration(seconds: 35)),
+        );
+        expect(
+          engine.openOptions.last.openTimeout,
+          greaterThan(const Duration(seconds: 8)),
+        );
+        expect(engine.currentSnapshot.position, const Duration(seconds: 17));
+        expect(engine.currentSnapshot.desiredPlaying, false);
+        expect(session.error, isNull);
+      } else {
+        expect(engine.openOptions, hasLength(1));
+        expect(session.error, isNotNull);
+      }
+    });
+  }
+
+  test(
+    'account replacement after a native failure cannot start the backup',
+    () async {
+      var scope = 'old';
+      final engine = _FakeEngine()
+        ..nextOpenFailure = PlayerFailureKind.nativePlayback
+        ..onOpenFailure = () => scope = 'new';
+      final repository = _FakeRepository();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: repository,
+        progress: _FakeProgress(),
+        accountScope: () => scope,
+      );
+      addTearDown(session.close);
+      final opening = session.open(_detail('one'), _part('one'));
+      await _flush();
+      repository.pendingResolves['one']!.complete(_backupMedia());
+      await opening;
+      expect(engine.openOptions, hasLength(1));
+      expect(session.media, isNull);
+    },
+  );
+
+  test(
+    'single URL retains the full startup budget and never repeats it',
+    () async {
+      final engine = _FakeEngine()
+        ..nextOpenFailure = PlayerFailureKind.nativePlayback;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      expect(engine.openOptions, hasLength(1));
+      expect(
+        engine.openOptions.single.openTimeout,
+        const Duration(seconds: 35),
+      );
+    },
+  );
+
   test('voice switching preserves playback options, subtitle intent, refresh and owner checkpoints', () async {
     final engine = _FakeEngine();
     final repository = _VoiceRepository();
@@ -737,7 +833,9 @@ void main() {
         addTearDown(session.close);
         session.configureSettings(AppSettings(resumePlayback: remember));
         await session.open(_detail('11'), _part('11'));
-        expect(engine.openOptions.single.startPosition, expected);
+        await _flush();
+        expect(engine.openOptions.single.startPosition, local ?? Duration.zero);
+        expect(engine.currentSnapshot.position, expected);
         expect(
           history.reads.length,
           local == null && remember && scope == 'user:1' ? 1 : 0,
@@ -787,8 +885,10 @@ void main() {
     expect(history.reads.first.cancellation.isCancelled, isTrue);
     gate.complete(const Duration(seconds: 55));
     await old;
-    expect(engine.openOptions, hasLength(1));
-    expect(engine.openOptions.single.startPosition, Duration.zero);
+    await _flush();
+    expect(engine.openOptions, hasLength(2));
+    expect(engine.openOptions.last.startPosition, Duration.zero);
+    expect(engine.seekTargets, isEmpty);
     expect(session.part?.cid, '12');
   });
 
@@ -813,8 +913,256 @@ void main() {
       epoch++;
       gate.complete(const Duration(seconds: 55));
       await opening;
-      expect(engine.openOptions, isEmpty);
+      await _flush();
+      expect(engine.openOptions, hasLength(1));
+      expect(engine.seekTargets, isEmpty);
       expect(history.reports, isEmpty);
+    },
+  );
+
+  test(
+    'media starts while cloud progress is pending without saving zero',
+    () async {
+      final engine = _FakeEngine();
+      final history = _FakeHistory()..nextRead = Completer<Duration?>();
+      final gate = history.nextRead!;
+      final progress = _FakeProgress()..readValue = null;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: progress,
+        historyRepository: history,
+        accountScope: () => 'user:1',
+      );
+      addTearDown(session.close);
+      await session
+          .open(_detail('11'), _part('11'))
+          .timeout(const Duration(seconds: 1));
+      expect(session.isResolving, isFalse);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      expect(engine.currentSnapshot.position, Duration.zero);
+      expect(history.reports, isEmpty);
+      await session.pause();
+      expect(progress.writes, isEmpty);
+      gate.complete(const Duration(seconds: 42));
+      await _flush();
+      expect(engine.seekTargets, [const Duration(seconds: 42)]);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      expect(history.reports.first.position, const Duration(seconds: 42));
+      expect(progress.writes, isNotEmpty);
+    },
+  );
+
+  test(
+    'early cloud response waits for the native source to be ready',
+    () async {
+      final engine = _FakeEngine()..nextOpen = Completer<void>();
+      final nativeReady = engine.nextOpen!;
+      final history = _FakeHistory()..readValue = const Duration(seconds: 42);
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress()..readValue = null,
+        historyRepository: history,
+        accountScope: () => 'user:1',
+      );
+      addTearDown(session.close);
+      final opening = session.open(_detail('11'), _part('11'));
+      await _flush();
+      expect(history.reads, hasLength(1));
+      expect(engine.seekTargets, isEmpty);
+      nativeReady.complete();
+      await opening;
+      await _flush();
+      expect(engine.seekTargets, [const Duration(seconds: 42)]);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+    },
+  );
+
+  test(
+    'closing during native preparation rejects an early cloud response',
+    () async {
+      final engine = _FakeEngine()..nextOpen = Completer<void>();
+      final nativeReady = engine.nextOpen!;
+      final history = _FakeHistory()..readValue = const Duration(seconds: 42);
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress()..readValue = null,
+        historyRepository: history,
+        accountScope: () => 'user:1',
+      );
+      final opening = session.open(_detail('11'), _part('11'));
+      await _flush();
+      await session.close();
+      nativeReady.complete();
+      await opening;
+      await _flush();
+      expect(engine.disposed, isTrue);
+      expect(engine.seekTargets, isEmpty);
+      expect(history.reports, isEmpty);
+    },
+  );
+
+  test(
+    'a cloud read failure after closing cannot notify a disposed session',
+    () async {
+      final engine = _FakeEngine();
+      final history = _FakeHistory()..nextRead = Completer<Duration?>();
+      final gate = history.nextRead!;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress()..readValue = null,
+        historyRepository: history,
+        accountScope: () => 'user:1',
+      );
+      await session.open(_detail('11'), _part('11'));
+      await session.close();
+      gate.completeError(
+        const AppFailure(AppFailureKind.network, 'late failure'),
+      );
+      await _flush();
+      expect(session.auxiliaryMessage, isNull);
+      expect(engine.seekTargets, isEmpty);
+      expect(history.reports, isEmpty);
+    },
+  );
+
+  for (final action in ['seek', 'stop', 'close', 'disable', 'account']) {
+    test('late cloud progress is discarded after $action', () async {
+      var scope = 'user:1';
+      final engine = _FakeEngine();
+      final history = _FakeHistory()..nextRead = Completer<Duration?>();
+      final gate = history.nextRead!;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress()..readValue = null,
+        historyRepository: history,
+        accountScope: () => scope,
+      );
+      addTearDown(session.close);
+      await session.open(_detail('11'), _part('11'));
+      switch (action) {
+        case 'seek':
+          await session.seek(const Duration(seconds: 10));
+        case 'stop':
+          await session.stop();
+        case 'close':
+          await session.close();
+        case 'disable':
+          session.configureSettings(AppSettings(resumePlayback: false));
+          session.configureSettings(AppSettings(resumePlayback: true));
+        case 'account':
+          scope = 'user:2';
+      }
+      if (action != 'account') {
+        expect(history.reads.single.cancellation.isCancelled, isTrue);
+      }
+      gate.complete(const Duration(seconds: 42));
+      await _flush();
+      expect(
+        engine.seekTargets,
+        action == 'seek' ? [const Duration(seconds: 10)] : isEmpty,
+      );
+      expect(session.error, isNull);
+      if (action == 'stop' || action == 'close' || action == 'account') {
+        expect(history.reports, isEmpty);
+      }
+    });
+  }
+
+  test(
+    'manual seek during a local progress read prevents a cloud resume',
+    () async {
+      final engine = _FakeEngine();
+      final progress = _FakeProgress()..nextRead = Completer<Duration?>();
+      final gate = progress.nextRead!;
+      final history = _FakeHistory()..readValue = const Duration(seconds: 42);
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: progress,
+        historyRepository: history,
+        accountScope: () => 'user:1',
+      );
+      addTearDown(session.close);
+      final opening = session.open(_detail('11'), _part('11'));
+      await _flush();
+      await session.seek(const Duration(seconds: 10));
+      gate.complete(null);
+      await opening;
+      await _flush();
+      expect(history.reads, isEmpty);
+      expect(engine.seekTargets, [const Duration(seconds: 10)]);
+    },
+  );
+
+  for (final remote in [
+    Duration.zero,
+    const Duration(seconds: -1),
+    const Duration(seconds: 118),
+    const Duration(seconds: 5),
+  ]) {
+    test(
+      'cloud resume does not rewind or restore an invalid position: $remote',
+      () async {
+        final engine = _FakeEngine();
+        final history = _FakeHistory()..nextRead = Completer<Duration?>();
+        final gate = history.nextRead!;
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _FakeRepository(autoResolve: true),
+          progress: _FakeProgress()..readValue = null,
+          historyRepository: history,
+          accountScope: () => 'user:1',
+        );
+        addTearDown(session.close);
+        await session.open(_detail('11'), _part('11'));
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            position: const Duration(seconds: 10),
+          ),
+        );
+        gate.complete(remote);
+        await _flush();
+        expect(engine.seekTargets, isEmpty);
+        expect(engine.currentSnapshot.position, const Duration(seconds: 10));
+        expect(history.reports.last.position, const Duration(seconds: 10));
+      },
+    );
+  }
+
+  test(
+    'a failed native open releases an early cloud response without seeking',
+    () async {
+      final engine = _FakeEngine()..nextOpen = Completer<void>();
+      final nativeReady = engine.nextOpen!;
+      final history = _FakeHistory()..readValue = const Duration(seconds: 42);
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress()..readValue = null,
+        historyRepository: history,
+        accountScope: () => 'user:1',
+      );
+      addTearDown(session.close);
+      final opening = session.open(_detail('11'), _part('11'));
+      await _flush();
+      nativeReady.completeError(
+        const PlayerFailure(
+          PlayerFailureKind.nativePlayback,
+          'native failure',
+          1,
+        ),
+      );
+      await opening;
+      await _flush();
+      expect(engine.seekTargets, isEmpty);
+      expect(history.reports, isEmpty);
+      expect(session.error, 'native failure');
     },
   );
 
@@ -2975,6 +3323,31 @@ PlaybackMedia _media(String id, int quality, Duration duration) =>
       headers: const {'Referer': 'https://www.bilibili.com'},
     );
 
+PlaybackMedia _backupMedia() => PlaybackMedia(
+  video: PlaybackTrack(
+    urls: [
+      Uri.parse('https://primary.mcdn.bilivideo.cn/v.m4s?k=primary'),
+      Uri.parse('https://node.edge.mountaintoys.cn/v.m4s?k=edge'),
+      Uri.parse('https://upos-sz-mirrorcos.bilivideo.com/v%2F1.m4s?k=regular'),
+    ],
+    codec: 'avc1',
+    bandwidth: 1000,
+  ),
+  audio: PlaybackTrack(
+    urls: [
+      Uri.parse('https://audio.mcdn.bilivideo.cn/a.m4s?k=primary'),
+      Uri.parse('https://audio.edge.mountaintoys.cn/a.m4s?k=edge'),
+      Uri.parse('https://upos-sz-mirrorhw.bilivideo.com/a.m4s?k=regular'),
+    ],
+    codec: 'mp4a',
+    bandwidth: 100,
+  ),
+  quality: 80,
+  qualities: const [80],
+  duration: const Duration(minutes: 2),
+  headers: const {},
+);
+
 final class _FakeRepository implements PlaybackRepository {
   _FakeRepository({
     this.autoResolve = false,
@@ -3193,10 +3566,14 @@ final class _FakeProgress implements PlaybackProgressStore {
   final writes = <_ProgressWrite>[];
   Completer<void>? nextWrite;
   Duration? readValue = Duration.zero;
+  Completer<Duration?>? nextRead;
 
   @override
-  Future<Duration?> read(String scope, VideoId video, String cid) async =>
-      readValue;
+  Future<Duration?> read(String scope, VideoId video, String cid) {
+    final pending = nextRead;
+    nextRead = null;
+    return pending?.future ?? Future.value(readValue);
+  }
 
   @override
   Future<void> write(
@@ -3239,6 +3616,9 @@ final class _FakeEngine implements PlayerEngine {
   Completer<void>? nextVolume;
   int volumeCalls = 0;
   Completer<void>? nextPause;
+  Completer<void>? nextOpen;
+  PlayerFailureKind? nextOpenFailure;
+  void Function()? onOpenFailure;
 
   @override
   PlaybackSnapshot get currentSnapshot => _current;
@@ -3271,6 +3651,24 @@ final class _FakeEngine implements PlayerEngine {
       ProgressiveSource(:final media) => media.uri,
     });
     openOptions.add(options);
+    final pending = nextOpen;
+    nextOpen = null;
+    final generation = _current.generation;
+    if (pending != null) await pending.future;
+    if (disposed || generation != _current.generation) return;
+    final failure = nextOpenFailure;
+    nextOpenFailure = null;
+    if (failure != null) {
+      _players--;
+      emit(
+        _current.copyWith(
+          phase: PlaybackPhase.failed,
+          generation: generation + 1,
+        ),
+      );
+      onOpenFailure?.call();
+      throw PlayerFailure(failure, 'fixture open failure', _current.generation);
+    }
     emit(
       PlaybackSnapshot(
         phase: PlaybackPhase.paused,

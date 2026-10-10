@@ -208,6 +208,24 @@ final class ApiVideoCollectionEntry {
   final List<ApiVideoPage> pages;
 }
 
+/// A member of a video's joint submission, in server-supplied credit order.
+final class ApiVideoStaffMember {
+  const ApiVideoStaffMember({
+    required this.name,
+    required this.title,
+    this.mid,
+    this.avatarUrl,
+    this.highlightedRole = false,
+    this.nicknameColor,
+  });
+
+  final String name, title;
+  final String? mid;
+  final Uri? avatarUrl;
+  final bool highlightedRole;
+  final String? nicknameColor;
+}
+
 final class ApiVideoDetail {
   const ApiVideoDetail({
     required this.aid,
@@ -227,6 +245,7 @@ final class ApiVideoDetail {
     this.favoriteCount,
     this.collection,
     this.replyCount,
+    this.staff = const [],
   });
   final String aid;
   final String bvid;
@@ -245,6 +264,7 @@ final class ApiVideoDetail {
   final int? favoriteCount;
   final ApiVideoCollection? collection;
   final int? replyCount;
+  final List<ApiVideoStaffMember> staff;
 }
 
 final class ApiMediaTrack {

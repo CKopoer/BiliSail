@@ -49,6 +49,18 @@ class ApiVideoRepository implements VideoRepository {
                   .toList(growable: false),
             ),
       authorMid: detail.ownerMid,
+      staff: List.unmodifiable(
+        detail.staff.map(
+          (member) => VideoStaffMember(
+            id: UserId.tryParse(member.mid),
+            name: member.name,
+            title: member.title,
+            avatarUrl: member.avatarUrl,
+            highlightedRole: member.highlightedRole,
+            nicknameColor: member.nicknameColor,
+          ),
+        ),
+      ),
       likeCount: detail.likeCount,
       coinCount: detail.coinCount,
       favoriteCount: detail.favoriteCount,

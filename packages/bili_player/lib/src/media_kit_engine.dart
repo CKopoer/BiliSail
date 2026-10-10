@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart' as mk;
@@ -7,6 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart' as mkv;
 import 'player_contract.dart';
 import 'player_diagnostics.dart';
 import 'native_readiness.dart';
+import 'native_media_options.dart';
 import 'native_error_monitor.dart';
 import 'video_dimensions.dart';
 
@@ -208,10 +210,51 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
   bool _hasRealTrack(List<mk.VideoTrack> tracks) =>
       tracks.any((track) => track.id != 'auto' && track.id != 'no');
 
-  Set<String> _realAudioIds(mk.Player player) => player.state.tracks.audio
-      .where((track) => track.id != 'auto' && track.id != 'no')
-      .map((track) => track.id)
-      .toSet();
+  static const _externalAudioProperty =
+      'current-tracks/audio/external-filename';
+
+  Future<Completer<void>> _configureExternalAudio(
+    mk.Player player,
+    MediaTrack audio,
+    int generation,
+    Stopwatch watch,
+    Duration budget,
+  ) async {
+    final platform = player.platform;
+    if (platform is! mk.NativePlayer) {
+      throw PlayerFailure(
+        PlayerFailureKind.nativePlayback,
+        'The playback backend cannot prepare external audio.',
+        generation,
+      );
+    }
+    final ready = Completer<void>();
+    final uri = audio.uri.toString();
+    await platform
+        .observeProperty(_externalAudioProperty, (value) async {
+          if (value == uri && !ready.isCompleted) ready.complete();
+        })
+        .timeout(_remaining(watch, budget));
+    await platform
+        .setProperty(
+          'audio-files',
+          mpvPathListEntry(audio.uri, windows: Platform.isWindows),
+        )
+        .timeout(_remaining(watch, budget));
+    // The locked SDK does not propagate property errors. Read back before
+    // opening, without emitting the signed URL into diagnostics.
+    final applied = await platform
+        .getProperty('audio-files')
+        .timeout(_remaining(watch, budget));
+    if (applied != uri) {
+      throw PlayerFailure(
+        PlayerFailureKind.nativePlayback,
+        'The playback backend did not apply the external audio source.',
+        generation,
+      );
+    }
+    return ready;
+  }
 
   Future<void> _configureBufferAhead(
     mk.Player player,
@@ -343,6 +386,20 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
           openBudget,
         );
         if (generation != _generation || _disposed) return;
+        // Register the track before loadfile. mpv loads it in its cancellable
+        // file-loading worker, instead of holding media_kit's command lock in
+        // audio-add while network I/O stalls. Both tracks use the on_load
+        // header hook; _validate requires identical, credential-free headers.
+        final audioReady = audioTrack == null
+            ? null
+            : await _configureExternalAudio(
+                player,
+                audioTrack,
+                generation,
+                watch,
+                openBudget,
+              );
+        if (generation != _generation || _disposed) return;
         await player
             .open(
               mk.Media(
@@ -354,9 +411,8 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
             .timeout(_remaining(watch, openBudget));
         if (generation != _generation || _disposed) return;
         if (source is DashPairSource || source is DashVideoSource) {
-          // Player.open acknowledges loadlist before mpv has run the on_load
-          // header hook and demuxed the video. The real track-list appears
-          // only after that stage, and is the prerequisite for audio-add.
+          // Player.open only acknowledges loadlist. Wait for actual demuxed
+          // tracks after the on_load header hook has run.
           await _waitReady(
             player,
             generation,
@@ -370,22 +426,21 @@ final class MediaKitEngine implements PlayerEngine, VideoSurfaceSource {
           );
         }
         if (generation != _generation || _disposed) return;
-        if (audioTrack != null) {
-          // media_kit's native implementation sets http-header-fields on the
-          // same mpv instance for Media before audio-add. It has no per-audio
-          // header parameter, so _validate requires identical header sets.
-          final existingAudio = _realAudioIds(player);
-          await player
-              .setAudioTrack(mk.AudioTrack.uri(audioTrack.uri.toString()))
-              .timeout(_remaining(watch, openBudget));
-          await _waitReady(
-            player,
-            generation,
-            () => _realAudioIds(player).difference(existingAudio).isNotEmpty,
-            [player.stream.tracks],
-            _remaining(watch, openBudget),
-            'External audio track did not become ready.',
+        if (audioReady != null) {
+          // A real embedded audio track is insufficient: confirm that mpv
+          // selected this source's external file, then verify decoding on play.
+          await waitForNativeSignal(
+            signal: audioReady.future,
+            superseded: () =>
+                generation != _generation ||
+                _disposed ||
+                !identical(_player, player),
+            changes: [_generationChanges.stream],
+            timeout: _remaining(watch, openBudget),
           );
+          await (player.platform as mk.NativePlayer)
+              .unobserveProperty(_externalAudioProperty)
+              .timeout(_remaining(watch, openBudget));
           _requiresDecodedAudio = true;
         } else if (source is DashPairSource || source is DashVideoSource) {
           await player

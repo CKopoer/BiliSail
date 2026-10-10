@@ -167,6 +167,7 @@ class AppDependencies {
       api,
       requests,
       cdnPreference: cdnPreference,
+      imageDimensions: images.dimensions,
     );
     final downloadSources = ApiDownloadSourceRepository(
       api,

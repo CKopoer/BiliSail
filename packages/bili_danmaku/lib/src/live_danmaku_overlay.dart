@@ -80,6 +80,7 @@ final class _LiveDanmakuOverlayState extends State<LiveDanmakuOverlay>
             painter: _LivePainter(
               widget.controller,
               Listenable.merge([widget.controller, _repaint]),
+              View.of(context).devicePixelRatio,
             ),
             size: Size.infinite,
           ),
@@ -90,17 +91,25 @@ final class _LiveDanmakuOverlayState extends State<LiveDanmakuOverlay>
 }
 
 final class _LivePainter extends CustomPainter {
-  _LivePainter(this.controller, Listenable repaint) : super(repaint: repaint);
+  _LivePainter(this.controller, Listenable repaint, this.pixelRatio)
+    : super(repaint: repaint);
   final LiveDanmakuController controller;
+  final double pixelRatio;
   @override
   void paint(Canvas canvas, Size size) {
     canvas.clipRect(Offset.zero & size);
     for (final item in controller.frame()) {
-      controller.paintText(item.event, canvas, Offset(item.x, item.y));
+      controller.paintText(
+        item.event,
+        canvas,
+        Offset(item.x, item.y),
+        pixelRatio: pixelRatio,
+      );
     }
   }
 
   @override
   bool shouldRepaint(_LivePainter oldDelegate) =>
-      !identical(controller, oldDelegate.controller);
+      !identical(controller, oldDelegate.controller) ||
+      pixelRatio != oldDelegate.pixelRatio;
 }

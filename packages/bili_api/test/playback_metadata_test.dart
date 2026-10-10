@@ -132,9 +132,38 @@ void main() {
     },
   );
 
+  for (final dimensions in [(0, 0), (160, 0), (0, 90)]) {
+    test(
+      'zero tile dimensions preserve the usable storyboard index $dimensions',
+      () async {
+        final shot = await PlaybackMetadataClient(
+          BiliApiClient(
+            transport: _Transport(
+              {},
+              shot: {
+                ..._shot,
+                'img_x_size': dimensions.$1,
+                'img_y_size': dimensions.$2,
+              },
+            ),
+          ),
+        ).storyboard('BV1abc123456', '2');
+        expect(shot?.needsImageDimensions, isTrue);
+        expect(shot?.times, hasLength(3));
+        expect(shot?.images, hasLength(1));
+      },
+    );
+  }
+
   for (final patch in <Map<String, Object?>>[
     {'img_x_len': 0},
     {'img_y_len': 1000},
+    {'img_x_size': -1},
+    {'img_y_size': -1},
+    {'img_x_size': 4097},
+    {'img_y_size': 4097},
+    {'img_x_size': null},
+    {'img_y_size': 'invalid'},
     {
       'index': [0, 0, 10, 5],
     },

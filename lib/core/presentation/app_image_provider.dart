@@ -17,6 +17,38 @@ final class AppImageCache extends ChangeNotifier {
   final ImageCache decoded;
   bool get enabled => bytes.enabled;
 
+  /// Reads the original sheet size without allocating its full decoded pixels.
+  /// The later thumbnail resolution shares the same bounded byte cache.
+  Future<({int width, int height})> dimensions(Uri uri) async {
+    final generation = bytes.generation;
+    Future<({int width, int height})> inspect(CachedImageBytes result) async {
+      final buffer = await ui.ImmutableBuffer.fromUint8List(result.bytes);
+      try {
+        final descriptor = await ui.ImageDescriptor.encoded(buffer);
+        try {
+          if (generation != bytes.generation) {
+            throw const ImageLoadCancelled();
+          }
+          return (width: descriptor.width, height: descriptor.height);
+        } finally {
+          descriptor.dispose();
+        }
+      } finally {
+        buffer.dispose();
+      }
+    }
+
+    final result = await bytes.load(uri);
+    try {
+      return await inspect(result);
+    } on Exception {
+      if (generation != bytes.generation) rethrow;
+      if (enabled) await bytes.invalidate(uri);
+      if (!result.fromDisk) rethrow;
+      return inspect(await bytes.load(uri, skipDisk: true));
+    }
+  }
+
   set enabled(bool value) {
     if (value == bytes.enabled) return;
     bytes.enabled = value;

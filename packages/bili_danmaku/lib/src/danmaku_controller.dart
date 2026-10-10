@@ -37,10 +37,11 @@ final class DanmakuPlacement {
 }
 
 final class _Active {
-  const _Active(this.event, this.start, this.width, this.lane);
+  const _Active(this.event, this.start, this.width, this.height, this.lane);
   final DanmakuEvent event;
   final Duration start;
   final double width;
+  final double height;
   final int lane;
 }
 
@@ -52,15 +53,20 @@ final class DanmakuController extends ChangeNotifier {
     this.maxPending = 500,
     this.maxVisible = 120,
     this.maxTextLayouts = 256,
+    this.maxAdmissionsPerFrame = 32,
     this.maxInterpolation = const Duration(milliseconds: 700),
     this.scrollDuration = const Duration(seconds: 8),
     this.fixedDuration = const Duration(seconds: 4),
-  }) : _now = monotonicNow;
+  }) : assert(maxAdmissionsPerFrame > 0),
+       _now = monotonicNow;
 
   final Duration Function() _now;
   final int maxPending;
   final int maxVisible;
   final int maxTextLayouts;
+
+  /// Caps text preparation per frame; remaining arrivals keep their media age.
+  final int maxAdmissionsPerFrame;
   final Duration maxInterpolation;
   final Duration scrollDuration;
   double _area = 1;
@@ -117,7 +123,7 @@ final class DanmakuController extends ChangeNotifier {
     _maxOnScreen = maxOnScreen.clamp(0, maxVisible);
     _layouts.clear();
     _layouts.style = textStyle;
-    _updateLaneHeight();
+    _laneHeight = DanmakuTextLayouts.minFontSize + _lineSpacing;
     seekConfirmed(position);
   }
 
@@ -144,6 +150,8 @@ final class DanmakuController extends ChangeNotifier {
   int get pendingCount => _events.length - _next;
   int get visibleCount => _active.length;
   int get textLayoutCount => _layouts.length;
+  int get textLayoutBuildCount => _layouts.buildCount;
+  int get textRasterBytes => _layouts.rasterBytes;
 
   /// Media history needed to rebuild after seeking or refresh visible items.
   Duration get requiredHistory {
@@ -166,6 +174,14 @@ final class DanmakuController extends ChangeNotifier {
       !_buffering &&
       !_seeking &&
       _now() - _anchorTime < maxInterpolation;
+
+  /// Finish bounded admission after a paused seek without advancing either clock.
+  bool get needsFrame =>
+      isAnimating ||
+      (_width > 0 &&
+          _height > 0 &&
+          _next < _events.length &&
+          _events[_next].at <= _displayPosition);
 
   Duration _elapsed(Duration now) {
     if (!_playing || _buffering || _seeking) return Duration.zero;
@@ -245,7 +261,6 @@ final class DanmakuController extends ChangeNotifier {
           nextEvent == null ||
           !_sameEvent(oldEvent, nextEvent);
     });
-    _updateLaneHeight();
     _active.removeWhere((item) {
       final next = available[item.event.id];
       return next == null || !_sameEvent(item.event, next);
@@ -331,22 +346,19 @@ final class DanmakuController extends ChangeNotifier {
   TextPainter _layout(DanmakuEvent event) =>
       _layouts.layout(event.text, event.color, event.fontSize);
 
-  void _updateLaneHeight() {
-    // Keep empty layouts valid without imposing a floor on scaled text height.
-    var textHeight = DanmakuTextLayouts.minFontSize;
-    for (final event in _events) {
-      final height = _layout(event).height;
-      if (height > textHeight) textHeight = height;
-    }
-    final laneHeight = textHeight + _lineSpacing;
-    if (_laneHeight != laneHeight) {
-      _laneHeight = laneHeight;
-      _active.clear();
-    }
-  }
-
-  void paintText(DanmakuEvent event, Canvas canvas, Offset offset) =>
-      _layouts.paint(event.text, event.color, event.fontSize, canvas, offset);
+  void paintText(
+    DanmakuEvent event,
+    Canvas canvas,
+    Offset offset, {
+    double pixelRatio = 1,
+  }) => _layouts.paint(
+    event.text,
+    event.color,
+    event.fontSize,
+    canvas,
+    offset,
+    pixelRatio: pixelRatio,
+  );
 
   void _clearLayouts() => _layouts.clear();
 
@@ -362,7 +374,12 @@ final class DanmakuController extends ChangeNotifier {
               : fixedDuration),
     );
     if (_width <= 0 || _height <= 0) return const [];
+    final prepared = <(DanmakuEvent, Duration, double, double)>[];
+    final texts = _mergeDuplicates
+        ? {for (final item in _active) (item.event.mode, item.event.text)}
+        : <(DanmakuMode, String)>{};
     while (_next < _events.length && _events[_next].at <= mediaAt) {
+      if (prepared.length >= maxAdmissionsPerFrame) break;
       final event = _events[_next++];
       if (!_consumedIds.add(event.id)) continue;
       if (_active.length >= (_maxOnScreen == 0 ? maxVisible : _maxOnScreen)) {
@@ -378,22 +395,53 @@ final class DanmakuController extends ChangeNotifier {
           ? _scrollLifetime
           : fixedDuration;
       if (age >= lifetime) continue;
-      if (_active.any((item) => item.event.id == event.id)) continue;
-      if (_mergeDuplicates &&
-          _active.any(
-            (item) =>
-                item.event.text == event.text && item.event.mode == event.mode,
-          )) {
+      if (_mergeDuplicates && !texts.add((event.mode, event.text))) {
         continue;
       }
       final layout = _layout(event);
-      final lane = _findLane(event, layout.width, at);
+      prepared.add((event, at - age, layout.width, layout.height));
+    }
+    // Only due, eligible text is measured. Pending windows never populate or
+    // churn the painter cache. Larger arrivals reflow/prune existing lanes
+    // without replaying events or resetting their independent animation age.
+    var textHeight = _active.isEmpty
+        ? DanmakuTextLayouts.minFontSize
+        : _laneHeight - _lineSpacing;
+    for (final item in _active) {
+      if (item.height > textHeight) textHeight = item.height;
+    }
+    for (final item in prepared) {
+      if (item.$4 > textHeight) textHeight = item.$4;
+    }
+    _laneHeight = textHeight + _lineSpacing;
+    final laneCount = _laneCount;
+    _active.removeWhere((item) => item.lane >= laneCount);
+    final lanes = List.generate(
+      DanmakuMode.values.length,
+      (_) => List.generate(laneCount, (_) => <_Active>[]),
+    );
+    for (final item in _active) {
+      lanes[item.event.mode.index][item.lane].add(item);
+    }
+    for (final (event, start, width, height) in prepared) {
+      if (_active.length >= (_maxOnScreen == 0 ? maxVisible : _maxOnScreen)) {
+        dropped++;
+        continue;
+      }
+      final lane = _findLane(event, width, at, lanes[event.mode.index]);
       if (lane < 0) {
         dropped++;
         continue;
       }
-      _active.add(_Active(event, at - age, layout.width, lane));
+      final item = _Active(event, start, width, height, lane);
+      _active.add(item);
+      lanes[event.mode.index][lane].add(item);
     }
+    _layouts.protectRasters(
+      _active.map(
+        (item) => (item.event.text, item.event.color, item.event.fontSize),
+      ),
+    );
     final result = <DanmakuPlacement>[];
     for (final item in _active) {
       final age = at - item.start;
@@ -410,12 +458,15 @@ final class DanmakuController extends ChangeNotifier {
     return result;
   }
 
-  int _findLane(DanmakuEvent event, double textWidth, Duration at) {
-    final laneCount = _laneCount;
-    for (var lane = 0; lane < laneCount; lane++) {
+  int _findLane(
+    DanmakuEvent event,
+    double textWidth,
+    Duration at,
+    List<List<_Active>> lanes,
+  ) {
+    for (var lane = 0; lane < lanes.length; lane++) {
       var free = true;
-      for (final prior in _active) {
-        if (prior.event.mode != event.mode || prior.lane != lane) continue;
+      for (final prior in lanes[lane]) {
         if (event.mode != DanmakuMode.scroll) {
           free = false;
           break;

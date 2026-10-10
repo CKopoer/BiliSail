@@ -15,11 +15,12 @@ final class UserFollowButton extends ConsumerWidget {
     this.onLogin,
     this.compact = false,
     this.showMessage = true,
+    this.iconOnly = false,
   });
 
   final UserId id;
   final VoidCallback? onLogin;
-  final bool compact, showMessage;
+  final bool compact, showMessage, iconOnly;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -61,82 +62,100 @@ final class UserFollowButton extends ConsumerWidget {
           PopupMenuItem(value: 'groups', child: Text('设置分组')),
           PopupMenuItem(value: 'unfollow', child: Text('取消关注')),
         ],
-        child: Container(
-          constraints: BoxConstraints(minHeight: compact ? 32 : 48),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(compact ? 6 : 4),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (state.busy)
-                const SizedBox.square(
-                  dimension: 14,
-                  child: CircularProgressIndicator(strokeWidth: 1.5),
-                )
-              else
-                const Icon(Icons.menu, size: 16),
-              const SizedBox(width: 5),
-              Text(state.busy ? '处理中' : '已关注'),
-            ],
-          ),
-        ),
+        child: iconOnly
+            ? _avatarIcon(context, state, Icons.check)
+            : Container(
+                constraints: BoxConstraints(minHeight: compact ? 32 : 48),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(compact ? 6 : 4),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (state.busy)
+                      const SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator(strokeWidth: 1.5),
+                      )
+                    else
+                      const Icon(Icons.menu, size: 16),
+                    const SizedBox(width: 5),
+                    Text(state.busy ? '处理中' : '已关注'),
+                  ],
+                ),
+              ),
       );
     } else {
-      button = TextButton.icon(
-        style: TextButton.styleFrom(
-          foregroundColor: following || needsRefresh
-              ? theme.colorScheme.onSurfaceVariant
-              : theme.colorScheme.primary,
-          backgroundColor: following || needsRefresh
-              ? theme.colorScheme.surfaceContainerHigh
-              : theme.colorScheme.primaryContainer,
-          minimumSize: Size(80, compact ? 32 : 40),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          tapTargetSize: compact
-              ? MaterialTapTargetSize.shrinkWrap
-              : MaterialTapTargetSize.padded,
-        ),
-        onPressed: state.busy || state.loading
-            ? null
-            : !state.signedIn
-            ? onLogin
-            : () {
-                final controller = ref.read(provider.notifier);
-                if (needsRefresh) {
-                  controller.refresh();
-                } else {
-                  controller.toggleFollow();
-                }
-              },
-        icon: state.busy || state.loading
-            ? SizedBox.square(
-                dimension: 13,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              )
-            : Icon(
-                needsRefresh
-                    ? Icons.refresh
-                    : following
-                    ? Icons.check
-                    : Icons.add,
-                size: 15,
+      final onPressed = state.busy || state.loading
+          ? null
+          : !state.signedIn
+          ? onLogin
+          : () {
+              final controller = ref.read(provider.notifier);
+              if (needsRefresh) {
+                controller.refresh();
+              } else {
+                controller.toggleFollow();
+              }
+            };
+      final icon = needsRefresh
+          ? Icons.refresh
+          : following
+          ? Icons.check
+          : Icons.add;
+      button = iconOnly
+          ? IconButton(
+              tooltip: state.message ?? (needsRefresh ? '刷新关注状态' : '关注'),
+              onPressed: onPressed,
+              style: IconButton.styleFrom(
+                minimumSize: const Size.square(28),
+                padding: EdgeInsets.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-        label: Text(
-          state.busy
-              ? '处理中'
-              : needsRefresh
-              ? '刷新状态'
-              : following
-              ? '已关注'
-              : '关注',
-        ),
-      );
+              icon: ExcludeSemantics(child: _avatarIcon(context, state, icon)),
+            )
+          : TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: following || needsRefresh
+                    ? theme.colorScheme.onSurfaceVariant
+                    : theme.colorScheme.primary,
+                backgroundColor: following || needsRefresh
+                    ? theme.colorScheme.surfaceContainerHigh
+                    : theme.colorScheme.primaryContainer,
+                minimumSize: Size(80, compact ? 32 : 40),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                tapTargetSize: compact
+                    ? MaterialTapTargetSize.shrinkWrap
+                    : MaterialTapTargetSize.padded,
+              ),
+              onPressed: onPressed,
+              icon: state.busy || state.loading
+                  ? SizedBox.square(
+                      dimension: 13,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  : Icon(icon, size: 15),
+              label: Text(
+                state.busy
+                    ? '处理中'
+                    : needsRefresh
+                    ? '刷新状态'
+                    : following
+                    ? '已关注'
+                    : '关注',
+              ),
+            );
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -155,6 +174,50 @@ final class UserFollowButton extends ConsumerWidget {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _avatarIcon(
+    BuildContext context,
+    VideoAuthorState state,
+    IconData icon,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    final muted = state.author?.following == true || state.uncertain;
+    return Semantics(
+      button: true,
+      label: state.busy || state.loading
+          ? '加载关注状态'
+          : muted
+          ? '关注操作'
+          : '关注',
+      child: SizedBox.square(
+        dimension: 28,
+        child: Center(
+          child: Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: muted ? colors.surfaceContainerHighest : colors.primary,
+              border: Border.all(color: colors.surface, width: 1.5),
+            ),
+            child: state.busy || state.loading
+                ? Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: muted ? colors.onSurfaceVariant : colors.onPrimary,
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    size: 14,
+                    color: muted ? colors.onSurfaceVariant : colors.onPrimary,
+                  ),
+          ),
+        ),
+      ),
     );
   }
 }

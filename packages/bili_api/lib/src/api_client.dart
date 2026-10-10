@@ -920,6 +920,7 @@ final class BiliApiClient {
       favoriteCount: _count(_optionalMap(data['stat'])?['favorite']),
       replyCount: _count(_optionalMap(data['stat'])?['reply']),
       collection: _collection(data['ugc_season']),
+      staff: _videoStaff(data['staff']),
       pages: List.unmodifiable(pages),
       playCount: _count(_optionalMap(data['stat'])?['view']),
       danmakuCount: _count(_optionalMap(data['stat'])?['danmaku']),
@@ -931,6 +932,25 @@ final class BiliApiClient {
     final content = (_string(_optionalMap(value)?['content']) ?? _string(value))
         ?.trim();
     return content == null || content.isEmpty ? null : content;
+  }
+
+  static List<ApiVideoStaffMember> _videoStaff(Object? value) {
+    if (value == null) return const [];
+    return List.unmodifiable(
+      _list(value, 'video_detail').take(100).map((value) {
+        final member = _map(value, 'video_detail');
+        return ApiVideoStaffMember(
+          mid: _userMid(member['mid']),
+          name: _string(member['name']) ?? '',
+          title: _string(member['title']) ?? '',
+          avatarUrl: _uri(member['face']),
+          highlightedRole: _int(member['label_style']) == 1,
+          nicknameColor: _string(
+            _optionalMap(member['vip'])?['nickname_color'],
+          ),
+        );
+      }),
+    );
   }
 
   ApiVideoCollection? _collection(Object? value) {
