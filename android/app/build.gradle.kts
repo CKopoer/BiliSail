@@ -4,6 +4,24 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Keep these bounds and the formula aligned with tool/android-version.ps1.
+fun compactAndroidVersionCode(versionName: String, build: Int): Int {
+    require(Regex("(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)").matches(versionName)) {
+        "Android version name must be major.minor.patch."
+    }
+    val parts = versionName.split(".").map { it.toLongOrNull() }
+    require(parts.all { it != null }) { "Android version component is too large." }
+    val (major, minor, patch) = parts.map { requireNotNull(it) }
+    require(major <= 209999 && minor <= 9 && patch <= 9 && build in 1..99) {
+        "Android compact version requires major <= 209999, minor/patch <= 9 and build in 1..99."
+    }
+    return (major * 10000 + minor * 1000 + patch * 100 + build).toInt()
+}
+
+require(project.findProperty("force-version-code-ignoring-abi").toString() == "true") {
+    "BiliSail requires force-version-code-ignoring-abi=true to preserve compact version codes."
+}
+
 val releaseStorePath = System.getenv("ANDROID_KEYSTORE_PATH")
 val releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
 val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
@@ -39,11 +57,8 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
-        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
-        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
-        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
-        // flag during build.
-        versionCode = flutter.versionCode
+        // Flutter still receives the raw +build number; encode exactly once here.
+        versionCode = compactAndroidVersionCode(flutter.versionName, flutter.versionCode)
         versionName = flutter.versionName
     }
 

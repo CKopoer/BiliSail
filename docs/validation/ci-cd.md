@@ -27,7 +27,7 @@ CI 在工作流顶层固定 `PUB_HOSTED_URL=https://pub.flutter-io.cn`，与根�
 
 ## 版本与产物
 
-手动输入版本使用 Flutter 的 `x.y.z+N`，例如 `0.1.0+1`；留空取根 `pubspec.yaml`。脚本通过 `--build-name` 和 `--build-number` 传入，不改源码版本或锁文件。Windows MSIX 与 EXE Bundle 映射为 `x.y.z.N`；MSI 使用三段 `x.y.(z*1000+N)`，例如 `0.3.0+1` → `0.3.1`、`0.3.0+2` → `0.3.2`、`0.3.1+1` → `0.3.1001`。选择 Windows 时要求 `x/y <= 255`、`1 <= N <= 999`、`z*1000+N <= 65535`，版本解析阶段即拒绝超限值。MSI 只比较前三段，不能直接采用 MSIX 的第四段构建号；依据 [Microsoft ProductVersion](https://learn.microsoft.com/en-us/windows/win32/msi/productversion)。Android 使用 arm64 split APK，Flutter 自动将 versionCode 设为 `N + 2000`，因此 `N` 不超过 2099998000；实际 versionCode 同时写入 metadata。MSIX 升级要求递增包版本并保持 identity/publisher。已有同名 tag 时拒绝附加新构建，重跑草稿遇到冲突时也需使用新版本或显式处理旧草稿。
+手动输入版本使用 Flutter 的 `x.y.z+N`，例如 `0.1.0+1`；留空取根 `pubspec.yaml`。脚本通过 `--build-name` 和 `--build-number` 传入，不改源码版本或锁文件。Windows MSIX 与 EXE Bundle 映射为 `x.y.z.N`；MSI 使用三段 `x.y.(z*1000+N)`，例如 `0.3.0+1` → `0.3.1`、`0.3.0+2` → `0.3.2`、`0.3.1+1` → `0.3.1001`。选择 Windows 时要求 `x/y <= 255`、`1 <= N <= 999`、`z*1000+N <= 65535`，版本解析阶段即拒绝超限值。MSI 只比较前三段，不能直接采用 MSIX 的第四段构建号；依据 [Microsoft ProductVersion](https://learn.microsoft.com/en-us/windows/win32/msi/productversion)。Android 保留 arm64 split APK，但在 `android/gradle.properties` 设置 `force-version-code-ignoring-abi=true`，关闭 Flutter 的 ABI 偏移。Gradle 从 `--build-name x.y.z` 与原始 `--build-number N` 计算 `versionCode = x*10000 + y*1000 + z*100 + N`，例如 `0.5.5+2` → `5502`，不再额外加 2000，也不要将已编码值传给 `--build-number`。CI 与打包脚本共用 [Android 版本校验](../../tool/android-version.ps1)，要求 `0 <= x <= 209999`、`0 <= y,z <= 9`、`1 <= N <= 99`，禁止前导零；Gradle 独立校验相同范围，直接 Flutter 构建也不能绕过数值限制。构建号满 99 后提升补丁号并重置构建号；补丁/次版本满 9 后相应提升上一段，避免进位碰撞。最大编码为 2099999999，低于 Android 上限 2100000000。打包后使用 SDK `aapt dump badging` 校验实际 APK 的 applicationId、versionName 和 versionCode；仅校验成功才将编码写入 metadata 并生成校验文件。MSIX 升级要求递增包版本并保持 identity/publisher。已有同名 tag 时拒绝附加新构建，重跑草稿遇到冲突时也需使用新版本或显式处理旧草稿。
 
 每个平台的 `artifacts/<target>/release/` 中包含：
 
@@ -258,3 +258,15 @@ macOS 命令在本机用 LLVM lipo 对真实 arm64 Mach-O fixture 验证通过�
 - 四份锁文件在完整检查和两端构建前后的 SHA-256 一致；文档本地链接及 `git diff --check` 通过。
 
 Android 构建输出 CupertinoIcons 字体声明警告，Windows 构建输出 `flutter_inappwebview_windows` 的 CMake 开发者警告，两端均构建成功。未执行 Android 真机、macOS 构建/运行、安装升级或真实账号操作；构建和离线测试不能代替这些验收。
+
+
+### Android 紧凑版本编码（2026-10-10）
+
+根版本从 `0.5.5+1` 提升为 `0.5.5+2`。提交 `1e867206` 的父版本为 `0.5.3+7`，该提交改为 `0.5.4+1`；旧编码只使用构建号加 arm64 偏移，造成版本升级时 versionCode 回退。已读取公开 Release 的 `0.5.3+7` 与 `0.5.5+1` build-info，分别记录 2007、2001，签名证书 SHA-256 均为 `be3770071a0e9c71a701405a685dd455cd1baa134abd2eac2d97b9926349996e`。新编码预期 5502 高于两者；固定签名配置保持不变。
+
+[版本回归脚本](../../tool/test-android-version.ps1) 已接入 `tool/check.ps1`，覆盖构建号/补丁/次版本/主版本进位、历史升级、最大值、范围与格式拒绝，以及实际 APK 元数据中的错误 ABI 偏移、旧编码、错误包名和 versionName。元数据校验在签名校验和上传之前执行。Release 工作流仍由手动触发，默认创建 draft + prerelease；本次用户授权的公开并设为 Latest 操作在产物核验后单独执行，不改变后续发布策略。
+
+
+本轮云端 Linux 本地验证：新增版本/manifest 校验 34 项、原有 Android 签名 21 项、Windows 版本 14 项、macOS 发布检查 22 项通过；从实际 Gradle 脚本提取的 Kotlin 版本函数通过 22 项边界用例；全部 PowerShell 脚本语法解析、actionlint 1.7.12 和 `git diff --check` 通过。另下载历史两份 APK 并解析二进制 AndroidManifest.xml，确认 `0.5.3` / `2007` 和 `0.5.5` / `2001`，包名均为 `dev.bilisail.bilisail`，与历史 build-info 一致。
+
+本地未完成根应用/包的 Flutter 格式、分析、测试或三端构建：环境未安装 Flutter，固定 SDK 源码下载成功，但 Dart SDK 下载被网络代理以 HTTP 403 拒绝。`tool/check.ps1 -EnforceLockfile` 的 PowerShell 检查已运行，Flutter 阶段无法启动；完整验证须由后续远端 CI 提供。没有执行 Android 真机覆盖安装、数据保留或播放验收。

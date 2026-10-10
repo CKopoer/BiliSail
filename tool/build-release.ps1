@@ -7,6 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'android-signing.ps1')
+. (Join-Path $PSScriptRoot 'android-version.ps1')
 . (Join-Path $PSScriptRoot 'windows-installers.ps1')
 . (Join-Path $PSScriptRoot 'macos-release-validation.ps1')
 
@@ -118,8 +119,7 @@ if ($Version -cnotmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\+[1-9]\d*$') 
   throw 'Version must be x.y.z+N, for example 0.1.0+1.'
 }
 $buildName, $buildNumber = $Version.Split('+')
-if ([long]$buildNumber -gt 2100000000) { throw 'Android build number is too large.' }
-if ($Target -eq 'android-arm64' -and [long]$buildNumber -gt 2099998000) { throw 'Android arm64 split APK reserves 2000 in its version code.' }
+$androidVersionCode = if ($Target -eq 'android-arm64') { Get-AndroidVersionCode $Version } else { $null }
 if ($Target -eq 'windows-x64' -and @(($Version -split '[.+]') | Where-Object { [long]$_ -gt 65535 }).Count) {
   throw 'MSIX version components must be at most 65535.'
 }
@@ -196,6 +196,7 @@ try {
         $abis = @($apk.Entries.FullName | Where-Object { $_ -match '^lib/' } | ForEach-Object { $_.Split('/')[1] } | Sort-Object -Unique)
         if ($abis.Count -ne 1 -or $abis[0] -ne 'arm64-v8a') { throw 'APK contains unexpected native ABIs.' }
       } finally { $apk.Dispose() }
+      $androidVersionCode = Confirm-AndroidApkVersion $package $Version
       $androidCertificateSha256 = Confirm-AndroidApkSigning $package $androidSigning
       $signing = $androidSigning.Signing
     }
@@ -256,7 +257,7 @@ try {
     target = $Target
     sourceRevision = $revision
     sourceDirty = $sourceDirty
-    androidVersionCode = if ($Target -eq 'android-arm64') { [long]$buildNumber + 2000 } else { $null }
+    androidVersionCode = $androidVersionCode
     androidSigningCertificateSha256 = $androidCertificateSha256
     flutterVersion = $sdk.frameworkVersion
     flutterRevision = $sdk.frameworkRevision

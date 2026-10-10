@@ -91,9 +91,9 @@ jobs:
           if ($version -cnotmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\+[1-9]\d*$') {
             throw 'Version must be x.y.z+N, for example 0.1.0+1.'
           }
-          if ([long]($version.Split('+')[1]) -gt 2100000000) { throw 'Android build number is too large.' }
-          if ($env:ENABLE_ANDROID -eq 'true' -and [long]($version.Split('+')[1]) -gt 2099998000) {
-            throw 'Android arm64 split APK reserves 2000 in its version code.'
+          if ($env:ENABLE_ANDROID -eq 'true') {
+            . ./tool/android-version.ps1
+            Get-AndroidVersionCode $version | Out-Null
           }
           $platforms = @(
             if ($env:ENABLE_ANDROID -eq 'true') { @{ target = 'android-arm64'; runner = 'ubuntu-24.04'; arch = 'x64' } }
