@@ -242,6 +242,9 @@ final class DanmakuController extends ChangeNotifier {
             )
             .toList()
           ..sort((a, b) => a.at.compareTo(b.at));
+    // Queue capacity limits future admission, not the lifetime of items that
+    // already have a lane. Still honor authoritative filtering/content changes.
+    final supplied = {for (final event in sorted) event.id: event};
     if (sorted.length > maxPending) {
       final pivot = _lowerBound(sorted, _displayPosition);
       final from = (pivot - maxPending ~/ 4).clamp(
@@ -262,9 +265,12 @@ final class DanmakuController extends ChangeNotifier {
           !_sameEvent(oldEvent, nextEvent);
     });
     _active.removeWhere((item) {
-      final next = available[item.event.id];
+      final next = supplied[item.event.id];
       return next == null || !_sameEvent(item.event, next);
     });
+    // Active IDs may sit outside the trimmed queue. Keep them consumed until
+    // they expire so a later refresh cannot admit a second copy.
+    _consumedIds.addAll(_active.map((item) => item.event.id));
     _rewindTo(_displayPosition);
     notifyListeners();
   }
@@ -402,17 +408,26 @@ final class DanmakuController extends ChangeNotifier {
       prepared.add((event, at - age, layout.width, layout.height));
     }
     // Only due, eligible text is measured. Pending windows never populate or
-    // churn the painter cache. Larger arrivals reflow/prune existing lanes
-    // without replaying events or resetting their independent animation age.
+    // churn the painter cache. Larger arrivals may reflow existing lanes only
+    // when every occupied row still fits; otherwise discard the new arrival.
     var textHeight = _active.isEmpty
         ? DanmakuTextLayouts.minFontSize
         : _laneHeight - _lineSpacing;
+    var occupiedLaneCount = 0;
     for (final item in _active) {
       if (item.height > textHeight) textHeight = item.height;
+      if (item.lane >= occupiedLaneCount) occupiedLaneCount = item.lane + 1;
     }
-    for (final item in prepared) {
-      if (item.$4 > textHeight) textHeight = item.$4;
-    }
+    prepared.removeWhere((item) {
+      if (item.$4 <= textHeight) return false;
+      if ((_availableHeight / (item.$4 + _lineSpacing)).floor() <
+          occupiedLaneCount) {
+        dropped++;
+        return true;
+      }
+      textHeight = item.$4;
+      return false;
+    });
     _laneHeight = textHeight + _lineSpacing;
     final laneCount = _laneCount;
     _active.removeWhere((item) => item.lane >= laneCount);

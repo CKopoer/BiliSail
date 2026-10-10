@@ -258,12 +258,22 @@ final class LiveDanmakuController extends ChangeNotifier {
     var textHeight = _visible.isEmpty
         ? DanmakuTextLayouts.minFontSize
         : _laneHeight - _lineSpacing;
+    var occupiedLaneCount = 0;
     for (final item in _visible) {
       if (item.height > textHeight) textHeight = item.height;
+      if (item.lane >= occupiedLaneCount) occupiedLaneCount = item.lane + 1;
     }
-    for (final item in prepared) {
-      if (item.$3 > textHeight) textHeight = item.$3;
-    }
+    prepared.removeWhere((item) {
+      if (item.$3 <= textHeight) return false;
+      // A new font size must not reclaim rows still displaying older messages.
+      if ((_availableHeight / (item.$3 + _lineSpacing)).floor() <
+          occupiedLaneCount) {
+        dropped++;
+        return true;
+      }
+      textHeight = item.$3;
+      return false;
+    });
     _laneHeight = textHeight + _lineSpacing;
     final laneCount = (_availableHeight / _laneHeight).floor().clamp(0, 24);
     _visible.removeWhere((item) => item.lane >= laneCount);
