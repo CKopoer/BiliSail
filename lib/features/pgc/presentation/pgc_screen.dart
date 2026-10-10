@@ -10,6 +10,7 @@ import '../../../core/input/shortcut_dispatcher.dart';
 import '../../../core/presentation/input_scope.dart';
 import '../../playback/application/playback_session.dart';
 import '../../../shared/ui/playback_page_commands.dart';
+import '../../../shared/ui/width_layout_builder.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../settings/domain/shortcut_settings.dart';
 import '../../../shared/ui/app_cover_image.dart';
@@ -189,13 +190,12 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
         () => _infoVisible =
             !(_infoVisible ?? MediaQuery.sizeOf(context).width >= 700),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 1000;
-          final showInfo = _infoVisible ?? constraints.maxWidth >= 700;
-          void toggleInfo() => setState(
-            () => _infoVisible = !(_infoVisible ?? constraints.maxWidth >= 700),
-          );
+      child: WidthLayoutBuilder(
+        builder: (context, width) {
+          final wide = width >= 1000;
+          final showInfo = _infoVisible ?? width >= 700;
+          void toggleInfo() =>
+              setState(() => _infoVisible = !(_infoVisible ?? width >= 700));
           final player = ColoredBox(
             key: const ValueKey('pgc-player'),
             color: Colors.black,
@@ -275,62 +275,71 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
               ],
             ),
           );
-          final playerHeight = math.min(
-            constraints.maxWidth * 9 / 16,
-            constraints.maxHeight.isFinite
-                ? constraints.maxHeight * 0.55
-                : constraints.maxWidth * 9 / 16,
-          );
-          final infoWidth = wide ? 380.0 : constraints.maxWidth;
-          final visiblePlayerWidth = wide
-              ? math.max(0.0, constraints.maxWidth - (showInfo ? infoWidth : 0))
-              : constraints.maxWidth;
-          final visiblePlayerHeight = wide || !showInfo
-              ? constraints.maxHeight
-              : playerHeight;
-          return Stack(
-            children: [
-              Positioned(
-                left: 0,
-                top: 0,
-                width: visiblePlayerWidth,
-                height: visiblePlayerHeight,
-                child: player,
-              ),
-              Positioned(
-                left: wide ? constraints.maxWidth - infoWidth : 0,
-                top: wide ? 0 : playerHeight,
-                width: infoWidth,
-                height: wide
-                    ? constraints.maxHeight
-                    : math.max(1.0, constraints.maxHeight - playerHeight),
-                child: ExcludeFocus(
-                  excluding: !showInfo,
-                  child: Offstage(offstage: !showInfo, child: info),
-                ),
-              ),
-              Positioned(
-                right: showInfo && wide ? infoWidth : 8,
-                top: wide || !showInfo
-                    ? math.max(
-                        0,
-                        visiblePlayerHeight / 2 -
-                            PlaybackSidebarToggle.size.height / 2,
-                      )
-                    : math.max(
-                        0,
-                        playerHeight / 2 -
-                            PlaybackSidebarToggle.size.height / 2,
-                      ),
-                child: PlaybackSidebarToggle(
-                  tooltip: showInfo ? '收起影视信息' : '展开影视信息',
-                  onPressed: toggleInfo,
-                  icon: wide
-                      ? (showInfo ? Icons.chevron_right : Icons.chevron_left)
-                      : (showInfo ? Icons.expand_less : Icons.expand_more),
-                ),
-              ),
-            ],
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final playerHeight = math.min(
+                constraints.maxWidth * 9 / 16,
+                constraints.maxHeight.isFinite
+                    ? constraints.maxHeight * 0.55
+                    : constraints.maxWidth * 9 / 16,
+              );
+              final infoWidth = wide ? 380.0 : constraints.maxWidth;
+              final visiblePlayerWidth = wide
+                  ? math.max(
+                      0.0,
+                      constraints.maxWidth - (showInfo ? infoWidth : 0),
+                    )
+                  : constraints.maxWidth;
+              final visiblePlayerHeight = wide || !showInfo
+                  ? constraints.maxHeight
+                  : playerHeight;
+              return Stack(
+                children: [
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    width: visiblePlayerWidth,
+                    height: visiblePlayerHeight,
+                    child: player,
+                  ),
+                  Positioned(
+                    left: wide ? constraints.maxWidth - infoWidth : 0,
+                    top: wide ? 0 : playerHeight,
+                    width: infoWidth,
+                    height: wide
+                        ? constraints.maxHeight
+                        : math.max(1.0, constraints.maxHeight - playerHeight),
+                    child: ExcludeFocus(
+                      excluding: !showInfo,
+                      child: Offstage(offstage: !showInfo, child: info),
+                    ),
+                  ),
+                  Positioned(
+                    right: showInfo && wide ? infoWidth : 8,
+                    top: wide || !showInfo
+                        ? math.max(
+                            0,
+                            visiblePlayerHeight / 2 -
+                                PlaybackSidebarToggle.size.height / 2,
+                          )
+                        : math.max(
+                            0,
+                            playerHeight / 2 -
+                                PlaybackSidebarToggle.size.height / 2,
+                          ),
+                    child: PlaybackSidebarToggle(
+                      tooltip: showInfo ? '收起影视信息' : '展开影视信息',
+                      onPressed: toggleInfo,
+                      icon: wide
+                          ? (showInfo
+                                ? Icons.chevron_right
+                                : Icons.chevron_left)
+                          : (showInfo ? Icons.expand_less : Icons.expand_more),
+                    ),
+                  ),
+                ],
+              );
+            },
           );
         },
       ),

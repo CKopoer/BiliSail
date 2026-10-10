@@ -2,10 +2,67 @@ import 'dart:ui' as ui;
 
 import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:bili_danmaku/src/danmaku_text_style.dart';
-import 'package:flutter/painting.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final isLive in [false, true]) {
+    testWidgets(
+      '${isLive ? 'live' : 'VOD'} retained overlay updates raster DPR at the same logical size',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(800, 600);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final vod = DanmakuController(monotonicNow: () => Duration.zero);
+        final live = LiveDanmakuController(monotonicNow: () => Duration.zero);
+        addTearDown(vod.dispose);
+        addTearDown(live.dispose);
+        live.configure(area: 1, speed: 1, maxPerSecond: 0);
+        vod.replaceEvents(const [
+          DanmakuEvent(id: 'text', at: Duration.zero, text: 'DPR text'),
+        ]);
+        live.add(const [LiveDanmakuEvent(id: 'text', text: 'DPR text')]);
+        final overlay = isLive
+            ? LiveDanmakuOverlay(controller: live)
+            : DanmakuOverlay(controller: vod);
+        await tester.pumpWidget(
+          MediaQuery.fromView(
+            view: tester.view,
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Center(
+                child: SizedBox(width: 600, height: 300, child: overlay),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        final initialBytes = isLive
+            ? live.textRasterBytes
+            : vod.textRasterBytes;
+        expect(initialBytes, greaterThan(0));
+        final initialElement = tester.element(find.byWidget(overlay));
+        tester.view.physicalSize = const Size(1600, 1200);
+        tester.view.devicePixelRatio = 2;
+        await tester.pump();
+        await tester.pump();
+        expect(tester.element(find.byWidget(overlay)), same(initialElement));
+        expect(tester.getSize(find.byWidget(overlay)), const Size(600, 300));
+        expect(
+          isLive ? live.textRasterBytes : vod.textRasterBytes,
+          greaterThan(initialBytes * 3),
+        );
+        expect(
+          isLive ? live.textLayoutBuildCount : vod.textLayoutBuildCount,
+          1,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
   test('VOD windows do not shape future text or evict visible painters', () {
     final controller = DanmakuController(monotonicNow: () => Duration.zero);
     addTearDown(controller.dispose);

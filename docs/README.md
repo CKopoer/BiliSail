@@ -67,6 +67,7 @@
 | [视频 CDN 与悬停恢复](validation/video-cdn.md) | 自动／运营商优先、旧设置兼容、备用地址／超时和前台恢复 |
 | [悬停预览加载延迟](validation/video-preview-loading.md) | 官网无音轨预览、cid 直传、CDN 顺序、启动预算、静止窗口与首帧切换 |
 | [播放控件与小窗布局](validation/responsive-player.md) | 单行工具栏、弹幕输入自适应、窄窗口布局和播放状态保留 |
+| [移动端弹幕输入与键盘布局](validation/mobile-danmaku-keyboard-performance.md) | 高度变化局部布局、控件测量复用、直播弹幕缓存保留及结构对比 |
 | [视频章节与悬停缩略图](validation/playback-timeline.md) | 自适应分段、雪碧图裁剪、预览生命周期与真实视频验证 |
 | [字幕与 AI 原声翻译](validation/subtitles-translated-audio.md) | 动态菜单选择修复、空文本字幕、AI 标识与语音双轨切换、登录态 Windows 验证及新版 Protobuf 调查 |
 | [用户主页](validation/user-profile.md) | 个人/UP 主空间、头像入口、投稿与动态/收藏/关注列表、会话隔离和实测边界 |

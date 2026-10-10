@@ -80,7 +80,8 @@ final class _LiveDanmakuOverlayState extends State<LiveDanmakuOverlay>
             painter: _LivePainter(
               widget.controller,
               Listenable.merge([widget.controller, _repaint]),
-              View.of(context).devicePixelRatio,
+              MediaQuery.maybeDevicePixelRatioOf(context) ??
+                  View.of(context).devicePixelRatio,
             ),
             size: Size.infinite,
           ),

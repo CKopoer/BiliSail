@@ -195,14 +195,23 @@ final class LiveDanmakuController extends ChangeNotifier {
     required double height,
     double bottomInset = 0,
   }) {
-    if (_width == width && _height == height && _bottomInset == bottomInset) {
+    final nextWidth = width.clamp(0.0, double.infinity);
+    final nextHeight = height.clamp(0.0, double.infinity);
+    final nextBottomInset = bottomInset.clamp(0.0, nextHeight);
+    if (_width == nextWidth &&
+        _height == nextHeight &&
+        _bottomInset == nextBottomInset) {
       return;
     }
-    _width = width.clamp(0, double.infinity);
-    _height = height.clamp(0, double.infinity);
-    _bottomInset = bottomInset.clamp(0, _height);
-    _visible.clear();
-    _clearLayouts();
+    _width = nextWidth;
+    _height = nextHeight;
+    _bottomInset = nextBottomInset;
+    if (_width > 0 && _height > 0) {
+      // Text shaping and rasters do not depend on viewport size. Keep arrival
+      // times and project scroll progress onto the new width in frame().
+      final lanes = (_availableHeight / _laneHeight).floor().clamp(0, 24);
+      _visible.removeWhere((item) => item.lane >= lanes);
+    }
     notifyListeners();
   }
 

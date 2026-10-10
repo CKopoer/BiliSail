@@ -26,6 +26,7 @@ import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/application/video_extras_controller.dart';
+import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -37,6 +38,153 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final fullScreen in [false, true]) {
+    testWidgets(
+      'keyboard resize retains video content, draft, focus and one source fullscreen=$fullScreen',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 844);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetViewInsets);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final window = _FakeWindowService(desktop: false);
+        final editor = TextEditingController(text: '保留输入草稿');
+        addTearDown(session.close);
+        addTearDown(editor.dispose);
+        var playerBuilds = 0;
+        var composerBuilds = 0;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              playbackSessionProvider.overrideWithValue(session),
+              settingsRepositoryProvider.overrideWithValue(_Settings()),
+              videoDetailProvider(_detail.summary.id)
+                  .overrideWith((_) => _detail),
+              relatedVideosProvider(_detail.summary.id)
+                  .overrideWith((_) => const []),
+              videoTagsProvider(_detail.summary.id)
+                  .overrideWith((_) => const []),
+            ],
+            child: InputTestApp(
+              home: Scaffold(
+                body: VideoScreen(
+                  id: _detail.summary.id,
+                  playerBuilder: (_, detail, part) {
+                    playerBuilds++;
+                    return PlaybackPanel(
+                      detail: detail,
+                      part: part,
+                      settings: const AppSettings.defaults(),
+                      onToggleComments: () {},
+                      window: window,
+                      danmakuComposerBuilder: (_) {
+                        composerBuilds++;
+                        return TextField(
+                          key: const Key('keyboard-editor'),
+                          controller: editor,
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+        await _pumpFrames(tester);
+        await session.pause();
+        await _pumpFrames(tester);
+        if (fullScreen) {
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+        }
+        await tester.tap(find.byTooltip('发送弹幕'));
+        await _pumpFrames(tester);
+        await tester.tap(find.byKey(const Key('keyboard-editor')));
+        await tester.pumpAndSettle();
+        final focus = FocusManager.instance.primaryFocus;
+        final opens = engine.opens;
+        final generation = session.sourceGeneration;
+        final before = tester.getRect(find.byType(VideoSurface));
+        playerBuilds = composerBuilds = 0;
+        for (final inset in [
+          for (var i = 1; i <= 16; i++) i * 20.0,
+          for (var i = 15; i >= 0; i--) i * 20.0,
+        ]) {
+          tester.view.viewInsets = FakeViewPadding(bottom: inset);
+          await tester.pump(const Duration(milliseconds: 16));
+          expect(playerBuilds, 0);
+          expect(composerBuilds, 0);
+          expect(FocusManager.instance.primaryFocus, same(focus));
+          expect(editor.text, '保留输入草稿');
+          final rect = tester.getRect(find.byType(VideoSurface));
+          expect(rect.width, before.width);
+          expect(
+            rect.height,
+            fullScreen ? before.height - inset : before.height,
+          );
+        }
+        expect(engine.opens, opens);
+        expect(session.sourceGeneration, generation);
+        expect(engine.maxSurfaces, 1);
+        expect(session.snapshots.value.desiredPlaying, isFalse);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+  }
+
+  testWidgets('cached controls sizing follows duration, rate and text scale', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    final window = _FakeWindowService();
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(session, window, const AppSettings.defaults(), width: 1200),
+    );
+    await _pumpFrames(tester);
+    await session.pause();
+    await _pumpFrames(tester);
+    final initialWidth = tester.getSize(find.text('00:00 / 03:00')).width;
+    engine._emit(
+      engine.currentSnapshot.copyWith(
+        duration: const Duration(minutes: 600),
+        rate: 3,
+      ),
+    );
+    await _pumpFrames(tester);
+    final longWidth = tester.getSize(find.text('00:00 / 600:00')).width;
+    expect(longWidth, greaterThan(initialWidth));
+    expect(find.text('3.0x'), findsOneWidget);
+    await tester.pumpWidget(
+      _app(
+        session,
+        window,
+        const AppSettings.defaults(),
+        width: 1200,
+        textScale: 2,
+      ),
+    );
+    await _pumpFrames(tester);
+    expect(
+      tester.getSize(find.text('00:00 / 600:00')).width,
+      greaterThan(longWidth),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
   for (final live in [false, true]) {
     for (final dimensions in [
       const VideoDimensions(1920, 1080),

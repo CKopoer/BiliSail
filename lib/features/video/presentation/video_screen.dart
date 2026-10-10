@@ -11,6 +11,7 @@ import '../../../domain/app_failure.dart';
 import '../../../core/network/api_requests.dart';
 
 import '../../../shared/ui/playback_page_commands.dart';
+import '../../../shared/ui/width_layout_builder.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/app_cover_image.dart';
@@ -229,9 +230,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     }
     return Stack(
       children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 1000;
+        WidthLayoutBuilder(
+          builder: (context, width) {
+            final wide = width >= 1000;
             final showInfo = _infoVisible;
             void toggleInfo() => setState(() => _infoVisible = !_infoVisible);
             return PlaybackPageCommands(
@@ -241,25 +242,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
               child: Focus(
                 child: Builder(
                   builder: (context) {
-                    final player = Column(
-                      key: _playerKey,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          height: wide || !showInfo
-                              ? constraints.maxHeight
-                              : constraints.maxWidth * 9 / 16,
-                          width: double.infinity,
-                          child: ColoredBox(
-                            color: Colors.black,
-                            child: widget.playerBuilder(
-                              context,
-                              video,
-                              selected,
-                            ),
-                          ),
-                        ),
-                      ],
+                    final playerContent = ColoredBox(
+                      color: Colors.black,
+                      child: widget.playerBuilder(context, video, selected),
                     );
                     final content = Padding(
                       padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
@@ -485,72 +470,89 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                         ],
                       ),
                     );
-                    final playerWithToggle = Stack(
-                      children: [
-                        player,
-                        Positioned(
-                          right: 0,
-                          top:
-                              (wide || !showInfo
-                                      ? constraints.maxHeight
-                                      : constraints.maxWidth * 9 / 16) /
-                                  2 -
-                              PlaybackSidebarToggle.size.height / 2,
-                          child: PlaybackSidebarToggle(
-                            tooltip: showInfo ? '收起视频信息' : '展开视频信息',
-                            icon: wide
-                                ? (showInfo
-                                      ? Icons.chevron_right
-                                      : Icons.chevron_left)
-                                : (showInfo
-                                      ? Icons.expand_less
-                                      : Icons.expand_more),
-                            onPressed: toggleInfo,
-                          ),
-                        ),
-                      ],
-                    );
-                    if (wide) {
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: playerWithToggle),
-                          ExcludeFocus(
-                            excluding: !showInfo,
-                            child: Offstage(
-                              offstage: !showInfo,
-                              child: SizedBox(
-                                width: 380,
-                                height: constraints.maxHeight,
-                                child: info,
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        final player = Column(
+                          key: _playerKey,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              height: wide || !showInfo
+                                  ? constraints.maxHeight
+                                  : constraints.maxWidth * 9 / 16,
+                              width: double.infinity,
+                              child: playerContent,
+                            ),
+                          ],
+                        );
+                        final playerWithToggle = Stack(
+                          children: [
+                            player,
+                            Positioned(
+                              right: 0,
+                              top:
+                                  (wide || !showInfo
+                                          ? constraints.maxHeight
+                                          : constraints.maxWidth * 9 / 16) /
+                                      2 -
+                                  PlaybackSidebarToggle.size.height / 2,
+                              child: PlaybackSidebarToggle(
+                                tooltip: showInfo ? '收起视频信息' : '展开视频信息',
+                                icon: wide
+                                    ? (showInfo
+                                          ? Icons.chevron_right
+                                          : Icons.chevron_left)
+                                    : (showInfo
+                                          ? Icons.expand_less
+                                          : Icons.expand_more),
+                                onPressed: toggleInfo,
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    }
-                    return SingleChildScrollView(
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          playerWithToggle,
-                          ExcludeFocus(
-                            excluding: !showInfo,
-                            child: Offstage(
-                              offstage: !showInfo,
-                              child: SizedBox(
-                                height: constraints.maxHeight.isFinite
-                                    ? (constraints.maxHeight -
-                                              constraints.maxWidth * 9 / 16)
-                                          .clamp(480.0, double.infinity)
-                                    : 600,
-                                child: info,
+                          ],
+                        );
+                        if (wide) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: playerWithToggle),
+                              ExcludeFocus(
+                                excluding: !showInfo,
+                                child: Offstage(
+                                  offstage: !showInfo,
+                                  child: SizedBox(
+                                    width: 380,
+                                    height: constraints.maxHeight,
+                                    child: info,
+                                  ),
+                                ),
                               ),
-                            ),
+                            ],
+                          );
+                        }
+                        return SingleChildScrollView(
+                          padding: EdgeInsets.zero,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              playerWithToggle,
+                              ExcludeFocus(
+                                excluding: !showInfo,
+                                child: Offstage(
+                                  offstage: !showInfo,
+                                  child: SizedBox(
+                                    height: constraints.maxHeight.isFinite
+                                        ? (constraints.maxHeight -
+                                                  constraints.maxWidth * 9 / 16)
+                                              .clamp(480.0, double.infinity)
+                                        : 600,
+                                    child: info,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     );
                   },
                 ),

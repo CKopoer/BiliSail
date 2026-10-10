@@ -8,6 +8,43 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('keyboard height changes retain active and hidden page widgets', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+    var builds = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BiliAppShell(
+          location: '/video/BV1abc123456',
+          navigationMode: WorkspaceNavigationMode.singlePage,
+          pageBuilder: (_, tab) {
+            builds++;
+            return SizedBox.expand(key: ValueKey('page-${tab.location.path}'));
+          },
+          child: const SizedBox.shrink(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final active = find.byKey(const ValueKey('page-/video/BV1abc123456'));
+    final element = tester.element(active);
+    final before = tester.getSize(active);
+    builds = 0;
+    for (final inset in [100.0, 200.0, 320.0, 160.0, 0.0]) {
+      tester.view.viewInsets = FakeViewPadding(bottom: inset);
+      await tester.pump();
+      expect(builds, 0);
+      expect(tester.element(active), same(element));
+      expect(tester.getSize(active).height, before.height - inset);
+    }
+    expect(tester.takeException(), isNull);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
   for (final dark in [false, true]) {
     testWidgets('home labels follow font changes in dark=$dark', (
       tester,

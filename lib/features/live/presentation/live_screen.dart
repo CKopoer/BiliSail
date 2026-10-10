@@ -229,6 +229,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       return const StateView.loading(message: '正在加载直播间…');
     }
 
+    final player = _player(context, room);
+    final sidebar = _sidebar(context, room, state, controller);
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 900;
@@ -255,7 +257,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
               top: 0,
               width: playerWidth,
               height: playerHeight,
-              child: _player(context, room),
+              child: player,
             ),
             Positioned(
               left: wide ? constraints.maxWidth - 380 : 0,
@@ -264,10 +266,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
               height: infoHeight,
               child: ExcludeFocus(
                 excluding: !_infoVisible,
-                child: Offstage(
-                  offstage: !_infoVisible,
-                  child: _sidebar(context, room, state, controller, infoHeight),
-                ),
+                child: Offstage(offstage: !_infoVisible, child: sidebar),
               ),
             ),
             Positioned(
@@ -316,69 +315,74 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
     LiveRoom room,
     LiveState state,
     LiveController controller,
-    double height,
   ) {
+    final roomInfo = SingleChildScrollView(
+      child: _roomInfo(context, room, state),
+    );
+    final content = Expanded(
+      child: WorkspaceActivity(
+        active: _lastActive == true && _infoVisible,
+        child: PlaybackInfoTabs(
+          key: ValueKey(widget.roomId),
+          value: _tab,
+          onChanged: (tab) => setState(() => _tab = tab),
+          viewKey: const ValueKey('live-info-swipe'),
+          labels: [const Text('聊天'), Text('SC (${state.superChats.length})')],
+          itemKey: (tab) => ValueKey('live-tab-$tab'),
+          compact: true,
+          preloadPages: true,
+          trailing: IconButton(
+            tooltip: _tab == 0
+                ? (state.connectionPhase == LiveConnectionPhase.failed
+                      ? '重新连接弹幕'
+                      : '刷新消息')
+                : '刷新 SC',
+            onPressed: _tab == 0
+                ? (state.connectionPhase == LiveConnectionPhase.failed
+                      ? controller.retryRealtime
+                      : state.chatLoading
+                      ? null
+                      : controller.refreshChat)
+                : (state.superChatLoading
+                      ? null
+                      : controller.refreshSuperChats),
+            icon: const Icon(Icons.refresh_rounded, size: 20),
+          ),
+          pageBuilder: (context, tab, active) => TickerMode(
+            enabled: _lastActive == true && _infoVisible && active,
+            child: tab == 0
+                ? _chat(context, state, controller)
+                : _superChats(context, state, controller),
+          ),
+        ),
+      ),
+    );
+    final composer = <Widget>[
+      if (widget.composerBuilder case final builder?) ...[
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.all(10),
+          child: builder(context, RoomId(widget.roomId)),
+        ),
+      ],
+    ];
     return Material(
       color: Theme.of(context).colorScheme.surface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: math.max(0, height * .4)),
-            child: SingleChildScrollView(
-              child: _roomInfo(context, room, state),
-            ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: WorkspaceActivity(
-              active: _lastActive == true && _infoVisible,
-              child: PlaybackInfoTabs(
-                key: ValueKey(widget.roomId),
-                value: _tab,
-                onChanged: (tab) => setState(() => _tab = tab),
-                viewKey: const ValueKey('live-info-swipe'),
-                labels: [
-                  const Text('聊天'),
-                  Text('SC (${state.superChats.length})'),
-                ],
-                itemKey: (tab) => ValueKey('live-tab-$tab'),
-                compact: true,
-                preloadPages: true,
-                trailing: IconButton(
-                  tooltip: _tab == 0
-                      ? (state.connectionPhase == LiveConnectionPhase.failed
-                            ? '重新连接弹幕'
-                            : '刷新消息')
-                      : '刷新 SC',
-                  onPressed: _tab == 0
-                      ? (state.connectionPhase == LiveConnectionPhase.failed
-                            ? controller.retryRealtime
-                            : state.chatLoading
-                            ? null
-                            : controller.refreshChat)
-                      : (state.superChatLoading
-                            ? null
-                            : controller.refreshSuperChats),
-                  icon: const Icon(Icons.refresh_rounded, size: 20),
-                ),
-                pageBuilder: (context, tab, active) => TickerMode(
-                  enabled: _lastActive == true && _infoVisible && active,
-                  child: tab == 0
-                      ? _chat(context, state, controller)
-                      : _superChats(context, state, controller),
-                ),
+      child: LayoutBuilder(
+        builder: (context, constraints) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: math.max(0, constraints.maxHeight * .4),
               ),
+              child: roomInfo,
             ),
-          ),
-          if (widget.composerBuilder case final builder?) ...[
             const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: builder(context, RoomId(widget.roomId)),
-            ),
+            content,
+            ...composer,
           ],
-        ],
+        ),
       ),
     );
   }

@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/platform/window_service.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/playback_page_commands.dart';
+import '../../../shared/ui/width_layout_builder.dart';
 import '../../../domain/video.dart';
 import '../../../domain/playback_rates.dart';
 import '../../settings/domain/app_settings.dart';
@@ -419,6 +420,7 @@ class _PlayerView extends StatefulWidget {
 }
 
 class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
+  _ControlsLayout? _cachedControlsLayout;
   final FocusNode _focusNode = FocusNode(debugLabel: 'video player');
   final GlobalKey _playerBoundsKey = GlobalKey();
   bool _exitingFullScreen = false;
@@ -712,6 +714,36 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     );
   }
 
+  _ControlsLayout _controlsLayout(
+    BuildContext context,
+    PlaybackSnapshot snapshot,
+    double width,
+  ) {
+    final session = widget.session;
+    final media = session.media;
+    final inputs = (
+      width: width,
+      timeLabel: session.isLive
+          ? '直播中'
+          : '${_time(snapshot.duration)} / ${_time(snapshot.duration)}',
+      rateLabel: session.isLive ? null : '${snapshot.rate}x',
+      qualityLabel: media != null && media.qualities.length > 1
+          ? media.qualityLabels[media.quality] ?? _quality(media.quality)
+          : null,
+      hasComposer: widget.danmakuComposerBuilder != null,
+      hasSubtitles: session.subtitleTracks.isNotEmpty,
+      hasVoices: session.voiceTracks.isNotEmpty,
+      textStyle: DefaultTextStyle.of(context).style,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    );
+    // Position ticks and keyboard height changes do not change label widths.
+    // Retain only the most recent measurement, including its typography.
+    final cached = _cachedControlsLayout;
+    if (cached != null && cached.inputs == inputs) return cached;
+    return _cachedControlsLayout = _ControlsLayout(inputs);
+  }
+
   Widget _buildPlayer(BuildContext context) {
     final session = widget.session;
     return InputProtection(
@@ -754,14 +786,12 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                       .firstOrNull;
                   final controls =
                       widget.controlsVisible.value || session.error != null;
-                  return LayoutBuilder(
-                    builder: (context, constraints) {
-                      final layout = _ControlsLayout(
+                  return WidthLayoutBuilder(
+                    builder: (context, width) {
+                      final layout = _controlsLayout(
                         context,
-                        session,
                         snapshot,
-                        constraints.maxWidth - 20,
-                        hasComposer: widget.danmakuComposerBuilder != null,
+                        width - 20,
                       );
                       return ColoredBox(
                         key: _playerBoundsKey,
@@ -1883,58 +1913,60 @@ class _VolumeSliderEntryState extends State<_VolumeSliderEntry> {
       );
 }
 
+typedef _ControlsLayoutInputs = ({
+  double width,
+  String timeLabel,
+  String? rateLabel,
+  String? qualityLabel,
+  bool hasComposer,
+  bool hasSubtitles,
+  bool hasVoices,
+  TextStyle textStyle,
+  TextDirection textDirection,
+  TextScaler textScaler,
+});
+
 // Match the actual labels and text scale so the editor shrinks before switching
 // layouts, including long videos and optional quality/subtitle controls.
 class _ControlsLayout {
-  _ControlsLayout(
-    BuildContext context,
-    PlaybackSession session,
-    PlaybackSnapshot snapshot,
-    double width, {
-    required bool hasComposer,
-  }) {
+  _ControlsLayout(this.inputs) {
     double textWidth(String text, double size) {
       final painter = TextPainter(
         text: TextSpan(
           text: text,
-          style: DefaultTextStyle.of(context).style.copyWith(fontSize: size),
+          style: inputs.textStyle.copyWith(fontSize: size),
         ),
-        textDirection: Directionality.of(context),
-        textScaler: MediaQuery.textScalerOf(context),
+        textDirection: inputs.textDirection,
+        textScaler: inputs.textScaler,
       )..layout();
       final result = painter.width.ceilToDouble() + 2;
       painter.dispose();
       return result;
     }
 
-    timeWidth = textWidth(
-      session.isLive
-          ? '直播中'
-          : '${_time(snapshot.duration)} / ${_time(snapshot.duration)}',
-      11,
-    );
-    rateWidth = session.isLive ? 0 : textWidth('${snapshot.rate}x', 12) + 16;
-    final media = session.media;
-    qualityWidth = media != null && media.qualities.length > 1
-        ? textWidth(
-                media.qualityLabels[media.quality] ?? _quality(media.quality),
-                12,
-              ) +
-              16
-        : 0;
-    composerMinWidth = 200 * MediaQuery.textScalerOf(context).scale(12) / 12;
+    timeWidth = textWidth(inputs.timeLabel, 11);
+    rateWidth = switch (inputs.rateLabel) {
+      final label? => textWidth(label, 12) + 16,
+      null => 0,
+    };
+    qualityWidth = switch (inputs.qualityLabel) {
+      final label? => textWidth(label, 12) + 16,
+      null => 0,
+    };
+    composerMinWidth = 200 * inputs.textScaler.scale(12) / 12;
     compact =
-        width <
+        inputs.width <
         buttonWidth *
                 (8 +
-                    (session.subtitleTracks.isNotEmpty ? 1 : 0) +
-                    (session.voiceTracks.isNotEmpty ? 1 : 0)) +
+                    (inputs.hasSubtitles ? 1 : 0) +
+                    (inputs.hasVoices ? 1 : 0)) +
             timeWidth +
             rateWidth +
             qualityWidth +
             12 +
-            (hasComposer ? composerMinWidth : 0);
+            (inputs.hasComposer ? composerMinWidth : 0);
   }
+  final _ControlsLayoutInputs inputs;
   static const buttonWidth = 40.0;
   late final double timeWidth, rateWidth, qualityWidth, composerMinWidth;
   late final bool compact;

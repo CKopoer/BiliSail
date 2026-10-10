@@ -123,6 +123,65 @@ void main() {
     ]);
   }
 
+  for (final dimensions in [const Size(390, 844), const Size(844, 390)]) {
+    testWidgets(
+      'live keyboard resize retains player, draft and connection at $dimensions',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = dimensions;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetViewInsets);
+        repository.scMessages = const [];
+        final editor = TextEditingController(text: '直播草稿');
+        addTearDown(editor.dispose);
+        var playerBuilds = 0;
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              home: Scaffold(
+                body: LiveScreen(
+                  roomId: '12',
+                  playerBuilder: (_, _) {
+                    playerBuilds++;
+                    return SizedBox.expand(
+                      key: const Key('keyboard-player'),
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: TextField(
+                          key: const Key('keyboard-editor'),
+                          controller: editor,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('keyboard-editor')));
+        await tester.pumpAndSettle();
+        final focus = FocusManager.instance.primaryFocus;
+        final opens = realtime.opens;
+        playerBuilds = 0;
+        final maxInset = dimensions.width < dimensions.height ? 320.0 : 150.0;
+        for (final inset in [maxInset / 2, maxInset, maxInset / 2, 0.0]) {
+          tester.view.viewInsets = FakeViewPadding(bottom: inset);
+          await tester.pump();
+          expect(playerBuilds, 0);
+          expect(editor.text, '直播草稿');
+          expect(FocusManager.instance.primaryFocus, same(focus));
+          expect(realtime.opens, opens);
+        }
+        expect(tester.takeException(), isNull);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+  }
+
   Future<void> wheelChat(WidgetTester tester, double delta) async {
     await tester.sendEventToBinding(
       PointerScrollEvent(

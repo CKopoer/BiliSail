@@ -1,8 +1,97 @@
+import 'dart:ui' as ui;
+
 import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mode in DanmakuMode.values) {
+    testWidgets(
+      'live ${mode.name} viewport changes preserve time and rasters',
+      (tester) async {
+        var now = Duration.zero;
+        final controller = LiveDanmakuController(monotonicNow: () => now);
+        addTearDown(controller.dispose);
+        controller.configure(area: 1, speed: 1, maxPerSecond: 0);
+        controller.setViewport(width: 600, height: 400);
+        final event = LiveDanmakuEvent(
+          id: 'active',
+          text: 'cached text',
+          mode: mode,
+        );
+        controller.add([event]);
+        final recorder = ui.PictureRecorder();
+        final canvas = ui.Canvas(recorder);
+        for (final placement in controller.frame()) {
+          controller.paintText(
+            placement.event,
+            canvas,
+            ui.Offset(placement.x, placement.y),
+          );
+        }
+        recorder.endRecording().dispose();
+        final rasterBytes = controller.textRasterBytes;
+        expect(rasterBytes, greaterThan(0));
+        now = const Duration(seconds: 1);
+        final before = controller.frame().single;
+        controller.setViewport(width: 500, height: 300, bottomInset: 50);
+        final after = controller.frame().single;
+        expect(after.event, same(event));
+        expect(controller.textLayoutBuildCount, 1);
+        expect(controller.textRasterBytes, rasterBytes);
+        if (mode == DanmakuMode.scroll) {
+          expect(after.x - before.x, closeTo(-100 * (1 - 1 / 8), .001));
+        } else {
+          expect(after.x - before.x, closeTo(-50, .001));
+        }
+        expect(after.y - before.y, mode == DanmakuMode.bottom ? -150 : 0);
+        now = Duration(seconds: mode == DanmakuMode.scroll ? 8 : 4);
+        expect(controller.frame(), isEmpty);
+      },
+    );
+  }
+
+  test('shrinking live viewport prunes unavailable lanes without replay', () {
+    final controller = LiveDanmakuController(monotonicNow: () => Duration.zero);
+    addTearDown(controller.dispose);
+    controller.configure(area: 1, speed: 1, maxPerSecond: 0);
+    controller.setViewport(width: 600, height: 240);
+    final events = [
+      for (var i = 0; i < 6; i++)
+        LiveDanmakuEvent(id: '$i', text: 'line $i', mode: DanmakuMode.top),
+    ];
+    controller.add(events);
+    expect(controller.frame(), hasLength(6));
+    controller.setViewport(width: 600, height: 32);
+    expect(controller.frame().map((placement) => placement.event.id), ['0']);
+    controller.setViewport(width: 600, height: 240);
+    expect(controller.frame().map((placement) => placement.event.id), ['0']);
+    controller.add(events);
+    expect(controller.pendingCount, 0);
+    expect(controller.textLayoutBuildCount, 6);
+  });
+
+  test('zero live viewport retains active identity and does not consume queued text', () {
+    final controller = LiveDanmakuController(monotonicNow: () => Duration.zero);
+    addTearDown(controller.dispose);
+    controller.configure(area: 1, speed: 1, maxPerSecond: 0);
+    controller.setViewport(width: 600, height: 240);
+    controller.add(const [LiveDanmakuEvent(id: 'first', text: 'first')]);
+    expect(controller.frame().single.event.id, 'first');
+    controller.setViewport(width: 0, height: 0);
+    controller.add(const [LiveDanmakuEvent(id: 'pending', text: 'pending')]);
+    expect(controller.frame(), isEmpty);
+    expect(controller.visibleCount, 1);
+    expect(controller.pendingCount, 1);
+    expect(controller.textLayoutBuildCount, 1);
+    controller.setViewport(width: 600, height: 240);
+    expect(controller.frame().map((placement) => placement.event.id), [
+      'first',
+      'pending',
+    ]);
+    expect(controller.textLayoutBuildCount, 2);
+  });
+
   for (final mode in DanmakuMode.values) {
     for (final fontSize in [2.4, 4.8, 12.0, 24.0, 54.0]) {
       test(

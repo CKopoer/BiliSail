@@ -57,6 +57,80 @@ final _season = PgcSeason(
 );
 
 void main() {
+  for (final dimensions in [const Size(390, 844), const Size(844, 390)]) {
+    testWidgets(
+      'PGC keyboard resize retains player and editor at $dimensions',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = dimensions;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetViewInsets);
+        final auth = _Auth();
+        final repository = _Repo();
+        final editor = TextEditingController(text: '番剧草稿');
+        addTearDown(auth.dispose);
+        addTearDown(editor.dispose);
+        var playerBuilds = 0;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              pgcRepositoryProvider.overrideWithValue(repository),
+              authRepositoryProvider.overrideWithValue(auth),
+            ],
+            child: InputTestApp(
+              home: Scaffold(
+                body: PgcScreen(
+                  seasonId: 's1',
+                  playerBuilder: (_, _, _) {
+                    playerBuilds++;
+                    return SizedBox.expand(
+                      key: const Key('keyboard-player'),
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: TextField(
+                          key: const Key('keyboard-editor'),
+                          controller: editor,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final expand = find.byTooltip('展开影视信息');
+        if (expand.evaluate().isNotEmpty) {
+          await tester.tap(expand);
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.byKey(const Key('keyboard-editor')));
+        await tester.pumpAndSettle();
+        final focus = FocusManager.instance.primaryFocus;
+        final player = tester.element(find.byKey(const Key('keyboard-player')));
+        final reads = repository.reads;
+        playerBuilds = 0;
+        final maxInset = dimensions.width < dimensions.height ? 320.0 : 150.0;
+        for (final inset in [maxInset / 2, maxInset, maxInset / 2, 0.0]) {
+          tester.view.viewInsets = FakeViewPadding(bottom: inset);
+          await tester.pump();
+          expect(playerBuilds, 0);
+          expect(
+            tester.element(find.byKey(const Key('keyboard-player'))),
+            same(player),
+          );
+          expect(FocusManager.instance.primaryFocus, same(focus));
+          expect(editor.text, '番剧草稿');
+          expect(repository.reads, reads);
+        }
+        expect(tester.takeException(), isNull);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+  }
+
   for (final width in [390.0, 1200.0]) {
     testWidgets('PGC info swipes retain comment scroll and player at $width', (
       tester,

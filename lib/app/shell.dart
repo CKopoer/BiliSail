@@ -297,6 +297,8 @@ final class _BiliAppShellState extends State<BiliAppShell> {
     if (dispatcher is ShortcutCoordinator) {
       dispatcher.configure(widget.shortcuts);
     }
+    // Keyboard resizing changes geometry, not the cached pages' configuration.
+    final pages = _pages(context);
     return CommandTargetScope<Object>(
       scope: CommandScope.workspace,
       commands: {
@@ -333,7 +335,7 @@ final class _BiliAppShellState extends State<BiliAppShell> {
                           constraints,
                           _channelBar(context),
                         ),
-                      Expanded(child: _pages(context)),
+                      Expanded(child: pages),
                     ],
                   );
                 },
