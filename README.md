@@ -29,8 +29,6 @@
 
 BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多标签浏览、原生播放、弹幕、云端观看历史与本地续播，以及下载队列和离线播放。界面借鉴 BiliLite 的轻量桌面布局，结合自适应网格、视频卡片悬停预览、播放详情分栏和可配置快捷键。
 
-当前处于预览阶段，源码版本以 [pubspec.yaml](pubspec.yaml) 为准，最新公开发布版本见 [GitHub Releases](https://github.com/CKopoer/BiliSail/releases)。截至 **2026-10-07**，已公开提供 Windows x64、Android arm64 和 macOS arm64 预览包，三端 CI 构建与打包已有通过记录；运行与功能实测主要在 Windows 上进行，完整三端验收仍在推进。具体状态见下方平台表及[验证文档](docs/README.md)。本项目为独立的第三方客户端，与哔哩哔哩官方无隶属关系。
-
 ## 使用声明
 
 本应用是哔哩哔哩第三方客户端，视频、影视、直播及相关内容均来自哔哩哔哩，与官方无隶属关系。
@@ -89,15 +87,6 @@ BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多
 | Android | arm64 / Android 7.0（API 24）及以上 | 本地与 CI 构建 APK 通过，固定 release 签名与单 arm64 ABI 校验通过；真机运行、播放、离线下载和覆盖升级待验 |
 | macOS | arm64 / macOS 12.0 及以上 | CI 的 arm64 构建、架构校验和 DMG 打包通过；设备启动、原生播放、安装及 Gatekeeper 验收待验 |
 
-2026-10-07 的 [CI 通过记录（提交 `3b8ed05`）](https://github.com/CKopoer/BiliSail/actions/runs/37591479657)覆盖根应用与三个包的检查及三端构建／打包。各项运行证据见[首版实测](docs/validation/m0-results.md)、[影视与直播播放](docs/validation/content-playback.md)、[多标签并发播放](docs/validation/multi-tab-playback.md)、[下载与离线播放](docs/downloads.md)和[构建打包记录](docs/validation/ci-cd.md)。首版记录保留历史快照，后续专项记录补充当前能力；构建成功与实机验收分别记录，预览版尚未完成 M0 三端验收。
-
-后续重点：
-
-- 补齐三端原生播放、扫码／密码／短信登录、安全存储和安装升级验收。
-- 验收真实账号下载、Android/macOS 离线播放与系统后台边界；验证云端观看历史列表及云端进度真实账号读写。
-- 逐平台接入并验证后台音频、媒体键和画中画（PiP）。
-
-完整阶段安排见[实施与验收](docs/implementation-plan.md)。
 
 ## 下载与安装
 
@@ -107,9 +96,9 @@ BiliSail（哔帆）以视频、影视和直播观看为核心，提供单／多
 
 | 平台 | 预览包格式 | 安装说明 |
 | --- | --- | --- |
-| Windows x64 | `.msix`/`.msi`/`.exe`，附签名公钥证书 `.cer` | 使用测试签名时，需要先信任对应证书；具体步骤见 [MSIX 签名与安装](docs/validation/ci-cd.md#windows-msix-签名与安装) |
-| Android arm64 | `.apk` | 旧版 0.3.0+1 包使用临时 debug 签名；后续非 PR 构建已改用固定 release 密钥，跨签名切换与覆盖升级说明见 [Android 签名](docs/validation/ci-cd.md#android-固定签名与覆盖升级) |
-| macOS arm64 | `.dmg` | 打开后将 `BiliSail.app` 拖到 `Applications`；当前配置使用 ad-hoc 签名，尚未完成 Developer ID 签名与公证 |
+| Windows x64 | `.msix`/`.msi`/`.exe`，附签名公钥证书 `.cer` | 使用msix安装时，需要先信任对应证书；具体步骤见 [MSIX 签名与安装](docs/validation/ci-cd.md#windows-msix-签名与安装) |
+| Android arm64 | `.apk` | 固定 release 密钥，跨签名切换与覆盖升级说明见 [Android 签名](docs/validation/ci-cd.md#android-固定签名与覆盖升级) |
+| macOS arm64 | `.dmg` | 打开后将 `BiliSail.app` 拖到 `Applications`；当前配置使用 ad-hoc 签名，安装后启动需要`设置-隐私与安全性-允许BiliSail运行` |
 
 GitHub Actions 的 **CI** 执行根应用和四个包的检查，并按平台构建预览产物；维护者可手动运行 **Release preview** 创建预览 Release 草稿，再公开发布。Release 和 CI 构建包的签名种类以各自的 `build-info.json` 为准。触发方式、产物校验与签名配置见 [CI/CD 说明](docs/validation/ci-cd.md)。
 
