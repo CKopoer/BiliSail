@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/presentation/public_image_variant.dart';
 import 'app_network_image.dart';
 
 /// Public CDN avatars never receive account cookies. Keep a stable fallback
@@ -9,6 +10,8 @@ class NetworkAvatar extends StatelessWidget {
   final Uri? url;
   final String name;
   final double radius;
+
+  static const _edges = [48, 64, 96, 128, 160, 240, 320, 480, 640, 960, 1280];
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +27,12 @@ class NetworkAvatar extends StatelessWidget {
       ),
     );
     final source = url;
+    // Share nearby sizes without requesting another URL for every pixel.
+    final physicalEdge = radius * 2 * MediaQuery.devicePixelRatioOf(context);
+    final edge = _edges.firstWhere(
+      (candidate) => candidate >= physicalEdge,
+      orElse: () => _edges.last,
+    );
     return Semantics(
       label: name.isEmpty ? '用户头像' : '$name 的头像',
       image: true,
@@ -34,8 +43,13 @@ class NetworkAvatar extends StatelessWidget {
               source == null || !const ['https', 'http'].contains(source.scheme)
               ? fallback
               : AppNetworkImage(
-                  url: source.replace(scheme: 'https').toString(),
-                  cacheWidth: 96,
+                  url: publicImageThumbnail(
+                    source.replace(scheme: 'https'),
+                    width: edge,
+                    height: edge,
+                  ).toString(),
+                  cacheWidth: edge,
+                  cacheHeight: edge,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => fallback,
                   frameBuilder: (_, child, frame, _) =>

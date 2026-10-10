@@ -50,16 +50,146 @@ Widget _app(AppImageCache cache, Widget child) => AppImageCacheScope(
   child: MaterialApp(home: Scaffold(body: child)),
 );
 
+final class _CountingImageBinding extends AutomatedTestWidgetsFlutterBinding {
+  int decodes = 0;
+
+  @override
+  Future<ui.Codec> instantiateImageCodecWithSize(
+    ui.ImmutableBuffer buffer, {
+    ui.TargetImageSizeCallback? getTargetSize,
+  }) {
+    decodes++;
+    return super.instantiateImageCodecWithSize(
+      buffer,
+      getTargetSize: getTargetSize,
+    );
+  }
+}
+
+final class _FastScrollActivity extends ScrollActivity {
+  _FastScrollActivity(super.delegate);
+
+  @override
+  bool get shouldIgnorePointer => false;
+  @override
+  bool get isScrolling => true;
+  @override
+  double get velocity => 5000;
+}
+
+final class _ManualImageCompleter extends ImageStreamCompleter {
+  void emit(ui.Image image) => setImage(ImageInfo(image: image));
+
+  void fail() => reportError(
+    exception: StateError('Frame decode failed'),
+    context: ErrorDescription('decoding a test frame'),
+  );
+}
+
 void main() {
+  final binding = _CountingImageBinding();
+  for (final lazy in [false, true]) {
+    for (final fast in [false, true]) {
+      testWidgets(
+        'decoded images return in the first frame with lazy=$lazy fast=$fast',
+        (tester) async {
+          tester.view.physicalSize = const Size(800, 600);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final bytes = await tester.runAsync(_png);
+          if (bytes == null) throw StateError('Missing PNG');
+          var calls = 0;
+          final cache = AppImageCache(
+            ImageByteCache(
+              directory: () async =>
+                  throw const FileSystemException('optional'),
+              loader: (_, _) async {
+                calls++;
+                return bytes;
+              },
+            ),
+          );
+          final scroll = ScrollController();
+          bool ready() => tester
+              .widgetList<RawImage>(find.byType(RawImage))
+              .any((image) => image.image != null);
+          await tester.pumpWidget(
+            _app(
+              cache,
+              lazy
+                  ? ListView.builder(
+                      controller: scroll,
+                      itemExtent: 150,
+                      itemCount: 30,
+                      addAutomaticKeepAlives: false,
+                      itemBuilder: (_, index) =>
+                          index == 0 ? _image(1) : const SizedBox(height: 150),
+                    )
+                  : SingleChildScrollView(
+                      controller: scroll,
+                      child: Column(
+                        children: [_image(1), const SizedBox(height: 4400)],
+                      ),
+                    ),
+            ),
+          );
+          await _until(tester, ready);
+          final original = tester.widget<RawImage>(find.byType(RawImage)).image;
+          if (original == null) throw StateError('Missing frame');
+          final clone = original.clone();
+          final decodes = binding.decodes;
+          final frameworkCacheSize = binding.imageCache.currentSize;
+          scroll.jumpTo(2500);
+          await tester.pumpAndSettle();
+          expect(
+            find.byType(AppNetworkImage),
+            lazy ? findsNothing : findsOneWidget,
+          );
+          expect(find.byType(RawImage), findsNothing);
+          expect(cache.decoded.liveImageCount, 0);
+          expect(cache.decoded.currentSize, 1);
+          scroll.jumpTo(0);
+          if (fast) {
+            final position = scroll.position as ScrollPositionWithSingleContext;
+            position.beginActivity(_FastScrollActivity(position));
+          }
+          await tester.pump();
+          expect(ready(), isTrue);
+          final returned = tester.widget<RawImage>(find.byType(RawImage)).image;
+          expect(returned?.isCloneOf(clone), isTrue);
+          for (var frame = 0; frame < 3; frame++) {
+            await tester.pump(const Duration(milliseconds: 16));
+            expect(ready(), isTrue);
+          }
+          expect(calls, 1);
+          expect(binding.decodes, decodes);
+          expect(binding.imageCache.currentSize, frameworkCacheSize);
+          clone.dispose();
+          await tester.pumpWidget(const SizedBox());
+          scroll.dispose();
+          await cache.close();
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
   testWidgets(
-    'retained hidden frames stop listening and clear on URL or account changes',
+    'cached streams deliver frames, pause when hidden and release offscreen',
     (tester) async {
       final bytes = await tester.runAsync(_png);
       if (bytes == null) throw StateError('Missing PNG');
+      final pixels = await tester.runAsync(() async {
+        final codec = await ui.instantiateImageCodec(bytes);
+        final frame = await codec.getNextFrame();
+        codec.dispose();
+        return frame.image;
+      });
+      if (pixels == null) throw StateError('Missing frame');
       var calls = 0;
       final cache = AppImageCache(
         ImageByteCache(
-          enabled: false,
           directory: () async => throw const FileSystemException('optional'),
           loader: (_, _) async {
             calls++;
@@ -67,52 +197,207 @@ void main() {
           },
         ),
       );
-      Widget page(bool active, int image) =>
-          _app(cache, WorkspaceActivity(active: active, child: _image(image)));
-      Future<void> loaded() => _until(
-        tester,
-        () => tester
-            .widgetList<RawImage>(find.byType(RawImage))
-            .any((image) => image.image != null),
+      final completer = _ManualImageCompleter();
+      cache.decoded.putIfAbsent(
+        AppImageProvider(cache: cache, url: 'https://i0.hdslb.com/cached.gif'),
+        () => completer,
       );
-
-      await tester.pumpWidget(page(true, 1));
-      await loaded();
-      final frame = tester.widget<RawImage>(find.byType(RawImage)).image;
-      await tester.pumpWidget(page(false, 1));
-      await tester.pumpAndSettle();
-      expect(tester.widget<RawImage>(find.byType(RawImage)).image, same(frame));
-      expect(calls, 1);
-      final ticker = find
-          .ancestor(
-            of: find.byType(RawImage),
-            matching: find.byType(TickerMode),
-          )
-          .first;
-      expect(tester.widget<TickerMode>(ticker).enabled, isFalse);
-
-      await tester.pumpWidget(page(false, 2));
+      completer.emit(pixels.clone());
+      final scroll = ScrollController();
+      int? lastFrame;
+      bool? synchronous;
+      Widget page(bool active, {bool outside = false}) => _app(
+        cache,
+        WorkspaceActivity(
+          active: active,
+          child: SingleChildScrollView(
+            controller: scroll,
+            child: Column(
+              children: [
+                if (outside) const SizedBox(height: 2000),
+                AppNetworkImage(
+                  url: 'https://i0.hdslb.com/cached.gif',
+                  width: 40,
+                  height: 40,
+                  semanticLabel: 'cached animation',
+                  errorBuilder: (_, _, _) => const Text('cached failure'),
+                  frameBuilder: (_, child, frame, sync) {
+                    lastFrame = frame;
+                    synchronous = sync;
+                    return child;
+                  },
+                ),
+                const SizedBox(height: 2000),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpWidget(page(false));
+      expect(find.byType(RawImage), findsNothing);
+      expect(completer.hasListeners, isFalse);
+      await tester.pumpWidget(page(true));
+      expect(lastFrame, 0);
+      expect(synchronous, isTrue);
+      expect(find.bySemanticsLabel('cached animation'), findsOneWidget);
+      completer.emit(pixels.clone());
+      await tester.pump();
+      expect(lastFrame, 1);
+      await tester.pumpWidget(page(false));
+      expect(completer.hasListeners, isFalse);
+      completer.emit(pixels.clone());
+      await tester.pump();
+      expect(lastFrame, 1);
+      await tester.pumpWidget(page(true));
+      expect(lastFrame, 2);
+      completer.fail();
+      await tester.pump();
+      expect(find.text('cached failure'), findsOneWidget);
+      scroll.jumpTo(scroll.position.maxScrollExtent);
       await tester.pumpAndSettle();
       expect(find.byType(RawImage), findsNothing);
-      expect(calls, 1);
-      await tester.pumpWidget(page(true, 2));
-      await loaded();
-      expect(calls, 2);
-      await tester.pumpWidget(page(false, 2));
+      expect(completer.hasListeners, isFalse);
+      expect(cache.decoded.liveImageCount, 0);
+      expect(calls, 0);
+      // Late failures after listener removal follow Image's errorBuilder policy.
+      completer.fail();
+      scroll.jumpTo(0);
       await tester.pumpAndSettle();
-      expect(find.byType(RawImage), findsOneWidget);
-      await tester.runAsync(() => cache.changeScope('next-account'));
-      await tester.pumpAndSettle();
-      expect(find.byType(RawImage), findsNothing);
-      expect(calls, 2);
-      await tester.pumpWidget(page(true, 2));
-      await loaded();
-      expect(calls, 3);
       await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(page(true, outside: true));
+      await tester.pumpAndSettle();
+      expect(completer.hasListeners, isFalse);
+      expect(cache.decoded.liveImageCount, 0);
+      await tester.pumpWidget(const SizedBox());
+      scroll.dispose();
       await cache.close();
+      pixels.dispose();
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('uncached images still defer requests during fast scrolling', (
+    tester,
+  ) async {
+    final bytes = await tester.runAsync(_png);
+    if (bytes == null) throw StateError('Missing PNG');
+    var calls = 0;
+    final cache = AppImageCache(
+      ImageByteCache(
+        directory: () async => throw const FileSystemException('optional'),
+        loader: (_, _) async {
+          calls++;
+          return bytes;
+        },
+      ),
+    );
+    final scroll = ScrollController();
+    await tester.pumpWidget(
+      _app(
+        cache,
+        ListView(
+          controller: scroll,
+          children: [_image(1), const SizedBox(height: 2000)],
+        ),
+      ),
+    );
+    final position = scroll.position as ScrollPositionWithSingleContext;
+    position.beginActivity(_FastScrollActivity(position));
+    for (var frame = 0; frame < 4; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(calls, 0);
+    position.goIdle();
+    await _until(
+      tester,
+      () => tester
+          .widgetList<RawImage>(find.byType(RawImage))
+          .any((image) => image.image != null),
+    );
+    expect(calls, 1);
+    await tester.pumpWidget(const SizedBox());
+    scroll.dispose();
+    await cache.close();
+  });
+
+  for (final enabled in [false, true]) {
+    testWidgets(
+      'retained hidden frames clear on URL or account changes with cache=$enabled',
+      (tester) async {
+        final bytes = await tester.runAsync(_png);
+        if (bytes == null) throw StateError('Missing PNG');
+        var calls = 0;
+        final cache = AppImageCache(
+          ImageByteCache(
+            enabled: enabled,
+            directory: () async => throw const FileSystemException('optional'),
+            loader: (_, _) async {
+              calls++;
+              return bytes;
+            },
+          ),
+        );
+        Widget page(bool active, int image) => _app(
+          cache,
+          WorkspaceActivity(active: active, child: _image(image)),
+        );
+        Future<void> loaded() => _until(
+          tester,
+          () => tester
+              .widgetList<RawImage>(find.byType(RawImage))
+              .any((image) => image.image != null),
+        );
+
+        await tester.pumpWidget(page(true, 1));
+        await loaded();
+        if (enabled) {
+          // Exercise the cached-stream renderer after a genuine remount.
+          await tester.pumpWidget(const SizedBox());
+          await tester.pumpWidget(page(true, 1));
+          expect(
+            tester.widget<RawImage>(find.byType(RawImage)).image,
+            isNotNull,
+          );
+        }
+        final frame = tester.widget<RawImage>(find.byType(RawImage)).image;
+        await tester.pumpWidget(page(false, 1));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<RawImage>(find.byType(RawImage)).image,
+          same(frame),
+        );
+        expect(calls, 1);
+        final ticker = find
+            .ancestor(
+              of: find.byType(RawImage),
+              matching: find.byType(TickerMode),
+            )
+            .first;
+        expect(tester.widget<TickerMode>(ticker).enabled, isFalse);
+
+        await tester.pumpWidget(page(false, 2));
+        await tester.pumpAndSettle();
+        expect(find.byType(RawImage), findsNothing);
+        expect(calls, 1);
+        await tester.pumpWidget(page(true, 2));
+        await loaded();
+        expect(calls, 2);
+        await tester.pumpWidget(page(false, 2));
+        await tester.pumpAndSettle();
+        expect(find.byType(RawImage), findsOneWidget);
+        await tester.runAsync(() => cache.changeScope('next-account'));
+        await tester.pumpAndSettle();
+        expect(find.byType(RawImage), findsNothing);
+        expect(calls, 2);
+        await tester.pumpWidget(page(true, 2));
+        await loaded();
+        expect(calls, 3);
+        await tester.pumpWidget(const SizedBox());
+        await cache.close();
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets('active page images release frames after vertical scrolling', (
     tester,

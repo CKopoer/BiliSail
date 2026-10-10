@@ -97,6 +97,32 @@ final class AppImageProvider extends ImageProvider<AppImageProvider> {
   final int generation;
   final int? cacheWidth, cacheHeight;
 
+  /// Only a completed frame may bypass viewport admission or scroll deferral.
+  /// Pending streams still need the usual visibility and loading policy.
+  bool get hasDecodedFrame {
+    if (!cache.enabled || generation != cache.bytes.generation) return false;
+    final status = cache.decoded.statusForKey(this);
+    return !status.pending && (status.keepAlive || status.live);
+  }
+
+  @override
+  ImageStream createStream(ImageConfiguration configuration) {
+    final stream = super.createStream(configuration);
+    if (hasDecodedFrame) {
+      // Expose our completed stream without populating the framework's global
+      // cache. A widget can consume it directly without starting new work.
+      final completer = cache.decoded.putIfAbsent(
+        this,
+        () => loadImage(
+          this,
+          PaintingBinding.instance.instantiateImageCodecWithSize,
+        ),
+      );
+      if (completer != null) stream.setCompleter(completer);
+    }
+    return stream;
+  }
+
   @override
   Future<AppImageProvider> obtainKey(ImageConfiguration configuration) =>
       SynchronousFuture(this);

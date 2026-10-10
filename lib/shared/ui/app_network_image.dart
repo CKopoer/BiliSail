@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../core/presentation/app_image_provider.dart';
@@ -71,18 +72,22 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
   AppImageCache? _waitingCache;
   bool _active = true;
   bool _visible = false;
+  bool _visibilityChecked = false;
   bool _checkScheduled = false;
   bool _retryScheduled = false;
   bool _hasFrame = false;
+  ImageProvider<Object>? _provider;
   _RetainedImageProvider? _source;
   int _attempt = 0;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final wasActive = _active;
     _active =
         TickerMode.valuesOf(context).enabled &&
         WorkspaceActivity.isActive(context);
+    if (_active && !wasActive) _visibilityChecked = false;
     // Observe viewport changes without rebuilding the whole list on scroll.
     MediaQuery.maybeSizeOf(context);
     Scrollable.maybeOf(context);
@@ -103,6 +108,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
         oldWidget.cacheHeight != widget.cacheHeight) {
       _stopWaiting();
       _hasFrame = false;
+      _provider = null;
       _releaseSource();
       ++_attempt;
     }
@@ -118,14 +124,67 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
       return true;
     });
     for (final position in _positions.difference(positions)) {
-      position.removeListener(_scheduleVisibilityCheck);
+      position.removeListener(_onScrollChanged);
     }
     for (final position in positions.difference(_positions)) {
-      position.addListener(_scheduleVisibilityCheck);
+      position.addListener(_onScrollChanged);
     }
     _positions
       ..clear()
       ..addAll(positions);
+  }
+
+  void _onScrollChanged() {
+    // A still-mounted image can return before the post-layout check (notably
+    // SingleChildScrollView). Re-admit only decoded frames here; new requests
+    // continue to wait for the authoritative check after layout.
+    final provider = _provider;
+    if (mounted &&
+        !_visible &&
+        SchedulerBinding.instance.schedulerPhase !=
+            SchedulerPhase.persistentCallbacks &&
+        provider is AppImageProvider &&
+        provider.hasDecodedFrame &&
+        _readVisibility().visible) {
+      setState(() => _visible = true);
+    }
+    _scheduleVisibilityCheck();
+  }
+
+  ({bool visible, bool visibleInPage}) _readVisibility() {
+    final box = context.findRenderObject();
+    var visible = _active && box is RenderBox && box.hasSize;
+    var visibleInPage = visible;
+    if (visible) {
+      // Check every ancestor viewport, including nested lists, with the same
+      // 160 logical-pixel prefetch range used for new requests.
+      RenderObject? ancestor = box.parent;
+      var insidePage = true;
+      while (ancestor != null) {
+        if (ancestor is _RenderAppImagePageViewport) insidePage = false;
+        if (ancestor is RenderAbstractViewport) {
+          final bounds = MatrixUtils.transformRect(
+            box.getTransformTo(ancestor),
+            // Intrinsic-sized images can have no area before their first frame.
+            box.paintBounds.isEmpty
+                ? Rect.fromLTWH(box.paintBounds.left, box.paintBounds.top, 1, 1)
+                : box.paintBounds,
+          );
+          final viewport = ancestor.paintBounds.inflate(160);
+          if (!bounds.overlaps(viewport)) visible = false;
+          // Keep a ready frame during page swipes, but release it for inner
+          // scrolling or outer vertical clipping.
+          if (insidePage
+              ? !bounds.overlaps(viewport)
+              : bounds.bottom <= viewport.top ||
+                    bounds.top >= viewport.bottom) {
+            visibleInPage = false;
+          }
+        }
+        ancestor = ancestor.parent;
+      }
+    }
+    return (visible: visible, visibleInPage: visibleInPage);
   }
 
   void _scheduleVisibilityCheck() {
@@ -134,48 +193,14 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkScheduled = false;
       if (!mounted) return;
-      final box = context.findRenderObject();
-      var visible = _active && box is RenderBox && box.hasSize;
-      var visibleInPage = visible;
-      if (visible) {
-        // Eager Wrap/Column lists still lay out offscreen children. Admit their
-        // images only when they intersect a viewport, with 160 logical pixels
-        // of prefetch. Check all ancestors for nested scrollable lists.
-        RenderObject? ancestor = box.parent;
-        var insidePage = true;
-        while (ancestor != null) {
-          if (ancestor is _RenderAppImagePageViewport) insidePage = false;
-          if (ancestor is RenderAbstractViewport) {
-            final bounds = MatrixUtils.transformRect(
-              box.getTransformTo(ancestor),
-              // An intrinsic-sized image may have no area until its first
-              // frame. Its origin still decides whether loading can begin.
-              box.paintBounds.isEmpty
-                  ? Rect.fromLTWH(
-                      box.paintBounds.left,
-                      box.paintBounds.top,
-                      1,
-                      1,
-                    )
-                  : box.paintBounds,
-            );
-            final viewport = ancestor.paintBounds.inflate(160);
-            if (!bounds.overlaps(viewport)) visible = false;
-            // A swipe keeps the outgoing page active until settling. Ignore
-            // horizontal clipping outside its page for frame retention, even
-            // in an outer vertical viewport such as the profile's header.
-            // Inner viewports and outer vertical clipping still release it.
-            if (insidePage
-                ? !bounds.overlaps(viewport)
-                : bounds.bottom <= viewport.top ||
-                      bounds.top >= viewport.bottom) {
-              visibleInPage = false;
-            }
-          }
-          ancestor = ancestor.parent;
-        }
-      }
-      final releaseFrame = _active && !visibleInPage && _hasFrame;
+      final (:visible, :visibleInPage) = _readVisibility();
+      _visibilityChecked = true;
+      // A cached animation can report an error before frameBuilder runs.
+      // Release its admitted stream too, even when only the error is painted.
+      final releaseFrame =
+          _active &&
+          !visibleInPage &&
+          (_hasFrame || _source?.hasCachedFrame == true);
       if (visible != _visible || releaseFrame) {
         if (!visible) _stopWaiting();
         setState(() {
@@ -253,6 +278,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
         uri.scheme != 'https' ||
         uri.userInfo.isNotEmpty ||
         uri.host.isEmpty) {
+      _provider = null;
       return widget.errorBuilder?.call(
             context,
             const ImageLoadCancelled(),
@@ -280,7 +306,16 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
       _hasFrame = false;
       ++_attempt;
     }
-    final showImage = (_visible && _active) || _hasFrame;
+    _provider = provider;
+    // Cached pixels can appear in the first build of a lazy-list child. The
+    // first layout still releases an offscreen frame, preventing permanent
+    // leases outside the viewport or loading any uncached hidden image.
+    final cachedFirstFrame =
+        _active &&
+        !_visibilityChecked &&
+        provider is AppImageProvider &&
+        provider.hasDecodedFrame;
+    final showImage = (_visible && _active) || _hasFrame || cachedFirstFrame;
     final retained = showImage
         ? (_source ??= _RetainedImageProvider(provider))
         : null;
@@ -295,45 +330,47 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
         enabled: _active,
         child: retained == null
             ? _placeholder(context)
-            : Image(
-                key: ValueKey(_attempt),
-                image: retained.image,
-                width: widget.width,
-                height: widget.height,
-                fit: widget.fit,
-                alignment: widget.alignment,
-                excludeFromSemantics: widget.excludeFromSemantics,
-                semanticLabel: widget.semanticLabel,
-                errorBuilder: (context, error, stack) {
-                  if (error is ImageQueueFull && cache != null) {
-                    _waitForCapacity(cache);
-                    return _placeholder(context);
-                  }
-                  final builder = widget.errorBuilder;
-                  if (builder != null) return builder(context, error, stack);
-                  Error.throwWithStackTrace(error, stack ?? StackTrace.current);
-                },
-                loadingBuilder: widget.loadingBuilder,
-                frameBuilder: (context, child, frame, synchronous) {
-                  _hasFrame = frame != null;
-                  return widget.frameBuilder?.call(
-                        context,
-                        child,
-                        frame,
-                        synchronous,
-                      ) ??
-                      child;
-                },
-                gaplessPlayback: true,
-              ),
+            : _buildImage(retained, cache),
       ),
     );
+  }
+
+  Widget _buildImage(_RetainedImageProvider retained, AppImageCache? cache) {
+    final image = Image(
+      key: ValueKey(_attempt),
+      image: retained.image,
+      width: widget.width,
+      height: widget.height,
+      fit: widget.fit,
+      alignment: widget.alignment,
+      excludeFromSemantics: widget.excludeFromSemantics,
+      semanticLabel: widget.semanticLabel,
+      errorBuilder: (context, error, stack) {
+        if (error is ImageQueueFull && cache != null) {
+          _waitForCapacity(cache);
+          return _placeholder(context);
+        }
+        final builder = widget.errorBuilder;
+        if (builder != null) return builder(context, error, stack);
+        Error.throwWithStackTrace(error, stack ?? StackTrace.current);
+      },
+      loadingBuilder: widget.loadingBuilder,
+      frameBuilder: (context, child, frame, synchronous) {
+        _hasFrame = frame != null;
+        return widget.frameBuilder?.call(context, child, frame, synchronous) ??
+            child;
+      },
+      gaplessPlayback: true,
+    );
+    return retained.hasCachedFrame
+        ? _CachedStreamImage(key: image.key, image: image, provider: retained)
+        : image;
   }
 
   @override
   void dispose() {
     for (final position in _positions) {
-      position.removeListener(_scheduleVisibilityCheck);
+      position.removeListener(_onScrollChanged);
     }
     _stopWaiting();
     _releaseSource();
@@ -345,10 +382,22 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
 /// stream even with caching disabled, so hiding a ready frame cannot initiate
 /// another transfer. The lease ends with the image's viewport/source lifetime.
 final class _RetainedImageProvider extends ImageProvider<Object> {
-  _RetainedImageProvider(this.provider);
+  _RetainedImageProvider(this.provider) {
+    final source = provider;
+    if (source is AppImageProvider && source.hasDecodedFrame) {
+      final stream = source.createStream(ImageConfiguration.empty);
+      final completer = stream.completer;
+      if (completer != null) {
+        _retain(completer);
+        _hasCachedFrame = true;
+      }
+    }
+  }
 
   final ImageProvider<Object> provider;
   final _lease = _ImageStreamLease();
+  bool _hasCachedFrame = false;
+  bool get hasCachedFrame => _hasCachedFrame;
 
   // NetworkImage already reuses Flutter's decoded cache. The app provider
   // needs a widget lease because its cache can be explicitly disabled.
@@ -358,6 +407,17 @@ final class _RetainedImageProvider extends ImageProvider<Object> {
   @override
   Future<Object> obtainKey(ImageConfiguration configuration) =>
       provider.obtainKey(configuration);
+
+  @override
+  ImageStream createStream(ImageConfiguration configuration) {
+    final retained = _lease.completer;
+    final stream = retained == null
+        ? provider.createStream(configuration)
+        : (ImageStream()..setCompleter(retained));
+    final completer = stream.completer;
+    if (completer != null) _retain(completer);
+    return stream;
+  }
 
   @override
   void resolveStreamForKey(
@@ -374,10 +434,14 @@ final class _RetainedImageProvider extends ImageProvider<Object> {
     }
     provider.resolveStreamForKey(configuration, stream, key, handleError);
     final resolved = stream.completer;
-    if (resolved != null) {
-      _lease.completer = resolved;
-      _lease.handle = resolved.keepAlive();
-    }
+    if (resolved != null) _retain(resolved);
+  }
+
+  void _retain(ImageStreamCompleter completer) {
+    if (identical(completer, _lease.completer)) return;
+    release();
+    _lease.completer = completer;
+    _lease.handle = completer.keepAlive();
   }
 
   void release() {
@@ -390,6 +454,140 @@ final class _RetainedImageProvider extends ImageProvider<Object> {
 final class _ImageStreamLease {
   ImageStreamCompleter? completer;
   ImageStreamCompleterHandle? handle;
+}
+
+/// Image's implicit ScrollAwareImageProvider cannot see our decoded cache.
+/// Only already decoded streams take this path; pending and uncached images
+/// keep Flutter's scroll deferral, error and download-progress handling.
+final class _CachedStreamImage extends StatefulWidget {
+  const _CachedStreamImage({
+    super.key,
+    required this.image,
+    required this.provider,
+  });
+
+  final Image image;
+  final _RetainedImageProvider provider;
+
+  @override
+  State<_CachedStreamImage> createState() => _CachedStreamImageState();
+}
+
+final class _CachedStreamImageState extends State<_CachedStreamImage> {
+  ImageStream? _stream;
+  ImageInfo? _info;
+  int? _frame;
+  bool _synchronous = false;
+  bool _listening = false;
+  Object? _error;
+  StackTrace? _stack;
+  late final _listener = ImageStreamListener(
+    _onFrame,
+    reportErrors: false,
+    onError: (error, stack) => setState(() {
+      _error = error;
+      _stack = stack;
+    }),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(_CachedStreamImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.provider, widget.provider)) _resolve();
+  }
+
+  void _resolve() {
+    final image = widget.image;
+    final next = widget.provider.resolve(
+      createLocalImageConfiguration(
+        context,
+        size: image.width != null && image.height != null
+            ? Size(image.width!, image.height!)
+            : null,
+      ),
+    );
+    if (_stream?.key != next.key) {
+      _stopListening();
+      _replaceInfo(null);
+      _frame = null;
+      _synchronous = false;
+      _error = null;
+      _stack = null;
+      _stream = next;
+    }
+    if (TickerMode.valuesOf(context).enabled) {
+      if (!_listening) {
+        _listening = true;
+        next.addListener(_listener);
+      }
+    } else {
+      _stopListening();
+    }
+  }
+
+  void _stopListening() {
+    if (_listening) _stream?.removeListener(_listener);
+    _listening = false;
+  }
+
+  void _replaceInfo(ImageInfo? info) {
+    final previous = _info;
+    _info = info;
+    if (previous != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
+    }
+  }
+
+  void _onFrame(ImageInfo info, bool synchronous) => setState(() {
+    _replaceInfo(info);
+    _frame = (_frame ?? -1) + 1;
+    _synchronous = _synchronous || synchronous;
+    _error = null;
+    _stack = null;
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final image = widget.image;
+    if (_error case final error?) {
+      return image.errorBuilder?.call(context, error, _stack) ??
+          const SizedBox.shrink();
+    }
+    Widget child = RawImage(
+      image: _info?.image,
+      width: image.width,
+      height: image.height,
+      scale: _info?.scale ?? 1,
+      fit: image.fit,
+      alignment: image.alignment,
+      invertColors: MediaQuery.maybeInvertColorsOf(context) ?? false,
+      filterQuality: image.filterQuality,
+    );
+    if (!image.excludeFromSemantics) {
+      child = Semantics(
+        container: image.semanticLabel != null,
+        image: true,
+        label: image.semanticLabel ?? '',
+        child: child,
+      );
+    }
+    child =
+        image.frameBuilder?.call(context, child, _frame, _synchronous) ?? child;
+    return image.loadingBuilder?.call(context, child, null) ?? child;
+  }
+
+  @override
+  void dispose() {
+    _stopListening();
+    _replaceInfo(null);
+    super.dispose();
+  }
 }
 
 /// Forward intrinsic/dry layout like the original Image. LayoutBuilder would
