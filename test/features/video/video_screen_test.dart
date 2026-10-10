@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/core/platform/external_links.dart';
 import 'package:bilisail/features/video/application/video_extras_controller.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
@@ -36,6 +37,61 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/video_card_fake_engine.dart';
 
 void main() {
+  testWidgets(
+    'charging video retains detail and player with an official access action',
+    (tester) async {
+      final opened = <Uri>[];
+      var players = 0;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authControllerProvider.overrideWith(_GuestAuthController.new),
+            videoRepositoryProvider.overrideWithValue(
+              const _VideoRepository(
+                access: VideoAccess(
+                  kind: VideoAccessKind.chargingExclusive,
+                  canWatch: false,
+                  canPreview: true,
+                ),
+              ),
+            ),
+            videoExtrasRepositoryProvider.overrideWithValue(
+              _ExtrasRepository(),
+            ),
+            externalLinkOpenerProvider.overrideWithValue((uri) async {
+              opened.add(uri);
+              return true;
+            }),
+          ],
+          child: InputTestApp(
+            home: Scaffold(
+              body: VideoScreen(
+                id: const VideoId('BV1abc123456'),
+                playerBuilder: (_, _, _) {
+                  players++;
+                  return const SizedBox();
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('测试视频'), findsOneWidget);
+      expect(find.text('充电专属'), findsOneWidget);
+      expect(players, greaterThan(0));
+      expect(opened, isEmpty);
+      final action = find.byKey(const ValueKey('video-access-official'));
+      await tester.ensureVisible(action);
+      await tester.tap(action);
+      await tester.pump();
+      expect(
+        opened.single.toString(),
+        'https://www.bilibili.com/video/BV1abc123456',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
   for (final width in [390.0, 1100.0]) {
     testWidgets('video info swipes retain scroll and player at $width', (
       tester,
@@ -1189,12 +1245,15 @@ final class _TrackedPlayerState extends State<_TrackedPlayer> {
 }
 
 final class _VideoRepository implements VideoRepository {
+  const _VideoRepository({this.access = const VideoAccess()});
+  final VideoAccess access;
   @override
   Future<VideoDetail> loadDetail(
     VideoId id, {
     required RequestCancellation cancellation,
-  }) async => const VideoDetail(
+  }) async => VideoDetail(
     summary: VideoSummary(
+      access: access,
       id: VideoId('BV1abc123456'),
       title: '测试视频',
       coverUrl: '',

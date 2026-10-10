@@ -1,5 +1,7 @@
 import 'package:bili_api/bili_api.dart';
 
+import '../../../shared/data/video_access_mapper.dart';
+
 import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
@@ -80,6 +82,9 @@ final class ApiLibraryRepository implements LibraryRepository {
             return WatchHistoryEntry(
               video: VideoSummary(
                 id: VideoId(item.bvid),
+                access: mapVideoAccess(
+                  detail?.access ?? const ApiVideoAccess(),
+                ),
                 title: item.title,
                 coverUrl: item.coverUrl?.toString() ?? '',
                 author: item.author,

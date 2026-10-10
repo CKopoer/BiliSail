@@ -11,6 +11,7 @@ import '../../features/video/domain/video_card_interactions.dart';
 import '../../features/video/application/video_card_preview_playback.dart';
 import 'bili_icons.dart';
 import 'video_card_interaction_scope.dart';
+import 'video_access_badge.dart';
 
 /// Desktop cover interaction shared by grid and horizontal video cards.
 class VideoCardCover extends StatefulWidget {
@@ -260,6 +261,18 @@ class _VideoCardCoverState extends State<VideoCardCover>
                     child: _VideoCardPlaybackPreview(
                       key: const ValueKey('video-card-preview'),
                       preview: preview,
+                    ),
+                  ),
+                if (widget.video.access.label != null)
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    right: 48,
+                    child: IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: VideoAccessBadge(access: widget.video.access),
+                      ),
                     ),
                   ),
                 if (widget.showWatchLaterButton &&

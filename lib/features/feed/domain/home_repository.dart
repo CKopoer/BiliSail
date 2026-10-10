@@ -1,4 +1,5 @@
 import '../../../domain/dynamic_post.dart';
+import '../../../domain/video_access.dart';
 import '../../../domain/request_cancellation.dart';
 import 'home_channel.dart';
 
@@ -16,6 +17,7 @@ final class HomeEntry {
     this.bvid,
     this.aid,
     this.previewCid,
+    this.access = const VideoAccess(),
     this.url,
     this.authorName = '',
     this.authorAvatarUrl,
@@ -43,6 +45,7 @@ final class HomeEntry {
   final String? bvid;
   final String? aid;
   final String? previewCid;
+  final VideoAccess access;
   final Uri? url;
   final String authorName;
   final Uri? authorAvatarUrl;

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../models.dart';
+import 'video_access_parser.dart';
 import '../models/dynamic_models.dart';
 
 /// Web dynamic responses are bounded before entering application state.
@@ -58,6 +59,7 @@ ApiDynamicPost parseDynamicPost(
   final stat = _map(archive['stat']);
   final video = RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid)
       ? ApiVideoSummary(
+          access: parseVideoAccess(archive),
           bvid: bvid,
           title: _text(archive['title']),
           coverUrl: _uri(archive['cover']),

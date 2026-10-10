@@ -2,6 +2,8 @@ import '../../domain/comment_target.dart';
 
 import 'package:bili_api/bili_api.dart';
 
+import 'video_access_mapper.dart';
+
 import '../../domain/dynamic_post.dart';
 import '../../domain/user.dart';
 import '../../domain/video.dart';
@@ -37,6 +39,7 @@ DynamicPost mapDynamicPost(ApiDynamicPost p) {
         ? null
         : VideoSummary(
             id: VideoId(v.bvid),
+            access: mapVideoAccess(v.access),
             title: v.title,
             coverUrl: v.coverUrl?.toString() ?? '',
             author: v.ownerName,

@@ -2,6 +2,8 @@ import '../../../domain/user.dart';
 
 import 'package:bili_api/bili_api.dart';
 
+import '../../../shared/data/video_access_mapper.dart';
+
 import '../../../core/network/api_requests.dart';
 import '../../../domain/page_result.dart';
 import '../../../domain/request_cancellation.dart';
@@ -138,6 +140,7 @@ class ApiFeedRepository
             .map(
               (item) => VideoSummary(
                 id: VideoId(item.bvid),
+                access: mapVideoAccess(item.access),
                 previewCid: item.previewCid,
                 title: item.title,
                 coverUrl: item.coverUrl?.toString() ?? '',

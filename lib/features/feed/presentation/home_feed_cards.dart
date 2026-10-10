@@ -44,6 +44,7 @@ final class HomeVideoCard extends StatelessWidget {
         entry.dynamicPost?.video ??
         VideoSummary(
           id: VideoId(entry.bvid ?? entry.id),
+          access: entry.access,
           previewCid: entry.previewCid,
           title: entry.title,
           coverUrl: entry.coverUrl?.toString() ?? '',

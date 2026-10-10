@@ -1,4 +1,5 @@
 import '../mappers/dynamic_post_parser.dart';
+import '../mappers/video_access_parser.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../models/profile_models.dart';
@@ -319,6 +320,7 @@ final class ProfileClient {
       }
     }
     final video = ApiVideoSummary(
+      access: parseVideoAccess(item),
       bvid: bvid,
       title: title,
       coverUrl: _uri(item['pic']),

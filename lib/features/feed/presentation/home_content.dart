@@ -608,6 +608,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                     WatchLaterQueueItem(
                       video: VideoSummary(
                         id: VideoId(candidate.bvid!),
+                        access: candidate.access,
                         title: candidate.title,
                         coverUrl: candidate.coverUrl?.toString() ?? '',
                         author: candidate.authorName,

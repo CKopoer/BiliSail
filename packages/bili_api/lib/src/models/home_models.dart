@@ -1,4 +1,5 @@
 import 'dynamic_models.dart';
+import 'video_access.dart';
 
 enum ApiHomeEntryKind { video, season, live, dynamic, folder, collection }
 
@@ -14,6 +15,7 @@ final class ApiHomeEntry {
     this.bvid,
     this.aid,
     this.previewCid,
+    this.access = const ApiVideoAccess(),
     this.url,
     this.authorName = '',
     this.authorAvatarUrl,
@@ -43,6 +45,7 @@ final class ApiHomeEntry {
   /// Decimal archive ID, independent of the card's stable BVID identity.
   final String? aid;
   final String? previewCid;
+  final ApiVideoAccess access;
   final Uri? url;
   final String authorName;
   final Uri? authorAvatarUrl;

@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'models/video_access.dart';
+export 'models/video_access.dart';
+
 enum ApiFailureCategory {
   cancelled,
   timeout,
@@ -20,6 +23,7 @@ final class ApiFailure implements Exception {
     this.httpStatus,
     this.businessCode,
     this.retryAfter,
+    this.videoAccessKind,
   });
 
   final ApiFailureCategory category;
@@ -27,11 +31,13 @@ final class ApiFailure implements Exception {
   final int? httpStatus;
   final int? businessCode;
   final Duration? retryAfter;
+  final ApiVideoAccessKind? videoAccessKind;
 
   @override
   String toString() =>
       'ApiFailure($category, $endpointId, '
-      'httpStatus: $httpStatus, businessCode: $businessCode)';
+      'httpStatus: $httpStatus, businessCode: $businessCode, '
+      'videoAccessKind: $videoAccessKind)';
 }
 
 final class ApiCancellation {
@@ -82,6 +88,7 @@ final class ApiVideoSummary {
     this.recommendationReason,
     this.recommendationFeedback,
     this.previewCid,
+    this.access = const ApiVideoAccess(),
   });
   final String bvid;
   final String title;
@@ -96,6 +103,7 @@ final class ApiVideoSummary {
   final String? recommendationReason;
   final ApiRecommendationFeedback? recommendationFeedback;
   final String? previewCid;
+  final ApiVideoAccess access;
 }
 
 final class ApiRecommendationFeedback {
@@ -246,6 +254,7 @@ final class ApiVideoDetail {
     this.collection,
     this.replyCount,
     this.staff = const [],
+    this.access = const ApiVideoAccess(),
   });
   final String aid;
   final String bvid;
@@ -265,6 +274,7 @@ final class ApiVideoDetail {
   final ApiVideoCollection? collection;
   final int? replyCount;
   final List<ApiVideoStaffMember> staff;
+  final ApiVideoAccess access;
 }
 
 final class ApiMediaTrack {

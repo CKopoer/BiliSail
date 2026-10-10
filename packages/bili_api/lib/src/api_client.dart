@@ -7,6 +7,7 @@ import 'dart:typed_data';
 
 import 'cookies.dart';
 import 'models.dart';
+import 'mappers/video_access_parser.dart';
 import 'transport.dart';
 import 'wbi.dart';
 
@@ -905,6 +906,7 @@ final class BiliApiClient {
       throw const ApiFailure(ApiFailureCategory.protocol, 'video_detail');
     }
     return ApiVideoDetail(
+      access: parseVideoAccess(data),
       aid: _id(data['aid'], 'video_detail'),
       bvid: _requiredString(data['bvid'], 'video_detail'),
       title: _requiredString(data['title'], 'video_detail'),
@@ -1051,31 +1053,46 @@ final class BiliApiClient {
             !RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(language))) {
       throw ArgumentError('Invalid play target');
     }
-    final data = await _wbiJson(
-      '/x/player/wbi/playurl',
-      {
-        'bvid': bvid,
-        'cid': cid,
-        'qn': '$qn',
-        'fnval': preview ? '2000' : '4048',
-        'fourk': '1',
-        if (!preview) ...{
-          'cur_language': language,
-          'cur_production_type': '$productionType',
-          'client_attr': '1',
+    late final Map<String, Object?> data;
+    try {
+      data = await _wbiJson(
+        '/x/player/wbi/playurl',
+        {
+          'bvid': bvid,
+          'cid': cid,
+          'qn': '$qn',
+          'fnval': preview ? '2000' : '4048',
+          'fourk': '1',
+          if (!preview) ...{
+            'cur_language': language,
+            'cur_production_type': '$productionType',
+            'client_attr': '1',
+          },
+          if (preview) ...{
+            'fnver': '0',
+            'from_client': 'BROWSER',
+            'need_fragment': 'false',
+          },
         },
-        if (preview) ...{
-          'fnver': '0',
-          'from_client': 'BROWSER',
-          'need_fragment': 'false',
-        },
-      },
-      'playurl',
-      context,
-    );
+        'playurl',
+        context,
+      );
+    } on ApiFailure catch (failure) {
+      if (failure.category != ApiFailureCategory.permission &&
+          failure.category != ApiFailureCategory.unavailable) {
+        rethrow;
+      }
+      throw await _videoPlaybackFailure(
+        bvid,
+        context,
+        originalFailure: failure,
+      );
+    }
     final dash = _optionalMap(data['dash']);
-    if (dash == null) {
-      throw const ApiFailure(ApiFailureCategory.unavailable, 'playurl');
+    if (dash == null ||
+        dash['video'] == null ||
+        !preview && dash['audio'] == null) {
+      throw await _videoPlaybackFailure(bvid, context);
     }
     final videos = _list(
       dash['video'],
@@ -1088,7 +1105,12 @@ final class BiliApiClient {
               .where((v) => v.codecs.toLowerCase().startsWith('mp4a'))
               .toList();
     if (videos.isEmpty || !preview && audios.isEmpty) {
-      throw const ApiFailure(ApiFailureCategory.unavailable, 'playurl');
+      throw await _videoPlaybackFailure(bvid, context);
+    }
+    // A trial must never be treated as the complete video by downloads,
+    // progress reporting or automatic queue advancement.
+    if (!preview && (data['is_preview'] == true || data['is_preview'] == 1)) {
+      throw await _videoPlaybackFailure(bvid, context, trial: true);
     }
     final dashSeconds = _num(dash['duration']);
     final durationMs = dashSeconds == null
@@ -1107,7 +1129,33 @@ final class BiliApiClient {
       voices: _playbackVoices(data['language']),
       currentLanguage: _string(data['cur_language']) ?? '',
       productionType: _int(data['cur_production_type']) ?? 0,
+      isPreview: data['is_preview'] == true || data['is_preview'] == 1,
     );
+  }
+
+  Future<ApiFailure> _videoPlaybackFailure(
+    String bvid,
+    ApiRequestContext? context, {
+    bool trial = false,
+    ApiFailure? originalFailure,
+  }) async {
+    // Only unsupported/blocked play responses need this extra read. Successful
+    // authorized DASH playback keeps its existing request count and behavior.
+    final access = (await getVideoDetail(bvid, context: context)).access;
+    if (trial ||
+        access.kind != ApiVideoAccessKind.normal && access.canWatch != true) {
+      return ApiFailure(
+        ApiFailureCategory.permission,
+        'playurl',
+        businessCode: originalFailure?.businessCode,
+        httpStatus: originalFailure?.httpStatus,
+        videoAccessKind: access.kind == ApiVideoAccessKind.normal
+            ? ApiVideoAccessKind.paid
+            : access.kind,
+      );
+    }
+    return originalFailure ??
+        const ApiFailure(ApiFailureCategory.unavailable, 'playurl');
   }
 
   Future<List<ApiSubtitleTrack>> getSubtitleTracks(
@@ -1665,6 +1713,7 @@ final class BiliApiClient {
         _parseDuration(_string(data['duration']) ?? '');
     final stat = _optionalMap(data['stat']);
     return ApiVideoSummary(
+      access: parseVideoAccess(data),
       bvid: _requiredString(data['bvid'], endpoint),
       previewCid: _userMid(data['cid']),
       title: _requiredString(

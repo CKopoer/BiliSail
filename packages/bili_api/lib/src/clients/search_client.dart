@@ -1,4 +1,5 @@
 import '../api_client.dart';
+import '../mappers/video_access_parser.dart';
 import '../models.dart';
 import '../models/search_models.dart';
 
@@ -280,6 +281,7 @@ final class SearchClient {
       }
     }
     return ApiVideoSummary(
+      access: parseVideoAccess(item),
       bvid: bvid,
       title: _requiredText(item['title']),
       coverUrl: _uri(item['pic']),

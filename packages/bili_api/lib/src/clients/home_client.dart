@@ -1,4 +1,5 @@
 import '../mappers/dynamic_post_parser.dart';
+import '../mappers/video_access_parser.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../models/home_models.dart';
@@ -174,6 +175,7 @@ final class HomeClient {
                   ? ApiHomeEntryKind.dynamic
                   : ApiHomeEntryKind.video,
               dynamicPost: post,
+              access: video?.access ?? const ApiVideoAccess(),
               coverUrl:
                   video?.coverUrl ??
                   post.imageUrls.firstOrNull ??
@@ -486,6 +488,7 @@ final class HomeClient {
     final stat = _optionalMap(m['cnt_info']) ?? _optionalMap(m['stat']);
     return ApiHomeEntry(
       id: bvid ?? 'aid:$aid',
+      access: parseVideoAccess(m),
       title: bvid == null
           ? _text(m['title']) ?? '已失效内容'
           : _required(m['title']),

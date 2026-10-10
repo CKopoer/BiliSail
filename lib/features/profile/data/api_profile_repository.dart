@@ -2,6 +2,8 @@ import '../../../shared/data/dynamic_post_mapper.dart';
 
 import 'package:bili_api/bili_api.dart';
 
+import '../../../shared/data/video_access_mapper.dart';
+
 import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
@@ -155,6 +157,7 @@ class ApiProfileRepository implements ProfileRepository {
           ? null
           : VideoSummary(
               id: VideoId(v.bvid),
+              access: mapVideoAccess(v.access),
               title: v.title,
               coverUrl: v.coverUrl?.toString() ?? '',
               author: v.ownerName,

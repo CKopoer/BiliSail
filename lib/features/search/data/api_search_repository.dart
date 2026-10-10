@@ -1,5 +1,7 @@
 import 'package:bili_api/bili_api.dart';
 
+import '../../../shared/data/video_access_mapper.dart';
+
 import '../../../core/network/api_requests.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
@@ -76,6 +78,7 @@ class ApiSearchRepository implements SearchRepository {
   };
   static VideoSummary _video(ApiVideoSummary v) => VideoSummary(
     id: VideoId(v.bvid),
+    access: mapVideoAccess(v.access),
     previewCid: v.previewCid,
     title: v.title,
     coverUrl: v.coverUrl?.toString() ?? '',

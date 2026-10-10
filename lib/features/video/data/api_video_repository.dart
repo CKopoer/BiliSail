@@ -2,6 +2,8 @@ import '../../../domain/user.dart';
 
 import 'package:bili_api/bili_api.dart';
 
+import '../../../shared/data/video_access_mapper.dart';
+
 import '../../../core/network/api_requests.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
@@ -66,6 +68,7 @@ class ApiVideoRepository implements VideoRepository {
       favoriteCount: detail.favoriteCount,
       summary: VideoSummary(
         id: VideoId(detail.bvid),
+        access: mapVideoAccess(detail.access),
         previewCid: detail.pages.firstOrNull?.cid,
         title: detail.title,
         coverUrl: detail.coverUrl?.toString() ?? '',

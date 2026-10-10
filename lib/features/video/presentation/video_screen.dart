@@ -25,6 +25,7 @@ import '../application/video_controller.dart';
 import '../application/video_extras_controller.dart';
 import 'video_comments_panel.dart';
 import 'video_tags_panel.dart';
+import 'video_access_notice.dart';
 import 'watch_later_queue_panel.dart';
 import '../domain/watch_later_queue.dart';
 import '../application/watch_later_queue_registry.dart';
@@ -337,6 +338,11 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
+                          if (video.summary.access.kind !=
+                              VideoAccessKind.normal) ...[
+                            VideoAccessNotice(video: video.summary),
+                            const SizedBox(height: 12),
+                          ],
                           if (widget.actionsBuilder != null)
                             widget.actionsBuilder!(context, video, selected),
                           if (_descriptionExpanded) ...[

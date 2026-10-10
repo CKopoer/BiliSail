@@ -1,4 +1,5 @@
 import '../../../shared/data/dynamic_post_mapper.dart';
+import '../../../shared/data/video_access_mapper.dart';
 
 import 'package:bili_api/bili_api.dart';
 
@@ -129,6 +130,7 @@ final class ApiHomeRepository
     bvid: item.bvid,
     aid: item.aid,
     previewCid: item.previewCid,
+    access: mapVideoAccess(item.access),
     url: item.url,
     authorName: item.authorName,
     authorAvatarUrl: item.authorAvatarUrl,

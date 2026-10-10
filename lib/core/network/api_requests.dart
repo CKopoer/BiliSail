@@ -94,9 +94,15 @@ AppFailure mapApiFailure(ApiFailure error) => switch (error.category) {
     AppFailureKind.authentication,
     '需要登录，或当前登录已失效',
   ),
-  ApiFailureCategory.permission => const AppFailure(
+  ApiFailureCategory.permission => AppFailure(
     AppFailureKind.permission,
-    '当前账号没有观看权限，或内容存在地区限制',
+    switch (error.videoAccessKind) {
+      ApiVideoAccessKind.chargingExclusive =>
+        '这是充电专属视频，当前账号未取得完整播放内容。请登录已开通对应充电档位的账号，或在哔哩哔哩官网开通后重试；试看请前往官网。',
+      ApiVideoAccessKind.paid =>
+        '这是付费视频，当前账号未取得完整播放内容。请登录已购买的账号，或在哔哩哔哩官网购买后重试；试看请前往官网。',
+      _ => '当前账号没有观看权限，或内容存在地区限制',
+    },
   ),
   ApiFailureCategory.rateLimited => const AppFailure(
     AppFailureKind.rateLimited,

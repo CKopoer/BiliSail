@@ -1,4 +1,6 @@
 import 'user.dart';
+import 'video_access.dart';
+export 'video_access.dart';
 
 final class VideoId {
   const VideoId(this.value);
@@ -32,6 +34,7 @@ final class VideoSummary {
     this.recommendationReason,
     this.recommendationFeedback,
     this.previewCid,
+    this.access = const VideoAccess(),
   });
 
   final VideoId id;
@@ -49,6 +52,7 @@ final class VideoSummary {
 
   /// Optional page ID already supplied by a list, avoiding a detail read.
   final String? previewCid;
+  final VideoAccess access;
 }
 
 /// Opaque recommendation context returned by the Web feed, kept in memory.
