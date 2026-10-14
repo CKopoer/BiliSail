@@ -193,7 +193,7 @@ jobs:
           MSIX_CERTIFICATE_PASSWORD: ${{ matrix.target == 'windows-x64' && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_PASSWORD || '' }}
         run: ./tool/build-release.ps1 -Target $env:BUILD_TARGET -Version $env:BUILD_VERSION -AndroidPreviewSigning:($env:ANDROID_PREVIEW_SIGNING -eq 'true')
       - name: Upload packages and checksums
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: BiliSail-${{ matrix.target }}-packages
           path: artifacts/${{ matrix.target }}/release/*
