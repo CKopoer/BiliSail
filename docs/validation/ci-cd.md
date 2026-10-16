@@ -310,3 +310,15 @@ Flutter 3.47.6 会将 Android 的 `--build-number 0` 归一化为 `1`（[固定 
 现在 CI 不再传入该变量，打包脚本不再接受覆盖，并通过 [身份校验](../../tool/windows-msix-identity.ps1) 检查源模板与实际 MSIX manifest 的三个身份字段及版本；实际读取的字段写入 `build-info.json` 的 `windowsMsixIdentity`。Windows 打包时通过系统 `PackageFamilyNameFromId` 从实际 Name 与 Publisher 派生 PFN，并与目标值比对，记录到 metadata；不向 manifest 添加虚构 PFN 字段。签名后校验包内 PKCS#7/CMS 的数学签名及签名证书与所选证书一致；该校验不声明系统信任链通过，也不修改证书信任区。回归覆盖旧变量隔离、错误 Publisher／Name／显示名／版本拒绝，并接入 `tool/check.ps1`。
 
 已配置签名证书仍须匹配固定 Publisher，不自动替换密钥、不降级签名；需要维护者在 Actions Secrets 安全更新 PFX 及对应密码。身份变化后的 MSIX 不应视为原错误 PFN 侧载包的直接升级。版本号、runFullTrust 与依赖不变；本修改不自动提交 Store，也不替换已有 Release 资产。
+
+## 2026-10-16：mux 与 Windows 安装工具缓存
+
+CI 在安装实际编译器后调用 `build-download-mux.ps1 -CacheKeyOnly`，用精确键恢复 `build/download_mux/cache`；不使用前缀回退，不缓存整个 build、FFmpeg object tree 或 Flutter/CMake 生成目录。键包含目标平台、FFmpeg 源码 SHA、native 源码/头文件/导出表/Info.plist、全部 mux shell 构建脚本与 PowerShell 入口、编译器/strip/make 版本、runner 镜像、NDK revision、Xcode/macOS SDK 版本及相关编译环境参数。构建参数在脚本内，脚本内容变化会失效。
+
+命中后逐一检查所需二进制、许可证、source.txt、configure.log 和 macOS framework 元数据的非空性及 SHA-256；缺失或损坏则删除该目标中间目录、重新解包固定源码并正常构建。只复制白名单文件，macOS 同时重新填充 CocoaPods framework。SHA 校验用于发现损坏，不替代 Actions 缓存的信任边界；沿用 GitHub PR ref 缓存隔离，不增加权限或向 PR 传递 secrets。即使命中，源码包仍下载并核验固定 SHA，继续生成对应源码分发包。
+
+Windows 使用独立的 `build/installer-downloads` 保存 NuGet package/HTTP 下载缓存，键含 OS、架构与 WiX 初始化脚本（含固定版本）。每轮重新安装当前主机工具 shim 并检查 WiX 版本，扩展仍按固定版本安装；安装失败只清理隔离下载目录与本轮 installer-work/tools，冷重试一次。证书、签名临时文件及安装包不进入缓存。`release.yml` 继续复用 CI，无需修改，未触发 Release 工作流。
+
+日志增加 mux configure/compile/link/总耗时，以及 Flutter 命令、Windows 安装工具准备、打包/签名/校验总耗时。Flutter build windows 仍包含 CMake、依赖、插件和 Dart 阶段，不能称为纯 C++ 编译时间。暂不增加 Windows C++ 编译缓存：尚未验证 Flutter 使用的 Visual Studio/MSBuild 路径与编译缓存工具的兼容性，不能通过缓存整个 build 目录跳过原生生成与链接。
+
+可执行回归入口为 `bash tool/test-mux-cache.sh`：在独立临时目录验证源码/参数失效、冷构建、热命中、损坏二进制及缺少配置文件后的重建。本次 Linux 验证耗时与 Windows hosted runner 不可直接比较；Windows 实际收益需由同一提交的 CI 冷/热运行确认。完整 `tool/check.ps1 -EnforceLockfile` 在本地通过五组 PowerShell 边界测试后因缺少 Flutter 停止；应用测试与 Windows/macOS 构建仍需 CI。

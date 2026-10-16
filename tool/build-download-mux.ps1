@@ -1,6 +1,7 @@
 param(
   [Parameter(Mandatory)][ValidateSet('windows-x64', 'android-arm64', 'macos-arm64', 'linux-x64')][string]$Target,
   [string]$MsysRoot = $(if ($env:BILI_MUX_MSYS_ROOT) { $env:BILI_MUX_MSYS_ROOT } else { 'C:\msys64' }),
+  [switch]$CacheKeyOnly,
   [string]$AndroidNdk
 )
 $ErrorActionPreference = 'Stop'
@@ -25,6 +26,7 @@ if ($Target -eq 'android-arm64') {
   }
   $env:ANDROID_NDK_HOME = [System.IO.Path]::GetFullPath($AndroidNdk)
 }
+[string[]]$extraArgs = if ($CacheKeyOnly) { @('--cache-key') } else { @() }
 if ($IsWindows) {
   $bash = Join-Path $MsysRoot 'usr/bin/bash.exe'
   if (!(Test-Path -LiteralPath $bash)) {
@@ -33,9 +35,9 @@ if ($IsWindows) {
   $cygpath = Join-Path $MsysRoot 'usr/bin/cygpath.exe'
   $scriptPath = & $cygpath -u $buildScript
   if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the build script path.' }
-  & $bash $scriptPath $Target
+  & $bash $scriptPath $Target @extraArgs
 } else {
-  & bash $buildScript $Target
+  & bash $buildScript $Target @extraArgs
 }
 if ($LASTEXITCODE -ne 0) {
   $buildDirectory = Join-Path $repoRoot "build/download_mux/$Target"

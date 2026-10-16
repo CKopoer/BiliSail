@@ -13,8 +13,15 @@ $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'macos-release-validation.ps1')
 
 function Invoke-BuildCommand([string]$Executable, [string[]]$Parameters) {
-  & $Executable @Parameters
-  if ($LASTEXITCODE -ne 0) { throw "$Executable failed: $LASTEXITCODE" }
+  $timer = [System.Diagnostics.Stopwatch]::StartNew()
+  # Log only the command/stage, never signing arguments or credentials.
+  $stage = if ($Executable -eq 'flutter') { "flutter $($Parameters[0]) $($Parameters[1])" } else { [System.IO.Path]::GetFileName($Executable) }
+  try {
+    & $Executable @Parameters
+    if ($LASTEXITCODE -ne 0) { throw "$Executable failed: $LASTEXITCODE" }
+  } finally {
+    Write-Host ("[timing] {0}: {1:F1}s" -f $stage, $timer.Elapsed.TotalSeconds)
+  }
 }
 
 function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [string]$Version, [string]$Wix, [string]$WorkingDirectory) {
@@ -216,8 +223,11 @@ try {
     'windows-x64' {
       $installerWork = Join-Path $outputRoot 'installer-work'
       New-Item -ItemType Directory -Path $installerWork | Out-Null
+      $toolsTimer = [System.Diagnostics.Stopwatch]::StartNew()
       $wix = Initialize-WindowsInstallerTools (Join-Path $installerWork 'tools')
+      Write-Host ('[timing] Windows installer tools: {0:F1}s' -f $toolsTimer.Elapsed.TotalSeconds)
       Invoke-BuildCommand flutter (@('build', 'windows') + $versionArgs)
+      $packagingTimer = [System.Diagnostics.Stopwatch]::StartNew()
       $staging = Join-Path $outputRoot $name
       Copy-Item -LiteralPath 'build/windows/x64/runner/Release' -Destination $staging -Recurse
       if (!(Test-Path -LiteralPath (Join-Path $staging 'bilisail.exe'))) { throw 'Windows executable is missing.' }
@@ -239,6 +249,7 @@ try {
       Copy-Item -Path 'windows/licenses/wix/*' -Destination $wixLicenseDir
       $package = Join-Path $releaseDir "$name.msix"
       $signing = New-SignedWindowsPackages $staging $package $Version $wix $installerWork
+      Write-Host ('[timing] Windows stage, MSI/MSIX/EXE, signing and validation: {0:F1}s' -f $packagingTimer.Elapsed.TotalSeconds)
     }
     'macos-arm64' {
       Invoke-BuildCommand flutter @('config', '--enable-macos-desktop', '--enable-macos-arm64-only')

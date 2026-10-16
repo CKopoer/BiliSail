@@ -177,6 +177,26 @@ jobs:
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358'
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+      - name: Fingerprint mux inputs and toolchain
+        id: mux-key
+        shell: pwsh
+        env:
+          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux.outputs.msys2-location }}
+          BUILD_TARGET: ${{ matrix.target }}
+        run: ./tool/build-download-mux.ps1 -Target $env:BUILD_TARGET -CacheKeyOnly >> $env:GITHUB_OUTPUT
+      - name: Restore verified mux outputs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: build/download_mux/cache
+          # No prefix fallback; PR caches stay in GitHub's PR ref scope.
+          key: ${{ steps.mux-key.outputs.key }}
+      - name: Cache Windows installer downloads
+        if: matrix.target == 'windows-x64'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          # Reinstall/validate the pinned tools on every run; cache no signing data.
+          path: build/installer-downloads
+          key: wix-nuget-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tool/windows-installers.ps1') }}
       - name: Build and package preview
         shell: pwsh
         env:
@@ -220,6 +240,10 @@ jobs:
         shell: bash
         run: |
           bash packages/bili_mux/tool/build.sh linux-x64
+          # Exercise the PowerShell key-only boundary and a verified local hit.
+          test "$(bash packages/bili_mux/tool/build.sh linux-x64 --cache-key)" = "$(pwsh -NoProfile -File tool/build-download-mux.ps1 -Target linux-x64 -CacheKeyOnly)"
+          bash packages/bili_mux/tool/build.sh linux-x64 | tee /tmp/mux-cache-hit.log
+          grep -q 'mux verified hit' /tmp/mux-cache-hit.log
           bash packages/bili_mux/tool/build-test-ffprobe.sh
           export BILI_MUX_LIBRARY="$PWD/packages/bili_mux/native/prebuilt/linux-x64/libbili_mux.so"
           export BILI_MUX_FFPROBE="$PWD/build/download_mux/test-ffprobe-linux-x64/ffprobe"

@@ -14,23 +14,6 @@ repo_dir="$(cd "$package_dir/../.." && pwd)"
 cache="$repo_dir/build/download_mux"
 version=n9.0.2
 archive_sha=6e374ed621e48faa40639307dff48ba6fe574a509977956d2cce9669b7cc27e9
-mkdir -p "$cache/source" "$cache/$target" "$package_dir/native/prebuilt/$target"
-archive="$cache/$version.tar.gz"
-if [[ ! -f "$archive" ]]; then
-  curl --fail --location --retry 3 --connect-timeout 30 --max-time 600 \
-    "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/$version" \
-    --output "$archive.tmp"
-  mv "$archive.tmp" "$archive"
-fi
-if command -v sha256sum >/dev/null; then
-  actual_sha="$(sha256sum "$archive" | cut -d ' ' -f 1)"
-else
-  actual_sha="$(shasum -a 256 "$archive" | cut -d ' ' -f 1)"
-fi
-[[ "$actual_sha" == "$archive_sha" ]] || { echo 'FFmpeg source hash mismatch' >&2; exit 1; }
-if [[ ! -f "$cache/source/configure" ]]; then
-  tar -xf "$archive" -C "$cache/source" --strip-components=1
-fi
 
 cc=cc
 cxx=c++
@@ -98,6 +81,90 @@ case "$target" in
   *) echo "Unsupported target: $target" >&2; exit 1 ;;
 esac
 
+
+# Cache only relocatable final outputs. Never restore CMake/FFmpeg object trees.
+hash_file() {
+  if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d ' ' -f 1
+  else shasum -a 256 "$1" | cut -d ' ' -f 1; fi
+}
+fingerprint() {
+  printf '%s\n' "$target" "$archive_sha" "${ImageOS:-}" "${ImageVersion:-}" "$(uname -sm)"
+  for file in "$package_dir"/native/* "$package_dir"/tool/*.sh "$repo_dir/tool/build-download-mux.ps1"; do
+    [[ ! -f "$file" ]] || hash_file "$file"
+  done
+  "$cc" --version
+  "$cxx" --version
+  "$strip_tool" --version 2>/dev/null || true
+  "$make_tool" --version
+  if [[ "$target" == android-arm64 ]]; then cat "$ndk/source.properties"; fi
+  if [[ "$target" == macos-arm64 ]]; then xcodebuild -version; xcrun --sdk macosx --show-sdk-version; fi
+  printf '%s\n' "${CFLAGS:-}" "${CXXFLAGS:-}" "${LDFLAGS:-}" "${SDKROOT:-}" "${MACOSX_DEPLOYMENT_TARGET:-}"
+}
+key_file="$(mktemp)"
+fingerprint > "$key_file"
+cache_key="$(hash_file "$key_file")"
+rm -f "$key_file"
+if [[ "${2:-}" == --cache-key ]]; then
+  echo "key=mux-v1-$target-$cache_key"
+  exit 0
+fi
+SECONDS=0
+trap 'echo "[timing] mux total: ${SECONDS}s"' EXIT
+
+mkdir -p "$cache/source" "$cache/$target" "$package_dir/native/prebuilt/$target"
+archive="$cache/$version.tar.gz"
+if [[ ! -f "$archive" ]]; then
+  curl --fail --location --retry 3 --connect-timeout 30 --max-time 600 \
+    "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/$version" \
+    --output "$archive.tmp"
+  mv "$archive.tmp" "$archive"
+fi
+if command -v sha256sum >/dev/null; then
+  actual_sha="$(sha256sum "$archive" | cut -d ' ' -f 1)"
+else
+  actual_sha="$(shasum -a 256 "$archive" | cut -d ' ' -f 1)"
+fi
+[[ "$actual_sha" == "$archive_sha" ]] || { echo 'FFmpeg source hash mismatch' >&2; exit 1; }
+
+
+
+output_dir="$package_dir/native/prebuilt/$target"
+entry="$cache/cache/$target/$cache_key"
+required=(configure.log COPYING.LGPLv2.1 source.txt)
+if [[ "$target" == macos-arm64 ]]; then
+  required+=(BiliMux.framework/BiliMux BiliMux.framework/Info.plist)
+else
+  required+=("$output_name")
+fi
+if [[ "$target" == windows-x64 ]]; then
+  required+=(bili_mux.LGPL.txt bili_mux.source.txt bili_mux.configuration.txt)
+fi
+valid=true
+for file in "${required[@]}"; do
+  if [[ ! -s "$entry/$file" || ! -f "$entry/$file.sha256" ]] ||
+     [[ "$(hash_file "$entry/$file")" != "$(cat "$entry/$file.sha256")" ]]; then valid=false; break; fi
+done
+if $valid; then
+  echo "[cache] mux verified hit: $cache_key"
+  for file in "${required[@]}"; do
+    mkdir -p "$output_dir/$(dirname "$file")"
+    cp "$entry/$file" "$output_dir/$file"
+  done
+  if [[ "$target" == macos-arm64 ]]; then
+    pod_framework="$package_dir/macos/Frameworks/BiliMux.framework"
+    mkdir -p "$pod_framework/Resources"
+    cp "$output_dir/BiliMux.framework/"* "$pod_framework/"
+    cp "$output_dir/"{COPYING.LGPLv2.1,source.txt,configure.log} "$pod_framework/Resources/"
+  fi
+  exit 0
+fi
+echo "[cache] mux miss or invalid entry: $cache_key; rebuilding"
+# A changed fingerprint must not reuse stale configure/object/source files.
+rm -rf "$cache/$target" "$cache/source"
+mkdir -p "$cache/$target" "$cache/source"
+tar -xf "$archive" -C "$cache/source" --strip-components=1
+stage_start=$SECONDS
+
 cd "$cache/$target"
 # Library-only build: no ffmpeg command-line front end or filter/resample libs.
 "$cache/source/configure" \
@@ -110,8 +177,12 @@ cd "$cache/$target"
   --enable-bsf=aac_adtstoasc,extract_extradata \
   --extra-cflags='-Os -fvisibility=hidden -ffunction-sections -fdata-sections' \
   "${configure_flags[@]}" > configure.log 2>&1
+echo "[timing] mux configure: $((SECONDS-stage_start))s"
+stage_start=$SECONDS
 "$make_tool" -j"${BILI_MUX_JOBS:-4}" > build.log 2>&1
 
+echo "[timing] mux compile: $((SECONDS-stage_start))s"
+stage_start=$SECONDS
 gc_flag=-Wl,--gc-sections
 shared_flag=-shared
 if [[ "$target" == macos-arm64 ]]; then gc_flag=-Wl,-dead_strip; shared_flag=-dynamiclib; fi
@@ -151,3 +222,13 @@ if [[ "$target" == macos-arm64 ]]; then
   cp "$package_dir/native/prebuilt/$target/configure.log" "$pod_framework/Resources/"
 fi
 echo "Built $target: $output_name"
+
+echo "[timing] mux link and stage: $((SECONDS-stage_start))s"
+rm -rf "$entry"
+mkdir -p "$entry"
+for file in "${required[@]}"; do
+  [[ -s "$output_dir/$file" ]] || { echo "Missing mux output: $file" >&2; exit 1; }
+  mkdir -p "$entry/$(dirname "$file")"
+  cp "$output_dir/$file" "$entry/$file"
+  hash_file "$entry/$file" > "$entry/$file.sha256"
+done
