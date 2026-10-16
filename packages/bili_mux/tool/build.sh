@@ -96,8 +96,14 @@ fingerprint() {
   "$cxx" --version
   "$strip_tool" --version 2>/dev/null || true
   "$make_tool" --version
+  # MSYS runtime/CRT/header packages can change without a GCC version change.
+  if [[ "$target" == windows-x64 ]]; then /usr/bin/pacman -Q; fi
   if [[ "$target" == android-arm64 ]]; then cat "$ndk/source.properties"; fi
-  if [[ "$target" == macos-arm64 ]]; then xcodebuild -version; xcrun --sdk macosx --show-sdk-version; fi
+  if [[ "$target" == macos-arm64 ]]; then
+    xcodebuild -version
+    xcrun --sdk macosx --show-sdk-version
+    xcrun --sdk macosx --show-sdk-build-version
+  fi
   printf '%s\n' "${CFLAGS:-}" "${CXXFLAGS:-}" "${LDFLAGS:-}" "${SDKROOT:-}" "${MACOSX_DEPLOYMENT_TARGET:-}"
 }
 key_file="$(mktemp)"

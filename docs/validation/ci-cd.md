@@ -313,7 +313,7 @@ Flutter 3.47.6 会将 Android 的 `--build-number 0` 归一化为 `1`（[固定 
 
 ## 2026-10-16：mux 与 Windows 安装工具缓存
 
-CI 在安装实际编译器后调用 `build-download-mux.ps1 -CacheKeyOnly`，用精确键恢复 `build/download_mux/cache`；不使用前缀回退，不缓存整个 build、FFmpeg object tree 或 Flutter/CMake 生成目录。键包含目标平台、FFmpeg 源码 SHA、native 源码/头文件/导出表/Info.plist、全部 mux shell 构建脚本与 PowerShell 入口、编译器/strip/make 版本、runner 镜像、NDK revision、Xcode/macOS SDK 版本及相关编译环境参数。构建参数在脚本内，脚本内容变化会失效。
+CI 在安装实际编译器后调用 `build-download-mux.ps1 -CacheKeyOnly`，用精确键恢复 `build/download_mux/cache`；不使用前缀回退，不缓存整个 build、FFmpeg object tree 或 Flutter/CMake 生成目录。键包含目标平台、FFmpeg 源码 SHA、native 源码/头文件/导出表/Info.plist、全部 mux shell 构建脚本与 PowerShell 入口、编译器/strip/make 版本、MSYS2 包版本清单（含 CRT/头文件）、runner 镜像、NDK revision、Xcode/macOS SDK 版本与 build version及相关编译环境参数。构建参数在脚本内，脚本内容变化会失效。
 
 命中后逐一检查所需二进制、许可证、source.txt、configure.log 和 macOS framework 元数据的非空性及 SHA-256；缺失或损坏则删除该目标中间目录、重新解包固定源码并正常构建。只复制白名单文件，macOS 同时重新填充 CocoaPods framework。SHA 校验用于发现损坏，不替代 Actions 缓存的信任边界；沿用 GitHub PR ref 缓存隔离，不增加权限或向 PR 传递 secrets。即使命中，源码包仍下载并核验固定 SHA，继续生成对应源码分发包。
 
