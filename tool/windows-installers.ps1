@@ -22,6 +22,7 @@ function Invoke-WixCommand([string]$Wix, [string[]]$Parameters) {
 
 function Initialize-WindowsInstallerTools([string]$ToolsDirectory) {
   if (!$IsWindows) { throw 'Windows installers require a Windows host.' }
+  $wix = Join-Path $ToolsDirectory 'wix.exe'
   $oldTelemetry = $env:DOTNET_CLI_TELEMETRY_OPTOUT
   $oldPackages = $env:NUGET_PACKAGES
   $oldHttpCache = $env:NUGET_HTTP_CACHE_PATH
@@ -33,8 +34,15 @@ function Initialize-WindowsInstallerTools([string]$ToolsDirectory) {
     # Recreate executable shims on this host; NuGet validates downloaded packages.
     for ($attempt = 0; $attempt -lt 2; $attempt++) {
       & dotnet tool install wix --version $script:WindowsWixVersion --tool-path $ToolsDirectory --source https://api.nuget.org/v3/index.json | Out-Host
-      if ($LASTEXITCODE -eq 0) { break }
-      if ($attempt -eq 1) { throw 'Could not install the pinned WiX toolset after a cold retry.' }
+      $valid = $false
+      if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $wix -PathType Leaf)) {
+        try {
+          $actualVersion = & $wix --version
+          $valid = $LASTEXITCODE -eq 0 -and "$actualVersion" -match "^$([regex]::Escape($script:WindowsWixVersion))(?:\+|$)"
+        } catch { Write-Host '[cache] Restored WiX executable is unusable.' }
+      }
+      if ($valid) { break }
+      if ($attempt -eq 1) { throw 'Could not install and validate the pinned WiX toolset after a cold retry.' }
       Write-Host '[cache] WiX restore failed; clearing isolated downloads and retrying once.'
       if (Test-Path -LiteralPath $downloadCache) { Remove-Item -LiteralPath $downloadCache -Recurse -Force }
       if (Test-Path -LiteralPath $ToolsDirectory) { Remove-Item -LiteralPath $ToolsDirectory -Recurse -Force }
@@ -43,11 +51,6 @@ function Initialize-WindowsInstallerTools([string]$ToolsDirectory) {
     $env:DOTNET_CLI_TELEMETRY_OPTOUT = $oldTelemetry
     $env:NUGET_PACKAGES = $oldPackages
     $env:NUGET_HTTP_CACHE_PATH = $oldHttpCache
-  }
-  $wix = Join-Path $ToolsDirectory 'wix.exe'
-  $actualVersion = & $wix --version
-  if ($LASTEXITCODE -ne 0 -or "$actualVersion" -notmatch "^$([regex]::Escape($script:WindowsWixVersion))(?:\+|$)") {
-    throw 'Installed WiX version does not match the pinned version.'
   }
   foreach ($extension in @('WixToolset.BootstrapperApplications.wixext', 'WixToolset.UI.wixext', 'WixToolset.Util.wixext')) {
     Invoke-WixCommand $wix @('extension', 'add', '-g', "$extension/$script:WindowsWixVersion")

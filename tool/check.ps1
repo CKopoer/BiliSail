@@ -14,6 +14,7 @@ try {
   & (Join-Path $PSScriptRoot 'test-android-version.ps1')
   & (Join-Path $PSScriptRoot 'test-android-signing.ps1')
   & (Join-Path $PSScriptRoot 'test-windows-installers.ps1')
+  & (Join-Path $PSScriptRoot 'test-windows-installer-cache.ps1')
   & (Join-Path $PSScriptRoot 'test-windows-msix-identity.ps1')
   & (Join-Path $PSScriptRoot 'test-macos-release-validation.ps1')
   # A cold Windows SDK can emit pub bootstrap output before the machine JSON.
