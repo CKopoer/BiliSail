@@ -9,7 +9,11 @@ import '../../../domain/app_failure.dart';
 import '../domain/download_models.dart';
 
 final class DownloadFileStore {
-  const DownloadFileStore();
+  const DownloadFileStore({this.trustedDocumentsDirectory});
+
+  /// Android supplies its app-private documents directory, never a DB path.
+  /// Other platforms retain the strict filesystem-root boundary.
+  final Future<String?> Function()? trustedDocumentsDirectory;
 
   Future<String> createTaskDirectory(
     String rootPath,
@@ -19,21 +23,15 @@ final class DownloadFileStore {
     if (!RegExp(r'^[0-9a-f]{32}$').hasMatch(id)) {
       throw const AppFailure(AppFailureKind.storage, '下载任务标识无效');
     }
-    final root = Directory(p.normalize(p.absolute(rootPath)));
-    await root.create(recursive: true);
-    await _requireDirectoryChain(root.path);
+    final root = await _rootDirectory(rootPath, create: true);
     final scopeName = sha256
         .convert(utf8.encode(scope))
         .toString()
         .substring(0, 16);
     final scopeDirectory = Directory(p.join(root.path, scopeName));
-    await scopeDirectory.create(recursive: true);
-    if (await FileSystemEntity.type(scopeDirectory.path, followLinks: false) !=
-        FileSystemEntityType.directory) {
-      throw const AppFailure(AppFailureKind.storage, '下载目录不能是符号链接');
-    }
+    await _requireDirectory(scopeDirectory.path, create: true);
     final taskDirectory = Directory(p.join(scopeDirectory.path, id));
-    await taskDirectory.create();
+    await _requireDirectory(taskDirectory.path, create: true);
     await _atomicWrite(
       File(p.join(taskDirectory.path, '.bilisail-task')),
       utf8.encode(jsonEncode({'id': id, 'scope': scope})),
@@ -42,22 +40,21 @@ final class DownloadFileStore {
   }
 
   Future<Directory> ownedDirectory(DownloadTask task) async {
-    final directory = Directory(task.directory);
     final parent = p.dirname(p.normalize(task.directory));
     final expectedScope = sha256
         .convert(utf8.encode(task.scope))
         .toString()
         .substring(0, 16);
     if (!p.isAbsolute(task.directory) ||
+        p.split(task.directory).contains('..') ||
+        !RegExp(r'^[0-9a-f]{32}$').hasMatch(task.id) ||
         p.basename(p.normalize(task.directory)) != task.id ||
-        p.basename(parent) != expectedScope ||
-        await FileSystemEntity.type(parent, followLinks: false) !=
-            FileSystemEntityType.directory ||
-        await FileSystemEntity.type(task.directory, followLinks: false) !=
-            FileSystemEntityType.directory) {
+        p.basename(parent) != expectedScope) {
       throw const AppFailure(AppFailureKind.storage, '下载目录无效');
     }
-    await _requireDirectoryChain(directory.path);
+    final root = await _rootDirectory(p.dirname(parent));
+    final directory = Directory(p.join(root.path, expectedScope, task.id));
+    await _requireDirectoryChain(directory.path, boundary: root.path);
     final marker = File(p.join(directory.path, '.bilisail-task'));
     if (await FileSystemEntity.type(marker.path, followLinks: false) !=
         FileSystemEntityType.file) {
@@ -388,16 +385,84 @@ final class DownloadFileStore {
     () async => (await sha256.bind(File(path).openRead()).first).toString(),
   );
 
-  static Future<void> _requireDirectoryChain(String path) async {
-    var current = p.normalize(path);
-    while (true) {
-      if (await FileSystemEntity.type(current, followLinks: false) !=
-          FileSystemEntityType.directory) {
-        throw const AppFailure(AppFailureKind.storage, '下载路径不能穿过符号链接');
+  Future<Directory> _rootDirectory(String path, {bool create = false}) async {
+    if (!p.isAbsolute(path) || p.split(path).contains('..')) {
+      throw const AppFailure(AppFailureKind.storage, '下载目录无效');
+    }
+    var root = p.normalize(path);
+    final documents = await trustedDocumentsDirectory?.call();
+    String? boundary;
+    if (documents != null) {
+      // Only the established Android layout is accepted. Resolve the platform
+      // anchor (and an old spelling of that SAME anchor), never its children.
+      // This supports /data/user/... aliases without trusting arbitrary DB roots.
+      if (!p.isAbsolute(documents) ||
+          p.basename(root) != 'offline' ||
+          p.basename(p.dirname(root)) != 'BiliSail') {
+        throw const AppFailure(AppFailureKind.storage, '下载目录不在应用离线目录内');
       }
+      try {
+        boundary = await Directory(documents).resolveSymbolicLinks();
+        final recordedAnchor = await Directory(
+          p.dirname(p.dirname(root)),
+        ).resolveSymbolicLinks();
+        if (!p.equals(recordedAnchor, boundary)) {
+          throw const AppFailure(AppFailureKind.storage, '下载目录不在应用离线目录内');
+        }
+      } on FileSystemException {
+        throw const AppFailure(AppFailureKind.storage, '无法解析应用下载目录');
+      }
+      root = p.join(boundary, 'BiliSail', 'offline');
+    }
+    await _requireDirectoryChain(root, boundary: boundary, create: create);
+    return Directory(root);
+  }
+
+  static Future<void> _requireDirectoryChain(
+    String path, {
+    String? boundary,
+    bool create = false,
+  }) async {
+    final directories = <String>[];
+    var current = p.normalize(path);
+    if (boundary != null &&
+        !p.equals(current, boundary) &&
+        !p.isWithin(boundary, current)) {
+      throw const AppFailure(AppFailureKind.storage, '下载目录超出安全边界');
+    }
+    while (true) {
+      directories.add(current);
       final parent = p.dirname(current);
-      if (parent == current) return;
+      if (current == boundary || parent == current) break;
       current = parent;
     }
+    // Check each existing parent before creating anything below it.
+    for (final directory in directories.reversed) {
+      await _requireDirectory(directory, create: create);
+    }
+  }
+
+  static Future<void> _requireDirectory(
+    String path, {
+    bool create = false,
+  }) async {
+    var type = await FileSystemEntity.type(path, followLinks: false);
+    if (type == FileSystemEntityType.notFound && create) {
+      try {
+        await Directory(path).create();
+      } on FileSystemException {
+        throw const AppFailure(AppFailureKind.storage, '无法访问或创建下载目录');
+      }
+      type = await FileSystemEntity.type(path, followLinks: false);
+    }
+    if (type == FileSystemEntityType.directory) return;
+    if (type == FileSystemEntityType.link) {
+      throw const AppFailure(AppFailureKind.storage, '下载路径不能穿过符号链接');
+    }
+    if (type == FileSystemEntityType.notFound) {
+      // Dart also returns notFound for lookup errors (including access denial).
+      throw const AppFailure(AppFailureKind.storage, '下载目录不存在或无法访问');
+    }
+    throw const AppFailure(AppFailureKind.storage, '下载路径包含非目录节点');
   }
 }

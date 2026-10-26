@@ -12,6 +12,13 @@ final class FileAccessService {
   bool get canChooseDownloadDirectory => canOpenDirectory;
   bool get pauseDownloadsInBackground => Platform.isAndroid || Platform.isIOS;
 
+  /// Only Android's platform-owned anchor may have system ancestors that the
+  /// app cannot inspect. Download children must still be checked without links.
+  Future<String?> trustedDownloadDocumentsDirectory() async =>
+      Platform.isAndroid
+      ? (await getApplicationDocumentsDirectory()).path
+      : null;
+
   Future<String> defaultDownloadDirectory() async {
     // Flatpak exposes XDG_DATA_HOME as persistent app-owned storage. The host's
     // Documents path may be outside the sandbox, even when it can be discovered.

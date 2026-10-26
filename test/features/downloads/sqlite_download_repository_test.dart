@@ -7,6 +7,7 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/downloads/data/sqlite_download_repository.dart';
+import 'package:bilisail/features/downloads/data/download_file_store.dart';
 import 'package:bilisail/features/downloads/domain/download_repository.dart';
 import 'package:bilisail/features/downloads/domain/download_muxer.dart';
 import 'package:drift/native.dart';
@@ -27,12 +28,17 @@ void main() {
   Future<void> Function(HttpResponse)? streamVideo;
   final media = List<int>.generate(2048, (index) => index % 256);
 
-  Future<void> openRepository({DateTime Function()? clock}) async {
+  Future<void> openRepository({
+    DateTime Function()? clock,
+    DownloadFileStore? files,
+    String? directory,
+  }) async {
     db = AppDatabase(NativeDatabase(databaseFile));
     repository = SqliteDownloadRepository(
       db,
       sources,
-      defaultDirectory: () async => root.path,
+      defaultDirectory: () async => directory ?? root.path,
+      files: files,
       muxer: muxer,
       clock: clock,
     );
@@ -118,6 +124,57 @@ void main() {
     expect(record.read<String>('record_json').contains('http'), isFalse);
     expect((await repository.offlineTask(task.id)).id, task.id);
   });
+
+  test(
+    'Android anchor supports legacy records through resume, offline and delete',
+    () async {
+      await repository.close();
+      await db.close();
+      final documents = await Directory('${root.path}/app_flutter').create();
+      final alias = await Link(
+        '${root.path}/system_alias',
+      ).create(documents.path);
+      final files = DownloadFileStore(
+        trustedDocumentsDirectory: () async => documents.path,
+      );
+      final downloadRoot = '${documents.path}/BiliSail/offline';
+      await openRepository(files: files, directory: downloadRoot);
+      slow = true;
+      await repository.enqueue([item], const DownloadSelection());
+      await _waitFor(repository, DownloadStatus.downloading);
+      final id = repository.current.tasks.single.id;
+      final directory = repository.current.tasks.single.directory;
+      await repository.close();
+      final row = await db
+          .customSelect('SELECT record_json FROM download_tasks')
+          .getSingle();
+      final record =
+          jsonDecode(row.read<String>('record_json')) as Map<String, dynamic>;
+      final legacyPath = directory.replaceFirst(
+        await documents.resolveSymbolicLinks(),
+        alias.path,
+      );
+      record['directory'] = legacyPath;
+      await db.customStatement('UPDATE download_tasks SET record_json = ?', [
+        jsonEncode(record),
+      ]);
+      await db.close();
+      await openRepository(files: files, directory: downloadRoot);
+      expect(repository.current.tasks.single.status, DownloadStatus.paused);
+      expect(repository.current.tasks.single.directory, legacyPath);
+      slow = false;
+      await repository.resume(id);
+      await _waitFor(repository, DownloadStatus.completed);
+      expect((await repository.offlineTask(id)).directory, legacyPath);
+      expect(await File('$directory/video.m4s').length(), media.length);
+      await repository.remove(id, deleteFiles: true);
+      expect(await Directory(directory).exists(), isFalse);
+      expect(await Link(alias.path).exists(), isTrue);
+    },
+    skip: Platform.isWindows
+        ? 'Creating Windows symlinks requires additional privileges.'
+        : false,
+  );
 
   test(
     'reopening verifies completed files and rejects damaged media',
@@ -421,8 +478,9 @@ void main() {
             task.mergedMedia?.sha256,
           );
           expect(repository.current.tasks.single.selection.output, output);
-          await File('${task.directory}/${output.fileName}')
-              .writeAsBytes(List.filled(media.length * 2, 0));
+          await File(
+            '${task.directory}/${output.fileName}',
+          ).writeAsBytes(List.filled(media.length * 2, 0));
           await expectLater(
             repository.offlineTask(task.id),
             throwsA(isA<AppFailure>()),
@@ -430,33 +488,36 @@ void main() {
         },
       );
 
-      test('merge failure preserves originals and retry needs no new source request', () async {
-        final native = (await useMuxer())..failNext = true;
-        await repository.enqueue([item], mergedSelection);
-        final failure = await repository.changes.firstWhere(
-          (state) =>
-              state.tasks.any((task) => task.status == DownloadStatus.failed),
-        );
-        final task = failure.tasks.single;
-        expect(
-          await File('${task.directory}/video.m4s').length(),
-          media.length,
-        );
-        expect(
-          await File('${task.directory}/audio.m4s').length(),
-          media.length,
-        );
-        expect(
-          await File('${task.directory}/${output.fileName}.part').exists(),
-          isFalse,
-        );
-        final resolves = sources.resolveCalls;
-        await repository.resume(task.id);
-        await _waitFor(repository, DownloadStatus.completed);
-        expect(native.calls, 2);
-        expect(sources.resolveCalls, resolves);
-        expect(videoRequests, 1);
-      });
+      test(
+        'merge failure preserves originals and retry needs no new source request',
+        () async {
+          final native = (await useMuxer())..failNext = true;
+          await repository.enqueue([item], mergedSelection);
+          final failure = await repository.changes.firstWhere(
+            (state) =>
+                state.tasks.any((task) => task.status == DownloadStatus.failed),
+          );
+          final task = failure.tasks.single;
+          expect(
+            await File('${task.directory}/video.m4s').length(),
+            media.length,
+          );
+          expect(
+            await File('${task.directory}/audio.m4s').length(),
+            media.length,
+          );
+          expect(
+            await File('${task.directory}/${output.fileName}.part').exists(),
+            isFalse,
+          );
+          final resolves = sources.resolveCalls;
+          await repository.resume(task.id);
+          await _waitFor(repository, DownloadStatus.completed);
+          expect(native.calls, 2);
+          expect(sources.resolveCalls, resolves);
+          expect(videoRequests, 1);
+        },
+      );
 
       test(
         'pause during merge waits for cancellation and removes partial output',
@@ -517,9 +578,9 @@ void main() {
           final row = await db
               .customSelect('SELECT record_json FROM download_tasks')
               .getSingle();
-          final record = jsonDecode(
-            row.read<String>('record_json'),
-          ) as Map<String, Object?>;
+          final record =
+              jsonDecode(row.read<String>('record_json'))
+                  as Map<String, Object?>;
           record['status'] = 'muxing';
           await db.customStatement(
             'UPDATE download_tasks SET record_json = ?',
@@ -546,9 +607,9 @@ void main() {
           final row = await db
               .customSelect('SELECT record_json FROM download_tasks')
               .getSingle();
-          final record = jsonDecode(
-            row.read<String>('record_json'),
-          ) as Map<String, Object?>;
+          final record =
+              jsonDecode(row.read<String>('record_json'))
+                  as Map<String, Object?>;
           record['status'] = 'muxing';
           await db.customStatement(
             'UPDATE download_tasks SET record_json = ?',
@@ -565,56 +626,65 @@ void main() {
         },
       );
 
-      test('legacy v1 record keeps separate output and unavailable mux refuses MP4', () async {
-        await expectLater(
-          repository.enqueue([item], mergedSelection),
-          throwsA(isA<AppFailure>()),
-        );
-        expect(repository.current.tasks, isEmpty);
-        await repository.enqueue([item], const DownloadSelection());
-        await _waitFor(repository, DownloadStatus.completed);
-        await repository.close();
-        final row = await db
-            .customSelect('SELECT record_json FROM download_tasks')
-            .getSingle();
-        final record =
-            jsonDecode(row.read<String>('record_json')) as Map<String, Object?>;
-        record['version'] = 1;
-        (record['selection'] as Map<String, Object?>).remove('output');
-        await db.customStatement('UPDATE download_tasks SET record_json = ?', [
-          jsonEncode(record),
-        ]);
-        await db.close();
-        await openRepository();
-        final task = repository.current.tasks.single;
-        expect(task.selection.output, DownloadOutput.separate);
-        expect(
-          (await repository.offlineTask(task.id)).status,
-          DownloadStatus.completed,
-        );
-      });
+      test(
+        'legacy v1 record keeps separate output and unavailable mux refuses MP4',
+        () async {
+          await expectLater(
+            repository.enqueue([item], mergedSelection),
+            throwsA(isA<AppFailure>()),
+          );
+          expect(repository.current.tasks, isEmpty);
+          await repository.enqueue([item], const DownloadSelection());
+          await _waitFor(repository, DownloadStatus.completed);
+          await repository.close();
+          final row = await db
+              .customSelect('SELECT record_json FROM download_tasks')
+              .getSingle();
+          final record =
+              jsonDecode(row.read<String>('record_json'))
+                  as Map<String, Object?>;
+          record['version'] = 1;
+          (record['selection'] as Map<String, Object?>).remove('output');
+          await db.customStatement(
+            'UPDATE download_tasks SET record_json = ?',
+            [jsonEncode(record)],
+          );
+          await db.close();
+          await openRepository();
+          final task = repository.current.tasks.single;
+          expect(task.selection.output, DownloadOutput.separate);
+          expect(
+            (await repository.offlineTask(task.id)).status,
+            DownloadStatus.completed,
+          );
+        },
+      );
 
-      test('startup cleanup keeps source backups if merged output has been damaged', () async {
-        await useMuxer();
-        await repository.enqueue([item], mergedSelection);
-        await _waitFor(repository, DownloadStatus.completed);
-        await repository.close();
-        final task = repository.current.tasks.single;
-        await File('${task.directory}/video.m4s').writeAsBytes(media);
-        await File('${task.directory}/audio.m4s').writeAsBytes(media);
-        await File('${task.directory}/${output.fileName}')
-            .writeAsBytes(List.filled(media.length * 2, 0));
-        await db.close();
-        await openRepository();
-        expect(await File('${task.directory}/video.m4s').exists(), isTrue);
-        expect(await File('${task.directory}/audio.m4s').exists(), isTrue);
-        await expectLater(
-          repository.offlineTask(task.id),
-          throwsA(isA<AppFailure>()),
-        );
-        await repository.resume(task.id);
-        await _waitFor(repository, DownloadStatus.completed);
-      });
+      test(
+        'startup cleanup keeps source backups if merged output has been damaged',
+        () async {
+          await useMuxer();
+          await repository.enqueue([item], mergedSelection);
+          await _waitFor(repository, DownloadStatus.completed);
+          await repository.close();
+          final task = repository.current.tasks.single;
+          await File('${task.directory}/video.m4s').writeAsBytes(media);
+          await File('${task.directory}/audio.m4s').writeAsBytes(media);
+          await File(
+            '${task.directory}/${output.fileName}',
+          ).writeAsBytes(List.filled(media.length * 2, 0));
+          await db.close();
+          await openRepository();
+          expect(await File('${task.directory}/video.m4s').exists(), isTrue);
+          expect(await File('${task.directory}/audio.m4s').exists(), isTrue);
+          await expectLater(
+            repository.offlineTask(task.id),
+            throwsA(isA<AppFailure>()),
+          );
+          await repository.resume(task.id);
+          await _waitFor(repository, DownloadStatus.completed);
+        },
+      );
 
       test(
         'separate and merged versions have distinct queue identities',
