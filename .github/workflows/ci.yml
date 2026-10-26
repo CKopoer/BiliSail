@@ -323,6 +323,15 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           pod --version
+      - name: Compare original and processed iOS framework metadata
+        if: matrix.target == 'ios-arm64'
+        shell: bash
+        run: |
+          # Pinned historical regression input; the validator checks its SHA-256.
+          curl --fail --location --retry 3 --max-time 120 \
+            'https://github.com/CKopoer/BiliSail/releases/download/v1.2.1%2B4/BiliSail-1.2.1%2B4-ios-arm64-unsigned.ipa' \
+            --output "$RUNNER_TEMP/bilisail-legacy.ipa"
+          python3 tool/ios-package-validation.py "$RUNNER_TEMP/bilisail-legacy.ipa" --compare-legacy
       - name: Build and package preview
         shell: pwsh
         env:

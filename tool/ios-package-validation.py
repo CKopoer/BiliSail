@@ -163,9 +163,52 @@ def validate_ipa(path, signing_probe=False):
         print(f"IPA structure validated: {count} Mach-O files; device re-signing remains unverified")
 
 
+def compare_legacy(path):
+    """A/B the exact released binary, without altering the downloaded IPA."""
+    require(hashlib.sha256(path.read_bytes()).hexdigest() ==
+            "e7e1ece6f97a73e406824046873361842500d465f355055cffe6d0f9686f056a",
+            "Legacy IPA checksum mismatch")
+    prefix = "Payload/Runner.app/Frameworks/BiliMux.framework/"
+    with zipfile.ZipFile(path) as archive, tempfile.TemporaryDirectory() as work:
+        original = archive.read(prefix + "BiliMux")
+        original_info = archive.read(prefix + "Info.plist")
+        for label in ("original-xml", "processed-binary"):
+            bundle = Path(work) / label / "BiliMux.framework"
+            bundle.mkdir(parents=True)
+            for name in archive.namelist():
+                if not name.startswith(prefix) or name.endswith("/"):
+                    continue
+                relative = PurePosixPath(name[len(prefix):])
+                require(".." not in relative.parts, "Unsafe legacy ZIP path")
+                target = bundle / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(archive.read(name))
+            require((bundle / "BiliMux").read_bytes() == original, "A/B binary differs")
+            (bundle / "BiliMux").chmod(0o755)
+            info_path = bundle / "Info.plist"
+            if label == "processed-binary":
+                metadata = plistlib.loads(original_info)
+                metadata["CFBundleInfoDictionaryVersion"] = "6.0"
+                info_path.write_bytes(plistlib.dumps(metadata))
+                subprocess.run(["plutil", "-convert", "binary1", str(info_path)], check=True)
+            info = info_path.read_bytes()
+            subprocess.run(["codesign", "--force", "--sign", "-", "--timestamp=none", str(bundle)], check=True)
+            subprocess.run(["codesign", "--verify", "--strict", "--verbose=2", str(bundle)], check=True)
+            require(info_path.read_bytes() == info, "Signing changed plist bytes")
+            for data in slices((bundle / "BiliMux").read_bytes()):
+                signature, _ = inspect_macho(data)
+                verify_info_slot(signature, info)
+            print(f"Legacy BiliMux A/B: {label} Apple ad-hoc and Info.plist slot -1 PASS", flush=True)
+    print("Apple A/B does not reproduce or certify third-party signer behavior", flush=True)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("ipa", type=Path)
     parser.add_argument("--signing-probe", action="store_true")
+    parser.add_argument("--compare-legacy", action="store_true")
     args = parser.parse_args()
-    validate_ipa(args.ipa, args.signing_probe)
+    if args.compare_legacy:
+        compare_legacy(args.ipa)
+    else:
+        validate_ipa(args.ipa, args.signing_probe)
