@@ -141,13 +141,7 @@ fi
   > link.log 2>&1
 
 framework_info="$package_dir/native/Info.plist"
-if [[ "$target" == ios-arm64 ]]; then
-  # Match Xcode's processed framework plist, rather than shipping handwritten XML.
-  # Use these exact bytes in both copies before CocoaPods embeds the framework.
-  framework_info="$cache/$target/Info.plist"
-  plutil -convert binary1 -o "$framework_info" "$package_dir/native/Info.ios.plist"
-  plutil -lint "$framework_info"
-fi
+if [[ "$target" == ios-arm64 ]]; then framework_info="$package_dir/native/Info.ios.plist"; fi
 if [[ "$target" == macos-arm64 || "$target" == ios-arm64 ]]; then
   "$strip_tool" -x "$output_name"
   framework="$package_dir/native/prebuilt/$target/BiliMux.framework"
@@ -170,11 +164,22 @@ if [[ "$target" == macos-arm64 || "$target" == ios-arm64 ]]; then
   apple_platform=macos
   if [[ "$target" == ios-arm64 ]]; then apple_platform=ios; fi
   pod_framework="$package_dir/$apple_platform/Frameworks/BiliMux.framework"
-  mkdir -p "$pod_framework/Resources"
+  pod_resources="$pod_framework/Resources"
+  if [[ "$target" == ios-arm64 ]]; then
+    # iOS frameworks are flat. A reserved Resources/ directory makes CFBundle
+    # look for Resources/Info.plist and ignore our root Info.plist when signing.
+    pod_resources="$pod_framework"
+    if [[ -d "$pod_framework/Resources" ]]; then
+      rm -f "$pod_framework/Resources/COPYING.LGPLv2.1" \
+        "$pod_framework/Resources/source.txt" "$pod_framework/Resources/configure.log"
+      rmdir "$pod_framework/Resources"
+    fi
+  fi
+  mkdir -p "$pod_resources"
   cp "$output_name" "$pod_framework/BiliMux"
   cp "$framework_info" "$pod_framework/Info.plist"
-  cp "$package_dir/native/prebuilt/$target/COPYING.LGPLv2.1" "$pod_framework/Resources/"
-  cp "$package_dir/native/prebuilt/$target/source.txt" "$pod_framework/Resources/"
-  cp "$package_dir/native/prebuilt/$target/configure.log" "$pod_framework/Resources/"
+  cp "$package_dir/native/prebuilt/$target/COPYING.LGPLv2.1" "$pod_resources/"
+  cp "$package_dir/native/prebuilt/$target/source.txt" "$pod_resources/"
+  cp "$package_dir/native/prebuilt/$target/configure.log" "$pod_resources/"
 fi
 echo "Built $target: $output_name"

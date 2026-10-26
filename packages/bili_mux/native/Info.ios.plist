@@ -3,7 +3,6 @@
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>BiliMux</string>
 <key>CFBundleIdentifier</key><string>dev.bilisail.mux</string>
-<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>BiliMux</string>
 <key>CFBundlePackageType</key><string>FMWK</string>
 <key>CFBundleShortVersionString</key><string>0.1.0</string>

@@ -323,7 +323,7 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           pod --version
-      - name: Compare original and processed iOS framework metadata
+      - name: Reproduce legacy iOS framework layout and verify flat layout
         if: matrix.target == 'ios-arm64'
         shell: bash
         run: |

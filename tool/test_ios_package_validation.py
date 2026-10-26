@@ -70,22 +70,30 @@ class IosValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Missing signature"):
             validation.verify_info_slot(None, b"plist")
 
-    def test_package_processed_plist_and_all_nested_platforms(self):
+    def test_empty_info_slot_rejected(self):
+        blob = signature(b"plist")[:-32] + bytes(32)
+        with self.assertRaisesRegex(ValueError, "empty.*not bound"):
+            validation.verify_info_slot(blob, b"plist")
+
+    def test_package_flat_layout_and_all_nested_platforms(self):
         root = "Payload/Runner.app/"
         framework = root + "Frameworks/BiliMux.framework/"
         info = plistlib.loads((Path(__file__).parents[1] /
                               "packages/bili_mux/native/Info.ios.plist").read_bytes())
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "test.ipa"
-            for fmt, platform, error in [(plistlib.FMT_BINARY, 2, None),
-                                         (plistlib.FMT_XML, 2, "processed binary"),
-                                         (plistlib.FMT_BINARY, 7, "iPhoneOS")]:
+            for fmt, platform, resources, error in [(plistlib.FMT_BINARY, 2, False, None),
+                                                    (plistlib.FMT_XML, 2, False, None),
+                                                    (plistlib.FMT_XML, 2, True, "reserved Resources"),
+                                                    (plistlib.FMT_BINARY, 7, False, "iPhoneOS")]:
                 with zipfile.ZipFile(path, "w") as archive:
                     archive.writestr(root + "Info.plist", plistlib.dumps({
                         "CFBundleIdentifier": "dev.bilisail.bilisail", "MinimumOSVersion": "15.0"}))
                     archive.writestr(root + "Runner", macho())
                     archive.writestr(framework + "Info.plist", plistlib.dumps(info, fmt=fmt))
                     archive.writestr(framework + "BiliMux", macho())
+                    if resources:
+                        archive.writestr(framework + "Resources/source.txt", "license metadata")
                     archive.writestr(root + "Frameworks/Nested.dylib", macho(platform))
                 if error:
                     with self.assertRaisesRegex(ValueError, error):

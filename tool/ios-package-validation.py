@@ -97,7 +97,9 @@ def verify_info_slot(signature, info):
         digest = hashlib.new(algorithms[hash_type], info).digest()
         expected_size = 20 if hash_type == 3 else len(digest)
         require(hash_size == expected_size, "Invalid signature hash size")
-        require(cd[hashes - hash_size:hashes] == digest[:hash_size],
+        actual = cd[hashes - hash_size:hashes]
+        require(any(actual), "Info.plist slot -1 is empty (not bound)")
+        require(actual == digest[:hash_size],
                 "Info.plist hash mismatch in CodeDirectory slot -1")
         checked += 1
     require(checked > 0, "No CodeDirectory")
@@ -133,9 +135,10 @@ def validate_ipa(path, signing_probe=False):
         framework = root + "Frameworks/BiliMux.framework/"
         raw_info = archive.read(framework + "Info.plist")
         metadata = plistlib.loads(raw_info)
-        require(raw_info.startswith(b"bplist00"), "BiliMux must ship a processed binary Info.plist")
+        require(not any(name.startswith(framework + "Resources/") for name in names),
+                "iOS BiliMux must be flat: reserved Resources directory hides root Info.plist")
         for key, value in {"CFBundleExecutable": "BiliMux", "CFBundleIdentifier": "dev.bilisail.mux",
-                           "CFBundlePackageType": "FMWK", "CFBundleInfoDictionaryVersion": "6.0",
+                           "CFBundlePackageType": "FMWK",
                            "MinimumOSVersion": "15.0", "CFBundleSupportedPlatforms": ["iPhoneOS"]}.items():
             require(metadata.get(key) == value, f"Invalid BiliMux {key}")
         for data in slices(archive.read(framework + "BiliMux")):
@@ -172,7 +175,7 @@ def compare_legacy(path):
     with zipfile.ZipFile(path) as archive, tempfile.TemporaryDirectory() as work:
         original = archive.read(prefix + "BiliMux")
         original_info = archive.read(prefix + "Info.plist")
-        for label in ("original-xml", "processed-binary"):
+        for label in ("original-layout", "metadata-only", "flat-layout"):
             bundle = Path(work) / label / "BiliMux.framework"
             bundle.mkdir(parents=True)
             for name in archive.namelist():
@@ -186,19 +189,35 @@ def compare_legacy(path):
             require((bundle / "BiliMux").read_bytes() == original, "A/B binary differs")
             (bundle / "BiliMux").chmod(0o755)
             info_path = bundle / "Info.plist"
-            if label == "processed-binary":
+            if label == "metadata-only":
                 metadata = plistlib.loads(original_info)
                 metadata["CFBundleInfoDictionaryVersion"] = "6.0"
                 info_path.write_bytes(plistlib.dumps(metadata))
                 subprocess.run(["plutil", "-convert", "binary1", str(info_path)], check=True)
+            if label == "flat-layout":
+                resources = bundle / "Resources"
+                for resource in resources.iterdir():
+                    resource.rename(bundle / resource.name)
+                resources.rmdir()
+                require(info_path.read_bytes() == original_info, "Flat-layout comparison changed plist")
             info = info_path.read_bytes()
             subprocess.run(["codesign", "--force", "--sign", "-", "--timestamp=none", str(bundle)], check=True)
             subprocess.run(["codesign", "--verify", "--strict", "--verbose=2", str(bundle)], check=True)
+            subprocess.run(["codesign", "--display", "--verbose=4", str(bundle)], check=True)
             require(info_path.read_bytes() == info, "Signing changed plist bytes")
             for data in slices((bundle / "BiliMux").read_bytes()):
                 signature, _ = inspect_macho(data)
-                verify_info_slot(signature, info)
-            print(f"Legacy BiliMux A/B: {label} Apple ad-hoc and Info.plist slot -1 PASS", flush=True)
+                if label == "flat-layout":
+                    verify_info_slot(signature, info)
+                else:
+                    try:
+                        verify_info_slot(signature, info)
+                    except ValueError as error:
+                        require("not bound" in str(error), f"Unexpected legacy failure: {error}")
+                        print(f"Legacy BiliMux {label}: reproduced {error}", flush=True)
+                    else:
+                        raise ValueError("Legacy layout unexpectedly binds root Info.plist")
+            print(f"Legacy BiliMux A/B: {label} expected result PASS", flush=True)
     print("Apple A/B does not reproduce or certify third-party signer behavior", flush=True)
 
 
