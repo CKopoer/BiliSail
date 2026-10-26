@@ -124,6 +124,10 @@ void main() {
             final alias = Link(p.join(sandbox.path, 'system_alias'));
             await alias.create(documents.path);
             final aliasRoot = p.join(alias.path, 'BiliSail', 'offline');
+        await expectLater(
+          const DownloadFileStore().createTaskDirectory(aliasRoot, 'guest', _id),
+          _failure('符号链接'),
+        );
             final platformFiles = DownloadFileStore(
               trustedDocumentsDirectory: () async => alias.path,
             );

@@ -150,6 +150,12 @@ jobs:
       - name: Check formatting, analysis and packaging boundaries
         shell: pwsh
         run: ./tool/check.ps1 -Stage Lint -EnforceLockfile
+      - name: Diagnose download fix formatting
+        if: failure()
+        shell: bash
+        run: |
+          dart format lib/features/downloads/data/download_file_store.dart test/features/downloads/download_file_store_test.dart test/features/downloads/sqlite_download_repository_test.dart
+          git diff -- lib/features/downloads/data/download_file_store.dart test/features/downloads/download_file_store_test.dart test/features/downloads/sqlite_download_repository_test.dart
       - name: Check Linux packaging, apt mirrors and download caches
         shell: bash
         run: |
