@@ -149,10 +149,7 @@ void main() {
           .getSingle();
       final record =
           jsonDecode(row.read<String>('record_json')) as Map<String, dynamic>;
-      final legacyPath = directory.replaceFirst(
-        documents.path,
-        alias.path,
-      );
+      final legacyPath = directory.replaceFirst(documents.path, alias.path);
       record['directory'] = legacyPath;
       await db.customStatement('UPDATE download_tasks SET record_json = ?', [
         jsonEncode(record),
