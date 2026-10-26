@@ -403,9 +403,8 @@ final class DownloadFileStore {
       }
       try {
         boundary = await Directory(documents).resolveSymbolicLinks();
-        final recordedAnchor = await Directory(
-          p.dirname(p.dirname(root)),
-        ).resolveSymbolicLinks();
+        final recordedAnchor = await Directory(p.dirname(p.dirname(root)))
+            .resolveSymbolicLinks();
         if (!p.equals(recordedAnchor, boundary)) {
           throw const AppFailure(AppFailureKind.storage, '下载目录不在应用离线目录内');
         }

@@ -131,9 +131,8 @@ void main() {
       await repository.close();
       await db.close();
       final documents = await Directory('${root.path}/app_flutter').create();
-      final alias = await Link(
-        '${root.path}/system_alias',
-      ).create(documents.path);
+      final alias = await Link('${root.path}/system_alias')
+          .create(documents.path);
       final files = DownloadFileStore(
         trustedDocumentsDirectory: () async => documents.path,
       );

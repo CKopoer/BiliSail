@@ -124,10 +124,14 @@ void main() {
             final alias = Link(p.join(sandbox.path, 'system_alias'));
             await alias.create(documents.path);
             final aliasRoot = p.join(alias.path, 'BiliSail', 'offline');
-        await expectLater(
-          const DownloadFileStore().createTaskDirectory(aliasRoot, 'guest', _id),
-          _failure('符号链接'),
-        );
+            await expectLater(
+              const DownloadFileStore().createTaskDirectory(
+                aliasRoot,
+                'guest',
+                _id,
+              ),
+              _failure('符号链接'),
+            );
             final platformFiles = DownloadFileStore(
               trustedDocumentsDirectory: () async => alias.path,
             );
@@ -172,12 +176,10 @@ void main() {
               _id,
             );
             final task = _task(directory);
-            final target = await Directory(
-              p.join(sandbox.path, 'outside'),
-            ).create();
-            final sentinel = await File(
-              p.join(target.path, 'keep'),
-            ).writeAsString('safe');
+            final target = await Directory(p.join(sandbox.path, 'outside'))
+                .create();
+            final sentinel = await File(p.join(target.path, 'keep'))
+                .writeAsString('safe');
             final replaced = switch (segment) {
               'BiliSail' => p.dirname(root),
               'offline' => root,
@@ -214,9 +216,8 @@ void main() {
                 _id,
               );
               final task = _task(directory);
-              final target = await File(
-                p.join(sandbox.path, 'outside'),
-              ).writeAsString('safe');
+              final target = await File(p.join(sandbox.path, 'outside'))
+                  .writeAsString('safe');
               final child = File(p.join(directory, name));
               if (await child.exists()) await child.delete();
               await Link(child.path).create(target.path);
@@ -240,9 +241,8 @@ void main() {
         }
 
         test('rejects dangling links before directory creation', () async {
-          await Link(
-            p.join(documents.path, 'BiliSail'),
-          ).create(p.join(sandbox.path, 'missing'));
+          await Link(p.join(documents.path, 'BiliSail'))
+              .create(p.join(sandbox.path, 'missing'));
           await expectLater(
             files.createTaskDirectory(root, 'guest', _id),
             _failure('符号链接'),
