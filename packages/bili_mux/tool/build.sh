@@ -141,7 +141,13 @@ fi
   > link.log 2>&1
 
 framework_info="$package_dir/native/Info.plist"
-if [[ "$target" == ios-arm64 ]]; then framework_info="$package_dir/native/Info.ios.plist"; fi
+if [[ "$target" == ios-arm64 ]]; then
+  # Match Xcode's processed framework plist, rather than shipping handwritten XML.
+  # Use these exact bytes in both copies before CocoaPods embeds the framework.
+  framework_info="$cache/$target/Info.plist"
+  plutil -convert binary1 -o "$framework_info" "$package_dir/native/Info.ios.plist"
+  plutil -lint "$framework_info"
+fi
 if [[ "$target" == macos-arm64 || "$target" == ios-arm64 ]]; then
   "$strip_tool" -x "$output_name"
   framework="$package_dir/native/prebuilt/$target/BiliMux.framework"

@@ -15,6 +15,8 @@
 
 ## iOS
 
+全能签 BiliMux Info.plist 校验失败的原包证据、兼容性处理与验证限制见 [重签名排查](ios-resigning.md)。
+
 - [工程](../../ios/Runner.xcodeproj/project.pbxproj) 与 Linux runner 均由固定 Flutter 3.47.6 模板生成。iOS bundle ID 为 `dev.bilisail.bilisail`，显示名 BiliSail；Swift 入口注册原生插件，使用 CocoaPods，与根配置的禁用 SwiftPM 保持一致。
 - `flutter build ios --release --no-codesign` 构建真实设备 arm64 应用，再将 `Runner.app` 按 `Payload/Runner.app` 布局压缩。脚本核对版本名、构建号、bundle ID、主程序和必需 framework 的 arm64 架构，以及压缩包内的实际布局。
 - [bili_mux](../../packages/bili_mux/README.md) 从已有固定 FFmpeg 源码构建独立的 iOS 动态 framework；通过 CocoaPods 嵌入，不借用播放器 FFmpeg。最低 iOS 15，暂不提供 simulator slice。媒体/CDN 可能提供 HTTP 地址，Info.plist 允许 ATS 非 HTTPS 请求，仍保留系统 TLS 证书校验。

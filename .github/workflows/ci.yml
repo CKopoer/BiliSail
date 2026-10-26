@@ -150,6 +150,8 @@ jobs:
       - name: Check formatting, analysis and packaging boundaries
         shell: pwsh
         run: ./tool/check.ps1 -Stage Lint -EnforceLockfile
+      - name: Check iOS package validation
+        run: python3 -m unittest discover -s tool -p 'test_ios_*.py'
       - name: Check Linux packaging, apt mirrors and download caches
         shell: bash
         run: |

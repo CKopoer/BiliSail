@@ -233,6 +233,7 @@ try {
           throw 'Unsigned IPA has an invalid Payload layout.'
         }
       } finally { $ipa.Dispose() }
+      Invoke-BuildCommand python3 @((Join-Path $PSScriptRoot 'ios-package-validation.py'), $package, '--signing-probe')
       $signing = 'unsigned-requires-apple-signing'
     }
     'linux-x64' {
