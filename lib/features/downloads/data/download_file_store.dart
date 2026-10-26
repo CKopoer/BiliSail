@@ -393,23 +393,33 @@ final class DownloadFileStore {
     final documents = await trustedDocumentsDirectory?.call();
     String? boundary;
     if (documents != null) {
-      // Only the established Android layout is accepted. Resolve the platform
-      // anchor (and an old spelling of that SAME anchor), never its children.
-      // This supports /data/user/... aliases without trusting arbitrary DB roots.
+      // Use the platform spelling directly: resolving it can itself require
+      // inspecting system ancestors that Android does not allow us to inspect.
+      // Only a DIFFERENT legacy spelling needs canonical identity verification.
       if (!p.isAbsolute(documents) ||
           p.basename(root) != 'offline' ||
           p.basename(p.dirname(root)) != 'BiliSail') {
         throw const AppFailure(AppFailureKind.storage, '下载目录不在应用离线目录内');
       }
-      try {
-        boundary = await Directory(documents).resolveSymbolicLinks();
-        final recordedAnchor = await Directory(p.dirname(p.dirname(root)))
-            .resolveSymbolicLinks();
-        if (!p.equals(recordedAnchor, boundary)) {
-          throw const AppFailure(AppFailureKind.storage, '下载目录不在应用离线目录内');
+      boundary = p.normalize(documents);
+      final recordedAnchor = p.dirname(p.dirname(root));
+      if (!p.equals(recordedAnchor, boundary)) {
+        try {
+          final expected = await Directory(boundary).resolveSymbolicLinks();
+          final recorded = await Directory(recordedAnchor)
+              .resolveSymbolicLinks();
+          if (!p.equals(recorded, expected)) {
+            throw const AppFailure(AppFailureKind.storage, '下载目录不在应用离线目录内');
+          }
+        } on FileSystemException {
+          throw const AppFailure(AppFailureKind.storage, '无法验证旧下载目录归属');
         }
-      } on FileSystemException {
-        throw const AppFailure(AppFailureKind.storage, '无法解析应用下载目录');
+      }
+      // This one platform-owned entry may be a system alias; its children may
+      // not. Never use a DB path as the traversal boundary or the I/O prefix.
+      if (await FileSystemEntity.type(boundary) !=
+          FileSystemEntityType.directory) {
+        throw const AppFailure(AppFailureKind.storage, '应用下载目录不存在或无法访问');
       }
       root = p.join(boundary, 'BiliSail', 'offline');
     }
@@ -429,10 +439,10 @@ final class DownloadFileStore {
         !p.isWithin(boundary, current)) {
       throw const AppFailure(AppFailureKind.storage, '下载目录超出安全边界');
     }
-    while (true) {
+    while (current != boundary) {
       directories.add(current);
       final parent = p.dirname(current);
-      if (current == boundary || parent == current) break;
+      if (parent == current) break;
       current = parent;
     }
     // Check each existing parent before creating anything below it.

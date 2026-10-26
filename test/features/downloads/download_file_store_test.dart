@@ -140,15 +140,15 @@ void main() {
               'guest',
               _id,
             );
-            expect(
-              directory,
-              startsWith(await documents.resolveSymbolicLinks()),
+            expect(directory, startsWith(alias.path));
+            final canonicalTask = _task(
+              directory.replaceFirst(
+                alias.path,
+                await documents.resolveSymbolicLinks(),
+              ),
             );
-            final legacyPath = directory.replaceFirst(
-              await documents.resolveSymbolicLinks(),
-              alias.path,
-            );
-            final legacy = _task(legacyPath);
+            await platformFiles.ownedDirectory(canonicalTask);
+            final legacy = _task(directory);
             await (await platformFiles.taskFile(
               legacy,
               'video.m4s.part',

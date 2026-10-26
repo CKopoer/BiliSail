@@ -150,7 +150,7 @@ void main() {
       final record =
           jsonDecode(row.read<String>('record_json')) as Map<String, dynamic>;
       final legacyPath = directory.replaceFirst(
-        await documents.resolveSymbolicLinks(),
+        documents.path,
         alias.path,
       );
       record['directory'] = legacyPath;
