@@ -1,0 +1,34 @@
+name: Update README downloads
+
+on:
+  release:
+    types: [published, released, edited, deleted]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: readme-downloads
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      # Always use the default branch implementation, including for old tags.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Check release attachment matching
+        run: node --test tool/test-readme-downloads.cjs
+      - name: Update links from the latest stable release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { syncReadmeDownloads } = require('./tool/update-readme-downloads.cjs');
+            await syncReadmeDownloads({ github, context, core });

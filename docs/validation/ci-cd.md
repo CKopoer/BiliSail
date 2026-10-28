@@ -49,6 +49,16 @@ Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d1
 - `.build-info.json`：源码 revision 与 `sourceDirty`、Flutter/engine/Dart 版本、目标、签名类型、Android 签名证书 SHA-256、Windows MSI 内部版本与 WiX 版本、runner image、根锁文件 SHA-256；macOS 的 `macosValidation` 保存发布门槛的通过状态。
 - 每个上述文件对应的 `.sha256`，格式兼容 `sha256sum -c`。
 
+### README 下载链接自动更新
+
+[下载链接工作流](../../.github/workflows/readme-downloads.yml) 在 Release 公开发布、转为正式版、编辑或删除后，以及手动运行时，读取 GitHub `releases/latest` 对应正式版及其附件，按现有 `BiliSail-<version>-<target>.<extension>` 命名匹配安装包。iOS 保留 `-unsigned.ipa`，Windows 同时识别 EXE／MSI／MSIX 和 CER，macOS 分别识别 arm64／x64。Release 文件名和附件不变，也不额外复制安装包。
+
+工作流只更新默认分支 README 中 `release-downloads:start/end` 标记之间的下载版本及表格下载列，保留安装说明和其他内容；无变化时不创建提交。链接直接采用 API 返回的 `browser_download_url`，没有对应附件时标为“暂未提供”，不回退到旧版或生成不存在的下载链接。草稿与预发布不会替换正式版目标。`GITHUB_TOKEN` 创建的 README 提交不再次触发普通 push CI，公开发布由维护者操作；首次使用前需把此工作流和标记提交到默认分支。默认分支若禁止工作流直接写入，任务会失败并保留原 README，不绕过分支规则。
+
+GitHub 官方的 [`/releases/latest/download/<附件名>`](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases) 需要准确的附件名，不解析版本通配符。本仓库保留带版本号的附件，由工作流自动维护 README 中的实际直链，维护者无需每次修改版本号；下载 URL 本身仍包含发布版本。
+
+2026-10-29 本地验证：`node --test tool/test-readme-downloads.cjs` 的 10 项测试通过，覆盖十种附件、部分平台、旧版本／未完成上传排除、换行和安装说明保留、重复运行、并发编辑冲突及写入权限失败；actionlint 1.7.12 检查新工作流及 Release 工作流通过。使用 GitHub API 实际 `v1.2.3+1` 响应核对 README 的 9 个下载链接，并确认重复生成无差异。本轮 `tool/check.ps1 -SkipPub` 的格式、静态分析、根应用 3352 项及四包 709 项测试通过；13 项 Windows symlink 因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生集成覆盖。远端自动更新尚未触发，未修改任何 Release 附件。
+
 CI 的 artifacts 保留 14 天；Release 从同一运行下载，所选平台失败时不创建新草稿。不使用参考仓库的 WebDAV、NuGet ZIP、UWP manifest、Chocolatey 或 TLS 验证绕过逻辑。
 
 Release 草稿及全部附件上传成功后，使用 GitHub 官方 [actions/github-script v8](https://github.com/actions/github-script/tree/ed597411d8f924073f98dfc5c65a23a2325f34cd) 清理旧版本，固定提交 `ed597411d8f924073f98dfc5c65a23a2325f34cd`。分页获取正式发布、预发布和草稿，合计保留按 `created_at` 排序的最新 **15 个 Release**；时间相同时按 Release ID 从新到旧排序。超出部分删除 Release 及其附件，保留 Git 标签与 Actions 运行记录。草稿没有 `published_at`，不能直接使用按发布时间排序或排除草稿的清理包。使用该 job 已有的 `contents: write` 和默认 `github.token`，不需额外 Secret；发布流程继续由 `release-preview` 并发组串行执行。删除请求失败立即停止，清理后再次分页查询并验证总数不超过 15，查询失败或仍超限会使流程失败。本地配置检查不代表已经执行远端删除。
