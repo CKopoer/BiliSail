@@ -28,6 +28,146 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  group('interrupted DASH video recovery', () {
+    late _FakeEngine engine;
+    late _FakeRepository repository;
+    late PlaybackSession session;
+    var scope = 'guest';
+    var epoch = 0;
+
+    setUp(() async {
+      scope = 'guest';
+      epoch = 0;
+      engine = _FakeEngine();
+      repository = _FakeRepository(autoResolve: true);
+      session = PlaybackSession(
+        engine: engine,
+        repository: repository,
+        progress: _FakeProgress(),
+        accountScope: () => scope,
+        sessionEpoch: () => epoch,
+      );
+      session.configureSettings(
+        AppSettings(autoPlay: true, resumePlayback: false),
+      );
+      await session.open(_detail('one'), _part('one'), quality: 64);
+      await session.setRate(2);
+      await session.setVolume(35);
+    });
+    tearDown(() => session.close());
+
+    void interrupt({int? generation}) {
+      engine.emit(
+        engine.currentSnapshot.copyWith(
+          phase: PlaybackPhase.failed,
+          desiredPlaying: false,
+          position: const Duration(seconds: 20),
+        ),
+      );
+      engine._failures.add(
+        PlayerFailure(
+          PlayerFailureKind.videoInterrupted,
+          'video interrupted',
+          generation ?? engine.currentSnapshot.generation,
+        ),
+      );
+    }
+
+    test(
+      'reloads once at video boundary, retaining quality/rate/volume',
+      () async {
+        interrupt();
+        await _flush();
+        expect(engine.openOptions, hasLength(2));
+        expect(
+          engine.openOptions.last.startPosition,
+          const Duration(seconds: 20),
+        );
+        expect(engine.openOptions.last.rate, 2);
+        expect(engine.openOptions.last.volume, 35);
+        expect(session.media?.quality, 64);
+        expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+        expect(session.error, isNull);
+        interrupt();
+        await _flush();
+        expect(engine.openOptions, hasLength(2));
+        expect(session.error, 'video interrupted');
+        expect(engine.currentSnapshot.desiredPlaying, false);
+      },
+    );
+
+    test('manual retry and a new video each allow a new recovery', () async {
+      interrupt();
+      await _flush();
+      await session.retry();
+      interrupt();
+      await _flush();
+      expect(engine.openOptions, hasLength(4));
+      await session.open(_detail('two'), _part('two'));
+      interrupt();
+      await _flush();
+      expect(engine.openOptions, hasLength(6));
+    });
+
+    for (final action in [
+      'pause',
+      'permission',
+      'stop',
+      'replace',
+      'scope',
+      'epoch',
+      'close',
+    ]) {
+      test('$action cancels a queued recovery', () async {
+        interrupt();
+        switch (action) {
+          case 'pause':
+            await session.pause();
+          case 'permission':
+            await session.setPlaybackAllowed(false);
+          case 'stop':
+            await session.stop();
+          case 'replace':
+            await session.open(_detail('two'), _part('two'));
+          case 'scope':
+            scope = 'another';
+          case 'epoch':
+            epoch++;
+          case 'close':
+            await session.close();
+        }
+        await _flush();
+        expect(engine.openOptions, hasLength(action == 'replace' ? 2 : 1));
+      });
+    }
+
+    for (final allowed in [true, false]) {
+      test(
+        'pause/permission during resolution preserves user intent ($allowed)',
+        () async {
+          repository.autoResolve = false;
+          interrupt();
+          await _flush();
+          if (allowed) {
+            await session.pause();
+          } else {
+            await session.setPlaybackAllowed(false);
+          }
+          repository.completeResolve('one');
+          await _flush();
+          expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+          expect(engine.currentSnapshot.desiredPlaying, false);
+        },
+      );
+    }
+
+    test('stale native failure cannot reload the current source', () async {
+      interrupt(generation: engine.currentSnapshot.generation - 1);
+      await _flush();
+      expect(engine.openOptions, hasLength(1));
+    });
+  });
+
   for (final (detached, initialMode, returnMode) in [
     for (final detached in [false, true])
       for (final (initialMode, returnMode) in [
@@ -5160,7 +5300,7 @@ final class _FakeRepository implements PlaybackRepository {
     this.autoResolve = false,
     this.mediaDuration = const Duration(minutes: 2),
   });
-  final bool autoResolve;
+  bool autoResolve;
   AudioLoudness? loudness;
   bool failNextResolve = false;
   final Duration mediaDuration;

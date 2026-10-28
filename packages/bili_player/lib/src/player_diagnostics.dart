@@ -51,6 +51,7 @@ enum PlayerDiagnosticKind {
   openStarted,
   openReady,
   openTerminated,
+  videoInterrupted,
   nativeLog,
   nativeError,
   recovered,

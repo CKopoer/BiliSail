@@ -90,6 +90,36 @@ class PlaybackSession extends ChangeNotifier {
             _audioRecovery?.preparing == true) {
           return;
         }
+        if (failure.kind == PlayerFailureKind.videoInterrupted &&
+            _videoRecoveryGeneration != _generation &&
+            media != null &&
+            !isLive &&
+            _desiredPlaying &&
+            _playbackAllowed) {
+          final generation = _generation;
+          final engineGeneration = failure.generation;
+          scheduleMicrotask(() {
+            if (_disposed ||
+                _closing ||
+                generation != _generation ||
+                engineGeneration != engine.currentSnapshot.generation ||
+                _scope != accountScope() ||
+                _epoch != this.sessionEpoch()) {
+              return;
+            }
+            if (!_desiredPlaying || !_playbackAllowed) {
+              error = failure.message;
+              _notify();
+              return;
+            }
+            // retry/open advances the source generation before its first
+            // await. Carry the one-attempt limit into the replacement source.
+            final recovery = retry();
+            _videoRecoveryGeneration = _generation;
+            unawaited(recovery);
+          });
+          return;
+        }
         error = contentTarget is OfflinePlaybackTarget
             ? '本地视频播放失败，文件可能无法解码或已不可访问'
             : failure.message;
@@ -120,6 +150,7 @@ class PlaybackSession extends ChangeNotifier {
             )
             .firstOrNull;
   final PlayerEngine engine;
+  int? _videoRecoveryGeneration;
   final PlaybackRepository repository;
   final PlaybackMetadataRepository? metadataRepository;
   final ContentPlaybackRepository? contentRepository;

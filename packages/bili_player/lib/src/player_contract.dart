@@ -212,6 +212,7 @@ enum PlayerFailureKind {
   invalidSource,
   unsupportedHeaders,
   nativePlayback,
+  videoInterrupted,
   disposed,
 }
 

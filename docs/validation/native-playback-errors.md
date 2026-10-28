@@ -55,3 +55,29 @@
 `tool/check.ps1 -SkipPub` 最终通过格式、静态分析、打包边界与根应用／四包测试，共 2,604 项（2,002／426／81／93／2）；另有 10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为通过。日志为 `build/black-screen-fix-check-final.log`。首轮静态分析发现新测试直接读取受保护的 controller 字段，改为 fake 子类的只读 getter 后完整重跑通过。文档相对链接和 `git diff --check` 通过。
 
 本轮没有构建或替换系统安装包；Windows 原生 GPU 实机播放及 Android/macOS 运行尚未验证。没有活动 DTD／debug 应用，热重载尝试返回无应用连接，不能将组件测试或全量离线检查当作已安装程序的修复验收。
+
+## 播放中视频断流但音频继续（2026-10-28）
+
+本机普通入口 Windows Release 出现画面停止且不能自行恢复。保留的 `playback-1793197674339106-35292.log` 中，23:03:48（北京时间）播放位置为 1,028.920 秒，视频缓冲端点为 1,029.000 秒；23:04:10 播放位置已经推进至 1,090.692 秒，缓冲端点仍为 1,029.000 秒，并出现 `vd/hardwareDecoder` warning。这些记录支持视频数据停止补充后音频继续的路径；日志没有逐帧时间戳和原始错误，不能仅凭 warning 断言显卡、驱动或某个 CDN 是最初断流的原因。
+
+使用现有 12 秒 H.264/AAC 分轨素材，本地 HTTP 服务声明完整视频长度，只交付前三分之一后断开连接，并拒绝后续视频 Range；音频完整可用。[原生回归](../../integration_test/windows_video_stall_test.dart)修改前复现：视频缓冲停在 **3.791 秒**，播放位置继续至 **10.031 秒**，状态始终 `playing`，失败事件为 0。首帧和解码尺寸均正常，因此不是启动时的视频未就绪。复现日志为 `build/validation/video-stall-20261028/before.log`，现场日志副本也保存在该忽略目录。
+
+共享播放器使用视频作为主源、`audio-files` 作为外部音轨。mpv 可以把提前耗尽的视频当作视频轨 EOF，继续播放外部音轨；这时主文件不一定产生错误 `END_FILE`，也不一定保持网络 buffering。mpv 的[缓存暂停实现](https://github.com/mpv-player/mpv/blob/88eb9f2e73/player/playloop.c)依据 demuxer idle/underrun 和输出 underrun 判断缓冲，普通等待补数据不能覆盖所有提前 EOF。原有 `NativeErrorMonitor` 只在错误流触发后等待播放位置恢复；音频位置推进也会满足该条件，不能用它证明视频恢复。
+
+本轮修复：
+
+- [DashVideoContinuity](../../packages/bili_player/lib/src/dash_video_continuity.dart)仅对带外部音轨的 DASH 监控主视频缓冲。播放位置超过视频缓冲 500ms、缓冲端点持续不变至少 1 秒、且距离正常结尾超过 2 秒时，报告 `videoInterrupted`。暂停、seek、正常 buffering、源替换、未知缓冲和正常 EOF 不触发；不增加逐帧 Provider 更新、FFI 查询或定时轮询。
+- [MediaKitEngine](../../packages/bili_player/lib/src/media_kit_engine.dart)先保留视频缓冲边界并冻结待处理的位置事件，再实际暂停 native player，随后报告专用失败。仅把 phase 标成 failed 不会停止外部音频。暂停超时/失败时释放旧 player；旧 generation 的异步操作不能改变新源。失败后的迟到位置事件也不能覆盖恢复位置。
+- [PlaybackSession](../../lib/features/playback/application/playback_session.dart)在当前账号与源仍有效、用户仍要播放且播放许可有效时，重新解析并重载一次，从视频缓冲边界继续，保留清晰度、倍速、音量、内容与配音选择。重载沿用已有打开/备用地址预算，重载后的再次视频中断明确报错；手动重试或新的视频可以重新获得一次恢复机会。暂停、切页互斥、stop、close、换源及账号 scope/epoch 变化取消排队的恢复，恢复期间的用户暂停继续生效。
+- 脱敏诊断新增 `videoInterrupted` 事件和失败分类，记录触发时的位置、视频缓冲和状态，不记录媒体 URL、凭据或原生正文。没有调整硬解偏好、缓存容量、media-kit fork 或 Windows 原生补丁。
+
+自动验证：
+
+- 13 项缓冲连续性单元回归通过，覆盖持续音频推进、正常缓冲、暂停/seek/结束、补充数据、换源和重置。
+- 12 项会话行为回归通过，覆盖自动恢复一次、再次中断、手动重试、新视频、设置保留、暂停/许可与账号/源生命周期隔离。
+- Windows 原生回归 2 项通过：底层在 3.791 秒边界失败并实际暂停，静置后 native 位置不再前进，正常资源重开恢复；使用完整 `PlaybackSession` 时同一 URL 的后续请求恢复正常，自动重载后继续至 6.041 秒、缓冲推进至 11.875 秒，视频仍有解码和输出。日志 `build/validation/video-stall-20261028/after-native.log`；已纳入 `tool/test-windows-media.ps1`。
+- 既有 `native_video_readiness_test.dart` 的 5 项 Windows 原生回归通过，覆盖无法解码视频、换正常源、暂停续播、seek 的确认位置、progressive 与纯音频。日志 `build/validation/video-stall-20261028/readiness.log`；完整播放会话单测 210 项通过（`session-all.log`）。
+- 最终 `tool/check.ps1 -SkipPub` 通过格式、静态分析、打包边界及根应用与四包测试：3343 / 492 / 96 / 116 / 5，共 **4052 项通过**。13 项 Windows 符号链接用例因权限跳过，10 项 mux 原生用例因未设置 `BILI_MUX_LIBRARY` 跳过，均不计为通过。日志 `build/validation/video-stall-20261028/check-final.log`。
+- 复用已准备的固定来源 Windows mux 资产，`flutter build windows --release --no-pub -t lib/main.dart` 通过（88.5 秒），正常入口 `build/windows/x64/runner/Release/bilisail.exe`，须保留整个 Release 目录；日志 `build/validation/video-stall-20261028/release.log`。本轮没有制作或替换系统安装包；构建和全量检查针对对应执行时的工作区，提交仅包含本任务文件。
+
+本修复覆盖“视频数据提前耗尽而外部音频继续”的已复现路径。缓冲充足时纯 GPU 呈现停顿、无新帧但缓冲仍前进的解码故障，以及真实故障 CDN 的最初诱因仍不由这些数据证明；未增加未经验证的全局软解或网络重试参数。Android/macOS 原生执行、真实账号长时间播放和人工可听音画同步需分别验收。
