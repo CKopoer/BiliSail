@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/platform/window_caption.dart';
+import '../core/platform/window_size_policy.dart';
 import '../features/feed/domain/home_channel.dart';
 import '../features/search/presentation/search_category_bar.dart';
 import '../core/presentation/workspace_activity.dart';
@@ -32,8 +33,6 @@ import '../shared/ui/paging_tab_strip.dart';
 import '../shared/ui/page_tab_style.dart';
 import '../shared/ui/retained_tab_view.dart';
 import '../shared/ui/primary_navigation_transition.dart';
-
-const _compactNavigationWidth = 600.0;
 
 typedef WorkspacePageBuilder = Widget Function(
   BuildContext context,
@@ -202,14 +201,25 @@ final class _BiliAppShellState extends State<BiliAppShell>
   }
 
   bool get _android => Theme.of(context).platform == TargetPlatform.android;
-  bool get _compactChannels =>
-      MediaQuery.sizeOf(context).width < _compactNavigationWidth;
-  bool _usesBottomNavigation(double width) =>
-      switch (widget.navigationBarMode) {
-        NavigationBarMode.automatic => width < _compactNavigationWidth,
-        NavigationBarMode.bottom => true,
-        NavigationBarMode.sidebar => false,
-      };
+  bool get _mobile => WindowSizePolicy.isMobile(Theme.of(context).platform);
+  bool _compactLayout(double width) => WindowSizePolicy.compactLayout(
+    mobile: _mobile,
+    displaySize: WindowSizePolicy.displaySize(View.of(context)),
+    availableWidth: width,
+  );
+  bool get _compactChannels => _compactLayout(
+    MediaQuery.sizeOf(context).width - MediaQuery.paddingOf(context).horizontal,
+  );
+  bool _usesBottomNavigation(double width) {
+    final compact = _compactLayout(width);
+    if (_mobile && compact) return true;
+    return switch (widget.navigationBarMode) {
+      NavigationBarMode.automatic => compact,
+      NavigationBarMode.bottom => true,
+      NavigationBarMode.sidebar => false,
+    };
+  }
+
   bool get _canReturnFromMessages =>
       _android && _workspace.canReturnFromMessages;
 
@@ -2113,7 +2123,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
           const SizedBox(width: 5),
           if (_frameTab(context).location.path != '/' &&
               _frameTab(context).location.path != '/search' &&
-              MediaQuery.sizeOf(context).width >= _compactNavigationWidth) ...[
+              !_compactChannels) ...[
             _tool('观看历史', BiliIcons.history, '/history'),
             _tool('下载', Icons.download_outlined, '/downloads'),
             _tool('设置', BiliIcons.settings, '/settings'),

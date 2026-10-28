@@ -8,6 +8,109 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mode in NavigationBarMode.values) {
+    testWidgets(
+      'mobile navigation uses the current unfolded display with $mode',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.display.size = const Size(390, 844);
+        tester.view.physicalSize = const Size(390, 844);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.display.resetSize);
+        addTearDown(tester.view.resetPhysicalSize);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: BiliTheme.light(),
+            home: BiliAppShell(
+              location: '/',
+              navigationBarMode: mode,
+              child: const SizedBox.expand(
+                key: ValueKey('fold-retained-content'),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final content = tester.element(
+          find.byKey(const ValueKey('fold-retained-content')),
+        );
+        for (final (display, viewport, compact) in [
+          (const Size(390, 844), const Size(390, 844), true),
+          (const Size(844, 390), const Size(844, 390), true),
+          (const Size(599, 900), const Size(599, 900), true),
+          (const Size(600, 900), const Size(600, 900), false),
+          (const Size(1200, 800), const Size(1200, 800), false),
+          (const Size(1200, 800), const Size(599, 800), true),
+          (const Size(800, 1200), const Size(800, 1200), false),
+          (const Size(390, 844), const Size(390, 844), true),
+        ]) {
+          tester.view.display.size = display;
+          tester.view.physicalSize = viewport;
+          await tester.pumpAndSettle();
+          final bottom = compact || mode == NavigationBarMode.bottom;
+          expect(
+            find.byKey(const ValueKey('workspace-bottom-navigation')),
+            bottom ? findsOneWidget : findsNothing,
+            reason: '$display $viewport',
+          );
+          expect(
+            find.byKey(const ValueKey('workspace-nav-home')),
+            bottom ? findsNothing : findsOneWidget,
+            reason: '$display $viewport',
+          );
+          expect(
+            find.byKey(const ValueKey('channel-live')),
+            compact ? findsOneWidget : findsNothing,
+          );
+          expect(
+            tester.element(find.byKey(const ValueKey('fold-retained-content'))),
+            same(content),
+          );
+          expect(tester.takeException(), isNull);
+        }
+        tester.view.display.size = const Size(600, 900);
+        tester.view.physicalSize = const Size(600, 900);
+        tester.view.padding = const FakeViewPadding(left: 24, right: 24);
+        addTearDown(tester.view.resetPadding);
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('workspace-bottom-navigation')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const ValueKey('workspace-nav-home')), findsNothing);
+        expect(find.byKey(const ValueKey('channel-live')), findsOneWidget);
+      },
+      variant: TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+      }),
+    );
+  }
+
+  testWidgets(
+    'desktop navigation keeps responding to window width on a small display',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.display.size = const Size(844, 390);
+      tester.view.physicalSize = const Size(844, 390);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.display.resetSize);
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: BiliAppShell(location: '/', child: SizedBox.expand()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('workspace-bottom-navigation')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('workspace-nav-home')), findsOneWidget);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
+
   for (final dark in [false, true]) {
     testWidgets(
       'messages and downloads match normal bottom navigation in dark=$dark',

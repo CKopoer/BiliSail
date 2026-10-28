@@ -7,6 +7,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'window_size_policy.dart';
+
 enum FullScreenOrientation { portrait, landscape }
 
 class WindowService {
@@ -292,8 +294,54 @@ class WindowService {
   /// Other desktop platforms retain their native caption until validated.
   bool get hasCustomTitleBar => Platform.isWindows && viewId == null;
   bool _fullScreen = false;
-  bool _mobileOrientationLocked = false;
+  bool? _browsePortrait;
+  bool _mobileFullScreenRequested = false;
+  FullScreenOrientation? _mobileFullScreenOrientation;
+  FullScreenOrientation? _appliedMobileOrientation;
+  Future<void> _orientationCommands = Future<void>.value();
   bool get isFullScreen => _fullScreen;
+  bool get keepsBrowsePortrait => _browsePortrait == true;
+
+  Future<void> updateDisplaySize(Size logicalDisplaySize) {
+    if (hasDesktopWindow || viewId != null) return Future<void>.value();
+    _browsePortrait = WindowSizePolicy.compactDisplay(logicalDisplaySize);
+    return _applyMobileOrientation();
+  }
+
+  Future<void> clearDisplayOrientationPolicy() {
+    if (_browsePortrait == null) return Future<void>.value();
+    _browsePortrait = null;
+    return _applyMobileOrientation();
+  }
+
+  Future<void> _applyMobileOrientation() {
+    final operation = _orientationCommands.then((_) async {
+      // Read the latest display and owner intent when the command runs, so a
+      // late phone request cannot re-lock an unfolded display.
+      final orientation = _browsePortrait == false
+          ? null
+          : _mobileFullScreenRequested
+          ? _mobileFullScreenOrientation
+          : _browsePortrait == true
+          ? FullScreenOrientation.portrait
+          : null;
+      if (orientation == _appliedMobileOrientation) return;
+      await SystemChrome.setPreferredOrientations(switch (orientation) {
+        FullScreenOrientation.landscape => const [
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ],
+        FullScreenOrientation.portrait => const [DeviceOrientation.portraitUp],
+        null => const [],
+      }).timeout(const Duration(seconds: 2));
+      _appliedMobileOrientation = orientation;
+    });
+    _orientationCommands = operation.then(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
+  }
 
   Future<void> initialize() async {
     // SDK-managed windows already have their title and constraints. In
@@ -366,24 +414,9 @@ class WindowService {
     } else if (hasDesktopWindow) {
       await windowManager.setFullScreen(value);
     } else {
-      final requestedOrientation = value ? orientation : null;
-      if (requestedOrientation != null || _mobileOrientationLocked) {
-        await SystemChrome.setPreferredOrientations(
-          switch (requestedOrientation) {
-            FullScreenOrientation.landscape => const [
-              DeviceOrientation.landscapeLeft,
-              DeviceOrientation.landscapeRight,
-            ],
-            FullScreenOrientation.portrait => const [
-              DeviceOrientation.portraitUp,
-            ],
-            null => const [],
-          },
-        );
-        // Only release a restriction this service actually installed. A tablet
-        // fullscreen cycle must not replace its existing system rotation policy.
-        _mobileOrientationLocked = requestedOrientation != null;
-      }
+      _mobileFullScreenRequested = value;
+      _mobileFullScreenOrientation = value ? orientation : null;
+      await _applyMobileOrientation();
       await SystemChrome.setEnabledSystemUIMode(
         value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
       );

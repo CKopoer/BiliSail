@@ -83,6 +83,7 @@ void main() {
 void _resetViewAfterTest(WidgetTester tester) {
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.display.resetSize);
   addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 }
 
@@ -94,5 +95,8 @@ void _configure(
 ) {
   tester.view.devicePixelRatio = ratio;
   tester.view.physicalSize = physicalSize;
+  // Keep display and viewport consistent when changing density. A fixed mock
+  // display can otherwise become smaller than this test's physical window.
+  tester.view.display.size = physicalSize;
   tester.platformDispatcher.textScaleFactorTestValue = textScale;
 }

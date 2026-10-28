@@ -44,6 +44,7 @@ import '../shared/ui/app_notice.dart';
 import '../shared/ui/video_card_interaction_scope.dart';
 import '../shared/ui/smooth_scroll_behavior.dart';
 import '../core/presentation/app_input_host.dart';
+import '../core/presentation/window_orientation_host.dart';
 import 'shortcut_coordinator.dart';
 import 'image_cache_binding.dart';
 import 'dependencies.dart';
@@ -429,22 +430,25 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         title: 'BiliSail',
         debugShowCheckedModeBanner: false,
         scrollBehavior: const SmoothScrollBehavior(),
-        builder: (context, child) => VideoCompositionScope(
-          adapter: widget.videoComposition,
-          child: SmoothScrollScope(
-            dampingRatio: settings.wheelDampingRatio,
-            child: AppInputHost<Object>(
-              dispatcher: _input,
-              routes: _input.routes,
-              onEditingChanged: widget.dependencies.window.setTextInputActive,
-              child: AppUpdateHost(
-                navigatorKey: _router.routerDelegate.navigatorKey,
-                child: AppNoticeHost(
-                  child: VideoCardInteractionScope(
-                    interactions: cardInteractions,
-                    onNotice: showAppNotice,
-                    hoverPlaybackEnabled: settings.videoCardHoverPlayback,
-                    child: child ?? const SizedBox.shrink(),
+        builder: (context, child) => WindowOrientationHost(
+          window: widget.dependencies.window,
+          child: VideoCompositionScope(
+            adapter: widget.videoComposition,
+            child: SmoothScrollScope(
+              dampingRatio: settings.wheelDampingRatio,
+              child: AppInputHost<Object>(
+                dispatcher: _input,
+                routes: _input.routes,
+                onEditingChanged: widget.dependencies.window.setTextInputActive,
+                child: AppUpdateHost(
+                  navigatorKey: _router.routerDelegate.navigatorKey,
+                  child: AppNoticeHost(
+                    child: VideoCardInteractionScope(
+                      interactions: cardInteractions,
+                      onNotice: showAppNotice,
+                      hoverPlaybackEnabled: settings.videoCardHoverPlayback,
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   ),
                 ),
               ),

@@ -1208,7 +1208,9 @@ void main() {
       events.add(FullScreenOrientation.portrait);
       await _pumpFrames(tester);
       expect(window.fullScreen, isFalse);
-      expect(events.hasListener, isFalse);
+      // Inline horizontal playback keeps observing rotation while the browse
+      // window is portrait-locked.
+      expect(events.hasListener, isTrue);
       // Still-landscape metrics and player events cannot reopen a dismissed route.
       engine._emit(
         engine.currentSnapshot.copyWith(position: const Duration(seconds: 12)),
@@ -1518,6 +1520,215 @@ void main() {
       expect(tester.takeException(), isNull);
     }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   }
+
+  testWidgets('portrait browse lock still allows physical player rotation', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    _usePhoneDisplay(tester);
+    tester.view.physicalSize = const Size(400, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final orientations = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'SystemChrome.setPreferredOrientations') {
+          orientations.add(call.arguments);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    final events = StreamController<FullScreenOrientation>.broadcast(
+      sync: true,
+    );
+    addTearDown(events.close);
+    final window = _MobileWindowService(orientationEvents: events.stream);
+    await window.updateDisplaySize(const Size(400, 800));
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(session, window, const AppSettings.defaults()),
+    );
+    await _pumpFrames(tester);
+    engine._emit(
+      engine.currentSnapshot.copyWith(
+        videoDimensions: const VideoDimensions(1920, 1080),
+        position: const Duration(seconds: 23),
+      ),
+    );
+    await _pumpFrames(tester);
+    expect(events.hasListener, isTrue);
+    final opens = engine.opens;
+    events.add(FullScreenOrientation.portrait);
+    events.add(FullScreenOrientation.landscape);
+    await _pumpFrames(tester);
+    expect(window.isFullScreen, isTrue);
+    expect(orientations.last, [
+      'DeviceOrientation.landscapeLeft',
+      'DeviceOrientation.landscapeRight',
+    ]);
+    // Interface metrics alone cannot exit a fullscreen whose orientation was
+    // forced by the player. The physical posture owns this transition.
+    tester.view.physicalSize = const Size(800, 400);
+    await _pumpFrames(tester);
+    events.add(FullScreenOrientation.portrait);
+    await _pumpFrames(tester);
+    expect(window.isFullScreen, isFalse);
+    expect(orientations.last, ['DeviceOrientation.portraitUp']);
+    expect(engine.opens, opens);
+    expect(engine.currentSnapshot.position, const Duration(seconds: 23));
+    expect(engine.maxSurfaces, 1);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+    await window.clearDisplayOrientationPolicy();
+    expect(events.hasListener, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final fullscreen in [false, true]) {
+    testWidgets(
+      'wide playback rotation retains fullscreen=$fullscreen across folding',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.display.size = const Size(800, 1200);
+        tester.view.physicalSize = const Size(800, 1200);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.display.resetSize);
+        addTearDown(tester.view.resetPhysicalSize);
+        final events = StreamController<FullScreenOrientation>.broadcast(
+          sync: true,
+        );
+        addTearDown(events.close);
+        final window = _FakeWindowService(
+          desktop: false,
+          orientationEvents: events.stream,
+        );
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(session, window, const AppSettings.defaults(), width: 800),
+        );
+        await _pumpFrames(tester);
+        engine._emit(
+          engine.currentSnapshot.copyWith(
+            videoDimensions: const VideoDimensions(1920, 1080),
+          ),
+        );
+        await _pumpFrames(tester);
+        if (fullscreen) {
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+        }
+        final opens = engine.opens;
+        for (final (display, viewport) in [
+          (const Size(1200, 800), const Size(1200, 800)),
+          (const Size(800, 1200), const Size(800, 1200)),
+          (const Size(400, 900), const Size(400, 900)),
+          (const Size(900, 1200), const Size(900, 1200)),
+          (const Size(1200, 900), const Size(1200, 900)),
+          (const Size(400, 900), const Size(400, 900)),
+        ]) {
+          tester.view.display.size = display;
+          tester.view.physicalSize = viewport;
+          await _pumpFrames(tester);
+          expect(window.fullScreen, fullscreen, reason: '$display');
+          if (display.shortestSide >= 600) {
+            expect(events.hasListener, isFalse);
+            events.add(FullScreenOrientation.landscape);
+            events.add(FullScreenOrientation.portrait);
+            await _pumpFrames(tester);
+            expect(window.fullScreen, fullscreen);
+          } else {
+            events.add(FullScreenOrientation.portrait);
+            await _pumpFrames(tester);
+            expect(
+              window.fullScreen,
+              fullscreen,
+              reason: 'Folding is not a rotation gesture',
+            );
+          }
+        }
+        // Once folded, a new actual landscape/portrait cycle resumes narrow mode
+        // behavior, whether fullscreen was entered manually or by that rotation.
+        events.add(FullScreenOrientation.landscape);
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isTrue);
+        events.add(FullScreenOrientation.portrait);
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isFalse);
+        expect(engine.opens, opens);
+        expect(engine.maxSurfaces, 1);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+        expect(events.hasListener, isFalse);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'narrow tablet windows rotate playback without locking the display',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.display.size = const Size(800, 1200);
+      tester.view.physicalSize = const Size(500, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.display.resetSize);
+      addTearDown(tester.view.resetPhysicalSize);
+      final window = _FakeWindowService(desktop: false);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      engine._emit(
+        engine.currentSnapshot.copyWith(
+          videoDimensions: const VideoDimensions(1920, 1080),
+        ),
+      );
+      tester.view.display.size = const Size(1200, 800);
+      // Split-window geometry may stay portrait-shaped on a landscape display.
+      tester.view.physicalSize = const Size(500, 800);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isTrue);
+      expect(window.orientations.last, isNull);
+      // Moving to a wide layout and then rotating must keep manual fullscreen.
+      tester.view.physicalSize = const Size(600, 400);
+      await _pumpFrames(tester);
+      tester.view.physicalSize = const Size(600, 900);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isTrue);
+      tester.view.physicalSize = const Size(500, 900);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isTrue);
+      tester.view.physicalSize = const Size(500, 400);
+      await _pumpFrames(tester);
+      tester.view.display.size = const Size(800, 1200);
+      tester.view.physicalSize = const Size(500, 900);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      expect(
+        window.orientations.every((orientation) => orientation == null),
+        isTrue,
+      );
+      expect(engine.opens, 1);
+      expect(engine.maxSurfaces, 1);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('fullscreen releases the phone lock when its display unfolds', (
     tester,
@@ -6225,6 +6436,12 @@ final class _FakeWindowService extends WindowService {
 }
 
 final class _MobileWindowService extends WindowService {
+  _MobileWindowService({this.orientationEvents = const Stream.empty()});
+  final Stream<FullScreenOrientation> orientationEvents;
+
+  @override
+  Stream<FullScreenOrientation> get deviceOrientations => orientationEvents;
+
   @override
   bool get hasDesktopWindow => false;
 }

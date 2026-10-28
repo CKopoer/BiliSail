@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/platform/window_service.dart';
+import '../../../core/platform/window_size_policy.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_navigation.dart';
@@ -63,6 +64,7 @@ class PlaybackPanel extends ConsumerStatefulWidget {
 class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     with WidgetsBindingObserver {
   late final PlaybackSession _session;
+  late FlutterView _view;
   late final PlaybackShortcutController _shortcuts;
   late final ValueNotifier<AppSettings> _settings;
   final _pageCommands = ValueNotifier<PlaybackPageCommands?>(null);
@@ -84,6 +86,11 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   bool _rotationCallbackPending = false;
   bool _physicalLandscapeSeen = false;
   Object? _portraitExitRequest;
+  Object? _deviceOrientationOwner;
+  FullScreenOrientation? _deviceOrientation;
+  bool? _rotationCompact, _displayCompact;
+  bool _deviceOrientationBaselinePending = false;
+  bool _metricsBaselinePending = false;
   static final _windowStates = Expando<_WindowFullScreenState>();
   _WindowFullScreenState get _windowState =>
       _windowStates[widget.window] ??= _WindowFullScreenState();
@@ -118,7 +125,10 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _viewLandscape ??= _isViewLandscape;
+    _view = View.of(context);
+    _viewLandscape ??= _isRotationLandscape;
+    _rotationCompact ??= _usesCompactRotation;
+    _displayCompact ??= _isPhoneDisplay;
     final commands = PlaybackPageCommands.maybeOf(context);
     final navigation = PlaybackNavigation.maybeOf(context);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -240,6 +250,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       _shortcuts.cancel();
       _landscapeRotationPending = false;
       _portraitExitRequest = null;
+      _stopDeviceOrientation();
+    } else {
+      _syncDeviceOrientation();
     }
     // A video can keep playing behind another workspace tab. System lifecycle
     // still applies to its owner even when the page has no visible surface.
@@ -268,6 +281,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
 
   void _dismissFullScreen() {
     _shortcuts.cancel();
+    _portraitExitRequest = null;
     _stopDeviceOrientation();
     final request = _fullScreenRequest;
     _fullScreenRequest = null;
@@ -343,22 +357,39 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     if (!_isPhoneDisplay) return null;
     return _videoOrientation ??
         _fullScreenOrientation ??
-        (MediaQuery.orientationOf(context) == Orientation.landscape
+        (_isViewLandscape
             ? FullScreenOrientation.landscape
             : FullScreenOrientation.portrait);
   }
 
   bool get _isPhoneDisplay {
     if (widget.window.hasDesktopWindow) return false;
-    final display = View.of(context).display;
     // Orientation locks can letterbox tablets. Use the physical display rather
     // than the app viewport, which can already be narrowed by compatibility mode
     // or multi-window. The shortest side keeps phone rotation below the cutoff.
-    return display.size.shortestSide / display.devicePixelRatio < 600;
+    return WindowSizePolicy.compactDisplay(WindowSizePolicy.displaySize(_view));
+  }
+
+  bool get _usesCompactRotation {
+    if (widget.window.hasDesktopWindow) return false;
+    final view = _view;
+    return WindowSizePolicy.compactLayout(
+      mobile: true,
+      displaySize: WindowSizePolicy.displaySize(view),
+      availableWidth: WindowSizePolicy.availableWidth(view),
+    );
   }
 
   bool get _isViewLandscape {
-    final size = View.of(context).physicalSize;
+    final size = _view.physicalSize;
+    return size.width > size.height;
+  }
+
+  bool get _isRotationLandscape {
+    if (_isPhoneDisplay) return _isViewLandscape;
+    final size = WindowSizePolicy.displaySize(_view);
+    // A narrow tablet split can remain portrait-shaped after the device turns.
+    // Its unrestricted display rotation, rather than a window resize, is input.
     return size.width > size.height;
   }
 
@@ -368,18 +399,45 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
 
   @override
   void didChangeMetrics() {
-    final landscape = _isViewLandscape;
-    if (landscape != _viewLandscape) {
+    final landscape = _isRotationLandscape;
+    final compact = _usesCompactRotation;
+    final phone = _isPhoneDisplay;
+    final sizeClassChanged =
+        compact != _rotationCompact || phone != _displayCompact;
+    _rotationCompact = compact;
+    _displayCompact = phone;
+    if (sizeClassChanged) {
+      // Folding, unfolding and split-window boundaries change layout, not the
+      // user's fullscreen intent. The next sensor sample is a new baseline.
+      _viewLandscape = landscape;
+      _landscapeRotationPending = false;
+      _portraitExitRequest = null;
+      _physicalLandscapeSeen = false;
+      _deviceOrientationBaselinePending = true;
+      _metricsBaselinePending = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        // Display metadata and the view rectangle can arrive separately during
+        // the same fold. Consume the final rectangle as the new baseline.
+        _metricsBaselinePending = false;
+        _viewLandscape = _isRotationLandscape;
+      });
+    } else if (landscape != _viewLandscape) {
       _viewLandscape = landscape;
       _landscapeRotationPending =
           !_fullScreen &&
           _active &&
           _appResumed &&
-          _isPhoneDisplay &&
+          compact &&
+          !_metricsBaselinePending &&
+          !widget.window.keepsBrowsePortrait &&
           landscape;
       if (landscape) _portraitExitRequest = null;
       if (!landscape &&
           _fullScreen &&
+          compact &&
+          !_metricsBaselinePending &&
+          !widget.window.keepsBrowsePortrait &&
           _videoOrientation == FullScreenOrientation.landscape) {
         _schedulePortraitExit(_fullScreenRequest);
       }
@@ -392,7 +450,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         !_landscapeRotationPending ||
         !_active ||
         !_appResumed ||
-        !_isPhoneDisplay ||
+        !_usesCompactRotation ||
         _fullScreen ||
         !_session.ownsPlayback(this) ||
         !_session.snapshots.value.desiredPlaying ||
@@ -405,9 +463,10 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       if (!mounted ||
           !_active ||
           !_appResumed ||
-          !_isPhoneDisplay ||
+          !_usesCompactRotation ||
           !_landscapeRotationPending ||
-          !_isViewLandscape ||
+          (!_isRotationLandscape &&
+              _deviceOrientation != FullScreenOrientation.landscape) ||
           !_session.ownsPlayback(this) ||
           !_session.snapshots.value.desiredPlaying ||
           _videoOrientation != FullScreenOrientation.landscape ||
@@ -427,7 +486,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       if (mounted &&
           _active &&
           _appResumed &&
-          _isPhoneDisplay &&
+          _usesCompactRotation &&
           identical(exitRequest, _portraitExitRequest) &&
           identical(request, _fullScreenRequest)) {
         unawaited(_exitFullScreen());
@@ -436,11 +495,24 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     WidgetsBinding.instance.scheduleFrame();
   }
 
-  void _watchDeviceOrientation(Object request) {
-    if (!_isPhoneDisplay) return;
-    // A button press while physically portrait must stay fullscreen until the
-    // user has actually held the phone landscape and then turns it back.
-    _physicalLandscapeSeen = _isViewLandscape;
+  void _syncDeviceOrientation() {
+    final watch =
+        mounted &&
+        _active &&
+        _appResumed &&
+        _isPhoneDisplay &&
+        (_fullScreen
+            ? _fullScreenRequest != null
+            : _session.ownsPlayback(this) &&
+                  _session.snapshots.value.desiredPlaying &&
+                  _videoOrientation == FullScreenOrientation.landscape);
+    if (!watch) {
+      _stopDeviceOrientation();
+      return;
+    }
+    if (_deviceOrientationSubscription != null) return;
+    final owner = Object();
+    _deviceOrientationOwner = owner;
     _deviceOrientationSubscription = widget.window.deviceOrientations.listen((
       orientation,
     ) {
@@ -448,26 +520,42 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
           !_active ||
           !_appResumed ||
           !_isPhoneDisplay ||
-          !identical(request, _fullScreenRequest)) {
+          !identical(owner, _deviceOrientationOwner)) {
         return;
       }
+      if (_deviceOrientationBaselinePending) {
+        _deviceOrientationBaselinePending = false;
+        _deviceOrientation = orientation;
+        _physicalLandscapeSeen = orientation == FullScreenOrientation.landscape;
+        return;
+      }
+      if (_deviceOrientation == orientation) return;
+      _deviceOrientation = orientation;
       if (orientation == FullScreenOrientation.landscape) {
         _physicalLandscapeSeen = true;
         _portraitExitRequest = null;
-      } else if (_physicalLandscapeSeen &&
-          _videoOrientation == FullScreenOrientation.landscape) {
-        _schedulePortraitExit(request);
+        if (!_fullScreen) {
+          _landscapeRotationPending = true;
+          _scheduleAutoFullScreen();
+        }
+      } else {
+        _landscapeRotationPending = false;
+        if (_physicalLandscapeSeen &&
+            _videoOrientation == FullScreenOrientation.landscape) {
+          _schedulePortraitExit(_fullScreenRequest);
+        }
       }
     });
   }
 
   void _stopDeviceOrientation() {
-    _portraitExitRequest = null;
+    _deviceOrientationOwner = null;
     unawaited(_deviceOrientationSubscription?.cancel());
     _deviceOrientationSubscription = null;
   }
 
   void _updateFullScreenOrientation() {
+    _syncDeviceOrientation();
     _scheduleAutoFullScreen();
     final request = _fullScreenRequest;
     if (request == null ||
@@ -475,11 +563,6 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         !_active ||
         widget.window.hasDesktopWindow) {
       return;
-    }
-    if (!_isPhoneDisplay) {
-      _stopDeviceOrientation();
-    } else if (_deviceOrientationSubscription == null) {
-      _watchDeviceOrientation(request);
     }
     final orientation = _preferredFullScreenOrientation;
     if (orientation == _fullScreenOrientation) return;
@@ -496,8 +579,13 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _fullScreenOrientation = _preferredFullScreenOrientation;
     _fullScreenRequest = request;
     _landscapeRotationPending = false;
-    _watchDeviceOrientation(request);
+    // While portrait browsing is locked, only physical posture can confirm a
+    // landscape hold; the interface may be rotating because of the button.
+    _physicalLandscapeSeen =
+        _deviceOrientation == FullScreenOrientation.landscape ||
+        (!widget.window.keepsBrowsePortrait && _isViewLandscape);
     setState(() => _fullScreen = true);
+    _syncDeviceOrientation();
     try {
       // Unmount the inline surface before the route surface is created.
       await WidgetsBinding.instance.endOfFrame;
@@ -561,7 +649,10 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       await WidgetsBinding.instance.endOfFrame;
       await _setWindowFullScreen(request, false);
       _fullScreenOrientation = null;
-      if (mounted) setState(() => _fullScreen = false);
+      if (mounted) {
+        setState(() => _fullScreen = false);
+        _syncDeviceOrientation();
+      }
     }
   }
 

@@ -73,8 +73,7 @@ void main() {
           mode.value = value;
           await tester.pumpAndSettle();
           final bottom =
-              value == NavigationBarMode.bottom ||
-              (value == NavigationBarMode.automatic && width - inset * 2 < 600);
+              value == NavigationBarMode.bottom || width - inset * 2 < 600;
           expect(
             tester
                 .widget<PredictiveBackRegion>(find.byType(PredictiveBackRegion))
@@ -97,7 +96,7 @@ void main() {
   );
 
   testWidgets(
-    'navigation mode overrides width and retains content and sidebar choices',
+    'navigation mode respects mobile space and retains content and sidebar choices',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1280, 900);
@@ -123,6 +122,9 @@ void main() {
       await tester.pumpAndSettle();
       final draft = find.byKey(const ValueKey('navigation-draft'));
       final original = tester.element(draft);
+      final platform = Theme.of(tester.element(draft)).platform;
+      final mobile =
+          platform == TargetPlatform.android || platform == TargetPlatform.iOS;
       await tester.enterText(draft, '导航切换保留草稿');
       for (final width in [320.0, 599.0, 600.0, 1280.0, 1600.0]) {
         tester.view.physicalSize = Size(width, 900);
@@ -135,7 +137,8 @@ void main() {
             await tester.pumpAndSettle();
             final bottom =
                 mode == NavigationBarMode.bottom ||
-                (mode == NavigationBarMode.automatic && width < 600);
+                (width < 600 &&
+                    (mobile || mode == NavigationBarMode.automatic));
             final expectedWidth = bottom
                 ? 0.0
                 : style == SidebarStyle.expanded ||
@@ -191,6 +194,11 @@ void main() {
       expect(settings.value.sidebarStyle, SidebarStyle.expanded);
       expect(tester.element(draft), same(original));
     },
+    variant: TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+      TargetPlatform.windows,
+    }),
   );
 
   for (final workspaceMode in WorkspaceNavigationMode.values) {
