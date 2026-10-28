@@ -71,6 +71,37 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
   final _searchController = TextEditingController();
   bool _completed = false;
   String _query = '';
+  String _normalizedQuery = '';
+  DownloadQueueStructure? _shownStructure;
+  bool _shownCompleted = false;
+  String _shownQuery = '';
+  List<DownloadTaskEntry> _shown = const [];
+  Map<String, int> _shownIndices = const {};
+
+  List<DownloadTaskEntry> _shownEntries(DownloadQueueStructure structure) {
+    if (identical(_shownStructure, structure) &&
+        _shownCompleted == _completed &&
+        _shownQuery == _normalizedQuery) {
+      return _shown;
+    }
+    _shownStructure = structure;
+    _shownCompleted = _completed;
+    _shownQuery = _normalizedQuery;
+    final group = _completed ? structure.completed : structure.queued;
+    _shown = _normalizedQuery.isEmpty
+        ? group
+        : group
+              .where((entry) => entry.searchText.contains(_normalizedQuery))
+              .toList(growable: false);
+    _shownIndices = {
+      for (var index = 0; index < _shown.length; index++)
+        _shown[index].id: index + 3,
+    };
+    return _shown;
+  }
+
+  DownloadTask? _task(String id) =>
+      ref.read(downloadQueueIndexProvider).tasksById[id];
 
   @override
   void dispose() {
@@ -106,30 +137,18 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(downloadControllerProvider);
-    final controller = ref.read(downloadControllerProvider.notifier);
-    final queue = state.tasks
-        .where((task) => task.status != DownloadStatus.completed)
-        .toList();
-    final completed = state.tasks
-        .where((task) => task.status == DownloadStatus.completed)
-        .toList();
-    final shown = (_completed ? completed : queue).where((task) {
-      final haystack = '${task.item.video.title} ${task.item.part.title}';
-      return haystack.toLowerCase().contains(_query.trim().toLowerCase());
-    }).toList();
-    final activeCount = queue.where((task) => task.active).length;
-    final resumableCount = queue
-        .where(
-          (task) =>
-              task.status == DownloadStatus.paused ||
-              task.status == DownloadStatus.failed,
-        )
-        .length;
-    final transferred = state.tasks.fold<int>(
-      0,
-      (sum, task) => sum + task.downloadedBytes,
+    final (initialized, failure) = ref.watch(
+      downloadControllerProvider.select(
+        (state) => (state.initialized, state.failure),
+      ),
     );
+    final structure = ref.watch(
+      downloadQueueIndexProvider.select((index) => index.structure),
+    );
+    final controller = ref.read(downloadControllerProvider.notifier);
+    final shown = _shownEntries(structure);
+    final activeCount = structure.activeCount;
+    final resumableCount = structure.resumableCount;
 
     final theme = Theme.of(context);
 
@@ -150,7 +169,9 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
                 onPressed: () => showAppDialog<void>(
                   context: context,
                   builder: (_) => _DownloadSettingsDialog(
-                    preferences: state.preferences,
+                    preferences: ref
+                        .read(downloadControllerProvider)
+                        .preferences,
                     allowCustomDirectory: widget.allowCustomDirectory,
                   ),
                 ),
@@ -203,7 +224,7 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    '${completedTab ? completed.length : queue.length}',
+                                    '${completedTab ? structure.completed.length : structure.queued.length}',
                                     style: const TextStyle(fontSize: 12),
                                   ),
                                 ],
@@ -222,116 +243,142 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
         ),
         const Divider(height: 1),
         Expanded(
-          child: ListView(
+          child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 72),
-            children: [
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final search = ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 360),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (text) => setState(() => _query = text),
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search_rounded, size: 20),
-                        hintText: '搜索标题或分集',
-                      ),
-                    ),
-                  );
-                  final actions = Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: activeCount == 0
-                            ? null
-                            : () => _run(controller.pauseAll),
-                        icon: const Icon(Icons.pause_rounded, size: 18),
-                        label: const Text('全部暂停'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: resumableCount == 0
-                            ? null
-                            : () => _run(controller.resumeAll),
-                        icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                        label: const Text('全部继续'),
-                      ),
-                    ],
-                  );
-                  final textScale =
-                      MediaQuery.textScalerOf(context).scale(14) / 14;
-                  if (constraints.maxWidth >= 720 * textScale) {
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: search,
-                          ),
+            itemCount: shown.length + 3,
+            findChildIndexCallback: (key) => switch (key) {
+              ValueKey<int>(:final value) => value,
+              ValueKey<String>(:final value) => _shownIndices[value],
+              _ => null,
+            },
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return LayoutBuilder(
+                  key: const ValueKey(0),
+                  builder: (context, constraints) {
+                    final search = ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 360),
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (text) => setState(() {
+                          _query = text;
+                          _normalizedQuery = text.trim().toLowerCase();
+                        }),
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search_rounded, size: 20),
+                          hintText: '搜索标题或分集',
                         ),
-                        const SizedBox(width: 16),
+                      ),
+                    );
+                    final actions = Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: activeCount == 0
+                              ? null
+                              : () => _run(controller.pauseAll),
+                          icon: const Icon(Icons.pause_rounded, size: 18),
+                          label: const Text('全部暂停'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: resumableCount == 0
+                              ? null
+                              : () => _run(controller.resumeAll),
+                          icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                          label: const Text('全部继续'),
+                        ),
+                      ],
+                    );
+                    final textScale =
+                        MediaQuery.textScalerOf(context).scale(14) / 14;
+                    if (constraints.maxWidth >= 720 * textScale) {
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: search,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          actions,
+                        ],
+                      );
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Align(alignment: Alignment.centerLeft, child: search),
+                        const SizedBox(height: 8),
                         actions,
                       ],
                     );
-                  }
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Align(alignment: Alignment.centerLeft, child: search),
-                      const SizedBox(height: 8),
-                      actions,
-                    ],
-                  );
-                },
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 16),
-                child: Text(
-                  '已传输 ${downloadByteText(transferred)}',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-              if (!state.initialized)
-                const SizedBox(height: 260, child: StateView.loading())
-              else if (state.failure case final failure?)
-                SizedBox(
-                  height: 180,
-                  child: StateView.error(
-                    message: failure.message,
-                    onAction: () => _run(controller.refresh),
-                  ),
-                ),
-              if (state.initialized && shown.isEmpty)
-                SizedBox(
-                  height: 240,
-                  child: StateView.empty(
-                    message: _query.isNotEmpty
-                        ? '没有匹配的下载任务'
-                        : _completed
-                        ? '还没有已完成的下载'
-                        : '还没有下载任务',
-                    icon: Icons.download_outlined,
-                  ),
-                ),
-              for (final task in shown) ...[
-                _DownloadTaskCard(
-                  key: ValueKey(task.id),
-                  task: task,
-                  onPause: () => _run(() => controller.pause(task.id)),
-                  onResume: () => _run(() => controller.resume(task.id)),
-                  onRemove: () => _remove(task),
+                  },
+                );
+              }
+              if (index == 1) {
+                return const _DownloadTransferredLabel(key: ValueKey(1));
+              }
+              if (index == 2) {
+                return Column(
+                  key: const ValueKey(2),
+                  children: [
+                    if (!initialized)
+                      const SizedBox(height: 260, child: StateView.loading())
+                    else if (failure != null)
+                      SizedBox(
+                        height: 180,
+                        child: StateView.error(
+                          message: failure.message,
+                          onAction: () => _run(controller.refresh),
+                        ),
+                      ),
+                    if (initialized && shown.isEmpty)
+                      SizedBox(
+                        height: 240,
+                        child: StateView.empty(
+                          message: _query.isNotEmpty
+                              ? '没有匹配的下载任务'
+                              : _completed
+                              ? '还没有已完成的下载'
+                              : '还没有下载任务',
+                          icon: Icons.download_outlined,
+                        ),
+                      ),
+                  ],
+                );
+              }
+              final id = shown[index - 3].id;
+              return Padding(
+                key: ValueKey(id),
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _DownloadTaskRow(
+                  id: id,
+                  onPause: () => _run(() => controller.pause(id)),
+                  onResume: () => _run(() => controller.resume(id)),
+                  onRemove: () {
+                    final task = _task(id);
+                    if (task != null) _remove(task);
+                  },
                   onPlay: widget.onPlay == null
                       ? null
-                      : () => widget.onPlay!(task),
+                      : () {
+                          final task = _task(id);
+                          if (task != null) widget.onPlay?.call(task);
+                        },
                   onOpenDirectory: widget.onOpenDirectory == null
                       ? null
-                      : () =>
-                            _run(() => widget.onOpenDirectory!(task.directory)),
+                      : () => _run(() async {
+                          final task = _task(id);
+                          if (task != null) {
+                            await widget.onOpenDirectory?.call(task.directory);
+                          }
+                        }),
                   coverProvider: widget.coverProvider,
                 ),
-                const SizedBox(height: 12),
-              ],
-            ],
+              );
+            },
           ),
         ),
       ],
@@ -339,9 +386,60 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
   }
 }
 
+final class _DownloadTransferredLabel extends ConsumerWidget {
+  const _DownloadTransferredLabel({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final transferred = ref.watch(
+      downloadQueueIndexProvider.select((index) => index.transferredBytes),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 16),
+      child: Text(
+        '已传输 ${downloadByteText(transferred)}',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    );
+  }
+}
+
+final class _DownloadTaskRow extends ConsumerWidget {
+  const _DownloadTaskRow({
+    required this.id,
+    required this.onPause,
+    required this.onResume,
+    required this.onRemove,
+    this.onPlay,
+    this.onOpenDirectory,
+    this.coverProvider,
+  });
+
+  final String id;
+  final VoidCallback onPause, onResume, onRemove;
+  final VoidCallback? onPlay, onOpenDirectory;
+  final ImageProvider<Object>? Function(DownloadTask)? coverProvider;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final task = ref.watch(
+      downloadQueueIndexProvider.select((index) => index.tasksById[id]),
+    );
+    if (task == null) return const SizedBox.shrink();
+    return _DownloadTaskCard(
+      task: task,
+      onPause: onPause,
+      onResume: onResume,
+      onRemove: onRemove,
+      onPlay: onPlay,
+      onOpenDirectory: onOpenDirectory,
+      coverProvider: coverProvider,
+    );
+  }
+}
+
 final class _DownloadTaskCard extends StatelessWidget {
   const _DownloadTaskCard({
-    super.key,
     required this.task,
     required this.onPause,
     required this.onResume,

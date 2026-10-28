@@ -125,6 +125,7 @@
 | [播放器滑动亮度与音量](validation/fullscreen-swipe-controls.md) | 普通／全屏左侧亮度与右侧音量、设置开关、窗口亮度恢复和验证边界 |
 | [首页刷新、自动分页与图片缓存](validation/feed-scroll-image-cache.md) | 悬浮刷新/回顶部、首屏补页、隐藏列表隔离和图片缓存设置 |
 | [列表滚动性能修复](validation/feed-scroll-performance.md) | Windows profile 对比、首页及搜索/历史虚拟化、局部重建和悬停生命周期 |
+| [页面性能热点复查](validation/page-performance-hotspots-2026-10-28.md) | 下载／离线页、用户空间和消息页的热点证据、局部更新方案及验证边界 |
 | [推荐页分页与反馈性能](validation/recommendation-updates-2026-10-27.md) | 单卡订阅、分页组件复用、查询归属与 Android Profile 对照 |
 | [多页面深滚动与共享卡片更新](validation/retained-card-pages-2026-10-27.md) | 隐藏列表惯性、共享卡片内容复用、动态高度缓存与真机对照 |
 | [全局桌面滚轮平滑过渡](validation/smooth-scrolling.md) | 官方模拟器、阻尼比设置、连续/反向输入、嵌套仲裁及验证边界 |

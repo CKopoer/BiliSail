@@ -41,20 +41,6 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   final Map<String, String> _drafts = {};
   int _openVersion = 0;
 
-  IconData _sectionIcon(InboxSection section) => switch (section) {
-    InboxSection.private => Icons.chat_bubble_outline_rounded,
-    InboxSection.replies => Icons.reply_rounded,
-    InboxSection.mentions => Icons.alternate_email_rounded,
-    InboxSection.likes => Icons.favorite_border_rounded,
-    InboxSection.system => Icons.notifications_none_rounded,
-  };
-
-  String _sectionTabLabel(InboxSection section) => switch (section) {
-    InboxSection.replies => '回复',
-    InboxSection.mentions => '我的',
-    _ => section.label,
-  };
-
   @override
   void initState() {
     super.initState();
@@ -87,25 +73,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final auth = ref.watch(authControllerProvider);
-    ref.listen(authControllerProvider.select((s) => (s.isSignedIn, s.mid)), (
-      _,
-      _,
-    ) {
-      _drafts.clear();
-      _openInitialConversation();
-    });
-    if (!auth.isSignedIn) {
-      return StateView.empty(
-        message: '登录后查看我的消息',
-        icon: Icons.mail_outline,
-        actionLabel: '登录',
-        onAction: widget.onLogin,
-      );
-    }
-    final state = ref.watch(messagesControllerProvider);
+  void _scheduleRead(MessagesState state) {
     final controller = ref.read(messagesControllerProvider.notifier);
     final active = WorkspaceActivity.isActive(context);
     if (active &&
@@ -123,6 +91,9 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
           controller.markRead(automatic: true);
         }
       });
+      // A read/write transition can change only controls or a non-visible
+      // footer. Ensure its deferred visibility check gets a frame as well.
+      WidgetsBinding.instance.ensureVisualUpdate();
     }
     if (active &&
         state.section == InboxSection.system &&
@@ -136,13 +107,42 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
           controller.markSystemNotificationsRead();
         }
       });
+      WidgetsBinding.instance.ensureVisualUpdate();
     }
-    final unreadState = ref.watch(unreadMessagesProvider);
-    final unread = unreadState.isLoading || unreadState.hasError
-        ? const <InboxSection, int>{}
-        : unreadState.value ?? const {};
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = ref.watch(
+      authControllerProvider.select((state) => (state.isSignedIn, state.mid)),
+    );
+    ref.listen(authControllerProvider.select((s) => (s.isSignedIn, s.mid)), (
+      _,
+      _,
+    ) {
+      _drafts.clear();
+      _openInitialConversation();
+    });
+    if (!auth.$1) {
+      return StateView.empty(
+        message: '登录后查看我的消息',
+        icon: Icons.mail_outline,
+        actionLabel: '登录',
+        onAction: widget.onLogin,
+      );
+    }
+    // Read effects still observe every transition, including visibility changes,
+    // while navigation only rebuilds when the selected page actually changes.
+    ref.listen(messagesControllerProvider, (_, state) => _scheduleRead(state));
+    _scheduleRead(ref.read(messagesControllerProvider));
+    final (section, selectedId) = ref.watch(
+      messagesControllerProvider.select(
+        (state) => (state.section, state.selected?.id),
+      ),
+    );
+    final controller = ref.read(messagesControllerProvider.notifier);
     return PageBackHandler(
-      enabled: state.section == InboxSection.private && state.selected != null,
+      enabled: section == InboxSection.private && selectedId != null,
       onBack: () {
         controller.closeConversation();
         return true;
@@ -174,77 +174,31 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
               ],
             ),
           ),
-          SizedBox(
-            height: PageTabStyle.barHeight,
-            child: ScrollConfiguration(
-              behavior: const SmoothScrollBehavior(horizontalMouseWheel: true)
-                  .copyWith(
-                    dragDevices: {
-                      ...const SmoothScrollBehavior().dragDevices,
-                      PointerDeviceKind.mouse,
-                    },
-                  ),
-              child: SingleChildScrollView(
-                key: const ValueKey('message-section-strip'),
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: PagingTabStrip<InboxSection>(
-                  tabs: InboxSection.values,
-                  value: state.section,
-                  onSelected: controller.selectSection,
-                  itemKey: (section) =>
-                      ValueKey('message-section-${section.name}'),
-                  buttonStyle: PageTabStyle.buttonStyle(context),
-                  labelBuilder: (context, section) => PageTabStyle.label(
-                    '${_sectionTabLabel(section)}${(unread[section] ?? 0) > 0 ? ' · ${unread[section]}' : ''}',
-                    icon: _sectionIcon(section),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          const _MessageSections(),
           const Divider(height: 1),
-          if (state.section == InboxSection.system)
-            if (state.writeMessage case final message?)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 8,
-                ),
-                child: Text(message),
-              ),
+          if (section == InboxSection.system) const _SystemWriteMessage(),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final entry = state.selected;
                 final wide = constraints.maxWidth >= 720;
                 final list = _InboxList(
-                  state: state.inbox,
-                  selected: entry?.id,
-                  isPrivate: state.section == InboxSection.private,
-                  section: state.section,
-                  onMore: controller.loadInbox,
-                  onRefresh: () => controller.loadInbox(refresh: true),
-                  onSelect: controller.selectConversation,
                   onOpenUser: widget.onOpenUser,
                   onOpenTarget: widget.onOpenTarget,
                 );
-                if (state.section != InboxSection.private) return list;
-                final thread = entry == null
+                if (section != InboxSection.private) return list;
+                final thread = selectedId == null
                     ? const StateView.empty(
                         message: '选择一个会话查看消息',
                         icon: Icons.chat_bubble_outline,
                       )
                     : _ConversationView(
-                        key: ValueKey('${auth.mid}:${entry.id}'),
-                        entry: entry,
-                        ownMid: auth.mid,
-                        state: state,
+                        key: ValueKey('${auth.$2}:$selectedId'),
+                        ownMid: auth.$2,
                         narrow: !wide,
-                        initialDraft: _drafts[entry.id] ?? '',
+                        initialDraft: _drafts[selectedId] ?? '',
                         onDraftChanged: (text) {
-                          _drafts.remove(entry.id);
-                          if (text.isNotEmpty) _drafts[entry.id] = text;
+                          _drafts.remove(selectedId);
+                          if (text.isNotEmpty) _drafts[selectedId] = text;
                           if (_drafts.length > 500) {
                             _drafts.remove(_drafts.keys.first);
                           }
@@ -254,8 +208,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                         onRefresh: () => controller.loadThread(refresh: true),
                         onSend: (text) async {
                           final sent = await controller.send(text);
-                          if (sent && mounted && _drafts[entry.id] == text) {
-                            _drafts.remove(entry.id);
+                          if (sent && mounted && _drafts[selectedId] == text) {
+                            // A different view of this conversation may have
+                            // reopened while the original send was pending.
+                            setState(() => _drafts.remove(selectedId));
                           }
                           return sent;
                         },
@@ -263,7 +219,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                         onOpenUser: widget.onOpenUser,
                         onOpenTarget: widget.onOpenTarget,
                       );
-                if (!wide) return entry == null ? list : thread;
+                if (!wide) return selectedId == null ? list : thread;
                 return Row(
                   children: [
                     SizedBox(width: 300, child: list),
@@ -280,33 +236,109 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   }
 }
 
-class _InboxList extends StatelessWidget {
-  const _InboxList({
-    required this.state,
-    required this.isPrivate,
-    required this.section,
-    required this.onMore,
-    required this.onRefresh,
-    required this.onSelect,
-    this.selected,
-    this.onOpenUser,
-    this.onOpenTarget,
-  });
-  final MessageListState<InboxEntry> state;
-  final bool isPrivate;
-  final InboxSection section;
-  final String? selected;
-  final VoidCallback onMore, onRefresh;
-  final ValueChanged<InboxEntry> onSelect;
+class _MessageSections extends ConsumerWidget {
+  const _MessageSections();
+
+  IconData _icon(InboxSection section) => switch (section) {
+    InboxSection.private => Icons.chat_bubble_outline_rounded,
+    InboxSection.replies => Icons.reply_rounded,
+    InboxSection.mentions => Icons.alternate_email_rounded,
+    InboxSection.likes => Icons.favorite_border_rounded,
+    InboxSection.system => Icons.notifications_none_rounded,
+  };
+
+  String _label(InboxSection section) => switch (section) {
+    InboxSection.replies => '回复',
+    InboxSection.mentions => '我的',
+    _ => section.label,
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final section = ref.watch(
+      messagesControllerProvider.select((state) => state.section),
+    );
+    final unreadState = ref.watch(unreadMessagesProvider);
+    final unread = unreadState.isLoading || unreadState.hasError
+        ? const <InboxSection, int>{}
+        : unreadState.value ?? const {};
+    return SizedBox(
+      height: PageTabStyle.barHeight,
+      child: ScrollConfiguration(
+        behavior: const SmoothScrollBehavior(horizontalMouseWheel: true)
+            .copyWith(
+              dragDevices: {
+                ...const SmoothScrollBehavior().dragDevices,
+                PointerDeviceKind.mouse,
+              },
+            ),
+        child: SingleChildScrollView(
+          key: const ValueKey('message-section-strip'),
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: PagingTabStrip<InboxSection>(
+            tabs: InboxSection.values,
+            value: section,
+            onSelected: ref
+                .read(messagesControllerProvider.notifier)
+                .selectSection,
+            itemKey: (section) => ValueKey('message-section-${section.name}'),
+            buttonStyle: PageTabStyle.buttonStyle(context),
+            labelBuilder: (context, section) => PageTabStyle.label(
+              '${_label(section)}${(unread[section] ?? 0) > 0 ? ' · ${unread[section]}' : ''}',
+              icon: _icon(section),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SystemWriteMessage extends ConsumerWidget {
+  const _SystemWriteMessage();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final message = ref.watch(
+      messagesControllerProvider.select((state) => state.writeMessage),
+    );
+    return message == null
+        ? const SizedBox.shrink()
+        : Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Text(message),
+          );
+  }
+}
+
+class _InboxList extends ConsumerWidget {
+  const _InboxList({this.onOpenUser, this.onOpenTarget});
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<Uri>? onOpenTarget;
   @override
-  Widget build(BuildContext context) {
-    if (state.loading && state.items.isEmpty) return const StateView.loading();
-    if (state.error != null && state.items.isEmpty) {
-      return StateView.error(message: state.error ?? '', onAction: onRefresh);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (items, section, selected, loading, error) = ref.watch(
+      messagesControllerProvider.select(
+        (state) => (
+          state.inbox.items,
+          state.section,
+          state.selected?.id,
+          state.inbox.items.isEmpty && state.inbox.loading,
+          state.inbox.items.isEmpty ? state.inbox.error : null,
+        ),
+      ),
+    );
+    final controller = ref.read(messagesControllerProvider.notifier);
+    final isPrivate = section == InboxSection.private;
+    if (loading) return const StateView.loading();
+    if (error != null) {
+      return StateView.error(
+        message: error,
+        onAction: () => controller.loadInbox(refresh: true),
+      );
     }
-    if (state.items.isEmpty) {
+    if (items.isEmpty) {
       return const StateView.empty(
         message: '暂时没有消息',
         icon: Icons.inbox_outlined,
@@ -315,22 +347,10 @@ class _InboxList extends StatelessWidget {
     return ListView.builder(
       key: PageStorageKey('inbox-${section.name}'),
       padding: const EdgeInsets.all(8),
-      itemCount: state.items.length + 1,
+      itemCount: items.length + 1,
       itemBuilder: (context, index) {
-        if (index == state.items.length) {
-          return _ListFooter(
-            loading: state.loading,
-            error: state.error,
-            hasMore: state.hasMore,
-            onMore: onMore,
-            endLabel: section == InboxSection.system
-                ? '当前显示最近 20 条系统通知，更多请打开官方消息页'
-                : state.items.length >= 500
-                ? '已加载 500 条消息'
-                : '没有更多消息',
-          );
-        }
-        final entry = state.items[index], user = state.items[index].userId;
+        if (index == items.length) return const _InboxFooter();
+        final entry = items[index], user = items[index].userId;
         return Card(
           elevation: 0,
           color: entry.id == selected
@@ -381,7 +401,9 @@ class _InboxList extends StatelessWidget {
                 ],
               ),
             ),
-            onTap: isPrivate ? () => onSelect(entry) : null,
+            onTap: isPrivate
+                ? () => controller.selectConversation(entry)
+                : null,
           ),
         );
       },
@@ -389,12 +411,40 @@ class _InboxList extends StatelessWidget {
   }
 }
 
-class _ConversationView extends StatefulWidget {
+class _InboxFooter extends ConsumerWidget {
+  const _InboxFooter();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (loading, error, hasMore, length, section) = ref.watch(
+      messagesControllerProvider.select(
+        (state) => (
+          state.inbox.loading,
+          state.inbox.error,
+          state.inbox.hasMore,
+          state.inbox.items.length,
+          state.section,
+        ),
+      ),
+    );
+    return _ListFooter(
+      loading: loading,
+      error: error,
+      hasMore: hasMore,
+      onMore: ref.read(messagesControllerProvider.notifier).loadInbox,
+      endLabel: section == InboxSection.system
+          ? '当前显示最近 20 条系统通知，更多请打开官方消息页'
+          : length >= 500
+          ? '已加载 500 条消息'
+          : '没有更多消息',
+    );
+  }
+}
+
+class _ConversationView extends ConsumerStatefulWidget {
   const _ConversationView({
     super.key,
-    required this.entry,
     required this.ownMid,
-    required this.state,
     required this.narrow,
     required this.initialDraft,
     required this.onDraftChanged,
@@ -406,9 +456,7 @@ class _ConversationView extends StatefulWidget {
     this.onOpenUser,
     this.onOpenTarget,
   });
-  final InboxEntry entry;
   final String? ownMid;
-  final MessagesState state;
   final bool narrow;
   final String initialDraft;
   final ValueChanged<String> onDraftChanged;
@@ -418,12 +466,20 @@ class _ConversationView extends StatefulWidget {
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<Uri>? onOpenTarget;
   @override
-  State<_ConversationView> createState() => _ConversationViewState();
+  ConsumerState<_ConversationView> createState() => _ConversationViewState();
 }
 
-class _ConversationViewState extends State<_ConversationView> {
+class _ConversationViewState extends ConsumerState<_ConversationView> {
   late final TextEditingController _draft = TextEditingController(
     text: widget.initialDraft,
+  );
+  // Retain the body when send/read controls change. Delegating through this
+  // State keeps callbacks current after the parent updates its handlers.
+  late final Widget _thread = _ConversationThread(
+    ownMid: widget.ownMid,
+    onMore: () => widget.onMore(),
+    onRefresh: () => widget.onRefresh(),
+    onOpenTarget: (target) => widget.onOpenTarget?.call(target),
   );
   @override
   void didUpdateWidget(covariant _ConversationView oldWidget) {
@@ -453,8 +509,19 @@ class _ConversationViewState extends State<_ConversationView> {
 
   @override
   Widget build(BuildContext context) {
-    final state = widget.state, entry = widget.entry;
-    final busy = state.sending || state.markingRead;
+    final (entry, sending, markingRead, writeMessage, canMarkRead) = ref.watch(
+      messagesControllerProvider.select(
+        (state) => (
+          state.selected,
+          state.sending,
+          state.markingRead,
+          state.writeMessage,
+          !state.thread.loading && state.thread.items.isNotEmpty,
+        ),
+      ),
+    );
+    if (entry == null) return const SizedBox.shrink();
+    final busy = sending || markingRead;
     return Column(
       children: [
         Padding(
@@ -488,18 +555,15 @@ class _ConversationViewState extends State<_ConversationView> {
               ),
               IconButton(
                 tooltip: '标为已读',
-                onPressed:
-                    busy || state.thread.loading || state.thread.items.isEmpty
-                    ? null
-                    : widget.onMarkRead,
+                onPressed: busy || !canMarkRead ? null : widget.onMarkRead,
                 icon: const Icon(Icons.done_all),
               ),
             ],
           ),
         ),
         const Divider(height: 1),
-        Expanded(child: _thread(context, state.thread)),
-        if (state.writeMessage case final message?)
+        Expanded(child: _thread),
+        if (writeMessage case final message?)
           Padding(
             padding: const EdgeInsets.all(8),
             child: Text(message, textAlign: TextAlign.center),
@@ -527,7 +591,7 @@ class _ConversationViewState extends State<_ConversationView> {
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: busy ? null : _send,
-                  child: Text(state.sending ? '发送中' : '发送'),
+                  child: Text(sending ? '发送中' : '发送'),
                 ),
               ],
             ),
@@ -537,33 +601,46 @@ class _ConversationViewState extends State<_ConversationView> {
       ],
     );
   }
+}
 
-  Widget _thread(BuildContext context, MessageListState<PrivateMessage> list) {
-    if (list.loading && list.items.isEmpty) return const StateView.loading();
-    if (list.error != null && list.items.isEmpty) {
-      return StateView.error(
-        message: list.error ?? '',
-        onAction: widget.onRefresh,
-      );
+class _ConversationThread extends ConsumerWidget {
+  const _ConversationThread({
+    required this.ownMid,
+    required this.onMore,
+    required this.onRefresh,
+    this.onOpenTarget,
+  });
+
+  final String? ownMid;
+  final VoidCallback onMore, onRefresh;
+  final ValueChanged<Uri>? onOpenTarget;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (items, loading, error) = ref.watch(
+      messagesControllerProvider.select(
+        (state) => (
+          state.thread.items,
+          state.thread.items.isEmpty && state.thread.loading,
+          state.thread.items.isEmpty ? state.thread.error : null,
+        ),
+      ),
+    );
+    if (loading) return const StateView.loading();
+    if (error != null) {
+      return StateView.error(message: error, onAction: onRefresh);
     }
-    if (list.items.isEmpty) return const StateView.empty(message: '暂无会话消息');
+    if (items.isEmpty) return const StateView.empty(message: '暂无会话消息');
     return ListView.builder(
       reverse: true,
       padding: const EdgeInsets.all(16),
-      itemCount: list.items.length + 1,
+      itemCount: items.length + 1,
       itemBuilder: (context, index) {
-        if (index == list.items.length) {
-          return _ListFooter(
-            loading: list.loading,
-            error: list.error,
-            hasMore: list.hasMore,
-            onMore: widget.onMore,
-            label: '加载更早的消息',
-            endLabel: list.items.length >= 500 ? '已加载 500 条消息' : '没有更早的消息',
-          );
+        if (index == items.length) {
+          return _ThreadFooter(onMore: onMore);
         }
-        final message = list.items[list.items.length - 1 - index];
-        final own = message.senderId.value == widget.ownMid;
+        final message = items[items.length - 1 - index];
+        final own = message.senderId.value == ownMid;
         return Align(
           key: ValueKey(message.id),
           alignment: own ? Alignment.centerRight : Alignment.centerLeft,
@@ -599,8 +676,7 @@ class _ConversationViewState extends State<_ConversationView> {
                           if (message.targetUrl case final Uri target
                               when message.imageUrl == null)
                             TextButton(
-                              onPressed: () =>
-                                  widget.onOpenTarget?.call(target),
+                              onPressed: () => onOpenTarget?.call(target),
                               child: const Text('查看分享内容'),
                             ),
                         ],
@@ -613,6 +689,33 @@ class _ConversationViewState extends State<_ConversationView> {
           ),
         );
       },
+    );
+  }
+}
+
+class _ThreadFooter extends ConsumerWidget {
+  const _ThreadFooter({required this.onMore});
+  final VoidCallback onMore;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (loading, error, hasMore, length) = ref.watch(
+      messagesControllerProvider.select(
+        (state) => (
+          state.thread.loading,
+          state.thread.error,
+          state.thread.hasMore,
+          state.thread.items.length,
+        ),
+      ),
+    );
+    return _ListFooter(
+      loading: loading,
+      error: error,
+      hasMore: hasMore,
+      onMore: onMore,
+      label: '加载更早的消息',
+      endLabel: length >= 500 ? '已加载 500 条消息' : '没有更早的消息',
     );
   }
 }

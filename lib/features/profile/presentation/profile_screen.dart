@@ -7,17 +7,13 @@ import '../../../core/platform/external_links.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../live/domain/live_room.dart';
-import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 import '../../../shared/ui/state_view.dart';
-import '../../../shared/ui/dynamic_post_interactions.dart';
-import '../../../shared/ui/sliver_dynamic_post_list.dart';
 import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/user_follow_button.dart';
 import '../../auth/application/auth_controller.dart';
 import 'profile_header.dart';
-import 'profile_folder_video_grid.dart';
-import 'profile_video_card.dart';
+import 'profile_section_content.dart';
 import '../application/profile_controller.dart';
 import '../domain/profile_repository.dart';
 
@@ -85,18 +81,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(profileControllerProvider(widget.id));
+    final (
+      generation,
+      p,
+      profileMessage,
+      liveRoom,
+      liveRoomMessage,
+      section,
+    ) = ref.watch(
+      profileControllerProvider(widget.id).select(
+        (state) => (
+          state.sessionGeneration,
+          state.profile,
+          state.profileMessage,
+          state.liveRoom,
+          state.liveRoomMessage,
+          state.section,
+        ),
+      ),
+    );
     final controller = ref.read(profileControllerProvider(widget.id).notifier);
-    final account = ref.watch(authControllerProvider);
-    final session = (widget.id, state.sessionGeneration);
-    final p = state.profile;
+    final (accountMid, signedIn) = ref.watch(
+      authControllerProvider.select((state) => (state.mid, state.isSignedIn)),
+    );
+    final session = (widget.id, generation);
     // Wait for the header before laying out tabs and content. Otherwise they
     // briefly appear at the top and jump down when the profile arrives.
-    if (p == null && state.profileMessage == null) {
+    if (p == null && profileMessage == null) {
       return _ProfileInitialLoading(key: ValueKey(session));
     }
-    final isSelf = widget.isSelf || account.mid == widget.id.value;
-    final signedIn = account.isSignedIn;
+    final isSelf = widget.isSelf || accountMid == widget.id.value;
     final scrollBehavior = ScrollConfiguration.of(context);
     return LayoutBuilder(
       key: ValueKey(session),
@@ -148,21 +162,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 label: const Text('私信'),
                               ),
                         onSelectSection: controller.select,
-                        liveRoom: state.liveRoom,
+                        liveRoom: liveRoom,
                         onOpenLiveRoom: switch ((
-                          state.liveRoom,
+                          liveRoom,
                           widget.onOpenLiveRoom,
                         )) {
                           (final room?, final open?) => () => open(room.id),
                           _ => null,
                         },
                       ),
-                    if (state.profileMessage case final message?)
+                    if (profileMessage case final message?)
                       StateView.error(
                         message: message,
                         onAction: controller.loadProfile,
                       ),
-                    if (state.liveRoomMessage case final message?)
+                    if (liveRoomMessage case final message?)
                       StateView.error(
                         message: '直播间：$message',
                         onAction: controller.loadLiveRoom,
@@ -175,7 +189,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
             child: ProfileSectionNavigation(
-              section: state.section,
+              section: section,
               progress: _pagingProgress,
               onSelected: controller.select,
             ),
@@ -184,15 +198,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: RetainedTabView<ProfileSection>(
               progress: _pagingProgress,
               tabs: ProfileSection.values,
-              value: state.section,
+              value: section,
               onChanged: controller.select,
               viewKey: const ValueKey('profile-section-swipe'),
-              pageBuilder: (context, section, active) => _sectionPage(
-                context,
-                state.copy(section: section),
-                controller,
-                session: session,
+              pageBuilder: (context, section, active) => _ProfileSectionPage(
+                id: widget.id,
+                section: section,
                 active: active,
+                onOpenVideo: widget.onOpenVideo,
+                onOpenUser: widget.onOpenUser,
               ),
             ),
           ),
@@ -200,38 +214,73 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
     );
   }
+}
 
-  Widget _sectionPage(
-    BuildContext context,
-    ProfileState state,
-    ProfileController controller, {
-    required (UserId, int) session,
-    required bool active,
-  }) {
-    final entries = state.current.items;
+/// Each retained list observes its own query and paging state. Header reads and
+/// updates to another section do not replace this page's scroll/content tree.
+class _ProfileSectionPage extends ConsumerStatefulWidget {
+  const _ProfileSectionPage({
+    required this.id,
+    required this.section,
+    required this.active,
+    this.onOpenVideo,
+    this.onOpenUser,
+  });
+
+  final UserId id;
+  final ProfileSection section;
+  final bool active;
+  final ValueChanged<VideoSummary>? onOpenVideo;
+  final ValueChanged<UserId>? onOpenUser;
+
+  @override
+  ConsumerState<_ProfileSectionPage> createState() =>
+      _ProfileSectionPageState();
+}
+
+class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
+  void _openLink(Uri uri) => ref.read(externalLinkOpenerProvider)(uri);
+
+  @override
+  Widget build(BuildContext context) {
+    final (generation, list, order, keyword, folderId, folderTitle) = ref.watch(
+      profileControllerProvider(widget.id).select(
+        (state) => (
+          state.sessionGeneration,
+          state.lists[widget.section] ?? const ProfileListState(),
+          widget.section == ProfileSection.videos ? state.order : '',
+          widget.section == ProfileSection.videos ? state.keyword : '',
+          widget.section == ProfileSection.folders ? state.folderId : null,
+          widget.section == ProfileSection.folders ? state.folderTitle : null,
+        ),
+      ),
+    );
+    final controller = ref.read(profileControllerProvider(widget.id).notifier);
+    final session = (widget.id, generation);
     final listKey = (
       session,
-      state.section,
-      state.section == ProfileSection.folders ? state.folderId : null,
+      widget.section,
+      widget.section == ProfileSection.folders ? folderId : null,
     );
     return PagedScrollViewport(
       key: ValueKey(listKey),
-      active: active,
+      active: widget.active,
       canLoadMore:
-          state.current.page > 0 &&
-          state.current.hasMore &&
-          !state.current.loading &&
-          !state.current.isHidden &&
-          state.current.message == null,
-      contentVersion: state.current,
+          list.page > 0 &&
+          list.hasMore &&
+          !list.loading &&
+          !list.isHidden &&
+          list.message == null,
+      contentVersion: list,
       onLoadMore: () async {
         final current = ref.read(profileControllerProvider(widget.id));
         // A deferred layout check must still target the selected list/query.
-        if (current.sessionGeneration == state.sessionGeneration &&
-            current.section == state.section &&
-            current.folderId == state.folderId &&
-            current.order == state.order &&
-            current.keyword == state.keyword &&
+        if (current.sessionGeneration == generation &&
+            current.section == widget.section &&
+            (widget.section != ProfileSection.folders ||
+                current.folderId == folderId) &&
+            (widget.section != ProfileSection.videos ||
+                (current.order == order && current.keyword == keyword)) &&
             current.current.message == null) {
           await controller.load();
         }
@@ -247,18 +296,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (state.section == ProfileSection.videos) ...[
+                  if (widget.section == ProfileSection.videos) ...[
                     _ProfileVideoFilters(
-                      order: state.order,
-                      keyword: state.keyword,
+                      order: order,
+                      keyword: keyword,
                       onOrderChanged: (value) =>
                           controller.filter(order: value),
                       onSearch: (value) => controller.filter(keyword: value),
                     ),
                     const SizedBox(height: 12),
                   ],
-                  if (state.section == ProfileSection.folders &&
-                      state.folderId != null)
+                  if (widget.section == ProfileSection.folders &&
+                      folderId != null)
                     Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
@@ -267,27 +316,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           icon: const Icon(Icons.arrow_back),
                           label: const Text('返回收藏夹'),
                         ),
-                        Text(state.folderTitle ?? ''),
+                        Text(folderTitle ?? ''),
                       ],
                     ),
-                  if (state.current.items.isEmpty && state.current.loading)
+                  if (list.items.isEmpty && list.loading)
                     const StateView.loading(),
-                  if (state.current.message case final message?)
+                  if (list.message case final message?)
                     StateView.error(
                       message: message,
                       onAction: () => controller.load(),
                     ),
-                  if (state.current.isHidden)
+                  if (list.isHidden)
                     StateView.empty(
-                      message: '该用户未公开${profileSectionLabel(state.section)}列表',
+                      message: '该用户未公开${profileSectionLabel(widget.section)}列表',
                       icon: Icons.visibility_off_outlined,
                     ),
-                  if (state.current.items.isEmpty &&
-                      !state.current.loading &&
-                      !state.current.isHidden &&
-                      state.current.message == null)
+                  if (list.items.isEmpty &&
+                      !list.loading &&
+                      !list.isHidden &&
+                      list.message == null)
                     StateView.empty(
-                      message: '${profileSectionLabel(state.section)}暂无公开内容',
+                      message: '${profileSectionLabel(widget.section)}暂无公开内容',
                     ),
                 ],
               ),
@@ -295,89 +344,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver:
-                state.section == ProfileSection.folders &&
-                    state.folderId != null
-                ? ProfileFolderVideoGrid(
-                    entries: entries,
-                    onOpenVideo: widget.onOpenVideo,
-                    onOpenUser: widget.onOpenUser,
-                  )
-                : state.section == ProfileSection.dynamics &&
-                      entries.every((entry) => entry.dynamicPost != null)
-                ? SliverDynamicPostList(
-                    posts: [for (final entry in entries) ?entry.dynamicPost],
-                    spacing: 12,
-                    onOpenUser: widget.onOpenUser,
-                    onOpenVideo: widget.onOpenVideo,
-                    onOpenLink: (uri) =>
-                        ref.read(externalLinkOpenerProvider)(uri),
-                  )
-                : SliverLayoutBuilder(
-                    builder: (context, constraints) {
-                      final isVideoList =
-                          entries.isNotEmpty &&
-                          entries.every(
-                            (e) =>
-                                e.kind == ProfileEntryKind.video &&
-                                e.video != null,
-                          );
-                      if (!isVideoList) {
-                        return SliverList.builder(
-                          itemCount: entries.length,
-                          itemBuilder: (context, index) => Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Align(
-                              alignment: Alignment.topCenter,
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth:
-                                      state.section == ProfileSection.dynamics
-                                      ? 780
-                                      : double.infinity,
-                                ),
-                                child: _entry(entries[index], controller),
-                              ),
-                            ),
-                          ),
-                        );
-                      }
-                      final columns = (constraints.crossAxisExtent / 560)
-                          .floor()
-                          .clamp(1, 3);
-                      final cardWidth =
-                          (constraints.crossAxisExtent - (columns - 1) * 24) /
-                          columns;
-                      return SliverGrid.builder(
-                        itemCount: entries.length,
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: columns,
-                          mainAxisExtent: ProfileVideoCard.heightFor(
-                            cardWidth,
-                            MediaQuery.textScalerOf(context),
-                          ),
-                          crossAxisSpacing: 24,
-                          mainAxisSpacing: 24,
-                        ),
-                        itemBuilder: (context, index) =>
-                            _video(entries[index].video!),
-                      );
-                    },
-                  ),
+            sliver: ProfileSectionContent(
+              section: widget.section,
+              folderOpen: folderId != null,
+              entries: list.items,
+              onOpenVideo: widget.onOpenVideo,
+              onOpenUser: widget.onOpenUser,
+              onOpenFolder: controller.openFolder,
+              onOpenLink: _openLink,
+            ),
           ),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  if (state.current.items.isNotEmpty &&
-                      state.current.message == null &&
-                      (state.current.loading || !state.current.hasMore))
+                  if (list.items.isNotEmpty &&
+                      list.message == null &&
+                      (list.loading || !list.hasMore))
                     Center(
-                      child: state.current.loading
+                      child: list.loading
                           ? const CircularProgressIndicator()
                           : Text(
-                              state.current.items.length >= 500
+                              list.items.length >= 500
                                   ? '已显示 500 条，请通过搜索或排序查找更多'
                                   : '已显示全部可见内容',
                             ),
@@ -400,101 +389,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
     );
   }
-
-  Widget _entry(ProfileEntry entry, ProfileController controller) {
-    final post = entry.dynamicPost;
-    if (post != null && entry.kind == ProfileEntryKind.dynamic) {
-      return InteractiveDynamicPostCard(
-        post: post,
-        onOpenUser: widget.onOpenUser,
-        onOpenVideo: widget.onOpenVideo,
-        onOpenLink: (uri) => ref.read(externalLinkOpenerProvider)(uri),
-      );
-    }
-    final video = entry.video;
-    if (video != null && entry.kind == ProfileEntryKind.video) {
-      return _video(video);
-    }
-    if (entry.kind == ProfileEntryKind.video) {
-      return Card(
-        child: ListTile(
-          leading: const Icon(Icons.play_disabled),
-          title: Text(entry.title),
-          subtitle: Text(entry.subtitle.isEmpty ? '该收藏内容不可播放' : entry.subtitle),
-        ),
-      );
-    }
-    if (entry.kind == ProfileEntryKind.user) {
-      return ListTile(
-        leading: NetworkAvatar(url: entry.coverUrl, name: entry.title),
-        title: Text(entry.title),
-        subtitle: entry.subtitle.isEmpty ? null : Text(entry.subtitle),
-        onTap: entry.userId?.isValid == true
-            ? () => widget.onOpenUser?.call(entry.userId!)
-            : null,
-      );
-    }
-    if (entry.kind == ProfileEntryKind.folder) {
-      return Card(
-        child: ListTile(
-          leading: const Icon(Icons.folder_outlined),
-          title: Text(entry.title),
-          subtitle: Text(entry.count == null ? '视频数量未知' : '${entry.count} 个视频'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => controller.openFolder(entry),
-        ),
-      );
-    }
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (entry.title.isNotEmpty && entry.title != entry.subtitle)
-              Text(entry.title, style: Theme.of(context).textTheme.titleMedium),
-            if (entry.publishedAt case final date?)
-              Text('${date.year}-${date.month}-${date.day}'),
-            if (entry.subtitle.isNotEmpty) Text(entry.subtitle),
-            if (entry.imageUrls.isNotEmpty)
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final url in entry.imageUrls.take(9))
-                    SizedBox(
-                      width: 100,
-                      height: 100,
-                      child: Image.network(
-                        url.toString(),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            const Icon(Icons.broken_image_outlined),
-                      ),
-                    ),
-                ],
-              ),
-            if (video != null)
-              TextButton(
-                onPressed: () => widget.onOpenVideo?.call(video),
-                child: Text('播放 ${video.title}'),
-              ),
-            TextButton(
-              onPressed: () => ref.read(externalLinkOpenerProvider)(
-                Uri.https('t.bilibili.com', '/${entry.id}'),
-              ),
-              child: const Text('查看原动态'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _video(VideoSummary video) => ProfileVideoCard(
-    video: video,
-    onTap: () => widget.onOpenVideo?.call(video),
-  );
 }
 
 class _ProfileInitialLoading extends StatefulWidget {

@@ -28,6 +28,125 @@ final downloadControllerProvider =
       DownloadController.new,
     );
 
+final downloadQueueIndexProvider =
+    NotifierProvider.autoDispose<
+      DownloadQueueIndexController,
+      DownloadQueueIndex
+    >(DownloadQueueIndexController.new);
+
+/// Built in O(N) per snapshot; each visible task then selects its value in O(1).
+final class DownloadQueueIndex {
+  DownloadQueueIndex._({
+    required Map<String, DownloadTask> tasksById,
+    required this.structure,
+    required this.transferredBytes,
+  }) : tasksById = Map.unmodifiable(tasksById);
+
+  final Map<String, DownloadTask> tasksById;
+  final DownloadQueueStructure structure;
+  final int transferredBytes;
+}
+
+/// Stable while only transfer details change, including cached search titles.
+final class DownloadQueueStructure {
+  DownloadQueueStructure._({
+    required List<DownloadTaskEntry> entries,
+    required this.activeCount,
+    required this.resumableCount,
+  }) : entries = List.unmodifiable(entries),
+       queued = List.unmodifiable(entries.where((entry) => !entry.completed)),
+       completed = List.unmodifiable(entries.where((entry) => entry.completed));
+
+  final List<DownloadTaskEntry> entries, queued, completed;
+  final int activeCount, resumableCount;
+}
+
+final class DownloadTaskEntry {
+  const DownloadTaskEntry._({
+    required this.id,
+    required this.scope,
+    required this.videoTitle,
+    required this.partTitle,
+    required this.searchText,
+    required this.completed,
+  });
+
+  final String id, scope, videoTitle, partTitle, searchText;
+  final bool completed;
+}
+
+final class DownloadQueueIndexController extends Notifier<DownloadQueueIndex> {
+  DownloadQueueIndex? _previous;
+  Map<String, DownloadTaskEntry> _entriesById = const {};
+
+  @override
+  DownloadQueueIndex build() {
+    final queue = ref.watch(downloadControllerProvider);
+    final previousStructure = _previous?.structure;
+    final tasksById = <String, DownloadTask>{};
+    final entriesById = <String, DownloadTaskEntry>{};
+    final entries = <DownloadTaskEntry>[];
+    var unchanged = previousStructure?.entries.length == queue.tasks.length;
+    var transferred = 0;
+    var active = 0;
+    var resumable = 0;
+    for (final task in queue.tasks) {
+      tasksById[task.id] = task;
+      transferred += task.downloadedBytes;
+      if (task.active) active++;
+      if (task.status == DownloadStatus.paused ||
+          task.status == DownloadStatus.failed) {
+        resumable++;
+      }
+      final previous = _entriesById[task.id];
+      final sameTitle =
+          previous != null &&
+          previous.videoTitle == task.item.video.title &&
+          previous.partTitle == task.item.part.title;
+      final completed = task.status == DownloadStatus.completed;
+      final entry =
+          sameTitle &&
+              previous.scope == task.scope &&
+              previous.completed == completed
+          ? previous
+          : DownloadTaskEntry._(
+              id: task.id,
+              scope: task.scope,
+              videoTitle: task.item.video.title,
+              partTitle: task.item.part.title,
+              searchText: sameTitle
+                  ? previous.searchText
+                  : '${task.item.video.title} ${task.item.part.title}'
+                        .toLowerCase(),
+              completed: completed,
+            );
+      if (unchanged &&
+          !identical(previousStructure?.entries[entries.length], entry)) {
+        unchanged = false;
+      }
+      entries.add(entry);
+      entriesById[task.id] = entry;
+    }
+    final structure =
+        previousStructure != null &&
+            unchanged &&
+            previousStructure.activeCount == active &&
+            previousStructure.resumableCount == resumable
+        ? previousStructure
+        : DownloadQueueStructure._(
+            entries: entries,
+            activeCount: active,
+            resumableCount: resumable,
+          );
+    _entriesById = entriesById;
+    return _previous = DownloadQueueIndex._(
+      tasksById: tasksById,
+      structure: structure,
+      transferredBytes: transferred,
+    );
+  }
+}
+
 final class DownloadController extends Notifier<DownloadQueueState> {
   StreamSubscription<DownloadQueueState>? _subscription;
 

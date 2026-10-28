@@ -47,18 +47,18 @@ final class _OfflineScreenState extends ConsumerState<OfflineScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final queue = ref.watch(downloadControllerProvider);
     final source = ref.watch(downloadSourceRepositoryProvider);
-    DownloadTask? current;
-    for (final task in queue.tasks) {
-      if (task.id == widget.taskId &&
-          task.scope == source.accountScope &&
-          task.status == DownloadStatus.completed) {
-        current = task;
-        break;
-      }
-    }
-    if (current == null) {
+    final accountScope = ref.watch(
+      downloadControllerProvider.select((_) => source.accountScope),
+    );
+    final current = ref.watch(
+      downloadQueueIndexProvider.select(
+        (index) => index.tasksById[widget.taskId],
+      ),
+    );
+    if (current == null ||
+        current.scope != accountScope ||
+        current.status != DownloadStatus.completed) {
       _verified = null;
       _identity = null;
       return _OfflineUnavailable(onBack: _back);
