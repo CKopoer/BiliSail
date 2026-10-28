@@ -18,6 +18,7 @@ import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:bilisail/shared/ui/playback_navigation.dart';
+import 'package:bilisail/shared/ui/playback_info_tabs.dart';
 import 'package:bilisail/features/playback/application/playback_viewers_controller.dart';
 import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -1105,6 +1106,417 @@ void main() {
         },
       );
     }
+  }
+
+  for (final target in <ContentPlaybackTarget?>[
+    null,
+    const PgcPlaybackTarget('1', cid: '123'),
+    const LivePlaybackTarget('12'),
+  ]) {
+    testWidgets(
+      'phone rotation presents and restores ${target?.runtimeType ?? 'video'}',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        _usePhoneDisplay(tester);
+        tester.view.physicalSize = const Size(400, 800);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final window = _FakeWindowService(desktop: false);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(session, window, const AppSettings.defaults(), target: target),
+        );
+        await _pumpFrames(tester);
+        engine._emit(
+          engine.currentSnapshot.copyWith(
+            videoDimensions: const VideoDimensions(1920, 1080),
+            position: const Duration(seconds: 37),
+            rate: 1.5,
+          ),
+        );
+        final opens = engine.opens;
+        final generation = session.sourceGeneration;
+        tester.view.physicalSize = const Size(800, 400);
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isTrue);
+        expect(
+          tester.getRect(find.byType(Dialog)),
+          const Rect.fromLTWH(0, 0, 800, 400),
+        );
+        expect(find.byType(VideoSurface), findsOneWidget);
+        await session.pause();
+        tester.view.physicalSize = const Size(400, 800);
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isFalse);
+        expect(find.byTooltip('全屏（F）'), findsOneWidget);
+        expect(engine.opens, opens);
+        expect(session.sourceGeneration, generation);
+        expect(engine.currentSnapshot.position, const Duration(seconds: 37));
+        expect(engine.currentSnapshot.rate, 1.5);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(engine.maxSurfaces, 1);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
+
+  testWidgets(
+    'phone fullscreen button waits for physical landscape before portrait exit',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      _usePhoneDisplay(tester);
+      tester.view.physicalSize = const Size(400, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final events = StreamController<FullScreenOrientation>.broadcast(
+        sync: true,
+      );
+      addTearDown(events.close);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService(
+        desktop: false,
+        orientationEvents: events.stream,
+      );
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      engine._emit(
+        engine.currentSnapshot.copyWith(
+          videoDimensions: const VideoDimensions(1920, 1080),
+        ),
+      );
+      await tester.tap(find.byTooltip('全屏（F）'));
+      await _pumpFrames(tester);
+      expect(window.orientations, [FullScreenOrientation.landscape]);
+      expect(events.hasListener, isTrue);
+      events.add(FullScreenOrientation.portrait);
+      tester.view.physicalSize = const Size(800, 400);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isTrue);
+      events.add(FullScreenOrientation.landscape);
+      events.add(FullScreenOrientation.portrait);
+      events.add(FullScreenOrientation.landscape);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isTrue);
+      events.add(FullScreenOrientation.portrait);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      expect(events.hasListener, isFalse);
+      // Still-landscape metrics and player events cannot reopen a dismissed route.
+      engine._emit(
+        engine.currentSnapshot.copyWith(position: const Duration(seconds: 12)),
+      );
+      tester.view.viewInsets = const FakeViewPadding(bottom: 100);
+      addTearDown(tester.view.resetViewInsets);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      expect(engine.maxSurfaces, 1);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+  );
+
+  for (final kind in [
+    'paused',
+    'portrait',
+    'unknown',
+    'tablet',
+    'desktop',
+    'hidden',
+    'background',
+    'modal',
+  ]) {
+    testWidgets('phone rotation does not take fullscreen for $kind', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      _usePhoneDisplay(tester);
+      tester.view.physicalSize = const Size(400, 800);
+      if (kind == 'tablet') tester.view.display.size = const Size(800, 1200);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService(desktop: kind == 'desktop');
+      addTearDown(session.close);
+      _resumeApp(tester);
+      await tester.pumpWidget(
+        _app(
+          session,
+          window,
+          const AppSettings.defaults(),
+          active: kind != 'hidden',
+        ),
+      );
+      await _pumpFrames(tester);
+      if (kind != 'unknown') {
+        engine._emit(
+          engine.currentSnapshot.copyWith(
+            videoDimensions: kind == 'portrait'
+                ? const VideoDimensions(1080, 1920)
+                : const VideoDimensions(1920, 1080),
+          ),
+        );
+      }
+      if (kind == 'paused') await session.pause();
+      if (kind == 'background') {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        addTearDown(() => _resumeApp(tester));
+      }
+      if (kind == 'modal') {
+        unawaited(
+          showDialog<void>(
+            context: tester.element(find.byType(PlaybackPanel)),
+            builder: (_) => const AlertDialog(content: Text('保留弹窗')),
+          ),
+        );
+        await _pumpFrames(tester);
+      }
+      tester.view.physicalSize = const Size(800, 400);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      if (kind == 'modal') expect(find.text('保留弹窗'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets(
+    'phone rotation waits for decoded dimensions and cancels when hidden',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      _usePhoneDisplay(tester);
+      tester.view.physicalSize = const Size(400, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final events = StreamController<FullScreenOrientation>.broadcast(
+        sync: true,
+      );
+      addTearDown(events.close);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService(
+        desktop: false,
+        orientationEvents: events.stream,
+      );
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      tester.view.physicalSize = const Size(800, 400);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      engine._emit(
+        engine.currentSnapshot.copyWith(
+          videoDimensions: const VideoDimensions(1920, 1080),
+        ),
+      );
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isTrue);
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults(), active: false),
+      );
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      expect(events.hasListener, isFalse);
+      events.add(FullScreenOrientation.landscape);
+      events.add(FullScreenOrientation.portrait);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'phone rotation restores video information scroll and selection',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      _usePhoneDisplay(tester);
+      tester.view.physicalSize = const Size(400, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService(desktop: false);
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            playbackSessionProvider.overrideWithValue(session),
+            settingsRepositoryProvider.overrideWithValue(_Settings()),
+            videoDetailProvider(_detail.summary.id)
+                .overrideWith((_) => _detail),
+            relatedVideosProvider(_detail.summary.id).overrideWith(
+              (_) => [
+                for (var i = 0; i < 30; i++)
+                  VideoSummary(
+                    id: VideoId('BV1abc1234$i'),
+                    title: '推荐视频 $i',
+                    coverUrl: '',
+                    author: 'UP',
+                    duration: const Duration(minutes: 3),
+                  ),
+              ],
+            ),
+            videoTagsProvider(_detail.summary.id).overrideWith((_) => const []),
+          ],
+          child: InputTestApp(
+            home: Scaffold(
+              body: VideoScreen(
+                id: _detail.summary.id,
+                playerBuilder: (_, detail, part) => PlaybackPanel(
+                  detail: detail,
+                  part: part,
+                  settings: const AppSettings.defaults(),
+                  window: window,
+                  onToggleComments: () {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await _pumpFrames(tester);
+      final scrollable = find
+          .descendant(
+            of: find.byKey(const ValueKey('video-intro-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      final position = tester.state<ScrollableState>(scrollable).position;
+      position.jumpTo(180);
+      await _pumpFrames(tester);
+      expect(position.pixels, 180);
+      final opens = engine.opens;
+      engine._emit(
+        engine.currentSnapshot.copyWith(
+          videoDimensions: const VideoDimensions(1920, 1080),
+        ),
+      );
+      for (var i = 0; i < 2; i++) {
+        tester.view.physicalSize = const Size(800, 400);
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isTrue);
+        expect(find.text('简介').hitTestable(), findsNothing);
+        expect(find.text('评论').hitTestable(), findsNothing);
+        tester.view.physicalSize = const Size(400, 800);
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isFalse);
+        expect(find.text('简介').hitTestable(), findsOneWidget);
+        expect(tester.state<ScrollableState>(scrollable).position.pixels, 180);
+      }
+      await tester.tap(find.text('评论'));
+      await tester.pumpAndSettle();
+      tester.view.physicalSize = const Size(800, 400);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isTrue);
+      tester.view.physicalSize = const Size(400, 800);
+      await _pumpFrames(tester);
+      expect(
+        tester.widget<PlaybackInfoTabs>(find.byType(PlaybackInfoTabs)).value,
+        1,
+      );
+      await tester.tap(find.text('简介'));
+      await tester.pumpAndSettle();
+      expect(tester.state<ScrollableState>(scrollable).position.pixels, 180);
+      expect(engine.opens, opens);
+      expect(engine.maxSurfaces, 1);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final mode in WorkspaceNavigationMode.values) {
+    testWidgets('phone rotation covers workspace navigation in ${mode.name}', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      _usePhoneDisplay(tester);
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService(desktop: false);
+      final settings = AppSettings.defaults(navigationMode: mode);
+      addTearDown(session.close);
+      final router = createBiliRouter(
+        initialLocation: '/video/${_detail.summary.id.value}',
+        playerBuilder: (_, detail, part) => PlaybackPanel(
+          detail: detail,
+          part: part,
+          settings: settings,
+          onToggleComments: () {},
+          window: window,
+        ),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            playbackSessionProvider.overrideWithValue(session),
+            settingsRepositoryProvider.overrideWithValue(
+              _Settings()..value = settings,
+            ),
+            videoDetailProvider(_detail.summary.id)
+                .overrideWith((_) => _detail),
+            relatedVideosProvider(_detail.summary.id)
+                .overrideWith((_) => const []),
+            videoTagsProvider(_detail.summary.id).overrideWith((_) => const []),
+          ],
+          child: InputTestApp.router(
+            builder: AppNoticeHost.builder,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await _pumpFrames(tester);
+      engine._emit(
+        engine.currentSnapshot.copyWith(
+          videoDimensions: const VideoDimensions(1920, 1080),
+        ),
+      );
+      final opens = engine.opens;
+      tester.view.physicalSize = const Size(800, 400);
+      await tester.pumpAndSettle();
+      expect(window.fullScreen, isTrue);
+      expect(
+        tester.getRect(find.byType(Dialog)),
+        const Rect.fromLTWH(0, 0, 800, 400),
+      );
+      expect(find.text('简介').hitTestable(), findsNothing);
+      expect(
+        find
+            .byKey(const ValueKey('workspace-primary-transition'))
+            .hitTestable(),
+        findsNothing,
+      );
+      tester.view.physicalSize = const Size(400, 800);
+      await tester.pumpAndSettle();
+      expect(window.fullScreen, isFalse);
+      expect(find.text('简介').hitTestable(), findsOneWidget);
+      expect(engine.opens, opens);
+      expect(engine.maxSurfaces, 1);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+      expect(tester.takeException(), isNull);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   }
 
   testWidgets('fullscreen releases the phone lock when its display unfolds', (
@@ -5787,13 +6199,20 @@ const _detail = VideoDetail(
 );
 
 final class _FakeWindowService extends WindowService {
-  _FakeWindowService({this.desktop = true});
+  _FakeWindowService({
+    this.desktop = true,
+    this.orientationEvents = const Stream.empty(),
+  });
   final bool desktop;
+  final Stream<FullScreenOrientation> orientationEvents;
   bool fullScreen = false;
   final orientations = <FullScreenOrientation?>[];
 
   @override
   bool get hasDesktopWindow => desktop;
+
+  @override
+  Stream<FullScreenOrientation> get deviceOrientations => orientationEvents;
 
   @override
   Future<void> setFullScreen(

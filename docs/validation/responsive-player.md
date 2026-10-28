@@ -27,6 +27,19 @@
 - `tool/check.ps1 -SkipPub` 完整通过：根应用 989、`bili_api` 283、`bili_player` 22、`bili_danmaku` 32 项，共 1326 项测试；四部分格式与静态分析均通过。日志：`artifacts/video-info-default-check.log`。
 - 本轮未修改原生播放后端；尚未进行 Windows 发布窗口、Android/macOS 实机界面验收。
 
+## 手机旋转全屏（2026-10-28）
+
+- 原因：`PlaybackPanel.didChangeMetrics` 原先只更新已进入全屏后的方向，没有从普通呈现进入全屏的分支，因此手机横屏仍走工作区宽屏布局。按钮全屏安装的方向限制又阻止窗口回到竖屏，仅监听窗口尺寸无法识别真实回转。
+- 手机完整显示屏最短边小于 600 dp 时，前台可见的播放 owner 随窗口由竖转横进入现有全屏路由，覆盖页面导航、顶栏及简介／评论并占满窗口；仅横向画面且有播放意图时生效。尺寸晚到可补进入，暂停、纵向画面、平板、桌面、隐藏页、后台与弹窗不抢占呈现。正常自动进入遵循系统旋转策略，不更改用户的系统旋转开关。
+- 竖屏点击全屏仍按解码画面尺寸请求横屏。`WindowService.deviceOrientations` 将 Android `OrientationEventListener` 与 iOS `UIDevice` 通知映射为物理方向；只在手机全屏期间订阅，原生侧以 250ms 稳定期过滤转动，忽略平放／不确定姿势，后台停用，退出／隐藏／关闭取消。按钮点击时仍竖拿不会立即退出，实际横拿后再竖拿才恢复普通呈现；窗口恢复竖屏也可退出。旧 owner 与已取消的退出回调不能影响后续呈现。
+- 切换继续沿用唯一 `PlaybackSession` 和既有全屏 surface 交接，不重新打开媒体源，不 seek，保留详情页面状态。自动回转与按钮退出保留播放／暂停意图、倍速、进度、简介滚动和信息标签；手动退出后不会因同一横屏状态下的位置更新或键盘尺寸变化再次进入。平板继续按完整 display 判断、不安装方向限制。
+- 当前工程目标 Android API 36；Flutter 官方说明此目标下 `SystemChrome.setEnabledSystemUIMode` 固定为 edge-to-edge，见[接口限制](https://api.flutter.dev/flutter/services/SystemChrome/setEnabledSystemUIMode.html)。Android 30+ 通过 `WindowInsetsController.hide/show(systemBars)` 管理沉浸式系统栏，较旧系统沿用对应 flags；旋转和重新聚焦时保持当前全屏。退出恢复系统栏，遵循[Android 沉浸式接口](https://developer.android.com/develop/ui/views/layout/immersive)。设备方向来源见[Android 方向监听](https://developer.android.com/reference/android/view/OrientationEventListener)、[iOS 方向通知](https://developer.apple.com/documentation/uikit/uidevice/begingeneratingdeviceorientationnotifications())。
+
+- 自动回归：播放面板与窗口服务最终 306 项通过，覆盖视频／影视／直播、手动与旋转进入、回转、快速方向反转、晚到尺寸、隐藏／取消、单一 surface、播放进度／倍速／暂停意图，以及真实工作区单／双／多标签下的全窗口覆盖。详情页连续往返还验证简介滚动 180px、评论标签选择及返回简介后原位置。日志：[最终专项](../../build/validation/phone-rotation-final-targeted.log)。
+- `tool/check.ps1 -SkipPub` 通过：根应用 3266、API 492、播放器 83、弹幕 116、封装 5，共 3962 项；格式、静态分析及打包边界通过。13 项 Windows 符号链接用例因权限不足、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。日志：[根检查](../../build/validation/phone-rotation-check.log)。最后补充方向订阅随折叠屏展开停止后，重新运行上述 306 项专项；全量 Lint 复查受到随后出现的并行 CDN 设置任务两处 `curly_braces_in_flow_control_structures` 提示阻塞，位置为 `cdn_speed_test_controller.dart:121`、`:136`，本任务未修改该文件。日志：[Lint 复查](../../build/validation/phone-rotation-final-lint.log)，本任务文件单独分析见[定向分析](../../build/validation/phone-rotation-scoped-analysis.log)。提交只包含本任务；并行登录、CDN 设置改动保留。
+- `tool/build-android-development.ps1 -Mode Release` 成功，重新构建固定来源 Android arm64 mux，普通 `lib/main.dart` 入口产出 [BiliSail-test-arm64-release.apk](../../build/development/android-arm64/BiliSail-test-arm64-release.apk)。脚本校验包名 `dev.bilisail.bilisail.test`／名称「BiliSail 测试版」、`1.2.3+1`／12301、本机开发签名、arm64 AOT 和不可调试标记，SHA-256 及元信息同目录保存；未安装到设备。日志：[Android Release](../../build/validation/phone-rotation-android-release.log)。
+- 当前没有连接 Android 设备，也没有可连接的 DTD 调试进程；Windows 主机无法构建 iOS。未进行 Android/iOS 真机旋转、状态栏／导航栏、系统动画及真实媒体播放验收，也未执行热重载；自动回归或 APK 构建不代表这些验证通过。
+
 ## 平板全屏退出后的居中与旋转（2026-10-27）
 
 - 原因：共享播放面板对所有移动设备按视频比例强制申请方向，退出又无条件发送空方向列表。平板同样经历这组方向切换，可能触发 Android 的方向兼容居中窗口和系统旋转过渡；这与播放页自身的信息区宽度限制无关。Flutter 官方说明方向锁定可能在大屏触发 letterbox，且 `MediaQuery.size` 此时只报告缩小后的窗口，见[方向接口](https://api.flutter.dev/flutter/services/SystemChrome/setPreferredOrientations.html)；Android 同样建议自适应应用避免方向限制，见[大屏方向约定](https://developer.android.com/develop/ui/compose/layouts/adaptive/adaptive-dos-and-donts#orientation)。具体设备上的兼容模式触发仍需实机确认。

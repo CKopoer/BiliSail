@@ -10,6 +10,25 @@ import 'package:window_manager/window_manager.dart';
 enum FullScreenOrientation { portrait, landscape }
 
 class WindowService {
+  static const _orientationChannel = EventChannel(
+    'bilisail/device_orientation',
+  );
+  static const _mobileWindowChannel = MethodChannel('bilisail/mobile_window');
+  static final _deviceOrientations = _orientationChannel
+      .receiveBroadcastStream()
+      .where((event) => event == 'portrait' || event == 'landscape')
+      .map(
+        (event) => event == 'landscape'
+            ? FullScreenOrientation.landscape
+            : FullScreenOrientation.portrait,
+      );
+
+  /// Physical rotation remains observable while fullscreen locks the interface.
+  Stream<FullScreenOrientation> get deviceOrientations =>
+      Platform.isAndroid || Platform.isIOS
+      ? _deviceOrientations
+      : const Stream.empty();
+
   WindowService()
     : viewId = null,
       nativeWindowHandle = null,
@@ -368,6 +387,13 @@ class WindowService {
       await SystemChrome.setEnabledSystemUIMode(
         value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
       );
+      if (Platform.isAndroid) {
+        // With target SDK 36 Flutter's SystemUiMode stays edge-to-edge. Hide
+        // system bars explicitly through WindowInsetsController instead.
+        await _mobileWindowChannel
+            .invokeMethod<void>('setFullScreen', value)
+            .timeout(const Duration(seconds: 2));
+      }
     }
     _fullScreen = value;
   }
