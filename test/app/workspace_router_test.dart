@@ -682,6 +682,20 @@ void main() {
           expect(windows.lastWindow!.disposed, isTrue);
           expect(find.byType(VideoScreen, skipOffstage: false), findsNothing);
         }
+        if (platform != TargetPlatform.android) {
+          final toggle = find.byKey(const ValueKey('workspace-sidebar-toggle'));
+          final sidebar = find.byKey(
+            const ValueKey('workspace-sidebar-region'),
+          );
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          expect(settings.settings.sidebarCollapsed, isTrue);
+          expect(tester.getSize(sidebar).width, 0);
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          expect(settings.settings.sidebarCollapsed, isFalse);
+          expect(tester.getSize(sidebar).width, 76);
+        }
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
         await tester.pump();

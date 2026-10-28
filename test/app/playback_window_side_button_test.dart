@@ -17,6 +17,62 @@ import '../support/input_test_app.dart';
 
 void main() {
   testWidgets(
+    'macOS sidebar remains interactive after Meta+W closes playback',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1280, 850);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final harness = _Harness(tester, 'Meta+W', earlyFocus: true);
+      addTearDown(harness.router.dispose);
+      await harness.mount();
+      final sidebar = find.byKey(const ValueKey('workspace-sidebar-region'));
+      final toggle = find.byKey(const ValueKey('workspace-sidebar-toggle'));
+      final browser = tester.element(toggle);
+      expect(tester.getSize(sidebar).width, 76);
+
+      for (var index = 0; index < 2; index++) {
+        if (index != 0) {
+          harness.router.go('/video/BV2234567890');
+          await tester.pumpAndSettle();
+        }
+        final window = harness.windows.lastWindow!;
+        // Native focus changes can leave the old view without the mouse Up.
+        // A retained button must not keep that unfinished tap after returning.
+        harness.focus(tester.view.viewId);
+        await tester.pumpAndSettle();
+        final interrupted = await tester.startGesture(
+          tester.getCenter(toggle),
+          pointer: 73 + index,
+          kind: PointerDeviceKind.mouse,
+        );
+        harness.focus(window.viewId);
+        await tester.pumpAndSettle();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.keyW);
+        await tester.pumpAndSettle();
+        expect(window.disposed, isTrue);
+        // The browser must accept the next click, including before Cmd is up.
+        await tester.tap(toggle, kind: PointerDeviceKind.mouse);
+        await tester.pumpAndSettle();
+        expect(tester.getSize(sidebar).width, 0);
+        expect(find.byTooltip('展开侧栏'), findsOneWidget);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.keyW);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+        await tester.tap(toggle, kind: PointerDeviceKind.mouse);
+        await tester.pumpAndSettle();
+        expect(tester.getSize(sidebar).width, 76);
+        expect(tester.element(toggle), same(browser));
+        await interrupted.cancel();
+        expect(tester.takeException(), isNull);
+      }
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+  );
+
+  testWidgets(
     'native keyWindow snapshot restores Space without an engine focus event',
     (tester) async {
       final harness = _Harness(tester, 'Space', nativeSnapshot: true);

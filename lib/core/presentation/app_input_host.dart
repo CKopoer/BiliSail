@@ -256,6 +256,7 @@ class AppInputHost<C> extends StatefulWidget {
 class _AppInputHostState<C> extends State<AppInputHost<C>>
     with WidgetsBindingObserver {
   final _normalizer = InputNormalizer();
+  final _mousePointers = <int, int>{};
   bool _lifecycleActive = true;
   bool _viewFocused = false;
   int? _viewId;
@@ -335,6 +336,7 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
       widget.dispatcher.cancel(keepWorkspace: !widget.routes.modal);
 
   void _resetInput() {
+    _cancelMouseGestures();
     widget.dispatcher.cancel();
     _normalizer.resetKeyboard();
     _normalizer.resetMouse();
@@ -342,6 +344,19 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
     // swallow the next real Down as the tail of the old sequence.
     widget.dispatcher.resetDevice(InputDevice.keyboard);
     widget.dispatcher.resetDevice(InputDevice.mouse);
+  }
+
+  void _cancelMouseGestures({int? device}) {
+    final pointers = _mousePointers.entries
+        .where((entry) => device == null || entry.value == device)
+        .map((entry) => entry.key)
+        .toList();
+    for (final pointer in pointers) {
+      _mousePointers.remove(pointer);
+      // A native window handoff can lose Up. Clear Flutter's retained tap/drag
+      // recognizers too, before another Down reaches the same control.
+      GestureBinding.instance.cancelPointer(pointer);
+    }
   }
 
   @override
@@ -471,7 +486,17 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
   }
 
   void _pointer(PointerEvent event) {
-    if (!_active || event.viewId != View.maybeOf(context)?.viewId) return;
+    if (event.viewId != _viewId) return;
+    if (event.kind == PointerDeviceKind.mouse) {
+      if (event is PointerDownEvent) {
+        _mousePointers[event.pointer] = event.device;
+      } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+        _mousePointers.remove(event.pointer);
+      } else if (event is PointerRemovedEvent) {
+        _cancelMouseGestures(device: event.device);
+      }
+    }
+    if (!_active) return;
     for (final stroke in _normalizer.pointer(event)) {
       widget.dispatcher.dispatch(stroke, _context());
     }
@@ -479,6 +504,7 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
 
   @override
   void dispose() {
+    _cancelMouseGestures();
     _cancel();
     _windowFocus.removeListener(_nativeFocusChanged);
     _focusScope.dispose();

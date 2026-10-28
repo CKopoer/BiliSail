@@ -525,10 +525,9 @@ void main() {
                                     ? 42
                                     : 0)
                               : 44
-                        : !mobile ||
-                              mode == WorkspaceNavigationMode.multipleTabs
-                        ? 42
-                        : 0) +
+                        : !mobile
+                        ? 44
+                        : 42) +
                     sidebarToolbarHeight +
                     (width >= 600 ? 12 : 0),
               );
@@ -978,7 +977,7 @@ void main() {
       expect(find.byKey(const ValueKey('workspace-tab-strip')), findsOneWidget);
       expect(
         tester.getTopLeft(find.byKey(const ValueKey('workspace-search'))).dy,
-        63,
+        65,
       );
       expect(find.byKey(const ValueKey('new-workspace-tab')), findsOneWidget);
       await tester.tap(find.text('count 0'));

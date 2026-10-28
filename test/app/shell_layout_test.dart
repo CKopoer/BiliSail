@@ -991,7 +991,7 @@ void main() {
             find.byKey(const ValueKey('workspace-bottom-navigation')),
             width < 600 ? findsOneWidget : findsNothing,
           );
-          final tabs = find.byKey(const ValueKey('workspace-tab-strip'));
+          final tabs = find.byKey(const ValueKey('workspace-tabs-toolbar'));
           final sidebarToolbar = find.byKey(
             const ValueKey('workspace-sidebar-toolbar'),
           );

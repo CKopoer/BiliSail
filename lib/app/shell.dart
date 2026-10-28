@@ -772,11 +772,9 @@ final class _BiliAppShellState extends State<BiliAppShell>
                 SidebarStyle.compact => false,
               };
               final playback = _workspace.latestPlayback;
-              final captionTools =
-                  workspaceHeaderVisibleForPlatform(
-                    Theme.of(context).platform,
-                  ) &&
-                  (_dualTabs || _singlePage);
+              final captionTools = workspaceHeaderVisibleForPlatform(
+                Theme.of(context).platform,
+              );
               final navigationTools = compact
                   ? null
                   : Row(
@@ -1738,7 +1736,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
     return ColoredBox(
       color: colors.surfaceContainerLow,
       child: SizedBox(
-        height: 42,
+        key: const ValueKey('workspace-tabs-toolbar'),
+        height: workspaceHeaderVisibleForPlatform(Theme.of(context).platform)
+            ? desktopCaptionHeight
+            : 42,
         child: Row(
           children: [
             ?navigationTools,

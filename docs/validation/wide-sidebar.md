@@ -61,3 +61,12 @@
 - macOS 原生标题栏下的独立导航工具行同步使用 44 逻辑像素高度，避免压缩共用按钮。原生窗口控制、侧栏收起状态与返回播放行为沿用既有实现；多标签栏及移动平台的按钮样式不变。
 - `tool/check.ps1 -SkipPub` 通过：格式、静态分析、平台打包边界检查、根应用 3188 项及四包 699 项离线测试通过；13 项根测试因 Windows 符号链接权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。日志为 `build/macos-navigation-buttons-check.log`。文档的 11 个相对链接检查通过。
 - 当前 Windows 主机没有运行中的 Flutter 调试实例，热重载因无 DTD 连接未执行成功。本轮未进行平台构建、macOS 原生窗口视觉确认或性能测量。
+
+## 多标签按钮统一与关闭播放后侧栏交互（2026-10-29）
+
+- 多标签此前被排除在桌面导航按钮样式之外。现三种页面导航模式共用扁平按钮样式、46 × 44 点击区域、18 号图标和悬停／禁用反馈；桌面多标签栏同步为 44 高，避免压缩点击区域。移动平台保留原有样式。
+- 用户反馈 macOS 双标签播放窗通过快捷键关闭后，只有主窗侧栏按钮失效。源码检查发现输入宿主失焦时仅清理业务快捷键序列，没有取消 Flutter 控件自身未结束的鼠标手势。模拟旧窗口丢失 Up 后，保留的侧栏按钮继续持有旧点击，新的鼠标点击无法收起侧栏；该回归在修复前失败，补充清理后通过。此结果证明该输入边界存在缺口，尚不能替代用户 Mac 上对实际事件顺序的确认。
+- [AppInputHost](../../lib/core/presentation/app_input_host.dart) 使用现有全局 pointer route 按所属 view 跟踪未结束的鼠标指针，在窗口失焦、应用失活、跨 view 迁移、设备移除和宿主销毁时，通过 Flutter `cancelPointer` 取消对应手势；不增加页面级监听，不重新挂载侧栏或页面，也不触发被取消的点击。迟到的抬起不会执行动作。
+- [侧栏回归](../../test/app/sidebar_test.dart)覆盖 Windows／macOS、浅／深主题、三种导航模式的按钮样式与尺寸；[双窗口快捷键回归](../../test/app/playback_window_side_button_test.dart)覆盖丢失 Up、Command+W 关闭、修饰键尚未释放时再次点击、展开／收起和再次打开关闭，保留原按钮实例。[输入宿主回归](../../test/core/presentation/app_input_host_test.dart)覆盖两平台失焦／失活和迟到 Up；[真实路由回归](../../test/app/workspace_router_test.dart)补充关闭后的设置保存与侧栏展开／收起。
+- `tool/check.ps1 -SkipPub` 最终通过：格式、静态分析、平台打包边界、根应用 3352 项和四包 709 项离线测试通过。13 项根测试因 Windows 符号链接权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生通过。日志 `build/sidebar-navigation-check-final.log`；定向 39 项回归另见 `build/sidebar-close-targeted.log`。首次全仓测试发现三处旧多标签栏高度断言，已修正并在最终全仓检查复测通过。
+- 本轮在 Windows 主机执行离线组件检查，未发现可连接的 DTD／Flutter 调试实例，无法热重载。macOS 构建、原生物理键鼠复测及性能测量未执行，设备验收需覆盖普通／全屏窗口和连续打开关闭后的侧栏按钮。

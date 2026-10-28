@@ -1,6 +1,7 @@
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/core/platform/window_caption.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
@@ -13,6 +14,59 @@ final _region = find.byKey(const ValueKey('workspace-sidebar-region'));
 final _toggle = find.byKey(const ValueKey('workspace-sidebar-toggle'));
 
 void main() {
+  for (final platform in [TargetPlatform.windows, TargetPlatform.macOS]) {
+    for (final dark in [false, true]) {
+      testWidgets(
+        'desktop navigation buttons match in all modes: $platform dark=$dark',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = const Size(1280, 900);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          addTearDown(tester.view.resetPhysicalSize);
+          for (final mode in WorkspaceNavigationMode.values) {
+            await tester.pumpWidget(
+              MaterialApp(
+                theme: (dark ? BiliTheme.dark() : BiliTheme.light()).copyWith(
+                  platform: platform,
+                ),
+                home: BiliAppShell(
+                  location: '/',
+                  navigationMode: mode,
+                  child: const SizedBox(),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            final playback = find.byKey(
+              const ValueKey('workspace-return-to-playback'),
+            );
+            for (final finder in [_toggle, playback]) {
+              final button = tester.widget<IconButton>(finder);
+              expect(button.style, desktopCaptionButtonStyle);
+              expect(tester.getSize(finder), const Size(46, 44));
+              expect(
+                tester
+                    .widget<Icon>(
+                      find.descendant(of: finder, matching: find.byType(Icon)),
+                    )
+                    .size,
+                18,
+              );
+            }
+            expect(tester.widget<IconButton>(playback).onPressed, isNull);
+            await tester.tap(_toggle);
+            await tester.pumpAndSettle();
+            expect(tester.getSize(_region).width, 0);
+            await tester.tap(_toggle);
+            await tester.pumpAndSettle();
+            expect(tester.getSize(_region).width, 76);
+            expect(tester.takeException(), isNull);
+          }
+        },
+      );
+    }
+  }
+
   for (final dark in [false, true]) {
     testWidgets('sidebar styles adapt and retain content, dark=$dark', (
       tester,

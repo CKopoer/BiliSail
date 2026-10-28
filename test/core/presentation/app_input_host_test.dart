@@ -12,6 +12,61 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/detached_window_fake.dart';
 
 void main() {
+  for (final viewFocus in [false, true]) {
+    testWidgets(
+      'lost mouse Up cannot leave a button stuck after ${viewFocus ? 'view blur' : 'lifecycle deactivation'}',
+      (tester) async {
+        final input = _dispatcher([]);
+        addTearDown(input.dispose);
+        var presses = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: AppInputHost<String>(
+              dispatcher: input,
+              routes: InputRouteObserver(),
+              child: Scaffold(
+                body: Center(
+                  child: IconButton(
+                    tooltip: 'toggle',
+                    onPressed: () => presses++,
+                    icon: const Icon(Icons.menu),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final button = find.byTooltip('toggle');
+        final interrupted = await tester.startGesture(
+          tester.getCenter(button),
+          pointer: 73,
+          kind: PointerDeviceKind.mouse,
+        );
+        _active(tester, false, viewFocus: viewFocus);
+        await tester.pump();
+        _active(tester, true, viewFocus: viewFocus);
+        await tester.pumpAndSettle();
+        expect(presses, 0);
+        await tester.tap(button, kind: PointerDeviceKind.mouse);
+        await tester.pumpAndSettle();
+        expect(presses, 1);
+        // A late release of the cancelled gesture must not activate the button.
+        await interrupted.up();
+        await tester.pumpAndSettle();
+        expect(presses, 1);
+        await tester.tap(button, kind: PointerDeviceKind.mouse);
+        await tester.pumpAndSettle();
+        expect(presses, 2);
+        await tester.pumpWidget(const SizedBox());
+      },
+      variant: TargetPlatformVariant({
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+      }),
+    );
+  }
+
   testWidgets('reparent resets held keys and restores only the native view', (
     tester,
   ) async {

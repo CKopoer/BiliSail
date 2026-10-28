@@ -5,6 +5,7 @@
 ## 当前结构
 
 - [AppInputHost](../../lib/core/presentation/app_input_host.dart) 位于根 Navigator 外层，拥有唯一业务键盘提前监听和鼠标全局路由。InputNormalizer 共用录制／执行键名表，Quote／quoteSingle 统一，修饰键精确匹配；未知逻辑标识可回退到两个标点物理位置，合法其他 Unicode 布局不会强行解释为 US 标点。
+- 2026-10-29 补充 Flutter 控件手势的窗口边界清理：沿用同一 pointer route 跟踪本 view 未结束的鼠标指针，失焦／失活、迁移、设备移除及销毁时调用 `cancelPointer`。业务快捷键序列取消和控件 tap／drag 取消分别完成，避免丢失 Up 后只有曾按下的侧栏按钮持续失效；迟到 Up 不执行动作。模拟 Command+W 关闭双窗口后的失败复现、修复及 macOS 实机验证边界见[侧栏记录](../validation/wide-sidebar.md#多标签按钮统一与关闭播放后侧栏交互2026-10-29)。
 - [ShortcutDispatcher](../../lib/core/input/shortcut_dispatcher.dart) 为纯 Dart 泛型内核；[命令目录](../../lib/domain/shortcut_command.dart) 提供 22 个动作和平台默认别名；[组合根](../../lib/app/shortcut_coordinator.dart) 编译设置、目录归属及图片绑定。输入只选择一个目标；重复注册返回 duplicateTarget，边界／忙碌仍消费已认领序列。
 - [InputScope 与目标注册](../../lib/core/presentation/input_scope.dart) 提供可释放句柄、source revision、编辑／控件保护和非 Route 弹层屏障。根／Shell Navigator observer 共用路由账本，包括 requestFocus:false 的弹窗。普通弹窗隔离底层；全屏属于呈现，保留所属页的工作区／页面／媒体命令。
 - [PlaybackShortcutController](../../lib/features/playback/application/playback_shortcut_controller.dart) 由 PlaybackPanel owner 持有，普通／全屏视图共享；视图只保留绘制和控件行为。长按达到阈值即标记正在加速，异步 begin 未完成时释放也不会变成短按 seek；失焦、弹层、切页、换源、设置修改、呈现交接均可取消。
