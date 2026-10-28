@@ -36,7 +36,7 @@
 固定 [flutter_inappwebview 6.2.0-beta.3](https://pub.dev/packages/flutter_inappwebview/versions/6.2.0-beta.3)，Apache-2.0。稳定版 6.1.5 的旧 ProGuard 配置无法通过本工程 AGP 9.1.0；[维护方 beta.3 更新记录](https://pub.dev/packages/flutter_inappwebview/versions/6.2.0-beta.3/changelog)包含 AGP 9 修正。实际解析版本提交到根锁文件。
 
 - Android 使用系统 WebView，要求支持 `GET_COOKIE_INFO`，以读取完整 Cookie 元数据；不支持时提示更新系统 WebView 或改用扫码，不能凭空扩大 Cookie 作用域。
-- macOS 使用 WKWebView；本轮未在 macOS 构建或运行。
+- iOS／macOS 使用 WKWebView；临时 Cookie 存储读取适配与未验收项见文末的 2026-10-28 修复记录。
 - Windows 使用 WebView2 Runtime，缺失时显示安装／扫码提示。保留 Loader 是内嵌网页所需的原生加载依赖，不因把极验交给官网而消失。
 - Windows 构建使用 NuGet；本机把官方 NuGet CLI 6.14.0 加入构建进程临时 PATH，没有修改全局 PATH。插件固定 WebView2 SDK `1.0.3650.58`、WIL `1.0.250325.1`、CppWinRT `2.0.250303.1` 和 nlohmann.json `3.12.0`。
 - 工程显式安装插件导入的 WebView2Loader.dll，补齐此 beta 包遗漏的 bundled-libraries 声明。WebView2 Microsoft BSD 类许可、WIL／CppWinRT 的 MIT 和 WIL notices 从对应 NuGet 包随产物复制；nlohmann.json 的 MIT 来源见 [第三方声明](../../THIRD_PARTY_NOTICES.md)。它们位于 Windows 产物 `data/licenses/webview`，不能用插件 Apache-2.0 替代。
@@ -73,3 +73,20 @@
 - [导航回归测试](../../test/core/platform/passport_web_login_navigation_test.dart)覆盖取消后成功、已生成 Cookie 的失败跳转、等待并发读取、错误覆盖层下的迟到 Cookie、WebView／平台实例保留、新导航隔离、子 frame 错误、GET 重试、关闭动画竞态、总超时及原生读取 deadline。使用假的 Cookie 和平台回调，不提交真实账号表单；真实密码／短信提交、Android／macOS 设备回归仍需独立验收。
 - 最终应用代码运行 `tool/check.ps1 -SkipPub` 通过：根应用 980 项、bili_api 282 项、bili_player 22 项、bili_danmaku 32 项，共 1316 项，四处格式和静态分析通过。随后补充“跳转目标尚未加载即提取 Cookie”的测试，最终 11 项导航回归及局部静态分析通过；本文相对文件链接和 `git diff --check` 通过。最终代码另通过 2 项 Windows 原生测试，覆盖真实 WebView2 Cookie 读写／隔离、官网登录窗口打开／重开和环境清理，不等同于真实账号登录后跳转验收。
 - Windows x64 Release 构建通过，产物为 `build/windows/x64/runner/Release/bilisail.exe`；同目录的 Flutter／Dart 运行文件、资产、网页登录插件、WebView2Loader 和五份原生许可已核对齐全。保留上游 WebView 插件的 CMake `CMP0175` 开发警告，构建退出码为 0。运行和分发须保留完整 Release 目录。
+
+## 2026-10-28 iPhone 网页已登录但应用仍未登录
+
+用户报告 iPhone 在官网完成密码／短信登录后，网页登录窗口不自动关闭，手动关闭后应用仍为游客；另用其他设备扫码可以登录。本次未取得设备日志，不把现场具体 Cookie 值或网页跳转地址作为已确认事实。
+
+当前锁定的 Apple 平台插件 `1.2.0-beta.3` 存在明确的存储错配：iOS／macOS 的 `InAppWebView.swift` 在 `incognito=true` 时为视图创建 `WKWebsiteDataStore.nonPersistent()`；`MyCookieManager.swift` 却固定读取 `WKWebsiteDataStore.default().httpCookieStore`。Dart 的 `getCookies(webViewController: ...)` 在这两个平台没有把 controller 传给原生 Cookie 接口。因此原有两秒轮询即使传入当前 controller，也读不到临时视图中的 SESSDATA，无法返回网页登录结果。网页显示已登录只说明网页自己的存储有效，手动关闭仍按取消处理。Apple 对 [websiteDataStore](https://developer.apple.com/documentation/webkit/wkwebviewconfiguration/websitedatastore) 的说明也将 Cookie 所属绑定到视图配置的存储。
+
+- 新增共享 [Apple 原生适配](../../apple/PassportWebCookies.swift)和 [Dart Cookie 读取器](../../lib/core/platform/passport_web_cookies.dart)，iOS／macOS 都从当前登录 WKWebView 的 `configuration.websiteDataStore.httpCookieStore` 读取，包括 HttpOnly Cookie。继续使用临时存储，未启用默认存储、Cookie 同步或 JavaScript `document.cookie` 回退，也不修改 Pub 缓存或升级依赖。
+- 插件未公开按 ID 获取 WKWebView 的接口，适配器在系统默认 UA 后追加每次登录独立的随机标记，通过 `customUserAgent` 只匹配当前已挂载的原生视图；该标记不是凭据，会出现在 UA。未使用插件的 `applicationNameForUserAgent`：它只在系统默认应用名非空时追加，而 [WebKit 的 macOS 默认值为空](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewConfiguration.mm)，会导致 macOS 标记丢失。系统 UA 获取期限为 10 秒，失败时关闭本次初始化；找不到视图时等待下一轮，重名或持久化视图直接拒绝，不读取其他窗口或默认存储。iOS 在隐式 engine 注册回调绑定 channel，macOS 绑定现有 engine，两个 Xcode 工程引用同一份 Swift 源码。
+- 原生只回传适用于 API 根地址的有效 Cookie，保留 domain/path/secure/HttpOnly/session/毫秒有效期，最多 128 项。Dart 严格检查元数据；原有 10 秒读取期限、10 分钟总期限、后台暂停／返回继续、关闭取消和迟到结果隔离继续适用。取得 Cookie 后自动关闭网页，再沿用 SessionRepository 的 nav 验证和系统安全保存，不要求 App token。
+- 复查锁定插件的其他平台：Windows 原生按传入的 `webViewId` 调用当前 WebView2 的 `Network.getCookies`，且应用已传入同一 environment；Android WebView 和 `CookieManagerCompat.getCookieInfo` 使用同一系统 CookieManager，继续要求 `GET_COOKIE_INFO`。未发现这两者有 Apple 式的默认／临时存储错配。Linux 仍隐藏网页登录入口，仅提供扫码；本次没有扩展其 WebView 能力。这些为源码结论，不替代各端真实官网提交验收。
+
+[读取器测试](../../test/core/platform/passport_web_cookies_test.dart)覆盖 Apple channel、独立标记、元数据、空视图、原生错误和超量拒绝；[窗口回归](../../test/core/platform/passport_web_login_navigation_test.dart)增加 iOS／macOS 临时存储成功后自动关闭、毫秒时间戳及关闭后的迟到结果。[共享原生 XCTest](../../apple/PassportWebCookiesTests.swift)接入两个 RunnerTests target，使用假会话在非持久化 WKWebView 中验证 HttpOnly、视图隔离、作用域和拒绝持久化存储。
+
+最终登录相关 62 项定向测试及四个相关 Dart 文件的静态分析通过。根检查按 `-Stage Lint -SkipPub` 和 `-Stage RootTests -SkipPub` 收尾：全仓格式、静态分析、打包边界检查通过，根应用 3266 项离线测试通过，13 项 Windows 符号链接用例按环境条件跳过；日志分别为 `build/passport-web-login-lint.log` 与 `build/passport-web-login-root-tests.log`。四个包在本轮完整 `tool/check.ps1 -SkipPub` 中通过 bili_api 492、bili_player 83、bili_danmaku 116、bili_mux 5 项测试；未配置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生用例跳过，不计为原生通过。测试总数包含同期其他任务的改动，不代表本次新增数量。文档相对链接、共享 Swift 源码引用、Xcode 对象标识唯一性和 `git diff --check` 通过；五份锁文件未修改。
+
+本机为 Windows，未执行 iOS／macOS 构建、上述 XCTest 或 iPhone 真实密码／短信登录。仍需 Xcode 主机构建与原生测试，以及设备上确认自动关闭、账号状态、重启恢复、切换短信应用和取消重开；用户已确认的扫码成功不推导为网页登录修复已实机通过。

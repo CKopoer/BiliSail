@@ -33,6 +33,68 @@ void main() {
   });
   setUp(() => platform.cookies.reset());
 
+  for (final target in [TargetPlatform.iOS, TargetPlatform.macOS]) {
+    testWidgets('Apple login captures private cookies and closes after login', (
+      tester,
+    ) async {
+      const channel = MethodChannel('bilisail/passport_web_cookies');
+      var signedIn = false;
+      String? attempt;
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        call,
+      ) async {
+        expect(call.method, 'getCookies');
+        expect(call.arguments, {'marker': attempt});
+        return signedIn ? [_nativeSessionCookie()] : [];
+      });
+      addTearDown(
+        () => binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+      final result = await _open(tester);
+      final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
+      final userAgent = view.platform.params.initialSettings?.userAgent;
+      expect(userAgent, startsWith('FixtureAgent '));
+      attempt = userAgent?.split(' ').last;
+      expect(attempt, startsWith('BiliSailPassport/'));
+      expect(view.platform.params.initialSettings?.incognito, isTrue);
+      signedIn = true;
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect((await result.value)?.single.value, 'fixture');
+      expect((await result.value)?.single.expires, DateTime.utc(2027));
+      expect(platform.cookies.reads, 0);
+      expect(find.byType(InAppWebView), findsNothing);
+    }, variant: TargetPlatformVariant({target}));
+  }
+
+  testWidgets('closing an Apple login rejects a late private-store result', (
+    tester,
+  ) async {
+    const channel = MethodChannel('bilisail/passport_web_cookies');
+    final pending = Completer<List<Object?>>();
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (_) => pending.future,
+    );
+    addTearDown(
+      () => binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    final result = await _open(tester);
+    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
+    view.platform.params.onLoadStop?.call(_controller(view), _loginUrl);
+    await tester.tap(find.byTooltip('关闭网页登录'));
+    pending.complete([_nativeSessionCookie()]);
+    await tester.pumpAndSettle();
+    expect(await result.value, isNull);
+    expect(platform.cookies.reads, 0);
+  }, variant: TargetPlatformVariant({TargetPlatform.iOS}));
+
   testWidgets('cancelled navigation keeps waiting for the login session', (
     tester,
   ) async {
@@ -293,9 +355,24 @@ Cookie _sessionCookie() => Cookie(
   isSessionOnly: true,
 );
 
+Map<String, Object?> _nativeSessionCookie() => {
+  'name': 'SESSDATA',
+  'value': 'fixture',
+  'domain': '.bilibili.com',
+  'path': '/',
+  'isSecure': true,
+  'isHttpOnly': true,
+  'isSessionOnly': false,
+  'expiresDate': DateTime.utc(2027).millisecondsSinceEpoch,
+};
+
 class _FakePlatform extends InAppWebViewPlatform {
   final cookies = _FakeCookies();
   late _FakeController controller;
+
+  @override
+  PlatformInAppWebViewController createPlatformInAppWebViewControllerStatic() =>
+      _FakeController();
 
   @override
   PlatformWebViewEnvironment createPlatformWebViewEnvironmentStatic() =>
@@ -364,6 +441,9 @@ class _FakeController extends PlatformInAppWebViewController {
       );
 
   final requests = <URLRequest>[];
+
+  @override
+  Future<String> getDefaultUserAgent() async => 'FixtureAgent';
 
   @override
   Future<void> loadUrl({

@@ -9,6 +9,7 @@ final class MacOSApplication {
   private let exitChannel: FlutterMethodChannel
   private var systemFontsChannel: FlutterMethodChannel?
   private var imageExportChannel: FlutterMethodChannel?
+  private var passportCookies: PassportWebCookies?
   private var desktopWindows: DesktopWindowController?
   private var focusObservers: [NSObjectProtocol] = []
   private var focusRevision: Int64 = 0
@@ -110,6 +111,9 @@ final class MacOSApplication {
     // operations go through the per-view WindowService, never window_manager's
     // legacy registrar.view (which only looks up implicit view 0).
     RegisterGeneratedPlugins(registry: engine)
+    passportCookies = PassportWebCookies(messenger: engine.binaryMessenger) {
+      NSApp.windows.compactMap { $0.contentView }
+    }
 
     let channel = FlutterMethodChannel(
       name: "bilisail/system_fonts",

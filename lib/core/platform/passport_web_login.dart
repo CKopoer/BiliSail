@@ -6,6 +6,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../shared/ui/app_dialog.dart';
+import 'passport_web_cookies.dart';
 import 'passport_webview_environment.dart';
 
 bool passportWebLoginSupportedForPlatform(TargetPlatform platform) =>
@@ -97,6 +98,8 @@ class _PassportDialogState extends State<_PassportDialog>
   int _navigationGeneration = 0;
   String? _error;
   String? _pageError;
+  String _userAgent = '';
+  final _cookieReader = PassportWebCookieReader();
 
   @override
   void initState() {
@@ -111,6 +114,7 @@ class _PassportDialogState extends State<_PassportDialog>
 
   Future<void> _initialize() async {
     try {
+      _userAgent = await _cookieReader.createUserAgent();
       if (Platform.isAndroid &&
           !await WebViewFeature.isFeatureSupported(
             WebViewFeature.GET_COOKIE_INFO,
@@ -174,15 +178,9 @@ class _PassportDialogState extends State<_PassportDialog>
     }
     try {
       // Fetch cookies applicable to the API root, retaining their native scope.
-      final cookies =
-          await CookieManager.instance(
-                webViewEnvironment: _environment?.environment,
-              )
-              .getCookies(
-                url: WebUri('https://api.bilibili.com/'),
-                webViewController: controller,
-              )
-              .timeout(const Duration(seconds: 10));
+      final cookies = await _cookieReader
+          .read(controller, environment: _environment?.environment)
+          .timeout(const Duration(seconds: 10));
       if (!mounted ||
           _paused ||
           _finished ||
@@ -200,7 +198,8 @@ class _PassportDialogState extends State<_PassportDialog>
         result.add(
           BrowserLoginCookie.fromNative(
             cookie,
-            windowsExpiryInSeconds: Platform.isWindows,
+            windowsExpiryInSeconds:
+                _cookieReader.platform == TargetPlatform.windows,
           ),
         );
       }
@@ -296,6 +295,7 @@ class _PassportDialogState extends State<_PassportDialog>
     ),
     initialSettings: InAppWebViewSettings(
       incognito: true,
+      userAgent: _userAgent,
       generalAutofillEnabled: false,
       passwordAutosaveEnabled: false,
       isInspectable: false,
