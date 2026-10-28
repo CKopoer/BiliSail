@@ -1,4 +1,29 @@
-# 视频 CDN 偏好与悬停故障恢复
+# 视频 CDN 设置、测速与悬停故障恢复
+
+## 具体节点与展开测速（2026-10-28）
+
+按用户要求，只读参考 PiliPlus 提交 `936072449e82e3d90c28c728c0087bf5136fa441` 的 `lib/models/common/video/cdn_type.dart`、`lib/pages/setting/widgets/select_dialog.dart`、`lib/utils/video_utils.dart` 和 `lib/pages/setting/models/video_settings.dart`。参考节点目录、选择弹窗与读取视频片段测速的行为，独立实现本项目的领域模型、仓储、控制器和 Material 弹窗，没有复制 GPLv3 应用源码或增加依赖。
+
+设置 → 播放 → CDN 线路现在折叠为一行，显示已保存的选择。点击展开弹窗后自动测速，逐项显示 MiB/s 与实际 host，或超时、HTTP 错误、不支持等结果；提供停止、重新测速与关闭。选择保存成功后关闭，失败留在弹窗并显示错误，继续保留原设置。测速不自动修改偏好。全部选项可滚动浏览，窄屏和放大文字沿用同一交互。
+
+- 保留原来的自动、常规 CDN 及腾讯／华为／阿里／百度四种运营商偏好及序列化名称；新增 19 个具体节点：ali/alib/alio1、cos/cosb/coso1、hw/hwb/hwo1/08c/08h/08ct、tf_hw/tf_tx、Akamai、aliov/cosov/hwov 与香港 bcache。仍通过 `preferences.v1.mediaCdn` 保存，既有快照继续读取，缺失／非法值默认自动；没有新增存储字段或 SQLite migration。
+- 自动／运营商偏好继续仅排序服务端返回地址。明确选择具体节点时，优先使用已返回的同 host 地址；否则仅从 HTTP(S)、无用户信息、无自定义端口、已知 UPOS／Akamai host 的 `/upgcxcode/` 地址构造该镜像，保留原 scheme、path 与 query。不会将 PCDN `/v1/resource` 或任意外部地址机械替换。原始地址保持为备用，恢复选择不重新插入已失败的首地址。视频、影视、悬停预览与下载共用此规则，直播继续独立。
+- 测速复用既有 Web/WBI 视频预览 profile（`api.bilibili.com` GET `/x/player/wbi/playurl`、`qn=32`），公开样本 `BV1fK4y1t7hj` / `196018899`。只解析 DASH 视频轨及其备用，不创建播放器、不上报观看进度、不执行账号写操作。获取样本使用现有读请求的重试／25 秒 deadline；测速地址 GET 不重试、无分页。
+- 媒体请求使用独立 HttpClient，保留系统 TLS 验证，仅带 Referer、User-Agent、Range 和 identity encoding，不带 Cookie/token。每个不同地址串行读取最多 1 MiB，总 deadline 5 秒，覆盖 DNS、连接、响应头和停滞正文；最多三次重定向，拒绝 HTTPS 降级，HTML／JSON 等错误正文不算视频测速。相同地址复用本轮结果，失败继续下一项；不足 1 MiB 的有效片段按实际字节计算，deadline 前收到部分数据时按整个耗时计算速度。
+- 关闭弹窗、停止／重测、控制器释放、账号 session epoch 变化都中断旧请求，迟到结果不能覆盖新一轮；样本和带签名 URL 仅留在本轮内存，不进入设置、数据库或日志。UI/日志只显示 host、速率与脱敏错误。
+
+本轮验证：
+
+- 自动测试覆盖全部节点的域名替换边界、原 URL 保留与不可重复回退；DASH 双轨、测速串行与去重、关闭／重测／销毁、账号变化、Range 忽略／损坏、HTTP 403／HTML、空响应、重定向上限、响应头／正文停滞，以及展开、停止／重试、窄屏大字体、保存失败与全部偏好落盘。
+- Windows 主机的公开只读烟测实际探测 19 个不同地址，其中 14 个返回有效片段；08c、08h、hwov、香港 bcache 连接失败，Akamai 返回 403。日志 `build/cdn-online-smoke.log` 只记录 host、读入字节、速率或脱敏错误。此为当次样本／网络环境的可达性检查，短片段结果不代表持续吞吐或所有视频兼容，失败节点继续保留为可选并准确显示失败。
+- 152 项定向测试全部通过，覆盖上述 CDN、设置存储／界面、预览及 DASH 双轨；任务范围静态分析无问题，文档相对链接与 `git diff --check` 通过。日志 `build/cdn-targeted-tests.log`、`build/cdn-analysis.log`。四包按根检查脚本单独运行测试，合计 696 项通过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不能视为原生通过；日志 `build/cdn-package-check.log`。
+- Windows 独立预览入口使用生产 CDN 控件、BiliTheme 和真实公开测速仓储，设置保存到内存，不接触个人账号／数据库。Debug 构建与热重载成功，实际检查了弹窗、滚动后的国内／海外节点及速度／HTTP 403／连接失败显示，保存 ali 后读取到正确设置摘要。FlutterDriver 的部分 tap 命令出现响应超时，保存后的状态与画面仍已变化；此工具层超时未作为产品操作完全通过的依据，完整交互断言以 widget 测试为准。独立预览已关闭，普通 `lib/main.dart` 入口的 Windows Debug 构建通过并已恢复，日志 `build/cdn-windows-debug-build.log`；未执行原生播放验收。
+- `tool/check.ps1 -SkipPub` 本次全量检查受同期其他修改阻塞：静态分析报告 `playback_panel.dart:2` 多余 `dart:ui` import 和 `window_orientation_host_test.dart:123` 缺少语句块。另行根测试记录 `navigation_bar_mode_test.dart` 两项及 `dpi_adaptation_test.dart` 一项失败；在输出 3200 通过／13 跳过后，测试子进程已退出而 runner 结束阶段停滞超过两分钟，已终止本轮 runner 并继续四包测试，没有宣称根测试全量完成。日志 `build/cdn-full-check.log`、`build/cdn-root-check.log`；保留这些并发修改，没有为通过检查改动无关文件。
+- Android/macOS 等其他平台实机、持续音视频播放、Release 性能及各地区网络尚未验收；本轮片段测速和 Windows 控件检查不代替这些验收。
+
+## 初版记录（2026-10-06）
+
+以下为初版历史记录；其中“不替换 host／不测速”仅描述当时实现，当前具体节点模式以上文为准。
 
 日期：2026-10-06。用户反馈部分卡片无法预览，提供 `BV1HcHn6UEdF`，并要求增加 CDN 设置及支持自动调度。
 

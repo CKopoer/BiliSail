@@ -21,6 +21,7 @@ import '../domain/app_settings.dart';
 import '../domain/settings_category.dart';
 import 'shortcut_settings_section.dart';
 import 'recommendation_settings_section.dart';
+import 'cdn_settings_tile.dart';
 
 const _usageNotice = <Widget>[
   Text('本应用是哔哩哔哩第三方客户端，视频、影视、直播及相关内容均来自哔哩哔哩，与官方无隶属关系。'),
@@ -525,16 +526,9 @@ final class _SettingsCategoryPageState
                         ]),
                       if (widget.category == SettingsCategory.playback)
                         _section('CDN 线路', [
-                          _choices('视频 CDN', s.mediaCdn, const {
-                            MediaCdnPreference.automatic: '自动（默认）',
-                            MediaCdnPreference.regular: '优先常规 CDN',
-                            MediaCdnPreference.tencent: '优先腾讯云',
-                            MediaCdnPreference.huawei: '优先华为云',
-                            MediaCdnPreference.alibaba: '优先阿里云',
-                            MediaCdnPreference.baidu: '优先百度云',
-                          }, controller.setMediaCdn),
+                          CdnSettingsTile(preference: s.mediaCdn),
                           const Text(
-                            '自动使用哔哩哔哩返回的线路，由系统或代理的 DNS 解析节点。其他选项优先选择接口提供的对应线路，连接失败时尝试备用地址。',
+                            '自动沿用接口调度；运营商偏好优先使用返回线路，也可选择具体 CDN 节点。连接失败时尝试原始备用地址。',
                             style: TextStyle(fontSize: 12),
                           ),
                           const SizedBox(height: 8),

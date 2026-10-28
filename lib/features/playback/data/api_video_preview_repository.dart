@@ -33,7 +33,7 @@ final class ApiVideoPreviewRepository implements VideoPreviewRepository {
       preferredCodec: VideoCodecPreference.h264,
       videoOnly: true,
       // A short hover must not wait on a PCDN before trying the supplied CDN.
-      // Explicit provider preferences still take priority; no URL is rewritten.
+      // Explicit provider and mirror preferences still take priority.
       cdnPreference: preference == MediaCdnPreference.automatic
           ? MediaCdnPreference.regular
           : preference,

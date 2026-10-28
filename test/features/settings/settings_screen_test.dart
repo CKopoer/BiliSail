@@ -747,13 +747,18 @@ void main() {
       ('优先腾讯云', MediaCdnPreference.tencent),
       ('自动（默认）', MediaCdnPreference.automatic),
     ]) {
-      final choice = find.widgetWithText(ChoiceChip, label);
-      await tester.ensureVisible(choice);
+      final tile = find.byKey(const ValueKey('cdn-settings'));
+      await tester.ensureVisible(tile);
       await tester.pumpAndSettle();
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+      final choice = find.byKey(ValueKey('cdn-option-${preference.name}'));
+      expect(find.text(label), findsOneWidget);
+      await tester.ensureVisible(choice);
       await tester.tap(choice);
       await tester.pumpAndSettle();
       expect(repository.settings.mediaCdn, preference);
-      expect(tester.widget<ChoiceChip>(choice).selected, true);
+      expect(find.text('当前：$label · 点击选择并测速'), findsOneWidget);
     }
     expect(tester.takeException(), isNull);
   });

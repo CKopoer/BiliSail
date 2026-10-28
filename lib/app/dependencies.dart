@@ -91,6 +91,8 @@ import '../features/live/application/live_controller.dart';
 import '../features/live/data/api_live_repository.dart';
 import '../features/playback/data/local_progress_store.dart';
 import '../features/settings/application/settings_controller.dart';
+import '../features/settings/application/cdn_speed_test_controller.dart';
+import '../features/settings/data/api_cdn_speed_test_repository.dart';
 import '../features/settings/application/app_update_controller.dart';
 import '../features/settings/data/github_update_repository.dart';
 import '../features/settings/data/installed_app_version.dart';
@@ -508,6 +510,9 @@ class AppDependencies {
           ),
         ),
         settingsRepositoryProvider.overrideWithValue(settings),
+        cdnSpeedTestRepositoryProvider.overrideWithValue(
+          ApiCdnSpeedTestRepository(api, requests),
+        ),
         settingsDefaultsProvider.overrideWithValue(settings.defaults),
         systemFontCatalogProvider.overrideWithValue(
           const NativeSystemFontCatalog(),

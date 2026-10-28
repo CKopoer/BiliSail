@@ -106,7 +106,7 @@
 | [内置与系统字体选择](validation/font-selection.md) | HarmonyOS Sans、Windows/macOS 已安装字体搜索、独立界面/弹幕偏好与普惠体移除 |
 | [关于页与每日更新检查](validation/app-updates.md) | GitHub 地址、手动检查、每日首次启动提醒与 Release 跳转 |
 | [视频编解码设置](validation/video-codec-settings.md) | H.264/HEVC/AV1 偏好、自动/软件解码、SDK 差异与验证边界 |
-| [视频 CDN 与悬停恢复](validation/video-cdn.md) | 自动／运营商优先、旧设置兼容、备用地址／超时和前台恢复 |
+| [视频 CDN 设置与测速](validation/video-cdn.md) | 自动／运营商与具体节点、点击展开测速、旧设置兼容、备用与取消 |
 | [悬停预览加载延迟](validation/video-preview-loading.md) | 官网无音轨预览、cid 直传、CDN 顺序、启动预算、静止窗口与首帧切换 |
 | [播放控件与小窗布局](validation/responsive-player.md) | 单行工具栏、弹幕输入自适应、窄窗口布局和播放状态保留 |
 | [播放器顶部导航与人数](validation/player-top-navigation.md) | 返回／回主页的三种模式、全屏动作、UGC 正在观看人数与取消隔离 |

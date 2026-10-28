@@ -17,6 +17,60 @@ void main() {
   );
   final urls = [pcdn, tencent, huawei, alibaba, baidu];
 
+  final mirrorSource = Uri.parse(
+    'https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/00/01/v%2F1.m4s?token=fixture%2Bkey&x=1&x=2',
+  );
+  for (final option in MediaCdnPreference.values.where(
+    (item) => item.host != null,
+  )) {
+    test('${option.name} selects a mirror and keeps the original fallback', () {
+      final ordered = orderMediaCdnUrls([pcdn, mirrorSource], option);
+      expect(ordered.first.host, option.host);
+      expect(ordered.first.scheme, mirrorSource.scheme);
+      expect(ordered.first.path, mirrorSource.path);
+      expect(ordered.first.query, mirrorSource.query);
+      expect(ordered, containsAll([pcdn, mirrorSource]));
+      expect(orderMediaCdnUrls(ordered, option), ordered);
+      final backup = backupMediaCdnUrl(ordered, option);
+      expect(backup, isNot(ordered.first));
+      expect(backup, isIn([pcdn, mirrorSource]));
+      expect(mediaCdnProbeUrl([mirrorSource], option)?.host, option.host);
+    });
+  }
+
+  test('specific mirrors do not rewrite unsupported sources or credentials', () {
+    for (final source in [
+      pcdn,
+      Uri.parse('https://upos-sz-mirrorhw.bilivideo.com/video.m4s'),
+      Uri.parse('https://upos-sz-mirrorhw.bilivideo.com:4483/upgcxcode/v.m4s'),
+      Uri.parse(
+        'https://user:password@upos-sz-mirrorhw.bilivideo.com/upgcxcode/v.m4s',
+      ),
+      Uri.parse(
+        'https://upos-sz-mirrorhw.bilivideo.com.example.org/upgcxcode/v.m4s',
+      ),
+      Uri.parse('file:///upgcxcode/v.m4s'),
+    ]) {
+      expect(orderMediaCdnUrls([source], MediaCdnPreference.ali), [source]);
+      expect(mediaCdnProbeUrl([source], MediaCdnPreference.ali), isNull);
+    }
+  });
+
+  test(
+    'a returned concrete host wins without replacing its path or signature',
+    () {
+      final existing = Uri.parse(
+        'https://${MediaCdnPreference.ali.host}/video.m4s?key=original',
+      );
+      final ordered = orderMediaCdnUrls([
+        mirrorSource,
+        existing,
+      ], MediaCdnPreference.ali);
+      expect(identical(ordered.first, existing), isTrue);
+      expect(ordered, [existing, mirrorSource]);
+    },
+  );
+
   test(
     'automatic retains API order, removes duplicates and never rewrites URLs',
     () {

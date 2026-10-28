@@ -1,10 +1,50 @@
 import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/media_cdn.dart';
 import 'package:bilisail/features/playback/data/dash_media_selection.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('explicit CDN mirrors preserve DASH audio, video and original backups', () {
+    ApiMediaTrack track(bool audio) => ApiMediaTrack(
+      id: audio ? 30280 : 80,
+      url: Uri.parse(
+        'https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/${audio ? 'audio' : 'video'}.m4s?key=fixture%2Bvalue',
+      ),
+      backupUrls: const [],
+      bandwidth: 100000,
+      mimeType: audio ? 'audio/mp4' : 'video/mp4',
+      codecs: audio ? 'mp4a.40.2' : 'avc1.640028',
+    );
+    final video = track(false);
+    final audio = track(true);
+    final media = selectDashMedia(
+      ApiPlayInfo(
+        duration: const Duration(minutes: 1),
+        dashVideo: [video],
+        dashAudio: [audio],
+        acceptQuality: const [80],
+      ),
+      quality: 80,
+      preferredCodec: VideoCodecPreference.h264,
+      cdnPreference: MediaCdnPreference.ali,
+      headers: const {'Referer': 'https://www.bilibili.com/'},
+    );
+    for (final (result, source) in [
+      (media.video, video),
+      (media.audio, audio),
+    ]) {
+      expect(result?.urls.first.host, MediaCdnPreference.ali.host);
+      expect(result?.urls.first.path, source.url.path);
+      expect(result?.urls.first.query, source.url.query);
+      expect(result?.urls.last, source.url);
+      expect(
+        backupMediaCdnUrl(result?.urls ?? [], MediaCdnPreference.ali),
+        source.url,
+      );
+    }
+  });
   test(
     'both DASH repositories share loudness mapping; muted preview omits it',
     () {
