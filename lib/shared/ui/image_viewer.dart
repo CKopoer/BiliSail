@@ -50,7 +50,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   final _transform = TransformationController();
   final _focus = FocusNode();
   OriginalImage? _shown;
+  int? _shownIndex;
   Size _viewport = Size.zero;
+  final _pointers = <int>{};
+  ({int pointer, int index, Offset position})? _swipeStart;
 
   @override
   void initState() {
@@ -97,15 +100,61 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
         0,
         1,
       )
-      ..scaleByDouble(clamped, clamped, 1, 1);
+      // InteractiveViewer reads the maximum scale across all three axes.
+      ..scaleByDouble(clamped, clamped, clamped, 1);
   }
 
-  void _fit() {
+  double get _fitScale {
     final image = _shown;
-    if (image == null) return;
+    if (image == null || _viewport.isEmpty) return 1;
     final width = _viewport.width / image.width;
     final height = _viewport.height / image.height;
-    _scale((width < height ? width : height).clamp(.0001, 1));
+    return (width < height ? width : height).clamp(.0001, 1);
+  }
+
+  void _fit() => _scale(_fitScale);
+
+  bool get _canSwipe =>
+      widget.request.images.length > 1 &&
+      (_shown == null ||
+          _transform.value.getMaxScaleOnAxis() <= _fitScale * 1.001);
+
+  void _startSwipe(PointerDownEvent event) {
+    _pointers.add(event.pointer);
+    // Observe the same pointers as InteractiveViewer without competing with
+    // its scale recognizer. A second finger cancels paging until all lift.
+    _swipeStart = _pointers.length == 1 && _canSwipe
+        ? (
+            pointer: event.pointer,
+            index: ref
+                .read(imageViewerControllerProvider(widget.request))
+                .index,
+            position: event.localPosition,
+          )
+        : null;
+  }
+
+  void _endSwipe(PointerUpEvent event) {
+    _pointers.remove(event.pointer);
+    final start = _swipeStart;
+    _swipeStart = null;
+    if (start == null ||
+        start.pointer != event.pointer ||
+        !_canSwipe ||
+        start.index !=
+            ref.read(imageViewerControllerProvider(widget.request)).index) {
+      return;
+    }
+    final delta = event.localPosition - start.position;
+    final threshold = (_viewport.width * .15).clamp(48.0, 100.0);
+    if (delta.dx.abs() >= threshold && delta.dx.abs() > delta.dy.abs() * 1.5) {
+      _move(delta.dx < 0 ? 1 : -1);
+    }
+  }
+
+  void _cancelSwipe(PointerCancelEvent event) {
+    _pointers.remove(event.pointer);
+    _swipeStart = null;
   }
 
   void _zoom(double factor) =>
@@ -159,9 +208,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     final state = ref.watch(imageViewerControllerProvider(widget.request));
     final canExport = ref.watch(imageExportServiceProvider).supported;
     final image = state.image;
-    if (!identical(image, _shown)) {
+    if (!identical(image, _shown) || state.index != _shownIndex) {
       _evict(_shown);
       _shown = image;
+      _shownIndex = state.index;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _fit();
       });
@@ -219,99 +269,116 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                         Expanded(
                           child: Padding(
                             padding: const EdgeInsets.all(24),
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                final size = constraints.biggest;
-                                if (_viewport != size) {
-                                  _viewport = size;
-                                  WidgetsBinding.instance.addPostFrameCallback((
-                                    _,
-                                  ) {
-                                    if (mounted) _fit();
-                                  });
-                                }
-                                if (state.loading) {
-                                  return const Center(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        CircularProgressIndicator(),
-                                        SizedBox(height: 16),
-                                        Text('正在加载原图…'),
-                                      ],
-                                    ),
-                                  );
-                                }
-                                if (image == null) {
-                                  return Center(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(state.message ?? '图片加载失败'),
-                                        const SizedBox(height: 12),
-                                        TextButton(
-                                          onPressed: () => ref
-                                              .read(
-                                                imageViewerControllerProvider(
-                                                  widget.request,
-                                                ).notifier,
-                                              )
-                                              .load(),
-                                          child: const Text('重试'),
+                            child: Listener(
+                              behavior: HitTestBehavior.opaque,
+                              onPointerDown: _startSwipe,
+                              onPointerUp: _endSwipe,
+                              onPointerCancel: _cancelSwipe,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final size = constraints.biggest;
+                                  if (_viewport != size) {
+                                    _swipeStart = null;
+                                    _viewport = size;
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                          if (mounted) _fit();
+                                        });
+                                  }
+                                  if (state.loading) {
+                                    return const Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          CircularProgressIndicator(),
+                                          SizedBox(height: 16),
+                                          Text('正在加载原图…'),
+                                        ],
+                                      ),
+                                    );
+                                  }
+                                  if (image == null) {
+                                    return Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(state.message ?? '图片加载失败'),
+                                          const SizedBox(height: 12),
+                                          TextButton(
+                                            onPressed: () => ref
+                                                .read(
+                                                  imageViewerControllerProvider(
+                                                    widget.request,
+                                                  ).notifier,
+                                                )
+                                                .load(),
+                                            child: const Text('重试'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+                                  return Listener(
+                                    onPointerSignal: (event) {
+                                      if (event is PointerScrollEvent &&
+                                          InputModifierScope.anyPressedOf(
+                                            context,
+                                            const [
+                                              LogicalKeyboardKey.controlLeft,
+                                              LogicalKeyboardKey.controlRight,
+                                            ],
+                                          )) {
+                                        GestureBinding
+                                            .instance
+                                            .pointerSignalResolver
+                                            .register(
+                                              event,
+                                              (_) => _zoom(
+                                                event.scrollDelta.dy < 0
+                                                    ? 1.25
+                                                    : .8,
+                                              ),
+                                            );
+                                      }
+                                    },
+                                    child: ValueListenableBuilder<Matrix4>(
+                                      valueListenable: _transform,
+                                      builder: (_, _, child) =>
+                                          InteractiveViewer(
+                                            transformationController:
+                                                _transform,
+                                            panEnabled: !_canSwipe,
+                                            constrained: false,
+                                            minScale: .0001,
+                                            maxScale: 8,
+                                            boundaryMargin:
+                                                const EdgeInsets.all(
+                                                  double.infinity,
+                                                ),
+                                            // The hit area follows the transformed image, leaving
+                                            // the surrounding viewport available for dismissal.
+                                            child: child!,
+                                          ),
+                                      child: GestureDetector(
+                                        excludeFromSemantics: true,
+                                        onTap: () {},
+                                        child: Image(
+                                          image: _imageProvider(image),
+                                          width: image.width.toDouble(),
+                                          height: image.height.toDouble(),
+                                          fit: BoxFit.fill,
+                                          semanticLabel:
+                                              '原图 ${state.index + 1}',
+                                          errorBuilder: (_, _, _) =>
+                                              const Center(
+                                                child: Text('原图解码失败'),
+                                              ),
                                         ),
-                                      ],
-                                    ),
-                                  );
-                                }
-                                return Listener(
-                                  onPointerSignal: (event) {
-                                    if (event is PointerScrollEvent &&
-                                        InputModifierScope.anyPressedOf(
-                                          context,
-                                          const [
-                                            LogicalKeyboardKey.controlLeft,
-                                            LogicalKeyboardKey.controlRight,
-                                          ],
-                                        )) {
-                                      GestureBinding
-                                          .instance
-                                          .pointerSignalResolver
-                                          .register(
-                                            event,
-                                            (_) => _zoom(
-                                              event.scrollDelta.dy < 0
-                                                  ? 1.25
-                                                  : .8,
-                                            ),
-                                          );
-                                    }
-                                  },
-                                  child: InteractiveViewer(
-                                    transformationController: _transform,
-                                    constrained: false,
-                                    minScale: .0001,
-                                    maxScale: 8,
-                                    boundaryMargin: const EdgeInsets.all(
-                                      double.infinity,
-                                    ),
-                                    // The hit area follows the transformed image, leaving
-                                    // the surrounding viewport available for dismissal.
-                                    child: GestureDetector(
-                                      excludeFromSemantics: true,
-                                      onTap: () {},
-                                      child: Image(
-                                        image: _imageProvider(image),
-                                        width: image.width.toDouble(),
-                                        height: image.height.toDouble(),
-                                        fit: BoxFit.fill,
-                                        semanticLabel: '原图 ${state.index + 1}',
-                                        errorBuilder: (_, _, _) =>
-                                            const Center(child: Text('原图解码失败')),
                                       ),
                                     ),
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         ),

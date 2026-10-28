@@ -1,5 +1,6 @@
 import '../../support/input_test_app.dart';
 
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -141,6 +142,126 @@ void main() {
   );
 
   for (final size in [const Size(1100, 740), const Size(360, 640)]) {
+    testWidgets('viewer ${size.width} swipes between fitted images', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repository = await _swipeRepository(tester);
+      final sources = await _openViewer(tester, repository);
+      final viewport = find.byType(InteractiveViewer);
+      final transform = tester
+          .widget<InteractiveViewer>(viewport)
+          .transformationController!;
+      final fitted = transform.value.clone();
+      expect(fitted.getMaxScaleOnAxis(), lessThan(1));
+
+      Future<void> swipe(Offset delta) async {
+        await tester.drag(viewport, delta);
+        await tester.pumpAndSettle();
+      }
+
+      await swipe(const Offset(-120, 0));
+      expect(find.text('3 / 3'), findsOneWidget);
+      expect(repository.sources, [sources[1], sources[2]]);
+      await swipe(const Offset(-120, 0));
+      expect(find.text('3 / 3'), findsOneWidget);
+      expect(repository.sources, hasLength(2));
+      await swipe(const Offset(120, 0));
+      expect(find.text('2 / 3'), findsOneWidget);
+      await swipe(const Offset(120, 0));
+      expect(find.text('1 / 3'), findsOneWidget);
+      await swipe(const Offset(120, 0));
+      expect(find.text('1 / 3'), findsOneWidget);
+      expect(repository.sources, hasLength(4));
+
+      for (final delta in [
+        const Offset(-30, 0),
+        const Offset(0, -140),
+        const Offset(-100, -140),
+      ]) {
+        await swipe(delta);
+        expect(find.text('1 / 3'), findsOneWidget);
+        expect(transform.value, fitted);
+      }
+      final cancelled = await tester.startGesture(tester.getCenter(viewport));
+      await cancelled.moveBy(const Offset(-120, 0));
+      await cancelled.cancel();
+      await tester.pumpAndSettle();
+      expect(repository.sources, hasLength(4));
+      expect(find.byType(ImageViewer), findsOneWidget);
+
+      await swipe(const Offset(-120, 0));
+      expect(find.text('2 / 3'), findsOneWidget);
+      expect(transform.value, fitted);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+      'viewer ${size.width} preserves pinch zoom and enlarged panning',
+      (tester) async {
+        await tester.binding.setSurfaceSize(size);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final repository = await _swipeRepository(tester);
+        await _openViewer(tester, repository);
+        final viewport = find.byType(InteractiveViewer);
+        final transform = tester
+            .widget<InteractiveViewer>(viewport)
+            .transformationController!;
+        final fitted = transform.value.clone();
+
+        await tester.tap(find.byTooltip('放大'));
+        await tester.pump();
+        final enlarged = transform.value.clone();
+        await tester.drag(viewport, const Offset(-120, 0));
+        await tester.pumpAndSettle();
+        expect(find.text('2 / 3'), findsOneWidget);
+        expect(
+          transform.value.getTranslation().x,
+          lessThan(enlarged.getTranslation().x),
+        );
+        expect(
+          transform.value.getMaxScaleOnAxis(),
+          closeTo(enlarged.getMaxScaleOnAxis(), .000001),
+        );
+        await tester.tap(find.byTooltip('适应窗口'));
+        await tester.pumpAndSettle();
+
+        final center = tester.getCenter(viewport);
+        final first = await tester.startGesture(center - const Offset(40, 0));
+        final second = await tester.startGesture(
+          center + const Offset(40, 0),
+          pointer: 2,
+        );
+        await first.moveTo(center - const Offset(100, 0));
+        await second.moveTo(center + const Offset(100, 0));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(
+          transform.value.getMaxScaleOnAxis(),
+          greaterThan(fitted.getMaxScaleOnAxis()),
+        );
+        await first.moveTo(center - const Offset(20, 0));
+        await second.moveTo(center + const Offset(20, 0));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(
+          transform.value.getMaxScaleOnAxis(),
+          lessThan(fitted.getMaxScaleOnAxis()),
+        );
+        await second.up();
+        await first.moveBy(const Offset(-120, 0));
+        await first.up();
+        await tester.pumpAndSettle();
+        expect(find.text('2 / 3'), findsOneWidget);
+        expect(repository.sources, hasLength(1));
+
+        await tester.drag(viewport, const Offset(-120, 0));
+        await tester.pumpAndSettle();
+        expect(find.text('3 / 3'), findsOneWidget);
+        expect(transform.value, fitted);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets(
       'viewer ${size.width} supports zoom and original image navigation',
       (tester) async {
@@ -230,6 +351,110 @@ void main() {
         expect(find.byType(Dialog), findsNothing);
       },
     );
+  }
+
+  testWidgets('swiping during loading or failure cancels stale originals', (
+    tester,
+  ) async {
+    final repository = _PendingRepository();
+    await _openViewer(tester, repository, pending: true);
+    final loading = find.text('正在加载原图…');
+    await tester.drag(loading, const Offset(-120, 0));
+    await tester.pump();
+    expect(find.text('3 / 3'), findsOneWidget);
+    expect(repository.reads.first.cancellation.isCancelled, isTrue);
+    final image = (await _swipeRepository(tester)).image;
+    repository.reads.first.result.complete(image);
+    await tester.pump();
+    expect(loading, findsOneWidget);
+    repository.reads[1].result.completeError(StateError('failed image'));
+    await tester.pump();
+    final failure = find.text('原图无法读取，请重试');
+    expect(failure, findsOneWidget);
+    await tester.drag(failure, const Offset(120, 0));
+    await tester.pump();
+    expect(find.text('2 / 3'), findsOneWidget);
+    repository.reads[2].result.complete(image);
+    await tester.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+    expect(loading, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a single original remains pannable without image paging', (
+    tester,
+  ) async {
+    final repository = await _swipeRepository(tester);
+    await _openViewer(tester, repository, count: 1, index: 0);
+    final viewport = find.byType(InteractiveViewer);
+    final transform = tester
+        .widget<InteractiveViewer>(viewport)
+        .transformationController!;
+    final initial = transform.value.clone();
+    await tester.drag(viewport, const Offset(-120, 0));
+    await tester.pumpAndSettle();
+    expect(
+      transform.value.getTranslation().x,
+      lessThan(initial.getTranslation().x),
+    );
+    expect(find.text('1 / 1'), findsOneWidget);
+    expect(repository.sources, hasLength(1));
+  });
+}
+
+Future<_Repository> _swipeRepository(WidgetTester tester) async {
+  final bytes = await tester.runAsync(png);
+  if (bytes == null) throw StateError('PNG missing');
+  return _Repository(OriginalImage(bytes: bytes, width: 1200, height: 800));
+}
+
+Future<List<Uri>> _openViewer(
+  WidgetTester tester,
+  OriginalImageRepository repository, {
+  int count = 3,
+  int index = 1,
+  bool pending = false,
+}) async {
+  final sources = List.generate(
+    count,
+    (index) => Uri.https('i0.hdslb.com', '/$index.png'),
+  );
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        originalImageRepositoryProvider.overrideWithValue(repository),
+      ],
+      child: InputTestApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showImageViewer(context, sources, index),
+              child: const Text('查看'),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('查看'));
+  if (pending) {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+  } else {
+    await tester.pumpAndSettle();
+  }
+  return sources;
+}
+
+class _PendingRepository implements OriginalImageRepository {
+  final reads =
+      <({RequestCancellation cancellation, Completer<OriginalImage> result})>[];
+
+  @override
+  Future<OriginalImage> load(Uri source, RequestCancellation cancellation) {
+    final result = Completer<OriginalImage>();
+    reads.add((cancellation: cancellation, result: result));
+    return result.future;
   }
 }
 

@@ -41,3 +41,13 @@ Android 剪贴板保留最近四份文件，最多 128 MiB，关闭查看器不�
 `tool/check.ps1 -SkipPub` 最终完整通过：根应用 2,237、`bili_api` 446、`bili_player` 81、`bili_danmaku` 93、`bili_mux` 2 项，共 **2,859 项**；五处格式、静态分析及打包边界检查通过。mux 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不能视作原生封装回归通过。此前的检查先因本次新增 Pictures entitlement 尚未同步发布白名单而失败（已修复），随后因同期新增的 `test/shared/ui/app_dialog_test.dart` lint 失败；最终检查时同期 lint 已消除，本任务未修改该文件。
 
 日志位于本机忽略目录 `build/validation/image-export-{check,windows-build,android-compile}.log`。计数包含工作区同期修改，不代表全部由本任务新增。`git diff --check` 通过，用户和其他任务的修改保留；本任务未提交或推送。
+
+## 2026-10-28 左右滑动与缩放
+
+共用查看器在适应窗口或更小的缩放下，支持单指左滑查看下一张、右滑查看上一张；横向距离需达到视口宽度的 15%（最少 48、最多 100 逻辑像素），且明显大于纵向距离。首尾不循环，短拖动、竖向／偏竖向拖动和取消手势不切图。加载中或加载失败时也可滑动切图，沿用控制器取消旧读取与代次隔离。
+
+缩放继续交给 `InteractiveViewer`。双指接触会取消本次切图候选，直到全部手指抬起；放大后的单指拖动继续平移图片，回到适应窗口后恢复滑动切图。单图继续允许平移，按钮、键盘、滚轮缩放及关闭行为保留。缩放矩阵同步设置三个坐标轴的比例，避免 `getMaxScaleOnAxis()` 把适应窗口后小于 1 的实际比例读成 1，保证大图缩放百分比、相对缩放和手势模式判断一致。
+
+[组件回归](../../test/features/image_viewer/image_viewer_test.dart)新增宽／窄视口的左右切图、首尾边界、短／竖向拖动、取消、双指放大缩小、单指续拖、放大平移、切图恢复适应窗口，以及加载失败／迟到响应和单图行为。连同[双窗口回归](../../test/app/workspace_image_viewer_test.dart)共 14 项通过。本轮未构建安装包，未进行 Windows／Android／macOS 实机触控或触控板验收；不以组件测试代替设备验收。
+
+本次两个改动 Dart 文件的定向静态分析通过。`tool/check.ps1 -SkipPub` 的打包边界及各目录格式检查通过，全量分析被同期工作区的 `playback_panel.dart` 多余导入和 `window_orientation_host_test.dart` 缺少花括号阻断。随后分别执行根应用与四包测试阶段：根应用 3,324 项通过、4 项失败、13 项因 Windows 符号链接权限不足跳过；失败分别为 `navigation_bar_mode_test.dart` 的两项导航布局断言、`playback_panel_test.dart` 的宽屏旋转全屏保持断言、`dpi_adaptation_test.dart` 的逻辑几何断言，均未由本任务修改。四包分别为 492／83／116／5 项通过，mux 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。本轮全量检查未记为通过，未改动上述同期文件；日志为 `build/validation/image-viewer-swipe-{check,root-tests,package-tests}.log`。文档相对链接及 `git diff --check` 通过。
