@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Runtime string contract derived from WiX 6.0.2 HyperlinkTheme.wxl,
+     copyright .NET Foundation and contributors, under MS-RL. See README.md. -->
+<WixLocalization Culture="zh-CN" Language="2052" xmlns="http://wixtoolset.org/schemas/v4/wxl">
+  <String Id="Caption" Value="BiliSail 哔帆 · 安装" />
+  <String Id="InstallVersion" Value="版本 [WixBundleVersion]" />
+  <String Id="ConfirmCancelMessage" Value="要取消当前操作吗？" />
+  <String Id="ExecuteUpgradeRelatedBundleMessage" Value="正在更新已有版本" />
+  <String Id="HelpText" Value="/install　安装（默认）&#10;/repair　修复程序&#10;/uninstall　卸载程序&#10;/layout [目录]　创建本地安装副本&#10;&#10;/passive　仅显示进度&#10;/quiet　静默运行&#10;/norestart　禁止自动重启&#10;/log 文件路径　指定日志文件" />
+  <String Id="FailureHyperlinkLogText" Value="安装遇到问题。请根据提示检查后重试，&#10;或查看 &lt;a href=&quot;#&quot;&gt;安装日志&lt;/a&gt; 获取详细信息。" />
+  <String Id="FilesInUseTitle" Value="程序文件正在使用中" />
+  <String Id="FilesInUseLabel" Value="以下应用正在使用需要更新的文件：" />
+  <String Id="FilesInUseNetfxCloseRadioButton" Value="关闭这些应用(&amp;C)" />
+  <String Id="FilesInUseCloseRadioButton" Value="关闭这些应用，并在完成后尝试重新打开(&amp;C)" />
+  <String Id="FilesInUseDontCloseRadioButton" Value="保留应用运行，稍后重启电脑(&amp;D)" />
+  <String Id="FilesInUseRetryButton" Value="重试(&amp;R)" />
+  <String Id="FilesInUseIgnoreButton" Value="忽略(&amp;I)" />
+  <String Id="FilesInUseExitButton" Value="退出(&amp;E)" />
+</WixLocalization>

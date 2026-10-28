@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <!-- Keep UpgradeCode and directory/component identities stable across releases. -->
   <Package Name="BiliSail" Manufacturer="BiliSail" Version="$(MsiVersion)"
-           UpgradeCode="BA1B4BF9-F727-42A7-A69C-0FCFD1FDA365" Scope="perMachine">
+           UpgradeCode="BA1B4BF9-F727-42A7-A69C-0FCFD1FDA365" Scope="perMachine"
+           Language="1033" Codepage="936">
+    <!-- Keep the old ProductLanguage so older installers also detect this product.
+         The UI resources are independently compiled with -culture zh-CN. -->
     <MajorUpgrade AllowSameVersionUpgrades="yes" Schedule="afterInstallInitialize"
-                  DowngradeErrorMessage="A newer version of BiliSail is already installed." />
+                  DowngradeErrorMessage="这台电脑已安装更新版本的 BiliSail 哔帆。" />
     <!-- MSI compatibility properties can report Windows 8.1 on newer systems. -->
     <Property Id="BILISAIL_WINDOWS_BUILD">
       <RegistrySearch Id="WindowsBuildNumber" Root="HKLM"
@@ -12,7 +15,7 @@
                       Name="CurrentBuildNumber" Type="raw" Bitness="always64" />
     </Property>
     <Launch Condition="Installed OR (VersionNT64 AND BILISAIL_WINDOWS_BUILD &gt;= 17763)"
-            Message="BiliSail requires Windows 10 version 1809 or later (x64)." />
+            Message="BiliSail 哔帆需要 Windows 10 1809 或更高版本（x64）。" />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
     <Icon Id="AppIcon" SourceFile="$(AppIcon)" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
@@ -31,15 +34,7 @@
     <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]"
                  After="CostFinalize" Sequence="both" />
 
-    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
-    <UIRef Id="WixUI_ErrorProgressText" />
-    <UI>
-      <!-- Reuse the standard wizard without showing WiX's placeholder licence. -->
-      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg"
-               Order="2" Condition="NOT Installed" />
-      <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg"
-               Order="2" />
-    </UI>
+    <UIRef Id="BiliSailUI" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="BiliSail" />

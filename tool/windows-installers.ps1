@@ -1,6 +1,7 @@
 # WiX is a build-time dependency; the native Burn UI needs no .NET on users' PCs.
 $script:WindowsWixVersion = '6.0.2'
 $script:WindowsPackagingRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../windows/packaging'))
+. (Join-Path $PSScriptRoot 'windows-installer-artwork.ps1')
 
 function Get-WindowsMsiVersion([string]$Version) {
   if ($Version -cnotmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\+(0|[1-9]\d*)$') {
@@ -41,12 +42,23 @@ function New-WindowsMsi([string]$Wix, [string]$Staging, [string]$Destination, [s
   }
   # Build before MSIX adds package identity, icons and PRI to this directory.
   if (Test-Path -LiteralPath (Join-Path $Staging 'AppxManifest.xml')) { throw 'MSI payload must be staged before MSIX packaging.' }
-  Invoke-WixCommand $Wix @('build', (Join-Path $script:WindowsPackagingRoot 'Installer.wxs'), '-arch', 'x64', '-ext', "WixToolset.UI.wixext/$script:WindowsWixVersion", '-d', "PayloadDirectory=$Staging", '-d', "MsiVersion=$(Get-WindowsMsiVersion $Version)", '-d', "DisplayVersion=$Version", '-d', "AppIcon=$(Join-Path $script:WindowsPackagingRoot '../runner/resources/app_icon.ico')", '-pdbtype', 'none', '-o', $Destination)
+  # Ship the source of the adapted WiX UI together with its file-scoped MS-RL.
+  $uiSource = Join-Path $Staging 'data/licenses/wix/installer-ui'
+  New-Item -ItemType Directory -Path $uiSource -Force | Out-Null
+  foreach ($source in @('InstallerUI.wxs', 'InstallerBrand.wxi', 'InstallerBackground.wxi', 'BundleTheme.xml', 'Bundle.zh-CN.wxl', 'README.md')) {
+    Copy-Item -LiteralPath (Join-Path $script:WindowsPackagingRoot $source) -Destination $uiSource -Force
+  }
+  Copy-Item -LiteralPath (Join-Path $script:WindowsPackagingRoot '../licenses/wix/LICENSE.TXT') -Destination $uiSource -Force
+  $artwork = Join-Path (Split-Path $Destination -Parent) 'installer-artwork'
+  New-WindowsInstallerArtwork $artwork
+  Invoke-WixCommand $Wix @('build', (Join-Path $script:WindowsPackagingRoot 'Installer.wxs'), (Join-Path $script:WindowsPackagingRoot 'InstallerUI.wxs'), '-culture', 'zh-CN', '-arch', 'x64', '-ext', "WixToolset.UI.wixext/$script:WindowsWixVersion", '-d', "InstallerArtwork=$artwork", '-d', "PayloadDirectory=$Staging", '-d', "MsiVersion=$(Get-WindowsMsiVersion $Version)", '-d', "DisplayVersion=$Version", '-d', "AppIcon=$(Join-Path $script:WindowsPackagingRoot '../runner/resources/app_icon.ico')", '-pdbtype', 'none', '-o', $Destination)
 }
 
 function New-WindowsBundle([string]$Wix, [string]$Msi, [string]$Destination, [string]$Version) {
   Get-WindowsMsiVersion $Version | Out-Null
-  Invoke-WixCommand $Wix @('build', (Join-Path $script:WindowsPackagingRoot 'Bundle.wxs'), '-arch', 'x64', '-ext', "WixToolset.BootstrapperApplications.wixext/$script:WindowsWixVersion", '-ext', "WixToolset.Util.wixext/$script:WindowsWixVersion", '-d', "MsiPackage=$Msi", '-d', "BundleVersion=$($Version.Replace('+', '.'))", '-d', "AppIcon=$(Join-Path $script:WindowsPackagingRoot '../runner/resources/app_icon.ico')", '-pdbtype', 'none', '-o', $Destination)
+  $artwork = Join-Path (Split-Path $Destination -Parent) 'installer-artwork'
+  New-WindowsInstallerArtwork $artwork
+  Invoke-WixCommand $Wix @('build', (Join-Path $script:WindowsPackagingRoot 'Bundle.wxs'), '-arch', 'x64', '-ext', "WixToolset.BootstrapperApplications.wixext/$script:WindowsWixVersion", '-ext', "WixToolset.Util.wixext/$script:WindowsWixVersion", '-d', "PackagingDirectory=$script:WindowsPackagingRoot", '-d', "InstallerArtwork=$artwork", '-d', "MsiPackage=$Msi", '-d', "BundleVersion=$($Version.Replace('+', '.'))", '-d', "AppIcon=$(Join-Path $script:WindowsPackagingRoot '../runner/resources/app_icon.ico')", '-pdbtype', 'none', '-o', $Destination)
 }
 
 function Complete-WindowsBundleSigning([string]$Wix, [string]$Bundle, [string]$Destination, [string]$WorkingDirectory, [scriptblock]$SignFile) {

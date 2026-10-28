@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- Native MSI bitmaps must not overlap edit fields or push buttons. -->
+  <Control Id="Background" Type="Bitmap" X="0" Y="0" Width="152" Height="300"
+           TabSkip="no" Text="BiliSailDialog" />
+</Include>

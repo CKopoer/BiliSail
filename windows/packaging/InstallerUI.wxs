@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dialog event patterns derived from WiX 6.0.2, copyright .NET Foundation and
+     contributors, under MS-RL. See windows/licenses/wix and packaging/README.md. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <UI Id="BiliSailUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Microsoft YaHei UI" Size="9" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Microsoft YaHei UI" Size="16" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Microsoft YaHei UI" Size="12" Bold="yes" />
+      <TextStyle Id="BiliSailBrand" FaceName="Segoe UI" Size="22" Bold="yes" Red="37" Green="51" Blue="67" />
+      <TextStyle Id="BiliSailSubtitle" FaceName="Microsoft YaHei UI" Size="13" Red="37" Green="51" Blue="67" />
+      <TextStyle Id="BiliSailTitle" FaceName="Microsoft YaHei UI" Size="18" Bold="yes" Red="37" Green="51" Blue="67" />
+      <TextStyle Id="BiliSailMuted" FaceName="Microsoft YaHei UI" Size="9" Red="88" Green="107" Blue="126" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+      <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+      <Property Id="ARPNOMODIFY" Value="1" />
+      <Property Id="BURNMSIREPAIR" Secure="yes" />
+      <Property Id="BURNMSIUNINSTALL" Secure="yes" />
+      <Property Id="BURNMSIMODIFY" Secure="yes" />
+
+      <DialogRef Id="BrowseDlg" />
+      <DialogRef Id="CancelDlg" />
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="OutOfDiskDlg" />
+      <DialogRef Id="OutOfRbDiskDlg" />
+
+      <!-- Choose the destination on the first page instead of an extra welcome page. -->
+      <Dialog Id="BiliSailInstallDirDlg" Width="480" Height="300" Title="BiliSail 哔帆 · 安装">
+        <?include InstallerBrand.wxi ?>
+        <Control Id="Title" Type="Text" X="174" Y="32" Width="282" Height="32" Transparent="yes" NoPrefix="yes" Text="{\BiliSailTitle}准备好启航了吗？" />
+        <Control Id="Description" Type="Text" X="176" Y="82" Width="274" Height="36" Transparent="yes" NoPrefix="yes" Text="安装 BiliSail 哔帆，在桌面畅享视频、番剧与直播。" />
+        <Control Id="FolderLabel" Type="Text" X="176" Y="135" Width="270" Height="18" Transparent="yes" Text="安装位置" />
+        <Control Id="Folder" Type="PathEdit" X="176" Y="158" Width="212" Height="22" Property="WIXUI_INSTALLDIR" Indirect="yes" />
+        <Control Id="ChangeFolder" Type="PushButton" X="394" Y="158" Width="62" Height="22" Text="浏览(&amp;B)…">
+          <Publish Property="_BrowseProperty" Value="[WIXUI_INSTALLDIR]" Order="1" />
+          <Publish Event="SpawnDialog" Value="BrowseDlg" Order="2" />
+        </Control>
+        <Control Id="Hint" Type="Text" X="176" Y="194" Width="278" Height="34" Transparent="yes" NoPrefix="yes" Text="{\BiliSailMuted}适用于 Windows 10 1809 及以上版本。&#13;&#10;安装时将请求管理员权限。" />
+        <Control Id="Version" Type="Text" X="176" Y="238" Width="280" Height="16" Transparent="yes" NoPrefix="yes" Text="{\BiliSailMuted}版本 $(DisplayVersion)" />
+        <Control Id="Next" Type="PushButton" X="288" Y="265" Width="90" Height="24" Default="yes" Text="下一步(&amp;N)">
+          <Publish Event="SetTargetPath" Value="[WIXUI_INSTALLDIR]" Order="1" />
+          <Publish Event="NewDialog" Value="BiliSailVerifyReadyDlg" Order="2" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="386" Y="265" Width="70" Height="24" Cancel="yes" Text="取消(&amp;C)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+        <?include InstallerBackground.wxi ?>
+      </Dialog>
+
+      <Dialog Id="BiliSailVerifyReadyDlg" Width="480" Height="300" Title="BiliSail 哔帆 · 确认">
+        <?include InstallerBrand.wxi ?>
+        <Control Id="Title" Type="Text" X="174" Y="32" Width="282" Height="32" Transparent="yes" NoPrefix="yes" Text="{\BiliSailTitle}即将就绪" />
+        <Control Id="InstallText" Type="Text" X="176" Y="84" Width="278" Height="44" Transparent="yes" NoPrefix="yes" Text="点击“安装”将哔帆添加到这台电脑。" HideCondition="Installed" />
+        <Control Id="RepairText" Type="Text" X="176" Y="84" Width="278" Height="44" Transparent="yes" NoPrefix="yes" Hidden="yes" Text="点击“修复”重新安装缺失或损坏的程序文件。" ShowCondition="WixUI_InstallMode = &quot;Repair&quot;" />
+        <Control Id="RemoveText" Type="Text" X="176" Y="84" Width="278" Height="44" Transparent="yes" NoPrefix="yes" Hidden="yes" Text="点击“卸载”从这台电脑移除哔帆程序。" ShowCondition="WixUI_InstallMode = &quot;Remove&quot;" />
+        <Control Id="FolderLabel" Type="Text" X="176" Y="141" Width="278" Height="18" Transparent="yes" Text="{\BiliSailMuted}安装位置" />
+        <Control Id="Folder" Type="Text" X="176" Y="164" Width="278" Height="65" Transparent="yes" NoPrefix="yes" Text="[INSTALLFOLDER]" />
+        <Control Id="Back" Type="PushButton" X="176" Y="265" Width="70" Height="24" Text="返回(&amp;B)">
+          <Publish Event="NewDialog" Value="BiliSailInstallDirDlg" Order="1" Condition="NOT Installed" />
+          <Publish Event="NewDialog" Value="BiliSailMaintenanceTypeDlg" Order="2" Condition="Installed" />
+        </Control>
+        <Control Id="Install" Type="PushButton" X="288" Y="265" Width="90" Height="24" Default="yes" ElevationShield="yes" Text="安装(&amp;I)" HideCondition="Installed">
+          <Publish Event="SpawnDialog" Value="OutOfDiskDlg" Order="1" Condition="OutOfDiskSpace = 1" />
+          <Publish Event="EndDialog" Value="Return" Order="2" Condition="OutOfDiskSpace &lt;&gt; 1" />
+        </Control>
+        <Control Id="Repair" Type="PushButton" X="288" Y="265" Width="90" Height="24" Hidden="yes" Disabled="yes" ElevationShield="yes" Text="修复(&amp;R)" ShowCondition="WixUI_InstallMode = &quot;Repair&quot;" EnableCondition="WixUI_InstallMode = &quot;Repair&quot;" DefaultCondition="WixUI_InstallMode = &quot;Repair&quot;">
+          <Publish Event="SpawnDialog" Value="OutOfDiskDlg" Order="1" Condition="OutOfDiskSpace = 1" />
+          <Publish Event="ReinstallMode" Value="ecmus" Order="2" Condition="OutOfDiskSpace &lt;&gt; 1" />
+          <Publish Event="Reinstall" Value="All" Order="3" Condition="OutOfDiskSpace &lt;&gt; 1" />
+          <Publish Event="EndDialog" Value="Return" Order="4" Condition="OutOfDiskSpace &lt;&gt; 1" />
+        </Control>
+        <Control Id="Remove" Type="PushButton" X="288" Y="265" Width="90" Height="24" Hidden="yes" Disabled="yes" ElevationShield="yes" Text="卸载(&amp;U)" ShowCondition="WixUI_InstallMode = &quot;Remove&quot;" EnableCondition="WixUI_InstallMode = &quot;Remove&quot;" DefaultCondition="WixUI_InstallMode = &quot;Remove&quot;">
+          <Publish Event="Remove" Value="All" Order="1" />
+          <Publish Event="EndDialog" Value="Return" Order="2" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="386" Y="265" Width="70" Height="24" Cancel="yes" Text="取消(&amp;C)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+        <?include InstallerBackground.wxi ?>
+      </Dialog>
+
+      <Dialog Id="BiliSailMaintenanceTypeDlg" Width="480" Height="300" Title="BiliSail 哔帆 · 维护">
+        <?include InstallerBrand.wxi ?>
+        <Control Id="Title" Type="Text" X="174" Y="32" Width="282" Height="32" Transparent="yes" NoPrefix="yes" Text="{\BiliSailTitle}管理哔帆" />
+        <Control Id="Description" Type="Text" X="176" Y="84" Width="278" Height="38" Transparent="yes" NoPrefix="yes" Text="这台电脑已安装 BiliSail。&#13;&#10;选择要执行的操作。" />
+        <Control Id="RepairButton" Type="PushButton" X="176" Y="142" Width="110" Height="28" Default="yes" Text="修复程序(&amp;R)" DisableCondition="ARPNOREPAIR OR BURNMSIMODIFY OR BURNMSIUNINSTALL">
+          <Publish Property="WixUI_InstallMode" Value="Repair" Order="1" />
+          <Publish Event="NewDialog" Value="BiliSailVerifyReadyDlg" Order="2" />
+        </Control>
+        <Control Id="RepairHint" Type="Text" X="176" Y="177" Width="278" Height="22" Transparent="yes" NoPrefix="yes" Text="{\BiliSailMuted}恢复缺失或损坏的程序文件。" />
+        <Control Id="RemoveButton" Type="PushButton" X="176" Y="211" Width="110" Height="28" Text="卸载程序(&amp;U)" DisableCondition="ARPNOREMOVE OR BURNMSIREPAIR OR BURNMSIMODIFY">
+          <Publish Property="WixUI_InstallMode" Value="Remove" Order="1" />
+          <Publish Event="NewDialog" Value="BiliSailVerifyReadyDlg" Order="2" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="386" Y="265" Width="70" Height="24" Cancel="yes" Text="关闭(&amp;C)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+        <?include InstallerBackground.wxi ?>
+      </Dialog>
+
+      <Dialog Id="BiliSailProgressDlg" Width="480" Height="300" Title="BiliSail 哔帆 · 处理中" Modeless="yes">
+        <?include InstallerBrand.wxi ?>
+        <Control Id="Title" Type="Text" X="174" Y="32" Width="282" Height="32" Transparent="yes" NoPrefix="yes" Text="{\BiliSailTitle}正在为你准备" />
+        <Control Id="Description" Type="Text" X="176" Y="84" Width="278" Height="44" Transparent="yes" NoPrefix="yes" Text="正在应用更改，请稍候。&#13;&#10;这可能需要几分钟时间。" />
+        <Control Id="ActionText" Type="Text" X="176" Y="145" Width="278" Height="38" Transparent="yes" NoPrefix="yes">
+          <Subscribe Event="ActionText" Attribute="Text" />
+        </Control>
+        <Control Id="ProgressBar" Type="ProgressBar" X="176" Y="190" Width="278" Height="12" ProgressBlocks="no" Text="安装进度">
+          <Subscribe Event="SetProgress" Attribute="Progress" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="386" Y="265" Width="70" Height="24" Default="yes" Cancel="yes" Text="取消(&amp;C)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+        <?include InstallerBackground.wxi ?>
+      </Dialog>
+
+      <Dialog Id="BiliSailExitDialog" Width="480" Height="300" Title="BiliSail 哔帆 · 已完成">
+        <?include InstallerBrand.wxi ?>
+        <Control Id="Title" Type="Text" X="174" Y="32" Width="282" Height="32" Transparent="yes" NoPrefix="yes" Text="{\BiliSailTitle}一切就绪" />
+        <Control Id="Description" Type="Text" X="176" Y="92" Width="278" Height="54" Transparent="yes" NoPrefix="yes" Text="安装程序已完成更改。&#13;&#10;点击“完成”关闭此窗口。" />
+        <Control Id="StartHint" Type="Text" X="176" Y="168" Width="278" Height="48" Transparent="yes" NoPrefix="yes" Text="{\BiliSailMuted}可以从开始菜单打开 BiliSail 哔帆。" HideCondition="REMOVE = &quot;ALL&quot;" />
+        <Control Id="Finish" Type="PushButton" X="366" Y="265" Width="90" Height="24" Default="yes" Cancel="yes" Text="完成(&amp;F)">
+          <Publish Event="EndDialog" Value="Return" />
+        </Control>
+        <?include InstallerBackground.wxi ?>
+      </Dialog>
+
+      <Dialog Id="BiliSailFatalError" Width="480" Height="300" Title="BiliSail 哔帆 · 未能完成">
+        <?include InstallerBrand.wxi ?>
+        <Control Id="Title" Type="Text" X="174" Y="32" Width="282" Height="32" Transparent="yes" NoPrefix="yes" Text="{\BiliSailTitle}暂时未能完成" />
+        <Control Id="Description" Type="Text" X="176" Y="92" Width="278" Height="100" Transparent="yes" NoPrefix="yes" Text="安装遇到问题，更改未能完成。&#13;&#10;&#13;&#10;请根据错误提示检查后重试。如需帮助，可在项目主页反馈。" />
+        <Control Id="Finish" Type="PushButton" X="366" Y="265" Width="90" Height="24" Default="yes" Cancel="yes" Text="关闭(&amp;C)">
+          <Publish Event="EndDialog" Value="Exit" />
+        </Control>
+        <?include InstallerBackground.wxi ?>
+      </Dialog>
+
+      <Dialog Id="BiliSailUserExit" Width="480" Height="300" Title="BiliSail 哔帆 · 已取消">
+        <?include InstallerBrand.wxi ?>
+        <Control Id="Title" Type="Text" X="174" Y="32" Width="282" Height="32" Transparent="yes" NoPrefix="yes" Text="{\BiliSailTitle}已取消安装" />
+        <Control Id="Description" Type="Text" X="176" Y="92" Width="278" Height="70" Transparent="yes" NoPrefix="yes" Text="安装程序已停止。&#13;&#10;准备好后，可以随时重新运行安装包。" />
+        <Control Id="Finish" Type="PushButton" X="366" Y="265" Width="90" Height="24" Default="yes" Cancel="yes" Text="关闭(&amp;C)">
+          <Publish Event="EndDialog" Value="Exit" />
+        </Control>
+        <?include InstallerBackground.wxi ?>
+      </Dialog>
+
+      <Publish Dialog="BrowseDlg" Control="OK" Event="SetTargetPath" Value="[_BrowseProperty]" Order="1" />
+      <Publish Dialog="BrowseDlg" Control="OK" Event="EndDialog" Value="Return" Order="2" />
+      <InstallUISequence>
+        <Show Dialog="BiliSailInstallDirDlg" Before="BiliSailProgressDlg" Condition="NOT Installed AND NOT RESUME AND NOT Preselected" />
+        <Show Dialog="BiliSailMaintenanceTypeDlg" Before="BiliSailProgressDlg" Condition="Installed AND NOT RESUME AND NOT Preselected" />
+        <Show Dialog="BiliSailProgressDlg" Before="ExecuteAction" />
+        <Show Dialog="BiliSailExitDialog" OnExit="success" />
+        <Show Dialog="BiliSailFatalError" OnExit="error" />
+        <Show Dialog="BiliSailUserExit" OnExit="cancel" />
+      </InstallUISequence>
+    </UI>
+    <Binary Id="BiliSailDialog" SourceFile="$(InstallerArtwork)/dialog.bmp" />
+    <UIRef Id="WixUI_Common" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+    <WixVariable Id="WixUIBannerBmp" Value="$(InstallerArtwork)/banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="$(InstallerArtwork)/dialog.bmp" />
+  </Fragment>
+</Wix>

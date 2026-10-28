@@ -4,10 +4,12 @@
   <Bundle Name="BiliSail" Manufacturer="BiliSail" Version="$(BundleVersion)"
           UpgradeCode="57DB873E-8B4F-4188-82BA-85C12A3775AA" IconSourceFile="$(AppIcon)">
     <BootstrapperApplication>
-      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl=""
-                                            ShowVersion="yes" />
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl="" ShowVersion="yes"
+          ThemeFile="$(PackagingDirectory)/BundleTheme.xml"
+          LocalizationFile="$(PackagingDirectory)/Bundle.zh-CN.wxl"
+          LogoFile="$(InstallerArtwork)/sidebar.png" />
     </BootstrapperApplication>
-    <!-- The stock Options page edits this variable and supplies a Browse button. -->
+    <!-- The branded Options page edits this variable and supplies a Browse button. -->
     <Variable Name="InstallFolder" Type="formatted" Value="[ProgramFiles64Folder]BiliSail"
               Persisted="yes" />
     <util:RegistrySearch Id="PreviousInstallFolder" Root="HKLM" Key="Software\BiliSail\Installer"

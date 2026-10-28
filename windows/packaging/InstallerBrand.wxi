@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Control Id="Brand" Type="Text" X="22" Y="91" Width="116" Height="26" Transparent="yes"
+           NoPrefix="yes" Text="{\BiliSailBrand}BiliSail" />
+  <Control Id="BrandName" Type="Text" X="24" Y="120" Width="110" Height="20" Transparent="yes"
+           NoPrefix="yes" Text="{\BiliSailSubtitle}哔帆" />
+  <Control Id="Tagline" Type="Text" X="24" Y="153" Width="110" Height="48" Transparent="yes"
+           NoPrefix="yes" Text="{\BiliSailMuted}让喜爱的内容，&#13;&#10;陪你轻松启航。" />
+  <Control Id="Platform" Type="Text" X="24" Y="265" Width="110" Height="18" Transparent="yes"
+           NoPrefix="yes" Text="{\BiliSailMuted}WINDOWS · x64" />
+</Include>

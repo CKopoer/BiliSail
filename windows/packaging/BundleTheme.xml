@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Page/control contracts derived from WiX 6.0.2 HyperlinkLargeTheme.xml,
+     copyright .NET Foundation and contributors, under MS-RL. See README.md. -->
+<Theme xmlns="http://wixtoolset.org/schemas/v4/thmutil">
+  <!-- ThmUtil colors use BGR; these match the app's ink, muted and sail blue. -->
+  <Font Id="0" Height="-14" Weight="400" Foreground="433325" Background="ffffff">Microsoft YaHei UI</Font>
+  <Font Id="1" Height="-28" Weight="600" Foreground="433325">Microsoft YaHei UI</Font>
+  <Font Id="2" Height="-14" Weight="400" Foreground="7e6b58">Microsoft YaHei UI</Font>
+  <Font Id="3" Height="-30" Weight="600" Foreground="433325">Segoe UI</Font>
+  <Font Id="4" Height="-18" Weight="400" Foreground="433325">Microsoft YaHei UI</Font>
+  <Window Width="720" Height="480" HexStyle="100a0000" FontId="0" Caption="#(loc.Caption)">
+    <ImageControl X="0" Y="0" Width="220" Height="480" ImageFile="logo.png" Visible="yes" />
+    <Label X="28" Y="143" Width="172" Height="44" FontId="3" Visible="yes" DisablePrefix="yes">BiliSail</Label>
+    <Label X="30" Y="192" Width="160" Height="30" FontId="4" Visible="yes" DisablePrefix="yes">哔帆</Label>
+    <Label X="30" Y="244" Width="166" Height="64" FontId="2" Visible="yes" DisablePrefix="yes">让喜爱的内容，&#10;陪你轻松启航。</Label>
+    <Label X="30" Y="428" Width="170" Height="24" FontId="2" Visible="yes" DisablePrefix="yes">WINDOWS · x64</Label>
+
+    <Page Name="Loading">
+      <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">正在准备</Label>
+      <Label X="254" Y="112" Width="430" Height="52" FontId="2" DisablePrefix="yes">正在检查这台电脑上的安装状态，请稍候。</Label>
+    </Page>
+    <Page Name="Install">
+      <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">准备好启航了吗？</Label>
+      <Label X="254" Y="112" Width="430" Height="56" FontId="0" DisablePrefix="yes">安装 BiliSail 哔帆，&#10;在桌面畅享视频、番剧与直播。</Label>
+      <Label X="254" Y="210" Width="430" Height="24" FontId="2" DisablePrefix="yes">安装位置</Label>
+      <Label X="254" Y="243" Width="430" Height="54" FontId="0" DisablePrefix="yes">[InstallFolder]</Label>
+      <Button Name="OptionsButton" X="254" Y="309" Width="116" Height="32" TabStop="yes" FontId="0" VisibleCondition="NOT WixStdBASuppressOptionsUI">
+        <Text>更改位置(&amp;B)…</Text>
+        <ChangePageAction Page="Options" />
+      </Button>
+      <Label X="254" Y="358" Width="430" Height="24" FontId="2" DisablePrefix="yes">安装时将请求管理员权限。</Label>
+      <Label Name="InstallVersion" X="254" Y="426" Width="180" Height="24" FontId="2" DisablePrefix="yes" VisibleCondition="WixStdBAShowVersion">#(loc.InstallVersion)</Label>
+      <Button Name="InstallButton" X="474" Y="420" Width="116" Height="36" TabStop="yes" FontId="0">开始安装(&amp;I)</Button>
+      <Button Name="InstallCancelButton" X="602" Y="420" Width="86" Height="36" TabStop="yes" FontId="0">
+        <Text>取消(&amp;C)</Text><CloseWindowAction />
+      </Button>
+    </Page>
+    <Page Name="Options">
+      <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">选择安装位置</Label>
+      <Label X="254" Y="112" Width="430" Height="56" FontId="0" DisablePrefix="yes">将哔帆安装到你选择的文件夹。&#10;升级时会自动沿用已有安装位置。</Label>
+      <Label X="254" Y="210" Width="430" Height="24" FontId="2" DisablePrefix="yes">安装位置</Label>
+      <Editbox Name="InstallFolder" X="254" Y="244" Width="330" Height="32" TabStop="yes" FontId="0" FileSystemAutoComplete="yes" />
+      <Button Name="BrowseButton" X="596" Y="244" Width="92" Height="32" TabStop="yes" FontId="0">
+        <Text>浏览(&amp;B)…</Text><BrowseDirectoryAction VariableName="InstallFolder" />
+      </Button>
+      <Button Name="OptionsOkButton" X="474" Y="420" Width="116" Height="36" TabStop="yes" FontId="0">
+        <Text>保存位置(&amp;S)</Text><ChangePageAction Page="Install" />
+      </Button>
+      <Button Name="OptionsCancelButton" X="602" Y="420" Width="86" Height="36" TabStop="yes" FontId="0">
+        <Text>返回(&amp;C)</Text><ChangePageAction Page="Install" Cancel="yes" />
+      </Button>
+    </Page>
+    <Page Name="Progress">
+      <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">正在为你准备</Label>
+      <Label X="254" Y="112" Width="430" Height="56" FontId="0" DisablePrefix="yes">正在应用更改，请稍候。&#10;这可能需要几分钟时间。</Label>
+      <Label Name="OverallProgressPackageText" X="254" Y="220" Width="430" Height="48" FontId="2" DisablePrefix="yes">正在初始化…</Label>
+      <Progressbar Name="OverallCalculatedProgressbar" X="254" Y="282" Width="434" Height="12" />
+      <Button Name="ProgressCancelButton" X="602" Y="420" Width="86" Height="36" TabStop="yes" FontId="0">取消(&amp;C)</Button>
+    </Page>
+    <Page Name="ProgressPassive">
+      <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">正在为你准备</Label>
+      <Label X="254" Y="112" Width="430" Height="56" FontId="0" DisablePrefix="yes">正在应用更改，请稍候。</Label>
+      <Progressbar Name="OverallCalculatedProgressbar" X="254" Y="282" Width="434" Height="12" />
+    </Page>
+    <Page Name="Modify">
+      <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">管理哔帆</Label>
+      <Label X="254" Y="112" Width="430" Height="56" FontId="0" DisablePrefix="yes">这台电脑已安装 BiliSail。&#10;选择要执行的操作。</Label>
+      <Button Name="RepairButton" X="254" Y="210" Width="150" Height="36" TabStop="yes" FontId="0" HideWhenDisabled="yes">修复程序(&amp;R)</Button>
+      <Label X="254" Y="260" Width="430" Height="40" FontId="2" DisablePrefix="yes">恢复缺失或损坏的程序文件。</Label>
+      <Button Name="UninstallButton" X="254" Y="316" Width="150" Height="36" TabStop="yes" FontId="0">卸载程序(&amp;U)</Button>
+      <Button Name="ModifyCancelButton" X="602" Y="420" Width="86" Height="36" TabStop="yes" FontId="0">
+        <Text>关闭(&amp;C)</Text><CloseWindowAction />
+      </Button>
+    </Page>
+    <Page Name="Success">
+      <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">
+        <Text>一切就绪</Text>
+        <Text Condition="WixBundleAction = 3">已卸载哔帆</Text>
+        <Text Condition="WixBundleAction = 7">修复已完成</Text>
+      </Label>
+      <Label X="254" Y="112" Width="430" Height="72" FontId="0" DisablePrefix="yes">
+        <Text>安装程序已完成更改。&#10;可以从开始菜单打开 BiliSail 哔帆。</Text>
+        <Text Condition="WixBundleAction = 3">哔帆程序已从这台电脑移除。&#10;感谢相伴，期待再次启航。</Text>
+        <Text Condition="WixBundleAction = 2">已创建完整的本地安装副本。</Text>
+      </Label>
+      <Label X="254" Y="242" Width="430" Height="72" FontId="2" DisablePrefix="yes" VisibleCondition="WixStdBARestartRequired">需要重启电脑以完成更改。&#10;请先保存工作，再点击“重启”。</Label>
+      <Button Name="SuccessRestartButton" X="474" Y="420" Width="116" Height="36" TabStop="yes" FontId="0" HideWhenDisabled="yes">重启(&amp;R)</Button>
+      <Button Name="SuccessCloseButton" X="602" Y="420" Width="86" Height="36" TabStop="yes" FontId="0">
+        <Text>完成(&amp;F)</Text><CloseWindowAction />
+      </Button>
+    </Page>
+    <Page Name="Failure">
+      <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">暂时未能完成</Label>
+      <Hypertext Name="FailureLogFileLink" X="254" Y="112" Width="430" Height="62" FontId="0" TabStop="yes" HideWhenDisabled="yes">#(loc.FailureHyperlinkLogText)</Hypertext>
+      <Hypertext Name="FailureMessageText" X="254" Y="194" Width="430" Height="160" FontId="2" TabStop="yes" HideWhenDisabled="yes" />
+      <Label X="254" Y="368" Width="430" Height="42" FontId="2" DisablePrefix="yes" VisibleCondition="WixStdBARestartRequired">需要重启电脑以完成回退。请先保存工作。</Label>
+      <Button Name="FailureRestartButton" X="474" Y="420" Width="116" Height="36" TabStop="yes" FontId="0" HideWhenDisabled="yes">重启(&amp;R)</Button>
+      <Button Name="FailureCloseButton" X="602" Y="420" Width="86" Height="36" TabStop="yes" FontId="0">
+        <Text>关闭(&amp;C)</Text><CloseWindowAction />
+      </Button>
+    </Page>
+    <Page Name="Help">
+      <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">安装帮助</Label>
+      <Label X="254" Y="112" Width="430" Height="272" FontId="0" DisablePrefix="yes">#(loc.HelpText)</Label>
+      <Button Name="HelpCloseButton" X="602" Y="420" Width="86" Height="36" TabStop="yes" FontId="0">
+        <Text>关闭(&amp;C)</Text><CloseWindowAction />
+      </Button>
+    </Page>
+  </Window>
+</Theme>
