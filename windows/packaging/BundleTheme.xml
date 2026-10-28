@@ -40,8 +40,8 @@
       <Label X="254" Y="112" Width="430" Height="56" FontId="0" DisablePrefix="yes">将哔帆安装到你选择的文件夹。&#10;升级时会自动沿用已有安装位置。</Label>
       <Label X="254" Y="210" Width="430" Height="24" FontId="2" DisablePrefix="yes">安装位置</Label>
       <Editbox Name="InstallFolder" X="254" Y="244" Width="330" Height="32" TabStop="yes" FontId="0" FileSystemAutoComplete="yes" />
-      <Button Name="BrowseButton" X="596" Y="244" Width="92" Height="32" TabStop="yes" FontId="0">
-        <Text>浏览(&amp;B)…</Text><BrowseDirectoryAction VariableName="InstallFolder" />
+      <Button Name="BiliSailBrowseButton" X="596" Y="244" Width="92" Height="32" TabStop="yes" FontId="0">
+        <Text>浏览(&amp;B)…</Text>
       </Button>
       <Button Name="OptionsOkButton" X="474" Y="420" Width="116" Height="36" TabStop="yes" FontId="0">
         <Text>保存位置(&amp;S)</Text><ChangePageAction Page="Install" />
@@ -56,11 +56,6 @@
       <Label Name="OverallProgressPackageText" X="254" Y="220" Width="430" Height="48" FontId="2" DisablePrefix="yes">正在初始化…</Label>
       <Progressbar Name="OverallCalculatedProgressbar" X="254" Y="282" Width="434" Height="12" />
       <Button Name="ProgressCancelButton" X="602" Y="420" Width="86" Height="36" TabStop="yes" FontId="0">取消(&amp;C)</Button>
-    </Page>
-    <Page Name="ProgressPassive">
-      <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">正在为你准备</Label>
-      <Label X="254" Y="112" Width="430" Height="56" FontId="0" DisablePrefix="yes">正在应用更改，请稍候。</Label>
-      <Progressbar Name="OverallCalculatedProgressbar" X="254" Y="282" Width="434" Height="12" />
     </Page>
     <Page Name="Modify">
       <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">管理哔帆</Label>

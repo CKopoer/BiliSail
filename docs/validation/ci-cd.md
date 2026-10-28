@@ -150,6 +150,8 @@ Windows 打包在签名之后运行 [实际产物检查](../../tool/test-windows
 
 WiX 源码采用 MS-RL，固定版本来源和内嵌 Burn 的许可见 [第三方说明](../../THIRD_PARTY_NOTICES.md)。WiX v6 的二进制发布同时适用 [Open Source Maintenance Fee 条款](https://docs.firegiant.com/wix/osmf/)；本工程不引入 FireGiant 商业扩展。`tool/check.ps1` 增加 [Windows 版本检查](../../tool/test-windows-installers.ps1)，在 Ubuntu 和 Windows 均验证补丁／构建号顺序与超限拒绝。
 
+2026-10-29 后续复查将两种安装器的旧文件夹浏览窗口替换为共享 `IFileOpenDialog`，提供系统地址栏、导航与新建文件夹；辅助库仅用于安装 UI，构建时从固定、校验 SHA-256 的 WiX 6.0.2 SDK 获取接口头文件。系统应用条目沿用 MSI／Burn 原生卸载注册，EXE 隐藏底层 MSI 的重复条目并使用缓存程序卸载。新增隔离安装／修复／卸载回归，真实设置列表检查、用户范围测试与尚未执行的管理员范围验证分别见[选择器与卸载记录](windows-installer-ui.md#2026-10-29文件夹选择器与系统卸载入口复查)。
+
 ## Windows MSIX 签名与安装
 
 [AppxManifest.xml](../../windows/packaging/AppxManifest.xml) 的 identity 为 `JerryHsu.BiliSail`，默认 publisher 为 `CN=D34F8E82-088B-4DC8-9296-620B8683A539`，PublisherDisplayName 为 `Jerry Hsu`；Windows 安装下限为 Windows 10 1809（build 17763）。`MakeAppx` 打包完整 Flutter Release 目录，`SignTool` 使用 SHA-256 签名。MSIX 图标在构建时从已有品牌 PNG 派生；生成普通、深色 `unplated`、浅色 `lightunplated` 的多尺寸图标，并使用同一 Windows SDK 的 `MakePri` 与 [PRI 配置](../../windows/packaging/priconfig.xml) 生成 `resources.pri`，供任务栏和开始菜单选择无底板图标。不引入新品牌资源或 Dart 依赖。

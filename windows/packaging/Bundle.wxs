@@ -2,8 +2,11 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Bundle Name="BiliSail" Manufacturer="BiliSail" Version="$(BundleVersion)"
-          UpgradeCode="57DB873E-8B4F-4188-82BA-85C12A3775AA" IconSourceFile="$(AppIcon)">
+          UpgradeCode="57DB873E-8B4F-4188-82BA-85C12A3775AA" IconSourceFile="$(AppIcon)"
+          DisableModify="yes">
     <BootstrapperApplication>
+      <Payload Id="BiliSailInstallerUI" SourceFile="$(InstallerUIHelper)"
+               Name="BiliSailInstallerUI.dll" bal:BAFunctions="yes" />
       <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl="" ShowVersion="yes"
           ThemeFile="$(PackagingDirectory)/BundleTheme.xml"
           LocalizationFile="$(PackagingDirectory)/Bundle.zh-CN.wxl"

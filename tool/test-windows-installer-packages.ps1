@@ -32,8 +32,11 @@ Assert-PackageNode $msiXml "//*[local-name()='Property' and @Id='WIXUI_INSTALLDI
 Assert-PackageNode $msiXml "//*[local-name()='Property' and @Id='INSTALLFOLDER' and @Secure='yes']" 'MSI directory choice cannot cross elevation.'
 Assert-PackageNode $msiXml "//*[local-name()='StandardDirectory' and @Id='ProgramFiles64Folder']/*[local-name()='Directory' and @Id='INSTALLFOLDER' and @Name='BiliSail']" 'MSI default directory changed.'
 Assert-PackageNode $msiXml "//*[local-name()='Dialog' and @Id='BiliSailInstallDirDlg']/*[local-name()='Control' and @Type='PathEdit' and @Property='WIXUI_INSTALLDIR' and @Indirect='yes']" 'MSI directory editor is missing.'
-Assert-PackageNode $msiXml "//*[local-name()='Dialog' and @Id='BiliSailInstallDirDlg']/*[local-name()='Control' and @Id='ChangeFolder']/*[local-name()='Publish' and @Event='SpawnDialog' and @Value='BrowseDlg']" 'MSI folder browser is unreachable.'
-Assert-PackageNode $msiXml "//*[local-name()='Dialog' and @Id='BrowseDlg']/*[local-name()='Control' and @Id='OK']/*[local-name()='Publish' and @Event='SetTargetPath' and @Value='[_BrowseProperty]']" 'MSI browser does not apply its selected path.'
+Assert-PackageNode $msiXml "//*[local-name()='Dialog' and @Id='BiliSailInstallDirDlg']/*[local-name()='Control' and @Id='ChangeFolder']/*[local-name()='Publish' and @Event='DoAction' and @Value='BiliSailChooseInstallFolder']" 'MSI modern folder picker is unreachable.'
+Assert-PackageNode $msiXml "//*[local-name()='CustomAction' and @Id='BiliSailChooseInstallFolder' and @BinaryRef='BsInstallerUI' and @DllEntry='ChooseInstallFolder']" 'MSI modern folder picker is not embedded.'
+Assert-PackageNode $msiXml "//*[local-name()='Dialog' and @Id='BiliSailInstallDirDlg']/*[local-name()='Control' and @Id='ChangeFolder']/*[local-name()='Publish' and @Event='SetTargetPath' and @Value='INSTALLFOLDER' and contains(@Condition, 'BILISAIL_FOLDER_PICKED')]" 'MSI does not apply folder selections only after confirmation.'
+if ($msiXml.SelectSingleNode("//*[local-name()='Dialog' and @Id='BrowseDlg']")) { throw 'MSI still embeds the legacy folder browser.' }
+$checks++
 
 # The first page now combines welcome and directory selection; confirmation
 # must remain reachable in both directions without a placeholder license page.
@@ -81,12 +84,48 @@ Assert-PackageNode $burnXml "//*[local-name()='MsiPackage' and @Id='BiliSailMsi'
 Assert-PackageNode $baXml "//*[local-name()='WixStdbaOptions' and not(@SuppressOptionsUI='1') and not(@SuppressOptionsUI='yes')]" 'EXE hides the directory options.'
 Assert-PackageNode $themeXml "//*[local-name()='Button' and @Name='OptionsButton']/*[local-name()='ChangePageAction' and @Page='Options']" 'EXE directory options page is unreachable.'
 Assert-PackageNode $themeXml "//*[local-name()='Page' and @Name='Options']/*[local-name()='Editbox' and @Name='InstallFolder']" 'EXE directory editor is missing.'
-Assert-PackageNode $themeXml "//*[local-name()='Page' and @Name='Options']/*[local-name()='Button']/*[local-name()='BrowseDirectoryAction' and @VariableName='InstallFolder']" 'EXE browser does not update the MSI directory variable.'
+Assert-PackageNode $themeXml "//*[local-name()='Page' and @Name='Options']/*[local-name()='Button' and @Name='BiliSailBrowseButton']" 'EXE modern folder picker is unreachable.'
+Assert-PackageNode $baXml "//*[local-name()='WixBalBAFunctions' and @FilePath='BiliSailInstallerUI.dll']" 'EXE modern folder picker helper is not registered.'
+if (!(Test-Path -LiteralPath (Join-Path $baDirectory 'BiliSailInstallerUI.dll'))) { throw 'EXE does not embed its folder picker helper.' }
+$checks++
+if ($themeXml.SelectSingleNode("//*[local-name()='BrowseDirectoryAction']")) { throw 'EXE still uses the legacy folder browser.' }
+$checks++
+Assert-PackageNode $burnXml "//*[local-name()='Registration']/*[local-name()='Arp' and @DisplayName='BiliSail' and not(@DisableRemove='yes') and not(@DisableRemove='1')]" 'EXE has no removable Windows Apps registration.'
+$installer = New-Object -ComObject WindowsInstaller.Installer
+$database = $null
+try {
+  $database = $installer.OpenDatabase($Msi, 0)
+  foreach ($action in @('RegisterProduct', 'RemoveFiles')) {
+    $view = $database.OpenView(('SELECT `Action` FROM `InstallExecuteSequence` WHERE `Action` = ''{0}''' -f $action))
+    $record = $null
+    try {
+      $view.Execute()
+      $record = $view.Fetch()
+      if (!$record) { throw "MSI is missing the $action standard action." }
+      $checks++
+    } finally {
+      if ($record) { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($record) | Out-Null }
+      $view.Close()
+      [Runtime.InteropServices.Marshal]::FinalReleaseComObject($view) | Out-Null
+    }
+  }
+} finally {
+  if ($database) { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($database) | Out-Null }
+  [Runtime.InteropServices.Marshal]::FinalReleaseComObject($installer) | Out-Null
+}
+foreach ($property in @('ARPNOREMOVE', 'ARPSYSTEMCOMPONENT')) {
+  if ($msiXml.SelectSingleNode("//*[local-name()='Property' and @Id='$property' and @Value='1']")) { throw "Standalone MSI hides/disables its Apps entry with $property." }
+  $checks++
+}
+Assert-PackageNode $burnXml "//*[local-name()='MsiPackage' and @Id='BiliSailMsi' and @Permanent='no']/*[local-name()='MsiProperty' and @Id='ARPSYSTEMCOMPONENT' and @Value='1']" 'EXE must hide its child MSI while keeping it removable.'
 Assert-PackageNode $themeXml "//*[local-name()='Page' and @Name='Install']/*[local-name()='Label' and text()='[InstallFolder]']" 'EXE does not show its actual destination before installation.'
 Assert-PackageNode $themeXml "//*[local-name()='Page' and @Name='Options']/*[local-name()='Button' and @Name='OptionsCancelButton']/*[local-name()='ChangePageAction' and @Page='Install' and @Cancel='yes']" 'EXE cannot discard directory edits.'
-foreach ($page in @('Loading', 'Install', 'Options', 'Progress', 'ProgressPassive', 'Modify', 'Success', 'Failure', 'Help')) {
+foreach ($page in @('Loading', 'Install', 'Options', 'Progress', 'Modify', 'Success', 'Failure', 'Help')) {
   Assert-PackageNode $themeXml "//*[local-name()='Page' and @Name='$page']" "EXE $page page is missing."
 }
+$duplicates = @($themeXml.SelectNodes('//*[@Name]') | Group-Object Name | Where-Object Count -gt 1)
+if ($duplicates.Count) { throw "EXE theme has duplicate control/page names: $($duplicates.Name -join ', ')." }
+$checks++
 [xml]$localizationXml = Get-Content -LiteralPath (Join-Path $baDirectory 'thm.wxl') -Raw
 Assert-PackageNode $localizationXml "/*[local-name()='WixLocalization' and @Language='2052']" 'EXE is not localized in Simplified Chinese.'
 Assert-PackageNode $localizationXml "//*[local-name()='String' and @Id='ConfirmCancelMessage' and string-length(@Value) > 0]" 'EXE cancellation confirmation is missing.'

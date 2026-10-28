@@ -18,7 +18,6 @@
       <Property Id="BURNMSIUNINSTALL" Secure="yes" />
       <Property Id="BURNMSIMODIFY" Secure="yes" />
 
-      <DialogRef Id="BrowseDlg" />
       <DialogRef Id="CancelDlg" />
       <DialogRef Id="ErrorDlg" />
       <DialogRef Id="FilesInUse" />
@@ -34,8 +33,8 @@
         <Control Id="FolderLabel" Type="Text" X="176" Y="135" Width="270" Height="18" Transparent="yes" Text="安装位置" />
         <Control Id="Folder" Type="PathEdit" X="176" Y="158" Width="212" Height="22" Property="WIXUI_INSTALLDIR" Indirect="yes" />
         <Control Id="ChangeFolder" Type="PushButton" X="394" Y="158" Width="62" Height="22" Text="浏览(&amp;B)…">
-          <Publish Property="_BrowseProperty" Value="[WIXUI_INSTALLDIR]" Order="1" />
-          <Publish Event="SpawnDialog" Value="BrowseDlg" Order="2" />
+          <Publish Event="DoAction" Value="BiliSailChooseInstallFolder" Order="1" />
+          <Publish Event="SetTargetPath" Value="INSTALLFOLDER" Order="2" Condition="BILISAIL_FOLDER_PICKED = &quot;1&quot;" />
         </Control>
         <Control Id="Hint" Type="Text" X="176" Y="194" Width="278" Height="34" Transparent="yes" NoPrefix="yes" Text="{\BiliSailMuted}适用于 Windows 10 1809 及以上版本。&#13;&#10;安装时将请求管理员权限。" />
         <Control Id="Version" Type="Text" X="176" Y="238" Width="280" Height="16" Transparent="yes" NoPrefix="yes" Text="{\BiliSailMuted}版本 $(DisplayVersion)" />
@@ -147,8 +146,6 @@
         <?include InstallerBackground.wxi ?>
       </Dialog>
 
-      <Publish Dialog="BrowseDlg" Control="OK" Event="SetTargetPath" Value="[_BrowseProperty]" Order="1" />
-      <Publish Dialog="BrowseDlg" Control="OK" Event="EndDialog" Value="Return" Order="2" />
       <InstallUISequence>
         <Show Dialog="BiliSailInstallDirDlg" Before="BiliSailProgressDlg" Condition="NOT Installed AND NOT RESUME AND NOT Preselected" />
         <Show Dialog="BiliSailMaintenanceTypeDlg" Before="BiliSailProgressDlg" Condition="Installed AND NOT RESUME AND NOT Preselected" />
@@ -159,6 +156,9 @@
       </InstallUISequence>
     </UI>
     <Binary Id="BiliSailDialog" SourceFile="$(InstallerArtwork)/dialog.bmp" />
+    <Binary Id="BsInstallerUI" SourceFile="$(InstallerUIHelper)" />
+    <CustomAction Id="BiliSailChooseInstallFolder" BinaryRef="BsInstallerUI"
+                  DllEntry="ChooseInstallFolder" Execute="immediate" Return="check" />
     <UIRef Id="WixUI_Common" />
     <UIRef Id="WixUI_ErrorProgressText" />
     <WixVariable Id="WixUIBannerBmp" Value="$(InstallerArtwork)/banner.bmp" />

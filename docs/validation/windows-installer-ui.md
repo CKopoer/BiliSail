@@ -26,3 +26,18 @@
 ## 尚未验收
 
 本轮没有执行真实全新安装、旧版本覆盖升级、实际修复／卸载、签名／SmartScreen 信任、Windows 10、其他系统语言或多显示器 DPI 切换验收。产物结构检查、窗口预览和本地副本模式不替代这些项目；没有发布 Release 或替换已发布附件。
+
+## 2026-10-29：文件夹选择器与系统卸载入口复查
+
+MSI 的 WiX `BrowseDlg` 与 EXE 的旧 `BrowseDirectoryAction` 均替换为共享的原生 `IFileOpenDialog` 文件夹模式。新窗口提供系统地址栏、导航侧栏、文件夹列表、新建文件夹及中文确认按钮；取消保留原路径，EXE 仍只编辑选项页草稿。通过固定版本／SHA-256 验证的 WiX API 头文件接入 BAFunctions，MSI 仅从 UI 调用即时 custom action；辅助 DLL 使用静态 CRT，源码和 SDK 头文件随包分发。EXE 实际窗口确认新选择器已打开；MSI 导出入口、绑定和条件更新由编译及产物检查覆盖，后续界面操作按用户 Escape 停止。
+
+卸载注册沿用 Windows Installer／Burn；EXE 的系统条目只提供卸载，重新运行安装包仍提供修复。新增 [生命周期回归](../../tool/test-windows-installer-lifecycle.ps1)，使用生产 authoring 的副本、随机 UpgradeCode／ProductCode、独立注册表／开始菜单目录和不执行的合成文件，避免触碰正式应用或账号数据。测试卸载只针对本轮随机身份；失败也会清理注册。
+
+本机以 `-Scope perUser -PauseForSettings` 执行，结果保存在 `build/installer-picker-validation/lifecycle-5bb80f74d4074bffb3d99a0ab87dea2a/result.json`：
+
+- 独立 MSI 安装后，真实 Windows“设置 → 应用 → 安装的应用”中出现带品牌图标的隔离条目，菜单的“卸载”可用；直接卸载命令为 `MsiExec.exe /X{测试产品码}`。删除一个测试文件后，修复成功恢复。
+- EXE 安装后生成一个可移除的 Bundle 卸载注册，内嵌 MSI 标为 `SystemComponent=1`，不产生重复可见注册。删除测试文件后，缓存的 EXE 修复成功；移动原始安装包后，仍可用应用条目指向的缓存程序执行卸载。
+- 两次卸载均返回 0，产品／Bundle 注册、快捷方式、安装目录注册值和所属程序文件移除；额外写入的非安装器文件仍保留。未读取或改动真实账号、数据库、下载或应用设置。
+- EXE 的用户范围注册未在本机系统设置列表中显示，不能将注册表可见性检查当成该界面的通过记录。生产安装包仍为 `perMachine`，本轮没有执行需管理员权限的生产范围生命周期；只确认其编译产物包含可卸载的 ARP 注册。独立 MSI 的真实系统列表检查与上述用户范围回归分别记录。
+
+最终原生辅助库通过 MSVC `/W4 /WX` Release 编译，两种完整载荷安装包编译并通过 67 项产物检查。PowerShell 语法、71 条相对文档链接及本任务差异检查通过。完整根检查的打包边界、格式与静态分析通过；根测试 3348 项通过、4 项失败、13 项 symlink 因权限跳过，失败为同期正在修改的 `playback_panel_test.dart` 的四项 `picture seek holds its target until confirmed`，预期 seek 54000 ms／进度 0.3，实际为 31000 ms／0.172222。未为本任务修改这些播放文件；四个包另行通过 709 项测试（492／96／116／5）。10 项 mux 原生用例仍因未配置库而跳过。本节不替代生产管理员安装、Windows 10 或多 DPI 验收。
