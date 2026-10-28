@@ -1196,7 +1196,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                       unawaited(session.ensureStoryboard());
                                     }
                                   },
-                                  onSeek: (position) {
+                                  onSeek: (position) async {
                                     // A source may change before the next UI frame.
                                     if (widget.active &&
                                         _appActive &&
@@ -1206,7 +1206,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                         !session.isLive &&
                                         session.media != null &&
                                         session.error == null) {
-                                      unawaited(session.seek(position));
+                                      await session.seek(position);
                                     }
                                   },
                                   child: PlayerSwipeControls(

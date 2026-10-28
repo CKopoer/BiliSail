@@ -29,7 +29,8 @@ class PlayerSeekControls extends StatefulWidget {
   final ValueGetter<Duration> position;
   final Duration duration;
   final ValueNotifier<Duration?> preview;
-  final ValueChanged<Duration> onSeek;
+  // Completes after the session has confirmed the backend position.
+  final Future<void> Function(Duration) onSeek;
   final VoidCallback onPreviewRequest;
   final VideoStoryboard? storyboard;
   final bool storyboardLoading;
@@ -153,12 +154,24 @@ class _PlayerSeekControlsState extends State<PlayerSeekControls>
     );
   }
 
-  void _endDrag() {
+  Future<void> _endDrag() async {
     if (!_dragging) return;
     final target = widget.preview.value;
     final commit = _current && target != null && target != _start;
-    _cancel();
-    if (commit) widget.onSeek(target);
+    if (!commit) {
+      _cancel();
+      return;
+    }
+    final revision = ++_revision;
+    // Hide the central card on release, but keep the timeline at the target
+    // until seek confirms it. Clearing early exposes the old playback clock.
+    setState(() => _dragging = false);
+    try {
+      await widget.onSeek(target);
+    } finally {
+      // A cancelled gesture or a newer drag owns its own preview now.
+      if (mounted && revision == _revision) _cancel();
+    }
   }
 
   @override

@@ -50,7 +50,7 @@ void main() {
   for (final fullscreen in [false, true]) {
     for (final controlsVisible in [true, false]) {
       testWidgets(
-        'picture seek previews locally (fullscreen: $fullscreen, controls: $controlsVisible)',
+        'picture seek holds its target until confirmed (fullscreen: $fullscreen, controls: $controlsVisible)',
         (tester) async {
           final engine = _FakeEngine();
           final session = _session(engine);
@@ -140,7 +140,46 @@ void main() {
               closeTo(54 / 180, .001),
             );
           }
+          final seekGate = Completer<void>();
+          addTearDown(() {
+            if (!seekGate.isCompleted) seekGate.complete();
+          });
+          engine.nextSeek = seekGate;
           await drag.up();
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.position, before.position);
+          expect(engine.seeks, seeks + 1);
+          expect(
+            find.byKey(const ValueKey('player-swipe-seek-preview')),
+            findsNothing,
+          );
+          // Old clock samples can still arrive while the backend is seeking.
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              position: const Duration(seconds: 31),
+            ),
+          );
+          await _pumpFrames(tester);
+          if (controlsVisible) {
+            expect(
+              tester
+                  .widget<Slider>(
+                    find.byKey(const ValueKey('playback-timeline-slider')),
+                  )
+                  .value,
+              closeTo(54000, 1),
+            );
+          } else {
+            expect(
+              tester
+                  .widget<LinearProgressIndicator>(
+                    find.byKey(const ValueKey('player-collapsed-progress')),
+                  )
+                  .value,
+              closeTo(54 / 180, .001),
+            );
+          }
+          seekGate.complete();
           await _pumpFrames(tester);
           expect(engine.currentSnapshot.position, const Duration(seconds: 54));
           expect(engine.seeks, seeks + 1);
@@ -157,6 +196,46 @@ void main() {
       );
     }
   }
+
+  testWidgets('a failed picture seek releases its pending progress', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(session, _FakeWindowService(), const AppSettings.defaults()),
+    );
+    await _pumpFrames(tester);
+    await session.pause();
+    await session.seek(const Duration(seconds: 30));
+    await _pumpFrames(tester);
+    final seekGate = Completer<void>();
+    engine.nextSeek = seekGate;
+    final drag = await tester.startGesture(_surfacePoint(tester));
+    await drag.moveBy(const Offset(80, 0));
+    await drag.up();
+    await _pumpFrames(tester);
+    final controls = tester.widget<PlayerSeekControls>(
+      find.byType(PlayerSeekControls),
+    );
+    expect(controls.preview.value, isNotNull);
+    seekGate.completeError(
+      PlayerFailure(
+        PlayerFailureKind.nativePlayback,
+        'Seek confirmation timed out',
+        engine.currentSnapshot.generation,
+      ),
+    );
+    await _pumpFrames(tester);
+    expect(controls.preview.value, isNull);
+    expect(engine.currentSnapshot.position, const Duration(seconds: 30));
+    expect(engine.currentSnapshot.desiredPlaying, isFalse);
+    expect(session.error, 'Seek confirmation timed out');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
 
   for (final action in ['hide', 'dispose']) {
     testWidgets('$action during a picture drag discards its preview', (
@@ -6521,6 +6600,7 @@ final class _FakeEngine implements PlayerEngine, VideoOutputSource {
   int maxSurfaces = 0;
   Completer<void>? nextRate;
   Completer<void>? nextVolume;
+  Completer<void>? nextSeek;
 
   @override
   Stream<PlaybackSnapshot> get snapshots => _snapshots.stream;
@@ -6568,6 +6648,9 @@ final class _FakeEngine implements PlayerEngine, VideoOutputSource {
   @override
   Future<void> seek(Duration target) async {
     seeks++;
+    final gate = nextSeek;
+    nextSeek = null;
+    if (gate != null) await gate.future;
     _emit(_current.copyWith(position: target));
   }
 

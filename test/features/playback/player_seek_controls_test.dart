@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bilisail/features/playback/domain/playback_timeline.dart';
 import 'package:bilisail/features/playback/presentation/player_seek_controls.dart';
 import 'package:bilisail/shared/ui/storyboard_thumbnail.dart';
@@ -102,6 +104,96 @@ void main() {
     expect(state.seeks, isEmpty);
     expect(state.preview.value, isNull);
   });
+
+  for (final releaseSecond in [false, true]) {
+    testWidgets(
+      'an older seek cannot clear a newer ${releaseSecond ? 'seek' : 'drag'} preview',
+      (tester) async {
+        final state = _State();
+        final firstSeek = Completer<void>();
+        state.nextSeek = firstSeek;
+        await tester.pumpWidget(_app(state));
+        final first = await tester.startGesture(const Offset(100, 100));
+        await first.moveBy(const Offset(100, 0));
+        await first.up();
+        await tester.pump();
+        expect(state.preview.value, const Duration(seconds: 90));
+        expect(
+          find.byKey(const ValueKey('player-swipe-seek-preview')),
+          findsNothing,
+        );
+
+        final secondSeek = Completer<void>();
+        final second = await tester.startGesture(const Offset(100, 100));
+        await second.moveBy(const Offset(60, 0));
+        if (releaseSecond) {
+          state.nextSeek = secondSeek;
+          await second.up();
+        }
+        await tester.pump();
+        firstSeek.complete();
+        await tester.pump();
+        expect(state.preview.value, const Duration(seconds: 78));
+        expect(
+          find.byKey(const ValueKey('player-swipe-seek-preview')),
+          releaseSecond ? findsNothing : findsOneWidget,
+        );
+        if (releaseSecond) {
+          secondSeek.complete();
+        } else {
+          await second.up();
+        }
+        await tester.pump();
+        expect(state.preview.value, isNull);
+        expect(state.seeks, [
+          const Duration(seconds: 90),
+          const Duration(seconds: 78),
+        ]);
+      },
+    );
+  }
+
+  for (final action in ['source', 'disabled', 'background', 'dispose']) {
+    testWidgets('$action invalidates a pending seek preview', (tester) async {
+      final state = _State();
+      final pendingSeek = Completer<void>();
+      state.nextSeek = pendingSeek;
+      await tester.pumpWidget(_app(state));
+      final drag = await tester.startGesture(const Offset(100, 100));
+      await drag.moveBy(const Offset(100, 0));
+      await drag.up();
+      await tester.pump();
+      expect(state.preview.value, const Duration(seconds: 90));
+      switch (action) {
+        case 'source':
+          await tester.pumpWidget(_app(state, generation: 2));
+        case 'disabled':
+          await tester.pumpWidget(_app(state, enabled: false));
+        case 'background':
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.paused,
+          );
+        case 'dispose':
+          await tester.pumpWidget(const SizedBox());
+          // The presenting view owns and disposes the notifier.
+          state.preview.dispose();
+      }
+      await tester.pump();
+      if (action != 'dispose') expect(state.preview.value, isNull);
+      pendingSeek.complete();
+      await tester.pump();
+      if (action != 'dispose') expect(state.preview.value, isNull);
+      expect(state.seeks, [const Duration(seconds: 90)]);
+      expect(tester.takeException(), isNull);
+      if (action == 'background') {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+      }
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
 
   testWidgets(
     'a second finger before recognition blocks until all fingers lift',
@@ -347,6 +439,7 @@ class _State {
   final seeks = <Duration>[];
   Duration position = const Duration(minutes: 1);
   int requests = 0;
+  Completer<void>? nextSeek;
 }
 
 Widget _app(
@@ -374,7 +467,12 @@ Widget _app(
             position: () => state.position,
             duration: duration,
             preview: state.preview,
-            onSeek: state.seeks.add,
+            onSeek: (position) async {
+              state.seeks.add(position);
+              final gate = state.nextSeek;
+              state.nextSeek = null;
+              if (gate != null) await gate.future;
+            },
             onPreviewRequest: () => state.requests++,
             storyboard: storyboard,
             child: picture ?? const ColoredBox(color: Colors.blue),
