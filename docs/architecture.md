@@ -6,7 +6,7 @@
 
 BiliSail（哔帆）是一个专注观看体验的跨平台 Bilibili 第三方客户端，以视频和直播为中心。首要目标是播放稳定、弹幕流畅、移动与桌面交互自然，以及 API 变化时可以局部修复。
 
-首批交付 Android arm64、Windows x64、macOS arm64。Windows 先作为本地调试入口，但 Android 和 macOS 从 M0 就必须进入验证矩阵。2026-10-26 增加 iOS arm64（iOS 15+）和 Linux x64 的工程与 CI：前者输出未签名 IPA，后者输出 Flatpak／AppImage，构建和设备验收状态见[扩展记录](validation/ios-linux.md)。Android x64 用于模拟器；Windows arm64、macOS Intel 仍属后续扩展。Web 不列入本轮范围，其 CORS、Cookie、解码器和后台能力需要单独方案。
+首批交付 Android arm64、Windows x64、macOS arm64。Windows 先作为本地调试入口，但 Android 和 macOS 从 M0 就必须进入验证矩阵。2026-10-26 增加 iOS arm64（iOS 15+）和 Linux x64 的工程与 CI：前者输出未签名 IPA，后者输出 Flatpak／AppImage，构建和设备验收状态见[扩展记录](validation/ios-linux.md)。2026-10-29 增加 macOS Intel x64 的 CI 与独立 DMG 打包配置，最低 macOS 12，首次远端构建和设备验收待完成，见 [CI/CD](validation/ci-cd.md#macos-dmg-安装)。Android x64 用于模拟器；Windows arm64 仍属后续扩展。Web 不列入本轮范围，其 CORS、Cookie、解码器和后台能力需要单独方案。
 
 拟定最低系统为 Android API 24、Windows 10、macOS 12；它们是初始验证下限。M0 选择具体 Flutter SDK 和插件版本后，按它们支持范围的交集锁定最终下限和 ABI，不引用某个播放器包的较低系统要求代替 Flutter 的要求。[Flutter 支持平台](https://docs.flutter.dev/reference/supported-platforms)
 

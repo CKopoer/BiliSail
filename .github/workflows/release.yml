@@ -17,7 +17,7 @@ on:
         type: boolean
         default: true
       enable_macos:
-        description: macOS arm64 DMG 安装文件
+        description: macOS arm64 / Intel x64 DMG 安装文件
         type: boolean
         default: true
       enable_ios:
@@ -94,7 +94,7 @@ jobs:
           - 仅包含本次选中的平台；包旁附 SHA-256 校验文件。
           - Windows 同时提供 MSIX、MSI 和 EXE 安装包；EXE 内嵌同一 MSI，任选一种安装。MSI 向导可选择安装目录，EXE 通过 Options → Browse 选择，升级默认沿用原目录。三者复用同一签名证书，测试签名需先信任包旁的 .cer；签名种类及 MSI 内部版本见 build-info.json。
           - Android 复用仓库配置的固定 release keystore，证书 SHA-256 见 build-info.json；macOS 仅 ad-hoc 签名，未 notarize。
-          - macOS 提供 DMG，打开后将 BiliSail.app 拖到 Applications 安装。
+          - macOS 分别提供 Apple Silicon arm64 与 Intel x64 DMG，按芯片选择；打开后将 BiliSail.app 拖到 Applications 安装。
           - iOS 提供 arm64 未签名 IPA，安装前须使用自己的 Apple 证书及 provisioning profile 签名；GitHub Actions token 只用于上传产物和 Release。
           - Linux x64 提供 AppImage 与 Flatpak。AppImage 基线为 Ubuntu 24.04，Flatpak 使用 Freedesktop 25.08 runtime；图形使用 X11／XWayland，登录需可用的系统 Secret Service。
           - 构建成功不等于各平台播放验收；正式分发前仍需完成签名、资源许可和设备验证。

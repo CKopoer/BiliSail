@@ -1,5 +1,5 @@
 param(
-  [Parameter(Mandatory)][ValidateSet('android-arm64', 'windows-x64', 'macos-arm64', 'ios-arm64', 'linux-x64')][string]$Target,
+  [Parameter(Mandatory)][ValidateSet('android-arm64', 'windows-x64', 'macos-arm64', 'macos-x64', 'ios-arm64', 'linux-x64')][string]$Target,
   [Parameter(Mandatory)][string]$Version,
   [switch]$AndroidPreviewSigning
 )
@@ -132,6 +132,8 @@ if ($Version -cnotmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\+(0|[1-9]\d*)
   throw 'Version must be x.y.z+N, for example 0.1.0+1.'
 }
 $buildName, $buildNumber = $Version.Split('+')
+$isMacOSTarget = $Target -in @('macos-arm64', 'macos-x64')
+$macosArch = if ($Target -eq 'macos-arm64') { 'arm64' } elseif ($Target -eq 'macos-x64') { 'x86_64' } else { $null }
 $androidVersionCode = if ($Target -eq 'android-arm64') { Get-AndroidVersionCode $Version } else { $null }
 if ($Target -eq 'windows-x64' -and @(($Version -split '[.+]') | Where-Object { [long]$_ -gt 65535 }).Count) {
   throw 'MSIX version components must be at most 65535.'
@@ -143,6 +145,9 @@ if ($Target -eq 'windows-x64' -and (!$IsWindows -or [System.Runtime.InteropServi
 if ($Target -eq 'macos-arm64' -and (!$IsMacOS -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'Arm64')) {
   throw 'macos-arm64 requires an Apple Silicon macOS host.'
 }
+if ($Target -eq 'macos-x64' -and (!$IsMacOS -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64')) {
+  throw 'macos-x64 requires an Intel x64 macOS host.'
+}
 if ($Target -eq 'ios-arm64' -and !$IsMacOS) {
   throw 'ios-arm64 requires a macOS host with Xcode.'
 }
@@ -152,6 +157,7 @@ if ($Target -eq 'linux-x64' -and (!$IsLinux -or [System.Runtime.InteropServices.
 
 $oldMacSigningIdentity = $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY
 $oldMacSigningStyle = $env:FLUTTER_XCODE_CODE_SIGN_STYLE
+$oldMacArchs = $env:FLUTTER_XCODE_ARCHS
 $androidSigning = $null
 $androidCertificateSha256 = $null
 $macosValidation = $null
@@ -296,13 +302,19 @@ try {
       $package = Join-Path $releaseDir "$name.msix"
       $signing = New-SignedWindowsPackages $staging $package $Version $wix $installerWork
     }
-    'macos-arm64' {
-      Invoke-BuildCommand flutter @('config', '--enable-macos-desktop', '--enable-macos-arm64-only')
+    { $_ -in @('macos-arm64', 'macos-x64') } {
+      $arm64Only = if ($Target -eq 'macos-arm64') { '--enable-macos-arm64-only' } else { '--no-enable-macos-arm64-only' }
+      Invoke-BuildCommand flutter @('config', '--enable-macos-desktop', $arm64Only)
       # Flutter 3.47.6 forwards FLUTTER_XCODE_* settings to xcodebuild.
+      # Select one architecture so the mux framework and Flutter app match.
+      $env:FLUTTER_XCODE_ARCHS = $macosArch
       $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY = '-'
       $env:FLUTTER_XCODE_CODE_SIGN_STYLE = 'Manual'
       Invoke-BuildCommand flutter (@('build', 'macos') + $versionArgs)
-      Invoke-BuildCommand lipo @('build/macos/Build/Products/Release/BiliSail.app/Contents/MacOS/BiliSail', '-verify_arch', 'arm64')
+      $builtApp = 'build/macos/Build/Products/Release/BiliSail.app'
+      foreach ($binary in @('MacOS/BiliSail', 'Frameworks/App.framework/App', 'Frameworks/FlutterMacOS.framework/FlutterMacOS', 'Frameworks/BiliMux.framework/BiliMux')) {
+        Invoke-BuildCommand lipo @((Join-Path $builtApp "Contents/$binary"), '-verify_arch', $macosArch)
+      }
       $staging = Join-Path $outputRoot $name
       New-Item -ItemType Directory -Path $staging -Force | Out-Null
       Invoke-BuildCommand ditto @('build/macos/Build/Products/Release/BiliSail.app', (Join-Path $staging 'BiliSail.app'))
@@ -343,8 +355,8 @@ try {
     windowsMsiVersion = if ($Target -eq 'windows-x64') { $msiVersion } else { $null }
     windowsMsixVersion = if ($Target -eq 'windows-x64') { $Version.Replace('+', '.') } else { $null }
     windowsMsixIdentity = if ($Target -eq 'windows-x64') { $script:windowsMsixIdentity } else { $null }
-    macosVersionName = if ($Target -eq 'macos-arm64') { $macosVersionName } else { $null }
-    macosBuildNumber = if ($Target -eq 'macos-arm64') { $macosBuildNumber } else { $null }
+    macosVersionName = if ($isMacOSTarget) { $macosVersionName } else { $null }
+    macosBuildNumber = if ($isMacOSTarget) { $macosBuildNumber } else { $null }
     iosVersionName = if ($Target -eq 'ios-arm64') { $iosVersionName } else { $null }
     iosBuildNumber = if ($Target -eq 'ios-arm64') { $iosBuildNumber } else { $null }
     iosBundleIdentifier = if ($Target -eq 'ios-arm64') { $iosBundleId } else { $null }
@@ -363,9 +375,10 @@ try {
   if ($Target -eq 'windows-x64') { Write-Output "Also packaged $name.msi and $name.exe" }
 } finally {
   Clear-AndroidSigning $androidSigning
-  if ($Target -eq 'macos-arm64') {
+  if ($isMacOSTarget) {
     $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY = $oldMacSigningIdentity
     $env:FLUTTER_XCODE_CODE_SIGN_STYLE = $oldMacSigningStyle
+    $env:FLUTTER_XCODE_ARCHS = $oldMacArchs
   }
   Pop-Location
 }

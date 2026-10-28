@@ -1,6 +1,6 @@
 # macOS 发布启动与安全存储
 
-日期：2026-10-08。当前保持 arm64、ad-hoc 签名、未公证的预览 DMG 分发方式。此修复在 Windows 主机实施；macOS 构建、真实 Keychain 和安装升级结果仍须由 macOS 执行记录确认。
+日期：2026-10-08；架构范围更新：2026-10-29。当前配置提供 arm64／Intel x64、ad-hoc 签名、未公证的预览 DMG，两种架构沿用相同发布门槛，Intel 首次远端构建待验。此修复在 Windows 主机实施；macOS 构建、真实 Keychain 和安装升级结果仍须由 macOS 执行记录确认。
 
 ## 根因与配置
 
@@ -18,7 +18,7 @@ macOS 使用传统系统 Keychain，不降级为明文文件或数据库。Andro
 
 ## 发布门槛
 
-调用链继续为 `release.yml → ci.yml → tool/build-release.ps1`。macOS 分支构建、验证 arm64、使用 `ditto` 复制后，直接运行待打包 bundle。没有另编译测试应用，也没有通过重新签名规避检查。[验证辅助脚本](../../tool/macos-release-validation.ps1) 执行：
+调用链继续为 `release.yml → ci.yml → tool/build-release.ps1`。macOS 分支构建、验证对应的 arm64／x86_64 架构、使用 `ditto` 复制后，直接运行待打包 bundle。没有另编译测试应用，也没有通过重新签名规避检查。[验证辅助脚本](../../tool/macos-release-validation.ps1) 执行：
 
 1. `codesign --verify --deep --strict` 校验应用及嵌套代码的签名完整性；从 `codesign --display --entitlements :-` 提取最终主程序权限。接受并要求启用 Sandbox、客户端网络和图片目录读写权限（2026-10-25 为原图保存新增 `com.apple.security.assets.pictures.read-write`，见[图片查看器保存与长图](image-viewer-export-long-images.md)）；空 Sharing、其他额外权限、重复／缺失／禁用权限均失败。禁止携带机器专用 `embedded.provisionprofile`。
 2. 运行同一 `Contents/MacOS/BiliSail` 的 `startup` 阶段：从 headless engine 创建明确的主浏览窗，执行正常应用依赖组装与 `BiliApp`，等待首帧 rasterize，继续运行三秒，再实际创建／挂载／激活／回收两轮独立播放窗，验证新增 view 与视口及标题栏返回通道。最后卸载 UI 并关闭应用资源。应用内回退、Flutter／未处理异步错误均使探测失败。窗口初始化原因见[双标签崩溃修复](macos-dual-playback-crash.md)。
@@ -31,7 +31,7 @@ macOS 使用传统系统 Keychain，不降级为明文文件或数据库。Andro
 
 [Dart 探测逻辑](../../lib/app/release_smoke.dart) 只接受显式 `--bilisail-release-smoke <phase> <32位UUID>`，由 [正常入口](../../lib/main.dart) 在 macOS 路由。Flutter macOS 默认将原生进程参数传给 Dart 入口，见 [FlutterDartProject](https://api.flutter.dev/macos-embedder/_flutter_dart_project_8h_source.html)。普通启动不启用探测。启动过程注入内存 SQLite 和独立的空 bootstrap 凭据前缀，不恢复真实账号、不修改用户数据库；网络页面仍可请求公开内容，网络成功不是该探测的验收条件。
 
-测试 key 为 `bilisail.release_smoke.v1.<UUID>.active/a/b`，只保存合成字符串；不调用 `deleteAll`，不读取正式登录 key。最终权限和脱敏的阶段／退出码／确认状态保存在 `artifacts/macos-arm64/validation/`，不保存原生／网络原始输出，不上传该目录。metadata 仅含通过状态，不含真实凭据、测试值或 Keychain 内容。
+测试 key 为 `bilisail.release_smoke.v1.<UUID>.active/a/b`，只保存合成字符串；不调用 `deleteAll`，不读取正式登录 key。最终权限和脱敏的阶段／退出码／确认状态按目标保存在 `artifacts/macos-arm64/validation/` 或 `artifacts/macos-x64/validation/`，不保存原生／网络原始输出，不上传该目录。metadata 仅含通过状态，不含真实凭据、测试值或 Keychain 内容。
 
 ## 旧数据与升级单独验收
 

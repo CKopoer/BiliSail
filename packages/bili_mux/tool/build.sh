@@ -8,7 +8,7 @@ if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == mingw* ]]; then
   [[ -x "$make_tool" ]] || { echo 'Install the MSYS2 make package in this MSYS root' >&2; exit 1; }
 fi
 
-target="${1:?usage: build.sh windows-x64|android-arm64|macos-arm64|ios-arm64|linux-x64}"
+target="${1:?usage: build.sh windows-x64|android-arm64|macos-arm64|macos-x64|ios-arm64|linux-x64}"
 package_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_dir="$(cd "$package_dir/../.." && pwd)"
 cache="$repo_dir/build/download_mux"
@@ -73,19 +73,22 @@ case "$target" in
     link_flags+=(-static-libstdc++ -Wl,-z,max-page-size=16384
       "-Wl,--version-script=$package_dir/native/exports.map" -Wl,-Bsymbolic)
     ;;
-  macos-arm64)
+  macos-arm64|macos-x64)
     [[ "$(uname -s)" == Darwin ]] || { echo 'macOS requires an Xcode host' >&2; exit 1; }
     cc="$(xcrun -f clang)"
     cxx="$(xcrun -f clang++)"
     strip_tool="$(xcrun -f strip)"
     macos_sdk="$(xcrun --sdk macosx --show-sdk-path)"
-    configure_flags+=(--target-os=darwin --arch=aarch64 --enable-cross-compile
+    macos_arch=arm64
+    ffmpeg_arch=aarch64
+    if [[ "$target" == macos-x64 ]]; then macos_arch=x86_64; ffmpeg_arch=x86_64; fi
+    configure_flags+=(--target-os=darwin "--arch=$ffmpeg_arch" --enable-cross-compile
       "--cc=$cc" "--sysroot=$macos_sdk"
-      "--extra-cflags=-arch arm64 -mmacosx-version-min=12.0"
-      "--extra-ldflags=-arch arm64 -mmacosx-version-min=12.0")
+      "--extra-cflags=-arch $macos_arch -mmacosx-version-min=12.0"
+      "--extra-ldflags=-arch $macos_arch -mmacosx-version-min=12.0")
     # Direct Xcode compiler paths need an explicit SDK for headers and libSystem.
     # Keep this array populated for macOS Bash 3.2 with nounset enabled.
-    cxx_flags+=(-arch arm64 -mmacosx-version-min=12.0 -isysroot "$macos_sdk")
+    cxx_flags+=(-arch "$macos_arch" -mmacosx-version-min=12.0 -isysroot "$macos_sdk")
     link_flags+=(
       -Wl,-install_name,@rpath/BiliMux.framework/BiliMux
       "-Wl,-exported_symbols_list,$package_dir/native/exports.macos")
@@ -129,7 +132,7 @@ cd "$cache/$target"
 
 gc_flag=-Wl,--gc-sections
 shared_flag=-shared
-if [[ "$target" == macos-arm64 || "$target" == ios-arm64 ]]; then
+if [[ "$target" == macos-* || "$target" == ios-arm64 ]]; then
   gc_flag=-Wl,-dead_strip; shared_flag=-dynamiclib
 fi
 "$cxx" -std=c++17 -O2 -fvisibility=hidden -ffunction-sections -fdata-sections \
@@ -142,7 +145,7 @@ fi
 
 framework_info="$package_dir/native/Info.plist"
 if [[ "$target" == ios-arm64 ]]; then framework_info="$package_dir/native/Info.ios.plist"; fi
-if [[ "$target" == macos-arm64 || "$target" == ios-arm64 ]]; then
+if [[ "$target" == macos-* || "$target" == ios-arm64 ]]; then
   "$strip_tool" -x "$output_name"
   framework="$package_dir/native/prebuilt/$target/BiliMux.framework"
   mkdir -p "$framework"
@@ -160,7 +163,7 @@ if [[ "$target" == windows-x64 ]]; then
   cp "$package_dir/native/prebuilt/$target/source.txt" "$package_dir/native/prebuilt/$target/bili_mux.source.txt"
   cp "$package_dir/native/prebuilt/$target/configure.log" "$package_dir/native/prebuilt/$target/bili_mux.configuration.txt"
 fi
-if [[ "$target" == macos-arm64 || "$target" == ios-arm64 ]]; then
+if [[ "$target" == macos-* || "$target" == ios-arm64 ]]; then
   bash "$package_dir/tool/package-apple-framework.sh" "$target"
 fi
 echo "Built $target: $output_name"

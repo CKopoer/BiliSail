@@ -18,6 +18,7 @@ on:
         type: boolean
         default: true
       enable_macos:
+        description: macOS arm64 / Intel x64 DMG 安装文件
         type: boolean
         default: true
       enable_ios:
@@ -42,6 +43,7 @@ on:
         type: boolean
         default: true
       enable_macos:
+        description: macOS arm64 / Intel x64 DMG installers.
         type: boolean
         default: true
       enable_ios:
@@ -116,7 +118,10 @@ jobs:
           $platforms = @(
             if ($env:ENABLE_ANDROID -eq 'true') { @{ target = 'android-arm64'; runner = 'ubuntu-24.04'; arch = 'x64' } }
             if ($env:ENABLE_WINDOWS -eq 'true') { @{ target = 'windows-x64'; runner = 'windows-2022'; arch = 'x64' } }
-            if ($env:ENABLE_MACOS -eq 'true') { @{ target = 'macos-arm64'; runner = 'macos-15'; arch = 'arm64' } }
+            if ($env:ENABLE_MACOS -eq 'true') {
+              @{ target = 'macos-arm64'; runner = 'macos-15'; arch = 'arm64' }
+              @{ target = 'macos-x64'; runner = 'macos-15-intel'; arch = 'x64' }
+            }
             if ($env:ENABLE_IOS -eq 'true') { @{ target = 'ios-arm64'; runner = 'macos-15'; arch = 'arm64' } }
             if ($env:ENABLE_LINUX -eq 'true') { @{ target = 'linux-x64'; runner = 'ubuntu-24.04'; arch = 'x64' } }
           )

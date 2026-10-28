@@ -9,15 +9,16 @@ fixture="$work/package with spaces"
 mkdir -p "$fixture/tool"
 cp "$package_dir/tool/package-apple-framework.sh" "$fixture/tool/"
 
-for platform in ios macos; do
-  prebuilt="$fixture/native/prebuilt/$platform-arm64"
+for target in ios-arm64 macos-arm64 macos-x64; do
+  platform="${target%-*}"
+  prebuilt="$fixture/native/prebuilt/$target"
   mkdir -p "$prebuilt/BiliMux.framework"
-  printf '%s binary\n' "$platform" > "$prebuilt/BiliMux.framework/BiliMux"
+  printf '%s binary\n' "$target" > "$prebuilt/BiliMux.framework/BiliMux"
   info="$package_dir/native/Info.plist"
   if [[ "$platform" == ios ]]; then info="$package_dir/native/Info.ios.plist"; fi
   cp "$info" "$prebuilt/BiliMux.framework/Info.plist"
   for record in COPYING.LGPLv2.1 source.txt configure.log; do
-    printf '%s %s\n' "$platform" "$record" > "$prebuilt/$record"
+    printf '%s %s\n' "$target" "$record" > "$prebuilt/$record"
   done
   framework="$fixture/$platform/Frameworks/BiliMux.framework"
   # Reproduce the old output, then rebuild twice to cover retained build dirs.
@@ -25,7 +26,7 @@ for platform in ios macos; do
   printf 'stale\n' > "$framework/Resources/configure.log"
   printf 'stale\n' > "$framework/_CodeSignature/CodeResources"
   for attempt in 1 2; do
-    bash "$fixture/tool/package-apple-framework.sh" "$platform-arm64"
+    bash "$fixture/tool/package-apple-framework.sh" "$target"
     cmp "$prebuilt/BiliMux.framework/BiliMux" "$framework/BiliMux"
     cmp "$info" "$framework/Info.plist"
     [[ ! -e "$framework/_CodeSignature" && ! -e "$framework/Versions" ]]
@@ -40,4 +41,4 @@ for platform in ios macos; do
     [[ "$(find "$framework" -type f | wc -l | tr -d ' ')" == 5 ]]
   done
 done
-echo 'Apple framework packaging checks passed (iOS/macOS, rebuild twice).'
+echo 'Apple framework packaging checks passed (iOS arm64, macOS arm64/x64, rebuild twice).'

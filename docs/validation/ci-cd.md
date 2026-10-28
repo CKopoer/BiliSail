@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD 与安装包
 
-更新日期：2026-10-26。配置覆盖 Android arm64、Windows x64、macOS arm64、iOS arm64、Linux x64；新增平台的远端构建进展与设备未验项详见[iOS／Linux 接入记录](ios-linux.md)。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
+更新日期：2026-10-29。配置覆盖 Android arm64、Windows x64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
 
 ## 入口与分工
 
@@ -15,11 +15,12 @@
 | Android | `ubuntu-24.04`，Temurin JDK 17 | 仅 arm64 的 release APK；正常构建复用固定 keystore，PR 使用临时预览签名 |
 | Windows | `windows-2022`，Visual Studio C++ / Windows SDK / .NET 8 / WiX 6.0.2 | 同时提供 x64 MSIX、MSI 和 EXE 安装包；全部包含完整原生 DLL/data 及 VC++ runtime |
 | macOS | `macos-15`，Apple Silicon / Xcode | arm64 DMG；先验证签名／最终权限、同一 Release 应用首帧和跨进程 Keychain 读写删除，再由 `hdiutil` 打包校验；仅 ad-hoc 签名，未 notarize |
+| macOS Intel | `macos-15-intel`，Intel x64 / Xcode | x64 DMG；复用相同的签名、首帧、Keychain 和镜像校验门槛 |
 | iOS | `macos-15`，Apple Silicon / Xcode / CocoaPods | arm64 未签名 IPA；核对应用版本、bundle ID、arm64 framework 及 Payload 布局；安装前需自行 Apple 签名 |
 | Linux | `ubuntu-24.04`，GTK / libsecret / libmpv / Flatpak SDK | x64 AppImage 与 Flatpak；携带媒体依赖，核对版本及主机／实际 Flatpak Runtime 内动态依赖；X11／XWayland |
 | Release 上传 | `ubuntu-24.04` | 合并本次所选平台的 Actions artifacts 后创建草稿 |
 
-PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要 Windows 主机与 Visual Studio 工具链，macOS 原生构建需要 macOS/Xcode。macOS 在固定 SDK 中显式启用 `--enable-macos-arm64-only`，避免默认 universal 构建引入未承诺的 Intel 目标。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
+PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要 Windows 主机与 Visual Studio 工具链，macOS 原生构建需要对应架构的 macOS/Xcode 主机。现有 `enable_macos` 开关同时控制 arm64 和 x64 两项矩阵；两项分别安装对应架构的 Flutter SDK，产物与缓存按架构隔离。arm64 启用 `--enable-macos-arm64-only`，x64 显式关闭该选项；两者均通过固定 SDK 支持的 `FLUTTER_XCODE_ARCHS` 指定单一架构（`arm64`／`x86_64`），与对应的 mux framework 一致。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 
 Flutter 固定 **3.47.6 stable / Dart 3.13.5**；升级需同时调整工作流、检查/构建脚本并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Xcode/系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
 
@@ -111,7 +112,13 @@ PR 不接收长期签名 Secrets，仅通过 `-AndroidPreviewSigning` 显式启�
 
 ## macOS DMG 安装
 
-macOS 产物为 `BiliSail-<version>-macos-arm64.dmg`。脚本先使用 `ditto` 复制完整 `BiliSail.app`，调用 [macOS 发布验证](../../tool/macos-release-validation.ps1) 校验签名、最终权限，并启动这份待打包的 Release 应用验证首帧和跨进程 Keychain 读写／删除。通过后在镜像根目录加入指向 `/Applications` 的符号链接与 `THIRD_PARTY_NOTICES.md`，使用 `hdiutil create -srcfolder ... -fs HFS+ -format UDZO` 创建压缩只读镜像并执行 `hdiutil verify`；任一步失败均停止，不上传产物。CI 与 Release 共用此脚本，现有上传通配符同时覆盖 DMG、metadata 和 SHA-256 文件。
+macOS 分别生成 `BiliSail-<version>-macos-arm64.dmg` 和 `BiliSail-<version>-macos-x64.dmg`，按 Apple Silicon／Intel 芯片选择。脚本用 `lipo -verify_arch` 核对主程序、App、FlutterMacOS 与 BiliMux framework 的目标架构，再使用 `ditto` 复制完整 `BiliSail.app`，调用 [macOS 发布验证](../../tool/macos-release-validation.ps1) 校验签名、最终权限，并启动这份待打包的 Release 应用验证首帧和跨进程 Keychain 读写／删除。通过后在镜像根目录加入指向 `/Applications` 的符号链接与 `THIRD_PARTY_NOTICES.md`，使用 `hdiutil create -srcfolder ... -fs HFS+ -format UDZO` 创建压缩只读镜像并执行 `hdiutil verify`；任一步失败均停止，不上传产物。CI 与 Release 共用此脚本，现有上传通配符同时覆盖两种架构的 DMG、metadata、mux 源码和 SHA-256 文件。
+
+2026-10-29 增加 Intel macOS 构建：下载封装组件新增 `macos-x64` 目标，FFmpeg 与 C++ 包装均以 `x86_64`、最低 macOS 12 编译，并沿用独立目标目录、来源归档和 framework 打包流程。首次 Intel hosted 构建、实际 DMG 安装、Keychain、音视频播放与设备操作仍待 macOS 执行确认；Windows 本地配置和离线检查不代表这些验收已经通过。
+
+本地定向验证：两份工作流通过 actionlint 1.7.12，修改的 PowerShell／Bash 脚本通过语法检查。执行生产矩阵生成片段，32 种平台开关组合均符合预期；使用 fake 原生命令执行两个 macOS 打包分支，覆盖架构参数、四份二进制架构门槛、metadata、启动验证和 DMG 校验，架构失败会阻止后续打包。mux 的 macOS arm64／x64 与 iOS arm64 编译参数通过 fake Xcode 路径检查；现有 Apple framework 回归扩展覆盖 Intel 及架构切换后的重复打包，实际文件目录检查通过。两种 macOS 发布目标均在 Windows 主机上提前拒绝构建。
+
+本轮 `tool/check.ps1 -SkipPub` 的打包边界、格式与静态分析通过；根测试 3344 项通过、4 项失败、13 项跳过，在同期导航／侧栏修改的工作区中失败：`playback_window_side_button_test.dart:58` 期望左边距 0、实际 76；`shell_layout_test.dart:1009` 的 Android／Windows 消息布局期望高度 43、实际 44；`workspace_shell_test.dart:978` 的系统返回用例期望位置 63、实际 65。因此不计为全量检查通过，后续包测试阶段未执行，也未执行 mux 原生封装回归。保留这些同期源码和测试修改，没有为本任务调整它们。
 
 两个 entitlements 文件移除 `keychain-access-groups`，保留原 Sandbox／网络权限和 Debug/Profile 调试权限；`SystemCredentialStore` 仅对 macOS 配置 `usesDataProtectionKeychain: false`，继续使用系统安全存储。锁定的插件 11.2.0 已支持，不升级依赖。启动探测使用内存数据库和独立凭据前缀；完整验证步骤、失败清理及旧登录／升级授权验收见 [macOS 发布启动与安全存储](macos-release-startup.md)。
 
