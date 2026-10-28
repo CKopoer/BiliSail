@@ -313,29 +313,24 @@ class SessionRepository
         'login_validate',
       );
     }
-    device ??= await loadAppDevice?.call() ?? _fallbackDevice;
-    if (generation != _generation) return;
-    if (app == null) {
-      final result = await AppPassportClient(
-        client,
-        clock: _clock,
-      ).exchangeWebSession(buvid: device, context: context);
+    AppSessionCredentials? appCredentials;
+    if (app != null) {
+      if (app.mid != nav.mid || !app.expiresAt.isAfter(_clock())) {
+        throw const ApiFailure(
+          ApiFailureCategory.authentication,
+          'unified_login',
+        );
+      }
+      device ??= await loadAppDevice?.call() ?? _fallbackDevice;
       if (generation != _generation) return;
-      app = result.credentials;
-    }
-    if (app == null || app.mid != nav.mid || !app.expiresAt.isAfter(_clock())) {
-      throw const ApiFailure(
-        ApiFailureCategory.authentication,
-        'unified_login',
+      appCredentials = AppSessionCredentials(
+        mid: app.mid,
+        accessToken: app.accessToken,
+        refreshToken: app.refreshToken,
+        expiresAt: app.expiresAt,
+        buvid: device,
       );
     }
-    final unified = AppSessionCredentials(
-      mid: app.mid,
-      accessToken: app.accessToken,
-      refreshToken: app.refreshToken,
-      expiresAt: app.expiresAt,
-      buvid: device,
-    );
     final snapshot = client.cookieJar.exportForSecureStorage();
     // Keep secure write, account cleanup and promotion in one queue operation.
     // A cancelled cleanup must roll back before a newer login can write.
@@ -360,7 +355,7 @@ class SessionRepository
             'name': nav.name,
             'avatarUrl': nav.avatarUrl?.toString(),
             'cookies': snapshot,
-            'app': _appSnapshot(unified),
+            if (appCredentials != null) 'app': _appSnapshot(appCredentials),
           }),
         );
         if (generation != _generation) {
@@ -375,7 +370,7 @@ class SessionRepository
         }
         api.cookieJar.restoreFromSecureStorage(snapshot);
         _scope = 'user:${nav.mid}';
-        _appCredentials = unified;
+        _appCredentials = appCredentials;
         _webAttempt = null;
         _emit(
           AuthState(
@@ -383,7 +378,7 @@ class SessionRepository
             userName: nav.name ?? '哔哩哔哩用户',
             avatarUrl: nav.avatarUrl,
             mid: nav.mid,
-            appSessionAvailable: true,
+            appSessionAvailable: _hasApp,
           ),
         );
       } catch (_) {

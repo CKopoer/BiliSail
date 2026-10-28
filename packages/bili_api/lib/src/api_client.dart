@@ -148,22 +148,6 @@ final class BiliApiClient {
     return _jsonValue(uri, endpoint, context);
   }
 
-  /// Only a user-initiated login may exchange its isolated Web session.
-  Future<void> confirmAppLogin(
-    String authCode, {
-    ApiRequestContext? context,
-  }) async {
-    if (authCode.isEmpty || authCode.length > 1024) {
-      throw ArgumentError('Invalid login code');
-    }
-    await _submitForm(
-      _passport.replace(path: '/x/passport-tv-login/h5/qrcode/confirm'),
-      'app_login_confirm',
-      {'auth_code': authCode, 'build': '2001100'},
-      context,
-    );
-  }
-
   /// App profile: no Web cookies, fixed destinations, and single-attempt writes.
   Future<Map<String, Object?>> requestAppJson(
     String path,

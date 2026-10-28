@@ -4,7 +4,7 @@
 
 ## 2026-10-28 统一凭据调整
 
-密码/短信继续使用内嵌官网，读取隔离 Cookie 并经 nav 校验后，在同一次明确登录内执行 HD auth_code → Cookie/CSRF confirm → poll，取得 App token 后统一安全落盘。正常扫码也改用一次返回 Cookie/token 的 HD 路径，不再要求 App 推荐额外扫码。旧 Web 会话保留；缺少 App 凭据只提示重新登录，没有“更新登录”入口。以下为原实现历史，当前设计与验证以[统一登录](../unified-login-design.md)为准。
+密码/短信继续使用内嵌官网，读取隔离 Cookie 并经 nav 校验后直接安全保存 Web 会话；按用户要求删除实测失败的 Cookie 换取 App token 流程，不再让兑换失败阻止网页登录。正常扫码使用一次返回 Cookie/token 的 HD 路径。两种方式都可切换 App 推荐；没有 App 凭据时为游客推荐，有效同账号凭据才用于账号推荐。旧 Web 会话保留，没有“更新登录”入口。以下为原实现历史，当前设计与验证以[统一登录](../unified-login-design.md)为准。
 
 ## 最终实现
 

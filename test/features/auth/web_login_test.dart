@@ -78,7 +78,7 @@ final class _Credentials implements CredentialStore {
   }
 }
 
-final class _Transport implements ApiTransport, ApiFormTransport {
+final class _Transport implements ApiTransport {
   int calls = 0;
   Future<ApiHttpResponse> Function()? handler;
   @override
@@ -92,34 +92,6 @@ final class _Transport implements ApiTransport, ApiFormTransport {
     expect(uri.path, '/x/web-interface/nav');
     expect(headers['Cookie'], contains('SESSDATA=fixture'));
     return handler == null ? _nav() : await handler!();
-  }
-
-  @override
-  Future<ApiHttpResponse> postForm(
-    Uri uri, {
-    required Map<String, String> fields,
-    required Map<String, String> headers,
-    required Duration timeout,
-    ApiCancellation? cancellation,
-  }) async {
-    final data = uri.path.endsWith('/auth_code')
-        ? {
-            'auth_code': 'fixture-code',
-            'url': 'https://passport.bilibili.com/fixture',
-          }
-        : uri.path.endsWith('/confirm')
-        ? <String, Object?>{}
-        : {
-            'mid': 123,
-            'access_token': 'fixture-app',
-            'refresh_token': 'fixture-refresh',
-            'expires_in': 86400,
-          };
-    return ApiHttpResponse(
-      200,
-      Uint8List.fromList(utf8.encode(jsonEncode({'code': 0, 'data': data}))),
-      const {},
-    );
   }
 }
 
@@ -166,9 +138,13 @@ void main() {
         _withCsrf([_cookie(expires: expiry)]),
       );
       expect(repository.current.isSignedIn, isTrue);
+      expect(repository.current.appSessionAvailable, isFalse);
+      expect(repository.appCredentials, isNull);
       expect(repository.accountScope, 'user:123');
       expect(transport.calls, 1);
       final saved = jsonDecode(credentials.value!) as Map<String, Object?>;
+      expect(saved['version'], 2);
+      expect(saved.containsKey('app'), isFalse);
       final jar = ApiCookieJar()
         ..restoreFromSecureStorage(saved['cookies'] as Map<String, Object?>);
       expect(

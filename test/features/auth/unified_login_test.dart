@@ -7,9 +7,11 @@ import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/core/storage/app_database.dart';
 import 'package:bilisail/core/storage/credential_store.dart';
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/auth/data/session_repository.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/feed/data/app_recommendation_identity_store.dart';
+import 'package:bilisail/features/feed/data/api_feed_repository.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -20,9 +22,11 @@ void main() {
   late SessionRepository session;
   late AppDatabase database;
   late AppRecommendationIdentityStore identity;
+  var appDeviceLoads = 0;
   setUp(() async {
     transport = _Transport();
     secure = _Secure();
+    appDeviceLoads = 0;
     final requests = ApiRequests();
     database = AppDatabase(NativeDatabase.memory());
     await database.writeSetting('app-recommendation-device.v1', _device);
@@ -32,7 +36,10 @@ void main() {
       credentials: secure,
       onSessionChanged: (_) async {},
       loginClientFactory: () => BiliApiClient(transport: transport),
-      loadAppDevice: () async => _device,
+      loadAppDevice: () async {
+        appDeviceLoads++;
+        return _device;
+      },
       pollInterval: Duration.zero,
     );
     identity = AppRecommendationIdentityStore(
@@ -112,7 +119,7 @@ void main() {
     },
   );
   test(
-    'password or SMS Cookie login obtains token inside the same transaction',
+    'password or SMS Web login commits without App authorization requests',
     () async {
       await session.completeWebLogin(session.beginWebLogin()!, const [
         LoginCookie(
@@ -123,18 +130,15 @@ void main() {
           hostOnly: false,
           secure: true,
         ),
-        LoginCookie(
-          name: 'bili_jct',
-          value: 'fixture-csrf',
-          domain: 'bilibili.com',
-          path: '/',
-          hostOnly: false,
-          secure: true,
-        ),
       ]);
-      expect(session.current.appSessionAvailable, isTrue);
+      expect(session.current.isSignedIn, isTrue);
+      expect(session.current.appSessionAvailable, isFalse);
+      expect(session.appCredentials, isNull);
       expect(secure.writes, 1);
-      expect((await identity.requestIdentity()).accessToken, 'fixture-app');
+      expect((await identity.requestIdentity()).accessToken, isNull);
+      expect(jsonDecode(secure.value!).containsKey('app'), isFalse);
+      expect(appDeviceLoads, 0);
+      expect(transport.paths, ['/x/web-interface/nav']);
     },
   );
   test('nav mismatch rejects both new credentials before storing', () async {
@@ -170,37 +174,24 @@ void main() {
           secure: true,
         ),
       ]);
-  test(
-    'Cookie exchange token mismatch cannot commit a partial Web login',
-    () async {
-      transport.tokenMid = 7;
-      await browserLogin();
-      expect(session.current.status, AuthStatus.failed);
-      expect(secure.value, isNull);
-    },
-  );
-  test(
-    'failed confirm is a single attempt and never commits a partial login',
-    () async {
-      transport.confirmStatus = 503;
-      await browserLogin();
-      expect(
-        transport.paths.where((path) => path.endsWith('/confirm')),
-        hasLength(1),
-      );
-      expect(session.current.status, AuthStatus.failed);
-      expect(secure.value, isNull);
-    },
-  );
-  test('cancellation during confirm cannot persist a late token', () async {
-    transport.confirmGate = Completer<void>();
-    final operation = browserLogin();
-    await transport.confirmStarted.future;
-    session.cancelSignIn();
-    transport.confirmGate!.complete();
-    await operation;
-    expect(secure.value, isNull);
-    expect(session.appCredentials, isNull);
+  test('Web login restores without App credentials and can load guest App recommendations', () async {
+    await browserLogin();
+    final saved = secure.value;
+    await session.restore();
+    expect(session.current.isSignedIn, isTrue);
+    expect(session.current.appSessionAvailable, isFalse);
+    expect(secure.value, saved);
+    final page = await ApiFeedRepository(
+      session.api,
+      session.requests,
+      appIdentity: identity,
+    ).loadAppRecommendations(page: 1, cancellation: RequestCancellation());
+    expect(page.items.single.id.value, 'BV17x411w7KC');
+    expect(transport.paths, [
+      '/x/web-interface/nav',
+      '/x/web-interface/nav',
+      '/x/v2/feed/index',
+    ]);
   });
   test('logout during paired secure write removes both credentials and rejects late promotion', () async {
     secure.gate = Completer<void>();
@@ -264,11 +255,8 @@ final class _Secure implements CredentialStore {
 
 final class _Transport implements ApiTransport, ApiFormTransport {
   final paths = <String>[];
-  Map<String, String>? confirmFields, confirmHeaders;
-  int navMid = 42, tokenMid = 42, confirmStatus = 200;
+  int navMid = 42, tokenMid = 42;
   bool includeCookies = true;
-  Completer<void>? confirmGate;
-  final confirmStarted = Completer<void>();
   ApiHttpResponse response(Object data, {int status = 200}) => ApiHttpResponse(
     status,
     Uint8List.fromList(utf8.encode(jsonEncode({'code': 0, 'data': data}))),
@@ -282,6 +270,21 @@ final class _Transport implements ApiTransport, ApiFormTransport {
     ApiCancellation? cancellation,
   }) async {
     paths.add(uri.path);
+    if (uri.path == '/x/v2/feed/index') {
+      expect(uri.host, 'app.bilibili.com');
+      expect(headers.containsKey('Cookie'), isFalse);
+      expect(uri.queryParameters.containsKey('access_key'), isFalse);
+      return response({
+        'items': [
+          {
+            'card_goto': 'av',
+            'can_play': 1,
+            'param': '170001',
+            'title': 'Fixture recommendation',
+          },
+        ],
+      });
+    }
     expect(uri.host, 'api.bilibili.com');
     expect(headers['Cookie'], contains('SESSDATA=fixture'));
     return response({'isLogin': true, 'mid': navMid, 'uname': 'fixture'});
@@ -297,13 +300,13 @@ final class _Transport implements ApiTransport, ApiFormTransport {
   }) async {
     paths.add(uri.path);
     expect(uri.host, 'passport.bilibili.com');
-    if (uri.path.endsWith('/confirm')) {
-      confirmFields = fields;
-      confirmHeaders = headers;
-      if (!confirmStarted.isCompleted) confirmStarted.complete();
-      await confirmGate?.future;
-      return response({}, status: confirmStatus);
-    }
+    expect(
+      uri.path,
+      isIn([
+        '/x/passport-tv-login/qrcode/auth_code',
+        '/x/passport-tv-login/qrcode/poll',
+      ]),
+    );
     expect(headers.containsKey('Cookie'), isFalse);
     expect(fields['sign'], isNotEmpty);
     if (uri.path.endsWith('/auth_code')) {

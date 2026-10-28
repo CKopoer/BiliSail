@@ -136,26 +136,4 @@ final class AppPassportClient {
       cookies: List.unmodifiable(cookies),
     );
   }
-
-  Future<ApiAppQrPoll> exchangeWebSession({
-    required String buvid,
-    required ApiRequestContext context,
-  }) async {
-    final qr = await generate(buvid: buvid, context: context);
-    await api.confirmAppLogin(qr.authCode, context: context);
-    for (var attempt = 0; attempt < 3; attempt++) {
-      final result = await poll(
-        buvid: buvid,
-        authCode: qr.authCode,
-        context: context,
-      );
-      if (result.status == ApiQrStatus.confirmed ||
-          result.status == ApiQrStatus.expired ||
-          attempt == 2) {
-        return result;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-    }
-    throw const ApiFailure(ApiFailureCategory.protocol, 'app_login_exchange');
-  }
 }

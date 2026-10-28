@@ -1,6 +1,6 @@
 # API、鉴权与数据边界
 
-2026-10-28 登录改为一次取得 Web Cookie 与 App token，统一安全快照 version=2；移除 App 推荐的独立扫码/授权状态机。旧 version=1 可恢复，缺少凭据仅提示重新登录。扫码和内嵌官网两条路径、取消/回滚及验证见[统一登录](unified-login-design.md)。
+2026-10-28 登录由 SessionRepository 统一提交，安全快照 version=2 的 App 凭据可选；HD 扫码同时取得 Cookie/token，内嵌官网密码/短信只保存通过 nav 验证的 Web Cookie。已删除实测失败的 Cookie 换 token 路径，旧 version=1 仍可恢复。App 推荐无 token 时使用游客身份，有效同账号 token 才用于账号推荐；设置仅显示当前身份摘要。两条登录路径、取消/回滚及验证见[统一登录](unified-login-design.md)。
 
 2026-10-27 推荐流过滤解析 Web 推荐、热门/排行/分区、相关视频响应中的可选 `stat.like`、`tname`、`is_followed`，在应用层按偏好筛选。新增可选 App 推荐 profile、独立 buvid 与扫码授权，游客可直接读取，统一登录取得的 token 只用于对应 Web 账号的 App 推荐/反馈；默认仍为 Web。aid 本地转换为 bvid，不增加逐视频请求。App 关注豁免只额外识别精确“已关注/新关注”，不从含糊推荐理由猜测点赞数。端点及离线/在线验证边界见[App 推荐设计](app-recommendation-design.md)。
 
@@ -86,7 +86,6 @@ ApiPage<T> { items, nextCursor, hasMore }
 | 扫码登录 M0/M2 | `/x/passport-login/web/qrcode/generate`、`/poll` | U `Models/Requests/Api/AccountApi.cs` | AuthClient；Web 二维码与 Set-Cookie，取消/过期/确认 |
 | 密码/短信登录（提前实现） | 内嵌 `https://passport.bilibili.com/login`；应用调用 `/x/web-interface/nav` 验证 | U AccountApi、LoginVM、LoginDialog；dart_simple_live Web 登录页 | Platform WebView → 会话控制器；保留 Cookie 作用域、账号校验和安全存储；不在 API 包维护官网表单 POST；见 [登录验证](validation/password-sms-login.md) |
 | 统一 Web/App 扫码登录 | `passport.bilibili.com` POST `/x/passport-tv-login/qrcode/auth_code`、`/poll` | PiliPlus `lib/http/login.dart` | HD profile/签名，不带 Cookie；用户点击后有界轮询，成功同时返回 token 和 Cookie，经 nav 验证后一起保存 |
-| Web 登录补齐 App 凭据 | `passport.bilibili.com` POST `/x/passport-tv-login/h5/qrcode/confirm` | K `TvAuthorizeClient.SignInWithCookiesAsync`；PiliPlus 端点声明 | 内嵌官网登录成功后的同一动作中执行 auth_code / Cookie+CSRF confirm / poll；confirm 单次提交、不自动重放。旧登录不自动调用，缺失凭据提示重新登录 |
 | 会话与 WBI M0/M2 | `/x/web-interface/nav`、cookie info/refresh/confirm | K `BiliKernel.Abstractions/Bili/BiliApis.cs`、Core Authenticator；U AccountApi | SessionStore；刷新要取得所需 refresh 数据，缺失则重新登录 |
 | 推荐 | Web `/x/web-interface/index/top/feed/rcmd`；App `app.bilibili.com` GET `/x/v2/feed/index` | K VideoDiscoveryClient；PiliPlus `lib/http/video.dart` | App 签名、稳定 buvid、可选 access_key，idx 从 0 开始、首请求 pull=true；25 秒总 deadline、读最多三次、2 MiB/100 卡片、双空页预算 |
 | App 推荐反馈/撤销 | `app.bilibili.com` GET `/x/feed/dislike`、`/x/feed/dislike/cancel` | PiliPlus `lib/http/video.dart`、`video_popup_menu.dart` | token 必需；使用服务端 three_point_v2 的 reason_id/feedback_id，撤销携带 aid/goto；虽为 GET，仍按单次写入处理，未知结果不重放 |

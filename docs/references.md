@@ -173,7 +173,7 @@
 
 ### 统一 Web / App 登录（2026-10-28）
 
-继续只读参考 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 的 `lib/http/login.dart`、`lib/pages/login/controller.dart`、`lib/utils/accounts/account.dart`；核对 HD 扫码的顶层 token 和 Cookie 列表。Cookie 登录补齐 token 另核对 bili-kernel `e26f6dbd071e20d4220806fcff7bd675f3c29fc5` 的 `Authorizers/Authorizers.Tv/Core/TvAuthorizeClient.cs` 中 SignInWithCookiesAsync。独立编写 Dart，未复制参考应用源码/资源或新增依赖；确认自己生成的登录码仅发生在明确用户登录动作内，不为旧保存账号自动授权。数据/许可及未验证项见[统一登录](unified-login-design.md)。
+继续只读参考 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 的 `lib/http/login.dart`、`lib/pages/login/controller.dart`、`lib/utils/accounts/account.dart`；核对 HD 扫码的顶层 token 和 Cookie 列表。Cookie 登录补齐 token 曾核对 bili-kernel `e26f6dbd071e20d4220806fcff7bd675f3c29fc5` 的 `Authorizers/Authorizers.Tv/Core/TvAuthorizeClient.cs` 中 SignInWithCookiesAsync；该路径在真实旧会话探测失败后已按用户要求删除，密码/短信仅保存 Web 会话。独立编写 Dart，未复制参考应用源码/资源或新增依赖。数据/许可及未验证项见[统一登录](unified-login-design.md)。
 
 ## 6. 尚待实测或决定的事项
 
