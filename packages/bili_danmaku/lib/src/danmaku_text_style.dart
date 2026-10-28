@@ -1,7 +1,10 @@
 import 'dart:ui' as ui;
 
+import 'package:canvas_danmaku/canvas_danmaku.dart' as upstream;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+
+import 'canvas_danmaku_renderer.dart';
 
 enum DanmakuTextEffect { shadow, stroke, plain }
 
@@ -74,7 +77,12 @@ final class DanmakuTextLayouts {
   final _cache = <(double, int, String), _TextLayout>{};
   final _rasters = <_TextLayout, int>{};
   final _protectedKeys = <(double, int, String)>{};
-  final _imagePaint = Paint()..filterQuality = FilterQuality.low;
+  final _renderer = CanvasDanmakuRenderer();
+
+  void beginFrame(Canvas canvas, double pixelRatio) =>
+      _renderer.beginFrame(canvas, pixelRatio);
+
+  void endFrame() => _renderer.endFrame();
   // Blur and glyph overhang in logical pixels.
   static const _rasterPadding = 6.0;
   int _rasterBytes = 0;
@@ -238,6 +246,7 @@ final class DanmakuTextLayouts {
     } else {
       _uncachedPaints++;
     }
+    _renderer.flush();
     entry.paint(canvas, offset);
   }
 
@@ -250,20 +259,18 @@ final class DanmakuTextLayouts {
     _imagePaints++;
     final cost = _rasters.remove(entry);
     if (cost != null) _rasters[entry] = cost;
-    canvas.drawImageRect(
-      raster.image,
-      raster.source,
-      Rect.fromLTWH(
-        offset.dx - _rasterPadding,
-        offset.dy - _rasterPadding,
-        raster.logicalWidth,
-        raster.logicalHeight,
-      ),
-      _imagePaint,
+    _renderer.paintImage(
+      canvas: canvas,
+      image: raster.item,
+      offset: offset - const Offset(_rasterPadding, _rasterPadding),
+      pixelRatio: raster.pixelRatio,
     );
   }
 
   void _releaseRaster(_TextLayout entry) {
+    // A small layout cache can evict an image queued earlier in this frame.
+    // Submit its borrowed draw before releasing the sole owning reference.
+    _renderer.flush();
     _rasterBytes -= _rasters.remove(entry) ?? 0;
     entry.raster?.image.dispose();
     entry.raster = null;
@@ -311,17 +318,14 @@ final class _TextLayout {
 /// query native image dimensions. Replacing the DPR replaces both together.
 final class _TextRaster {
   _TextRaster(this.image, this.pixelRatio)
-    : source = Rect.fromLTWH(
-        0,
-        0,
-        image.width.toDouble(),
-        image.height.toDouble(),
-      ),
-      logicalWidth = image.width / pixelRatio,
-      logicalHeight = image.height / pixelRatio;
+    : item = upstream.DanmakuItem<void>(
+        content: upstream.DanmakuContentItem<void>(''),
+        width: image.width / pixelRatio,
+        height: image.height / pixelRatio,
+        image: image,
+      );
 
   final ui.Image image;
   final double pixelRatio;
-  final Rect source;
-  final double logicalWidth, logicalHeight;
+  final upstream.DanmakuItem<void> item;
 }

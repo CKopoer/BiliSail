@@ -27,7 +27,7 @@
 - 相邻 `../biliuwp-lite` 提供功能和交互/模块划分参考；`../bili-kernel` 提供 C#/.NET API 实现参考，后者不是 Rust 项目。
 - `../PiliPlus` 用于协议、播放器与弹幕行为参考；采用前核对实际 Git overrides、锁文件和精确提交。PiliPlus 应用的 GPLv3 与其所用 media-kit 分支的 MIT 许可分别处理，不能将应用源码按 MIT 使用。
 - 定位源码、提交与采用限制见 [参考文档](docs/references.md)。除用户明确要求外，不修改相邻仓库，不将它们作为需要发布的运行时依赖。
-- 当前 media-kit 使用自有 Git fork 的固定提交，并非相邻 `../media-kit` 的 path 依赖。需要修改 fork 时遵循用户授权范围，应用只依赖已固定、可获取的源码。
+- 当前 media-kit 使用 `Predidit/media-kit` 的固定提交，并非相邻 `../media-kit` 的 path 依赖。弹幕绘制使用固定 `Predidit/canvas_danmaku`；迁移边界见 [切换方案](docs/predidit-media-migration.md)。需要修改 fork 时遵循用户授权范围，应用只依赖已固定、可获取的源码。
 - 借鉴职责、协议和模型，避免机械翻译 UWP 控件、静态全局服务或整仓导入。引用代码/schema/资源前记录来源与明确的许可范围。
 - 参考 API 不等于在线可用；未做在线验证必须注明。不要把对话中的性能概括当作测量结果。
 
@@ -102,8 +102,8 @@
 - 下载队列由进程级仓储持有，页面关闭不停止任务；账号变化暂停旧任务，重启等待用户显式继续。校验 206/Content-Range、文件完整性及 URL 刷新后的资源身份，不将带签名 URL 或凭据落盘。
 - 下载文件、manifest 与 SQLite 按可恢复的提交顺序处理；分轨/MP4/MKV 均需兼容已有任务及离线打开。封装在 worker isolate 执行，取消、临时文件清理、校验和原子发布由下载仓储负责，离线媒体不受普通缓存清理影响。
 - 工程固定 Flutter **3.47.6 stable / Dart 3.13.5**，以 `.flutter-version`、检查脚本和 CI 配置共同约束；升级须同步这些入口及验证记录。直接依赖使用精确版本，提交根应用和四个包的五份 `pubspec.lock`。
-- media-kit fork 的 Git ref 必须固定完整提交；更新时同步根应用和 `bili_player` 的七处 ref，以及这两处锁文件。保留根应用的 overrides，Pub 不会采纳传递依赖包的 overrides；来源、许可和 Android 原生资产见移植记录。
-- Windows 固定 libmpv 由 `windows/native/mpv.cmake` 管理，渲染/释放补丁由 `windows/patches/media_kit_video/apply.cmake` 校验源码并应用到构建副本。不得修改 Pub 缓存或绕过来源/哈希校验；依赖升级需重新审查补丁兼容性。
+- media-kit fork 的 Git ref 必须固定完整提交；更新时同步根应用核心 override、`bili_player` 的核心／视频依赖及核心 override，以及两处锁文件。Native Assets 已替代旧的 `media_kit_libs_*`，不再维护旧七处 ref。保留根应用的 overrides，Pub 不会采纳传递依赖包的 overrides；弹幕依赖更新同步根应用与 `bili_danmaku` 锁文件。
+- 原生 libmpv 由固定 media-kit 的 `hook/native_bundles.json` 和构建钩子校验／打包。Windows 使用匹配的 DXGI DLL 与 D3D11 输出，不启用历史 `windows/native/mpv.cmake` 的 ANGLE 库覆盖。渲染/释放补丁由 `windows/patches/media_kit_video/apply.cmake` 校验源码并应用到构建副本。不得修改 Pub 缓存或绕过来源/哈希校验；依赖升级需重新审查补丁兼容性。
 - `bili_mux` 原生资产按其 README 从固定源码构建，不能借用系统 FFmpeg 或播放器私有库；预构建资产不提交 Git，分发保留许可、来源和可重建材料。
 - 新依赖先确认目标平台、维护接口、二进制依赖和许可；选择能满足具体需求的最小组合。
 - 生成器/schema 记录版本、命令和来源；提交项目需要的生成物，改源后重生成，不手修输出。

@@ -1,4 +1,4 @@
-// BiliSail render-thread dimensions for media_kit_video 2.0.1 (MIT; see LICENSE).
+// BiliSail render-thread dimensions for Predidit media-kit 83b7ca6 (MIT; see LICENSE).
 
 // NativeVideoController sends decoded display dimensions (including rotation
 // and pixel aspect) through SetSize. The BiliSail viewport is independent, so

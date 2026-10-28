@@ -722,8 +722,9 @@ void main() {
         final surfaceTarget = find.byKey(
           const ValueKey('player-surface-tap-target'),
         );
+        // Match the widget fixture's empty-picture point, outside toolbar hits.
         await tester.tapAt(
-          tester.getTopLeft(surfaceTarget) + const Offset(30, 50),
+          tester.getTopLeft(surfaceTarget) + const Offset(130, 70),
         );
         await tester.pump(const Duration(milliseconds: 400));
         final progress = tester.widget<LinearProgressIndicator>(
@@ -740,7 +741,7 @@ void main() {
         expect(engine.currentSnapshot.generation, generation);
         expect(engine.currentSnapshot.desiredPlaying, isFalse);
         await tester.tapAt(
-          tester.getTopLeft(surfaceTarget) + const Offset(30, 50),
+          tester.getTopLeft(surfaceTarget) + const Offset(130, 70),
         );
         await tester.pump(const Duration(milliseconds: 400));
         for (final width in [940.0, 600.0, 420.0, 940.0, 640.0]) {
@@ -809,7 +810,9 @@ void main() {
         final tapTarget = find.byKey(
           const ValueKey('player-surface-tap-target'),
         );
-        await tester.tapAt(tester.getTopLeft(tapTarget) + const Offset(30, 50));
+        await tester.tapAt(
+          tester.getTopLeft(tapTarget) + const Offset(130, 70),
+        );
         // Native animation ticks follow rendered frames rather than pump's
         // requested delay; wait for the fade to actually remove the controls.
         await _until(
@@ -820,7 +823,9 @@ void main() {
         expect(find.byKey(const ValueKey('player-controls')), findsNothing);
         expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
         expect(engine.currentSnapshot.generation, generation);
-        await tester.tapAt(tester.getTopLeft(tapTarget) + const Offset(30, 50));
+        await tester.tapAt(
+          tester.getTopLeft(tapTarget) + const Offset(130, 70),
+        );
         await tester.pump(const Duration(milliseconds: 400));
         expect(find.byKey(const ValueKey('player-controls')), findsOneWidget);
         expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
@@ -854,7 +859,7 @@ void main() {
         Future<void> touchHold({required bool cancel}) async {
           final position = engine.currentSnapshot.position;
           final gesture = await tester.startGesture(
-            tester.getTopLeft(surfaceTarget) + const Offset(30, 50),
+            tester.getTopLeft(surfaceTarget) + const Offset(130, 70),
             kind: PointerDeviceKind.touch,
           );
           await _until(
@@ -986,7 +991,8 @@ void main() {
           expect(tester.takeException(), isNull);
         }
         Future<void> doubleClickSurface() async {
-          final point = tester.getTopLeft(surfaceTarget) + const Offset(30, 50);
+          final point =
+              tester.getTopLeft(surfaceTarget) + const Offset(130, 70);
           await tester.tapAt(point, kind: PointerDeviceKind.mouse);
           await tester.pump(const Duration(milliseconds: 50));
           await tester.tapAt(point, kind: PointerDeviceKind.mouse);
@@ -996,7 +1002,7 @@ void main() {
           final controls = find.byKey(const ValueKey('player-controls'));
           if (!visible) {
             await tester.tapAt(
-              tester.getTopLeft(surfaceTarget) + const Offset(30, 50),
+              tester.getTopLeft(surfaceTarget) + const Offset(130, 70),
               kind: PointerDeviceKind.mouse,
             );
             await _until(tester, () => controls.evaluate().isEmpty);

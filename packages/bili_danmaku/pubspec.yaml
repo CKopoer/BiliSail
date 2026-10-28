@@ -1,5 +1,5 @@
 name: bili_danmaku
-description: Bounded video danmaku scheduling and Canvas rendering for BiliSail.
+description: Bounded danmaku clocks and canvas_danmaku rendering for BiliSail.
 version: 0.1.0
 publish_to: none
 environment:
@@ -7,6 +7,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  canvas_danmaku:
+    git:
+      url: https://github.com/Predidit/canvas_danmaku.git
+      ref: 401915a11ae113cddb5409632cd99729f4b0a301
 dev_dependencies:
   flutter_test:
     sdk: flutter

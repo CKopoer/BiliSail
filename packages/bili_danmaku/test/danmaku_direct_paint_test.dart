@@ -6,6 +6,44 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   for (final live in [false, true]) {
+    test('canvas_danmaku batching preserves mixed text at multiple DPRs '
+        '(${live ? 'live' : 'VOD'})', () async {
+      var now = Duration.zero;
+      final reference = _Scene(live, true, () => now, count: 18);
+      final batched = _Scene(live, true, () => now, count: 18);
+      addTearDown(reference.dispose);
+      addTearDown(batched.dispose);
+      for (final effect in DanmakuTextEffect.values) {
+        for (final scene in [reference, batched]) {
+          scene.configure(effect);
+          scene.viewport(360);
+          scene.add();
+          scene.sync(now);
+          // Drain bounded admission before advancing the external clock.
+          for (var i = 0; i < 9; i++) {
+            if (live) {
+              scene.stream.frame();
+            } else {
+              scene.vod.frame();
+            }
+          }
+        }
+        expect(batched.visible, greaterThan(10));
+        for (final ratio in [1.0, 1.25, 2.0]) {
+          now += const Duration(milliseconds: 100);
+          reference.sync(now);
+          batched.sync(now);
+          expect(
+            await batched.pixels(ratio, direct: true),
+            await reference.pixels(ratio, direct: false),
+            reason: '${effect.name}, DPR $ratio',
+          );
+        }
+      }
+    });
+  }
+
+  for (final live in [false, true]) {
     for (final mixed in [false, true]) {
       test(
         '${live ? 'live' : 'VOD'} direct paint matches '
@@ -106,22 +144,23 @@ void main() {
 }
 
 final class _Scene {
-  _Scene(this.live, this.mixed, Duration Function() now)
+  _Scene(this.live, this.mixed, Duration Function() now, {this.count = 6})
     : vod = DanmakuController(
         monotonicNow: now,
         maxAdmissionsPerFrame: 2,
-        maxTextLayouts: 3,
+        maxTextLayouts: count == 6 ? 3 : 24,
         scrollDuration: const Duration(seconds: 1),
         fixedDuration: const Duration(seconds: 2),
       ),
       stream = LiveDanmakuController(
         monotonicNow: now,
         maxAdmissionsPerFrame: 2,
-        maxTextLayouts: 3,
+        maxTextLayouts: count == 6 ? 3 : 24,
         scrollDuration: const Duration(seconds: 1),
         fixedDuration: const Duration(seconds: 2),
       );
   final bool live, mixed;
+  final int count;
   final DanmakuController vod;
   final LiveDanmakuController stream;
   int get visible => live ? stream.visibleCount : vod.visibleCount;
@@ -146,7 +185,7 @@ final class _Scene {
 
   void add() {
     final events = [
-      for (var i = 0; i < 6; i++)
+      for (var i = 0; i < count; i++)
         DanmakuEvent(
           id: '$i',
           at: Duration.zero,

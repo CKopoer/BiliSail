@@ -300,9 +300,15 @@ final class LiveDanmakuController extends ChangeNotifier {
   /// Paint the current receipt-clock frame in arrival order without building
   /// an intermediate position list. The caller owns clipping.
   void paintFrame(Canvas canvas, {double pixelRatio = 1}) {
-    _visitFrame((event, x, y) {
-      paintText(event, canvas, Offset(x, y), pixelRatio: pixelRatio);
-    });
+    final ratio = pixelRatio.isFinite && pixelRatio > 0 ? pixelRatio : 1.0;
+    _layouts.beginFrame(canvas, ratio);
+    try {
+      _visitFrame((event, x, y) {
+        paintText(event, canvas, Offset(x, y), pixelRatio: ratio);
+      });
+    } finally {
+      _layouts.endFrame();
+    }
   }
 
   void _visitFrame(void Function(LiveDanmakuEvent, double, double) visit) {

@@ -457,3 +457,12 @@ Linux 暂用扫码登录，以显式的 Dart 平台适配禁用实验 WPE WebKit
 **决定（2026-10-28，修订 D58 的独立 App 授权）**：正常 HD 扫码同时取得 Cookie/token；密码/短信保持内嵌官网，仅在 Cookie/nav 验证成功后保存 Web 会话。Cookie 换取 App token 的路径实测失败，按用户后续要求删除接口、调用及相关测试，避免兑换失败阻止网页登录。SessionRepository 统一保存一份 version=2 安全快照并提交会话，`app` 字段可选；有 token 时校验 UID 一致性及有效期。推荐数据层通过纯 Dart 端口读取，不再另起扫码状态机。
 
 按用户明确要求，不提供“更新登录”或设备标识编辑入口；设备标识由内部自动生成并持久化，保留已有值。所有登录方式都可选择 App 来源，无有效 App 凭据时使用游客推荐；设置仅提示实际推荐身份，已失效的账号授权指向重新扫码登录。旧 App 安全槽仅兼容读取并在取得统一 App 凭据、登出或账号变化时撤销。新快照写入、取消回滚及账号切换共用原队列，协议与验收见[统一登录设计](unified-login-design.md)。
+
+
+## D60：固定 Predidit 弹幕绘制与 media-kit Native Assets
+
+**决定（2026-10-29）**：按用户要求，`bili_danmaku` 接入固定提交的 `Predidit/canvas_danmaku` 批量 Canvas 绘制管线；包内保留无网络的时钟、布局、缓存预算与字体效果兼容。直接采用 `DanmakuScreen` 的独立动画时钟会改变暂停、seek 与倍速语义，因此使用其公开可扩展 painter，不额外创建 Ticker。
+
+`bili_player` 的核心及视频插件固定到同一 `Predidit/media-kit` 提交，移除 `media_kit_libs_*`，改用目标分支的 Native Assets。Windows 采用匹配 DXGI libmpv 与 D3D11/mailbox，撤销旧 ANGLE 库覆盖；仍校验源哈希并在构建副本应用释放、调度及视口保护。macOS 最低部署版本改为固定 Flutter Native Assets framework 所要求的 13.0，继续使用 CocoaPods。Linux 打包消费 hook 提供的 mpv。
+
+依赖、二进制来源、实施顺序、回退与逐平台验收见[切换方案](predidit-media-migration.md)。旧库的许可配置与性能记录不自动适用于新实现。

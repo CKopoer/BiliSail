@@ -31,9 +31,10 @@ cp "$work/tools/gtk-LICENSE.txt" "$work/tools/linuxdeploy-plugin-gtk.sh" "$gtk_n
 
 export APPIMAGE_EXTRACT_AND_RUN=1 NO_STRIP=1 DEPLOY_GTK_VERSION=3
 export LD_LIBRARY_PATH="$bundle/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-# libmpv is dlopen'ed, so it must be explicitly added to dependency discovery.
-mpv="$(pkg-config --variable=libdir mpv)/libmpv.so.2"
-[[ -f "$mpv" ]] || { echo 'Install libmpv-dev' >&2; exit 1; }
+# libmpv is dlopen'ed. Discover dependencies of the exact Native Assets library;
+# adding the distro mpv here would silently replace the pinned implementation.
+mpv="$work/AppDir/usr/bin/lib/libmpv.so.2"
+[[ -f "$mpv" ]] || { echo 'Missing media-kit Native Assets libmpv.so.2' >&2; exit 1; }
 "$work/tools/linuxdeploy-x86_64.AppImage" --appdir "$work/AppDir" \
   --executable "$work/AppDir/usr/bin/bilisail" --library "$mpv" \
   --desktop-file "$repo/linux/packaging/dev.bilisail.bilisail.desktop" \

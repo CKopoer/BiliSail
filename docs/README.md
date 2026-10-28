@@ -32,6 +32,7 @@
 | [API 与会话](api-design.md) | 协议边界、接口映射、鉴权、错误、缓存和降级 |
 | [密码、短信与移动登录窗口](validation/password-sms-login.md) | 三种 Web 登录、交互验证码、安全会话与小屏/键盘布局 |
 | [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |
+| [Predidit 弹幕与播放器切换](predidit-media-migration.md) | 固定源码、Canvas 绘制适配、D3D11／Native Assets、打包及逐平台验证 |
 | [播放控制、视频输出与平台合成拆分](player-output-composition-design.md) | 三层接口、当前 Flutter 基线、输出所有权与后续平台迁移边界 |
 | [播放合成重绘与卡顿分析](validation/playback-composition-performance-2026-10-24.md) | 进度／字幕绘制传播、合成边界、Windows Profile 对照与偶发慢放的证据边界 |
 | [弹幕调度与图像缓存合成优化](validation/playback-composition-performance-2026-10-28.md) | 当前播放链路、静止/等待停帧、PiliPlus 设计取舍和 Windows Profile 对照 |

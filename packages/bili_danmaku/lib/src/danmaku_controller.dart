@@ -473,9 +473,15 @@ final class DanmakuController extends ChangeNotifier {
   /// Advance admission once and paint in arrival order without allocating a
   /// position snapshot for every visible comment. The caller owns clipping.
   void paintFrame(Canvas canvas, {double pixelRatio = 1}) {
-    _visitFrame((event, x, y) {
-      paintText(event, canvas, Offset(x, y), pixelRatio: pixelRatio);
-    });
+    final ratio = pixelRatio.isFinite && pixelRatio > 0 ? pixelRatio : 1.0;
+    _layouts.beginFrame(canvas, ratio);
+    try {
+      _visitFrame((event, x, y) {
+        paintText(event, canvas, Offset(x, y), pixelRatio: ratio);
+      });
+    } finally {
+      _layouts.endFrame();
+    }
   }
 
   void _visitFrame(void Function(DanmakuEvent, double, double) visit) {

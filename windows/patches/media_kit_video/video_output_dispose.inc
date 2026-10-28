@@ -1,4 +1,4 @@
-// BiliSail lifecycle replacement for media_kit_video 2.0.1 (MIT; see LICENSE).
+// BiliSail lifecycle replacement for Predidit media-kit 83b7ca6 (MIT; see LICENSE).
 
 void VideoOutput::UnregisterTexture(int64_t id,
                                     std::function<void()> callback) {
@@ -38,26 +38,20 @@ VideoOutput::~VideoOutput() {
                             [this] { return pending_texture_releases_ == 0; });
   }
 
-  // libmpv must be freed on its rendering thread while the original GL context
-  // still exists. Completion of this task is required before replying Dispose.
+  // libmpv must be freed on its rendering thread while the D3D11 device
+  // and mailbox swap chain still exist. Completion of this task is required before replying Dispose.
   thread_pool_ref_
       ->Post([this] {
         std::lock_guard<std::mutex> lock(textures_mutex_);
         if (render_context_ != nullptr) {
-          if (surface_manager_ != nullptr) {
-            surface_manager_->MakeCurrent(true);
-          }
           mpv_render_context_free(render_context_);
           render_context_ = nullptr;
-          if (surface_manager_ != nullptr) {
-            surface_manager_->MakeCurrent(false);
-          }
         }
         texture_id_ = 0;
         texture_variants_.clear();
         textures_.clear();
         pixel_buffer_textures_.clear();
-        surface_manager_.reset();
+        d3d11_renderer_.reset();
         pixel_buffer_.reset();
       })
       .get();

@@ -1,4 +1,4 @@
-// BiliSail lifecycle replacement for media_kit_video 2.0.1 (MIT; see LICENSE).
+// BiliSail lifecycle replacement for Predidit media-kit 83b7ca6 (MIT; see LICENSE).
 
 void VideoOutputManager::Dispose(int64_t handle,
                                  std::function<void()> on_disposed) {

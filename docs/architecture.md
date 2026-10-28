@@ -6,9 +6,9 @@
 
 BiliSail（哔帆）是一个专注观看体验的跨平台 Bilibili 第三方客户端，以视频和直播为中心。首要目标是播放稳定、弹幕流畅、移动与桌面交互自然，以及 API 变化时可以局部修复。
 
-首批交付 Android arm64、Windows x64、macOS arm64。Windows 先作为本地调试入口，但 Android 和 macOS 从 M0 就必须进入验证矩阵。2026-10-26 增加 iOS arm64（iOS 15+）和 Linux x64 的工程与 CI：前者输出未签名 IPA，后者输出 Flatpak／AppImage，构建和设备验收状态见[扩展记录](validation/ios-linux.md)。2026-10-29 增加 macOS Intel x64 的 CI 与独立 DMG 打包配置，最低 macOS 12，首次远端构建和设备验收待完成，见 [CI/CD](validation/ci-cd.md#macos-dmg-安装)。Android x64 用于模拟器；Windows arm64 仍属后续扩展。Web 不列入本轮范围，其 CORS、Cookie、解码器和后台能力需要单独方案。
+首批交付 Android arm64、Windows x64、macOS arm64。Windows 先作为本地调试入口，但 Android 和 macOS 从 M0 就必须进入验证矩阵。2026-10-26 增加 iOS arm64（iOS 15+）和 Linux x64 的工程与 CI：前者输出未签名 IPA，后者输出 Flatpak／AppImage，构建和设备验收状态见[扩展记录](validation/ios-linux.md)。2026-10-29 增加 macOS Intel x64 的 CI 与独立 DMG 打包配置，最低 macOS 13（Native Assets 迁移后），首次远端构建和设备验收待完成，见 [CI/CD](validation/ci-cd.md#macos-dmg-安装)。Android x64 用于模拟器；Windows arm64 仍属后续扩展。Web 不列入本轮范围，其 CORS、Cookie、解码器和后台能力需要单独方案。
 
-拟定最低系统为 Android API 24、Windows 10、macOS 12；它们是初始验证下限。M0 选择具体 Flutter SDK 和插件版本后，按它们支持范围的交集锁定最终下限和 ABI，不引用某个播放器包的较低系统要求代替 Flutter 的要求。[Flutter 支持平台](https://docs.flutter.dev/reference/supported-platforms)
+初始最低系统为 Android API 24、Windows 10、macOS 12；2026-10-29 的 Native Assets 迁移将 macOS 应用部署下限提高到 13，见[切换方案](predidit-media-migration.md)。M0 选择具体 Flutter SDK 和插件版本后，按它们支持范围的交集锁定最终下限和 ABI，不引用某个播放器包的较低系统要求代替 Flutter 的要求。[Flutter 支持平台](https://docs.flutter.dev/reference/supported-platforms)
 
 ### 功能层次
 
@@ -36,7 +36,7 @@ BiliSail（哔帆）是一个专注观看体验的跨平台 Bilibili 第三方�
 | 数据模型 | Dart 不可变类型；复杂联合状态按需用 `freezed`，JSON 按需生成 | Domain 不依赖 JSON/Protobuf 字段；避免为简单类型强制生成 |
 | 播放 | `bili_player` 封装 `media_kit`、`media_kit_video`、视频原生库 | 首选后端，须通过 DASH/直播/请求头三端验证；`fvp` 是备选 |
 | 下载合并 | `bili_mux` 的精简原生 MP4 封装与 Dart FFI | 只读写已下载的本地文件，不访问播放器内部 ABI；三端验证见[合并记录](validation/download-muxing-results.md) |
-| 弹幕 | `bili_danmaku`：Dart 调度 + Flutter Canvas/TextPainter | 先实现滚动/顶部/底部；渲染适配器允许接入实测合格的现成包 |
+| 弹幕 | `bili_danmaku`：Dart 调度 + `canvas_danmaku` 绘制适配 | 保留确认媒体／到达时钟、布局、字体效果和有界缓存；上游负责批量 Canvas 合成，见[迁移](predidit-media-migration.md) |
 | 持久化 | Drift/SQLite、安全存储、文件缓存 | 结构化数据、凭据、媒体文件分别管理 |
 | 并发 | Dart async + 有界任务队列；重解析放 isolate | 不把异步网络请求等同于 CPU 并行 |
 | 原生系统能力 | Flutter 插件，缺口才写 Kotlin/Swift/C++ 适配 | 仅平台层接触系统 API |

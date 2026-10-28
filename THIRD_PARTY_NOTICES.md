@@ -2,6 +2,14 @@
 
 记录日期：2026-10-05。本文件用于本地 0.1.0 预览的来源追踪，不表示已经完成对外发行所需的全部原生许可证归档。项目尚未确定自己的开源许可证。
 
+## 2026-10-29 弹幕与播放器切换
+
+`bili_danmaku` 依赖 MIT 的 [Predidit/canvas_danmaku](https://github.com/Predidit/canvas_danmaku/tree/401915a11ae113cddb5409632cd99729f4b0a301)，固定完整提交 `401915a11ae113cddb5409632cd99729f4b0a301`（0.3.3），使用其公开 Canvas 批量绘制和图像合成管线；包内保留媒体／到达时钟、布局、字体效果与缓存预算适配，没有复制 PiliPlus 应用代码。
+
+播放器核心及视频插件切换为 MIT 的 [Predidit/media-kit](https://github.com/Predidit/media-kit/tree/83b7ca63772856e1ea0158916177e136f7b7b0be)，固定完整提交 `83b7ca63772856e1ea0158916177e136f7b7b0be`。其包内版本分别是 1.1.11 / 1.2.5，版本数字较旧不表示解析回到官方 hosted 实现。所有 `media_kit_libs_*` 已由 Native Assets 替代；原生资产逐目标 URL、SHA-256 及解包规则以该提交的 `media_kit/hook/native_bundles.json` 为准。Windows 使用 D3D11/DXGI，Linux 打包消费构建产物中的原生库，不再从系统软件包加入另一份 mpv；其余 Ubuntu 运行库仍保留 distro notices。
+
+新 Windows 来源及分发边界见 [Native Assets 来源](windows/native/PREDIDIT_SOURCE.md)。下文 2026-10-16 自有 fork、旧 Android 资产与 Windows ANGLE/LGPL DLL 的描述属于历史实现，不能作为新二进制的许可或性能证明。目标 fork 的 MIT 只覆盖其源码；mpv、FFmpeg 和子依赖仍须保留各自许可、源码与重建材料。迁移方案与实际验证见[切换记录](docs/predidit-media-migration.md)。
+
 ## 2026-10-26 iOS 与 Linux 预览包
 
 iOS 原生播放器沿用锁定 media-kit 依赖，独立 bili_mux 继续从固定 FFmpeg 源码构建，原始归档与构建材料随 `.mux-source.zip` 提供。Linux 从 Ubuntu 24.04 软件源安装 libmpv，使用 linuxdeploy 收集运行依赖；这些二进制不沿用 Windows LGPL 资产的配置声明，各自许可以包内 `usr/share/doc/bilisail/dependencies/*.copyright` 为准，`packages.tsv` 记录实际 binary/source 名称与版本。正式分发仍需归档实际子依赖的对应源码和许可材料。
@@ -10,7 +18,7 @@ iOS 原生播放器沿用锁定 media-kit 依赖，独立 bili_mux 继续从固�
 
 ## 工程与参考
 
-- Flutter 工程由本机 Flutter 3.47.6 模板生成；Dart 3.13.5。直接版本写入各 `pubspec.yaml`，实际完整依赖保留在根及三个包的 `pubspec.lock`。
+- Flutter 工程由本机 Flutter 3.47.6 模板生成；Dart 3.13.5。直接版本写入各 `pubspec.yaml`，实际完整依赖保留在根及四个包的 `pubspec.lock`。
 - `../biliuwp-lite` 作为功能、布局和交互参考，并按用户明确要求采用部分图标字体与 PNG 资源；`../bili-kernel` 仅作为协议/职责参考。没有复制它们的 C#、XAML 或 schema，也没有运行时依赖这两个仓库。图标具体路径、来源提交、SHA-256 与派生启动图标命令见 [资源来源](assets/README.md)。本地尚未找到覆盖这些资源的明确许可，本次采用范围为用户本机预览，不代表已获开源或对外再分发授权；发行前需核实资源权利和品牌使用范围。
 - Bilibili 标题、封面、弹幕和媒体由服务端动态取得，未作为应用素材内置。测试的音视频由 FFmpeg 合成，生成命令见 [测试媒体说明](test/fixtures/media/README.md)。
 - 界面业务图标采用上述 Bili 图标字体，通用操作保留 Flutter Material 图标；构建产物 `data/flutter_assets/NOTICES.Z` 包含 Flutter 工具收集的包许可文本，但不能替代手动记录的 UWP 资源许可审查。用户界面“关于”提供 Flutter 的许可证页。
@@ -31,7 +39,7 @@ Windows 安装器的现代文件夹选择器另使用同版本的 `WixToolset.Bo
 
 应用默认内置 HarmonyOS Sans（简体中文 Regular/Medium/Bold），来源为用户提供的本机字体目录，文件未修改。随字体提供的 HarmonyOS Sans Fonts License Agreement、版权通知与 SHA-256 见 [资源来源](assets/README.md#harmonyos-sans)。完整许可证打包到应用，并通过“关于”中的许可证页展示；设置中可切换为系统默认字体。
 
-固定组合：Flutter 3.47.6、Riverpod 3.4.3、go_router 18.0.2、Dio 5.11.1、crypto 3.0.7、Drift 2.35.1、path 1.9.1、path_provider 2.1.6、flutter_secure_storage 11.2.0、qr_flutter 4.1.0、window_manager 0.5.2、media_kit 1.2.6、media_kit_video 2.0.1、media_kit_libs_video 1.0.7。各包的许可证以锁定版本包内 `LICENSE` 和生成的 notices 为准。
+固定组合：Flutter 3.47.6、Riverpod 3.4.3、go_router 18.0.2、Dio 5.11.1、crypto 3.0.7、Drift 2.35.1、path 1.9.1、path_provider 2.1.6、flutter_secure_storage 11.2.0、qr_flutter 4.1.0、window_manager 0.5.2、canvas_danmaku 0.3.3、media_kit 1.1.11、media_kit_video 1.2.5（上述固定 Predidit Git 提交）。各包的许可证以锁定版本包内 `LICENSE` 和生成的 notices 为准。
 
 依赖维护方入口：[Flutter](https://github.com/flutter/flutter)、[Riverpod](https://github.com/rrousselGit/riverpod)、[go_router](https://pub.dev/packages/go_router/versions/18.0.2)、[Dio](https://github.com/cfug/dio)、[Drift](https://github.com/simolus3/drift)、[flutter_secure_storage](https://github.com/juliansteenbakker/flutter_secure_storage)、[media_kit](https://github.com/media-kit/media-kit)。
 
@@ -51,7 +59,7 @@ PiliPlus 应用为 GPLv3，本次仅参考其配置与职责，未复制应用�
 
 新增外部内容入口采用固定的 [url_launcher 6.3.2](https://pub.dev/packages/url_launcher/versions/6.3.2)，由 Flutter 团队维护，BSD-3-Clause。Android、Windows、macOS 的平台实现随根锁文件固定；插件调用系统 URL 打开能力，不增加媒体解码二进制。仅在用户点击明确的“在浏览器打开”内容入口后打开 Bilibili HTTPS 页面，不向外部浏览器传递应用 Cookie。
 
-当前锁文件解析 `media_kit_libs_windows_video 1.0.11`。SDK 默认资产本机成功下载并校验：
+迁移前锁文件曾解析 `media_kit_libs_windows_video 1.0.11`。旧 SDK 默认资产的历史下载校验如下；当前实现以本文件开头的 2026-10-29 记录为准：
 
 | 资产 | 固定来源 | 已核对 MD5 |
 | --- | --- | --- |

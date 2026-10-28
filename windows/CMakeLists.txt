@@ -57,8 +57,8 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
-include(native/mpv.cmake)
-bilisail_use_pinned_mpv()
+# Predidit media-kit bundles its matching DXGI libmpv with Native Assets.
+# Do not override it with the former ANGLE-only library.
 
 include(patches/media_kit_video/apply.cmake)
 bilisail_patch_video_target()
@@ -80,13 +80,26 @@ endif()
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 
+# An incremental build can still contain the former library plugin and ANGLE.
+# They must not be shipped alongside the new Native Assets/D3D11 renderer.
+install(CODE "file(REMOVE
+  \"${INSTALL_BUNDLE_LIB_DIR}/libEGL.dll\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/libGLESv2.dll\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/media_kit_libs_windows_video_plugin.dll\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/SOURCE.md\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/COPYING.LGPLv2.1\")"
+  COMPONENT Runtime)
+
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/patches/media_kit_video/LICENSE"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/media_kit_video"
   COMPONENT Runtime)
 
-install(FILES "${BILISAIL_MPV_ROOT}/SOURCE.md"
-  "${BILISAIL_MPV_ROOT}/COPYING.LGPLv2.1"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/PREDIDIT_SOURCE.md"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/mpv"
+  COMPONENT Runtime)
+
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../THIRD_PARTY_NOTICES.md"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"

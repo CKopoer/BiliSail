@@ -45,8 +45,7 @@ void mpv_render_context_free(RenderState *state) {
   require(std::this_thread::get_id() == state->render_thread,
           "mpv freed outside the rendering thread");
   require(state->callback_removed, "mpv callback still attached");
-  require(!state->surface_destroyed, "GL surface destroyed before mpv");
-  require(!state->gpu || state->current, "GL context is not current");
+  require(!state->surface_destroyed, "D3D11 device destroyed before mpv");
   state->freed = true;
 }
 
@@ -97,7 +96,7 @@ public:
     state.render_thread =
         pool.Post([] { return std::this_thread::get_id(); }).get();
     if (state.gpu)
-      surface_manager_ = std::make_unique<Surface>(state);
+      d3d11_renderer_ = std::make_unique<Surface>(state);
   }
   ~VideoOutput();
   void UnregisterTexture(int64_t id, std::function<void()> callback);
@@ -141,7 +140,7 @@ private:
   size_t pending_texture_releases_ = 0;
   std::mutex textures_mutex_;
   std::vector<int> texture_variants_, textures_, pixel_buffer_textures_;
-  std::unique_ptr<Surface> surface_manager_;
+  std::unique_ptr<Surface> d3d11_renderer_;
   std::unique_ptr<uint8_t[]> pixel_buffer_;
 };
 
@@ -182,7 +181,6 @@ void texture_callbacks_gate_dispose() {
           "Dispose did not finish");
   require(old_callback_finished && state.freed && state.surface_destroyed,
           "Dispose acknowledged incomplete cleanup");
-  require(!state.current, "GL context remained current after cleanup");
 }
 
 void render_queue_gates_dispose() {

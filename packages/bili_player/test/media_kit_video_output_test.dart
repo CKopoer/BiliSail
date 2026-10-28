@@ -28,9 +28,22 @@ final class _PlatformOutput extends mkv.PlatformVideoController {
   Future<void> setSize({int? width, int? height}) async {}
 }
 
+final class _PlayerFacade extends Fake implements mk.Player {
+  _PlayerFacade(this.platform);
+
+  @override
+  final mk.PlatformPlayer platform;
+
+  @override
+  mk.PlayerState get state => platform.state;
+
+  @override
+  mk.PlayerStream get stream => platform.stream;
+}
+
 final class _Controller extends Fake implements mkv.VideoController {
   _Controller(_Player backend, int textureId)
-    : player = mk.Player(platformPlayer: backend) {
+    : player = _PlayerFacade(backend) {
     output = _PlatformOutput(player, textureId);
     notifier = ValueNotifier(output);
   }

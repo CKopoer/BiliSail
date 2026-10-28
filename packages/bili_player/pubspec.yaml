@@ -9,33 +9,25 @@ dependencies:
     sdk: flutter
   media_kit:
     git:
-      url: https://github.com/CKopoer/media-kit.git
+      url: https://github.com/Predidit/media-kit.git
       path: media_kit
-      ref: 24f5c7cb6b78f68fa7c23c73ffe7294f0bd962ab
+      ref: 83b7ca63772856e1ea0158916177e136f7b7b0be
   media_kit_video:
     git:
-      url: https://github.com/CKopoer/media-kit.git
+      url: https://github.com/Predidit/media-kit.git
       path: media_kit_video
-      ref: 24f5c7cb6b78f68fa7c23c73ffe7294f0bd962ab
-  media_kit_libs_video:
-    git:
-      url: https://github.com/CKopoer/media-kit.git
-      path: libs/universal/media_kit_libs_video
-      ref: 24f5c7cb6b78f68fa7c23c73ffe7294f0bd962ab
+      ref: 83b7ca63772856e1ea0158916177e136f7b7b0be
 
 # Overrides are repeated in the application root: Pub ignores dependency
 # overrides from a transitive package. Keep every fork ref in sync.
 dependency_overrides:
+  # Match the application's existing wakelock_plus/package_info_plus pair.
+  wakelock_plus: 1.8.1
   media_kit:
     git:
-      url: https://github.com/CKopoer/media-kit.git
+      url: https://github.com/Predidit/media-kit.git
       path: media_kit
-      ref: 24f5c7cb6b78f68fa7c23c73ffe7294f0bd962ab
-  media_kit_libs_android_video:
-    git:
-      url: https://github.com/CKopoer/media-kit.git
-      path: libs/android/media_kit_libs_android_video
-      ref: 24f5c7cb6b78f68fa7c23c73ffe7294f0bd962ab
+      ref: 83b7ca63772856e1ea0158916177e136f7b7b0be
 dev_dependencies:
   flutter_test:
     sdk: flutter

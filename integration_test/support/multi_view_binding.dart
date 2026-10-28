@@ -15,6 +15,17 @@ class MultiViewIntegrationTestWidgetsFlutterBinding
   bool forwardNativeExitRequests = false;
 
   @override
+  void handlePointerEvent(PointerEvent event) {
+    // Native window destruction can deliver a final mouse packet after its
+    // test render view is gone. LiveTestWidgetsFlutterBinding assumes a match
+    // and throws firstWhere; keep events for every still-mounted view intact.
+    if (!renderViews.any((view) => view.flutterView.viewId == event.viewId)) {
+      return;
+    }
+    super.handlePointerEvent(event);
+  }
+
+  @override
   Future<AppExitResponse> exitApplication(
     AppExitType exitType, [
     int exitCode = 0,

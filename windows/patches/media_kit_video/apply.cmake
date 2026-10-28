@@ -21,79 +21,41 @@ function(bilisail_patch_video_sources source output)
   if(source STREQUAL output)
     message(FATAL_ERROR "media_kit_video patch requires a separate build directory")
   endif()
-  set(files video_output.h video_output.cc video_output_manager.h
-    video_output_manager.cc media_kit_video_plugin.cc
-    angle_surface_manager.h angle_surface_manager.cc)
+  set(files video_output.h video_output.cc video_output_manager.h video_output_manager.cc media_kit_video_plugin.cc d3d11_renderer.h d3d11_renderer.cc mailbox_swap_chain.h mailbox_swap_chain.cc)
   set(hashes
-    e276c8b80e9e117d60713b3b25b12ddb0df1878a2c076fe946847ac7eec7c17a
-    198cb59a97070b61df5ee8ae35ac3e0bc344f3174f6e4aaf7b77e7357d606548
-    42228d0f1bb2cb99cf31a3b12422d4246207ad227298c723744a1806f1ebfc65
-    bfdd46d2bf19094af5b912f6ac922d91f41fd3b3e6202a11a9c2012ce59461be
-    00ecd361cd61791bf4cb9c6beb84f82614ef5788dcb1ae51e70c66d347a080a0
-    3c7f24a94a8f7e8b551877142ea12b92d1543d4f8384370d55c3b5147eefe6ef
-    04eadbea88ce1d825a732c8ea96f9557bb19c275330f4abf7836950e7efd2e2a)
-  foreach(index RANGE 0 6)
+    36c4bac24c3a1d6abd937f1319a7acca55f329aceb552e92a610aed0bdcd7ecd
+    cfa81c441ccb1deea1c93e5d137b860bfea78cbc80a51c92db8cff3a9519c804
+    de48824c62d6b7f003b65f4891431ab016987806c395755e2b8a53d7063cf780
+    5952a6e22f1161719f17dc350a18fbf8919d067bb6f05bf1447557ce59424135
+    5f17001004f240c48656bd64e44037b1822d0055c78fa64cf91aa99d015937fb
+    371a029087e82c43c18b01ca2963d3d47c88069f344dab40824dedf435d82b8a
+    125ad611e3dc3332e325a117c68d450acf6d51dc8c2c01ebf6fbac3107660756
+    d55e39e4705440490ddc1551f4db41ae91fbeee5d8330fcbcdd3edb3caf58740
+    8bb19233dc0727f3b5e85c8a6d902dc1ac4ac0aea09aed28e6ee1326d4198ead)
+  foreach(index RANGE 0 8)
     list(GET files ${index} file)
     list(GET hashes ${index} expected)
-    file(SHA256 "${source}/${file}" actual)
+    # Git checkouts may use LF or CRLF. Validate exactly the same source text
+    # on both; substantive changes still fail closed against the pinned blob.
+    file(READ "${source}/${file}" original)
+    string(REPLACE "\r\n" "\n" original "${original}")
+    string(SHA256 actual "${original}")
     if(NOT actual STREQUAL expected)
-      message(FATAL_ERROR "media_kit_video 2.0.1 source changed: ${file}; review the Windows lifecycle patch before building")
+      message(FATAL_ERROR "Predidit media-kit 83b7ca6 source changed: ${file}; review the D3D11 lifecycle patch")
     endif()
   endforeach()
-  file(GLOB_RECURSE inputs RELATIVE "${source}" "${source}/*")
+  file(GLOB inputs RELATIVE "${source}" "${source}/*")
   foreach(file IN LISTS inputs)
-    configure_file("${source}/${file}" "${output}/${file}" COPYONLY)
+    if(NOT IS_DIRECTORY "${source}/${file}")
+      configure_file("${source}/${file}" "${output}/${file}" COPYONLY)
+    endif()
   endforeach()
+  # Copied sources keep their upstream ../common includes.
+  file(COPY "${source}/../common" DESTINATION "${output}/..")
   foreach(file video_output_dispose.inc video_output_manager_dispose.inc
-    video_output_dimensions.inc video_output_viewport.inc angle_gpu_queue.inc)
+      video_output_dimensions.inc video_output_viewport.inc)
     configure_file("${BILISAIL_VIDEO_PATCH_DIR}/${file}" "${output}/${file}" COPYONLY)
   endforeach()
-
-  bilisail_replace_once("${output}/angle_surface_manager.h" "#include <d3d11.h>"
-    "#include <d3d11.h>\n#include <d3d10.h>\n#include <optional>")
-  bilisail_replace_once("${output}/angle_surface_manager.h" "  void Read();"
-    "  HANDLE Read();")
-  bilisail_replace_once("${output}/angle_surface_manager.h" "  bool CreateD3DTexture();"
-    "  bool CreateD3DTexture();\n  bool UseAngleDevice();")
-  bilisail_replace_once("${output}/angle_surface_manager.h"
-    "  ID3D11Device* d3d_11_device_ = nullptr;"
-    "  bool uses_angle_device_ = false;\n  uint64_t draw_revision_ = 0;\n  std::optional<uint64_t> copied_revision_;\n  std::optional<bool> last_direct_;\n  ID3D11Device* d3d_11_device_ = nullptr;")
-  file(READ "${output}/angle_surface_manager.cc" angle_text)
-  string(FIND "${angle_text}" "void ANGLESurfaceManager::Draw(" angle_begin)
-  string(FIND "${angle_text}" "void ANGLESurfaceManager::MakeCurrent(" angle_end)
-  math(EXPR angle_count "${angle_end} - ${angle_begin}")
-  string(SUBSTRING "${angle_text}" ${angle_begin} ${angle_count} angle_old)
-  bilisail_replace_once("${output}/angle_surface_manager.cc" "${angle_old}"
-    "#include \"angle_gpu_queue.inc\"\n\n")
-  bilisail_replace_once("${output}/angle_surface_manager.cc" [=[void ANGLESurfaceManager::SwapBuffers() {
-  glFinish();
-}
-
-]=] "")
-  bilisail_replace_once("${output}/angle_surface_manager.cc" [=[  if (!CreateD3DTexture()) {
-    throw std::runtime_error("Unable to create Windows Direct3D device.");
-    return;
-  }
-  if (!CreateEGLDisplay()) {
-    throw std::runtime_error("Unable to create ANGLE EGL display.");
-    return;
-  }]=] [=[  if (!CreateEGLDisplay()) {
-    throw std::runtime_error("Unable to create ANGLE EGL display.");
-  }
-  if (!CreateD3DTexture()) {
-    throw std::runtime_error("Unable to create Windows Direct3D device.");
-  }]=])
-  bilisail_replace_once("${output}/angle_surface_manager.cc"
-    "  if (d3d_11_device_ == nullptr) {"
-    "  if (d3d_11_device_ == nullptr) UseAngleDevice();\n  copied_revision_.reset();\n  if (d3d_11_device_ == nullptr) {")
-  bilisail_replace_once("${output}/angle_surface_manager.cc" [=[    if (instance_count_ == 1) {
-      eglTerminate(display_);
-    }]=] [=[    // EGL's default display can also belong to Flutter. Contexts and surfaces
-    // are released above; do not terminate another component's live display.]=])
-  bilisail_replace_once("${output}/video_output.cc" [=[                surface_manager_->Read();
-                return textures_.at(texture_id_).get();]=] [=[                auto* descriptor = textures_.at(texture_id_).get();
-                descriptor->handle = surface_manager_->Read();
-                return descriptor;]=])
 
   bilisail_replace_once("${output}/video_output.h" "#include <optional>"
     "#include <optional>\n#include <atomic>\n#include <cmath>\n#include <condition_variable>\n#include <utility>")
@@ -110,7 +72,7 @@ function(bilisail_patch_video_sources source output)
   bilisail_replace_once("${output}/video_output.h"
     "  std::optional<int64_t> viewport_height_ = std::nullopt;"
     "  std::optional<int64_t> viewport_height_ = std::nullopt;\n  uint64_t viewport_revision_ = 0;")
-  bilisail_replace_once("${output}/video_output.h" "  bool destroyed_ = false;" [=[
+  bilisail_replace_once("${output}/video_output.h" "  std::atomic<bool> destroyed_{false};" [=[
   std::atomic<bool> destroyed_{false};
   std::mutex render_tasks_mutex_;
   bool render_task_queued_ = false;
@@ -225,17 +187,15 @@ void VideoOutput::Render() {
       "void VideoOutput::${method}() {\n  if (destroyed_) return;")
   endforeach()
 
-  bilisail_replace_once("${output}/video_output_manager.h" "  void Dispose(int64_t handle);"
-    "  void Dispose(int64_t handle, std::function<void()> on_disposed);")
   bilisail_replace_once("${output}/video_output_manager.h"
     "  void Dispose(int64_t handle, std::function<void()> on_disposed);"
     "  void SetViewportSize(int64_t handle, std::optional<int64_t> width, std::optional<int64_t> height, uint64_t revision);\n  void Dispose(int64_t handle, std::function<void()> on_disposed);")
-  bilisail_replace_once("${output}/video_output_manager.cc" [=[void VideoOutputManager::Dispose(int64_t handle) {
+  bilisail_replace_once("${output}/video_output_manager.cc" [=[void VideoOutputManager::Dispose(int64_t handle,
+                                std::function<void()> on_disposed) {
   std::thread([=]() {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (video_outputs_.find(handle) != video_outputs_.end()) {
-      video_outputs_.erase(handle);
-    }
+    video_outputs_.erase(handle);
+    on_disposed();
   }).detach();
 }]=] "#include \"video_output_manager_dispose.inc\"")
   bilisail_replace_once("${output}/video_output_manager.cc"
@@ -252,14 +212,6 @@ void VideoOutput::Render() {
 }
 
 #include "video_output_manager_dispose.inc"]=])
-  bilisail_replace_once("${output}/media_kit_video_plugin.cc" [=[    video_output_manager_->Dispose(handle_value);
-    result->Success(flutter::EncodableValue(std::monostate{}));]=] [=[    auto reply = std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>>(
-        std::move(result));
-    video_output_manager_->Dispose(handle_value, [this, reply] {
-      RunOnMainThread([reply] {
-        reply->Success(flutter::EncodableValue(std::monostate{}));
-      });
-    });]=])
   bilisail_replace_once("${output}/media_kit_video_plugin.cc"
     [=[  } else if (method_call.method_name().compare("Utils.EnterNativeFullscreen") ==]=]
     [=[  } else if (method_call.method_name().compare("VideoOutputManager.SetViewportSize") ==
@@ -295,10 +247,14 @@ function(bilisail_patch_video_target)
   set(patched)
   foreach(file IN LISTS inputs)
     get_filename_component(name "${file}" NAME)
-    if(NOT EXISTS "${output}/${name}")
+    if(EXISTS "${output}/${name}")
+      list(APPEND patched "${output}/${name}")
+    elseif(file STREQUAL "../common/mpv/media_kit_mpv.c")
+      get_filename_component(binding "${source}/${file}" ABSOLUTE)
+      list(APPEND patched "${binding}")
+    else()
       message(FATAL_ERROR "Unexpected media_kit_video compile input: ${file}")
     endif()
-    list(APPEND patched "${output}/${name}")
   endforeach()
   set_property(TARGET media_kit_video_plugin PROPERTY SOURCES "${patched}")
 endfunction()
