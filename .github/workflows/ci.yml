@@ -169,6 +169,7 @@ jobs:
           python3 -m unittest discover -s tool -p 'test_apple_*.py'
           ruby -c ios/Podfile
           ruby -c macos/Podfile
+          ruby -c tool/media-kit-apple-pods.rb
           bash tool/test-linux-downloads.sh
           bash packages/bili_mux/tool/test-apple-framework.sh
           for script in tool/package-linux.sh tool/setup-linux-build.sh tool/linux-downloads.sh tool/linux-runtime-validation.sh; do

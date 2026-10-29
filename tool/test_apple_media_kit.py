@@ -56,6 +56,7 @@ class AppleStagingTests(unittest.TestCase):
                     self.assertEqual(wrapper, '#include "client.h"\n')
                     self.assertEqual((podroot / "plugin.swift").read_text(), "class Plugin {}")
                     self.assertNotIn("../common/mpv", (podroot / "media_kit_video.podspec").read_text())
+                    self.assertNotIn("header_mappings_dir", (podroot / "media_kit_video.podspec").read_text())
                     self.assertEqual((source / platform / "media_kit_video.podspec").read_text(), original)
                     # Repeated pod install starts from the original, not its patched copy.
                     self.assertEqual(staging.prepare(repo, platform), destination)

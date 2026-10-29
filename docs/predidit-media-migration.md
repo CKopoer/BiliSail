@@ -72,3 +72,5 @@ Windows 本地 `tool/check.ps1 -SkipPub` 通过格式、分析和 4070 项测试
 [CI #217](https://github.com/CKopoer/BiliSail/actions/runs/40798307861) 的全部检查通过，包括 Ubuntu 上的 25 项 Linux 脚本检查、Apple staging 和 Ruby 语法检查。首次 staging 已解决源文件未收录，但 Apple 构建暴露了 framework umbrella header 仍引用嵌套 `mpv/client.h` 的问题，因此补上上述展平处理；本地对真实固定 C 绑定及公共头文件执行 Clang 语法检查通过，补改后的 `-Stage Lint -SkipPub` 通过。平台构建结论以包含补改的后续 CI 为准。
 
 该次 Linux x64 构建、AppImage／Flatpak 打包及已安装 Flatpak Runtime 的依赖检查通过，Android 构建通过。Windows 的 LZMA 工具修复在本地用相同 SHA-256 的真实固定 `.7z` 验证了目录读取和 DLL 解压；后续远端 Windows／Apple 结果仍需复验。
+
+CI #218 的检查通过。Apple 插件内部编译通过后，主应用导入 framework 时仍找不到 `client.h`；副本中同时移除 `header_mappings_dir`，让 CocoaPods 使用标准 Public Headers 阶段，并在 Podfile 的 post-install 中直接检查生成 Xcode 项目包含四个必要公共头文件。这样可在 pod install 时拦截只在源目录可见、没有导出给 Runner 的配置。

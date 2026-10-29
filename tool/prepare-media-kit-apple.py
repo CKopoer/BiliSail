@@ -55,6 +55,12 @@ def prepare(repo: Path, platform: str) -> Path:
     )
     # CocoaPods matches files below the pod root; ../common is never enumerated.
     patched = text.replace("../common/mpv/", "media_kit_mpv/")
+    # Flat framework headers must use Xcode's normal Public Headers phase.
+    # header_mappings_dir switches CocoaPods to custom folder-copy phases.
+    patched = "\n".join(
+        line for line in patched.splitlines()
+        if not line.strip().startswith("s.header_mappings_dir")
+    ) + "\n"
     (destination / platform / podspec.name).write_text(patched, encoding="utf-8")
     marker.write_text(str(source) + "\n", encoding="utf-8")
     link.unlink()
