@@ -1,7 +1,7 @@
 name: bilisail
 description: BiliSail, a cross-platform third-party Bilibili client focused on the viewing experience, built with Flutter.
 publish_to: none
-version: 1.2.4+0
+version: 1.2.4+1
 
 environment:
   sdk: '>=3.13.0 <4.0.0'
