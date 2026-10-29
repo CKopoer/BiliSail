@@ -18,8 +18,9 @@ class AppleStagingTests(unittest.TestCase):
     def fixture(self, repo: Path, platform: str) -> tuple[Path, Path]:
         source = repo / "pub-cache/media_kit_video"
         (source / platform).mkdir(parents=True)
-        (source / "common/mpv/include").mkdir(parents=True)
-        (source / "common/mpv/include/media_kit_mpv.h").write_text("int binding();")
+        (source / "common/mpv/include/mpv").mkdir(parents=True)
+        (source / "common/mpv/include/mpv/client.h").write_text("int binding();")
+        (source / "common/mpv/include/media_kit_mpv.h").write_text('#include "mpv/client.h"\n')
         (source / "common/mpv/media_kit_mpv.c").write_text("int binding() { return 0; }")
         (source / "common/plugin.swift").write_text("class Plugin {}")
         (source / platform / "plugin.swift").symlink_to(Path("../common/plugin.swift"))
@@ -49,6 +50,10 @@ class AppleStagingTests(unittest.TestCase):
                     podroot = destination / platform
                     self.assertTrue((podroot / "media_kit_mpv/media_kit_mpv.c").is_file())
                     self.assertTrue((podroot / "media_kit_mpv/include/media_kit_mpv.h").is_file())
+                    self.assertTrue((podroot / "media_kit_mpv/include/client.h").is_file())
+                    self.assertFalse((podroot / "media_kit_mpv/include/mpv").exists())
+                    wrapper = (podroot / "media_kit_mpv/include/media_kit_mpv.h").read_text()
+                    self.assertEqual(wrapper, '#include "client.h"\n')
                     self.assertEqual((podroot / "plugin.swift").read_text(), "class Plugin {}")
                     self.assertNotIn("../common/mpv", (podroot / "media_kit_video.podspec").read_text())
                     self.assertEqual((source / platform / "media_kit_video.podspec").read_text(), original)

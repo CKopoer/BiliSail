@@ -62,8 +62,13 @@ macOS 部署下限提高至 13.0 的依据已核对固定 Flutter SDK `packages/
 
 [CI #216](https://github.com/CKopoer/BiliSail/actions/runs/40738122479) 的检查和 Android 构建通过，三个 Apple 目标在 Swift 编译时缺少 mpv 声明，Linux 在打包时缺少 `libva-wayland.so.2`，Windows 仅输出 Native Assets 汇总错误。
 
-- 两份 Podfile 在 Flutter 创建插件链接后调用 [构建副本准备脚本](../tool/prepare-media-kit-apple.py)。校验固定 podspec 的 SHA-256，将插件复制到 `build/apple-plugins/<platform>/`，把共享 C 绑定放进 Pod 根目录并重定向生成的插件链接。保留上游源码、许可和符号链接；不修改 Pub 缓存或依赖提交。升级依赖时必须重新审查校验值和目录布局。
+- 两份 Podfile 在 Flutter 创建插件链接后调用 [构建副本准备脚本](../tool/prepare-media-kit-apple.py)。校验固定 podspec 的 SHA-256，将插件复制到 `build/apple-plugins/<platform>/`，把共享 C 绑定放进 Pod 根目录并重定向生成的插件链接。framework 公共头文件在副本中展平，同步 wrapper 的 include 路径，兼容 Xcode 的 Headers 拷贝阶段。保留上游源码、许可和符号链接；不修改 Pub 缓存或依赖提交。升级依赖时必须重新审查校验值和目录布局。
 - Linux 显式安装 `libva-wayland2`，打包前输出固定 libmpv 的完整 `ldd` 结果。继续使用 Native Assets 的库，禁止用系统 mpv 替换。
 - Windows 打包脚本启用 Flutter verbose 输出；原生编译期间移除 MSIX 签名凭据，随后恢复供签名使用。失败时收集经过环境敏感值和 URL query 过滤的 hook 输入、输出与日志，上传独立诊断产物。
+- Windows CI #217 的详细日志确认系统 `tar` 报 `LZMA codec is unsupported`，在读取固定 mpv `.7z` 的目录阶段失败。CI 的 MSYS2 工具链补装 libarchive，通过 [工具配置脚本](../tool/setup-windows-native-tar.ps1) 提供支持 LZMA 的 `tar.exe` 并记录实际路径和版本；Native Assets 下载、哈希和路径校验保持原实现。本地 Windows 无需替换已有可用工具。
 
 Windows 本地 `tool/check.ps1 -SkipPub` 通过格式、分析和 4070 项测试，根应用 13 项既有跳过，mux 10 项因未配置 `BILI_MUX_LIBRARY` 跳过；两项 Apple staging 回归、18 项 Linux 纯 Python 回归、PowerShell／Bash 语法和诊断脱敏检查通过。7 项 POSIX shell 运行时检查未在此 Windows 环境执行成功，交由 Ubuntu CI 验证。远端构建结果将在修复推送后的 CI 核验；以上不代表设备安装、音画或性能验收通过。
+
+[CI #217](https://github.com/CKopoer/BiliSail/actions/runs/40798307861) 的全部检查通过，包括 Ubuntu 上的 25 项 Linux 脚本检查、Apple staging 和 Ruby 语法检查。首次 staging 已解决源文件未收录，但 Apple 构建暴露了 framework umbrella header 仍引用嵌套 `mpv/client.h` 的问题，因此补上上述展平处理；本地对真实固定 C 绑定及公共头文件执行 Clang 语法检查通过，补改后的 `-Stage Lint -SkipPub` 通过。平台构建结论以包含补改的后续 CI 为准。
+
+该次 Linux x64 构建、AppImage／Flatpak 打包及已安装 Flatpak Runtime 的依赖检查通过，Android 构建通过。Windows 的 LZMA 工具修复在本地用相同 SHA-256 的真实固定 `.7z` 验证了目录读取和 DLL 解压；后续远端 Windows／Apple 结果仍需复验。

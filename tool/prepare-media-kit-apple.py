@@ -42,6 +42,17 @@ def prepare(repo: Path, platform: str) -> Path:
         shutil.copytree(source / directory, destination / directory, symlinks=True)
     shutil.copyfile(source / "LICENSE", destination / "LICENSE")
     shutil.copytree(bindings, destination / platform / "media_kit_mpv")
+    # Xcode's framework Headers phase flattens public headers. Keep both the
+    # generated umbrella imports and the wrapper's includes valid after copying.
+    includes = destination / platform / "media_kit_mpv/include"
+    for header in (includes / "mpv").glob("*.h"):
+        header.rename(includes / header.name)
+    (includes / "mpv").rmdir()
+    wrapper = includes / "media_kit_mpv.h"
+    wrapper.write_text(
+        wrapper.read_text(encoding="utf-8").replace('#include "mpv/', '#include "'),
+        encoding="utf-8",
+    )
     # CocoaPods matches files below the pod root; ../common is never enumerated.
     patched = text.replace("../common/mpv/", "media_kit_mpv/")
     (destination / platform / podspec.name).write_text(patched, encoding="utf-8")

@@ -277,7 +277,13 @@ jobs:
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
         with:
           msystem: UCRT64
-          install: make mingw-w64-ucrt-x86_64-gcc
+          install: make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libarchive
+      - name: Set up LZMA support for Windows Native Assets
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        env:
+          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux.outputs.msys2-location }}
+        run: ./tool/setup-windows-native-tar.ps1 -MsysRoot $env:BILI_MUX_MSYS_ROOT
       - name: Set up the Android mux compiler
         if: matrix.target == 'android-arm64'
         shell: bash
