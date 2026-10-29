@@ -266,6 +266,8 @@ Pop-Location
 
 参考项目的具体采用范围见[参考文档](docs/references.md)，资源、字体和原生组件的来源及许可范围见[第三方说明](THIRD_PARTY_NOTICES.md)。
 
+感谢 [Linux DO 社区](https://linux.do/latest) 的支持
+
 ## Star 趋势
 
 如果 BiliSail 对你有帮助，欢迎点亮 Star，支持项目持续完善。
