@@ -10,7 +10,11 @@ import 'package:bilisail/core/input/input_stroke.dart';
 import 'package:bilisail/core/input/shortcut_dispatcher.dart';
 
 import 'dart:async';
-import 'dart:ui' show PointerDeviceKind, Tristate;
+import 'dart:io';
+
+import 'package:bilisail/features/playback/presentation/live_stream_picker.dart';
+
+import 'dart:ui' show PointerDeviceKind, Tristate, ImageByteFormat;
 
 import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:bilisail/app/router.dart';
@@ -3739,14 +3743,10 @@ void main() {
       await tester.tap(find.byTooltip('清晰度'));
       await tester.pumpAndSettle();
       final videoText = find.text('720P');
-      final videoStyle = DefaultTextStyle.of(tester.element(videoText)).style;
       final videoParagraph = tester.renderObject<RenderParagraph>(
         find.descendant(of: videoText, matching: find.byType(RichText)),
       );
       expect(videoParagraph.text.style?.fontFamily, 'Player Test Font');
-      final videoPopup = tester.widget<Material>(
-        find.ancestor(of: videoText, matching: find.byType(Material)).first,
-      );
       await tester.tapAt(const Offset(2, 2));
       await tester.pumpAndSettle();
       await tester.pumpWidget(
@@ -3763,18 +3763,12 @@ void main() {
       await tester.tap(find.byTooltip('直播清晰度与线路'));
       await tester.pumpAndSettle();
       final liveText = find.text('720P 超清');
-      final liveStyle = DefaultTextStyle.of(tester.element(liveText)).style;
       final liveParagraph = tester.renderObject<RenderParagraph>(
         find.descendant(of: liveText, matching: find.byType(RichText)),
       );
       expect(liveParagraph.text.style?.fontFamily, 'Player Test Font');
-      final livePopup = tester.widget<Material>(
-        find.ancestor(of: liveText, matching: find.byType(Material)).first,
-      );
-      expect(livePopup.color, videoPopup.color);
-      expect(livePopup.shape, videoPopup.shape);
-      expect(liveStyle.color, videoStyle.color);
-      expect(liveStyle.fontSize, videoStyle.fontSize);
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(Theme.of(tester.element(liveText)).brightness, brightness);
       expect(find.text('直播线路 主线'), findsOneWidget);
       expect(find.text('直播线路 备线2'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -3831,16 +3825,11 @@ void main() {
           if (!compact) {
             expect(find.text('直播线路 主线'), findsOneWidget);
             expect(find.text('直播线路 备线2'), findsOneWidget);
-            final line = find
-                .ancestor(
-                  of: find.text('直播线路 备线1'),
-                  matching: find.byWidgetPredicate(
-                    (widget) => widget is PopupMenuEntry,
-                  ),
-                )
-                .first;
+            final line = find.widgetWithText(ListTile, '直播线路 备线1');
             await tester.ensureVisible(line);
             await tester.tap(line);
+            expect(engine.opens, 1);
+            await tester.tap(find.text('应用'));
           } else {
             final line = find.widgetWithText(
               CheckedPopupMenuItem<VoidCallback>,
@@ -3863,6 +3852,7 @@ void main() {
               : find.text('720P 超清');
           await tester.ensureVisible(quality);
           await tester.tap(quality);
+          if (!compact) await tester.tap(find.text('应用'));
           await tester.pumpAndSettle();
           expect(session.media?.quality, 250);
           expect(session.liveLine, 1);
@@ -3875,6 +3865,7 @@ void main() {
               : find.text('自动');
           await tester.ensureVisible(auto);
           await tester.tap(auto);
+          if (!compact) await tester.tap(find.text('应用'));
           await tester.pumpAndSettle();
           expect(session.requestedQuality, 0);
           expect(session.liveLine, 1);
@@ -3886,6 +3877,132 @@ void main() {
       );
     }
   }
+
+  for (final size in [
+    const Size(390, 844),
+    const Size(844, 390),
+    const Size(1400, 900),
+  ]) {
+    testWidgets('live stream picker stages, saves and applies HEVC at $size', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final settings = _Settings();
+      final engine = _FakeEngine();
+      final session = _session(
+        engine,
+        contentRepository: _LiveMenuRepository(),
+      );
+      addTearDown(session.close);
+      final captureKey = GlobalKey();
+      if (Platform.environment['BILI_CAPTURE_LIVE_PICKER'] == 'true') {
+        await (FontLoader('HarmonyOS Sans')..addFont(
+              rootBundle.load(
+                'assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf',
+              ),
+            ))
+            .load();
+      }
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: captureKey,
+          child: _app(
+            session,
+            _FakeWindowService(),
+            const AppSettings.defaults(),
+            width: size.height < 500 ? 320 : 1200,
+            target: const LivePlaybackTarget('12'),
+            settingsRepository: settings,
+          ),
+        ),
+      );
+      await _pumpFrames(tester);
+      // Open the shared selector directly so viewport coverage is independent of the controls' width.
+      final context = tester.element(find.byType(PlaybackPanel));
+      unawaited(
+        showLiveStreamPicker(
+          context,
+          session: session,
+          media: session.media!,
+          onMenuChanged: (_) {},
+        ),
+      );
+      await tester.pumpAndSettle();
+      if (Platform.environment['BILI_CAPTURE_LIVE_PICKER'] == 'true') {
+        await tester.runAsync(() async {
+          final boundary =
+              captureKey.currentContext?.findRenderObject()
+                  as RenderRepaintBoundary;
+          final image = await boundary.toImage();
+          final bytes = await image.toByteData(format: ImageByteFormat.png);
+          image.dispose();
+          if (bytes != null) {
+            final file = File(
+              'artifacts/live-picker/${size.width.toInt()}x${size.height.toInt()}.png',
+            );
+            await file.parent.create(recursive: true);
+            await file.writeAsBytes(bytes.buffer.asUint8List());
+          }
+        });
+      }
+      final hevc = find.widgetWithText(ChoiceChip, 'HLS · fMP4 · HEVC');
+      await tester.ensureVisible(hevc);
+      await tester.tap(hevc);
+      expect(engine.opens, 1);
+      await tester.tap(find.text('应用'));
+      await tester.pumpAndSettle();
+      expect(settings.value.liveStreamPreference.codec, 'hevc');
+      expect(session.media?.video.codec, 'hevc');
+      expect(engine.opens, 2);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets(
+    'live preference save failure stays open and stale selection cannot switch source',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1400, 900);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final settings = _Settings()..failWrites = true;
+      final engine = _FakeEngine();
+      final session = _session(
+        engine,
+        contentRepository: _LiveMenuRepository(),
+      );
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(
+          session,
+          _FakeWindowService(),
+          const AppSettings.defaults(),
+          width: 1200,
+          target: const LivePlaybackTarget('12'),
+          settingsRepository: settings,
+        ),
+      );
+      await _pumpFrames(tester);
+      await tester.tap(find.byTooltip('直播清晰度与线路'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'HLS · fMP4 · HEVC'));
+      await tester.tap(find.text('应用'));
+      await tester.pumpAndSettle();
+      expect(find.text('偏好保存失败，请重试'), findsOneWidget);
+      expect(engine.opens, 1);
+      expect(settings.value.liveStreamPreference.isAutomatic, isTrue);
+      settings.failWrites = false;
+      await session.changeQuality(250);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('应用'));
+      await tester.pumpAndSettle();
+      expect(find.text('播放内容已变化，请关闭后重新选择'), findsOneWidget);
+      expect(engine.opens, 2);
+    },
+  );
 
   for (final compact in [false, true]) {
     for (final fullscreen in [false, true]) {
@@ -6337,10 +6454,13 @@ Widget _app(
   VoidCallback? onHome,
   PlaybackViewerRepository? viewers,
   bool showNavigationInPlayer = false,
+  SettingsRepository? settingsRepository,
 }) => ProviderScope(
   overrides: [
     playbackSessionProvider.overrideWithValue(session),
-    settingsRepositoryProvider.overrideWithValue(_Settings()),
+    settingsRepositoryProvider.overrideWithValue(
+      settingsRepository ?? _Settings(),
+    ),
     playbackViewerRepositoryProvider.overrideWithValue(viewers),
   ],
   child: InputTestApp(
@@ -6896,7 +7016,30 @@ final class _FakeContentPlaybackRepository
   );
 }
 
-final class _LiveMenuRepository implements ContentPlaybackRepository {
+final class _LiveMenuRepository
+    implements ContentPlaybackRepository, LiveStreamPlaybackRepository {
+  LiveStreamPreference preference = LiveStreamPreference.automatic;
+  static const avc = LiveStreamPreference(
+    protocol: 'http_hls',
+    format: 'fmp4',
+    codec: 'avc',
+  );
+  static const hevc = LiveStreamPreference(
+    protocol: 'http_hls',
+    format: 'fmp4',
+    codec: 'hevc',
+  );
+  @override
+  Future<PlaybackMedia> resolveLive(
+    LivePlaybackTarget target, {
+    required int quality,
+    required LiveStreamPreference preference,
+    required RequestCancellation cancellation,
+  }) {
+    this.preference = preference;
+    return resolve(target, quality: quality, cancellation: cancellation);
+  }
+
   @override
   Future<PlaybackMedia> resolve(
     ContentPlaybackTarget target, {
@@ -6904,12 +7047,25 @@ final class _LiveMenuRepository implements ContentPlaybackRepository {
     VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
     required RequestCancellation cancellation,
   }) async => PlaybackMedia(
+    liveStream: preference.isAutomatic ? avc : preference,
+    liveStreams: [
+      for (final key in [avc, hevc])
+        LivePlaybackStream(
+          preference: key,
+          urls: List.generate(
+            3,
+            (line) => Uri.https('live.example', '/$line.m3u8'),
+          ),
+          quality: quality == 0 ? 400 : quality,
+          qualities: const [10000, 400, 250],
+        ),
+    ],
     video: PlaybackTrack(
       urls: List.generate(
         3,
         (line) => Uri.https('live.example', '/$line.m3u8'),
       ),
-      codec: 'avc',
+      codec: preference.isAutomatic ? 'avc' : preference.codec,
       bandwidth: 0,
     ),
     audio: null,
@@ -6924,10 +7080,12 @@ final class _LiveMenuRepository implements ContentPlaybackRepository {
 
 final class _Settings implements SettingsRepository {
   AppSettings value = const AppSettings.defaults();
+  bool failWrites = false;
   @override
   Future<AppSettings> load() async => value;
   @override
   Future<void> save(AppSettings settings) async {
+    if (failWrites) throw StateError('fixture save failed');
     value = settings;
   }
 }

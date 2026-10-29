@@ -49,3 +49,12 @@ abstract interface class ContentPlaybackRepository {
     required RequestCancellation cancellation,
   });
 }
+
+abstract interface class LiveStreamPlaybackRepository {
+  Future<PlaybackMedia> resolveLive(
+    LivePlaybackTarget target, {
+    required int quality,
+    required LiveStreamPreference preference,
+    required RequestCancellation cancellation,
+  });
+}

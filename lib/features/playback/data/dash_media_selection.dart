@@ -3,6 +3,7 @@ import 'package:bili_api/bili_api.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/audio_normalization.dart';
 import '../../../domain/media_cdn.dart';
+import '../../../domain/audio_quality.dart';
 import '../domain/playback_repository.dart';
 
 /// Quality takes priority; a missing preferred codec does not downgrade it.
@@ -13,6 +14,7 @@ PlaybackMedia selectDashMedia(
   required Map<String, String> headers,
   MediaCdnPreference cdnPreference = MediaCdnPreference.automatic,
   bool videoOnly = false,
+  AudioQualityPreference audioQuality = AudioQualityPreference.aac192,
 }) {
   final videos =
       info.dashVideo
@@ -23,13 +25,31 @@ PlaybackMedia selectDashMedia(
         ..sort((a, b) => b.id.compareTo(a.id));
   final audios =
       info.dashAudio
-          .where((track) => track.codecs.toLowerCase().startsWith('mp4a'))
+          .where(
+            (track) =>
+                AudioQualityPreference.identify(track.id, track.codecs) != null,
+          )
           .toList()
-        ..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
+        ..sort((a, b) {
+          final order = audioQuality.fallbackOrder;
+          final rank = order
+              .indexWhere(
+                (quality) =>
+                    quality == AudioQualityPreference.identify(a.id, a.codecs),
+              )
+              .compareTo(
+                order.indexWhere(
+                  (quality) =>
+                      quality ==
+                      AudioQualityPreference.identify(b.id, b.codecs),
+                ),
+              );
+          return rank != 0 ? rank : b.bandwidth.compareTo(a.bandwidth);
+        });
   if (videos.isEmpty || !videoOnly && audios.isEmpty) {
     throw AppFailure(
       AppFailureKind.playback,
-      videoOnly ? '未取得可用的预览视频轨道' : '未取得可用的 H.264、HEVC 或 AV1 视频和 AAC 音频轨道',
+      videoOnly ? '未取得可用的预览视频轨道' : '未取得可用的视频和音频轨道',
     );
   }
   final selectedQuality =

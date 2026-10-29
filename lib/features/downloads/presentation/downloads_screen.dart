@@ -45,6 +45,7 @@ String downloadCodecText(VideoCodecPreference codec) => switch (codec) {
   VideoCodecPreference.h264 => 'H.264',
   VideoCodecPreference.hevc => 'HEVC',
   VideoCodecPreference.av1 => 'AV1',
+  VideoCodecPreference.dolbyVision => '杜比视界',
 };
 
 final class DownloadsScreen extends ConsumerStatefulWidget {

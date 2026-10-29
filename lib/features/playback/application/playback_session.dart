@@ -179,6 +179,8 @@ class PlaybackSession extends ChangeNotifier {
   double _openingVolume = 100;
   int _quality = 80;
   int _liveLine = 0;
+  LiveStreamPreference _liveStreamPreference = LiveStreamPreference.automatic;
+  LiveStreamPreference get liveStreamPreference => _liveStreamPreference;
   int get requestedQuality => _quality;
 
   /// Index in the selected live stream's server-ordered url_info list.
@@ -430,6 +432,7 @@ class PlaybackSession extends ChangeNotifier {
       volume: preparing ? _openingVolume : snapshot.volume,
       quality: _quality,
       liveLine: _liveLine,
+      liveStream: _liveStreamPreference,
       desiredPlaying: _desiredPlaying,
       subtitleLabel: _subtitlePreference,
       voice: _voice,
@@ -524,6 +527,7 @@ class PlaybackSession extends ChangeNotifier {
               ? _settings.preferredLiveQuality
               : _settings.preferredQuality),
       liveLine: restored?.liveLine,
+      liveStream: restored?.liveStream,
       position: nextPlaying != null ? nextIntent?.position : restored?.position,
       desiredPlaying:
           nextPlaying ??
@@ -635,6 +639,7 @@ class PlaybackSession extends ChangeNotifier {
     String? title,
     PlaybackVoice? voice,
     int? liveLine,
+    LiveStreamPreference? liveStream,
   }) async {
     if (_disposed || _closing) return;
     if (target == null && (video == null || selected == null)) return;
@@ -689,6 +694,12 @@ class PlaybackSession extends ChangeNotifier {
     final requestedLiveLine = target is LivePlaybackTarget
         ? liveLine ?? (samePart ? _liveLine : 0)
         : 0;
+    final requestedLiveStream = target is LivePlaybackTarget
+        ? liveStream ??
+              (samePart
+                  ? _liveStreamPreference
+                  : _settings.liveStreamPreference)
+        : LiveStreamPreference.automatic;
     _voice = target == null
         ? voice ?? (samePart ? _voice : const PlaybackVoice.original())
         : const PlaybackVoice.original();
@@ -717,6 +728,7 @@ class PlaybackSession extends ChangeNotifier {
     _openingVolume = oldVolume;
     _quality = quality;
     _liveLine = requestedLiveLine;
+    _liveStreamPreference = requestedLiveStream;
     detail = video;
     part = selected;
     contentTarget = target;
@@ -770,6 +782,16 @@ class PlaybackSession extends ChangeNotifier {
           if (target != null) {
             if (contentResolver == null) {
               throw const AppFailure(AppFailureKind.playback, '内容播放服务未配置');
+            }
+            if (target is LivePlaybackTarget &&
+                contentResolver is LiveStreamPlaybackRepository) {
+              return (contentResolver as LiveStreamPlaybackRepository)
+                  .resolveLive(
+                    target,
+                    quality: quality,
+                    preference: requestedLiveStream,
+                    cancellation: cancellation,
+                  );
             }
             return contentResolver.resolve(
               target,
@@ -982,6 +1004,11 @@ class PlaybackSession extends ChangeNotifier {
       media = resolved;
       if (isLive) {
         _liveLine = openedLiveLine;
+        if (!requestedLiveStream.isAutomatic &&
+            resolved.liveStream != null &&
+            resolved.liveStream != requestedLiveStream) {
+          auxiliaryMessage = '当前房间未提供偏好的直播流，已使用可用组合';
+        }
         if (samePart && quality != 0 && resolved.quality != quality) {
           auxiliaryMessage =
               '该清晰度当前不可用，已切换到${resolved.qualityLabels[resolved.quality] ?? resolved.quality}';
@@ -2259,6 +2286,26 @@ class PlaybackSession extends ChangeNotifier {
     );
   }
 
+  Future<void> changeLiveStream(
+    LiveStreamPreference preference, {
+    required int quality,
+    required int line,
+  }) async {
+    if (!isLive || media == null) return;
+    await open(
+      null,
+      null,
+      quality: quality,
+      liveLine: line,
+      liveStream: preference,
+      force: true,
+      desiredPlaying: _desiredPlaying,
+      volume: snapshots.value.volume,
+      target: contentTarget,
+      title: contentTitle,
+    );
+  }
+
   Future<void> changeVoice(PlaybackVoice voice) async {
     final video = detail;
     final selected = part;
@@ -2452,6 +2499,7 @@ final class _PlaybackCheckpoint {
     required this.volume,
     required this.quality,
     this.liveLine = 0,
+    this.liveStream = LiveStreamPreference.automatic,
     required this.desiredPlaying,
     this.subtitleLabel,
     this.target,
@@ -2467,6 +2515,7 @@ final class _PlaybackCheckpoint {
   final double volume;
   final int quality;
   final int liveLine;
+  final LiveStreamPreference liveStream;
   final bool desiredPlaying;
   final String? subtitleLabel;
   final PlaybackVoice voice;

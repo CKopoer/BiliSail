@@ -1,11 +1,93 @@
 import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/audio_quality.dart';
 import 'package:bilisail/domain/media_cdn.dart';
 import 'package:bilisail/features/playback/data/dash_media_selection.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('dvh1 and dvhe are Dolby Vision rather than ordinary HEVC', () {
+    expect(
+      VideoCodecPreference.fromCodec('dvh1.05.06'),
+      VideoCodecPreference.dolbyVision,
+    );
+    expect(
+      VideoCodecPreference.fromCodec('dvhe.08.06'),
+      VideoCodecPreference.dolbyVision,
+    );
+    final media = selectDashMedia(
+      ApiPlayInfo(
+        duration: const Duration(seconds: 60),
+        dashVideo: [_track(126, 'dvh1.05.06')],
+        dashAudio: [_track(30280, 'mp4a.40.2')],
+        acceptQuality: const [126],
+      ),
+      quality: 126,
+      preferredCodec: VideoCodecPreference.dolbyVision,
+      headers: const {},
+    );
+    expect(media.video.codec, 'dvh1.05.06');
+  });
+  for (final (preference, expected) in [
+    (AudioQualityPreference.aac64, 'mp4a.40.5'),
+    (AudioQualityPreference.aac132, 'mp4a.40.29'),
+    (AudioQualityPreference.aac192, 'mp4a.40.2'),
+    (AudioQualityPreference.lossless, 'fLaC'),
+    (AudioQualityPreference.dolby, 'ec-3'),
+  ]) {
+    test(
+      'audio preference $preference selects format before bandwidth and ID',
+      () {
+        final info = ApiPlayInfo(
+          duration: const Duration(seconds: 60),
+          dashVideo: [_track(80, 'avc1')],
+          dashAudio: [
+            _track(30255, 'ec-3'),
+            _track(30251, 'fLaC'),
+            _track(30280, 'mp4a.40.2'),
+            _track(30232, 'mp4a.40.29'),
+            _track(30216, 'mp4a.40.5'),
+          ],
+          acceptQuality: const [80],
+        );
+        final media = selectDashMedia(
+          info,
+          quality: 80,
+          preferredCodec: VideoCodecPreference.h264,
+          headers: const {},
+          audioQuality: preference,
+        );
+        expect(media.audio?.codec, expected);
+      },
+    );
+  }
+  test(
+    'missing special audio falls back to AAC and unknown codecs stay excluded',
+    () {
+      final info = ApiPlayInfo(
+        duration: const Duration(seconds: 60),
+        dashVideo: [_track(80, 'avc1')],
+        dashAudio: [_track(30280, 'mp4a.40.2'), _track(99999, 'unknown')],
+        acceptQuality: const [80],
+      );
+      for (final preference in [
+        AudioQualityPreference.lossless,
+        AudioQualityPreference.dolby,
+      ]) {
+        expect(
+          selectDashMedia(
+            info,
+            quality: 80,
+            preferredCodec: VideoCodecPreference.h264,
+            headers: const {},
+            audioQuality: preference,
+          ).audio?.codec,
+          'mp4a.40.2',
+        );
+      }
+    },
+  );
   test('explicit CDN mirrors preserve DASH audio, video and original backups', () {
     ApiMediaTrack track(bool audio) => ApiMediaTrack(
       id: audio ? 30280 : 80,

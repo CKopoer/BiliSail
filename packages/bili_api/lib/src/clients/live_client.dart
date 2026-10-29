@@ -286,19 +286,20 @@ final class LiveClient {
     // qn=0 asks the live service to choose a quality automatically.
     if (qn < 0 || qn > 30000) throw ArgumentError.value(qn, 'qn');
     const endpoint = 'live_playurl';
-    final data = await api.requestJson(
-      Uri.https(
-        'api.live.bilibili.com',
-        '/xlive/web-room/v2/index/getRoomPlayInfo',
-        {
-          'room_id': roomId,
-          'qn': '$qn',
-          'protocol': '0,1',
-          'format': '0,1,2',
-          'codec': '0,1',
-          'platform': 'web',
-        },
-      ),
+    final data = await api.requestLiveWbiJson(
+      '/xlive/web-room/v2/index/getRoomPlayInfo',
+      {
+        'room_id': roomId,
+        'qn': '$qn',
+        'protocol': '0,1',
+        'format': '0,1,2',
+        'codec': '0,1,2',
+        'platform': 'web',
+        'ptype': '8',
+        'dolby': '5',
+        'panorama': '1',
+        'web_location': '444.8',
+      },
       endpoint,
       context: context,
     );

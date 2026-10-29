@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/network/api_requests.dart';
 import '../domain/media_cdn.dart';
+import '../domain/audio_quality.dart';
 import '../core/logging/playback_diagnostic_log.dart';
 import '../core/platform/window_service.dart';
 import '../core/platform/detached_playback_window.dart';
@@ -195,10 +196,13 @@ class AppDependencies {
     );
     Future<MediaCdnPreference> cdnPreference() async =>
         (await settings.load()).mediaCdn;
+    Future<AudioQualityPreference> audioQualityPreference() async =>
+        (await settings.load()).preferredAudioQuality;
     final playbackRepository = ApiPlaybackRepository(
       api,
       requests,
       cdnPreference: cdnPreference,
+      audioQualityPreference: audioQualityPreference,
       imageDimensions: images.dimensions,
     );
     final downloadSources = ApiDownloadSourceRepository(
@@ -246,6 +250,7 @@ class AppDependencies {
             LiveClient(api),
             requests,
             cdnPreference: cdnPreference,
+            audioQualityPreference: audioQualityPreference,
           ),
         );
         return PlaybackSession(

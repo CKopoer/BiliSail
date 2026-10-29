@@ -3,11 +3,15 @@ import '../../../domain/audio_normalization.dart';
 export '../../../domain/audio_normalization.dart'
     show AudioNormalizationMode, AudioNormalizationLabel;
 import '../../../domain/video_codec.dart';
+import '../../../domain/audio_quality.dart';
+import '../../../domain/live_stream_preference.dart';
 import '../../../domain/media_cdn.dart';
 import 'shortcut_settings.dart';
 import '../../../domain/recommendation_settings.dart';
 
 export '../../../domain/video_codec.dart';
+export '../../../domain/audio_quality.dart';
+export '../../../domain/live_stream_preference.dart';
 export '../../../domain/media_cdn.dart' show MediaCdnPreference;
 
 enum AppThemePreference { system, light, dark }
@@ -75,6 +79,8 @@ final class AppSettings {
     this.fullscreenSwipeControls = true,
     this.preferredQuality = 80,
     this.preferredLiveQuality = 10000,
+    this.liveStreamPreference = LiveStreamPreference.automatic,
+    this.preferredAudioQuality = AudioQualityPreference.aac192,
     this.preferredVideoCodec = VideoCodecPreference.h264,
     this.mediaCdn = MediaCdnPreference.automatic,
     this.videoDecoding = VideoDecodingPreference.automatic,
@@ -139,6 +145,8 @@ final class AppSettings {
        showCollapsedProgress = true,
        preferredQuality = 80,
        preferredLiveQuality = 10000,
+       liveStreamPreference = LiveStreamPreference.automatic,
+       preferredAudioQuality = AudioQualityPreference.aac192,
        preferredVideoCodec = VideoCodecPreference.h264,
        mediaCdn = MediaCdnPreference.automatic,
        videoDecoding = VideoDecodingPreference.automatic,
@@ -203,6 +211,8 @@ final class AppSettings {
   final bool fullscreenSwipeControls;
   final int preferredQuality;
   final int preferredLiveQuality;
+  final LiveStreamPreference liveStreamPreference;
+  final AudioQualityPreference preferredAudioQuality;
   final VideoCodecPreference preferredVideoCodec;
   final MediaCdnPreference mediaCdn;
   final VideoDecodingPreference videoDecoding;
@@ -277,6 +287,8 @@ final class AppSettings {
     bool? fullscreenSwipeControls,
     int? preferredQuality,
     int? preferredLiveQuality,
+    LiveStreamPreference? liveStreamPreference,
+    AudioQualityPreference? preferredAudioQuality,
     VideoCodecPreference? preferredVideoCodec,
     MediaCdnPreference? mediaCdn,
     VideoDecodingPreference? videoDecoding,
@@ -341,6 +353,8 @@ final class AppSettings {
         fullscreenSwipeControls ?? this.fullscreenSwipeControls,
     preferredQuality: preferredQuality ?? this.preferredQuality,
     preferredLiveQuality: preferredLiveQuality ?? this.preferredLiveQuality,
+    liveStreamPreference: liveStreamPreference ?? this.liveStreamPreference,
+    preferredAudioQuality: preferredAudioQuality ?? this.preferredAudioQuality,
     preferredVideoCodec: preferredVideoCodec ?? this.preferredVideoCodec,
     mediaCdn: mediaCdn ?? this.mediaCdn,
     videoDecoding: videoDecoding ?? this.videoDecoding,
@@ -394,8 +408,7 @@ final class AppSettings {
     126,
     127,
   ];
-  // Live qn values are separate from VOD quality IDs. Dolby is omitted while
-  // live playback selects AVC streams; zero lets the server choose a quality.
+  // Live qn values are independent of VOD; zero asks the server to choose.
   static const liveQualityOptions = {
     0: '自动',
     80: '流畅',
@@ -405,6 +418,7 @@ final class AppSettings {
     10000: '原画',
     15000: '2K',
     20000: '4K',
+    30000: '杜比',
   };
   static const supportedSponsorCategories = [
     'sponsor',
@@ -435,6 +449,9 @@ final class AppSettings {
       preferredLiveQuality: liveQualityOptions.containsKey(preferredLiveQuality)
           ? preferredLiveQuality
           : 10000,
+      liveStreamPreference: LiveStreamPreference.fromJson(
+        liveStreamPreference.toJson(),
+      ),
       defaultPlaybackRate: PlaybackRates.nearest(defaultPlaybackRate),
       defaultVolume: bounded(defaultVolume, 0, 100, 100),
       danmakuOpacity: bounded(danmakuOpacity, .2, 1, .8),

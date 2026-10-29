@@ -1,6 +1,7 @@
 import '../api_client.dart';
 import '../models.dart';
 import '../models/pgc_models.dart';
+import '../mappers/dash_audio_parser.dart';
 
 /// Web Cookie PGC reads. Entitlement decisions remain with the playurl API.
 final class PgcClient {
@@ -80,10 +81,7 @@ final class PgcClient {
       dash['video'],
       endpoint,
     ).map((v) => _track(_map(v, endpoint))).toList();
-    final audios = _list(dash['audio'], endpoint)
-        .map((v) => _track(_map(v, endpoint)))
-        .where((v) => v.codecs.toLowerCase().startsWith('mp4a'))
-        .toList();
+    final audios = dashAudioEntries(dash, endpoint).map(_track).toList();
     if (videos.isEmpty || audios.isEmpty) {
       throw const ApiFailure(ApiFailureCategory.unavailable, endpoint);
     }

@@ -227,6 +227,45 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                           ),
                         ),
                         ListTile(
+                          title: const Text('直播流偏好'),
+                          subtitle: Text(s.liveStreamPreference.label),
+                          trailing: s.liveStreamPreference.isAutomatic
+                              ? null
+                              : TextButton(
+                                  onPressed: () => _update(
+                                    (c) => c.copyWith(
+                                      liveStreamPreference:
+                                          LiveStreamPreference.automatic,
+                                    ),
+                                  ),
+                                  child: const Text('恢复自动'),
+                                ),
+                        ),
+                        ListTile(
+                          title: const Text('优先音质'),
+                          subtitle: DropdownButton<AudioQualityPreference>(
+                            key: const ValueKey('preferred-audio-quality'),
+                            isExpanded: true,
+                            value: s.preferredAudioQuality,
+                            items: [
+                              for (final quality
+                                  in AudioQualityPreference.values)
+                                DropdownMenuItem(
+                                  value: quality,
+                                  child: Text(quality.label),
+                                ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                _update(
+                                  (c) =>
+                                      c.copyWith(preferredAudioQuality: value),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                        ListTile(
                           title: const Text('默认倍速'),
                           subtitle: DropdownButton<double>(
                             isExpanded: true,

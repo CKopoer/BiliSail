@@ -5,6 +5,38 @@ import 'package:bili_api/bili_api.dart';
 import 'package:test/test.dart';
 
 void main() {
+  for (final pgc in [false, true]) {
+    for (final ordinary in [false, true]) {
+      test(
+        '${pgc ? 'PGC' : 'UGC'} combines FLAC, Dolby and nullable ordinary audio=$ordinary',
+        () async {
+          final transport = _Transport(
+            ['dvh1.05.06'],
+            includeAudio: ordinary,
+            specialAudio: true,
+          );
+          final api = BiliApiClient(transport: transport);
+          addTearDown(api.close);
+          final info = pgc
+              ? await PgcClient(api).getPlayInfo('123')
+              : await api.getPlayInfo('BV1xx411c7mD', '123');
+          expect(info.dashVideo.single.codecs, 'dvh1.05.06');
+          expect(info.dashAudio.map((track) => track.id), [
+            if (ordinary) 30280,
+            30251,
+            30250,
+            30255,
+          ]);
+          expect(info.dashAudio.map((track) => track.codecs), [
+            if (ordinary) 'mp4a.40.2',
+            'fLaC',
+            'ec-3',
+            'ec-3',
+          ]);
+        },
+      );
+    }
+  }
   test('PGC play info preserves preview entitlement marker', () async {
     final transport = _Transport(['avc1.640028'], isPreview: true);
     final api = BiliApiClient(transport: transport);
@@ -57,7 +89,13 @@ void main() {
 }
 
 final class _Transport implements ApiTransport {
-  _Transport(this.codecs, {this.includeAudio = true, this.isPreview = false});
+  _Transport(
+    this.codecs, {
+    this.includeAudio = true,
+    this.isPreview = false,
+    this.specialAudio = false,
+  });
+  final bool specialAudio;
   final List<String> codecs;
   final bool includeAudio;
   final bool isPreview;
@@ -90,6 +128,25 @@ final class _Transport implements ApiTransport {
           'is_preview': isPreview ? 1 : 0,
           'accept_quality': [80],
           'dash': {
+            if (specialAudio) ...{
+              'flac': {
+                'audio': {
+                  'id': 30251,
+                  'base_url': 'https://cdn.example/flac.m4s',
+                  'codecs': 'fLaC',
+                },
+              },
+              'dolby': {
+                'audio': [
+                  for (final id in [30250, 30255])
+                    {
+                      'id': id,
+                      'baseUrl': 'https://cdn.example/dolby-$id.m4s',
+                      'codecs': 'ec-3',
+                    },
+                ],
+              },
+            },
             'duration': 3,
             'video': [
               for (final codec in codecs)

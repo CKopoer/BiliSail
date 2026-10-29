@@ -143,6 +143,14 @@ class SqliteSettingsRepository implements SettingsRepository {
               .where((item) => item.name == decoded['preferredVideoCodec'])
               .firstOrNull ??
           VideoCodecPreference.h264,
+      liveStreamPreference: LiveStreamPreference.fromJson(
+        decoded['liveStreamPreference'],
+      ),
+      preferredAudioQuality:
+          AudioQualityPreference.values
+              .where((item) => item.name == decoded['preferredAudioQuality'])
+              .firstOrNull ??
+          AudioQualityPreference.aac192,
       mediaCdn:
           MediaCdnPreference.values
               .where((item) => item.name == decoded['mediaCdn'])
@@ -219,7 +227,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 31,
+        'schemaVersion': 32,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
         'sidebarStyle': value.sidebarStyle.name,
@@ -248,6 +256,8 @@ class SqliteSettingsRepository implements SettingsRepository {
         'playerControlsMode': value.playerControlsMode.name,
         'preferredQuality': value.preferredQuality,
         'preferredLiveQuality': value.preferredLiveQuality,
+        'liveStreamPreference': value.liveStreamPreference.toJson(),
+        'preferredAudioQuality': value.preferredAudioQuality.name,
         'preferredVideoCodec': value.preferredVideoCodec.name,
         'mediaCdn': value.mediaCdn.name,
         'videoDecoding': value.videoDecoding.name,

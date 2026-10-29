@@ -17,6 +17,59 @@ void main() {
     repository = SqliteSettingsRepository(database);
   });
   tearDown(() => database.close());
+  test(
+    'stream and audio preferences migrate, validate, reset and reload',
+    () async {
+      await database.writeSetting(
+        'preferences.v1',
+        jsonEncode({
+          'schemaVersion': 31,
+          'preferredQuality': 64,
+          'liveStreamPreference': {
+            'protocol': 'bad',
+            'format': 'flv',
+            'codec': 'hevc',
+          },
+          'preferredAudioQuality': 'future',
+        }),
+      );
+      final initial = await repository.load();
+      expect(initial.liveStreamPreference.isAutomatic, isTrue);
+      expect(initial.preferredAudioQuality, AudioQualityPreference.aac192);
+      expect(initial.preferredQuality, 64);
+      const preference = LiveStreamPreference(
+        protocol: 'http_hls',
+        format: 'ts',
+        codec: 'hevc',
+      );
+      for (final audio in AudioQualityPreference.values) {
+        await repository.save(
+          initial.copyWith(
+            liveStreamPreference: preference,
+            preferredAudioQuality: audio,
+          ),
+        );
+        final loaded = await repository.load();
+        expect(loaded.liveStreamPreference, preference);
+        expect(loaded.preferredAudioQuality, audio);
+        final snapshot = jsonDecode(
+          (await database.readSetting('preferences.v1'))!,
+        );
+        expect(snapshot['schemaVersion'], 32);
+        expect(snapshot['liveStreamPreference'], preference.toJson());
+      }
+      await repository.save(const AppSettings.defaults());
+      expect(
+        (await repository.load()).liveStreamPreference.isAutomatic,
+        isTrue,
+      );
+      expect(
+        (await repository.load()).preferredAudioQuality,
+        AudioQualityPreference.aac192,
+      );
+      expect(database.schemaVersion, 3);
+    },
+  );
   test('prerelease checks default off, preserve saved choices and migrate old snapshots', () async {
     expect(AppSettings().checkPrereleaseUpdates, isFalse);
     expect(const AppSettings.defaults().checkPrereleaseUpdates, isFalse);

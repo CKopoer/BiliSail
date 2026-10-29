@@ -29,6 +29,7 @@ import 'player_seek_controls.dart';
 import 'playback_timeline_bar.dart';
 import 'playback_snapshot_builder.dart';
 import 'live_stream_menu.dart';
+import 'live_stream_picker.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/bili_icons.dart';
 import '../../../shared/ui/shortcut_hint.dart';
@@ -2307,7 +2308,7 @@ class _ControlBar extends StatelessWidget {
                     ),
                   ),
                 ),
-              slot(_moreOptions()),
+              slot(_moreOptions(context)),
               slot(volumeButton),
               slot(fullscreenButton),
             ]
@@ -2358,7 +2359,7 @@ class _ControlBar extends StatelessWidget {
     );
   }
 
-  Widget _moreOptions() => PopupMenuButton<VoidCallback>(
+  Widget _moreOptions(BuildContext context) => PopupMenuButton<VoidCallback>(
     tooltip: '更多播放选项',
     icon: const Icon(Icons.more_horiz, size: 20),
     onOpened: () => onMenuChanged(true),
@@ -2387,6 +2388,18 @@ class _ControlBar extends StatelessWidget {
             child: Text(title),
           ),
       if (session.media case final media?) ...[
+        if (session.isLive)
+          PopupMenuItem(
+            value: () => unawaited(
+              showLiveStreamPicker(
+                context,
+                session: session,
+                media: media,
+                onMenuChanged: onMenuChanged,
+              ),
+            ),
+            child: const Text('直播流与线路'),
+          ),
         if (session.isLive || media.qualities.length > 1)
           const PopupMenuDivider(),
         if (session.isLive || media.qualities.length > 1)

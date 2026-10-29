@@ -259,6 +259,8 @@ estimatedPosition = anchorPosition + (monotonicNow - anchorTime) × playbackRate
 
 直播使用同一个 PlayerEngine，但独立 `LivePlaybackPolicy`：选择服务端提供且后端可播的 HLS/HTTP-FLV 等组合；协议、容器、codec、线路是不同维度。M0 同时验证 HLS 与 HTTP-FLV，正式默认选通过验证且稳定的线路组合。
 
+2026-10-30 普通／全屏统一直播选择器，可选择实际返回的协议／格式／编码和流内 CDN，并保存组合偏好；自动模式保留 AVC/fMP4 HLS 优先，缺少偏好时回退，不根据平台名称宣称解码支持。点播另识别杜比视界并按音质偏好选择 AAC／FLAC／杜比音轨；行为与逐平台验收见[直播流与点播音质偏好](validation/live-stream-audio-preferences-2026-10-30.md)。
+
 直播不复用点播的续播位置、完播和分 P 逻辑；默认不可 seek，除非服务端明确提供回看窗口。重连后追直播边缘，不 seek 到断线前的时间。缓冲长度作为播放策略配置，先保证稳定，再测延迟。
 
 `LiveChatSession` 的状态：Idle → FetchingConnectionInfo → Connecting → Authenticating → Connected → Backoff / Offline / Closed。

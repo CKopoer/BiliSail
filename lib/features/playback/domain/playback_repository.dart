@@ -4,9 +4,11 @@ import '../../../domain/video_codec.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/audio_normalization.dart';
 import 'playback_timeline.dart';
+import '../../../domain/live_stream_preference.dart';
 
 export '../../../domain/video_codec.dart';
 export 'playback_timeline.dart';
+export '../../../domain/live_stream_preference.dart';
 
 final class PlaybackTrack {
   const PlaybackTrack({
@@ -36,6 +38,8 @@ final class PlaybackMedia {
     this.voices = const [],
     this.voice = const PlaybackVoice.original(),
     this.loudness,
+    this.liveStreams = const [],
+    this.liveStream,
   });
   final PlaybackTrack video;
   final PlaybackTrack? audio;
@@ -48,6 +52,21 @@ final class PlaybackMedia {
   final List<PlaybackVoice> voices;
   final PlaybackVoice voice;
   final AudioLoudness? loudness;
+  final List<LivePlaybackStream> liveStreams;
+  final LiveStreamPreference? liveStream;
+}
+
+final class LivePlaybackStream {
+  const LivePlaybackStream({
+    required this.preference,
+    required this.urls,
+    required this.quality,
+    required this.qualities,
+  });
+  final LiveStreamPreference preference;
+  final List<Uri> urls;
+  final int quality;
+  final List<int> qualities;
 }
 
 final class PlaybackVoice {

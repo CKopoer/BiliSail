@@ -16,6 +16,25 @@ final class _Transport implements ApiTransport {
     required Duration timeout,
     ApiCancellation? cancellation,
   }) async {
+    if (uri.path == '/x/web-interface/nav') {
+      return ApiHttpResponse(
+        200,
+        Uint8List.fromList(
+          utf8.encode(
+            jsonEncode({
+              'code': 0,
+              'data': {
+                'wbi_img': {
+                  'img_url': 'https://i0.hdslb.com/bfs/wbi/${'a' * 32}.png',
+                  'sub_url': 'https://i0.hdslb.com/bfs/wbi/${'b' * 32}.png',
+                },
+              },
+            }),
+          ),
+        ),
+        const {},
+      );
+    }
     requests.add(uri);
     return ApiHttpResponse(
       200,
@@ -320,6 +339,16 @@ void main() {
     ).getPlayInfo('6', qn: 0);
     expect(play.roomId, '7734200');
     expect(transport.requests.single.queryParameters['qn'], '0');
+    final query = transport.requests.single.queryParameters;
+    expect(query['w_rid'], isNotEmpty);
+    expect(query['wts'], isNotEmpty);
+    expect(query['codec'], '0,1,2');
+    expect(query['protocol'], '0,1');
+    expect(query['format'], '0,1,2');
+    expect(query['ptype'], '8');
+    expect(query['dolby'], '5');
+    expect(query['panorama'], '1');
+    expect(query['web_location'], '444.8');
     expect(play.streams.single.protocol, 'http_stream');
     expect(play.streams.single.qualities, [400, 250]);
     expect(play.streams.single.format, 'flv');

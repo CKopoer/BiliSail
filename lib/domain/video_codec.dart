@@ -2,10 +2,14 @@
 enum VideoCodecPreference {
   h264,
   hevc,
-  av1;
+  av1,
+  dolbyVision;
 
   static VideoCodecPreference? fromCodec(String codec) {
     final value = codec.toLowerCase();
+    if (value.startsWith('dvh1') || value.startsWith('dvhe')) {
+      return dolbyVision;
+    }
     if (value.startsWith('avc1') ||
         value.startsWith('avc3') ||
         value == 'h264' ||

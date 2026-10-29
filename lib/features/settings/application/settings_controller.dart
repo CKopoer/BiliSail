@@ -115,6 +115,10 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(preferredQuality: value));
   Future<void> setPreferredLiveQuality(int value) =>
       update((current) => current.copyWith(preferredLiveQuality: value));
+  Future<void> setLiveStreamPreference(LiveStreamPreference value) =>
+      update((current) => current.copyWith(liveStreamPreference: value));
+  Future<void> setPreferredAudioQuality(AudioQualityPreference value) =>
+      update((current) => current.copyWith(preferredAudioQuality: value));
   Future<void> setPreferredVideoCodec(VideoCodecPreference value) =>
       update((current) => current.copyWith(preferredVideoCodec: value));
   Future<void> setMediaCdn(MediaCdnPreference value) =>

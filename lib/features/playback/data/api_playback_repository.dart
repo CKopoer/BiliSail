@@ -8,6 +8,7 @@ import '../../../core/storage/image_byte_cache.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/media_cdn.dart';
+import '../../../domain/audio_quality.dart';
 import '../../../domain/app_failure.dart';
 import '../domain/playback_repository.dart';
 import '../domain/high_energy_trend.dart';
@@ -25,11 +26,13 @@ class ApiPlaybackRepository
     this.api,
     this.requests, {
     this.cdnPreference,
+    this.audioQualityPreference,
     this.imageDimensions,
   });
   final BiliApiClient api;
   final ApiRequests requests;
   final Future<MediaCdnPreference> Function()? cdnPreference;
+  final Future<AudioQualityPreference> Function()? audioQualityPreference;
   final Future<({int width, int height})> Function(Uri)? imageDimensions;
   late final _highEnergyCache = HighEnergyCache(requests);
 
@@ -250,6 +253,8 @@ class ApiPlaybackRepository
     }
     return selectDashMedia(
       info,
+      audioQuality:
+          await audioQualityPreference?.call() ?? AudioQualityPreference.aac192,
       quality: quality,
       preferredCodec: preferredCodec,
       cdnPreference:

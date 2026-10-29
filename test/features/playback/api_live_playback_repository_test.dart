@@ -11,6 +11,60 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final (protocol, format, codec) in [
+    ('http_stream', 'flv', 'avc'),
+    ('http_hls', 'fmp4', 'hevc'),
+    ('http_hls', 'ts', 'av1'),
+  ]) {
+    test(
+      'selects and retains live combination $protocol/$format/$codec',
+      () async {
+        final requests = ApiRequests();
+        final api = BiliApiClient(
+          transport: _Transport(),
+          sessionProvider: requests,
+        );
+        addTearDown(api.close);
+        final repository = ApiContentPlaybackRepository(
+          PgcClient(api),
+          LiveClient(api),
+          requests,
+        );
+        final preference = LiveStreamPreference(
+          protocol: protocol,
+          format: format,
+          codec: codec,
+        );
+        final media = await repository.resolveLive(
+          const LivePlaybackTarget('8'),
+          quality: 400,
+          preference: preference,
+          cancellation: RequestCancellation(),
+        );
+        expect(media.liveStream, preference);
+        expect(media.video.codec, codec);
+        expect(media.liveStreams.length, 4);
+        expect(
+          media.kind,
+          format == 'flv'
+              ? PlaybackMediaKind.liveFlv
+              : PlaybackMediaKind.liveHls,
+        );
+        final fallback = await repository.resolveLive(
+          const LivePlaybackTarget('8'),
+          quality: 400,
+          preference: const LiveStreamPreference(
+            protocol: 'http_stream',
+            format: 'flv',
+            codec: 'hevc',
+          ),
+          cancellation: RequestCancellation(),
+        );
+        expect(fallback.liveStream?.format, 'fmp4');
+        expect(fallback.liveStream?.codec, 'avc');
+      },
+    );
+  }
   for (final quality in [0, 400, 10000]) {
     test(
       'live resolution keeps stream-specific qualities and server line order: qn=$quality',
@@ -62,6 +116,25 @@ final class _Transport implements ApiTransport {
     required Duration timeout,
     ApiCancellation? cancellation,
   }) async {
+    if (uri.path == '/x/web-interface/nav') {
+      return ApiHttpResponse(
+        200,
+        Uint8List.fromList(
+          utf8.encode(
+            jsonEncode({
+              'code': 0,
+              'data': {
+                'wbi_img': {
+                  'img_url': 'https://i0.hdslb.com/bfs/wbi/${'a' * 32}.png',
+                  'sub_url': 'https://i0.hdslb.com/bfs/wbi/${'b' * 32}.png',
+                },
+              },
+            }),
+          ),
+        ),
+        const {},
+      );
+    }
     request = uri;
     final requested = int.parse(uri.queryParameters['qn'] ?? '0');
     Map<String, Object?> codec(String name, List<int> qualities) => {
@@ -106,6 +179,12 @@ final class _Transport implements ApiTransport {
             {
               'protocol_name': 'http_hls',
               'format': [
+                {
+                  'format_name': 'ts',
+                  'codec': [
+                    codec('av1', [10000, 400, 250]),
+                  ],
+                },
                 {
                   'format_name': 'fmp4',
                   'codec': [

@@ -62,7 +62,7 @@ void main() {
       expect(settings.preferredLiveQuality, quality);
       expect(settings.preferredQuality, 120);
     }
-    for (final quality in [-1, 64, 112, 30000, 99999]) {
+    for (final quality in [-1, 64, 112, 99999]) {
       final settings = AppSettings(
         preferredLiveQuality: quality,
         preferredQuality: 64,

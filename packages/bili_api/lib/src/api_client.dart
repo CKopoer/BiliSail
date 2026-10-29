@@ -11,6 +11,7 @@ import 'models.dart';
 import 'models/popular_models.dart';
 import 'models/pgc_models.dart';
 import 'mappers/video_access_parser.dart';
+import 'mappers/dash_audio_parser.dart';
 import 'transport.dart';
 import 'wbi.dart';
 import 'app_profile.dart';
@@ -93,7 +94,10 @@ final class BiliApiClient {
     String endpoint, {
     ApiRequestContext? context,
   }) {
-    if (!const {'/xlive/web-room/v1/index/getDanmuInfo'}.contains(path)) {
+    if (!const {
+      '/xlive/web-room/v1/index/getDanmuInfo',
+      '/xlive/web-room/v2/index/getRoomPlayInfo',
+    }.contains(path)) {
       throw ArgumentError('Unsupported live WBI endpoint');
     }
     return _wbiJson(
@@ -1465,9 +1469,7 @@ final class BiliApiClient {
       );
     }
     final dash = _optionalMap(data['dash']);
-    if (dash == null ||
-        dash['video'] == null ||
-        !preview && dash['audio'] == null) {
+    if (dash == null || dash['video'] == null) {
       throw await _videoPlaybackFailure(bvid, context);
     }
     final videos = _list(
@@ -1476,10 +1478,7 @@ final class BiliApiClient {
     ).map((v) => _track(_map(v, 'playurl'))).toList();
     final audios = preview
         ? const <ApiMediaTrack>[]
-        : _list(dash['audio'], 'playurl')
-              .map((v) => _track(_map(v, 'playurl')))
-              .where((v) => v.codecs.toLowerCase().startsWith('mp4a'))
-              .toList();
+        : dashAudioEntries(dash, 'playurl').map(_track).toList();
     if (videos.isEmpty || !preview && audios.isEmpty) {
       throw await _videoPlaybackFailure(bvid, context);
     }

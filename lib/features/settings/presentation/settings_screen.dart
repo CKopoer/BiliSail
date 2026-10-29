@@ -489,6 +489,23 @@ final class _SettingsCategoryPageState
                             AppSettings.liveQualityOptions,
                             controller.setPreferredLiveQuality,
                           ),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('直播流偏好'),
+                            subtitle: Text(
+                              '${s.liveStreamPreference.label}；可在直播播放页选择并记住组合',
+                            ),
+                            trailing: s.liveStreamPreference.isAutomatic
+                                ? null
+                                : TextButton(
+                                    onPressed: () => _save(
+                                      () => controller.setLiveStreamPreference(
+                                        LiveStreamPreference.automatic,
+                                      ),
+                                    ),
+                                    child: const Text('恢复自动'),
+                                  ),
+                          ),
                           const Text(
                             '用于新打开的直播间；自动由服务端选择清晰度，权限和直播源限制仍适用。当前直播间的手动选择保持不变。',
                             style: TextStyle(fontSize: 12),
@@ -540,9 +557,10 @@ final class _SettingsCategoryPageState
                             VideoCodecPreference.h264: 'H.264 / AVC（默认）',
                             VideoCodecPreference.hevc: 'H.265 / HEVC',
                             VideoCodecPreference.av1: 'AV1',
+                            VideoCodecPreference.dolbyVision: '杜比视界 / dvh1',
                           }, controller.setPreferredVideoCodec),
                           const Text(
-                            '用于视频和影视：先选择可用清晰度，再优先使用所选编码。片源缺少首选编码时回退到其他可用编码；直播继续使用 H.264 线路。',
+                            '用于视频和影视：先选择可用清晰度，再选择编码。直播在播放页独立选择协议、格式与编码；杜比实际显示效果取决于设备和输出。',
                             style: TextStyle(fontSize: 12),
                           ),
                           _choices('视频解码方式', s.videoDecoding, const {
@@ -555,6 +573,13 @@ final class _SettingsCategoryPageState
                           ),
                           const SizedBox(height: 8),
                           const Text('下次打开或重新加载播放源时生效。'),
+                          _choices('优先音质', s.preferredAudioQuality, {
+                            for (final quality in AudioQualityPreference.values)
+                              quality: quality.label,
+                          }, controller.setPreferredAudioQuality),
+                          const Text(
+                            '适用于视频和影视；优先所选音质，缺少时回退到普通 AAC。下次加载播放源时生效。',
+                          ),
                         ]),
                       if (widget.category == SettingsCategory.danmaku)
                         _section('弹幕', [

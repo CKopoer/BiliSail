@@ -288,9 +288,34 @@ final class OfflinePlaybackRepository
   }
 }
 
-final class _OfflineContentRepository implements ContentPlaybackRepository {
+final class _OfflineContentRepository
+    implements ContentPlaybackRepository, LiveStreamPlaybackRepository {
   const _OfflineContentRepository(this.owner);
   final OfflinePlaybackRepository owner;
+  @override
+  Future<PlaybackMedia> resolveLive(
+    LivePlaybackTarget target, {
+    required int quality,
+    required LiveStreamPreference preference,
+    required RequestCancellation cancellation,
+  }) {
+    owner._beginSource();
+    final resolver = owner.networkContent;
+    if (resolver is LiveStreamPlaybackRepository) {
+      return (resolver as LiveStreamPlaybackRepository).resolveLive(
+        target,
+        quality: quality,
+        preference: preference,
+        cancellation: cancellation,
+      );
+    }
+    return resolver.resolve(
+      target,
+      quality: quality,
+      cancellation: cancellation,
+    );
+  }
+
   @override
   Future<PlaybackMedia> resolve(
     ContentPlaybackTarget target, {

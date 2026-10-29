@@ -27,6 +27,62 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('live stream preference follows room changes, switches and navigation checkpoints', () async {
+    const saved = LiveStreamPreference(
+      protocol: 'http_hls',
+      format: 'ts',
+      codec: 'hevc',
+    );
+    const manual = LiveStreamPreference(
+      protocol: 'http_stream',
+      format: 'flv',
+      codec: 'avc',
+    );
+    final engine = _FakeEngine();
+    final content = _PreferredLiveRepository();
+    final session = PlaybackSession(
+      engine: engine,
+      repository: _FakeRepository(autoResolve: true),
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+      contentRepository: content,
+    );
+    addTearDown(session.close);
+    session.configureSettings(AppSettings(liveStreamPreference: saved));
+    final live = Object(), video = Object();
+    session.attach(live);
+    session.attach(video);
+    await session.activate(
+      live,
+      null,
+      null,
+      target: const LivePlaybackTarget('42'),
+    );
+    expect(content.preferences.last, saved);
+    await session.pause();
+    await session.setVolume(31);
+    await session.changeLiveStream(manual, quality: 400, line: 0);
+    expect(content.preferences.last, manual);
+    expect(engine.currentSnapshot.desiredPlaying, isFalse);
+    expect(engine.currentSnapshot.volume, 31);
+    await session.changeQuality(10000);
+    expect(content.preferences.last, manual);
+    await session.activate(video, _detail('one'), _part('one'));
+    await session.activate(
+      live,
+      null,
+      null,
+      target: const LivePlaybackTarget('42'),
+    );
+    expect(content.preferences.last, manual);
+    await session.activate(
+      live,
+      null,
+      null,
+      target: const LivePlaybackTarget('99'),
+    );
+    expect(content.preferences.last, saved);
+  });
 
   group('interrupted DASH video recovery', () {
     late _FakeEngine engine;
@@ -5763,6 +5819,21 @@ final class _FakeSponsor implements SponsorRepository {
     pending[cid] = result;
     requestedCategories[cid] = List.of(categories);
     return result.future;
+  }
+}
+
+final class _PreferredLiveRepository extends _FakeContentRepository
+    implements LiveStreamPlaybackRepository {
+  final preferences = <LiveStreamPreference>[];
+  @override
+  Future<PlaybackMedia> resolveLive(
+    LivePlaybackTarget target, {
+    required int quality,
+    required LiveStreamPreference preference,
+    required RequestCancellation cancellation,
+  }) {
+    preferences.add(preference);
+    return resolve(target, quality: quality, cancellation: cancellation);
   }
 }
 

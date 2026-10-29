@@ -11,6 +11,10 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'HLS fixture generation failed' }
   & ffmpeg -hide_banner -loglevel error -y -i test/fixtures/media/video.mp4 -i test/fixtures/media/audio.m4a -c copy -f flv (Join-Path $mediaDirectory 'live.flv')
   if ($LASTEXITCODE -ne 0) { throw 'FLV fixture generation failed' }
+  & ffmpeg -hide_banner -loglevel error -y -i test/fixtures/media/audio.m4a -c:a flac -strict -2 -f mp4 (Join-Path $mediaDirectory 'audio-flac.m4a')
+  if ($LASTEXITCODE -ne 0) { throw 'FLAC fixture generation failed' }
+  & ffmpeg -hide_banner -loglevel error -y -i test/fixtures/media/audio.m4a -c:a eac3 -b:a 192k -f mp4 (Join-Path $mediaDirectory 'audio-dolby.m4a')
+  if ($LASTEXITCODE -ne 0) { throw 'E-AC-3 fixture generation failed' }
   $env:BILI_CONTENT_MEDIA_DIR = $mediaDirectory
   $arguments = @('test', 'integration_test/windows_content_playback_test.dart', '-d', 'windows')
   if ($Online) { $arguments += '--dart-define=BILI_CONTENT_ONLINE=true' }
@@ -26,6 +30,8 @@ try {
   }
   & flutter @arguments
   if ($LASTEXITCODE -ne 0) { throw 'Windows content playback validation failed' }
+  & flutter test integration_test/windows_audio_quality_test.dart -d windows
+  if ($LASTEXITCODE -ne 0) { throw 'Windows audio quality validation failed' }
 } finally {
   Remove-Item Env:BILI_CONTENT_MEDIA_DIR -ErrorAction SilentlyContinue
   Pop-Location
