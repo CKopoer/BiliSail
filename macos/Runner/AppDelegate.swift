@@ -8,9 +8,12 @@ class AppDelegate: FlutterAppDelegate {
   private let termination = ApplicationTerminationCoordinator()
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
+    ReleaseSmokeNativeStage.application.emit()
     let application = MacOSApplication()
     self.application = application
+    ReleaseSmokeNativeStage.engineRun.emit()
     applicationStarted = application.start()
+    ReleaseSmokeNativeStage.engineRunning.emit()
     if !applicationStarted { NSApp.terminate(nil) }
   }
 
@@ -34,6 +37,21 @@ class AppDelegate: FlutterAppDelegate {
 
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     return true
+  }
+}
+
+// Fixed markers only; never emit process arguments, paths or plugin data.
+enum ReleaseSmokeNativeStage: String {
+  case application
+  case engineCreate = "engine-create"
+  case pluginsRegister = "plugins-register"
+  case pluginsReady = "plugins-ready"
+  case engineRun = "engine-run"
+  case engineRunning = "engine-running"
+
+  func emit() {
+    guard ProcessInfo.processInfo.arguments.contains("--bilisail-release-smoke") else { return }
+    FileHandle.standardError.write(Data("BILISAIL_NATIVE_STAGE:\(rawValue)\n".utf8))
   }
 }
 

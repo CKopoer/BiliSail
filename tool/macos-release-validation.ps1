@@ -44,7 +44,8 @@ function Confirm-MacOSSmokeResult([int]$ExitCode, [string]$Output, [string]$Phas
 function Get-MacOSSmokeDiagnosticLines([string]$Text) {
   foreach ($line in ($Text -split '\r?\n')) {
     if ($line -cmatch '^BILISAIL_FOCUS_STAGE:(foreground|prepare|present|primary|space|passed)$' -or
-        $line -cmatch '^BILISAIL_RELEASE_STAGE:(window-create|window-ready|dependencies|dependencies-ready|first-frame-wait|first-frame|playback-windows|credentials|closed)$' -or
+        $line -cmatch '^BILISAIL_NATIVE_STAGE:(application|engine-create|plugins-register|plugins-ready|engine-run|engine-running)$' -or
+        $line -cmatch '^BILISAIL_RELEASE_STAGE:(dart-entry|window-create|window-ready|dependencies|dependencies-ready|first-frame-wait|first-frame|playback-windows|credentials|closed)$' -or
         $line -cmatch '^BILISAIL_CREDENTIAL_STAGE:(empty|write-first|read-first|write-second|read-second|read-restart|delete|deleted|cleanup-bootstrap|cleanup-recommendation)$' -or
         $line -cmatch '^BILISAIL_RELEASE_SMOKE_FAILED:(startup|write|read-delete|verify-deleted|cleanup)$') {
       $Matches[0]
@@ -57,47 +58,111 @@ function Get-MacOSSmokeDiagnosticLines([string]$Text) {
 function Invoke-MacOSReleaseSmokePhase {
   param(
     [string]$Executable, [string]$Phase, [string]$RunId, [string]$WorkingDirectory,
-    [ValidateRange(1, 60)][int]$TimeoutSeconds = 60
+    [ValidateRange(1, 60)][int]$TimeoutSeconds = 60,
+    [ValidateRange(1, 300)][int]$LaunchTimeoutSeconds = 180,
+    # Offline tests run the same process supervisor against a pwsh fixture.
+    [string[]]$LauncherArguments = @()
   )
   $start = [System.Diagnostics.ProcessStartInfo]::new()
   $start.FileName = $Executable
   $start.UseShellExecute = $false
   $start.RedirectStandardOutput = $true
   $start.RedirectStandardError = $true
-  foreach ($argument in @('--bilisail-release-smoke', $Phase, $RunId)) { $start.ArgumentList.Add($argument) }
+  foreach ($argument in @($LauncherArguments) + @('--bilisail-release-smoke', $Phase, $RunId)) { $start.ArgumentList.Add($argument) }
   $process = [System.Diagnostics.Process]::new()
   $process.StartInfo = $start
   $started = $false
+  $clock = [System.Diagnostics.Stopwatch]::StartNew()
   try {
     $started = $process.Start()
     if (!$started) { throw 'Could not launch the macOS Release application.' }
-    # Drain both pipes while waiting so native output cannot deadlock the probe.
-    $outputTask = $process.StandardOutput.ReadToEndAsync()
-    $errorTask = $process.StandardError.ReadToEndAsync()
-    $timedOut = !$process.WaitForExit($TimeoutSeconds * 1000)
-    if ($timedOut) { $process.Kill(); $process.WaitForExit() }
-    $output = $outputTask.GetAwaiter().GetResult()
-    $errors = $errorTask.GetAwaiter().GetResult()
-    # Export only the fixed smoke stages and numeric native focus state.
-    # Discard responder names and every other native/network output field.
-    $diagnostics = @(Get-MacOSSmokeDiagnosticLines ($output + "`n" + $errors))
-    $diagnostics | ForEach-Object { Write-Host $_ }
-    # Never persist raw native/network output, which can contain URL queries.
+    $processStartedMilliseconds = $clock.ElapsedMilliseconds
+    Write-Host "macOS Release smoke phase '$Phase' launched."
+    # Read both pipes continuously. Discard raw lines immediately, retaining
+    # only exact acknowledgements and fixed diagnostic stages with timings.
+    $pipes = @(
+      @{ reader = $process.StandardOutput; task = $process.StandardOutput.ReadLineAsync(); closed = $false; stderr = $false }
+      @{ reader = $process.StandardError; task = $process.StandardError.ReadLineAsync(); closed = $false; stderr = $true }
+    )
+    $marker = "BILISAIL_RELEASE_SMOKE_OK:${Phase}:$RunId"
+    $acknowledged = $false
+    $stderrPresent = $false
+    $dartEntryMilliseconds = $null
+    $lastStage = $null
+    $stages = [System.Collections.Generic.List[object]]::new()
+    $timedOut = $false
+    $timeoutKind = $null
+    $exitedAt = $null
+    while ($true) {
+      foreach ($pipe in $pipes) {
+        # Bound each pass so a busy pipe cannot starve the other or the timer.
+        for ($lineIndex = 0; $lineIndex -lt 128 -and !$pipe.closed -and $pipe.task.IsCompleted; $lineIndex++) {
+          $line = $pipe.task.GetAwaiter().GetResult()
+          if ($null -eq $line) { $pipe.closed = $true; break }
+          if ($pipe.stderr -and ![string]::IsNullOrWhiteSpace($line)) { $stderrPresent = $true }
+          if (!$pipe.stderr -and $line -ceq $marker) { $acknowledged = $true }
+          foreach ($diagnostic in @(Get-MacOSSmokeDiagnosticLines $line)) {
+            if ($diagnostic -ceq 'BILISAIL_RELEASE_STAGE:dart-entry' -and $null -eq $dartEntryMilliseconds) {
+              $dartEntryMilliseconds = $clock.ElapsedMilliseconds
+            }
+            Write-Host "macOS smoke '$Phase' +$($clock.ElapsedMilliseconds)ms $diagnostic"
+            if ($diagnostic -cmatch '^BILISAIL_(NATIVE|RELEASE|CREDENTIAL)_STAGE:') {
+              $lastStage = $diagnostic
+              if ($stages.Count -lt 128) {
+                $stages.Add([ordered]@{ stage = $diagnostic; elapsedMilliseconds = $clock.ElapsedMilliseconds })
+              }
+            }
+          }
+          $pipe.task = $pipe.reader.ReadLineAsync()
+        }
+      }
+      if ($process.HasExited) {
+        if ($null -eq $exitedAt) { $exitedAt = $clock.ElapsedMilliseconds }
+        if ($pipes[0].closed -and $pipes[1].closed) { break }
+        # Descendants must not hold inherited pipes open indefinitely either.
+        if ($clock.ElapsedMilliseconds - $exitedAt -ge 5000) { break }
+      } elseif (!$timedOut) {
+        if ($null -eq $dartEntryMilliseconds -and $clock.ElapsedMilliseconds -ge $LaunchTimeoutSeconds * 1000) {
+          $timeoutKind = 'launch'
+        } elseif ($null -ne $dartEntryMilliseconds -and $clock.ElapsedMilliseconds - $dartEntryMilliseconds -ge $TimeoutSeconds * 1000) {
+          $timeoutKind = 'probe'
+        }
+        if ($null -ne $timeoutKind) {
+          $timedOut = $true
+          $process.Kill()
+          if (!$process.WaitForExit(5000)) { throw 'macOS smoke child did not stop after termination.' }
+        }
+      }
+      [System.Threading.Thread]::Sleep(10)
+    }
+    $outputDrained = $pipes[0].closed -and $pipes[1].closed
     $status = [ordered]@{
       phase = $Phase
       timedOut = $timedOut
+      timeoutKind = $timeoutKind
       exitCode = $process.ExitCode
-      acknowledged = "BILISAIL_RELEASE_SMOKE_OK:${Phase}:$RunId" -cin @($output -split '\r?\n')
-      stderrPresent = ![string]::IsNullOrWhiteSpace($errors)
-      lastStage = $diagnostics | Where-Object { $_ -cmatch '^BILISAIL_(RELEASE|CREDENTIAL)_STAGE:' } | Select-Object -Last 1
+      acknowledged = $acknowledged
+      stderrPresent = $stderrPresent
+      outputDrained = $outputDrained
+      lastStage = $lastStage
+      processStartMilliseconds = $processStartedMilliseconds
+      launchMilliseconds = $dartEntryMilliseconds
+      probeMilliseconds = if ($null -ne $dartEntryMilliseconds) { $clock.ElapsedMilliseconds - $dartEntryMilliseconds } else { $null }
+      launchTimeoutSeconds = $LaunchTimeoutSeconds
+      probeTimeoutSeconds = $TimeoutSeconds
+      elapsedMilliseconds = $clock.ElapsedMilliseconds
+      stages = $stages.ToArray()
     }
     $status | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkingDirectory "$Phase.result.json") -Encoding utf8
-    if ($timedOut) { throw "macOS Release smoke phase '$Phase' timed out." }
-    Confirm-MacOSSmokeResult $process.ExitCode $output $Phase $RunId
+    if ($timedOut) { throw "macOS Release smoke phase '$Phase' timed out during $timeoutKind (last stage: $lastStage)." }
+    if (!$outputDrained) { throw "macOS Release smoke phase '$Phase' did not close its output pipes." }
+    if ($null -eq $dartEntryMilliseconds) { throw "macOS Release smoke phase '$Phase' exited before Dart entry." }
+    $confirmation = if ($acknowledged) { $marker } else { '' }
+    Confirm-MacOSSmokeResult $process.ExitCode $confirmation $Phase $RunId
     Write-Host "macOS Release smoke phase '$Phase' passed."
   } finally {
     # Only stop the exact child process created above, never an existing app.
-    if ($started -and !$process.HasExited) { $process.Kill(); $process.WaitForExit() }
+    if ($started -and !$process.HasExited) { $process.Kill(); [void]$process.WaitForExit(5000) }
     $process.Dispose()
   }
 }

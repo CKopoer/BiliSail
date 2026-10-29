@@ -18,6 +18,7 @@ final class MacOSApplication {
     ProcessInfo.processInfo.arguments.contains("--bilisail-release-smoke")
 
   init() {
+    ReleaseSmokeNativeStage.engineCreate.emit()
     engine = FlutterEngine(name: "BiliSail", project: nil, allowHeadlessExecution: true)
     applicationWindowChannel = FlutterMethodChannel(
       name: "bilisail/application_window", binaryMessenger: engine.binaryMessenger
@@ -110,7 +111,9 @@ final class MacOSApplication {
     // These plugins use the messenger/texture registry headlessly. Main-window
     // operations go through the per-view WindowService, never window_manager's
     // legacy registrar.view (which only looks up implicit view 0).
+    ReleaseSmokeNativeStage.pluginsRegister.emit()
     RegisterGeneratedPlugins(registry: engine)
+    ReleaseSmokeNativeStage.pluginsReady.emit()
     passportCookies = PassportWebCookies(messenger: engine.binaryMessenger) {
       NSApp.windows.compactMap { $0.contentView }
     }

@@ -14,6 +14,10 @@ import 'core/platform/macos_application_window.dart';
 import 'core/storage/app_database.dart';
 
 Future<void> main(List<String> arguments) async {
+  if (Platform.isMacOS && arguments.contains(ReleaseSmokeRequest.flag)) {
+    // The launcher times native loading separately from Dart probe execution.
+    stderr.writeln('BILISAIL_RELEASE_STAGE:dart-entry');
+  }
   BiliWidgetsBinding.ensureInitialized();
   WindowInputFocus.instance.initialize();
   ReleaseSmokeRequest? smoke;

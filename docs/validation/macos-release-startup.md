@@ -27,13 +27,13 @@ macOS 使用传统系统 Keychain，不降级为明文文件或数据库。Andro
 5. 再次启动执行 `verify-deleted`，核对三个 key 均不存在。启动、写入和读取阶段使用同一 UUID 前缀，避免“重启后重新写值”掩盖持久化失败。
 6. 再次校验 bundle 签名与最终权限，通过后才创建并校验 DMG，最后生成 metadata 和 SHA-256。`macosValidation` 只记录成功状态。
 
-每个子进程最多运行 60 秒，必须退出码为 0 且返回匹配阶段和 UUID 的完整确认行；只看到进程启动、退出码 0 或磁盘文件存在均不算通过。每个凭据步骤另有 10 秒上限，原生调用挂起时退出失败，不重放结果不明的写入。失败时终止本次创建的子进程，并用相同 bundle 的 `cleanup` 阶段删除本次前缀（含 bootstrap／recommendation 辅助前缀）；清理失败仍保持构建失败并明确警告，不自动重试真实账号写操作。
+每个子进程分别限制原生启动与 Dart 探测执行：从创建进程到收到第一条 `dart-entry` 最多 180 秒；收到该标记后最多再运行 60 秒，后续重复标记不能重置时限。必须退出码为 0、确认到达 Dart 入口，且返回匹配阶段和 UUID 的完整 stdout 确认行；只看到进程启动、退出码 0 或磁盘文件存在均不算通过。每个凭据步骤另有 10 秒上限，原生调用挂起时退出失败，不重放结果不明的写入。失败时终止本次创建的子进程，并用相同 bundle 的 `cleanup` 阶段删除本次前缀（含 bootstrap／recommendation 辅助前缀）；清理失败仍保持构建失败并明确警告，不自动重试真实账号写操作。进程终止和输出排空各有独立的 5 秒上限，不能在超时后的清理中无限等待。
 
 [Dart 探测逻辑](../../lib/app/release_smoke.dart) 只接受显式 `--bilisail-release-smoke <phase> <32位UUID>`，由 [正常入口](../../lib/main.dart) 在 macOS 路由。Flutter macOS 默认将原生进程参数传给 Dart 入口，见 [FlutterDartProject](https://api.flutter.dev/macos-embedder/_flutter_dart_project_8h_source.html)。普通启动不启用探测。`startup` 注入内存 SQLite、独立的空 bootstrap 会话凭据和 recommendation 旧 App 凭据前缀，不恢复真实账号、不修改用户数据库；网络页面仍可请求公开内容，网络成功不是该探测的验收条件。
 
 测试 key 为 `bilisail.release_smoke.v1.<UUID>.active/a/b`，只保存合成字符串；不调用 `deleteAll`，不读取正式登录 key。最终权限和脱敏的阶段／退出码／确认状态按目标保存在 `artifacts/macos-arm64/validation/` 或 `artifacts/macos-x64/validation/`，不保存原生／网络原始输出。2026-10-29 起失败任务只上传脱敏的 `*.result.json`，不上传该目录的其他文件。metadata 仅含通过状态，不含真实凭据、测试值或 Keychain 内容。
 
-Intel CI 首次执行启动探测时曾达到 60 秒上限。固定 SDK 的普通窗口构造不会激活应用，而原探测在首帧完成后才激活；显式 smoke 现在先激活主窗口再等待首帧，避免后台显示前提造成的等待环。超时仍然失败，停止本次子进程并排空输出后，只导出固定启动阶段、数字焦点状态和脱敏 JSON，便于区分依赖初始化、首帧、播放窗及清理阶段。普通启动不启用这些探测日志。
+Intel CI 首次执行启动探测时曾达到原有 60 秒上限。固定 SDK 的普通窗口构造不会激活应用，而原探测在首帧完成后才激活；显式 smoke 现在先激活主窗口再等待首帧，避免后台显示前提造成的等待环。探测监督脚本实时排空两路输出，只导出固定启动阶段、数字焦点状态和脱敏 JSON；不保存原生／网络原始行。普通启动不启用这些探测日志。
 
 ## CI #222：凭据探测隔离（2026-10-29）
 
@@ -44,6 +44,18 @@ Intel CI 首次执行启动探测时曾达到 60 秒上限。固定 SDK 的普�
 修复将 `write`／`read-delete`／`verify-deleted`／`cleanup` 提前到业务依赖和窗口创建之前，仍使用待打包 bundle 的真实插件、默认 Keychain 选项及原双 slot 协议。`startup` 继续执行完整应用／多窗口门槛，并通过组合根为推荐凭据注入本次 UUID 前缀。新增固定凭据步骤标记及 10 秒步骤超时；打包脚本只接受白名单标记，将最后一步保存到既有 `*.result.json` 的 `lastStage`，不记录 key、值、异常详情或原始输出。原 60 秒进程上限、签名／权限校验、跨进程读取和失败阻断均保留。
 
 本轮 Windows / Flutter 3.47.6 的 9 项 Dart 探测回归和 PowerShell 权限／确认行／脱敏检查通过，覆盖真实游客清理路径保留正式凭据、挂起写入超时后不重放、不执行后续步骤，以及辅助前缀清理。`tool/check.ps1 -SkipPub` 完整通过格式、静态分析、打包边界检查及 4080 项测试（根应用 3369、API 492、播放器 96、弹幕 118、封装 5）；13 项 Windows 符号链接用例因权限不足跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。五份锁文件未变化；两份 PowerShell 脚本解析、11 个本地文档链接和 `git diff --check` 通过。未发现可连接的调试应用，未执行热重载；没有构建、安装或实机操作。macOS x64 的修复结果须由后续 CI 实际执行确认；本机不能复现或证明系统 Keychain 授权行为。
+
+## CI #223：区分原生启动与探测执行（2026-10-29）
+
+[后续失败任务](https://github.com/CKopoer/BiliSail/actions/runs/40841368541/job/123341427493) 对应隔离修复提交 `aa4f310c42473d145d2b524518e5ebb04f8aa998`。本次 x64 的完整 `startup`、`write`、跨进程 `read-delete` 均通过，`verify-deleted` 超时；其诊断文件明确记录 `stderrPresent=false`、`lastStage=null`、退出码 137（监督脚本终止），没有进入第一步 `deleted` 的证据，随后的同 bundle `cleanup` 也通过。因此上轮隔离缺口不能解释全部失败，本轮不能再把问题归为已确认的 Keychain 读写卡死。
+
+旧监督脚本只给整个进程 60 秒，且退出后才打印汇总输出，无法区分原生装载／插件初始化、进入 Dart 和执行凭据调用的耗时。同次成功的 `write` 进程在前一阶段通过约 59 秒后才汇总完成，说明这个统一限额缺少可靠的执行阶段边界；日志仍不能确定无输出的原生等待发生在加载器、Cocoa、插件还是 Dart engine 内。
+
+本次在原生 application／engine／插件注册和 Dart 入口添加固定标记。监督脚本同时逐行读取 stdout／stderr，在收到第一条 `dart-entry` 前使用 180 秒启动限额，再单独执行原有 60 秒探测限额；凭据步骤仍限制 10 秒，没有自动重试或跳过。重复入口标记不会续期。实时输出附带进程阶段和单调毫秒数；`*.result.json` 只保留白名单阶段与时间、`timeoutKind=launch/probe`、进程创建／到达 Dart／探测执行耗时及有限数量的轨迹，不写原始行、路径、凭据或测试值。
+
+[真实子进程回归](../../tool/fixtures/macos-smoke-process.ps1) 由已有 PowerShell 边界检查调用，覆盖启动耗时超过执行限额仍可通过、原生启动超时、原生阶段记录、Dart 执行超时、重复入口不续期、非零退出、缺少确认、仅 stderr 确认、缺少 Dart 入口，以及两路大量输出无死锁与脱敏。此类回归验证监督脚本的计时、失败阻断和输出处理；不替代 macOS 的原生启动复验。
+
+本轮 Windows / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过格式、静态分析、打包边界及 4080 项测试（根 3369、API 492、播放器 96、弹幕 118、封装 5），13 项 Windows 符号链接和 10 项未配置 mux 原生库的用例按环境跳过。新增 10 个真实子进程场景在完整检查中及定向复验均通过；三份 PowerShell 脚本解析、12 个本地文档链接和 `git diff --check` 通过，五份锁文件未变化。没有可连接的调试应用，未热重载；Swift／真实 macOS 启动与 DMG 打包以修复提交对应的新 CI 结果为准。
 
 ## 旧数据与升级单独验收
 
