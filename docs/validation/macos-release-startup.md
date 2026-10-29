@@ -31,7 +31,9 @@ macOS 使用传统系统 Keychain，不降级为明文文件或数据库。Andro
 
 [Dart 探测逻辑](../../lib/app/release_smoke.dart) 只接受显式 `--bilisail-release-smoke <phase> <32位UUID>`，由 [正常入口](../../lib/main.dart) 在 macOS 路由。Flutter macOS 默认将原生进程参数传给 Dart 入口，见 [FlutterDartProject](https://api.flutter.dev/macos-embedder/_flutter_dart_project_8h_source.html)。普通启动不启用探测。启动过程注入内存 SQLite 和独立的空 bootstrap 凭据前缀，不恢复真实账号、不修改用户数据库；网络页面仍可请求公开内容，网络成功不是该探测的验收条件。
 
-测试 key 为 `bilisail.release_smoke.v1.<UUID>.active/a/b`，只保存合成字符串；不调用 `deleteAll`，不读取正式登录 key。最终权限和脱敏的阶段／退出码／确认状态按目标保存在 `artifacts/macos-arm64/validation/` 或 `artifacts/macos-x64/validation/`，不保存原生／网络原始输出，不上传该目录。metadata 仅含通过状态，不含真实凭据、测试值或 Keychain 内容。
+测试 key 为 `bilisail.release_smoke.v1.<UUID>.active/a/b`，只保存合成字符串；不调用 `deleteAll`，不读取正式登录 key。最终权限和脱敏的阶段／退出码／确认状态按目标保存在 `artifacts/macos-arm64/validation/` 或 `artifacts/macos-x64/validation/`，不保存原生／网络原始输出。2026-10-29 起失败任务只上传脱敏的 `*.result.json`，不上传该目录的其他文件。metadata 仅含通过状态，不含真实凭据、测试值或 Keychain 内容。
+
+Intel CI 首次执行启动探测时曾达到 60 秒上限。固定 SDK 的普通窗口构造不会激活应用，而原探测在首帧完成后才激活；显式 smoke 现在先激活主窗口再等待首帧，避免后台显示前提造成的等待环。超时仍然失败，停止本次子进程并排空输出后，只导出固定启动阶段、数字焦点状态和脱敏 JSON，便于区分依赖初始化、首帧、播放窗及清理阶段。普通启动不启用这些探测日志。
 
 ## 旧数据与升级单独验收
 

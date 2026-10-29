@@ -38,3 +38,14 @@ Assert-Rejected { Confirm-MacOSSmokeResult 0 "prefix $marker" 'write' $runId }
 Assert-Rejected { Confirm-MacOSSmokeResult 0 $marker 'read-delete' $runId }
 Assert-Rejected { Confirm-MacOSSmokeResult 0 $marker 'write' 'fedcba9876543210fedcba9876543210' }
 Write-Output 'macOS release entitlement and smoke acknowledgement checks passed (24 cases).'
+$safe = @(Get-MacOSSmokeDiagnosticLines @'
+BILISAIL_RELEASE_STAGE:first-frame-wait
+BILISAIL_FOCUS_STAGE:foreground
+BILISAIL_FOCUS_NATIVE revision=3 active=1 key=1 view=2 responder=FlutterView inView=1
+BILISAIL_RELEASE_SMOKE_FAILED:startup
+BILISAIL_RELEASE_STAGE:https://example.invalid/?token=private
+native https://example.invalid/?token=private
+'@)
+if ($safe.Count -ne 4 -or ($safe -join "`n") -match 'private|FlutterView|https:') {
+  throw 'macOS smoke diagnostics leaked non-whitelisted output.'
+}

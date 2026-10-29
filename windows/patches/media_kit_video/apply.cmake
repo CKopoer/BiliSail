@@ -50,6 +50,9 @@ function(bilisail_patch_video_sources source output)
       configure_file("${source}/${file}" "${output}/${file}" COPYONLY)
     endif()
   endforeach()
+  # The C API translation unit uses include/media_kit_video/... relative to its
+  # source directory. Preserve that public tree in a fresh build-local copy.
+  file(COPY "${source}/include" DESTINATION "${output}")
   # Copied sources keep their upstream ../common includes.
   file(COPY "${source}/../common" DESTINATION "${output}/..")
   foreach(file video_output_dispose.inc video_output_manager_dispose.inc

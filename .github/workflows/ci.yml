@@ -382,6 +382,14 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+      - name: Upload macOS smoke results
+        if: failure() && startsWith(matrix.target, 'macos-')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: BiliSail-${{ matrix.target }}-smoke-diagnostics
+          path: artifacts/${{ matrix.target }}/validation/*.result.json
+          if-no-files-found: warn
+          retention-days: 14
 
   native-mux:
     name: MP4 and MKV native regression

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bilisail/app/release_smoke.dart';
 import 'package:bilisail/core/storage/credential_store.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -10,6 +12,21 @@ ReleaseSmokeRequest request(String phase) =>
         as ReleaseSmokeRequest;
 
 void main() {
+  test('background smoke gets a first frame after window activation', () async {
+    final frame = Completer<void>();
+    var completed = false;
+    unawaited(
+      request('startup')
+          .waitForFirstFrame(
+            activate: () async => frame.complete(),
+            rasterized: () => frame.future,
+          )
+          .then((_) => completed = true),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(completed, isTrue);
+  });
+
   test(
     'macOS uses system Keychain without provisioning; other defaults stay',
     () {

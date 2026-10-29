@@ -42,6 +42,10 @@ Future<void> main(List<String> arguments) async {
     ], license.replaceAll('\u0000', ''));
   });
   MacOSApplicationWindow? applicationWindow;
+  void smokeStage(String stage) {
+    if (smoke != null) stderr.writeln('BILISAIL_RELEASE_STAGE:$stage');
+  }
+
   void present(Widget app) {
     final window = applicationWindow;
     if (window == null) {
@@ -52,14 +56,17 @@ Future<void> main(List<String> arguments) async {
   }
 
   try {
+    smokeStage('window-create');
     applicationWindow = await MacOSApplicationWindow.create();
     await applicationWindow?.prepare();
+    smokeStage('window-ready');
     if (smoke != null && smoke.phase == 'cleanup') {
       await smoke.probeCredentials();
       stdout.writeln(smoke.successMarker);
       await stdout.flush();
       exit(0);
     }
+    smokeStage('dependencies');
     final dependencies = await AppDependencies.create(
       // Smoke launches cannot restore real accounts or modify the user's DB.
       credentials: smoke == null
@@ -71,21 +78,30 @@ Future<void> main(List<String> arguments) async {
       windowOverride: applicationWindow?.service,
     );
     final app = dependencies.scope(BiliApp(dependencies: dependencies));
+    smokeStage('dependencies-ready');
     present(app);
     if (smoke != null) {
-      await WidgetsBinding.instance.waitUntilFirstFrameRasterized;
+      final mainWindow = applicationWindow;
+      if (mainWindow == null) {
+        throw StateError('macOS smoke requires an explicit main window');
+      }
+      smokeStage('first-frame-wait');
+      await smoke.waitForFirstFrame(
+        activate: mainWindow.service.activate,
+        rasterized: () => WidgetsBinding.instance.waitUntilFirstFrameRasterized,
+      );
+      smokeStage('first-frame');
       if (smoke.phase == 'startup') {
         await Future<void>.delayed(const Duration(seconds: 3));
-        final mainWindow = applicationWindow;
-        if (mainWindow == null) {
-          throw StateError('macOS startup requires an explicit main window');
-        }
         await verifyMacOSPlaybackWindows(mainWindow, app);
+        smokeStage('playback-windows');
       }
       await smoke.probeCredentials();
+      smokeStage('credentials');
       present(const SizedBox.shrink());
       await WidgetsBinding.instance.endOfFrame;
       await dependencies.close();
+      smokeStage('closed');
       if (smokeHadError) throw StateError('Release application failed');
       stdout.writeln(smoke.successMarker);
       await stdout.flush();

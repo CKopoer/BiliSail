@@ -173,6 +173,16 @@ class ReleaseSmokeRequest {
   String get successMarker => 'BILISAIL_RELEASE_SMOKE_OK:$phase:$runId';
   String get _value => 'BiliSail synthetic Keychain probe $runId';
 
+  // Direct binary launches on CI can remain in the background. Establish the
+  // foreground precondition before waiting for the compositor's first frame.
+  Future<void> waitForFirstFrame({
+    required Future<void> Function() activate,
+    required Future<void> Function() rasterized,
+  }) async {
+    await activate();
+    await rasterized();
+  }
+
   static ReleaseSmokeRequest? parse(List<String> arguments) {
     if (!arguments.contains(flag)) return null;
     if (arguments.length != 3 ||
