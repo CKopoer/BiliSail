@@ -198,6 +198,14 @@ void main() {
             ),
           );
           await _frames(tester);
+          await tester.tapAt(
+            tester.getTopLeft(
+                  find.byKey(const ValueKey('player-surface-tap-target')),
+                ) +
+                const Offset(130, 70),
+          );
+          await tester.pump(const Duration(milliseconds: 350));
+          await tester.pump(const Duration(milliseconds: 216));
           if (fullscreen) {
             await tester.tap(find.byTooltip('全屏（F）'));
             await _frames(tester);

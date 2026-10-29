@@ -98,6 +98,17 @@ void main() {
     }
   }
 
+  Future<void> revealControls(WidgetTester tester) async {
+    await tester.tapAt(
+      tester.getTopLeft(
+            find.byKey(const ValueKey('player-surface-tap-target')),
+          ) +
+          const Offset(130, 70),
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump(const Duration(milliseconds: 216));
+  }
+
   Future<void> showPlayer(
     WidgetTester tester,
     PlaybackSession session,
@@ -157,6 +168,7 @@ void main() {
       addTearDown(session.close);
       final window = _Window();
       await showPlayer(tester, session, window);
+      await revealControls(tester);
       final live = container.read(liveControllerProvider(requested).notifier);
       live.setActive(true);
       await pumpFrames(tester);
@@ -239,6 +251,7 @@ void main() {
       addTearDown(session.close);
       final window = _Window();
       await showPlayer(tester, session, window);
+      await revealControls(tester);
       final live = container.read(liveControllerProvider(requested).notifier);
       live.setActive(true);
       await pumpFrames(tester);

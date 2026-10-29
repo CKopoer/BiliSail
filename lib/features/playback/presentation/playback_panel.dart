@@ -72,7 +72,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   final _navigation = ValueNotifier<PlaybackNavigation?>(null);
   int? _handledCompletionGeneration;
   // Inline and fullscreen views are recreated, but share the page's intent.
-  final _controlsVisible = ValueNotifier(true);
+  late final ValueNotifier<bool> _controlsVisible;
   bool _fullScreen = false;
   bool _active = false;
   bool _surfaceReady = false;
@@ -99,6 +99,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   @override
   void initState() {
     super.initState();
+    _controlsVisible = ValueNotifier(
+      widget.settings.playerControlsMode != PlayerControlsMode.click,
+    );
     _settings = ValueNotifier(widget.settings);
     _session = ref.read(playbackSessionProvider)..attach(this);
     _session.snapshots.addListener(_updateFullScreenOrientation);

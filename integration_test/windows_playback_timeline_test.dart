@@ -110,6 +110,20 @@ void main() {
         );
         expect(session.error, isNull);
         await session.pause();
+        await tester.tapAt(
+          tester.getTopLeft(
+                find.byKey(const ValueKey('player-surface-tap-target')),
+              ) +
+              const Offset(130, 70),
+        );
+        await _until(
+          tester,
+          () => find
+              .byKey(const ValueKey('playback-timeline-slider'))
+              .evaluate()
+              .isNotEmpty,
+          const Duration(seconds: 5),
+        );
         final generation = engine.currentSnapshot.generation;
         final paused = engine.currentSnapshot.position;
         expect(

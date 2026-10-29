@@ -51,6 +51,81 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final mode in PlayerControlsMode.values) {
+    for (final (content, target) in <(String, ContentPlaybackTarget?)>[
+      ('video', null),
+      ('pgc', const PgcPlaybackTarget('12', cid: '123')),
+      ('live', const LivePlaybackTarget('12')),
+      ('offline', const OfflinePlaybackTarget('local-task')),
+    ]) {
+      testWidgets(
+        '${mode.name} controls start with the expected visibility for $content',
+        (tester) async {
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(
+              session,
+              _FakeWindowService(),
+              AppSettings(playerControlsMode: mode),
+              target: target,
+            ),
+          );
+          await _pumpFrames(tester);
+          final controls = find.byKey(const ValueKey('player-controls'));
+          expect(
+            controls,
+            mode == PlayerControlsMode.click ? findsNothing : findsOneWidget,
+          );
+          if (mode == PlayerControlsMode.click) {
+            final playing = engine.currentSnapshot.desiredPlaying;
+            await tester.tapAt(_surfacePoint(tester));
+            await _pumpSurfaceTap(tester);
+            expect(controls.hitTestable(), findsOneWidget);
+            expect(engine.currentSnapshot.desiredPlaying, playing);
+            await tester.tap(find.byTooltip('全屏（F）'));
+            await _pumpFrames(tester);
+            expect(controls.hitTestable(), findsOneWidget);
+            await tester.tapAt(_surfacePoint(tester));
+            await _pumpSurfaceTap(tester);
+            expect(controls, findsNothing);
+            await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+            await _pumpFrames(tester);
+            expect(controls, findsNothing);
+            expect(engine.opens, 1);
+            expect(engine.maxSurfaces, 1);
+          }
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
+  testWidgets('click controls stay hidden while preparing the video', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final session = _session(
+      _FakeEngine(),
+      repository: _FakePlaybackRepository(gate),
+    );
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(session, _FakeWindowService(), const AppSettings.defaults()),
+    );
+    await _pumpFrames(tester);
+    expect(find.text('正在准备音视频…'), findsOneWidget);
+    expect(find.byKey(const ValueKey('player-controls')), findsNothing);
+    gate.complete();
+    await _pumpFrames(tester);
+    expect(find.text('正在准备音视频…'), findsNothing);
+    expect(find.byKey(const ValueKey('player-controls')), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
   for (final fullscreen in [false, true]) {
     for (final controlsVisible in [true, false]) {
       testWidgets(
@@ -75,6 +150,7 @@ void main() {
             ),
           );
           await _pumpFrames(tester);
+          await _showControls(tester);
           if (fullscreen) {
             await tester.tap(find.byTooltip('全屏（F）'));
             await _pumpFrames(tester);
@@ -253,6 +329,7 @@ void main() {
         _app(session, window, const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       final drag = await tester.startGesture(_surfacePoint(tester));
       await drag.moveBy(const Offset(80, 0));
       await tester.pump();
@@ -372,6 +449,7 @@ void main() {
             ),
           );
           await _pumpFrames(tester);
+          await _showControls(tester);
           if (fullscreen) {
             await tester.tap(find.byTooltip('全屏（F）'));
             await _pumpFrames(tester);
@@ -445,6 +523,7 @@ void main() {
       );
       await tester.pumpWidget(app(false));
       await _pumpFrames(tester);
+      await _showControls(tester);
       final opens = engine.opens;
       for (final fullscreen in [false, true]) {
         if (fullscreen) {
@@ -497,6 +576,7 @@ void main() {
       );
       await tester.pumpWidget(app());
       await _pumpFrames(tester);
+      await _showControls(tester);
       final top = find.byKey(const ValueKey('player-control-title-layer'));
       expect(
         find.descendant(of: top, matching: find.text('测试视频')),
@@ -594,6 +674,7 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     final panel = tester.element(find.byType(PlaybackPanel));
     final playbackNavigator = Navigator.of(panel);
     final browserNavigator = Navigator.of(
@@ -650,6 +731,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       await session.selectSubtitle(0);
       await _pumpFrames(tester);
       if (fullScreen) {
@@ -709,6 +791,7 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     final opens = engine.opens;
     final inlineCompositions = composition.compositions;
     expect(inlineCompositions, greaterThan(0));
@@ -753,6 +836,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       await session.pause();
       await session.selectSubtitle(0);
       await tester.pump();
@@ -902,6 +986,7 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     await session.pause();
     await _pumpFrames(tester);
     final opens = engine.opens;
@@ -997,6 +1082,7 @@ void main() {
           ),
         );
         await _pumpFrames(tester);
+        await _showControls(tester);
         await session.pause();
         await _pumpFrames(tester);
         if (fullScreen) {
@@ -1056,6 +1142,7 @@ void main() {
       _app(session, window, const AppSettings.defaults(), width: 1200),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     await session.pause();
     await _pumpFrames(tester);
     final initialWidth = tester.getSize(find.text('00:00 / 03:00')).width;
@@ -1126,6 +1213,7 @@ void main() {
             _app(session, window, const AppSettings.defaults(), target: target),
           );
           await _pumpFrames(tester);
+          await _showControls(tester);
           await session.pause();
           final opens = engine.opens;
           final generation = session.sourceGeneration;
@@ -1212,6 +1300,7 @@ void main() {
           _app(session, window, const AppSettings.defaults(), target: target),
         );
         await _pumpFrames(tester);
+        await _showControls(tester);
         engine._emit(
           engine.currentSnapshot.copyWith(
             videoDimensions: const VideoDimensions(1920, 1080),
@@ -1270,6 +1359,7 @@ void main() {
         _app(session, window, const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       engine._emit(
         engine.currentSnapshot.copyWith(
           videoDimensions: const VideoDimensions(1920, 1080),
@@ -1701,6 +1791,7 @@ void main() {
           _app(session, window, const AppSettings.defaults(), width: 800),
         );
         await _pumpFrames(tester);
+        await _showControls(tester);
         engine._emit(
           engine.currentSnapshot.copyWith(
             videoDimensions: const VideoDimensions(1920, 1080),
@@ -1846,6 +1937,7 @@ void main() {
       _app(session, window, const AppSettings.defaults()),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     engine._emit(
       engine.currentSnapshot.copyWith(
         videoDimensions: const VideoDimensions(1920, 1080),
@@ -1899,6 +1991,7 @@ void main() {
             ),
           );
           await _pumpFrames(tester);
+          await _showControls(tester);
           expect(session.isLive, live);
           await session.pause();
           engine._emit(
@@ -1951,6 +2044,7 @@ void main() {
         _app(session, window, const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       await tester.tap(find.byTooltip('全屏（F）'));
       await _pumpFrames(tester);
       expect(window.orientations, [FullScreenOrientation.portrait]);
@@ -2004,6 +2098,7 @@ void main() {
           _app(session, window, const AppSettings.defaults()),
         );
         await _pumpFrames(tester);
+        await _showControls(tester);
         engine._emit(
           engine.currentSnapshot.copyWith(
             videoDimensions: const VideoDimensions(1920, 1080),
@@ -2043,6 +2138,7 @@ void main() {
       _app(session, window, const AppSettings.defaults()),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     await tester.tap(find.byTooltip('全屏（F）'));
     await _pumpFrames(tester);
     engine._emit(
@@ -2078,6 +2174,7 @@ void main() {
       );
       await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
       await _pumpFrames(tester);
+      await _showControls(tester);
       expect(find.byTooltip('退出全屏（Esc）'), findsOneWidget);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.keyW);
@@ -2370,6 +2467,7 @@ void main() {
         _app(session, _FakeWindowService(), AppSettings(danmakuMaxOnScreen: 1)),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       await session.pause();
       for (final fullscreen in [false, true]) {
         if (fullscreen) {
@@ -2458,6 +2556,7 @@ void main() {
           _app(session, window, AppSettings(danmakuMaxOnScreen: 1), width: 800),
         );
         await _pumpFrames(tester);
+        await _showControls(tester);
         await session.pause();
         final target = find.byKey(const ValueKey('player-surface-tap-target'));
         if (!controlsVisible) {
@@ -2630,6 +2729,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       await session.pause();
       await session.seek(const Duration(seconds: 45));
       final generation = engine.currentSnapshot.generation;
@@ -2719,6 +2819,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       await session.pause();
       final generation = engine.currentSnapshot.generation;
       final position = engine.currentSnapshot.position;
@@ -2925,6 +3026,7 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     expect(find.text('房间草稿'), findsOneWidget);
     await tester.tap(find.byTooltip('全屏（F）'));
     await _pumpFrames(tester);
@@ -2948,6 +3050,7 @@ void main() {
         _app(session, window, const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       engine._emit(
         engine.currentSnapshot.copyWith(position: const Duration(seconds: 90)),
       );
@@ -3060,6 +3163,7 @@ void main() {
         _app(session, window, const AppSettings.defaults(), overlay: overlay),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       expect(find.text('实时弹幕覆盖层'), findsOneWidget);
       final generation = engine.currentSnapshot.generation;
       await tester.tap(find.byTooltip('全屏（F）'));
@@ -3453,6 +3557,7 @@ void main() {
           ),
         );
         await _pumpFrames(tester);
+        await _showControls(tester);
         expect(tester.takeException(), isNull);
       }
 
@@ -3575,6 +3680,7 @@ void main() {
             ),
           );
           await _pumpFrames(tester);
+          await _showControls(tester);
           if (fullScreen) {
             await tester.tap(find.byTooltip('全屏（F）'));
             await _pumpFrames(tester);
@@ -3688,6 +3794,7 @@ void main() {
       _app(session, _FakeWindowService(), const AppSettings.defaults()),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     await session.pause();
     await tester.tap(find.byTooltip('更多播放选项'));
     await tester.pumpAndSettle();
@@ -3739,6 +3846,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       await session.pause();
       await tester.tap(find.byTooltip('清晰度'));
       await tester.pumpAndSettle();
@@ -3986,6 +4094,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       await tester.tap(find.byTooltip('直播清晰度与线路'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ChoiceChip, 'HLS · fMP4 · HEVC'));
@@ -4111,6 +4220,7 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     await session.pause();
     await tester.tap(find.byTooltip('播放速度'));
     await tester.pumpAndSettle();
@@ -4235,6 +4345,7 @@ void main() {
           );
           await tester.pumpWidget(_app(session, window, settings));
           await _pumpFrames(tester);
+          await _showControls(tester);
           await session.setRate(1.5);
           await session.seek(const Duration(seconds: 12));
           if (fullscreen) {
@@ -4444,6 +4555,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       final gesture = await tester.startGesture(
         action == 'button'
             ? tester.getCenter(find.byTooltip('暂停（空格）'))
@@ -4495,6 +4607,7 @@ void main() {
                 ),
               );
               await _pumpFrames(tester);
+              await _showControls(tester);
               if (fullscreen) {
                 await tester.tap(find.byTooltip('全屏（F）'));
                 await _pumpFrames(tester);
@@ -4623,6 +4736,7 @@ void main() {
             _app(session, window, const AppSettings.defaults()),
           );
           await _pumpFrames(tester);
+          await _showControls(tester);
           await session.pause();
           await session.seek(const Duration(seconds: 12));
           final generation = session.sourceGeneration;
@@ -5033,6 +5147,7 @@ void main() {
         _app(session, _FakeWindowService(), const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       final controls = find.byKey(const ValueKey('player-controls'));
       await tester.pump(const Duration(seconds: 6));
       expect(controls.hitTestable(), findsOneWidget);
@@ -5061,6 +5176,7 @@ void main() {
         _app(session, window, const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       final controls = find.byKey(const ValueKey('player-controls'));
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: Offset.zero);
@@ -5160,6 +5276,7 @@ void main() {
             _app(session, window, const AppSettings.defaults(), width: width),
           );
           await _pumpFrames(tester);
+          await _showControls(tester);
           await session.pause();
           if (fullscreen) {
             await tester.tap(find.byTooltip('全屏（F）'));
@@ -5244,6 +5361,7 @@ void main() {
             ),
           );
           await _pumpFrames(tester);
+          await _showControls(tester);
           if (fullscreen) {
             await tester.tap(find.byTooltip('全屏（F）'));
             await _pumpFrames(tester);
@@ -5305,6 +5423,7 @@ void main() {
                 ),
               );
               await _pumpFrames(tester);
+              await _showControls(tester);
               if (fullscreen) {
                 await tester.tap(find.byTooltip('全屏（F）'));
                 await _pumpFrames(tester);
@@ -5382,6 +5501,7 @@ void main() {
         addTearDown(session.close);
         await tester.pumpWidget(_app(session, window, settings, width: 320));
         await _pumpFrames(tester);
+        await _showControls(tester);
         final controls = find.byKey(const ValueKey('player-controls'));
         final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
         await mouse.addPointer(location: const Offset(-10, -10));
@@ -5410,6 +5530,7 @@ void main() {
         _app(session, _FakeWindowService(), const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       final controls = find.byKey(const ValueKey('player-controls'));
       await tester.pump(const Duration(seconds: 4));
       final gesture = await tester.startGesture(
@@ -5577,6 +5698,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       final controls = find.byKey(const ValueKey('player-controls'));
       await tester.tap(find.byKey(const Key('click-editor')));
       await tester.enterText(find.byKey(const Key('click-editor')), '草稿');
@@ -5605,6 +5727,7 @@ void main() {
         _app(session, window, const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       final controls = find.byKey(const ValueKey('player-controls'));
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await tester.pump(const Duration(seconds: 10));
@@ -5640,6 +5763,7 @@ void main() {
       _app(session, _FakeWindowService(), const AppSettings.defaults()),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     final target = find.byKey(const ValueKey('player-surface-tap-target'));
     final controls = find.byKey(const ValueKey('player-controls'));
     final point = tester.getTopLeft(target) + const Offset(130, 70);
@@ -5685,6 +5809,7 @@ void main() {
         _app(session, _FakeWindowService(), const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       final target = find.byKey(const ValueKey('player-surface-tap-target'));
       final controls = find.byKey(const ValueKey('player-controls'));
       final playing = engine.currentSnapshot.desiredPlaying;
@@ -5790,6 +5915,7 @@ void main() {
         _app(session, _FakeWindowService(), const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       await session.seek(const Duration(seconds: 12));
       await session.pause();
       await tester.tapAt(
@@ -5838,6 +5964,7 @@ void main() {
       _app(session, _FakeWindowService(), const AppSettings.defaults()),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     await session.seek(const Duration(seconds: 12));
     await session.pause();
     await tester.tap(find.byTooltip('全屏（F）'));
@@ -5865,6 +5992,7 @@ void main() {
       _app(session, window, const AppSettings.defaults()),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     await tester.tap(find.byTooltip('全屏（F）'));
     await _pumpFrames(tester);
     engine._failures.add(
@@ -5920,6 +6048,7 @@ void main() {
           ),
         );
         await _pumpFrames(tester);
+        await _showControls(tester);
         expect(tester.takeException(), isNull);
         if (find.byTooltip('发送弹幕').evaluate().isNotEmpty) {
           await tester.tap(find.byTooltip('发送弹幕'));
@@ -5962,6 +6091,7 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     await tester.tap(find.byTooltip('更多播放选项'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -6011,6 +6141,7 @@ void main() {
       );
       await tester.pumpWidget(app(0));
       await _pumpFrames(tester);
+      await _showControls(tester);
       await tester.tap(find.byTooltip('全屏（F）'));
       await _pumpFrames(tester);
       await tester.pumpWidget(app(1));
@@ -6041,6 +6172,7 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     await tester.tap(find.byTooltip('全屏（F）'));
     await _pumpFrames(tester);
     await tester.pumpWidget(
@@ -6074,6 +6206,7 @@ void main() {
         _app(session, window, const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       await _pumpFrames(tester);
       await tester.tap(find.byTooltip('全屏（F）'));
       await _pumpFrames(tester);
@@ -6107,6 +6240,7 @@ void main() {
       _app(session, window, const AppSettings.defaults(), textScale: 2),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     expect(tester.takeException(), isNull);
     expect(find.byTooltip('全屏（F）'), findsOneWidget);
     expect(engine.maxSurfaces, 1);
@@ -6194,6 +6328,7 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     await tester.tap(find.byTooltip('全屏（F）'));
     await _pumpFrames(tester);
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'video player');
@@ -6229,6 +6364,7 @@ void main() {
       _app(session, window, const AppSettings.defaults(), textScale: 2),
     );
     await _pumpFrames(tester);
+    await _showControls(tester);
     await tester.tap(find.byTooltip('全屏（F）'));
     await _pumpFrames(tester);
 
@@ -6250,6 +6386,7 @@ void main() {
         _app(session, window, const AppSettings.defaults()),
       );
       await _pumpFrames(tester);
+      await _showControls(tester);
       if (fullscreen) {
         await tester.tap(find.byTooltip('全屏（F）'));
         await _pumpFrames(tester);
@@ -6315,6 +6452,7 @@ void main() {
     );
     await _pumpFrames(tester);
     expect(find.text('正在准备音视频…'), findsOneWidget);
+    await _showControls(tester);
     _expectPlayerSemantics(tester, '全屏（F）', focused: true);
 
     await tester.tap(find.byTooltip('全屏（F）'));
@@ -6373,6 +6511,22 @@ Future<void> _pumpSurfaceTap(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 350));
   await tester.pump(const Duration(milliseconds: 216));
   await tester.pump();
+}
+
+Future<void> _showControls(WidgetTester tester) async {
+  if (find.byKey(const ValueKey('player-controls')).evaluate().isNotEmpty) {
+    return;
+  }
+  final surface = find.byKey(const ValueKey('player-surface-tap-target'));
+  await tester.tapAt(
+    _surfacePoint(tester),
+    view: View.of(tester.element(surface)),
+  );
+  await _pumpSurfaceTap(tester);
+  expect(
+    find.byKey(const ValueKey('player-controls')).hitTestable(),
+    findsOneWidget,
+  );
 }
 
 Future<FocusNode> _focusRecommendation(

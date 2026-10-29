@@ -722,11 +722,7 @@ void main() {
         final surfaceTarget = find.byKey(
           const ValueKey('player-surface-tap-target'),
         );
-        // Match the widget fixture's empty-picture point, outside toolbar hits.
-        await tester.tapAt(
-          tester.getTopLeft(surfaceTarget) + const Offset(130, 70),
-        );
-        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.byKey(const ValueKey('player-controls')), findsNothing);
         final progress = tester.widget<LinearProgressIndicator>(
           find.byKey(const ValueKey('player-collapsed-progress')),
         );
@@ -740,6 +736,7 @@ void main() {
         );
         expect(engine.currentSnapshot.generation, generation);
         expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        // Match the widget fixture's empty-picture point, outside toolbar hits.
         await tester.tapAt(
           tester.getTopLeft(surfaceTarget) + const Offset(130, 70),
         );
@@ -1409,6 +1406,17 @@ void main() {
         expect(find.byKey(const ValueKey('workspace-tab-strip')), findsNothing);
         final playbackView = View.of(
           tester.element(find.byType(PlaybackPanel)),
+        );
+        await tester.tapAt(
+          tester.getTopLeft(
+                find.byKey(const ValueKey('player-surface-tap-target')),
+              ) +
+              const Offset(130, 70),
+          view: playbackView,
+        );
+        await _until(
+          tester,
+          () => find.byTooltip('全屏（F）').evaluate().isNotEmpty,
         );
         final nativeWindow = NativePlaybackWindow(playbackView.viewId);
         nativeWindow.resize(1000, 700);

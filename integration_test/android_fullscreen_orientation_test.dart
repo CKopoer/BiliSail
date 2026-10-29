@@ -69,6 +69,16 @@ void main() {
         expect(session.isLive, live);
         final opens = engine.opens;
         final generation = engine.currentSnapshot.generation;
+        await tester.tapAt(
+          tester.getTopLeft(
+                find.byKey(const ValueKey('player-surface-tap-target')),
+              ) +
+              const Offset(130, 70),
+        );
+        await _until(
+          tester,
+          () => find.byTooltip('全屏（F）').evaluate().isNotEmpty,
+        );
         engine.publish(
           engine.currentSnapshot.copyWith(
             videoDimensions: const VideoDimensions(1920, 1080),
