@@ -182,6 +182,9 @@ try {
   $sourceDirty = [bool]$sourceChanges
   $lockHash = (Get-FileHash -LiteralPath 'pubspec.lock' -Algorithm SHA256).Hash
   Invoke-BuildCommand flutter @('pub', 'get', '--enforce-lockfile')
+  if ($Target -eq 'windows-x64' -and $env:BILISAIL_NATIVE_TAR) {
+    & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1') -Tar $env:BILISAIL_NATIVE_TAR
+  }
   & (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Target $Target
   # Release builds must regenerate native registrants without dev-only plugins.
   # In Flutter 3.47.6 --no-pub skips that regeneration (not just dependency fetching).

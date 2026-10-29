@@ -65,7 +65,7 @@ macOS 部署下限提高至 13.0 的依据已核对固定 Flutter SDK `packages/
 - 两份 Podfile 在 Flutter 创建插件链接后调用 [构建副本准备脚本](../tool/prepare-media-kit-apple.py)。校验固定 podspec 的 SHA-256，将插件复制到 `build/apple-plugins/<platform>/`，把共享 C 绑定放进 Pod 根目录并重定向生成的插件链接。framework 公共头文件在副本中展平，同步 wrapper 的 include 路径，兼容 Xcode 的 Headers 拷贝阶段。保留上游源码、许可和符号链接；不修改 Pub 缓存或依赖提交。升级依赖时必须重新审查校验值和目录布局。
 - Linux 显式安装 `libva-wayland2`，打包前输出固定 libmpv 的完整 `ldd` 结果。继续使用 Native Assets 的库，禁止用系统 mpv 替换。
 - Windows 打包脚本启用 Flutter verbose 输出；原生编译期间移除 MSIX 签名凭据，随后恢复供签名使用。失败时收集经过环境敏感值和 URL query 过滤的 hook 输入、输出与日志，上传独立诊断产物。
-- Windows CI #217 的详细日志确认系统 `tar` 报 `LZMA codec is unsupported`，在读取固定 mpv `.7z` 的目录阶段失败。CI 的 MSYS2 工具链补装 libarchive，通过 [工具配置脚本](../tool/setup-windows-native-tar.ps1) 提供支持 LZMA 的 `tar.exe` 并记录实际路径和版本；Native Assets 下载、哈希和路径校验保持原实现。本地 Windows 无需替换已有可用工具。
+- Windows CI #217 的详细日志确认系统 `tar` 报 `LZMA codec is unsupported`，在读取固定 mpv `.7z` 的目录阶段失败。CI 的 MSYS2 工具链补装 libarchive，通过 [工具配置脚本](../tool/setup-windows-native-tar.ps1) 记录 bsdtar 的绝对路径和版本，再由 [缓存准备脚本](../tool/prepare-windows-media-assets.ps1) 校验并解压固定资源。Native Assets 随后重新验证缓存；本地 Windows 无需替换已有可用工具。
 
 Windows 本地 `tool/check.ps1 -SkipPub` 通过格式、分析和 4070 项测试，根应用 13 项既有跳过，mux 10 项因未配置 `BILI_MUX_LIBRARY` 跳过；两项 Apple staging 回归、18 项 Linux 纯 Python 回归、PowerShell／Bash 语法和诊断脱敏检查通过。7 项 POSIX shell 运行时检查未在此 Windows 环境执行成功，交由 Ubuntu CI 验证。远端构建结果将在修复推送后的 CI 核验；以上不代表设备安装、音画或性能验收通过。
 
@@ -74,3 +74,7 @@ Windows 本地 `tool/check.ps1 -SkipPub` 通过格式、分析和 4070 项测试
 该次 Linux x64 构建、AppImage／Flatpak 打包及已安装 Flatpak Runtime 的依赖检查通过，Android 构建通过。Windows 的 LZMA 工具修复在本地用相同 SHA-256 的真实固定 `.7z` 验证了目录读取和 DLL 解压；后续远端 Windows／Apple 结果仍需复验。
 
 CI #218 的检查通过。Apple 插件内部编译通过后，主应用导入 framework 时仍找不到 `client.h`；副本中同时移除 `header_mappings_dir`，让 CocoaPods 使用标准 Public Headers 阶段，并在 Podfile 的 post-install 中直接检查生成 Xcode 项目包含四个必要公共头文件。这样可在 pod install 时拦截只在源目录可见、没有导出给 Runner 的配置。
+
+Windows #218 进一步确认 Dart 子进程仍解析到系统 tar，单纯修改 PATH 不足以覆盖系统目录的查找顺序。改为通过绝对 bsdtar 路径预热 Native Assets 的内容寻址缓存：读取当前解析包的固定 catalog，核验 HTTPS 归档 SHA-256 和安全路径，写入逐文件 SHA-256 清单。原 hook 随后仍重新验证归档和所有文件，只省去不兼容的系统 tar 解压步骤；不修改 SDK、Pub 源码或原生资产来源。
+
+本地用真实固定归档准备独立缓存，并调用未修改的 `BundleCache.prepare`，确认 hook 完成哈希复核后直接复用缓存、未重建解压清单；最后一次根 `-Stage Lint -SkipPub` 通过。
