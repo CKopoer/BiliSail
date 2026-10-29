@@ -121,17 +121,17 @@ class AppDependencies {
     this.downloads,
     this.downloadSources,
     this._downloadAccountSubscription,
+    this._appRecommendationCredentials,
   );
 
   final AppDatabase database;
   final ApiRequests requests;
   final BiliApiClient api;
   final SessionRepository session;
+  final CredentialStore _appRecommendationCredentials;
   late final appRecommendationIdentity = AppRecommendationIdentityStore(
     database: database,
-    credentials: SystemCredentialStore(
-      keyPrefix: 'bilisail.app_recommendation.v1',
-    ),
+    credentials: _appRecommendationCredentials,
     accountScope: () => session.accountScope,
     accountChanges: session.changes,
     sessionCredentials: session,
@@ -155,6 +155,7 @@ class AppDependencies {
 
   static Future<AppDependencies> create({
     CredentialStore? credentials,
+    CredentialStore? appRecommendationCredentials,
     AppDatabase? databaseOverride,
     WindowService? windowOverride,
   }) async {
@@ -327,6 +328,8 @@ class AppDependencies {
       downloads,
       downloadSources,
       downloadAccountSubscription,
+      appRecommendationCredentials ??
+          SystemCredentialStore(keyPrefix: 'bilisail.app_recommendation.v1'),
     );
     return dependencies;
   }

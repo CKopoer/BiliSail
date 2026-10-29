@@ -45,6 +45,7 @@ function Get-MacOSSmokeDiagnosticLines([string]$Text) {
   foreach ($line in ($Text -split '\r?\n')) {
     if ($line -cmatch '^BILISAIL_FOCUS_STAGE:(foreground|prepare|present|primary|space|passed)$' -or
         $line -cmatch '^BILISAIL_RELEASE_STAGE:(window-create|window-ready|dependencies|dependencies-ready|first-frame-wait|first-frame|playback-windows|credentials|closed)$' -or
+        $line -cmatch '^BILISAIL_CREDENTIAL_STAGE:(empty|write-first|read-first|write-second|read-second|read-restart|delete|deleted|cleanup-bootstrap|cleanup-recommendation)$' -or
         $line -cmatch '^BILISAIL_RELEASE_SMOKE_FAILED:(startup|write|read-delete|verify-deleted|cleanup)$') {
       $Matches[0]
     } elseif ($line -cmatch 'BILISAIL_FOCUS_NATIVE revision=(\d+) active=([01]) key=([01]) view=(\d+|<null>) responder=[A-Za-z0-9_.]+ inView=([01])$') {
@@ -79,7 +80,8 @@ function Invoke-MacOSReleaseSmokePhase {
     $errors = $errorTask.GetAwaiter().GetResult()
     # Export only the fixed smoke stages and numeric native focus state.
     # Discard responder names and every other native/network output field.
-    Get-MacOSSmokeDiagnosticLines ($output + "`n" + $errors) | ForEach-Object { Write-Host $_ }
+    $diagnostics = @(Get-MacOSSmokeDiagnosticLines ($output + "`n" + $errors))
+    $diagnostics | ForEach-Object { Write-Host $_ }
     # Never persist raw native/network output, which can contain URL queries.
     $status = [ordered]@{
       phase = $Phase
@@ -87,6 +89,7 @@ function Invoke-MacOSReleaseSmokePhase {
       exitCode = $process.ExitCode
       acknowledged = "BILISAIL_RELEASE_SMOKE_OK:${Phase}:$RunId" -cin @($output -split '\r?\n')
       stderrPresent = ![string]::IsNullOrWhiteSpace($errors)
+      lastStage = $diagnostics | Where-Object { $_ -cmatch '^BILISAIL_(RELEASE|CREDENTIAL)_STAGE:' } | Select-Object -Last 1
     }
     $status | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkingDirectory "$Phase.result.json") -Encoding utf8
     if ($timedOut) { throw "macOS Release smoke phase '$Phase' timed out." }

@@ -1,7 +1,11 @@
 import 'dart:async';
 
 import 'package:bilisail/app/release_smoke.dart';
+import 'package:bilisail/core/storage/app_database.dart';
 import 'package:bilisail/core/storage/credential_store.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
+import 'package:bilisail/features/feed/data/app_recommendation_identity_store.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,6 +16,59 @@ ReleaseSmokeRequest request(String phase) =>
         as ReleaseSmokeRequest;
 
 void main() {
+  test(
+    'startup guest cleanup keeps both production credential stores intact',
+    () async {
+      final storage = MemorySecureStorage();
+      await SystemCredentialStore(storage: storage)
+          .write('private web session');
+      await SystemCredentialStore(
+        storage: storage,
+        keyPrefix: 'bilisail.app_recommendation.v1',
+      ).write('private legacy app session');
+      final before = Map<String, String>.of(storage.values);
+      final smoke = request('startup');
+      expect(await smoke.bootstrapCredentials(storage: storage).read(), isNull);
+
+      final database = AppDatabase(NativeDatabase.memory());
+      final changes = StreamController<AuthState>.broadcast(sync: true);
+      final identity = AppRecommendationIdentityStore(
+        database: database,
+        credentials: smoke.recommendationCredentials(storage: storage),
+        accountScope: () => 'guest',
+        accountChanges: changes.stream,
+      );
+      try {
+        changes.add(const AuthState());
+        // close drains the actual guest-triggered legacy deletion queue.
+        await identity.close();
+        expect(storage.values, before);
+      } finally {
+        await changes.close();
+        await database.close();
+      }
+    },
+  );
+
+  testWidgets(
+    'a hung credential write times out without replay or later steps',
+    (tester) async {
+      final gate = Completer<void>();
+      final storage = MemorySecureStorage(writeGate: gate.future);
+      final stages = <ReleaseCredentialStep>[];
+      final result = expectLater(
+        request('write').probeCredentials(storage: storage, onStep: stages.add),
+        throwsA(isA<TimeoutException>()),
+      );
+      await tester.pump();
+      expect(stages.last, ReleaseCredentialStep.writeFirst);
+      await tester.pump(const Duration(seconds: 10));
+      await result;
+      expect(storage.writes, hasLength(1));
+      expect(stages.last, ReleaseCredentialStep.writeFirst);
+    },
+  );
+
   test('background smoke gets a first frame after window activation', () async {
     final frame = Completer<void>();
     var completed = false;
@@ -105,6 +162,12 @@ void main() {
   test('cleanup only removes its isolated prefix', () async {
     final storage = MemorySecureStorage();
     await request('write').probeCredentials(storage: storage);
+    await request('startup')
+        .bootstrapCredentials(storage: storage)
+        .write('bootstrap');
+    await request('startup')
+        .recommendationCredentials(storage: storage)
+        .write('legacy');
     storage.values['bilisail.web_session.v1.active'] = 'a';
     storage.values['another.probe.b'] = 'keep';
     await request('cleanup').probeCredentials(storage: storage);
@@ -116,8 +179,10 @@ void main() {
 }
 
 class MemorySecureStorage extends FlutterSecureStorage {
-  MemorySecureStorage({this.dropWrites = false});
+  MemorySecureStorage({this.dropWrites = false, this.writeGate});
   final bool dropWrites;
+  final Future<void>? writeGate;
+  final writes = <String>[];
   final values = <String, String>{};
 
   @override
@@ -142,6 +207,8 @@ class MemorySecureStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
+    writes.add(key);
+    await writeGate;
     if (dropWrites) return;
     if (value == null) {
       values.remove(key);

@@ -13,6 +13,22 @@ import '../core/presentation/app_input_host.dart';
 import '../core/presentation/window_input_focus.dart';
 import '../core/storage/credential_store.dart';
 
+enum ReleaseCredentialStep {
+  empty('empty'),
+  writeFirst('write-first'),
+  readFirst('read-first'),
+  writeSecond('write-second'),
+  readSecond('read-second'),
+  readRestart('read-restart'),
+  delete('delete'),
+  deleted('deleted'),
+  cleanupBootstrap('cleanup-bootstrap'),
+  cleanupRecommendation('cleanup-recommendation');
+
+  const ReleaseCredentialStep(this.marker);
+  final String marker;
+}
+
 // Run only in the explicit startup smoke of the exact bundle being packaged.
 // This must exercise the real FFI twice; a capability check alone would let
 // an in-window fallback hide a broken macOS multi-window initialization.
@@ -173,6 +189,15 @@ class ReleaseSmokeRequest {
   String get successMarker => 'BILISAIL_RELEASE_SMOKE_OK:$phase:$runId';
   String get _value => 'BiliSail synthetic Keychain probe $runId';
 
+  CredentialStore bootstrapCredentials({FlutterSecureStorage? storage}) =>
+      SystemCredentialStore(storage: storage, keyPrefix: '$prefix.bootstrap');
+
+  CredentialStore recommendationCredentials({FlutterSecureStorage? storage}) =>
+      SystemCredentialStore(
+        storage: storage,
+        keyPrefix: '$prefix.recommendation',
+      );
+
   // Direct binary launches on CI can remain in the background. Establish the
   // foreground precondition before waiting for the compositor's first frame.
   Future<void> waitForFirstFrame({
@@ -194,37 +219,79 @@ class ReleaseSmokeRequest {
     return ReleaseSmokeRequest._(arguments[1], arguments[2]);
   }
 
-  Future<void> probeCredentials({FlutterSecureStorage? storage}) async {
+  Future<void> probeCredentials({
+    FlutterSecureStorage? storage,
+    void Function(ReleaseCredentialStep)? onStep,
+  }) async {
     final secureStorage = storage ?? SystemCredentialStore.defaultStorage;
     final credentials = SystemCredentialStore(
       storage: secureStorage,
       keyPrefix: prefix,
     );
+    Future<T> step<T>(
+      ReleaseCredentialStep stage,
+      Future<T> Function() action,
+    ) {
+      onStep?.call(stage);
+      // A hung native call must fail the child, never retry an uncertain write.
+      // The packaging script still owns the 60-second process deadline.
+      return action().timeout(const Duration(seconds: 10));
+    }
+
     switch (phase) {
       case 'startup':
         return;
       case 'write':
-        await _expectDeleted(secureStorage);
-        await credentials.write('$_value first');
-        if (await credentials.read() != '$_value first') {
+        await step(
+          ReleaseCredentialStep.empty,
+          () => _expectDeleted(secureStorage),
+        );
+        await step(
+          ReleaseCredentialStep.writeFirst,
+          () => credentials.write('$_value first'),
+        );
+        if (await step(ReleaseCredentialStep.readFirst, credentials.read) !=
+            '$_value first') {
           throw StateError('Keychain write/read failed');
         }
         // Exercise both snapshot slots and the active-reference switch.
-        await credentials.write(_value);
-        if (await credentials.read() != _value) {
+        await step(
+          ReleaseCredentialStep.writeSecond,
+          () => credentials.write(_value),
+        );
+        if (await step(ReleaseCredentialStep.readSecond, credentials.read) !=
+            _value) {
           throw StateError('Keychain snapshot switch failed');
         }
       case 'read-delete':
-        if (await credentials.read() != _value) {
+        if (await step(ReleaseCredentialStep.readRestart, credentials.read) !=
+            _value) {
           throw StateError('Keychain read after restart failed');
         }
-        await credentials.delete();
-        await _expectDeleted(secureStorage);
+        await step(ReleaseCredentialStep.delete, credentials.delete);
+        await step(
+          ReleaseCredentialStep.deleted,
+          () => _expectDeleted(secureStorage),
+        );
       case 'verify-deleted':
-        await _expectDeleted(secureStorage);
+        await step(
+          ReleaseCredentialStep.deleted,
+          () => _expectDeleted(secureStorage),
+        );
       case 'cleanup':
-        await credentials.delete();
-        await _expectDeleted(secureStorage);
+        await step(ReleaseCredentialStep.delete, credentials.delete);
+        await step(
+          ReleaseCredentialStep.deleted,
+          () => _expectDeleted(secureStorage),
+        );
+        await step(
+          ReleaseCredentialStep.cleanupBootstrap,
+          bootstrapCredentials(storage: secureStorage).delete,
+        );
+        await step(
+          ReleaseCredentialStep.cleanupRecommendation,
+          recommendationCredentials(storage: secureStorage).delete,
+        );
     }
   }
 

@@ -12,7 +12,6 @@ import 'core/presentation/bili_widgets_binding.dart';
 import 'core/presentation/window_input_focus.dart';
 import 'core/platform/macos_application_window.dart';
 import 'core/storage/app_database.dart';
-import 'core/storage/credential_store.dart';
 
 Future<void> main(List<String> arguments) async {
   BiliWidgetsBinding.ensureInitialized();
@@ -56,22 +55,27 @@ Future<void> main(List<String> arguments) async {
   }
 
   try {
-    smokeStage('window-create');
-    applicationWindow = await MacOSApplicationWindow.create();
-    await applicationWindow?.prepare();
-    smokeStage('window-ready');
-    if (smoke != null && smoke.phase == 'cleanup') {
-      await smoke.probeCredentials();
+    if (smoke != null && smoke.phase != 'startup') {
+      // Credential restarts exercise the shipped plugin without starting the
+      // homepage's concurrent session restore and legacy credential cleanup.
+      await smoke.probeCredentials(
+        onStep: (step) =>
+            stderr.writeln('BILISAIL_CREDENTIAL_STAGE:${step.marker}'),
+      );
+      if (smokeHadError) throw StateError('Release credential probe failed');
       stdout.writeln(smoke.successMarker);
       await stdout.flush();
       exit(0);
     }
+    smokeStage('window-create');
+    applicationWindow = await MacOSApplicationWindow.create();
+    await applicationWindow?.prepare();
+    smokeStage('window-ready');
     smokeStage('dependencies');
     final dependencies = await AppDependencies.create(
       // Smoke launches cannot restore real accounts or modify the user's DB.
-      credentials: smoke == null
-          ? null
-          : SystemCredentialStore(keyPrefix: '${smoke.prefix}.bootstrap'),
+      credentials: smoke?.bootstrapCredentials(),
+      appRecommendationCredentials: smoke?.recommendationCredentials(),
       databaseOverride: smoke == null
           ? null
           : AppDatabase(NativeDatabase.memory()),
