@@ -124,7 +124,7 @@ PR 不接收长期签名 Secrets，仅通过 `-AndroidPreviewSigning` 显式启�
 
 macOS 分别生成 `BiliSail-<version>-macos-arm64.dmg` 和 `BiliSail-<version>-macos-x64.dmg`，按 Apple Silicon／Intel 芯片选择。脚本用 `lipo -verify_arch` 核对主程序、App、FlutterMacOS 与 BiliMux framework 的目标架构，再使用 `ditto` 复制完整 `BiliSail.app`，调用 [macOS 发布验证](../../tool/macos-release-validation.ps1) 校验签名、最终权限，并启动这份待打包的 Release 应用验证首帧和跨进程 Keychain 读写／删除。通过后在镜像根目录加入指向 `/Applications` 的符号链接与 `THIRD_PARTY_NOTICES.md`，使用 `hdiutil create -srcfolder ... -fs HFS+ -format UDZO` 创建压缩只读镜像并执行 `hdiutil verify`；任一步失败均停止，不上传产物。CI 与 Release 共用此脚本，现有上传通配符同时覆盖两种架构的 DMG、metadata、mux 源码和 SHA-256 文件。
 
-2026-10-29 增加 Intel macOS 构建：下载封装组件新增 `macos-x64` 目标，FFmpeg 与 C++ 包装均以 `x86_64`、最低 macOS 12 编译，并沿用独立目标目录、来源归档和 framework 打包流程。首次 Intel hosted 构建、实际 DMG 安装、Keychain、音视频播放与设备操作仍待 macOS 执行确认；Windows 本地配置和离线检查不代表这些验收已经通过。
+2026-10-29 增加 Intel macOS 构建：下载封装组件新增 `macos-x64` 目标，FFmpeg 与 C++ 包装均以 `x86_64`、最低 macOS 12 编译，并沿用独立目标目录、来源归档和 framework 打包流程。最终 [CI #221](https://github.com/CKopoer/BiliSail/actions/runs/40804720827)（代码提交 `64acaa709315b9c91e15c67ae173f56b05689570`）的 Intel／arm64 hosted 构建、签名校验、待打包应用首帧、跨进程合成 Keychain 读写／删除和 DMG 校验均通过。该次运行全部检查及六个平台构建通过，产物均已上传；实际 DMG 安装升级、Gatekeeper、真实账号、音视频播放与设备操作仍待验收。兼容修复与本地检查见 [Native Assets 迁移记录](../predidit-media-migration.md#ci-构建兼容修复2026-10-29)。
 
 本地定向验证：两份工作流通过 actionlint 1.7.12，修改的 PowerShell／Bash 脚本通过语法检查。执行生产矩阵生成片段，32 种平台开关组合均符合预期；使用 fake 原生命令执行两个 macOS 打包分支，覆盖架构参数、四份二进制架构门槛、metadata、启动验证和 DMG 校验，架构失败会阻止后续打包。mux 的 macOS arm64／x64 与 iOS arm64 编译参数通过 fake Xcode 路径检查；现有 Apple framework 回归扩展覆盖 Intel 及架构切换后的重复打包，实际文件目录检查通过。两种 macOS 发布目标均在 Windows 主机上提前拒绝构建。
 

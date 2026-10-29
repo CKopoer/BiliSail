@@ -84,3 +84,5 @@ CI #219 的 iOS 和 macOS arm64 已通过构建／打包；Intel 构建及签名
 CI #220 的 Windows 资源缓存准备及原生 hook 已通过，后续干净 C++ 编译暴露补丁副本没有复制 `include/` 公共头文件目录，导致 C API 入口的相对 include 失败。补上该目录的构建副本复制，不改变播放器原生实现；本地以全新输出目录编译真实 C API 入口验证，避免旧构建残留掩盖缺项。
 
 上述补改后，完整 `tool/check.ps1 -SkipPub` 通过 4071 项测试（根 3360、API 492、播放器 96、弹幕 118、mux 5），13 项根测试及未配置原生库的 10 项 mux 用例沿用跳过。9 项受控原生生命周期／队列／尺寸回归和干净目录的 C API 编译通过。没有可连接的 DTD／调试应用，未做热重载；macOS 首帧顺序由后续目标 Release smoke 验证。
+
+最终 [CI #221](https://github.com/CKopoer/BiliSail/actions/runs/40804720827) 在代码提交 `64acaa709315b9c91e15c67ae173f56b05689570` 上全部通过：根检查、子包检查与原生 mux 检查，以及 Android arm64、Windows x64、macOS arm64／x64、iOS arm64、Linux x64 六个构建任务均成功，六份平台产物均已上传。Windows 完成 EXE／MSI／MSIX 打包与 MSIX 签名核验；两种 macOS 架构均完成待打包应用的签名校验、首帧及跨进程合成 Keychain 写入／读取删除／删除确认，并生成 DMG。Linux 完成 AppImage／Flatpak 打包和已安装 Flatpak Runtime 的依赖检查。上述结果不覆盖设备安装升级、Gatekeeper／系统证书信任、真实账号、音画播放或长期性能验收。

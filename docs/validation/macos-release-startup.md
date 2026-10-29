@@ -1,6 +1,6 @@
 # macOS 发布启动与安全存储
 
-日期：2026-10-08；架构范围更新：2026-10-29。当前配置提供 arm64／Intel x64、ad-hoc 签名、未公证的预览 DMG，两种架构沿用相同发布门槛，Intel 首次远端构建待验。此修复在 Windows 主机实施；macOS 构建、真实 Keychain 和安装升级结果仍须由 macOS 执行记录确认。
+日期：2026-10-08；验证更新：2026-10-29。当前配置提供 arm64／Intel x64、ad-hoc 签名、未公证的预览 DMG，两种架构沿用相同发布门槛。[CI #221](https://github.com/CKopoer/BiliSail/actions/runs/40804720827)（代码提交 `64acaa709315b9c91e15c67ae173f56b05689570`）的两种架构均通过构建、签名校验、待打包应用首帧和跨进程合成 Keychain 读写／删除验证，并完成 DMG 打包。设备安装升级、Gatekeeper、真实账号与音画播放仍未验收。
 
 ## 根因与配置
 
