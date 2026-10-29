@@ -89,6 +89,8 @@ jobs:
           $notes = @"
           BiliSail（哔帆）$env:RELEASE_VERSION 预览构建。
 
+          国内下载：[夸克网盘](https://pan.quark.cn/s/ffceda8afc83)。
+
           - 源码提交：$env:GITHUB_SHA
           - Flutter 3.47.6；各平台 SDK 信息见 build-info.json。
           - 仅包含本次选中的平台；包旁附 SHA-256 校验文件。
