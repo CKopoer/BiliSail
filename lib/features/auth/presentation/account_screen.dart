@@ -7,6 +7,7 @@ import '../../../domain/user.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/paging_tab_strip.dart';
 import '../../../shared/ui/retained_tab_view.dart';
+import '../../../shared/ui/scroll_collapsing_header.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../application/account_overview_controller.dart';
 import '../application/auth_controller.dart';
@@ -78,77 +79,85 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     final id = auth.isSignedIn ? UserId.tryParse(auth.mid) : null;
     final theme = Theme.of(context);
     return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Material(
-            color: theme.colorScheme.surface,
-            child: _AccountProfileBar(
-              auth: auth,
-              overview: overview,
-              onLogin: widget.onLogin,
-              onLogout: () =>
-                  ref.read(authControllerProvider.notifier).signOut(),
-              onRetry: () => ref.invalidate(accountOverviewProvider),
-              onOpenProfile: id == null || widget.onNavigate == null
-                  ? null
-                  : () => widget.onNavigate?.call('/user/${id.value}'),
-              onOpenSection: id == null || widget.onNavigate == null
-                  ? null
-                  : (section) => widget.onNavigate?.call(
-                      '/user/${id.value}?section=$section',
-                    ),
+      child: ScrollHeaderRegion(
+        enabled: ScrollHeaderRegion.isEnabled(context),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ScrollCollapsingHeader(
+              key: const ValueKey('account-collapsing-profile'),
+              child: Material(
+                color: theme.colorScheme.surface,
+                child: _AccountProfileBar(
+                  auth: auth,
+                  overview: overview,
+                  onLogin: widget.onLogin,
+                  onLogout: () =>
+                      ref.read(authControllerProvider.notifier).signOut(),
+                  onRetry: () => ref.invalidate(accountOverviewProvider),
+                  onOpenProfile: id == null || widget.onNavigate == null
+                      ? null
+                      : () => widget.onNavigate?.call('/user/${id.value}'),
+                  onOpenSection: id == null || widget.onNavigate == null
+                      ? null
+                      : (section) => widget.onNavigate?.call(
+                          '/user/${id.value}?section=$section',
+                        ),
+                ),
+              ),
             ),
-          ),
-          Material(
-            color: theme.colorScheme.surface,
-            child: ScrollConfiguration(
-              behavior: const SmoothScrollBehavior(horizontalMouseWheel: true),
-              child: SingleChildScrollView(
-                key: const ValueKey('account-tab-strip'),
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: PagingTabStrip<AccountContentTab>(
-                  tabs: AccountContentTab.values,
-                  value: _selected,
-                  onSelected: _select,
-                  progress: _progress,
-                  itemKey: (tab) => ValueKey('account-tab-${tab.name}'),
-                  labelBuilder: (context, tab) => Text(tab.label),
-                  spacing: 0,
-                  fullWidthIndicator: true,
-                  unselectedColor: theme.colorScheme.onSurfaceVariant,
-                  buttonStyle: TextButton.styleFrom(
-                    minimumSize: const Size(0, 44),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    textStyle: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
+            Material(
+              color: theme.colorScheme.surface,
+              child: ScrollConfiguration(
+                behavior: const SmoothScrollBehavior(
+                  horizontalMouseWheel: true,
+                ),
+                child: SingleChildScrollView(
+                  key: const ValueKey('account-tab-strip'),
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: PagingTabStrip<AccountContentTab>(
+                    tabs: AccountContentTab.values,
+                    value: _selected,
+                    onSelected: _select,
+                    progress: _progress,
+                    itemKey: (tab) => ValueKey('account-tab-${tab.name}'),
+                    labelBuilder: (context, tab) => Text(tab.label),
+                    spacing: 0,
+                    fullWidthIndicator: true,
+                    unselectedColor: theme.colorScheme.onSurfaceVariant,
+                    buttonStyle: TextButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      textStyle: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          const Divider(),
-          Expanded(
-            child: RetainedTabView<AccountContentTab>(
-              tabs: AccountContentTab.values,
-              value: _selected,
-              onChanged: _select,
-              progress: _progress,
-              viewKey: const ValueKey('account-content-pages'),
-              pageBuilder: (context, tab, active) => _AccountTabContent(
-                key: ValueKey('account-content-${tab.name}'),
-                tab: tab,
-                active: active,
-                builder: widget.contentBuilder,
+            const Divider(),
+            Expanded(
+              child: RetainedTabView<AccountContentTab>(
+                tabs: AccountContentTab.values,
+                value: _selected,
+                onChanged: _select,
+                progress: _progress,
+                viewKey: const ValueKey('account-content-pages'),
+                pageBuilder: (context, tab, active) => _AccountTabContent(
+                  key: ValueKey('account-content-${tab.name}'),
+                  tab: tab,
+                  active: active,
+                  builder: widget.contentBuilder,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

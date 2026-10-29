@@ -70,3 +70,14 @@
 - [侧栏回归](../../test/app/sidebar_test.dart)覆盖 Windows／macOS、浅／深主题、三种导航模式的按钮样式与尺寸；[双窗口快捷键回归](../../test/app/playback_window_side_button_test.dart)覆盖丢失 Up、Command+W 关闭、修饰键尚未释放时再次点击、展开／收起和再次打开关闭，保留原按钮实例。[输入宿主回归](../../test/core/presentation/app_input_host_test.dart)覆盖两平台失焦／失活和迟到 Up；[真实路由回归](../../test/app/workspace_router_test.dart)补充关闭后的设置保存与侧栏展开／收起。
 - `tool/check.ps1 -SkipPub` 最终通过：格式、静态分析、平台打包边界、根应用 3352 项和四包 709 项离线测试通过。13 项根测试因 Windows 符号链接权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生通过。日志 `build/sidebar-navigation-check-final.log`；定向 39 项回归另见 `build/sidebar-close-targeted.log`。首次全仓测试发现三处旧多标签栏高度断言，已修正并在最终全仓检查复测通过。
 - 本轮在 Windows 主机执行离线组件检查，未发现可连接的 DTD／Flutter 调试实例，无法热重载。macOS 构建、原生物理键鼠复测及性能测量未执行，设备验收需覆盖普通／全屏窗口和连续打开关闭后的侧栏按钮。
+
+## 底栏页面顶部随滚动收起（2026-10-30）
+
+- 底栏布局下，首页列表向上滑动时，头像和搜索框在 240 ms 内向上收起，并释放顶部空间；向下滑动即恢复，无需先回到列表顶部。频道标签与底部导航保留。宽屏手动选择底栏也采用独立的工具行，侧栏布局保留原有常驻工具。
+- “我的”页使用相同动效收起完整用户资料，历史／稍后再看／收藏／下载标签保持可操作。切换内容标签保留资料收起状态、列表身份和滚动位置；向下滑动恢复资料。布局启用状态由外壳传入，不按账号页面自身宽度另行推算。
+- [共享组件](../../lib/shared/ui/scroll_collapsing_header.dart)只响应活动页面的纵向用户滚动方向，忽略水平切页、程序滚动、隐藏页面和不足一屏的列表。通知继续冒泡以保留下拉刷新；收起时停用资料区域的点击、焦点与无障碍内容，系统减少动画设置即时生效。动画只更新顶部局部，不逐帧重建内容页面或更换其滚动控制器。
+- 只读参考本地 PiliPlus 提交 `936072449e82e3d90c28c728c0087bf5136fa441` 的 [首页工具行](../../../PiliPlus/lib/pages/home/view.dart)、[滚动方向通知](../../../PiliPlus/lib/pages/common/common_page.dart)和[我的页资料区](../../../PiliPlus/lib/pages/mine/view.dart)。PiliPlus 应用为 GPLv3；这里只借鉴交互，独立实现 Flutter 组件，未复制应用源码、资源或增加运行时依赖。
+- [共享动效回归](../../test/shared/ui/scroll_collapsing_header_test.dart)与[外壳和账号页回归](../../test/app/scroll_collapsing_headers_test.dart)共 13 项通过，覆盖动画中间态、未到顶部反向恢复、搜索草稿、内容身份、窄屏自动底栏、宽屏强制底栏、侧栏、账号内容切换、水平滚动、程序滚动、隐藏页面、短列表、下拉刷新及减少动画。
+- 基于 `91cdff1` 只叠加本任务六个文件导出源码快照，五份锁文件使用 `pub get --offline --enforce-lockfile` 解析。`tool/check.ps1 -SkipPub` 的格式、全仓与 Linux 适配器分析、平台打包边界阶段通过，后续通过脚本的 `RootTests`／`PackageTests` 阶段完成全套测试：根应用 3407 项、四包 715 项通过。13 项根测试因 Windows 符号链接权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生集成通过。日志为 `build/validation/scroll-collapsing-header-snapshot-check-final.log`、`build/validation/scroll-collapsing-header-snapshot-root-tests.log`、`build/validation/scroll-collapsing-header-snapshot-package-tests.log`。
+- 快照首次启动测试遇到 SQLite 下载连接中断；随后复用当前工作区的 SQLite 与 libmpv 官方资产缓存，由原构建钩子继续验证 SHA-256 后运行，未修改 Pub 缓存或绕过来源／哈希校验。共享工作区的根应用 3412 项和四包 715 项同样通过；其全量入口最初被同期 `primary_navigation_transition.dart` 的格式问题阻塞，全仓分析另报告同期 `video_card_cover.dart` 两条 `invalid_null_aware_operator`。本任务文件定向分析、文档 22 个相对链接与 `git diff --check` 通过；未修改或提交上述同期差异。
+- 本轮平台构建、Android／iOS／macOS 设备操作、实际触摸手感及性能测量未执行。已连接当前 Windows Flutter 实例并尝试热重载；该实例为 AOT 构建，VM 返回 `Compiler is disabled in AOT mode`，未将其记为更新后的运行验收。
