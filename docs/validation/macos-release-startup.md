@@ -57,6 +57,12 @@ Intel CI 首次执行启动探测时曾达到原有 60 秒上限。固定 SDK �
 
 本轮 Windows / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过格式、静态分析、打包边界及 4080 项测试（根 3369、API 492、播放器 96、弹幕 118、封装 5），13 项 Windows 符号链接和 10 项未配置 mux 原生库的用例按环境跳过。新增 10 个真实子进程场景在完整检查中及定向复验均通过；三份 PowerShell 脚本解析、12 个本地文档链接和 `git diff --check` 通过，五份锁文件未变化。没有可连接的调试应用，未热重载；Swift／真实 macOS 启动与 DMG 打包以修复提交对应的新 CI 结果为准。
 
+### CI #224 实际执行结果
+
+[CI #224](https://github.com/CKopoer/BiliSail/actions/runs/40851739162) 对应修复提交 `98040b8aa2c46acc2067d965716af93ea64f03c0`，工作流已结束且结论为 `success`，全部检查、独立原生 mux 回归及六个构建目标均通过。macOS [x64](https://github.com/CKopoer/BiliSail/actions/runs/40851739162/job/123376492094) 和 [arm64](https://github.com/CKopoer/BiliSail/actions/runs/40851739162/job/123376491977) 均通过 Release 编译、最终签名与权限校验、四个真实启动／跨进程凭据阶段及 DMG 创建、校验和上传。Swift 标记与实时输出监督已在两种 Mac runner 执行通过。
+
+x64 日志中，`startup`／`write`／`read-delete`／`verify-deleted` 从创建进程到 Dart 入口分别为 3872／463／470／428 毫秒，`verify-deleted` 随即完成 Keychain 空值核对并成功退出。本次未复现 CI #223 的无输出原生等待，也未用到扩大的启动预算；该次通过不能反推上一轮具体是哪一个系统调用阻塞。新增回归已独立证明启动预算与执行预算分开、重复入口不续期、步骤超时和失败阻断，后续若再出现等待，可通过原生阶段、`timeoutKind` 与单调时间定位。实际设备安装升级、Gatekeeper、真实账号和音画播放仍不包含在本轮 CI 验收内。
+
 ## 旧数据与升级单独验收
 
 Keychain 后端选择改变不会自动迁移原 Data Protection Keychain 的条目。传统 Keychain 中已有的同服务／同 key 条目沿用原身份；旧 Data Protection 条目的可访问性受原签名、provisioning 和系统授权影响，不能假设移除 Sharing 后仍可读取。不尝试用缺权限的新签名强读旧库，也不自动删除旧后端条目；无法恢复时按现有登录流程重新登录。
