@@ -10,6 +10,8 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/messages/application/messages_controller.dart';
 import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
+import 'package:bilisail/shared/ui/paging_tab_strip.dart';
+import 'package:bilisail/shared/ui/retained_tab_view.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,7 +31,11 @@ void main() {
     WidgetTester tester, {
     double scale = 1,
     TargetPlatform? platform,
+    ValueNotifier<bool>? active,
+    TabPagingProgress? outerProgress,
   }) async {
+    final progress = outerProgress ?? TabPagingProgress(0);
+    if (outerProgress == null) addTearDown(progress.dispose);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -43,12 +49,199 @@ void main() {
                 .copyWith(textScaler: TextScaler.linear(scale)),
             child: child ?? const SizedBox(),
           ),
-          home: const Scaffold(body: MessagesScreen()),
+          home: Scaffold(
+            body: TabPagingScope(
+              progress: progress,
+              child: active == null
+                  ? const MessagesScreen()
+                  : ValueListenableBuilder<bool>(
+                      valueListenable: active,
+                      child: const MessagesScreen(),
+                      builder: (_, value, child) =>
+                          WorkspaceActivity(active: value, child: child!),
+                    ),
+            ),
+          ),
         ),
       ),
     );
     await tester.pumpAndSettle();
   }
+
+  for (final width in [390.0, 1280.0]) {
+    testWidgets('message sections swipe in both directions at $width', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 850);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await mount(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MessagesScreen)),
+      );
+      final pager = find.byKey(const ValueKey('message-section-pager'));
+      for (final section in InboxSection.values.skip(1)) {
+        await tester.drag(pager, Offset(-width * .8, 0));
+        await tester.pumpAndSettle();
+        expect(container.read(messagesControllerProvider).section, section);
+      }
+      for (final section in InboxSection.values.reversed.skip(1)) {
+        await tester.drag(pager, Offset(width * .8, 0));
+        await tester.pumpAndSettle();
+        expect(container.read(messagesControllerProvider).section, section);
+      }
+      await tester.drag(pager, Offset(width * .8, 0));
+      await tester.pumpAndSettle();
+      expect(
+        container.read(messagesControllerProvider).section,
+        InboxSection.private,
+      );
+      expect(repo.reads, 9);
+      expect(repo.sends + repo.marks + repo.systemMarks, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final cancel in [false, true]) {
+    testWidgets(
+      'partial message swipe follows local progress: cancel=$cancel',
+      (tester) async {
+        final outer = TabPagingProgress(7);
+        addTearDown(outer.dispose);
+        await mount(tester, outerProgress: outer);
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(MessagesScreen)),
+        );
+        final progress = tester
+            .widget<RetainedTabView<InboxSection>>(
+              find.byType(RetainedTabView<InboxSection>),
+            )
+            .progress!;
+        expect(
+          tester
+              .widget<PagingTabStrip<InboxSection>>(
+                find.byType(PagingTabStrip<InboxSection>),
+              )
+              .progress,
+          same(progress),
+        );
+        expect(progress, isNot(same(outer)));
+        final pager = find.byKey(const ValueKey('message-section-pager'));
+        final gesture = await tester.startGesture(tester.getCenter(pager));
+        await gesture.moveBy(Offset(-tester.getSize(pager).width * .25, 0));
+        await tester.pump();
+        await tester.pump();
+        expect(progress.value, inExclusiveRange(0, .5));
+        expect(
+          container.read(messagesControllerProvider).section,
+          InboxSection.private,
+        );
+        expect(repo.reads, 1);
+        expect(outer.value, 7);
+        await tester.pump(const Duration(milliseconds: 300));
+        if (cancel) {
+          await gesture.cancel();
+        } else {
+          await gesture.up();
+        }
+        await tester.pumpAndSettle();
+        expect(progress.value, 0);
+        expect(repo.reads, 1);
+        expect(
+          container.read(messagesControllerProvider).section,
+          InboxSection.private,
+        );
+      },
+    );
+  }
+
+  testWidgets('retained message neighbors display their own category rows', (
+    tester,
+  ) async {
+    await mount(tester);
+    final replies = const InboxEntry(id: 'reply', title: '回复标题', text: '回复正文');
+    final mentions = const InboxEntry(
+      id: 'mention',
+      title: '提及标题',
+      text: '提及正文',
+    );
+    repo.entries = [replies];
+    await tester.tap(find.byKey(const ValueKey('message-section-replies')));
+    await tester.pumpAndSettle();
+    repo.entries = [mentions];
+    await tester.tap(find.byKey(const ValueKey('message-section-mentions')));
+    await tester.pumpAndSettle();
+    final pager = find.byKey(const ValueKey('message-section-pager'));
+    final gesture = await tester.startGesture(tester.getCenter(pager));
+    await gesture.moveBy(Offset(tester.getSize(pager).width * .4, 0));
+    await tester.pump();
+    expect(find.text('回复正文'), findsOneWidget);
+    expect(find.text('提及正文'), findsOneWidget);
+    expect(repo.reads, 3);
+    await gesture.cancel();
+    await tester.pumpAndSettle();
+    expect(find.text('提及正文'), findsOneWidget);
+    expect(repo.reads, 3);
+  });
+
+  testWidgets('hiding messages interrupts a swipe without loading a section', (
+    tester,
+  ) async {
+    final active = ValueNotifier(true);
+    addTearDown(active.dispose);
+    await mount(tester, active: active);
+    final pager = find.byKey(const ValueKey('message-section-pager'));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MessagesScreen)),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(pager));
+    await gesture.moveBy(Offset(-tester.getSize(pager).width * .7, 0));
+    await tester.pump();
+    active.value = false;
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(
+      container.read(messagesControllerProvider).section,
+      InboxSection.private,
+    );
+    expect(repo.reads, 1);
+    active.value = true;
+    await tester.pumpAndSettle();
+    await tester.drag(pager, Offset(-tester.getSize(pager).width * .8, 0));
+    await tester.pumpAndSettle();
+    expect(
+      container.read(messagesControllerProvider).section,
+      InboxSection.replies,
+    );
+    expect(repo.reads, 2);
+  });
+
+  testWidgets('swiping from a private conversation preserves its draft', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 850);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await mount(tester);
+    await tester.tap(find.text('测试会话'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '滑动后保留的草稿');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    final pager = find.byKey(const ValueKey('message-section-pager'));
+    await tester.drag(pager, const Offset(-310, 0));
+    await tester.pumpAndSettle();
+    await tester.drag(pager, const Offset(310, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('测试会话'));
+    await tester.pumpAndSettle();
+    expect(find.text('滑动后保留的草稿'), findsOneWidget);
+    expect(repo.sends, 0);
+    expect(tester.takeException(), isNull);
+  });
 
   Future<void> mountWithAccount(
     WidgetTester tester, {

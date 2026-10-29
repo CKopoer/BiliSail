@@ -9,6 +9,7 @@ import '../../../domain/user.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/page_tab_style.dart';
 import '../../../shared/ui/paging_tab_strip.dart';
+import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../auth/application/auth_controller.dart';
@@ -39,7 +40,14 @@ class MessagesScreen extends ConsumerStatefulWidget {
 
 class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   final Map<String, String> _drafts = {};
+  final _pagingProgress = TabPagingProgress(0);
   int _openVersion = 0;
+
+  @override
+  void dispose() {
+    _pagingProgress.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -147,90 +155,121 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
         controller.closeConversation();
         return true;
       },
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '我的消息',
-                    style: Theme.of(context).textTheme.titleLarge,
+      child: TabPagingScope(
+        progress: _pagingProgress,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '我的消息',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '刷新消息',
+                    onPressed: controller.refresh,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                  IconButton(
+                    tooltip: '官方消息页',
+                    icon: const Icon(Icons.open_in_new),
+                    onPressed: () => ref.read(externalLinkOpenerProvider)(
+                      Uri.https('message.bilibili.com', '/'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const _MessageSections(),
+            const Divider(height: 1),
+            Expanded(
+              child: RetainedTabView<InboxSection>(
+                key: ValueKey(auth.$2),
+                viewKey: const ValueKey('message-section-pager'),
+                tabs: InboxSection.values,
+                value: section,
+                progress: _pagingProgress,
+                onChanged: controller.selectSection,
+                pageBuilder: (context, tab, active) => TickerMode(
+                  enabled: active && WorkspaceActivity.isActive(context),
+                  child: Column(
+                    children: [
+                      if (tab == InboxSection.system)
+                        const _SystemWriteMessage(),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final wide = constraints.maxWidth >= 720;
+                            final list = _InboxList(
+                              section: tab,
+                              onOpenUser: widget.onOpenUser,
+                              onOpenTarget: widget.onOpenTarget,
+                            );
+                            if (tab != InboxSection.private) return list;
+                            final thread = selectedId == null
+                                ? const StateView.empty(
+                                    message: '选择一个会话查看消息',
+                                    icon: Icons.chat_bubble_outline,
+                                  )
+                                : _ConversationView(
+                                    key: ValueKey('${auth.$2}:$selectedId'),
+                                    ownMid: auth.$2,
+                                    narrow: !wide,
+                                    initialDraft: _drafts[selectedId] ?? '',
+                                    onDraftChanged: (text) {
+                                      _drafts.remove(selectedId);
+                                      if (text.isNotEmpty) {
+                                        _drafts[selectedId] = text;
+                                      }
+                                      if (_drafts.length > 500) {
+                                        _drafts.remove(_drafts.keys.first);
+                                      }
+                                    },
+                                    onBack: controller.closeConversation,
+                                    onMore: controller.loadThread,
+                                    onRefresh: () =>
+                                        controller.loadThread(refresh: true),
+                                    onSend: (text) async {
+                                      final sent = await controller.send(text);
+                                      if (sent &&
+                                          mounted &&
+                                          _drafts[selectedId] == text) {
+                                        // A different view of this conversation may have
+                                        // reopened while the original send was pending.
+                                        setState(
+                                          () => _drafts.remove(selectedId),
+                                        );
+                                      }
+                                      return sent;
+                                    },
+                                    onMarkRead: controller.markRead,
+                                    onOpenUser: widget.onOpenUser,
+                                    onOpenTarget: widget.onOpenTarget,
+                                  );
+                            if (!wide) {
+                              return selectedId == null ? list : thread;
+                            }
+                            return Row(
+                              children: [
+                                SizedBox(width: 300, child: list),
+                                const VerticalDivider(width: 1),
+                                Expanded(child: thread),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                IconButton(
-                  tooltip: '刷新消息',
-                  onPressed: controller.refresh,
-                  icon: const Icon(Icons.refresh),
-                ),
-                IconButton(
-                  tooltip: '官方消息页',
-                  icon: const Icon(Icons.open_in_new),
-                  onPressed: () => ref.read(externalLinkOpenerProvider)(
-                    Uri.https('message.bilibili.com', '/'),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-          const _MessageSections(),
-          const Divider(height: 1),
-          if (section == InboxSection.system) const _SystemWriteMessage(),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 720;
-                final list = _InboxList(
-                  onOpenUser: widget.onOpenUser,
-                  onOpenTarget: widget.onOpenTarget,
-                );
-                if (section != InboxSection.private) return list;
-                final thread = selectedId == null
-                    ? const StateView.empty(
-                        message: '选择一个会话查看消息',
-                        icon: Icons.chat_bubble_outline,
-                      )
-                    : _ConversationView(
-                        key: ValueKey('${auth.$2}:$selectedId'),
-                        ownMid: auth.$2,
-                        narrow: !wide,
-                        initialDraft: _drafts[selectedId] ?? '',
-                        onDraftChanged: (text) {
-                          _drafts.remove(selectedId);
-                          if (text.isNotEmpty) _drafts[selectedId] = text;
-                          if (_drafts.length > 500) {
-                            _drafts.remove(_drafts.keys.first);
-                          }
-                        },
-                        onBack: controller.closeConversation,
-                        onMore: controller.loadThread,
-                        onRefresh: () => controller.loadThread(refresh: true),
-                        onSend: (text) async {
-                          final sent = await controller.send(text);
-                          if (sent && mounted && _drafts[selectedId] == text) {
-                            // A different view of this conversation may have
-                            // reopened while the original send was pending.
-                            setState(() => _drafts.remove(selectedId));
-                          }
-                          return sent;
-                        },
-                        onMarkRead: controller.markRead,
-                        onOpenUser: widget.onOpenUser,
-                        onOpenTarget: widget.onOpenTarget,
-                      );
-                if (!wide) return selectedId == null ? list : thread;
-                return Row(
-                  children: [
-                    SizedBox(width: 300, child: list),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: thread),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -279,6 +318,7 @@ class _MessageSections extends ConsumerWidget {
           child: PagingTabStrip<InboxSection>(
             tabs: InboxSection.values,
             value: section,
+            progress: TabPagingScope.maybeOf(context),
             onSelected: ref
                 .read(messagesControllerProvider.notifier)
                 .selectSection,
@@ -312,23 +352,42 @@ class _SystemWriteMessage extends ConsumerWidget {
   }
 }
 
-class _InboxList extends ConsumerWidget {
-  const _InboxList({this.onOpenUser, this.onOpenTarget});
+class _InboxList extends ConsumerStatefulWidget {
+  const _InboxList({required this.section, this.onOpenUser, this.onOpenTarget});
+  final InboxSection section;
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<Uri>? onOpenTarget;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final (items, section, selected, loading, error) = ref.watch(
+  ConsumerState<_InboxList> createState() => _InboxListState();
+}
+
+class _InboxListState extends ConsumerState<_InboxList> {
+  // A retained neighbor must keep its own rows during the next swipe rather
+  // than render the newly selected category's inbox.
+  (List<InboxEntry>, String?, bool, String?) _snapshot = (
+    const [],
+    null,
+    true,
+    null,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final current = ref.watch(
       messagesControllerProvider.select(
-        (state) => (
-          state.inbox.items,
-          state.section,
-          state.selected?.id,
-          state.inbox.items.isEmpty && state.inbox.loading,
-          state.inbox.items.isEmpty ? state.inbox.error : null,
-        ),
+        (state) => state.section == widget.section
+            ? (
+                state.inbox.items,
+                state.selected?.id,
+                state.inbox.items.isEmpty && state.inbox.loading,
+                state.inbox.items.isEmpty ? state.inbox.error : null,
+              )
+            : null,
       ),
     );
+    if (current != null) _snapshot = current;
+    final (items, selected, loading, error) = _snapshot;
+    final section = widget.section;
     final controller = ref.read(messagesControllerProvider.notifier);
     final isPrivate = section == InboxSection.private;
     if (loading) return const StateView.loading();
@@ -349,7 +408,7 @@ class _InboxList extends ConsumerWidget {
       padding: const EdgeInsets.all(8),
       itemCount: items.length + 1,
       itemBuilder: (context, index) {
-        if (index == items.length) return const _InboxFooter();
+        if (index == items.length) return _InboxFooter(section: section);
         final entry = items[index], user = items[index].userId;
         return Card(
           elevation: 0,
@@ -360,7 +419,7 @@ class _InboxList extends ConsumerWidget {
             key: ValueKey(entry.id),
             leading: InkWell(
               onTap: !isPrivate && user != null
-                  ? () => onOpenUser?.call(user)
+                  ? () => widget.onOpenUser?.call(user)
                   : null,
               child: Badge(
                 isLabelVisible: entry.unread > 0,
@@ -395,7 +454,7 @@ class _InboxList extends ConsumerWidget {
                   if (!isPrivate && entry.targetUrl != null)
                     TextButton(
                       onPressed: () =>
-                          onOpenTarget?.call(entry.targetUrl ?? Uri()),
+                          widget.onOpenTarget?.call(entry.targetUrl ?? Uri()),
                       child: const Text('查看原内容'),
                     ),
                 ],
@@ -411,28 +470,39 @@ class _InboxList extends ConsumerWidget {
   }
 }
 
-class _InboxFooter extends ConsumerWidget {
-  const _InboxFooter();
+class _InboxFooter extends ConsumerStatefulWidget {
+  const _InboxFooter({required this.section});
+  final InboxSection section;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final (loading, error, hasMore, length, section) = ref.watch(
+  ConsumerState<_InboxFooter> createState() => _InboxFooterState();
+}
+
+class _InboxFooterState extends ConsumerState<_InboxFooter> {
+  (bool, String?, bool, int) _snapshot = (false, null, false, 0);
+
+  @override
+  Widget build(BuildContext context) {
+    final current = ref.watch(
       messagesControllerProvider.select(
-        (state) => (
-          state.inbox.loading,
-          state.inbox.error,
-          state.inbox.hasMore,
-          state.inbox.items.length,
-          state.section,
-        ),
+        (state) => state.section == widget.section
+            ? (
+                state.inbox.loading,
+                state.inbox.error,
+                state.inbox.hasMore,
+                state.inbox.items.length,
+              )
+            : null,
       ),
     );
+    if (current != null) _snapshot = current;
+    final (loading, error, hasMore, length) = _snapshot;
     return _ListFooter(
       loading: loading,
       error: error,
       hasMore: hasMore,
       onMore: ref.read(messagesControllerProvider.notifier).loadInbox,
-      endLabel: section == InboxSection.system
+      endLabel: widget.section == InboxSection.system
           ? '当前显示最近 20 条系统通知，更多请打开官方消息页'
           : length >= 500
           ? '已加载 500 条消息'
