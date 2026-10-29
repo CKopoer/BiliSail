@@ -30,6 +30,10 @@ target 'Runner' do
   use_frameworks!
 
   flutter_install_all_macos_pods File.dirname(File.realpath(__FILE__))
+  # Keep the pinned Pub checkout immutable; repair only a build-local pod copy.
+  unless system('python3', File.expand_path('../tool/prepare-media-kit-apple.py', __dir__), 'macos')
+    raise 'Could not prepare media-kit CocoaPods C bindings'
+  end
   target 'RunnerTests' do
     inherit! :search_paths
   end

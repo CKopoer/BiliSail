@@ -35,6 +35,13 @@ export LD_LIBRARY_PATH="$bundle/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 # adding the distro mpv here would silently replace the pinned implementation.
 mpv="$work/AppDir/usr/bin/lib/libmpv.so.2"
 [[ -f "$mpv" ]] || { echo 'Missing media-kit Native Assets libmpv.so.2' >&2; exit 1; }
+# Print the complete missing dependency set before linuxdeploy stops at the first.
+mpv_dependencies="$(ldd "$mpv")"
+printf '%s\n' "$mpv_dependencies"
+if grep -q 'not found' <<< "$mpv_dependencies"; then
+  echo 'Pinned libmpv has unresolved runtime dependencies' >&2
+  exit 1
+fi
 "$work/tools/linuxdeploy-x86_64.AppImage" --appdir "$work/AppDir" \
   --executable "$work/AppDir/usr/bin/bilisail" --library "$mpv" \
   --desktop-file "$repo/linux/packaging/dev.bilisail.bilisail.desktop" \

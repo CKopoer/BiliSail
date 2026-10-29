@@ -23,6 +23,9 @@ flutter_ios_podfile_setup
 target 'Runner' do
   use_frameworks!
   flutter_install_all_ios_pods __dir__
+  unless system('python3', File.expand_path('../tool/prepare-media-kit-apple.py', __dir__), 'ios')
+    raise 'Could not prepare media-kit CocoaPods C bindings'
+  end
   target 'RunnerTests' do
     inherit! :search_paths
   end

@@ -57,3 +57,13 @@ Android 的目标实现已替换旧 fork 的 `surface_lifecycle.dart`。应用�
 本地日志位于 `build/predidit-*.log`。Android 与 Windows 同时构建曾导致 Flutter 插件注册文件交叉更新；已改为串行并通过标准入口重新构建 Android Release，没有手改生成文件。
 
 macOS 部署下限提高至 13.0 的依据已核对固定 Flutter SDK `packages/flutter_tools/lib/src/isolated/native_assets/macos/native_assets.dart` 中的 `targetMacOSVersion = 13`。macOS／iOS／Linux 的本平台构建、Android 实机音画与 Surface、真实账号／长时间播放、跨 GPU 和性能对照尚未执行。新原生二进制完整分发材料仍需按来源归档；本轮未创建正式发布。
+
+## CI 构建兼容修复（2026-10-29）
+
+[CI #216](https://github.com/CKopoer/BiliSail/actions/runs/40738122479) 的检查和 Android 构建通过，三个 Apple 目标在 Swift 编译时缺少 mpv 声明，Linux 在打包时缺少 `libva-wayland.so.2`，Windows 仅输出 Native Assets 汇总错误。
+
+- 两份 Podfile 在 Flutter 创建插件链接后调用 [构建副本准备脚本](../tool/prepare-media-kit-apple.py)。校验固定 podspec 的 SHA-256，将插件复制到 `build/apple-plugins/<platform>/`，把共享 C 绑定放进 Pod 根目录并重定向生成的插件链接。保留上游源码、许可和符号链接；不修改 Pub 缓存或依赖提交。升级依赖时必须重新审查校验值和目录布局。
+- Linux 显式安装 `libva-wayland2`，打包前输出固定 libmpv 的完整 `ldd` 结果。继续使用 Native Assets 的库，禁止用系统 mpv 替换。
+- Windows 打包脚本启用 Flutter verbose 输出；原生编译期间移除 MSIX 签名凭据，随后恢复供签名使用。失败时收集经过环境敏感值和 URL query 过滤的 hook 输入、输出与日志，上传独立诊断产物。
+
+Windows 本地 `tool/check.ps1 -SkipPub` 通过格式、分析和 4070 项测试，根应用 13 项既有跳过，mux 10 项因未配置 `BILI_MUX_LIBRARY` 跳过；两项 Apple staging 回归、18 项 Linux 纯 Python 回归、PowerShell／Bash 语法和诊断脱敏检查通过。7 项 POSIX shell 运行时检查未在此 Windows 环境执行成功，交由 Ubuntu CI 验证。远端构建结果将在修复推送后的 CI 核验；以上不代表设备安装、音画或性能验收通过。

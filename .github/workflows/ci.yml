@@ -166,6 +166,9 @@ jobs:
         shell: bash
         run: |
           python3 -m unittest discover -s tool -p 'test_linux_*.py'
+          python3 -m unittest discover -s tool -p 'test_apple_*.py'
+          ruby -c ios/Podfile
+          ruby -c macos/Podfile
           bash tool/test-linux-downloads.sh
           bash packages/bili_mux/tool/test-apple-framework.sh
           for script in tool/package-linux.sh tool/setup-linux-build.sh tool/linux-downloads.sh tool/linux-runtime-validation.sh; do
@@ -349,6 +352,21 @@ jobs:
           MSIX_CERTIFICATE_BASE64: ${{ matrix.target == 'windows-x64' && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_BASE64 || '' }}
           MSIX_CERTIFICATE_PASSWORD: ${{ matrix.target == 'windows-x64' && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_PASSWORD || '' }}
         run: ./tool/build-release.ps1 -Target $env:BUILD_TARGET -Version $env:BUILD_VERSION -AndroidPreviewSigning:($env:ANDROID_PREVIEW_SIGNING -eq 'true')
+      - name: Collect Windows native build diagnostics
+        if: failure() && matrix.target == 'windows-x64'
+        shell: pwsh
+        env:
+          MSIX_CERTIFICATE_BASE64: ${{ secrets.MSIX_CERTIFICATE_BASE64 }}
+          MSIX_CERTIFICATE_PASSWORD: ${{ secrets.MSIX_CERTIFICATE_PASSWORD }}
+        run: ./tool/collect-build-diagnostics.ps1
+      - name: Upload Windows build diagnostics
+        if: failure() && matrix.target == 'windows-x64'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: BiliSail-windows-x64-build-diagnostics
+          path: artifacts/windows-x64/diagnostics/
+          if-no-files-found: warn
+          retention-days: 14
       - name: Upload packages and checksums
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

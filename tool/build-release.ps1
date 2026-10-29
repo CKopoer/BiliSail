@@ -279,7 +279,18 @@ try {
       $installerWork = Join-Path $outputRoot 'installer-work'
       New-Item -ItemType Directory -Path $installerWork | Out-Null
       $wix = Initialize-WindowsInstallerTools (Join-Path $installerWork 'tools')
-      Invoke-BuildCommand flutter (@('build', 'windows') + $versionArgs)
+      # Native toolchain diagnostics can print the compiler environment. Signing
+      # happens later and these credentials must not reach build hooks.
+      $msixCertificate = $env:MSIX_CERTIFICATE_BASE64
+      $msixPassword = $env:MSIX_CERTIFICATE_PASSWORD
+      try {
+        $env:MSIX_CERTIFICATE_BASE64 = $null
+        $env:MSIX_CERTIFICATE_PASSWORD = $null
+        Invoke-BuildCommand flutter (@('build', 'windows', '--verbose') + $versionArgs)
+      } finally {
+        $env:MSIX_CERTIFICATE_BASE64 = $msixCertificate
+        $env:MSIX_CERTIFICATE_PASSWORD = $msixPassword
+      }
       $staging = Join-Path $outputRoot $name
       Copy-Item -LiteralPath 'build/windows/x64/runner/Release' -Destination $staging -Recurse
       if (!(Test-Path -LiteralPath (Join-Path $staging 'bilisail.exe'))) { throw 'Windows executable is missing.' }
