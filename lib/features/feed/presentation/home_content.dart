@@ -33,6 +33,7 @@ import '../../../shared/ui/app_notice.dart';
 import 'home_feed_cards.dart';
 import 'favorite_folder_edit_dialog.dart';
 import '../application/home_controller.dart';
+import '../application/favorite_playback_queue.dart';
 import '../application/watch_later_removal_controller.dart';
 import '../domain/home_channel.dart';
 import '../domain/home_repository.dart';
@@ -67,6 +68,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   bool? _bodyHasLogin;
   bool? _bodyCanUnsubscribe;
   Widget? _bodySliver;
+  FavoriteQueueRequest? _favoriteRequest;
 
   void _clearBodyCache() {
     _bodyItems = null;
@@ -142,6 +144,14 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
       ref.watch(homeControllerProvider(visited));
     }
     final feed = ref.watch(homeControllerProvider(query));
+    final favoriteRequest = _favoriteRequest =
+        widget.channel == HomeChannel.favorites &&
+            (_folder != null || widget.section == '默认收藏夹')
+        ? (query: query, title: _folder?.title ?? widget.section)
+        : null;
+    final favoriteQueue = favoriteRequest == null
+        ? null
+        : ref.watch(favoritePlaybackQueueProvider(favoriteRequest));
     if (_bodyQuery != query || feed.items.asData?.value.isNotEmpty != true) {
       // A full load, empty/error state or query replacement has no retained
       // body. Release its models and callbacks; paging errors still carry data.
@@ -210,16 +220,41 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                           ),
                         ),
                       ),
-                    if (_folder != null && !liveBrowse)
+                    if ((_folder != null || favoriteRequest != null) &&
+                        !liveBrowse)
                       SliverToBoxAdapter(
                         child: Row(
                           children: [
-                            IconButton(
-                              tooltip: '返回列表',
-                              onPressed: () => setState(() => _folder = null),
-                              icon: const Icon(Icons.arrow_back),
+                            if (_folder != null)
+                              IconButton(
+                                tooltip: '返回列表',
+                                onPressed: () => setState(() => _folder = null),
+                                icon: const Icon(Icons.arrow_back),
+                              ),
+                            Expanded(
+                              child: Text(_folder?.title ?? widget.section),
                             ),
-                            Expanded(child: Text(_folder!.title)),
+                            if (favoriteRequest != null)
+                              TextButton.icon(
+                                key: const ValueKey('favorite-play-all'),
+                                onPressed:
+                                    favoriteQueue!.isLoading ||
+                                        feed.items.asData?.value.isNotEmpty !=
+                                            true
+                                    ? null
+                                    : () => _playFavorites(favoriteRequest),
+                                icon: favoriteQueue.isLoading
+                                    ? const SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.playlist_play),
+                                label: Text(
+                                  favoriteQueue.isLoading ? '加载中' : '播放全部',
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -621,6 +656,11 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
       return;
     }
     if (entry.bvid != null) {
+      final request = _favoriteRequest;
+      if (request != null) {
+        await _playFavorites(request, initial: VideoId(entry.bvid!));
+        return;
+      }
       if (widget.channel == HomeChannel.watchLater && visibleItems != null) {
         final scope = ref.read(homeRepositoryProvider).accountScope;
         final queue = ref
@@ -672,6 +712,44 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
     if (mounted && !opened) {
       showAppNotice(context, '无法打开浏览器，请稍后重试');
     }
+  }
+
+  Future<void> _playFavorites(
+    FavoriteQueueRequest request, {
+    VideoId? initial,
+  }) async {
+    final provider = favoritePlaybackQueueProvider(request);
+    if (ref.read(provider).isLoading) return;
+    final queue = await ref.read(provider.notifier).capture();
+    if (!mounted ||
+        !widget.active ||
+        !WorkspaceActivity.isActive(context) ||
+        _favoriteRequest != request) {
+      return;
+    }
+    if (queue == null) {
+      final error = ref.read(provider).error;
+      if (error != null) showAppNotice(context, _message(error));
+      return;
+    }
+    if (ref.read(homeRepositoryProvider).accountScope != queue.scope ||
+        ref.read(sessionEpochProvider)() != queue.sessionEpoch) {
+      return;
+    }
+    final id = initial ?? queue.items.first.video.id;
+    if (queue.indexOf(id) < 0) {
+      showAppNotice(context, '该视频不在当前收藏夹播放列表内，请刷新后重试');
+      return;
+    }
+    if (queue.truncated) {
+      showAppNotice(context, '收藏夹较大，本次播放前 1000 条内容中的有效视频');
+    }
+    context.go(
+      Uri(
+        path: '/video/${id.value}',
+        queryParameters: {'queue': queue.id},
+      ).toString(),
+    );
   }
 }
 

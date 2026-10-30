@@ -143,6 +143,7 @@
 | [视频卡操作菜单](validation/video-card-menus.md) | 推荐反馈、添加稍后再看、删除稍后再看及悬停入口范围 |
 | [稍后再看队列播放](validation/watch-later-queue.md) | 列表上下文、分 P 与队列推进、侧栏和账号/标签隔离 |
 | [收藏子标签与视频卡片](validation/favorites-tabs.md) | 五类收藏入口、公共视频卡、自建收藏夹状态/日期与信息编辑、Windows 验证边界 |
+| [收藏夹播放全部](validation/favorite-playback-queue.md) | 收藏夹/合集有序播放、独立分页、播放页列表、账号隔离与容量边界 |
 | [收藏与订阅取消操作](validation/favorites-unsubscribe.md) | 卡片三点菜单、取消前确认、CSRF 单次提交与分页/账号竞态 |
 | [媒体包验证](validation/media-packages.md) | 包契约、限制、原生资产来源 |
 | [播放器预读窗口](validation/player-buffer-ahead.md) | 普通播放最多 5 分钟、悬停预览 5 秒、内存限额和 Windows 原生验证 |

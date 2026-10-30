@@ -13,7 +13,7 @@ final class ProfileVideoQueueSource {
   final String name, order;
 }
 
-/// An account-scoped queue shared by watch-later and public submissions.
+/// An account-scoped queue shared by watch-later, favorites and submissions.
 final class WatchLaterQueue {
   WatchLaterQueue({
     required this.id,
@@ -21,6 +21,8 @@ final class WatchLaterQueue {
     required this.sessionEpoch,
     required List<WatchLaterQueueItem> items,
     this.profileSource,
+    this.favoriteTitle,
+    this.truncated = false,
     this.nextPage = 1,
     this.hasMore = false,
     this.offset = 0,
@@ -31,13 +33,17 @@ final class WatchLaterQueue {
   final int sessionEpoch;
   final List<WatchLaterQueueItem> items;
   final ProfileVideoQueueSource? profileSource;
+  final String? favoriteTitle;
+  final bool truncated;
   final int nextPage, offset;
   final bool hasMore;
-  bool get isWatchLater => profileSource == null;
-  String get title => switch (profileSource) {
-    final source? => '${source.name}的投稿',
-    null => '稍后再看',
-  };
+  bool get isWatchLater => profileSource == null && favoriteTitle == null;
+  String get title =>
+      favoriteTitle ??
+      switch (profileSource) {
+        final source? => '${source.name}的投稿',
+        null => '稍后再看',
+      };
 
   WatchLaterQueue append(
     List<WatchLaterQueueItem> added, {
@@ -50,6 +56,8 @@ final class WatchLaterQueue {
     sessionEpoch: sessionEpoch,
     items: [...items.skip(drop), ...added],
     profileSource: profileSource,
+    favoriteTitle: favoriteTitle,
+    truncated: truncated,
     nextPage: nextPage,
     hasMore: hasMore,
     offset: offset + drop,
@@ -67,6 +75,8 @@ final class WatchLaterQueue {
       id: id,
       scope: scope,
       sessionEpoch: sessionEpoch,
+      favoriteTitle: favoriteTitle,
+      truncated: truncated,
       items: [
         for (final item in items)
           if (item.video.id == current || !removed.contains(item.removalId))

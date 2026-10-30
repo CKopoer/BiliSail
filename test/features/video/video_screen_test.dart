@@ -761,6 +761,100 @@ void main() {
       }
     }
   });
+  testWidgets(
+    'favorite queue retains removed watch-later videos and has no delete action',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1100, 720);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final home = _QueueHomeRepository();
+      final session = PlaybackSession(
+        engine: CardFakeEngine(),
+        repository: _UnusedPlaybackRepository(),
+        progress: _UnusedProgressStore(),
+        accountScope: () => home.accountScope,
+        sessionEpoch: () => 0,
+      );
+      addTearDown(session.close);
+      final container = ProviderContainer(
+        overrides: [
+          homeRepositoryProvider.overrideWithValue(home),
+          playbackSessionProvider.overrideWithValue(session),
+          authControllerProvider.overrideWith(_GuestAuthController.new),
+          videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+          videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
+        ],
+      );
+      addTearDown(container.dispose);
+      final queue = WatchLaterQueue(
+        id: 'favorites',
+        scope: 'user:7',
+        sessionEpoch: 0,
+        favoriteTitle: '测试收藏夹',
+        items: [
+          for (final entry in home.entries)
+            WatchLaterQueueItem(
+              entryId: entry.id,
+              aid: entry.aid,
+              video: VideoSummary(
+                id: VideoId(entry.bvid!),
+                title: entry.title,
+                coverUrl: '',
+                author: 'UP',
+                duration: Duration.zero,
+              ),
+            ),
+        ],
+      );
+      final opened = <VideoId>[];
+      var created = 0;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: InputTestApp(
+            builder: AppNoticeHost.builder,
+            home: Scaffold(
+              body: VideoScreen(
+                id: const VideoId('BV1abc123456'),
+                queue: queue,
+                onOpenQueueVideo: opened.add,
+                playerBuilder: (_, _, _) =>
+                    _TrackedPlayer(onCreate: () => created++, onDispose: () {}),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('测试收藏夹'), findsOneWidget);
+      expect(find.text('删除'), findsNothing);
+      final removal = container
+          .read(watchLaterRemovalProvider('user:7').notifier)
+          .remove(home.entries[1]);
+      home.writes.single.complete();
+      await removal;
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('watch-later-queue-BV2abc123456')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('watch-later-queue-BV2abc123456')),
+      );
+      await tester.pumpAndSettle();
+      expect(opened, [const VideoId('BV2abc123456')]);
+      await tester.tap(find.text('测试收藏夹'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('watch-later-queue-list')),
+        findsNothing,
+      );
+      expect(created, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final outcome in ['success', 'failure', 'uncertain', 'session-change']) {
     testWidgets(
       'watch-later queue deletion handles $outcome without changing player',

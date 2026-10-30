@@ -30,10 +30,14 @@ final class WatchLaterQueueRegistry {
     required int sessionEpoch,
     required List<WatchLaterQueueItem> items,
     ProfileVideoQueueSource? profileSource,
+    String? favoriteTitle,
+    bool truncated = false,
     bool hasMore = false,
     int nextPage = 1,
   }) {
-    if ((profileSource == null && !scope.startsWith('user:')) ||
+    if ((profileSource == null &&
+            !scope.startsWith('user:') &&
+            !(scope == 'guest' && favoriteTitle != null)) ||
         items.isEmpty) {
       return null;
     }
@@ -45,6 +49,8 @@ final class WatchLaterQueueRegistry {
       sessionEpoch: sessionEpoch,
       items: items.take(maximumItems).toList(),
       profileSource: profileSource,
+      favoriteTitle: favoriteTitle,
+      truncated: truncated || items.length > maximumItems,
       hasMore: hasMore,
       nextPage: nextPage,
     );

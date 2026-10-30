@@ -117,7 +117,7 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
                     Icon(Icons.equalizer, size: 15, color: scheme.primary),
                     const SizedBox(width: 5),
                     Text(
-                      '${widget.queue.offset + index + 1}/${widget.queue.offset + widget.queue.items.length}${widget.queue.hasMore ? '+' : ''}',
+                      '${widget.queue.offset + index + 1}/${widget.queue.offset + widget.queue.items.length}${widget.queue.hasMore || widget.queue.truncated ? '+' : ''}',
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
