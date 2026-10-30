@@ -196,6 +196,20 @@ Android 在当前页面没有可返回层级时显示“退出哔帆？”确认
 
 `tool/check.ps1 -SkipPub` 全量通过：根应用 3367、bili_api 492、bili_player 96、bili_danmaku 118、bili_mux 5 项，共 4078 项测试通过；格式、静态分析和打包边界检查通过。另有 13 项根应用测试因 Windows 符号链接权限跳过，10 项 mux 原生测试因未配置 `BILI_MUX_LIBRARY` 跳过。日志为本机忽略文件 `build/message-swipe-check.log`；本文 13 个本地链接与 `git diff --check` 通过。
 
+## 2026-10-30：消息页窄屏顶栏
+
+消息页原先由工作区单独绘制一行返回按钮，页面再绘制标题与刷新／官方消息页按钮，因此窄屏出现两行顶栏。现在工作区通过共享 `PageToolbarLeading` 将原返回按钮交给页面的 `PageToolbar`，与标题和两项操作同排；返回仍走工作区原来的页内返回、会话关闭和入口恢复流程，桌面原生标题栏已有返回按钮时不在页面重复显示。未登录时保留标题和已有返回入口。
+
+顶栏按实际可用宽度布局，标题保持单行并在不足时省略，按钮点击区域至少 48×48 逻辑像素。低于三项按钮与最小标题宽度时，顶栏允许横向滚动，避免压缩点击区域或溢出；文字缩放沿用 `MediaQuery`，不缩小系统字号。消息分类分页、私信草稿及已读规则保持原有所有者。
+
+定向回归覆盖 Android／Windows、单／双／多标签模式、240／280／320／390／1280 宽度往返、正常／双倍字号、刷新和官方页入口、私信顶栏返回与草稿恢复、登出后返回。共享顶栏另验证 160–390 宽度、最高三倍字号与各按钮点击。最终共享工作区定向复测 74 项通过，相关六文件静态分析通过；日志为本机忽略文件 `build/message-header-final-targeted.log`。
+
+共享工作区首次执行 `tool/check.ps1 -SkipPub` 时，格式检查被同期新增的 `test/features/feed/favorite_playback_queue_test.dart` 阻塞；未修改该文件。随后从 `8396b88` 创建本机隔离副本 `build/message-header-validation`，仅应用本任务源码及测试，相关五个完整文件与共享工作区逐字节核对一致，工作区顶栏则只应用本任务的三个改动块。两次全量脚本均完成打包边界、五处格式与静态分析；两次测试启动分别遇到 SQLite／media-kit 原生资产下载的 TLS 握手失败，按固定依赖清单核对 SHA-256 后复用本机缓存，保留原钩子的校验与解包流程。
+
+之后按脚本分阶段完成验证：根应用 `-Stage RootTests` 为 3406 项通过、13 项 Windows 符号链接权限跳过、8 项失败，失败均为未修改的 `sqlite_download_repository_test.dart` 中 5 秒状态等待超时；四包 `-Stage PackageTests` 为 API 496、播放器 96、弹幕 118、封装 5 项通过，共 715 项，另有 10 项封装原生测试因未配置 `BILI_MUX_LIBRARY` 跳过。下载仓储文件单独复测为 30 项通过、1 项权限跳过、3 项同类超时，其中两项此前全量通过；该文件只加载下载／存储实现，不依赖本次消息顶栏。未修改无关下载代码，不将全量检查记为通过。日志为 `build/message-header-check.log`、`build/message-header-isolated-check-final.log`、`build/message-header-isolated-root-tests.log`、`build/message-header-isolated-package-tests.log` 和 `build/message-header-download-retest.log`。
+
+本轮未构建或安装设备包，未操作真实账号，也未做 Android／Windows／macOS 运行界面验收。尝试发现调试应用并热重载，但当前没有可连接的 Flutter 调试进程，热重载未执行。
+
 ## 未验证或未实现
 
 真实文本发送、真实已读写操作没有在线执行，仅模拟验证协议/行为；Android/macOS 原生构建和设备运行本轮未验证。图片上传、表情选择、完整富消息渲染和后台推送未实现；系统历史超过最近 20 条使用官方消息页。没有新增依赖或数据库 migration，也没有修改原生播放实现。

@@ -8,6 +8,7 @@ import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/user.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/page_tab_style.dart';
+import '../../../shared/ui/page_toolbar.dart';
 import '../../../shared/ui/paging_tab_strip.dart';
 import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
@@ -132,11 +133,18 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
       _openInitialConversation();
     });
     if (!auth.$1) {
-      return StateView.empty(
-        message: '登录后查看我的消息',
-        icon: Icons.mail_outline,
-        actionLabel: '登录',
-        onAction: widget.onLogin,
+      return Column(
+        children: [
+          const PageToolbar(title: '我的消息'),
+          Expanded(
+            child: StateView.empty(
+              message: '登录后查看我的消息',
+              icon: Icons.mail_outline,
+              actionLabel: '登录',
+              onAction: widget.onLogin,
+            ),
+          ),
+        ],
       );
     }
     // Read effects still observe every transition, including visibility changes,
@@ -159,30 +167,22 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
         progress: _pagingProgress,
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '我的消息',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
+            PageToolbar(
+              title: '我的消息',
+              actions: [
+                IconButton(
+                  tooltip: '刷新消息',
+                  onPressed: controller.refresh,
+                  icon: const Icon(Icons.refresh),
+                ),
+                IconButton(
+                  tooltip: '官方消息页',
+                  icon: const Icon(Icons.open_in_new),
+                  onPressed: () => ref.read(externalLinkOpenerProvider)(
+                    Uri.https('message.bilibili.com', '/'),
                   ),
-                  IconButton(
-                    tooltip: '刷新消息',
-                    onPressed: controller.refresh,
-                    icon: const Icon(Icons.refresh),
-                  ),
-                  IconButton(
-                    tooltip: '官方消息页',
-                    icon: const Icon(Icons.open_in_new),
-                    onPressed: () => ref.read(externalLinkOpenerProvider)(
-                      Uri.https('message.bilibili.com', '/'),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
             const _MessageSections(),
             const Divider(height: 1),

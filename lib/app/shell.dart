@@ -31,6 +31,7 @@ import '../shared/ui/playback_navigation.dart';
 import '../shared/ui/app_dialog.dart';
 import '../shared/ui/paging_tab_strip.dart';
 import '../shared/ui/page_tab_style.dart';
+import '../shared/ui/page_toolbar.dart';
 import '../shared/ui/retained_tab_view.dart';
 import '../shared/ui/scroll_collapsing_header.dart';
 
@@ -876,7 +877,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                           ),
                                         if (tab.location.path != '/search' &&
                                             !tab.isPlayback &&
-                                            !tab.isProfile)
+                                            !tab.isProfile &&
+                                            !tab.isMessages)
                                           LayoutBuilder(
                                             builder: (context, bounds) =>
                                                 _navigationHeader(
@@ -889,7 +891,18 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                                   compact: compact,
                                                 ),
                                           ),
-                                        Expanded(child: pages),
+                                        Expanded(
+                                          child: PageToolbarLeading(
+                                            leading:
+                                                tab.isMessages &&
+                                                    _frameShowsBack(context) &&
+                                                    widget.windowControlsBuilder ==
+                                                        null
+                                                ? _backButton()
+                                                : null,
+                                            child: pages,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
