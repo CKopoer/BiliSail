@@ -1,5 +1,9 @@
 # 播放页与评论交互
 
+## 组件重建与生命周期（2026-10-30）
+
+共用评论区已复用未变化行、将 busy/loading 更新限制到操作控件，并在关闭／刷新楼中楼时取消读取和释放详情数据。逐组件分析、结构计数前后对照及验证边界见[评论区性能记录](comments-performance-2026-10-30.md)。
+
 ## 桌面评论回车换行（2026-10-27）
 
 共用评论输入框收起时使用 `maxLines=1`，未显式设置输入类型和动作，导致首次原生输入连接被配置为单行文本与 `TextInputAction.done`；回车因此可能结束编辑，失焦后评论框随之收起。现在 [CommentsPanel](../../lib/shared/ui/comments_panel.dart) 始终显式使用 `TextInputType.multiline` 和 `TextInputAction.newline`，显示行数仍按焦点展开／收起。视频、影视和动态共用该修复，评论和楼中楼回复均保留换行与焦点；发布继续由按钮显式触发。

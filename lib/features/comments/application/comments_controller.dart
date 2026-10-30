@@ -177,6 +177,37 @@ class CommentsController extends Notifier<CommentsState> {
       for (final c in [...old, ...next]) c.id: c,
     }.values.take(500),
   );
+
+  static CommentEntry _updateEntry(
+    CommentEntry entry,
+    String id,
+    CommentEntry Function(CommentEntry) update,
+  ) {
+    if (entry.id == id) return update(entry);
+    final replies = _updateEntries(entry.replies, id, update);
+    return identical(replies, entry.replies)
+        ? entry
+        : entry.withReplies(replies);
+  }
+
+  // Preserve unchanged branches so mounted rows can reuse their content.
+  static List<CommentEntry> _updateEntries(
+    List<CommentEntry> entries,
+    String id,
+    CommentEntry Function(CommentEntry) update,
+  ) {
+    List<CommentEntry>? changed;
+    for (var index = 0; index < entries.length; index++) {
+      final entry = entries[index];
+      final next = _updateEntry(entry, id, update);
+      if (!identical(entry, next)) {
+        changed ??= List.of(entries);
+        changed[index] = next;
+      }
+    }
+    return changed == null ? entries : List.unmodifiable(changed);
+  }
+
   static String? _error(Object e) => e is AppFailure
       ? e.kind == AppFailureKind.cancelled
             ? null
@@ -188,6 +219,10 @@ class CommentsController extends Notifier<CommentsState> {
     if (!reset &&
         (state.loading || !state.hasMore || state.items.length >= 500)) {
       return;
+    }
+    if (reset) {
+      _replies.cancel();
+      ++_replyGeneration;
     }
     _read.cancel();
     _read = RequestCancellation();
@@ -203,6 +238,10 @@ class CommentsController extends Notifier<CommentsState> {
       clearCursor: reset,
       closeRoot: reset,
       clearTarget: reset,
+      replyItems: reset ? const [] : null,
+      replyPage: reset ? 0 : null,
+      replyHasMore: reset ? false : null,
+      replyLoading: reset ? false : null,
     );
     try {
       final p = await r.load(
@@ -255,7 +294,14 @@ class CommentsController extends Notifier<CommentsState> {
   void closeReplies() {
     _replies.cancel();
     ++_replyGeneration;
-    state = state.copy(closeRoot: true, clearTarget: true, replyLoading: false);
+    state = state.copy(
+      closeRoot: true,
+      clearTarget: true,
+      replyItems: const [],
+      replyPage: 0,
+      replyHasMore: false,
+      replyLoading: false,
+    );
   }
 
   Future<void> loadReplies() async {
@@ -380,13 +426,13 @@ class CommentsController extends Notifier<CommentsState> {
       (r) => r.like(oid, comment.id, liked, _write),
     );
     if (!result) return false;
-    CommentEntry update(CommentEntry c) => c.id == comment.id
-        ? c.withLike(liked)
-        : c.withReplies(c.replies.map(update).toList());
+    CommentEntry update(CommentEntry c) => c.withLike(liked);
     state = state.copy(
-      items: state.items.map(update).toList(),
-      replyItems: state.replyItems.map(update).toList(),
-      openRoot: state.openRoot == null ? null : update(state.openRoot!),
+      items: _updateEntries(state.items, comment.id, update),
+      replyItems: _updateEntries(state.replyItems, comment.id, update),
+      openRoot: state.openRoot == null
+          ? null
+          : _updateEntry(state.openRoot!, comment.id, update),
     );
     return true;
   }
@@ -434,7 +480,9 @@ class CommentsController extends Notifier<CommentsState> {
       state = state.copy(
         items: state.items.map(update).toList(),
         openRoot: state.openRoot == null ? null : update(state.openRoot!),
-        replyItems: _merge(state.replyItems, [entry]),
+        replyItems: state.openRoot?.id == rootId
+            ? _merge(state.replyItems, [entry])
+            : null,
         clearTarget: true,
         message: notice,
       );

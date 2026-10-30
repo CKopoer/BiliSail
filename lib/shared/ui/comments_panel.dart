@@ -49,7 +49,8 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   final _composerFocus = FocusNode(skipTraversal: true);
   final _emotePickerOpen = ValueNotifier(false);
   final _topScroll = ScrollController();
-  final _replyScroll = ScrollController();
+  // Detail always opens at the top; do not retain a PageStorage entry per root.
+  final _replyScroll = ScrollController(keepScrollOffset: false);
   double _topOffset = 0;
   String? _shownRoot;
   RequestCancellation? _linkCancellation;
@@ -67,8 +68,11 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       _text.clear();
       _topOffset = 0;
       _shownRoot = null;
+      final target = widget.target;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _topScroll.hasClients) _topScroll.jumpTo(0);
+        if (mounted && widget.target == target && _topScroll.hasClients) {
+          _topScroll.jumpTo(0);
+        }
       });
     }
   }
@@ -145,6 +149,8 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     }
   }
 
+  void _handleOpenLink(Uri uri) => unawaited(_openLink(uri));
+
   Future<void> _emotes() async {
     final target = widget.target;
     final provider = _provider;
@@ -196,6 +202,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     ref.listen(
       _provider.select((value) => (value.accountScope, value.sessionEpoch)),
       (_, _) {
+        _linkCancellation?.cancel();
         _text.clear();
         _topOffset = 0;
         _shownRoot = null;
@@ -205,8 +212,12 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       _shownRoot = rootId;
       final offset = rootId == null ? _topOffset : 0.0;
       final scroll = rootId == null ? _topScroll : _replyScroll;
+      final target = widget.target;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && scroll.hasClients) {
+        if (mounted &&
+            widget.target == target &&
+            _shownRoot == rootId &&
+            scroll.hasClients) {
           scroll.jumpTo(offset.clamp(0, scroll.position.maxScrollExtent));
         }
       });
@@ -555,42 +566,16 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     CommentEntry comment, {
     required bool preview,
     bool root = false,
-  }) => Consumer(
+  }) => _CommentTile(
     key: ValueKey((root ? 'comment-root' : 'comment', comment.id)),
-    builder: (context, ref, _) {
-      final busy = ref.watch(
-        _provider.select(
-          (state) =>
-              state.busy ||
-              state.loading ||
-              state.replyLoading ||
-              state.uncertain.contains('like:${comment.id}'),
-        ),
-      );
-      final controller = ref.read(_provider.notifier);
-      void reply() {
-        if (!ref.read(_provider).signedIn) {
-          _login();
-          return;
-        }
-        controller.target(comment);
-        _focus.requestFocus();
-      }
-
-      return _CommentTile(
-        comment: comment,
-        preview: preview,
-        busy: busy,
-        onOpenUser: widget.onOpenUser,
-        onOpenLink: (uri) => unawaited(_openLink(uri)),
-        onSeek: widget.onSeek,
-        onLike: () => ref.read(_provider).signedIn
-            ? controller.toggleLike(comment)
-            : _login(),
-        onReply: reply,
-        onOpen: () => controller.openReplies(comment),
-      );
-    },
+    provider: _provider,
+    comment: comment,
+    preview: preview,
+    onOpenUser: widget.onOpenUser,
+    onOpenLink: _handleOpenLink,
+    onSeek: widget.onSeek,
+    onLogin: _login,
+    onReplyFocus: _focus.requestFocus,
   );
 
   Widget _list() => Consumer(
@@ -598,16 +583,13 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       ref.watch(
         _provider.select(
           (state) => (
-            state.items,
-            state.replyItems,
+            state.openRoot == null ? state.items : state.replyItems,
             state.openRoot,
-            state.sort,
-            state.loading,
-            state.replyLoading,
-            state.hasMore,
-            state.replyHasMore,
+            state.openRoot == null ? state.sort : null,
+            state.openRoot == null ? state.loading : state.replyLoading,
+            state.openRoot == null ? state.hasMore : state.replyHasMore,
             state.message,
-            state.totalCount,
+            state.openRoot == null ? state.totalCount : null,
           ),
         ),
       );
@@ -779,27 +761,92 @@ final class _CommentEmoteDialog extends ConsumerWidget {
   }
 }
 
-class _CommentTile extends StatelessWidget {
+class _CommentTile extends ConsumerStatefulWidget {
   const _CommentTile({
+    super.key,
+    required this.provider,
     required this.comment,
-    required this.busy,
-    required this.onLike,
-    required this.onReply,
-    required this.onOpen,
+    required this.onLogin,
+    required this.onReplyFocus,
     this.preview = true,
     this.onOpenUser,
     required this.onOpenLink,
     this.onSeek,
   });
+  final NotifierProvider<CommentsController, CommentsState> provider;
   final CommentEntry comment;
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<Uri> onOpenLink;
   final ValueChanged<Duration>? onSeek;
-  final bool busy, preview;
-  final VoidCallback onLike, onReply, onOpen;
+  final bool preview;
+  final VoidCallback onLogin, onReplyFocus;
+
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context), c = comment;
+  ConsumerState<_CommentTile> createState() => _CommentTileState();
+}
+
+class _CommentTileState extends ConsumerState<_CommentTile> {
+  Widget? _content;
+
+  @override
+  void didUpdateWidget(covariant _CommentTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.provider != widget.provider ||
+        !identical(oldWidget.comment, widget.comment) ||
+        oldWidget.preview != widget.preview ||
+        oldWidget.onOpenUser != widget.onOpenUser ||
+        oldWidget.onOpenLink != widget.onOpenLink ||
+        oldWidget.onSeek != widget.onSeek) {
+      _content = null;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _content = null;
+  }
+
+  bool _busy(WidgetRef ref) => ref.watch(
+    widget.provider.select(
+      (state) =>
+          state.busy ||
+          state.loading ||
+          state.replyLoading ||
+          state.uncertain.contains('like:${widget.comment.id}'),
+    ),
+  );
+
+  void _like() {
+    if (ref.read(widget.provider).signedIn) {
+      unawaited(ref.read(widget.provider.notifier).toggleLike(widget.comment));
+    } else {
+      widget.onLogin();
+    }
+  }
+
+  void _reply() {
+    if (!ref.read(widget.provider).signedIn) {
+      widget.onLogin();
+      return;
+    }
+    ref.read(widget.provider.notifier).target(widget.comment);
+    widget.onReplyFocus();
+  }
+
+  void _open() =>
+      unawaited(ref.read(widget.provider.notifier).openReplies(widget.comment));
+
+  @override
+  Widget build(BuildContext context) => _content ??= _buildContent(context);
+
+  // Only mounted rows retain content. Busy/loading changes rebuild controls,
+  // while pagination can reuse the rich text, images and author header.
+  Widget _buildContent(BuildContext context) {
+    final theme = Theme.of(context), c = widget.comment;
+    final onOpenUser = widget.onOpenUser;
+    final onOpenLink = widget.onOpenLink;
+    final onSeek = widget.onSeek;
     final styles = CommentTextStyles(theme);
     return Padding(
       padding: const EdgeInsets.only(top: 12),
@@ -808,7 +855,7 @@ class _CommentTile extends StatelessWidget {
         children: [
           InkWell(
             onTap: c.authorId?.isValid == true && onOpenUser != null
-                ? () => onOpenUser!(c.authorId!)
+                ? () => onOpenUser(c.authorId!)
                 : null,
             child: NetworkAvatar(url: c.avatarUrl, name: c.author, radius: 15),
           ),
@@ -830,35 +877,47 @@ class _CommentTile extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 4),
                     child: Text('暂未公开', style: styles.metadata),
                   ),
-                Row(
-                  children: [
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: busy ? null : onLike,
-                      iconSize: 16,
-                      color: c.liked
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.outline,
-                      icon: Icon(
-                        BiliIcons.like,
-                        semanticLabel: c.liked ? '取消点赞评论' : '点赞评论',
-                      ),
-                    ),
-                    Text('${c.likeCount}', style: styles.action),
-                    const SizedBox(width: 12),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: busy ? null : onReply,
-                      iconSize: 17,
-                      color: theme.colorScheme.outline,
-                      icon: const Icon(BiliIcons.reply, semanticLabel: '回复评论'),
-                    ),
-                  ],
+                Consumer(
+                  builder: (context, ref, _) {
+                    final busy = _busy(ref);
+                    return Row(
+                      children: [
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          onPressed: busy ? null : _like,
+                          iconSize: 16,
+                          color: c.liked
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outline,
+                          icon: Icon(
+                            BiliIcons.like,
+                            semanticLabel: c.liked ? '取消点赞评论' : '点赞评论',
+                          ),
+                        ),
+                        Text('${c.likeCount}', style: styles.action),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          onPressed: busy ? null : _reply,
+                          iconSize: 17,
+                          color: theme.colorScheme.outline,
+                          icon: const Icon(
+                            BiliIcons.reply,
+                            semanticLabel: '回复评论',
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
-                if (preview && (c.replyCount > 0 || c.replies.isNotEmpty))
-                  InkWell(
-                    onTap: busy ? null : onOpen,
-                    borderRadius: BorderRadius.circular(5),
+                if (widget.preview &&
+                    (c.replyCount > 0 || c.replies.isNotEmpty))
+                  Consumer(
+                    builder: (context, ref, child) => InkWell(
+                      onTap: _busy(ref) ? null : _open,
+                      borderRadius: BorderRadius.circular(5),
+                      child: child,
+                    ),
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(10),
@@ -883,7 +942,7 @@ class _CommentTile extends StatelessWidget {
                                         onTap:
                                             r.authorId?.isValid == true &&
                                                 onOpenUser != null
-                                            ? () => onOpenUser!(r.authorId!)
+                                            ? () => onOpenUser(r.authorId!)
                                             : null,
                                         child: Text(
                                           '${r.author}：',

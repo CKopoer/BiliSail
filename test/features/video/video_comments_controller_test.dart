@@ -587,6 +587,23 @@ void main() {
     repo.failure = null;
     expect(await controller.send('x'), true);
   });
+
+  test(
+    'a reply completing after detail closes does not retain hidden detail data',
+    () async {
+      await controller.openReplies(root);
+      repo.writePending = Completer<void>();
+      final sending = controller.send('关闭详情期间发送');
+      controller.closeReplies();
+      repo.writePending!.complete();
+      expect(await sending, isTrue);
+      expect(state().openRoot, isNull);
+      expect(state().replyItems, isEmpty);
+      expect(state().items.single.replyCount, 4);
+      expect(state().items.single.replies.single.message, '关闭详情期间发送');
+      expect(repo.writes, 1);
+    },
+  );
   test(
     'pagination forwards opaque cursors and resets them on sort and refresh',
     () async {
@@ -716,6 +733,79 @@ void main() {
     expect(state().openRoot, isNull);
     expect(state().replyItems, isEmpty);
   });
+
+  test(
+    'closing loaded replies releases the detail buffer and pagination',
+    () async {
+      await controller.openReplies(root);
+      expect(state().replyItems, isNotEmpty);
+      controller.target(child);
+      controller.closeReplies();
+      expect(repo.replyCancellation!.isCancelled, isTrue);
+      expect(state().replyItems, isEmpty);
+      expect(state().replyPage, 0);
+      expect(state().replyHasMore, isFalse);
+      expect(state().replyTarget, isNull);
+      expect(state().items.single, same(root));
+    },
+  );
+
+  for (final sort in [null, CommentSort.latest]) {
+    test(
+      'reset ($sort) cancels pending replies and allows subsequent writes',
+      () async {
+        repo.replyPending = Completer<CommentPage>();
+        final opening = controller.openReplies(root);
+        final cancellation = repo.replyCancellation!;
+        await controller.load(refresh: sort == null, sort: sort);
+        expect(cancellation.isCancelled, isTrue);
+        expect(state().replyLoading, isFalse);
+        expect(state().openRoot, isNull);
+        expect(state().replyItems, isEmpty);
+        expect(state().replyPage, 0);
+        expect(state().replyHasMore, isFalse);
+        repo.replyPending!.complete(
+          const CommentPage(items: [child], hasMore: true),
+        );
+        await opening;
+        expect(state().replyItems, isEmpty);
+        expect(await controller.toggleLike(state().items.single), isTrue);
+      },
+    );
+  }
+
+  test(
+    'likes preserve unrelated comments and only copy the affected reply branch',
+    () async {
+      const sibling = CommentEntry(id: '13', author: '丙', message: '另一条回复');
+      const parent = CommentEntry(
+        id: '20',
+        author: '丁',
+        message: '另一条评论',
+        replies: [child, sibling],
+      );
+      repo.items = [root, parent];
+      repo.replyItems = [child, sibling];
+      await controller.load(refresh: true);
+      final before = state();
+      await controller.openReplies(parent);
+      final detailBefore = state();
+      expect(await controller.toggleLike(child), isTrue);
+      expect(state().items.first, same(before.items.first));
+      expect(state().items.last.replies.first.liked, isTrue);
+      expect(state().items.last.replies.last, same(sibling));
+      expect(state().openRoot!.replies.first.liked, isTrue);
+      expect(state().replyItems.first.liked, isTrue);
+      expect(state().replyItems.last, same(detailBefore.replyItems.last));
+      final replies = state().replyItems;
+      final openRoot = state().openRoot;
+      final otherComment = state().items.last;
+      expect(await controller.toggleLike(root), isTrue);
+      expect(state().replyItems, same(replies));
+      expect(state().openRoot, same(openRoot));
+      expect(state().items.last, same(otherComment));
+    },
+  );
   test('in-flight read cannot race a mutation', () async {
     repo.pending = Completer<CommentPage>();
     final pending = controller.load(refresh: true);
@@ -1109,6 +1199,231 @@ void main() {
     expect(after, closeTo(before, 1));
   });
 
+  testWidgets('pagination and busy controls reuse unchanged rich comments', (
+    tester,
+  ) async {
+    repo.items = List.generate(
+      480,
+      (index) => CommentEntry(
+        id: '$index',
+        author: '用户 $index',
+        message: '评论内容 $index 00:09',
+        replyCount: 3,
+        replies: [
+          CommentEntry(
+            id: 'preview-$index',
+            author: '预览',
+            message: '回复 $index',
+          ),
+        ],
+      ),
+    );
+    await controller.load(refresh: true);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 340,
+              child: VideoCommentsPanel(detail: _detail),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final builds = <String, int>{};
+    final previous = debugOnRebuildDirtyWidget;
+    debugOnRebuildDirtyWidget = (element, builtOnce) {
+      previous?.call(element, builtOnce);
+      final widget = element.widget;
+      if (widget is CommentRichContent) {
+        builds.update(
+          widget.comment.id,
+          (value) => value + 1,
+          ifAbsent: () => 1,
+        );
+      }
+    };
+    addTearDown(() => debugOnRebuildDirtyWidget = previous);
+
+    repo.pending = Completer<CommentPage>();
+    final loading = controller.load();
+    await tester.pump();
+    expect(builds, isEmpty, reason: 'loading should rebuild controls only');
+    repo.pending!.complete(
+      CommentPage(
+        items: List.generate(
+          20,
+          (index) => CommentEntry(
+            id: '${480 + index}',
+            author: '新用户',
+            message: '新评论 $index',
+          ),
+        ),
+        hasMore: false,
+      ),
+    );
+    await loading;
+    await tester.pumpAndSettle();
+    expect(state().items, hasLength(500));
+    expect(
+      builds,
+      isEmpty,
+      reason: 'appending offscreen data should reuse visible content',
+    );
+
+    repo.writePending = Completer<void>();
+    final liking = controller.toggleLike(state().items.first);
+    await tester.pump();
+    expect(builds, isEmpty, reason: 'busy should rebuild controls only');
+    expect(
+      tester
+          .widget<IconButton>(
+            find.widgetWithIcon(IconButton, BiliIcons.reply).first,
+          )
+          .onPressed,
+      isNull,
+    );
+    repo.writePending!.complete();
+    await liking;
+    await tester.pumpAndSettle();
+    expect(builds.keys, unorderedEquals(['0', 'preview-0']));
+    expect(state().items.first.liked, isTrue);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.widgetWithIcon(IconButton, BiliIcons.reply).first,
+          )
+          .onPressed,
+      isNotNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'retained comment content updates callbacks, theme and server edits',
+    (tester) async {
+      final first = <UserId>[], second = <UserId>[];
+      var onOpen = first.add;
+      var theme = ThemeData.light();
+      late StateSetter update;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return MaterialApp(
+                theme: theme,
+                home: Scaffold(
+                  body: SizedBox(
+                    width: 340,
+                    child: VideoCommentsPanel(
+                      detail: _detail,
+                      onOpenUser: onOpen,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final author = find.descendant(
+        of: find.byType(CommentAuthorHeader),
+        matching: find.text('甲'),
+      );
+      await tester.tap(author);
+      update(() {
+        onOpen = second.add;
+        theme = ThemeData.dark();
+      });
+      await tester.pumpAndSettle();
+      await tester.tap(author);
+      expect(first, [const UserId('100')]);
+      expect(second, [const UserId('100')]);
+      final rich = tester.widget<CommentRichContent>(
+        find.byType(CommentRichContent),
+      );
+      final body = tester.widget<Text>(
+        find.descendant(
+          of: find.byType(CommentRichContent),
+          matching: find.byType(Text),
+        ),
+      );
+      expect(body.style!.color, const Color(0xFFE7E9EB));
+      repo.items = [
+        const CommentEntry(id: '10', author: '修改后的作者', message: '服务端编辑后的正文'),
+      ];
+      await controller.load();
+      await tester.pumpAndSettle();
+      expect(find.text('服务端编辑后的正文'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(CommentAuthorHeader),
+          matching: find.text('修改后的作者'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<CommentRichContent>(find.byType(CommentRichContent)),
+        isNot(same(rich)),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'reply views disable per-thread scroll persistence and release rows',
+    (tester) async {
+      repo.replyItems = List.generate(
+        30,
+        (index) => CommentEntry(
+          id: 'reply-$index',
+          author: '回复用户',
+          message: '回复内容 $index',
+          rootId: root.id,
+        ),
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 340,
+                child: VideoCommentsPanel(detail: _detail),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await controller.openReplies(root);
+      await tester.pumpAndSettle();
+      final list = tester.widget<ListView>(find.byType(ListView));
+      expect(list.controller!.keepScrollOffset, isFalse);
+      final rich = find.byType(CommentRichContent).evaluate().first;
+      await tester.drag(find.byType(ListView), const Offset(0, -700));
+      await tester.pumpAndSettle();
+      controller.closeReplies();
+      await tester.pumpAndSettle();
+      expect(state().replyItems, isEmpty);
+      expect(rich.mounted, isFalse);
+      await controller.openReplies(root);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<ListView>(find.byType(ListView)).controller!.offset,
+        0,
+      );
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     '500 comments use a lazy delegate and reply targeting does not rebuild the list',
     (tester) async {
@@ -1232,6 +1547,7 @@ class _Repo implements VideoCommentsRepository, CommentEmotesRepository {
   String? sentRoot, sentParent, sentText;
   Object? failure;
   Completer<CommentPage>? pending, replyPending;
+  RequestCancellation? replyCancellation;
   Completer<void>? writePending;
   @override
   String get accountScope => 'user:7';
@@ -1263,9 +1579,13 @@ class _Repo implements VideoCommentsRepository, CommentEmotesRepository {
     String rootId,
     int page,
     RequestCancellation cancellation,
-  ) async => replyPending == null
-      ? CommentPage(items: replyItems, hasMore: false)
-      : replyPending!.future;
+  ) async {
+    replyCancellation = cancellation;
+    return replyPending == null
+        ? CommentPage(items: replyItems, hasMore: false)
+        : replyPending!.future;
+  }
+
   Future<void> write() async {
     writes++;
     final error = failure;
