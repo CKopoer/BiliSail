@@ -466,3 +466,9 @@ Linux 暂用扫码登录，以显式的 Dart 平台适配禁用实验 WPE WebKit
 `bili_player` 的核心及视频插件固定到同一 `Predidit/media-kit` 提交，移除 `media_kit_libs_*`，改用目标分支的 Native Assets。Windows 采用匹配 DXGI libmpv 与 D3D11/mailbox，撤销旧 ANGLE 库覆盖；仍校验源哈希并在构建副本应用释放、调度及视口保护。macOS 最低部署版本改为固定 Flutter Native Assets framework 所要求的 13.0，继续使用 CocoaPods。Linux 打包消费 hook 提供的 mpv。
 
 依赖、二进制来源、实施顺序、回退与逐平台验收见[切换方案](predidit-media-migration.md)。旧库的许可配置与性能记录不自动适用于新实现。
+
+## D61：一级页面静止呈现，底栏承担选中动效
+
+**决定（2026-10-30）**：底栏切换立即呈现保留的根页面，移除整个视频卡页面的 220ms 平移，保留底栏选中反馈、频道内触摸分页和原有页面／滚动状态。恢复图片页面时的整页位移会叠加光栅工作，仅减少业务卡片 build 无法消除该成本。空闲封面、图片和资料栏复用未变配置；活动、账号、数据与交互状态变化仍正常失效。
+
+不增加永久页面截图、图片容量或预加载，不改变隐藏页面停用绘制／预览与关闭页面释放资源的边界。候选消融、Windows Profile 对照和首帧／移动端未验收项见[窄屏切换优化结果](validation/narrow-video-card-navigation-results-2026-10-30.md)。

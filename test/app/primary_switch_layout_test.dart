@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:bilisail/core/presentation/workspace_activity.dart';
+import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,7 +24,13 @@ void main() {
       await tester.pumpWidget(fixture.app);
       await tester.pumpAndSettle();
       Future<void> bottom(String name) async {
+        final content = find.byKey(const ValueKey('workspace-primary-content'));
+        final bounds = tester.getRect(content);
         await tester.tap(find.byKey(ValueKey('workspace-bottom-$name')));
+        await tester.pump();
+        expect(tester.getRect(content), bounds);
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(tester.getRect(content), bounds);
         await tester.pumpAndSettle();
       }
 
@@ -47,9 +54,13 @@ void main() {
         for (final state in tester.stateList<ScrollableState>(
           find.byType(Scrollable, skipOffstage: false),
         ))
-          state: state.position,
+          if (state.position.axis == Axis.vertical) state: state.position,
       };
       final reads = Map.of(fixture.home.reads);
+      final cards = find
+          .byType(VideoCard, skipOffstage: false)
+          .evaluate()
+          .toSet();
       for (final name in [
         'dynamic',
         'mine',
@@ -61,6 +72,11 @@ void main() {
         'home',
       ]) {
         await bottom(name);
+        final currentScrollables = tester
+            .stateList<ScrollableState>(
+              find.byType(Scrollable, skipOffstage: false),
+            )
+            .toSet();
         for (final entry in sizes.entries) {
           expect(
             entry.key.size,
@@ -69,10 +85,29 @@ void main() {
           );
         }
         for (final entry in positions.entries) {
+          expect(currentScrollables, contains(entry.key));
           expect(entry.key.position, same(entry.value));
         }
+        expect(
+          find.byType(VideoCard, skipOffstage: false).evaluate().toSet(),
+          cards,
+          reason: 'Warm primary switches must retain mounted video cards',
+        );
       }
       expect(fixture.home.reads, reads);
+      expect(fixture.feed.reads, 1);
+      // Taps can retarget before the bottom indicator finishes animating.
+      for (final name in ['dynamic', 'mine', 'settings', 'home']) {
+        await tester.tap(find.byKey(ValueKey('workspace-bottom-$name')));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await tester.pumpAndSettle();
+      expect(
+        find.byType(VideoCard, skipOffstage: false).evaluate().toSet(),
+        cards,
+      );
+      expect(fixture.home.reads, reads);
+      expect(fixture.feed.reads, 1);
       // A real window/density change still reaches a page when it is shown.
       // The retained constraint boundary must not freeze visible layouts.
       for (final width in [320.0, 599.0, 600.0, 960.0, 390.0]) {

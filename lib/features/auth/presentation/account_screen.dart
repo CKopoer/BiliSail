@@ -57,6 +57,31 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   late AccountContentTab _selected =
       widget.initialTab ?? AccountContentTab.history;
   late final _progress = TabPagingProgress(_selected.index.toDouble());
+  (AuthState, AsyncValue<AccountOverview?>, bool)? _profileConfiguration;
+  Widget? _profile;
+
+  Widget _profileBar(AuthState auth, AsyncValue<AccountOverview?> overview) {
+    final configuration = (auth, overview, widget.onNavigate != null);
+    if (_profileConfiguration != configuration) {
+      _profileConfiguration = configuration;
+      final id = auth.isSignedIn ? UserId.tryParse(auth.mid) : null;
+      _profile = _AccountProfileBar(
+        auth: auth,
+        overview: overview,
+        onLogin: () => widget.onLogin(),
+        onLogout: () => ref.read(authControllerProvider.notifier).signOut(),
+        onRetry: () => ref.invalidate(accountOverviewProvider),
+        onOpenProfile: id == null || widget.onNavigate == null
+            ? null
+            : () => widget.onNavigate?.call('/user/${id.value}'),
+        onOpenSection: id == null || widget.onNavigate == null
+            ? null
+            : (section) =>
+                  widget.onNavigate?.call('/user/${id.value}?section=$section'),
+      );
+    }
+    return _profile!;
+  }
 
   @override
   void didUpdateWidget(AccountScreen oldWidget) {
@@ -76,7 +101,6 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final overview = ref.watch(accountOverviewProvider);
-    final id = auth.isSignedIn ? UserId.tryParse(auth.mid) : null;
     final theme = Theme.of(context);
     return SafeArea(
       child: ScrollHeaderRegion(
@@ -88,22 +112,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
               key: const ValueKey('account-collapsing-profile'),
               child: Material(
                 color: theme.colorScheme.surface,
-                child: _AccountProfileBar(
-                  auth: auth,
-                  overview: overview,
-                  onLogin: widget.onLogin,
-                  onLogout: () =>
-                      ref.read(authControllerProvider.notifier).signOut(),
-                  onRetry: () => ref.invalidate(accountOverviewProvider),
-                  onOpenProfile: id == null || widget.onNavigate == null
-                      ? null
-                      : () => widget.onNavigate?.call('/user/${id.value}'),
-                  onOpenSection: id == null || widget.onNavigate == null
-                      ? null
-                      : (section) => widget.onNavigate?.call(
-                          '/user/${id.value}?section=$section',
-                        ),
-                ),
+                child: _profileBar(auth, overview),
               ),
             ),
             Material(

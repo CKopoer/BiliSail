@@ -6,7 +6,6 @@ import 'package:bilisail/features/settings/application/settings_controller.dart'
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:bilisail/shared/ui/primary_navigation_transition.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -151,12 +150,8 @@ void main() {
               bottom ? findsOneWidget : findsNothing,
             );
             expect(
-              tester
-                  .widget<PrimaryNavigationTransition>(
-                    find.byType(PrimaryNavigationTransition),
-                  )
-                  .enabled,
-              bottom,
+              find.byKey(const ValueKey('workspace-primary-content')),
+              findsOneWidget,
             );
             expect(_toggle, bottom ? findsNothing : findsOneWidget);
             expect(tester.element(draft), same(original));

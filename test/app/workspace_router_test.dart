@@ -27,7 +27,6 @@ import 'package:bilisail/app/platform_defaults.dart';
 import 'package:bilisail/app/workspace_navigation.dart';
 import 'package:bilisail/features/auth/presentation/account_screen.dart';
 import 'package:bilisail/shared/ui/retained_tab_view.dart';
-import 'package:bilisail/shared/ui/primary_navigation_transition.dart';
 import 'package:bilisail/features/messages/application/messages_controller.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
 import 'package:bilisail/shared/ui/app_dialog.dart';
@@ -751,7 +750,6 @@ void main() {
           );
           final surface = find.byKey(const ValueKey('home-channel-swipe'));
           final compact = width < 600;
-          final animatePrimary = compact;
           expect(
             tester
                 .widget<FeedScreen>(find.byType(FeedScreen))
@@ -851,20 +849,15 @@ void main() {
           await boundary(home.first, 1);
 
           final prefix = width < 600 ? 'workspace-bottom' : 'workspace-nav';
+          final primary = find.byKey(
+            const ValueKey('workspace-primary-content'),
+          );
+          final contentBounds = tester.getRect(primary);
           await tester.tap(find.byKey(ValueKey('$prefix-dynamic')));
           await tester.pump();
-          final primary = find.byType(PrimaryNavigationTransition);
-          final slide = find
-              .descendant(of: primary, matching: find.byType(SlideTransition))
-              .first;
-          expect(
-            tester.widget<PrimaryNavigationTransition>(primary).enabled,
-            animatePrimary,
-          );
-          expect(
-            tester.widget<SlideTransition>(slide).position.value.dx.abs(),
-            animatePrimary ? greaterThan(0) : equals(0),
-          );
+          expect(tester.getRect(primary), contentBounds);
+          await tester.pump(const Duration(milliseconds: 50));
+          expect(tester.getRect(primary), contentBounds);
           await tester.pumpAndSettle();
           expectChannel(HomeChannel.dynamic);
           await boundary(HomeChannel.dynamic, 1);

@@ -45,6 +45,8 @@ class _VideoCardCoverState extends State<VideoCardCover> {
   bool _active = true;
   VideoCardInteractionScope? _scope;
   int _writeGeneration = 0;
+  Object? _coverConfiguration;
+  Widget? _cover;
 
   bool get _hovered => _active && (widget.hovered ?? _pointerHovered);
 
@@ -127,51 +129,77 @@ class _VideoCardCoverState extends State<VideoCardCover> {
   @override
   Widget build(BuildContext context) {
     final scope = _scope;
+    final hovered = _hovered;
+    final showAction =
+        widget.showWatchLaterButton &&
+        _active &&
+        scope != null &&
+        (hovered || widget.focused) &&
+        widget.video.id.isValid;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final configuration = (
+      widget.child,
+      widget.video,
+      widget.borderRadius,
+      widget.hovered == null,
+      hovered,
+      showAction,
+      _snapBack,
+      _busy,
+      scope?.interactions,
+      scope?.hoverPlaybackEnabled,
+      showAction ? scope.interactions.isAdded(widget.video.id) : null,
+      showAction ? scope.interactions.isUncertain(widget.video.id) : null,
+      reduceMotion,
+      Theme.of(context),
+    );
+    final cached = _cover;
+    if (cached != null && _coverConfiguration == configuration) return cached;
+    _coverConfiguration = configuration;
+    // Activity still cancels pending actions/previews above. An idle cover's
+    // rendered content does not change when its retained page is hidden.
+    final contents = Stack(
+      fit: StackFit.expand,
+      children: [
+        widget.child,
+        if (hovered &&
+            scope != null &&
+            scope.hoverPlaybackEnabled &&
+            widget.video.id.isValid)
+          _VideoCardHoverPreview(
+            key: const ValueKey('video-card-hover-preview'),
+            video: widget.video,
+            interactions: scope.interactions,
+          ),
+        if (widget.video.access.label != null)
+          Positioned(
+            top: 6,
+            left: 6,
+            right: 48,
+            child: IgnorePointer(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: VideoAccessBadge(access: widget.video.access),
+              ),
+            ),
+          ),
+        if (showAction)
+          Positioned(top: 8, right: 8, child: _watchLaterButton()),
+      ],
+    );
     final cover = AnimatedScale(
       key: const ValueKey('video-card-cover-scale'),
-      scale: _hovered ? _coverHoverScale : 1,
-      duration: _snapBack || MediaQuery.disableAnimationsOf(context)
+      scale: hovered ? _coverHoverScale : 1,
+      duration: _snapBack || reduceMotion
           ? Duration.zero
           : const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(widget.borderRadius),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            widget.child,
-            if (_hovered &&
-                scope != null &&
-                scope.hoverPlaybackEnabled &&
-                widget.video.id.isValid)
-              _VideoCardHoverPreview(
-                key: const ValueKey('video-card-hover-preview'),
-                video: widget.video,
-                interactions: scope.interactions,
-              ),
-            if (widget.video.access.label != null)
-              Positioned(
-                top: 6,
-                left: 6,
-                right: 48,
-                child: IgnorePointer(
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: VideoAccessBadge(access: widget.video.access),
-                  ),
-                ),
-              ),
-            if (widget.showWatchLaterButton &&
-                _active &&
-                scope != null &&
-                widget.video.id.isValid &&
-                (_hovered || widget.focused))
-              Positioned(top: 8, right: 8, child: _watchLaterButton()),
-          ],
-        ),
+        child: contents,
       ),
     );
-    return widget.hovered == null
+    return _cover = widget.hovered == null
         ? ScrollAwareHoverRegion(onHover: _hoverCover, child: cover)
         : cover;
   }

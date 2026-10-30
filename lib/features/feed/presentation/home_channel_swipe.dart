@@ -51,39 +51,33 @@ final class _HomeChannelSwipeState extends State<HomeChannelSwipe> {
             Offstage(
               key: ValueKey(('home-channel-group', group.first)),
               offstage: group.first != selectedGroup.first,
-              child: WorkspaceActivity(
-                active:
-                    group.first == selectedGroup.first &&
-                    WorkspaceActivity.isActive(context),
-                previewing:
-                    group.first == selectedGroup.first &&
-                    WorkspaceActivity.isVisible(context) &&
-                    !WorkspaceActivity.isActive(context),
-                child: RetainedPageLayout(
-                  visible:
+              child: _ChannelGroupActivity(
+                selected: group.first == selectedGroup.first,
+                child: RetainedTabView<HomeChannel>(
+                  tabs: group,
+                  value: group.contains(previous) ? previous : group.first,
+                  progress:
                       group.first == selectedGroup.first &&
-                      WorkspaceActivity.isVisible(context),
-                  child: RetainedTabView<HomeChannel>(
-                    tabs: group,
-                    value: group.contains(previous) ? previous : group.first,
-                    progress:
-                        group.first == selectedGroup.first &&
-                            sharedProgress != null
-                        ? sharedProgress
-                        : _progress.putIfAbsent(
-                            group.first,
-                            () => TabPagingProgress(0),
-                          ),
-                    onChanged: (channel) {
-                      if (group.first == selectedGroup.first &&
-                          WorkspaceActivity.isActive(context)) {
-                        widget.onChanged(channel);
-                      }
-                    },
-                    animateSelection: widget.animateSelection,
-                    pageBuilder: widget.pageBuilder,
-                    viewKey: const ValueKey('home-channel-swipe'),
-                  ),
+                          sharedProgress != null
+                      ? sharedProgress
+                      : _progress.putIfAbsent(
+                          group.first,
+                          () => TabPagingProgress(0),
+                        ),
+                  onChanged: (channel) {
+                    if (group.first == selectedGroup.first &&
+                        (context
+                                .getInheritedWidgetOfExactType<
+                                  WorkspaceActivity
+                                >()
+                                ?.active ??
+                            true)) {
+                      widget.onChanged(channel);
+                    }
+                  },
+                  animateSelection: widget.animateSelection,
+                  pageBuilder: widget.pageBuilder,
+                  viewKey: const ValueKey('home-channel-swipe'),
                 ),
               ),
             ),
@@ -97,5 +91,24 @@ final class _HomeChannelSwipeState extends State<HomeChannelSwipe> {
       progress.dispose();
     }
     super.dispose();
+  }
+}
+
+/// Visibility changes keep the idle pager's configuration and content intact.
+class _ChannelGroupActivity extends StatelessWidget {
+  const _ChannelGroupActivity({required this.selected, required this.child});
+
+  final bool selected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = selected && WorkspaceActivity.isActive(context);
+    final visible = selected && WorkspaceActivity.isVisible(context);
+    return WorkspaceActivity(
+      active: active,
+      previewing: visible && !active,
+      child: RetainedPageLayout(visible: visible, child: child),
+    );
   }
 }

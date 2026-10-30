@@ -59,6 +59,8 @@
 | [首页子频道协议](validation/home-subtabs.md) | 各首页列表的端点、游标与前序接入记录 |
 | [窄屏一级导航动效](validation/primary-navigation-motion.md) | 底栏不透明滑入、隐藏根分支构建复用与历史验证边界 |
 | [窄屏底栏切换复查](validation/primary-navigation-performance-2026-10-28.md) | Windows/Android 共用分页器活动隔离、设置表单复用和底栏过渡 |
+| [窄屏视频卡切页与生命周期分析](validation/narrow-video-card-navigation-analysis-2026-10-30.md) | 页面保留与局部更新、真实账号 Windows Profile、深滚动／快速切换和优化顺序 |
+| [窄屏视频卡切换优化结果](validation/narrow-video-card-navigation-results-2026-10-30.md) | 空闲内容复用、移除整页平移、1×／3× Windows Profile 对照和验证边界 |
 | [Android 窄屏底栏性能复查](validation/android-primary-switch-2026-10-26.md) | 保留列表约束、嵌套查询作用域、图片可见性与真机 Profile 对照 |
 | [Android 原生与 PiliPlus 导航对照](validation/android-navigation-reference-comparison-2026-10-26.md) | 状态保留与页面结构、悬停/裁剪优化、图片和骨架候选及后续优先级 |
 | [Android 预测式返回](validation/android-predictive-back.md) | 工作区系统手势预览、取消／确认、返回优先级和验证边界 |

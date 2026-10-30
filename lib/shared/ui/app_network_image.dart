@@ -157,6 +157,8 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
   bool _retryScheduled = false;
   bool _hasFrame = false;
   ImageProvider<Object>? _provider;
+  (AppImageCache?, int?, String, int?, int?)? _providerConfiguration;
+  Widget? _image;
   _RetainedImageProvider? _source;
   int _attempt = 0;
   RenderBox? _visibilityBox;
@@ -193,6 +195,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
   @override
   void didUpdateWidget(AppNetworkImage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _image = null;
     // Configuration updates do not reparent the element. Scroll dependencies
     // and activate/deactivate own ancestry changes; layout owns size changes.
     if (oldWidget.url != widget.url ||
@@ -363,10 +366,14 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
         (_hasFrame || _source?.hasCachedFrame == true);
     if (visible != _visible || releaseFrame) {
       if (!visible) _stopWaiting();
-      setState(() {
-        _visible = visible;
-        if (releaseFrame) _hasFrame = false;
-      });
+      _visible = visible;
+      // A ready frame already stays on screen during page swipes/restoration.
+      // Demand/geometry changes alone do not change its rendered subtree.
+      if (!_hasFrame || releaseFrame) {
+        setState(() {
+          if (releaseFrame) _hasFrame = false;
+        });
+      }
     }
   }
 
@@ -420,13 +427,21 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
   }
 
   void _releaseSource() {
+    _image = null;
     _source?.release();
     _source = null;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final cache = AppImageCacheScope.maybeOf(context);
+  ImageProvider<Object>? _resolveProvider(AppImageCache? cache) {
+    final configuration = (
+      cache,
+      cache?.bytes.generation,
+      widget.url,
+      widget.cacheWidth,
+      widget.cacheHeight,
+    );
+    if (_providerConfiguration == configuration) return _provider;
+    _providerConfiguration = configuration;
     final source = Uri.tryParse(widget.url);
     final normalized = source != null && source.scheme == 'http'
         ? source.replace(scheme: 'https').toString()
@@ -437,12 +452,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
         uri.userInfo.isNotEmpty ||
         uri.host.isEmpty) {
       _provider = null;
-      return widget.errorBuilder?.call(
-            context,
-            const ImageLoadCancelled(),
-            StackTrace.empty,
-          ) ??
-          const SizedBox.shrink();
+      return null;
     }
     final provider = cache == null || !ImageByteCache.isPublicImageUri(uri)
         ? ResizeImage.resizeIfNeeded(
@@ -459,12 +469,26 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
             cacheWidth: widget.cacheWidth,
             cacheHeight: widget.cacheHeight,
           );
+    return _provider = provider;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cache = AppImageCacheScope.maybeOf(context);
+    final provider = _resolveProvider(cache);
+    if (provider == null) {
+      return widget.errorBuilder?.call(
+            context,
+            const ImageLoadCancelled(),
+            StackTrace.empty,
+          ) ??
+          const SizedBox.shrink();
+    }
     if (_source case final previous? when previous.provider != provider) {
       _releaseSource();
       _hasFrame = false;
       ++_attempt;
     }
-    _provider = provider;
     // Cached pixels can appear in the first build of a lazy-list child. The
     // first layout still releases an offscreen frame, preventing permanent
     // leases outside the viewport or loading any uncached hidden image.
@@ -493,7 +517,10 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
     );
   }
 
-  Widget _buildImage(_RetainedImageProvider retained, AppImageCache? cache) {
+  Widget _buildImage(_RetainedImageProvider retained, AppImageCache? cache) =>
+      _image ??= _createImage(retained, cache);
+
+  Widget _createImage(_RetainedImageProvider retained, AppImageCache? cache) {
     final image = Image(
       key: ValueKey(_attempt),
       image: retained.image,

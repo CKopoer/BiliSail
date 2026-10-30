@@ -488,6 +488,23 @@ void main() {
     expect(find.byType(AccountScreen), findsOneWidget);
   });
 
+  testWidgets('retained profile actions use the latest navigation callback', (
+    tester,
+  ) async {
+    final first = <String>[];
+    final current = <String>[];
+    await mount(tester, onNavigate: first.add);
+    await mount(tester, onNavigate: current.add);
+    await tester.tap(find.byType(NetworkAvatar));
+    await tester.pump();
+    expect(first, isEmpty);
+    expect(current, ['/user/1']);
+    await tester.tap(find.byKey(const ValueKey('account-statistic-关注')));
+    await tester.pump();
+    expect(current.last, '/user/1?section=following');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'account change hides cached level and ignores a late old reply',
     (tester) async {

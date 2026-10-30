@@ -32,7 +32,6 @@ import '../shared/ui/app_dialog.dart';
 import '../shared/ui/paging_tab_strip.dart';
 import '../shared/ui/page_tab_style.dart';
 import '../shared/ui/retained_tab_view.dart';
-import '../shared/ui/primary_navigation_transition.dart';
 import '../shared/ui/scroll_collapsing_header.dart';
 
 typedef WorkspacePageBuilder = Widget Function(
@@ -840,17 +839,13 @@ final class _BiliAppShellState extends State<BiliAppShell>
                               ),
                               child: ColoredBox(
                                 color: colors.surface,
-                                child: PrimaryNavigationTransition(
+                                // Switching a retained root restores dense image
+                                // lists. Keep that content stationary while the
+                                // bottom bar animates its selected destination.
+                                child: RepaintBoundary(
                                   key: const ValueKey(
-                                    'workspace-primary-transition',
+                                    'workspace-primary-content',
                                   ),
-                                  enabled: compact,
-                                  index: tab.isRoot
-                                      ? sectionForLocation(
-                                          tab.location,
-                                          compact: _compactChannels,
-                                        ).index
-                                      : null,
                                   child: ScrollHeaderRegion(
                                     enabled: compact,
                                     identity: (
@@ -1638,7 +1633,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
       key: const ValueKey('workspace-bottom-navigation'),
       animationDuration: MediaQuery.disableAnimationsOf(context)
           ? Duration.zero
-          : PrimaryNavigationTransition.duration,
+          : const Duration(milliseconds: 220),
       height: _bottomNavigationHeight,
       labelPadding: EdgeInsets.zero,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {

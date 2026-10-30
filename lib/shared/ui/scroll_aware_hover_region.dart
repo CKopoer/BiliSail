@@ -25,6 +25,13 @@ final class _ScrollAwareHoverRegionState extends State<ScrollAwareHoverRegion> {
   bool _hovered = false;
   bool _active = true;
   bool _checkScheduled = false;
+  Widget? _region;
+
+  @override
+  void didUpdateWidget(ScrollAwareHoverRegion oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.child, widget.child)) _region = null;
+  }
 
   @override
   void didChangeDependencies() {
@@ -105,7 +112,7 @@ final class _ScrollAwareHoverRegionState extends State<ScrollAwareHoverRegion> {
   }
 
   @override
-  Widget build(BuildContext context) => MouseRegion(
+  Widget build(BuildContext context) => _region ??= MouseRegion(
     onEnter: (_) => _setPointerInside(true),
     onExit: (_) => _setPointerInside(false),
     child: widget.child,
