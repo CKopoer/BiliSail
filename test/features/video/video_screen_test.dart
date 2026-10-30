@@ -1,4 +1,5 @@
 import '../../support/input_test_app.dart';
+import '../../support/playback_layout_session_fake.dart';
 import '../../support/text_selection.dart';
 
 import 'dart:async';
@@ -1246,6 +1247,62 @@ void main() {
     }
   }
 
+  testWidgets('listening uses half the narrow page and restores video height', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final session = PlaybackLayoutSessionFake();
+    addTearDown(session.dispose);
+    var created = 0;
+    var disposed = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          playbackSessionProvider.overrideWithValue(session),
+          authControllerProvider.overrideWith(_GuestAuthController.new),
+          videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+          videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
+        ],
+        child: InputTestApp(
+          home: Scaffold(
+            body: VideoScreen(
+              id: const VideoId('BV1abc123456'),
+              playerBuilder: (context, _, _) {
+                ProviderScope.containerOf(context)
+                    .read(playbackSessionProvider);
+                return _TrackedPlayer(
+                  onCreate: () => created++,
+                  onDispose: () => disposed++,
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(_TrackedPlayer)).height, 390 * 9 / 16);
+    await session.setAudioOnly(true);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(_TrackedPlayer)).height, 400);
+    tester.view.physicalSize = const Size(480, 660);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(_TrackedPlayer)).height, 330);
+    tester.view.physicalSize = const Size(1100, 800);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(_TrackedPlayer)).height, 800);
+    tester.view.physicalSize = const Size(390, 800);
+    await session.setAudioOnly(false);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(_TrackedPlayer)).height, 390 * 9 / 16);
+    expect(created, 1);
+    expect(disposed, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final initialSize in [const Size(480, 660), const Size(1100, 800)]) {
     testWidgets(
       'video info defaults to expanded at ${initialSize.width} and retains user choice',
@@ -2402,8 +2459,12 @@ final class _HomeQueuePagingRepository extends Fake implements HomeRepository {
   }
 }
 
-final class _ProfilePagingSession extends Fake implements PlaybackSession {
+final class _ProfilePagingSession extends Fake
+    with ChangeNotifier
+    implements PlaybackSession {
   _ProfilePagingSession(this.detail);
+  @override
+  bool get audioOnly => false;
   @override
   final VideoDetail detail;
   @override

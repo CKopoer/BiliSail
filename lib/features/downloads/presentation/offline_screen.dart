@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
 import '../../../shared/ui/state_view.dart';
+import '../../../shared/ui/playback_layout_builder.dart';
 import '../application/download_controller.dart';
 import '../domain/download_models.dart';
 import 'downloads_screen.dart';
@@ -90,97 +91,112 @@ final class _OfflineScreenState extends ConsumerState<OfflineScreen> {
           return _OfflineUnavailable(onBack: _back);
         }
         final cover = widget.coverProvider?.call(verified);
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 48),
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: _back,
-                icon: const Icon(Icons.arrow_back_rounded),
-                label: const Text('返回下载'),
+        return PlaybackLayoutBuilder(
+          builder: (context, pageBounds, listening) => ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 48),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _back,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text('返回下载'),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final narrow = constraints.maxWidth < 440;
-                final image = ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
-                    width: narrow ? 120 : 192,
-                    height: narrow ? 68 : 108,
-                    child: cover == null
-                        ? ColoredBox(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHigh,
-                            child: const Icon(Icons.download_done_rounded),
-                          )
-                        : Image(
-                            image: cover,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => ColoredBox(
+              const SizedBox(height: 8),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final narrow = constraints.maxWidth < 440;
+                  final image = ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: narrow ? 120 : 192,
+                      height: narrow ? 68 : 108,
+                      child: cover == null
+                          ? ColoredBox(
                               color: Theme.of(context)
                                   .colorScheme
                                   .surfaceContainerHigh,
                               child: const Icon(Icons.download_done_rounded),
+                            )
+                          : Image(
+                              image: cover,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => ColoredBox(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHigh,
+                                child: const Icon(Icons.download_done_rounded),
+                              ),
                             ),
-                          ),
+                    ),
+                  );
+                  final details = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        verified.item.video.title,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(verified.item.part.title),
+                      const SizedBox(height: 6),
+                      Text(
+                        '本地 · ${downloadQualityText(verified.selection.quality)} · ${downloadCodecText(verified.selection.codec)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  );
+                  return narrow
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            image,
+                            const SizedBox(height: 12),
+                            details,
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            image,
+                            const SizedBox(width: 16),
+                            Expanded(child: details),
+                          ],
+                        );
+                },
+              ),
+              for (final warning in verified.warnings)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    '离线附属内容提示：$warning',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                );
-                final details = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      verified.item.video.title,
-                      style: Theme.of(context).textTheme.titleLarge,
+                ),
+              const SizedBox(height: 18),
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1120),
+                  child: LayoutBuilder(
+                    builder: (context, bounds) => SizedBox(
+                      height:
+                          listening &&
+                              bounds.maxWidth < 1000 &&
+                              pageBounds.maxHeight.isFinite
+                          ? PlaybackLayoutBuilder.listeningHeight(
+                              pageBounds.maxHeight,
+                            )
+                          : bounds.maxWidth * 9 / 16,
+                      child: widget.playerBuilder(context, verified),
                     ),
-                    const SizedBox(height: 6),
-                    Text(verified.item.part.title),
-                    const SizedBox(height: 6),
-                    Text(
-                      '本地 · ${downloadQualityText(verified.selection.quality)} · ${downloadCodecText(verified.selection.codec)}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                );
-                return narrow
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [image, const SizedBox(height: 12), details],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          image,
-                          const SizedBox(width: 16),
-                          Expanded(child: details),
-                        ],
-                      );
-              },
-            ),
-            for (final warning in verified.warnings)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  '离线附属内容提示：$warning',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
-            const SizedBox(height: 18),
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1120),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: widget.playerBuilder(context, verified),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );

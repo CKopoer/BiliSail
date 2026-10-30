@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/downloads/application/download_controller.dart';
 import 'package:bilisail/features/downloads/domain/download_repository.dart';
 import 'package:bilisail/features/downloads/presentation/downloads_screen.dart';
@@ -9,6 +10,8 @@ import 'package:bilisail/features/downloads/presentation/offline_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../support/playback_layout_session_fake.dart';
 
 DownloadTask _task(
   int index, {
@@ -316,6 +319,49 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('offline listening uses half the page and retains its player', (
+    tester,
+  ) async {
+    final repository = _Repository([
+      _task(1, status: DownloadStatus.completed),
+    ]);
+    final session = PlaybackLayoutSessionFake();
+    addTearDown(repository.close);
+    addTearDown(session.dispose);
+    const player = ColoredBox(
+      key: ValueKey('offline-listening-player'),
+      color: Colors.black,
+    );
+    await _pump(
+      tester,
+      repository,
+      ProviderScope(
+        overrides: [playbackSessionProvider.overrideWithValue(session)],
+        child: OfflineScreen(
+          taskId: '1',
+          playerBuilder: (context, _) {
+            ProviderScope.containerOf(context).read(playbackSessionProvider);
+            return player;
+          },
+        ),
+      ),
+      size: const Size(390, 800),
+    );
+    await tester.pumpAndSettle();
+    final finder = find.byKey(const ValueKey('offline-listening-player'));
+    final element = tester.element(finder);
+    expect(tester.getSize(finder).height, (390 - 40) * 9 / 16);
+    await session.setAudioOnly(true);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(finder).height, 400);
+    expect(tester.element(finder), same(element));
+    await session.setAudioOnly(false);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(finder).height, (390 - 40) * 9 / 16);
+    expect(tester.element(finder), same(element));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('unrelated queue progress leaves the offline player intact', (
     tester,

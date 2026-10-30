@@ -12,6 +12,7 @@ import '../../../core/input/shortcut_dispatcher.dart';
 import '../../../core/presentation/input_scope.dart';
 import '../../playback/application/playback_session.dart';
 import '../../../shared/ui/playback_page_commands.dart';
+import '../../../shared/ui/playback_layout_builder.dart';
 import '../../../shared/ui/width_layout_builder.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../settings/domain/shortcut_settings.dart';
@@ -308,14 +309,17 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
               ],
             ),
           );
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final playerHeight = math.min(
-                constraints.maxWidth * 9 / 16,
-                constraints.maxHeight.isFinite
-                    ? constraints.maxHeight * 0.55
-                    : constraints.maxWidth * 9 / 16,
-              );
+          return PlaybackLayoutBuilder(
+            builder: (context, constraints, listening) {
+              final playerHeight =
+                  listening && !wide && constraints.maxHeight.isFinite
+                  ? PlaybackLayoutBuilder.listeningHeight(constraints.maxHeight)
+                  : math.min(
+                      constraints.maxWidth * 9 / 16,
+                      constraints.maxHeight.isFinite
+                          ? constraints.maxHeight * 0.55
+                          : constraints.maxWidth * 9 / 16,
+                    );
               final infoWidth = wide ? 380.0 : constraints.maxWidth;
               final visiblePlayerWidth = wide
                   ? math.max(

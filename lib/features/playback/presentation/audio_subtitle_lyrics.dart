@@ -8,7 +8,7 @@ import '../application/playback_session.dart';
 import '../domain/playback_repository.dart';
 
 /// A lazy, sentence-driven listening transcript. The media clock only moves
-/// the wheel when its current cue changes; scrolling never seeks per frame.
+/// the wheel when its current cue changes. Only an explicit tap seeks.
 class AudioSubtitleLyrics extends StatefulWidget {
   const AudioSubtitleLyrics({super.key, required this.session});
 
@@ -27,15 +27,14 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
   late final FixedExtentScrollController _scroll;
   SubtitleCue? _playing;
   int _center = 0;
+  int _browseCacheAnchor = 0;
   int? _preview;
   int _revision = 0;
-  bool _following = false;
-  bool _interacting = false;
+  bool _browsing = false;
   bool _subscribed = false;
   bool _visible = true;
   bool _tickerEnabled = true;
   double? _itemExtent;
-  Timer? _wheelEnd;
 
   bool get _currentSource =>
       widget.session.sourceGeneration == _generation &&
@@ -95,15 +94,11 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
       _follow(animate: false);
     } else {
       widget.session.snapshots.removeListener(_onSnapshot);
-      _wheelEnd?.cancel();
-      _wheelEnd = null;
       _revision++;
-      _interacting = false;
+      _browsing = false;
       _preview = null;
       // Cancel any drag/ballistic/automatic animation before hiding the view.
-      _following = true;
       if (_scroll.hasClients) _scroll.jumpToItem(_center);
-      _following = false;
     }
   }
 
@@ -132,14 +127,14 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
   }
 
   void _onSnapshot() {
-    if (!_subscribed || !_currentSource || _interacting || _preview != null) {
+    if (!_subscribed || !_currentSource || _preview != null) {
       return;
     }
     final previous = (_playing, _center);
     _readPosition();
     if (previous == (_playing, _center)) return;
     setState(() {});
-    _follow();
+    if (!_browsing) _follow();
   }
 
   void _follow({bool animate = true}) {
@@ -149,24 +144,19 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
           !_subscribed ||
           !_currentSource ||
           revision != _revision ||
-          _interacting ||
+          _browsing ||
           _preview != null ||
           !_scroll.hasClients) {
         return;
       }
-      _following = true;
-      try {
-        if (animate && !MediaQuery.disableAnimationsOf(context)) {
-          await _scroll.animateToItem(
-            _center,
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-          );
-        } else {
-          _scroll.jumpToItem(_center);
-        }
-      } finally {
-        if (mounted && revision == _revision) _following = false;
+      if (animate && !MediaQuery.disableAnimationsOf(context)) {
+        await _scroll.animateToItem(
+          _center,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        _scroll.jumpToItem(_center);
       }
     });
   }
@@ -181,20 +171,8 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
             notification.direction != ScrollDirection.idle)) {
       // A real drag can interrupt auto-follow, including with a desktop mouse.
       _revision++;
-      if (notification is ScrollStartNotification) {
-        _wheelEnd?.cancel();
-        _wheelEnd = null;
-      }
-      _following = false;
-      _interacting = true;
-    }
-    if (notification is ScrollEndNotification &&
-        _interacting &&
-        !_following &&
-        _wheelEnd == null &&
-        _scroll.hasClients) {
-      _interacting = false;
-      unawaited(_seek(_scroll.selectedItem));
+      _browsing = true;
+      if (_preview != null) setState(() => _preview = null);
     }
     return false;
   }
@@ -209,9 +187,7 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
       return;
     }
     final revision = ++_revision;
-    _wheelEnd?.cancel();
-    _wheelEnd = null;
-    _interacting = false;
+    _browsing = false;
     setState(() => _preview = index);
     try {
       final duration = session.snapshots.value.duration;
@@ -234,26 +210,10 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
     }
   }
 
-  void _onPointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent || !_subscribed || !_currentSource) return;
-    // Flutter sends an end notification for each mouse-wheel packet. Wait for
-    // the burst to finish so a wheel gesture does not flood the native engine.
-    _wheelEnd?.cancel();
-    _wheelEnd = Timer(const Duration(milliseconds: 180), () {
-      _wheelEnd = null;
-      if (mounted && _interacting && _scroll.hasClients) {
-        _interacting = false;
-        unawaited(_seek(_scroll.selectedItem));
-      }
-    });
-  }
-
   void _cancelDrag(PointerCancelEvent event) {
-    if (!_interacting) return;
-    _wheelEnd?.cancel();
-    _wheelEnd = null;
+    if (!_browsing) return;
     _revision++;
-    _interacting = false;
+    _browsing = false;
     setState(() {
       _preview = null;
       _readPosition();
@@ -266,7 +226,6 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
     WidgetsBinding.instance.removeObserver(this);
     if (_subscribed) widget.session.snapshots.removeListener(_onSnapshot);
     _revision++;
-    _wheelEnd?.cancel();
     _scroll.dispose();
     super.dispose();
   }
@@ -292,9 +251,7 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
             // A resize/text-scale change alters pixels per sentence. Preserve
             // the media sentence rather than reinterpreting the old offset.
             _revision++;
-            _wheelEnd?.cancel();
-            _wheelEnd = null;
-            _interacting = false;
+            _browsing = false;
             _preview = null;
             _readPosition();
             _follow(animate: false);
@@ -312,7 +269,6 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
               },
             ),
             child: Listener(
-              onPointerSignal: _onPointerSignal,
               onPointerCancel: _cancelDrag,
               child: NotificationListener<ScrollNotification>(
                 onNotification: _onScroll,
@@ -324,7 +280,11 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
                   diameterRatio: 100,
                   perspective: .001,
                   onSelectedItemChanged: (index) {
-                    if (_interacting) setState(() => _preview = index);
+                    if (_browsing && (index - _browseCacheAnchor).abs() >= 16) {
+                      // ListWheel caches delegate widgets until a rebuild.
+                      // Bound that cache even during long paused browsing.
+                      setState(() => _browseCacheAnchor = index);
+                    }
                   },
                   childDelegate: ListWheelChildBuilderDelegate(
                     childCount: _cues.length,

@@ -1,4 +1,8 @@
 import '../../support/input_test_app.dart';
+import '../../support/playback_layout_session_fake.dart';
+
+import 'package:bilisail/features/playback/application/playback_session.dart';
+
 import '../../support/text_selection.dart';
 
 import 'dart:async';
@@ -57,6 +61,61 @@ final _season = PgcSeason(
 );
 
 void main() {
+  testWidgets(
+    'listening uses half the PGC page without recreating its player',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = _Auth();
+      final session = PlaybackLayoutSessionFake();
+      addTearDown(auth.dispose);
+      addTearDown(session.dispose);
+      var creates = 0;
+      var disposes = 0;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            playbackSessionProvider.overrideWithValue(session),
+            pgcRepositoryProvider.overrideWithValue(_Repo()),
+            authRepositoryProvider.overrideWithValue(auth),
+          ],
+          child: InputTestApp(
+            home: Scaffold(
+              body: PgcScreen(
+                seasonId: 's1',
+                episodeId: 'e1',
+                playerBuilder: (context, _, episode) {
+                  ProviderScope.containerOf(context)
+                      .read(playbackSessionProvider);
+                  return _TrackedPlayer(
+                    title: episode.title,
+                    onCreate: () => creates++,
+                    onDispose: () => disposes++,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(_TrackedPlayer)).height, 390 * 9 / 16);
+      await session.setAudioOnly(true);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(_TrackedPlayer)).height, 400);
+      tester.view.physicalSize = const Size(480, 660);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(_TrackedPlayer)).height, 330);
+      await session.setAudioOnly(false);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(_TrackedPlayer)).height, 270);
+      expect(creates, 1);
+      expect(disposes, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
   for (final (comments, width) in [
     for (final comments in [false, true])
       for (final width in [390.0, 1200.0]) (comments, width),

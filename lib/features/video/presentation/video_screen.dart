@@ -12,6 +12,7 @@ import '../../../shared/ui/app_notice.dart';
 import '../../../core/network/api_requests.dart';
 
 import '../../../shared/ui/playback_page_commands.dart';
+import '../../../shared/ui/playback_layout_builder.dart';
 import '../../../shared/ui/width_layout_builder.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/state_view.dart';
@@ -519,16 +520,21 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                               collapsedChild: infoTabs,
                             ),
                     );
-                    return LayoutBuilder(
-                      builder: (context, constraints) {
+                    return PlaybackLayoutBuilder(
+                      builder: (context, constraints, listening) {
+                        final playerHeight = wide || !showInfo
+                            ? constraints.maxHeight
+                            : listening && constraints.maxHeight.isFinite
+                            ? PlaybackLayoutBuilder.listeningHeight(
+                                constraints.maxHeight,
+                              )
+                            : constraints.maxWidth * 9 / 16;
                         final player = Column(
                           key: _playerKey,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             SizedBox(
-                              height: wide || !showInfo
-                                  ? constraints.maxHeight
-                                  : constraints.maxWidth * 9 / 16,
+                              height: playerHeight,
                               width: double.infinity,
                               child: playerContent,
                             ),
@@ -584,8 +590,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                   offstage: !showInfo,
                                   child: SizedBox(
                                     height: constraints.maxHeight.isFinite
-                                        ? (constraints.maxHeight -
-                                                  constraints.maxWidth * 9 / 16)
+                                        ? (constraints.maxHeight - playerHeight)
                                               .clamp(480.0, double.infinity)
                                         : 600,
                                     child: info,

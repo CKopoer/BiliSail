@@ -139,7 +139,7 @@ void main() {
   });
 
   for (final kind in [PointerDeviceKind.touch, PointerDeviceKind.mouse]) {
-    testWidgets('$kind drag previews and seeks once after release', (
+    testWidgets('$kind drag only browses until a sentence is tapped', (
       tester,
     ) async {
       await listen();
@@ -160,6 +160,14 @@ void main() {
       expect(controller(tester).selectedItem, isNot(9));
       await gesture.up();
       await tester.pumpAndSettle();
+      expect(engine.seeks, 0);
+      expect(engine.currentSnapshot.position, const Duration(seconds: 91));
+      final browsed = controller(tester).selectedItem;
+      engine.advance(const Duration(seconds: 101));
+      await tester.pumpAndSettle();
+      expect(controller(tester).selectedItem, browsed);
+      await tester.tap(find.byKey(ValueKey('audio-subtitle-$browsed')));
+      await tester.pumpAndSettle();
       expect(engine.seeks, 1);
       expect(
         engine.currentSnapshot.position,
@@ -169,7 +177,7 @@ void main() {
     });
   }
 
-  testWidgets('mouse wheel seeks and adjacent sentences can be clicked', (
+  testWidgets('mouse wheel only browses and clicking resumes following', (
     tester,
   ) async {
     await listen();
@@ -196,12 +204,16 @@ void main() {
     expect(engine.seeks, 0);
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pumpAndSettle();
-    expect(engine.seeks, 1);
+    expect(engine.seeks, 0);
+    expect(engine.currentSnapshot.position, const Duration(seconds: 51));
     final next = controller(tester).selectedItem + 1;
     await tester.tap(find.byKey(ValueKey('audio-subtitle-$next')));
     await tester.pumpAndSettle();
     expect(engine.currentSnapshot.position, Duration(seconds: next * 10));
-    expect(engine.seeks, 2);
+    expect(engine.seeks, 1);
+    engine.advance(Duration(seconds: (next + 1) * 10));
+    await tester.pumpAndSettle();
+    expect(controller(tester).selectedItem, next + 1);
   });
 
   testWidgets('pending seek and track replacement cannot restore old lyrics', (
@@ -429,6 +441,7 @@ void main() {
   for (final size in [
     const Size(320, 180),
     const Size(390, 220),
+    const Size(390, 400),
     const Size(390, 760),
     const Size(900, 506),
     const Size(1400, 800),
