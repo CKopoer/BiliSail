@@ -299,32 +299,27 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
                         label: '跳转到 ${_time(cue.start)}，${cue.text}',
                         excludeSemantics: true,
                         onTap: () => unawaited(_seek(index)),
-                        child: Tooltip(
-                          message: cue.text,
-                          child: InkWell(
-                            key: ValueKey('audio-subtitle-$index'),
-                            onTap: () => unawaited(_seek(index)),
-                            borderRadius: BorderRadius.circular(12),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  cue.text,
-                                  maxLines: maxLines,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: fontSize,
-                                    height: 1.3,
-                                    fontWeight: selected
-                                        ? FontWeight.w600
-                                        : FontWeight.w400,
-                                    color: selected
-                                        ? scheme.primary
-                                        : scheme.onSurfaceVariant,
-                                  ),
+                        child: InkWell(
+                          key: ValueKey('audio-subtitle-$index'),
+                          onTap: () => unawaited(_seek(index)),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Center(
+                              child: Text(
+                                cue.text,
+                                maxLines: maxLines,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: fontSize,
+                                  height: 1.3,
+                                  fontWeight: selected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: selected
+                                      ? scheme.primary
+                                      : scheme.onSurfaceVariant,
                                 ),
                               ),
                             ),
