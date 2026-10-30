@@ -1111,6 +1111,7 @@ class PlaybackSession extends ChangeNotifier {
                           codec: audio.codec,
                           bandwidth: audio.bandwidth,
                         ),
+                        isAudioOnly: true,
                       )
                     : resolved.kind == PlaybackMediaKind.liveHls
                     ? ManifestSource(

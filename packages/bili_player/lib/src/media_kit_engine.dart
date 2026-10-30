@@ -606,11 +606,14 @@ final class MediaKitEngine
           );
         }
         _subscribe(player, generation);
-        _videoOutput.bindPlayer(
-          player,
-          generation: generation,
-          decoding: options.videoDecoding,
-        );
+        final audioOnly = source is ProgressiveSource && source.isAudioOnly;
+        if (!audioOnly) {
+          _videoOutput.bindPlayer(
+            player,
+            generation: generation,
+            decoding: options.videoDecoding,
+          );
+        }
         await _configureBufferAhead(
           player,
           options.maxBufferAhead,
@@ -714,6 +717,14 @@ final class MediaKitEngine
             source is DashPairSource ||
             source is DashVideoSource ||
             _hasRealTrack(player.state.tracks.video);
+        if (audioOnly && requireVideoOutput) {
+          throw PlayerFailure(
+            PlayerFailureKind.invalidSource,
+            'An audio-only source must not contain a video track.',
+            generation,
+          );
+        }
+        if (audioOnly) _requiresDecodedAudio = true;
         Future<void> waitForOutput() => waitForNativeSignal(
           signal: _videoOutput.firstFrameRendered,
           superseded: () =>

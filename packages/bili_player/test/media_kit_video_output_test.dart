@@ -9,6 +9,21 @@ final class _Player extends mk.PlatformPlayer {
 
   bool get hasWidthListener => widthController.hasListener;
   bool get hasHeightListener => heightController.hasListener;
+  int pauses = 0, plays = 0;
+
+  @override
+  Future<void> pause() async {
+    pauses++;
+    state = state.copyWith(playing: false);
+    playingController.add(false);
+  }
+
+  @override
+  Future<void> play() async {
+    plays++;
+    state = state.copyWith(playing: true);
+    playingController.add(true);
+  }
 
   void publishDimensions(int width, int height) {
     state = state.copyWith(width: width, height: height);
@@ -39,6 +54,12 @@ final class _PlayerFacade extends Fake implements mk.Player {
 
   @override
   mk.PlayerStream get stream => platform.stream;
+
+  @override
+  Future<void> pause() => platform.pause();
+
+  @override
+  Future<void> play() => platform.play();
 }
 
 final class _Controller extends Fake implements mkv.VideoController {
@@ -74,6 +95,46 @@ final class _Harness {
 }
 
 void main() {
+  for (final playing in [true, false]) {
+    testWidgets('surface leaves background playback and foreground intent to '
+        'its session (playing=$playing)', (tester) async {
+      final player = _Player();
+      final controller = _Controller(player, 44);
+      final harness = _Harness();
+      addTearDown(() async {
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pumpWidget(const SizedBox());
+        harness.output.dispose();
+        controller.dispose();
+        await player.dispose();
+      });
+      harness.controllers.value = controller;
+      await tester.pumpWidget(harness.build());
+      player.state = player.state.copyWith(playing: playing);
+      // No pump between hidden/paused: Android can suspend Flutter frames while
+      // the outgoing video surface is still observing the old native player.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      expect(player.pauses, 0);
+      expect(player.state.playing, playing);
+
+      // A pause requested by the session while backgrounded must stay paused.
+      await player.pause();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      expect(player.state.playing, isFalse);
+      expect(player.plays, 0);
+    });
+  }
+
   for (final dimensionsReadyBeforeSwap in [true, false]) {
     testWidgets('replacement displays its texture when dimensions are ready '
         '${dimensionsReadyBeforeSwap ? 'before' : 'after'} the swap', (

@@ -67,6 +67,7 @@ void main() {
         await session.setBackgroundAudio(true);
         expect(session.audioOnly, isTrue);
         expect(engine.sources.last, isA<ProgressiveSource>());
+        expect((engine.sources.last as ProgressiveSource).isAudioOnly, isTrue);
         expect(engine.currentSnapshot.position, const Duration(minutes: 3));
         expect(engine.currentSnapshot.desiredPlaying, !paused);
         final opens = engine.sources.length;

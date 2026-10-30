@@ -36,3 +36,21 @@ Android 锁屏、系统媒体按钮、长时间后台、真实账号和在线媒
 - 在独立源码副本执行 `integration_test/audio_only_playback_test.dart -d windows`，**1 项通过**。本机 HTTP 分轨夹具确认：手动听视频及自动后台听视频只请求音轨；后台换 P 仍为音轨、音频实际解码且没有视频输出；回前台恢复 DASH 视频并保留暂停。没有访问公网媒体或真实账号，日志：`build/validation/background-audio/runtime/native-audio-cached.log`。
 - 首次隔离构建缺少 NuGet 路径，随后 SQLite／media-kit 下载遭遇 TLS 握手失败。补齐本机 `.dart_tool/native-tools/nuget.exe` 的 PATH，并复制既有构建钩子的下载缓存到隔离目录；SQLite 与固定 media-kit 钩子继续校验 SHA-256，没有修改 Pub 缓存、校验规则或 TLS 设置。最终 Windows Debug 构建及原生用例通过。
 - 使用经过定向验证的本任务应用源码启动独立 Windows 调试入口；入口不恢复真实账号、不打开用户数据库、不请求媒体。DTD 连接后热重载成功，运行时错误查询为空，验证后已退出该程序。没有操作用户正在运行的正式客户端。
+
+## 退后台仍暂停的修正（2026-10-31）
+
+用户反馈实际退后台后仍暂停。复查固定 media-kit 依赖发现两个未覆盖路径：
+
+- `media_kit_video` 的真实 `Video` 控件默认 `pauseUponEnteringBackgroundMode: true`，在 `paused`／`detached` 时直接暂停原生 Player。此前根应用的 fake engine 生命周期测试未挂载该真实控件，无法捕获这条绕过会话的命令。
+- 所有换源都无条件创建 `VideoController`；固定依赖的控制器构造需要等待 `addPostFrameCallback` 才能完成原生初始化。进入 `paused` 后 Flutter 不再生产帧，纯音频也可能因此卡在打开流程。此前原生测试持续 pump 帧，没有模拟这一约束。
+
+修正后，视频输出显式关闭控件自身的自动暂停／恢复，生命周期仍由 `PlaybackSession` 统一决定，因此 Android 自动听视频与 iOS 既有暂停策略分别保留。主应用将已确认的独立音轨标记为 `ProgressiveSource.isAudioOnly`；引擎对该类源完全跳过视频控制器与 surface 初始化，并在播放时验证实际音频解码。发现意外视频轨时拒绝该音频源，不静默回退混合视频。
+
+新增真实视频控件的生命周期回归，覆盖进入后台前播放／暂停和后台手动暂停后回前台。原生用例改为真正发送 `inactive → hidden → paused`，确认 `framesEnabled == false`，同时用 `benchmark` frame policy 关闭测试框架的强制帧并监测 post-frame 回调，确保后台没有实际绘制帧；在没有 pump 的异步区内切音轨、检查进度推进并换下一 P，最后恢复前台视频和暂停意图。
+
+本轮结果：
+
+- `tool/check.ps1 -SkipPub` 完整通过：根应用 **3649**、bili_api **497**、bili_player **101**、bili_danmaku **136**、bili_mux **5** 项通过；根应用 13 项既有条件跳过，mux 10 项因未配置 `BILI_MUX_LIBRARY` 跳过，不算原生覆盖。格式、静态分析和打包边界通过；强化后的集成测试另行静态分析无问题。日志：`build/validation/background-pause-fix/check-final.log`、`integration-analysis.log`。
+- Windows 本地分轨原生对照：只在隔离源码副本临时撤掉独立音轨标记，严格无帧用例在后台切源处 **8 秒超时**；恢复标记后 **1 项通过**，并确认后台无 post-frame 回调、只请求音轨、进度推进、后台下一 P、前台恢复视频及手动暂停意图。对照期间保留视频控件生命周期修正，单独复现控制器初始化等待。日志：`build/validation/background-audio/runtime/native-background-before-strict.log`、`native-background-final.log`。
+- 当前共享工作区的普通入口 Android arm64 开发 Release／AOT 重建通过，包名 `dev.bilisail.bilisail.test`、版本 `1.2.5+1`／12501，签名与不可调试检查通过。测试包仍位于 `build/development/android-arm64/BiliSail-test-arm64-release.apk`，SHA-256：`b0ba63ce486f1b817252170fb3181f57e813604062baffbf92b25f9b191acb15`。日志：`build/validation/background-pause-fix/android-release.log`。没有连接 Android 设备或安装操作，系统锁屏、长时间后台和真实媒体仍需实机确认。
+- Windows 独立调试入口热重载成功；补齐调试入口自己的 `AppNoticeHost` 后，运行时错误查询为空，验证后已退出。该入口不加载真实账号或用户数据库。

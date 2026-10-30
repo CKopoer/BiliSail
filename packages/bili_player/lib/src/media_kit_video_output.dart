@@ -116,6 +116,10 @@ final class MediaKitVideoOutput implements FlutterVideoOutput {
             key: ObjectKey(controller),
             controller: controller,
             controls: mkv.NoVideoControls,
+            // PlaybackSession owns lifecycle and the user's pause intent.
+            // The old surface may still be mounted while switching to audio.
+            pauseUponEnteringBackgroundMode: false,
+            resumeUponEnteringForegroundMode: false,
           ),
   );
 

@@ -11,8 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
-      LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
   testWidgets(
     'listening requests only audio, then restores paused DASH video',
@@ -126,31 +126,70 @@ void main() {
           lessThan(400),
         );
         expect(observed, containsAll(['/video.mp4', '/audio.m4a']));
-        observed.clear();
-        await _withFrames(tester, session.setBackgroundAudio(true));
-        expect(session.audioOnly, isTrue);
-        expect(engine.currentSnapshot.desiredPlaying, isFalse);
-        expect(observed, isNotEmpty);
-        expect(observed.every((path) => path == '/audio.m4a'), isTrue);
-        observed.clear();
-        await _withFrames(
-          tester,
-          session.open(
-            _detail,
-            const VideoPart(
-              cid: '43',
-              page: 2,
-              title: '下一 P',
-              duration: Duration(seconds: 6),
-            ),
-          ),
+        await _withFrames(tester, session.play());
+        final framePolicy = binding.framePolicy;
+        binding.framePolicy =
+            LiveTestWidgetsFlutterBindingFramePolicy.benchmark;
+        var renderedInBackground = false;
+        binding.addPostFrameCallback((_) => renderedInBackground = true);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
         );
-        expect(session.audioOnly, isTrue);
-        expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
-        expect(engine.inspectDiagnostics().hasVideoOutput, isFalse);
-        expect(observed, isNotEmpty);
-        expect(observed.every((path) => path == '/audio.m4a'), isTrue);
-        await _withFrames(tester, session.pause());
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        try {
+          expect(tester.binding.framesEnabled, isFalse);
+          await tester.runAsync(() async {
+            // Deliver the outgoing Video widget's lifecycle callbacks without
+            // rendering a frame, as on a real backgrounded Android Activity.
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+            expect(engine.currentSnapshot.desiredPlaying, isTrue);
+            observed.clear();
+            await session
+                .setBackgroundAudio(true)
+                .timeout(const Duration(seconds: 8));
+            expect(session.error, isNull);
+            expect(session.audioOnly, isTrue);
+            expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
+            expect(engine.inspectDiagnostics().hasVideoOutput, isFalse);
+            final position = engine.currentSnapshot.position;
+            await Future<void>.delayed(const Duration(milliseconds: 350));
+            expect(engine.currentSnapshot.position, greaterThan(position));
+            expect(observed, isNotEmpty);
+            expect(observed.every((path) => path == '/audio.m4a'), isTrue);
+            observed.clear();
+            await session
+                .open(
+                  _detail,
+                  const VideoPart(
+                    cid: '43',
+                    page: 2,
+                    title: '下一 P',
+                    duration: Duration(seconds: 6),
+                  ),
+                )
+                .timeout(const Duration(seconds: 8));
+            expect(session.error, isNull);
+            expect(session.audioOnly, isTrue);
+            expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
+            expect(engine.inspectDiagnostics().hasVideoOutput, isFalse);
+            expect(observed, isNotEmpty);
+            expect(observed.every((path) => path == '/audio.m4a'), isTrue);
+            await session.pause();
+            expect(renderedInBackground, isFalse);
+          });
+        } finally {
+          binding.framePolicy = framePolicy;
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.hidden,
+          );
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.inactive,
+          );
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+        }
         await _withFrames(tester, session.setBackgroundAudio(false));
         expect(session.audioOnly, isFalse);
         expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
