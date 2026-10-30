@@ -1552,8 +1552,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
-                            if (!smallWindow &&
-                                !controls &&
+                            if (!controls &&
                                 settings.showCollapsedProgress &&
                                 !session.isLive &&
                                 snapshot.duration.inMilliseconds > 0)
@@ -1788,8 +1787,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                       ),
                                                     ),
                                                   ),
-                                                if (!smallWindow &&
-                                                    !session.isLive)
+                                                if (!session.isLive)
                                                   PlaybackSnapshotBuilder(
                                                     snapshots:
                                                         session.snapshots,

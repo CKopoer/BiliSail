@@ -102,7 +102,7 @@ void main() {
           final generation = session.sourceGeneration;
           await session.seek(const Duration(seconds: 35));
           await _pumpFrames(tester);
-          final position = session.snapshots.value.position;
+          var position = session.snapshots.value.position;
           void expectMinimalControls() {
             expect(
               find.descendant(
@@ -114,7 +114,6 @@ void main() {
             for (final key in [
               'player-control-title-layer',
               'compact-playback-actions',
-              'playback-timeline-slider',
               'player-next-episode',
               'player-back',
               'player-home',
@@ -141,6 +140,12 @@ void main() {
               session.canListen ? findsOneWidget : findsNothing,
             );
             expect(find.byTooltip('全屏（F）').hitTestable(), findsOneWidget);
+            expect(
+              find
+                  .byKey(const ValueKey('playback-timeline-slider'))
+                  .hitTestable(),
+              session.isLive ? findsNothing : findsOneWidget,
+            );
             expect(tester.takeException(), isNull);
           }
 
@@ -159,6 +164,19 @@ void main() {
           expect(find.text('画面弹幕'), findsOneWidget);
           expect(toggles, 2);
           await session.pause();
+          await _pumpFrames(tester);
+          if (!session.isLive) {
+            final seeks = engine.seeks;
+            await tester.drag(
+              find.byKey(const ValueKey('playback-timeline-slider')),
+              const Offset(80, 0),
+            );
+            await _pumpFrames(tester);
+            expect(engine.seeks, seeks + 1);
+            expect(session.snapshots.value.position, greaterThan(position));
+            expect(session.snapshots.value.desiredPlaying, isFalse);
+            position = session.snapshots.value.position;
+          }
           await tester.tap(find.byTooltip('全屏（F）'));
           await _pumpFrames(tester);
           expect(window.fullScreen, isTrue);
@@ -173,11 +191,16 @@ void main() {
           expect(session.sourceGeneration, generation);
           expect(engine.opens, 1);
           expect(engine.maxSurfaces, 1);
-          await tester.tapAt(_surfacePoint(tester));
-          await _pumpSurfaceTap(tester);
+          if (mode == PlayerControlsMode.dynamic) {
+            await tester.pump(const Duration(seconds: 3));
+            await tester.pump(const Duration(milliseconds: 216));
+          } else {
+            await tester.tapAt(_surfacePoint(tester));
+            await _pumpSurfaceTap(tester);
+          }
           expect(
             find.byKey(const ValueKey('player-collapsed-progress')),
-            findsNothing,
+            session.isLive ? findsNothing : findsOneWidget,
           );
           await tester.pumpWidget(const SizedBox());
           await _pumpFrames(tester);
@@ -3476,14 +3499,14 @@ void main() {
     await _pumpFrames(tester);
   });
   testWidgets(
-    'collapsed progress tracks confirmed position, buffer, setting and content kind',
+    'collapsed small-window progress tracks position, buffer, setting and content kind',
     (tester) async {
       final engine = _FakeEngine();
       final session = _session(engine);
       final window = _FakeWindowService();
       addTearDown(session.close);
       await tester.pumpWidget(
-        _app(session, window, const AppSettings.defaults()),
+        _app(session, window, const AppSettings.defaults(), width: 320),
       );
       await _pumpFrames(tester);
       await _showControls(tester);
@@ -3561,13 +3584,18 @@ void main() {
       await tester.tapAt(_surfacePoint(tester));
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpWidget(
-        _app(session, window, AppSettings(showCollapsedProgress: false)),
+        _app(
+          session,
+          window,
+          AppSettings(showCollapsedProgress: false),
+          width: 320,
+        ),
       );
       await _pumpFrames(tester);
       expect(find.byKey(progressKey), findsNothing);
       expect(find.byKey(bufferKey), findsNothing);
       await tester.pumpWidget(
-        _app(session, window, const AppSettings.defaults()),
+        _app(session, window, const AppSettings.defaults(), width: 320),
       );
       await _pumpFrames(tester);
       session.contentTarget = const LivePlaybackTarget('12');
