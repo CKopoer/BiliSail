@@ -156,3 +156,15 @@
 | 1584 | 3.800–4.283 | 0.237–0.244 | 13.714–14.073 | 4.587–4.632 |
 
 两轮帧数有波动，测量顺序为各宽度先基线、后修复；不由采样帧数推算 FPS，也不将这些结果等同于用户真实收藏夹或其他设备的卡顿已全部消除。探针、基线副本和原始结果位于忽略目录 `artifacts/profile-folder-performance/`，启动／构建日志为 `build/profile-folder-windows-profile.log`，专用样本窗口已正常退出。仅构建并运行了该 Windows Profile 诊断入口，`build/windows/x64/runner/Profile/bilisail.exe` 是诊断程序；本轮未生成正式 Release 包。真实账号网络／封面加载、人工滚轮手感和 Android／macOS 设备性能尚未验收。
+
+## 2026-10-30：主页与收藏夹播放入口
+
+个人／UP 主主页的投稿工具栏将“播放全部”统一为“我的－收藏”使用的文字按钮和播放列表图标；加载期间保留原有禁用、进度提示、读屏说明及工具栏尺寸稳定性，窄屏和放大字号继续使用原有自适应布局。
+
+- 点击投稿卡片只打开当前视频，不携带投稿播放列表。
+- 点击投稿“播放全部”时，沿用当前排序从公开投稿第一页建立播放列表，不受搜索词影响；后续投稿由播放页分页读取。
+- 进入个人／UP 主收藏夹后，保留同款“播放全部”入口；点击夹内单个视频同样携带收藏夹播放列表，并从选中视频开始。失效内容过滤、去重、容量及账号 scope/session epoch 隔离沿用既有实现。
+
+定向组件回归覆盖个人／UP 主页的上述入口、收藏夹顺序、投稿单击不入队、320／1100 宽度及加载期间布局稳定性，38 项通过。日志为 `build/profile-playlist-targeted-final.log`。本轮没有修改协议、播放器原生实现或存储，也未进行真实账号及 Windows／Android／macOS 实机点击验收。未发现可连接的 Flutter debug 应用，热重载尝试因没有 DTD 连接未能执行。
+
+`tool/check.ps1 -SkipPub` 在本次工作区完整通过：根应用 3574、`bili_api` 496、`bili_player` 96、`bili_danmaku` 118、`bili_mux` 5，共 4289 项通过；格式、静态分析和打包边界检查均通过。根应用 13 项符号链接测试因 Windows 权限条件跳过；mux 的 10 项原生测试因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生通过。全量日志为 `build/profile-playlist-workspace-check-final.log`。另完成 375／1100 宽浅色、375 宽深色及 320 宽两倍字号的 4 项预览测试并检查截图，日志为 `build/profile-playlist-preview.log`。本次文档差异没有新增相对链接，`git diff --check` 通过。

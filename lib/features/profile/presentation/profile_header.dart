@@ -319,22 +319,15 @@ class ProfileVideoToolbar extends StatelessWidget {
     final playAll = Semantics(
       liveRegion: playAllLoading,
       value: playAllLoading ? '正在加载播放列表' : null,
-      child: FilledButton.tonalIcon(
+      child: TextButton.icon(
         key: const ValueKey('profile-play-all'),
         onPressed: playAllLoading ? null : onPlayAll,
-        style: FilledButton.styleFrom(
-          minimumSize: const Size(0, 40),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          backgroundColor: theme.colorScheme.primaryContainer,
-          foregroundColor: theme.colorScheme.onPrimaryContainer,
-        ),
         icon: playAllLoading
             ? const SizedBox.square(
                 dimension: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Icon(Icons.play_arrow_rounded, size: 18),
+            : const Icon(Icons.playlist_play, size: 18),
         label: const Text('播放全部'),
       ),
     );

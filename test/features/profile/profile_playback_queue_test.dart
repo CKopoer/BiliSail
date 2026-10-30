@@ -14,6 +14,7 @@ import 'package:bilisail/features/profile/application/profile_playback_queue.dar
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
+import 'package:bilisail/features/video/application/video_author_controller.dart';
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -22,6 +23,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../messages/message_fakes.dart';
+import '../../support/follow_repository_fake.dart';
 
 const _id = UserId('7');
 ProfileEntry _entry(int index) {
@@ -67,6 +69,7 @@ void main() {
       overrides: [
         profileRepositoryProvider.overrideWithValue(repository),
         authRepositoryProvider.overrideWithValue(auth),
+        videoAuthorRepositoryProvider.overrideWithValue(FollowRepositoryFake()),
       ],
     );
   });
@@ -387,6 +390,40 @@ void main() {
   }
 
   for (final width in [320.0, 1100.0]) {
+    testWidgets(
+      'selecting a submission opens only that video at width=$width',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        repository.hasMore = false;
+        final opened = <VideoSummary>[];
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              home: Scaffold(
+                body: ProfileScreen(
+                  id: _id,
+                  isSelf: width < 600,
+                  onOpenVideo: opened.add,
+                  onOpenPlaylist: (_, _) =>
+                      fail('Submission must open without a playlist'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('投稿1'));
+        await tester.pumpAndSettle();
+        expect(opened, hasLength(1));
+        expect(opened.single.id, _entry(1).video?.id);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('play all button opens the UP playlist at width=$width', (
       tester,
     ) async {
@@ -403,7 +440,7 @@ void main() {
             home: Scaffold(
               body: ProfileScreen(
                 id: _id,
-                isSelf: true,
+                isSelf: width < 600,
                 onOpenPlaylist: (video, queueId) {
                   selected = video;
                   opened = queueId;
@@ -419,7 +456,7 @@ void main() {
       final pending = repository.pending = Completer<ProfilePage>();
       await tester.tap(play);
       await tester.pump();
-      expect(tester.widget<FilledButton>(play).onPressed, isNull);
+      expect(tester.widget<TextButton>(play).onPressed, isNull);
       expect(
         find.descendant(
           of: play,

@@ -336,7 +336,7 @@ void main() {
         await tester.enterText(search, '保留搜索草稿');
         update(() => loading = true);
         await tester.pump(const Duration(milliseconds: 200));
-        expect(tester.widget<FilledButton>(play).onPressed, isNull);
+        expect(tester.widget<TextButton>(play).onPressed, isNull);
         expect(
           find.descendant(
             of: play,
@@ -355,7 +355,7 @@ void main() {
         expect(tester.widget<TextField>(search).controller, same(keyword));
         update(() => loading = false);
         await tester.pumpAndSettle();
-        expect(tester.widget<FilledButton>(play).onPressed, isNotNull);
+        expect(tester.widget<TextButton>(play).onPressed, isNotNull);
         expect(tester.takeException(), isNull);
       },
     );
