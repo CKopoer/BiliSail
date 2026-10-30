@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/platform/window_service.dart';
 import '../../../core/platform/window_size_policy.dart';
 import '../../../core/presentation/workspace_activity.dart';
+import '../../../core/presentation/android_system_ui.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/width_layout_builder.dart';
@@ -610,33 +611,40 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         transitionDuration: Duration.zero,
         pageBuilder: (dialogContext, _, _) => UncontrolledProviderScope(
           container: providerContainer,
-          child: Dialog.fullscreen(
+          child: AndroidSystemUi(
             backgroundColor: Colors.black,
-            child: _PlayerView(
-              session: _session,
-              settings: _settings,
-              controlsVisible: _controlsVisible,
-              shortcuts: _shortcuts,
-              onToggleComments: () => widget.onToggleComments(),
-              danmakuComposerBuilder: widget.danmakuComposerBuilder == null
-                  ? null
-                  : (context) =>
-                        widget.danmakuComposerBuilder?.call(context) ??
-                        const SizedBox.shrink(),
-              danmakuOverlayBuilder: widget.danmakuOverlayBuilder == null
-                  ? null
-                  : (context) =>
-                        widget.danmakuOverlayBuilder?.call(context) ??
-                        const SizedBox.shrink(),
-              pageCommands: _pageCommands,
-              navigation: _navigation,
-              onNavigate: _navigateFromPlayer,
-              fullScreen: true,
-              onFullScreen: () {
-                if (identical(_fullScreenRoute, ModalRoute.of(dialogContext))) {
-                  navigator.pop();
-                }
-              },
+            brightness: Brightness.dark,
+            child: Dialog.fullscreen(
+              backgroundColor: Colors.black,
+              child: _PlayerView(
+                session: _session,
+                settings: _settings,
+                controlsVisible: _controlsVisible,
+                shortcuts: _shortcuts,
+                onToggleComments: () => widget.onToggleComments(),
+                danmakuComposerBuilder: widget.danmakuComposerBuilder == null
+                    ? null
+                    : (context) =>
+                          widget.danmakuComposerBuilder?.call(context) ??
+                          const SizedBox.shrink(),
+                danmakuOverlayBuilder: widget.danmakuOverlayBuilder == null
+                    ? null
+                    : (context) =>
+                          widget.danmakuOverlayBuilder?.call(context) ??
+                          const SizedBox.shrink(),
+                pageCommands: _pageCommands,
+                navigation: _navigation,
+                onNavigate: _navigateFromPlayer,
+                fullScreen: true,
+                onFullScreen: () {
+                  if (identical(
+                    _fullScreenRoute,
+                    ModalRoute.of(dialogContext),
+                  )) {
+                    navigator.pop();
+                  }
+                },
+              ),
             ),
           ),
         ),

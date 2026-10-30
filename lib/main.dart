@@ -19,6 +19,9 @@ Future<void> main(List<String> arguments) async {
     stderr.writeln('BILISAIL_RELEASE_STAGE:dart-entry');
   }
   BiliWidgetsBinding.ensureInitialized();
+  if (Platform.isAndroid) {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
   WindowInputFocus.instance.initialize();
   ReleaseSmokeRequest? smoke;
   var smokeHadError = false;

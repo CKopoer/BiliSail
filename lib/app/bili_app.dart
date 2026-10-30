@@ -44,6 +44,7 @@ import '../shared/ui/app_notice.dart';
 import '../shared/ui/video_card_interaction_scope.dart';
 import '../shared/ui/smooth_scroll_behavior.dart';
 import '../core/presentation/app_input_host.dart';
+import '../core/presentation/android_system_ui.dart';
 import '../core/presentation/window_orientation_host.dart';
 import 'shortcut_coordinator.dart';
 import 'image_cache_binding.dart';
@@ -447,7 +448,9 @@ class _BiliAppState extends ConsumerState<BiliApp> {
                       interactions: cardInteractions,
                       onNotice: showAppNotice,
                       hoverPlaybackEnabled: settings.videoCardHoverPlayback,
-                      child: child ?? const SizedBox.shrink(),
+                      child: AndroidSystemUi(
+                        child: child ?? const SizedBox.shrink(),
+                      ),
                     ),
                   ),
                 ),
