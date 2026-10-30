@@ -1801,9 +1801,11 @@ class PlaybackSession extends ChangeNotifier {
       final preference = _subtitlePreference;
       _notify();
       if (preference == null &&
-          _settings.subtitlesEnabled &&
+          (_settings.subtitlesEnabled || _audioOnly) &&
           tracks.isNotEmpty) {
-        await selectSubtitle(0);
+        // Listening lyrics may be enabled independently of video subtitles.
+        // An explicit track choice/close still updates the shared preference.
+        await _selectSubtitle(0, remember: _settings.subtitlesEnabled);
       } else if (preference != null) {
         final index = tracks.indexWhere(
           (track) => track.preferenceKey == preference,
@@ -1896,7 +1898,9 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  Future<void> selectSubtitle(int index) async {
+  Future<void> selectSubtitle(int index) => _selectSubtitle(index);
+
+  Future<void> _selectSubtitle(int index, {bool remember = true}) async {
     if (_disposed || _closing || index < -1 || index >= subtitleTracks.length) {
       return;
     }
@@ -1904,9 +1908,11 @@ class PlaybackSession extends ChangeNotifier {
     final generation = ++_subtitleGeneration;
     _subtitleCancellation?.cancel();
     selectedSubtitle = index;
-    _subtitlePreference = index >= 0 && index < subtitleTracks.length
-        ? subtitleTracks[index].preferenceKey
-        : '__off__';
+    if (remember) {
+      _subtitlePreference = index >= 0 && index < subtitleTracks.length
+          ? subtitleTracks[index].preferenceKey
+          : '__off__';
+    }
     subtitleCues = const [];
     subtitleLoading = index >= 0;
     subtitleMessage = null;

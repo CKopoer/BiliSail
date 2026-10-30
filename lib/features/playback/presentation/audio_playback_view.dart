@@ -8,9 +8,10 @@ import '../../../domain/playback_rates.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../application/playback_session.dart';
+import 'audio_subtitle_lyrics.dart';
 import 'playback_snapshot_builder.dart';
 
-/// A static listening surface. Position updates rebuild only the timeline.
+/// A listening surface with localized timeline and subtitle updates.
 class AudioPlaybackView extends StatelessWidget {
   const AudioPlaybackView({
     super.key,
@@ -84,7 +85,7 @@ class AudioPlaybackView extends StatelessWidget {
                     ],
                   ),
                 ),
-                Expanded(child: _identity(context)),
+                Expanded(child: _content(context)),
                 if (session.error case final error?)
                   SizedBox(
                     height: 32,
@@ -189,6 +190,25 @@ class AudioPlaybackView extends StatelessWidget {
                         tooltip: '听视频选项',
                         onSelected: (action) => action(),
                         itemBuilder: (_) => [
+                          if (session.subtitleTracks.isNotEmpty) ...[
+                            CheckedPopupMenuItem(
+                              checked: session.selectedSubtitle == -1,
+                              value: () =>
+                                  unawaited(session.selectSubtitle(-1)),
+                              child: const Text('关闭字幕'),
+                            ),
+                            for (
+                              var i = 0;
+                              i < session.subtitleTracks.length;
+                              i++
+                            )
+                              CheckedPopupMenuItem(
+                                checked: session.selectedSubtitle == i,
+                                value: () =>
+                                    unawaited(session.selectSubtitle(i)),
+                                child: Text(session.subtitleTracks[i].label),
+                              ),
+                          ],
                           if (commands != null) ...[
                             PopupMenuItem(
                               value: commands?.previousPart,
@@ -254,6 +274,66 @@ class AudioPlaybackView extends StatelessWidget {
       ),
     );
   }
+
+  Widget _content(BuildContext context) => LayoutBuilder(
+    builder: (context, bounds) {
+      final hasLyrics = session.subtitleCues.isNotEmpty;
+      final lyrics = hasLyrics
+          ? AudioSubtitleLyrics(
+              key: ValueKey((
+                session,
+                session.sourceGeneration,
+                session.subtitleCues,
+              )),
+              session: session,
+            )
+          : Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  session.subtitleLoading
+                      ? '正在加载字幕…'
+                      : session.subtitleMessage ??
+                            (session.subtitleTracks.isEmpty
+                                ? '暂无字幕'
+                                : '字幕已关闭，可在听视频选项中开启'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            );
+      if (bounds.maxWidth >= 720 && bounds.maxHeight >= 220) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1100),
+            child: Row(
+              children: [
+                Expanded(flex: 2, child: _identity(context)),
+                const SizedBox(width: 24),
+                Expanded(flex: 3, child: lyrics),
+              ],
+            ),
+          ),
+        );
+      }
+      return Column(
+        children: [
+          if (!hasLyrics || bounds.maxHeight >= 240)
+            SizedBox(
+              height: !hasLyrics
+                  ? bounds.maxHeight * .65
+                  : bounds.maxHeight >= 480
+                  ? 168
+                  : 64,
+              child: _identity(context),
+            ),
+          Expanded(child: lyrics),
+        ],
+      );
+    },
+  );
 
   Widget _identity(BuildContext context) => LayoutBuilder(
     builder: (context, bounds) {
