@@ -44,3 +44,16 @@ flutter test integration_test/windows_system_media_test.dart -d windows
 `windows-system-media-command.ps1` 仅匹配标题为 `BiliSail system media fixture` 的测试会话，通过 Windows 全局媒体 API 读取元信息、请求暂停／seek／播放／停止，并检查系统会话移除。不会控制其他应用的会话。
 
 待设备验收：Android 通知栏／锁屏按钮、通知滑除、最近任务移除、后台暂停后恢复、通知点击回到应用；iOS 控制中心／锁屏与系统中断；macOS 双窗口／控制中心；Linux GNOME／KDE、Flatpak 与 D-Bus 断开恢复。尚无 Android 设备连接，Apple／Linux 工具链不在当前 Windows 主机上。
+
+## Android Release 通知缺失修复（2026-10-31）
+
+定位到 Release 资源压缩丢失动态图标的问题。修复前可用的开发 Release APK（1.2.5+1，SHA-256 `776c9f6db9804831d27e4c5ffcda33a31670f9d665e0064e027a3b02885522dd`）中，`aapt2 dump resources` 仅能找到 `ic_media_notification`，找不到 `audio_service_play_arrow`、`audio_service_pause`、`audio_service_stop`；构建的 `resources.txt` 也把三者标为不可达。基线证据保存在 `build/android-media-notification-baseline.log`。
+
+`audio_service` 0.18.19 的 `AudioService.getResourceId` 用 `Resources.getIdentifier` 按 Dart 传来的名称查图标，Android 资源压缩器无法据此识别 Dart 的引用。Android 13+ 的 `createCustomAction` 会为停止按钮创建 `PlaybackStateCompat.CustomAction.Builder`，而实际解析到的 androidx.media 1.7.0 要求图标 ID 非零；该构造器在图标缺失时抛出异常，发生在 `enterPlayingState` 和通知创建之前。通过本机固定依赖的原生源码及 AAR 字节码核对了这条失败路径，未将缺图误判为缺少通知运行时权限。
+
+- [资源保留规则](../../android/app/src/main/res/raw/keep.xml) 明确保留小图标与三种实际使用的媒体按钮图标，继续开启 Release 代码／资源压缩，不扩大为保留所有 drawable。依据为 [Android 动态资源保留说明](https://developer.android.com/topic/performance/app-optimization/customize-which-resources-to-keep)。
+- [APK 媒体资源检查](../../tool/android-media-notification.ps1) 读取实际编译后的资源表，要求四个 drawable 都具有非零资源 ID 和文件资源值；仅有名称、空资源或相似名称均拒绝。开发构建和正式／CI 打包在产物校验阶段调用它，缺图时停止，不进入安装／分发流程。
+- [离线边界检查](../../tool/test-android-media-notification.ps1) 已接入根检查，21 项通过；覆盖正式与测试包名、LF／CRLF、逐个缺图、仅 spec、空值、零 ID 和相似名称。新检查也成功拒绝修复前的实际 APK。
+- `tool/check.ps1 -SkipPub` 通过：格式、静态分析、打包边界检查通过；根应用 3649 项通过、13 项既有跳过，bili_api 497、bili_player 101、bili_danmaku 136、bili_mux 5 项通过。mux 另有 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生通过。日志：`build/android-media-notification-check.log`。
+- 普通入口开发 Release／AOT APK 构建通过，并通过新增的实际资源检查；`aapt2` 确认四个 drawable 均存在，资源压缩报告明确按 keep 规则保留媒体按钮。产物为 `build/development/android-arm64/BiliSail-test-arm64-release.apk`，包名 `dev.bilisail.bilisail.test`，版本 `1.2.5+1`／12501，沿用原开发签名、不可调试；SHA-256 `6c160f047c039a04b5605218d2c98f38a41678e2a100a06de8fee1297e714174`。日志：`build/android-media-notification-release.log`、`build/android-media-notification-fixed.log`。构建复用本机已有 arm64 mux 资产，没有执行安装或清理数据。
+- 本轮不修改播放状态、后台策略、凭据、SDK、依赖或安全存储；没有修改 Pub 缓存。未连接 Android 设备，通知栏实际操作仍需设备验收。

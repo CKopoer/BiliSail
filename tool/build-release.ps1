@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'android-signing.ps1')
 . (Join-Path $PSScriptRoot 'android-version.ps1')
+. (Join-Path $PSScriptRoot 'android-media-notification.ps1')
 . (Join-Path $PSScriptRoot 'windows-installers.ps1')
 . (Join-Path $PSScriptRoot 'windows-msix-identity.ps1')
 . (Join-Path $PSScriptRoot 'macos-release-validation.ps1')
@@ -274,6 +275,7 @@ try {
         if ($abis.Count -ne 1 -or $abis[0] -ne 'arm64-v8a') { throw 'APK contains unexpected native ABIs.' }
       } finally { $apk.Dispose() }
       $androidVersionCode = Confirm-AndroidApkVersion $package $Version
+      Confirm-AndroidMediaNotificationResources $package
       Write-Output "Verified APK manifest: versionName=$buildName, versionCode=$androidVersionCode"
       $androidCertificateSha256 = Confirm-AndroidApkSigning $package $androidSigning
       $signing = $androidSigning.Signing

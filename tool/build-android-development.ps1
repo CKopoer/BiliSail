@@ -10,6 +10,7 @@ $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'android-development.ps1')
 . (Join-Path $PSScriptRoot 'android-signing.ps1')
 . (Join-Path $PSScriptRoot 'android-version.ps1')
+. (Join-Path $PSScriptRoot 'android-media-notification.ps1')
 if ($Install -and [string]::IsNullOrWhiteSpace($DeviceId)) { throw '-Install requires an explicit -DeviceId.' }
 
 Push-Location $repoRoot
@@ -43,6 +44,7 @@ try {
   $package = Join-Path $output "BiliSail-test-arm64-$buildMode.apk"
   Copy-Item -LiteralPath "build/app/outputs/flutter-apk/app-arm64-v8a-$buildMode.apk" -Destination $package
   $identity = Confirm-AndroidDevelopmentApk $package $Mode
+  Confirm-AndroidMediaNotificationResources $package (Get-AndroidDevelopmentAapt)
   if ($identity.VersionCode -ne $expectedCode -or $identity.VersionName -cne $version.Split('+')[0]) {
     throw 'Development APK version does not match pubspec.yaml.'
   }
