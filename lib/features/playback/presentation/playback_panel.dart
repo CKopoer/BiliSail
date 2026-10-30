@@ -1321,6 +1321,18 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                   recognizer.onLongPressStart =
                                                       (_) => widget.shortcuts
                                                           .beginTouchHold();
+                                                  recognizer
+                                                          .onLongPressMoveUpdate =
+                                                      (details) => widget
+                                                          .shortcuts
+                                                          .moveTouchHold(
+                                                            dx: details
+                                                                .offsetFromOrigin
+                                                                .dx,
+                                                            dy: details
+                                                                .offsetFromOrigin
+                                                                .dy,
+                                                          );
                                                   recognizer.onLongPressEnd =
                                                       (_) => widget.shortcuts
                                                           .endTouchHold();
@@ -1371,13 +1383,27 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                         ),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
-                                      child: Text(
-                                        widget.shortcuts.isHoldingRate
-                                            ? '长按倍速 ${snapshot.rate}x'
-                                            : '播放速度 ${snapshot.rate}x',
+                                      child: DefaultTextStyle(
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 13,
+                                        ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              widget.shortcuts.isHoldingRate
+                                                  ? '长按倍速 ${snapshot.rate}x'
+                                                  : widget.shortcuts.isRateFixed
+                                                  ? '固定倍速 ${snapshot.rate}x'
+                                                  : '播放速度 ${snapshot.rate}x',
+                                            ),
+                                            if (widget.shortcuts.touchHoldHint
+                                                case final hint?)
+                                              Text(hint),
+                                          ],
                                         ),
                                       ),
                                     ),

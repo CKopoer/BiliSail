@@ -625,6 +625,146 @@ void main() {
   );
 
   testWidgets(
+    'Windows native touch hold pins and unpins playback rate inline and fullscreen',
+    (tester) async {
+      initializePlayerBackend();
+      final fixturePath = Platform.environment['BILI_TEST_MEDIA_DIR'];
+      expect(fixturePath, isNotNull, reason: 'Use tool/test-windows-media.ps1');
+      final window = WindowService();
+      await window.initialize();
+      await window.setFullScreen(false);
+      final engine = MediaKitEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakePlaybackRepository(
+          File('$fixturePath/video.mp4').uri,
+          File('$fixturePath/audio.m4a').uri,
+        ),
+        progress: _NoopProgressStore(),
+        accountScope: () => 'guest',
+      );
+      const part = VideoPart(
+        cid: 'touch-rate',
+        page: 1,
+        title: '触摸固定倍速',
+        duration: Duration(seconds: 12),
+      );
+      const detail = VideoDetail(
+        summary: VideoSummary(
+          id: VideoId('BV1abc123456'),
+          title: '触摸固定倍速本地分轨',
+          coverUrl: '',
+          author: 'fixture',
+          duration: Duration(seconds: 12),
+        ),
+        description: '',
+        parts: [part],
+      );
+      try {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [playbackSessionProvider.overrideWithValue(session)],
+            child: InputTestApp(
+              home: Scaffold(
+                body: Center(
+                  child: SizedBox(
+                    width: 640,
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: PlaybackPanel(
+                        detail: detail,
+                        part: part,
+                        settings: const AppSettings.defaults(),
+                        onToggleComments: () {},
+                        window: window,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await _until(
+          tester,
+          () =>
+              engine.inspectDiagnostics().hasDecodedVideo &&
+              engine.inspectDiagnostics().hasDecodedAudio,
+        );
+        await session.setVolume(0);
+        await session.pause();
+        final generation = engine.currentSnapshot.generation;
+        final position = engine.currentSnapshot.position;
+        Future<TestGesture> hold(double rate, String hint) async {
+          final target = find.byKey(
+            const ValueKey('player-surface-tap-target'),
+          );
+          final gesture = await tester.startGesture(
+            tester.getTopLeft(target) + const Offset(130, 70),
+          );
+          await _until(
+            tester,
+            () =>
+                engine.currentSnapshot.rate == rate &&
+                find.text(hint).evaluate().isNotEmpty,
+          );
+          return gesture;
+        }
+
+        for (final fullscreen in [false, true]) {
+          if (fullscreen) {
+            await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+            await _until(
+              tester,
+              () =>
+                  window.isFullScreen &&
+                  find
+                          .byKey(const ValueKey('player-surface-tap-target'))
+                          .evaluate()
+                          .length ==
+                      1,
+            );
+          }
+          await session.setRate(1.5);
+          final pin = await hold(2, '上滑固定倍速');
+          await pin.moveBy(const Offset(0, -60));
+          await _until(tester, () => find.text('已固定倍速').evaluate().isNotEmpty);
+          await pin.up();
+          await _until(
+            tester,
+            () => find.text('固定倍速 2.0x').evaluate().isNotEmpty,
+          );
+          expect(engine.currentSnapshot.rate, 2);
+          final normal = await hold(1, '上滑解除固定');
+          await normal.up();
+          await _until(tester, () => engine.currentSnapshot.rate == 2);
+          final unpin = await hold(1, '上滑解除固定');
+          await unpin.moveBy(const Offset(0, -60));
+          await _until(tester, () => find.text('已解除固定').evaluate().isNotEmpty);
+          await unpin.up();
+          await _until(
+            tester,
+            () => find.text('播放速度 1.0x').evaluate().isNotEmpty,
+          );
+          expect(engine.currentSnapshot.rate, 1);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(engine.currentSnapshot.generation, generation);
+          expect(
+            (engine.currentSnapshot.position - position).abs(),
+            lessThan(const Duration(milliseconds: 250)),
+          );
+          expect(tester.takeException(), isNull);
+        }
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 100));
+        await window.setFullScreen(false);
+        await session.close();
+      }
+    },
+  );
+
+  testWidgets(
     'Windows native responsive controls, fullscreen and Esc preserve one playback source',
     (tester) async {
       initializePlayerBackend();

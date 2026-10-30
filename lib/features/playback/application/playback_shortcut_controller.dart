@@ -23,6 +23,7 @@ final class PlaybackShortcutController extends ChangeNotifier {
     this.timer = Timer.new,
   }) {
     session.addListener(_sourceChanged);
+    session.snapshots.addListener(_sourceChanged);
   }
   final PlaybackSession session;
   final ShortcutSettings Function() settings;
@@ -35,6 +36,23 @@ final class PlaybackShortcutController extends ChangeNotifier {
   _RateHoldInput? _holdInput;
   bool _accelerating = false, rateFeedback = false, _disposed = false;
   bool get isHoldingRate => _accelerating;
+  double? _fixedRate;
+  int? _fixedRateGeneration;
+  Object? _fixedRateRequest;
+  bool _touchHoldWasFixed = false, _touchHoldCommitted = false;
+  double? _touchHoldRate;
+  bool get isRateFixed =>
+      _fixedRate != null &&
+      _fixedRateGeneration == session.sourceGeneration &&
+      _fixedRate == session.commandRate;
+  String? get touchHoldHint {
+    if (!_accelerating || _holdInput != _RateHoldInput.touch) return null;
+    if (_touchHoldCommitted) {
+      return _touchHoldWasFixed ? '已解除固定' : '已固定倍速';
+    }
+    return _touchHoldWasFixed ? '上滑解除固定' : '上滑固定倍速';
+  }
+
   double _savedVolume = 100;
   Set<ShortcutAction> get capabilities => {
     ShortcutAction.playPause,
@@ -55,6 +73,11 @@ final class PlaybackShortcutController extends ChangeNotifier {
     },
   };
   void _sourceChanged() {
+    if (!isRateFixed) {
+      _fixedRate = null;
+      _fixedRateGeneration = null;
+      _fixedRateRequest = null;
+    }
     if (_holdGeneration != null &&
         _holdGeneration != session.sourceGeneration) {
       cancel();
@@ -67,6 +90,7 @@ final class PlaybackShortcutController extends ChangeNotifier {
     final generation = _holdGeneration;
     _holdGeneration = null;
     _holdInput = null;
+    _touchHoldRate = null;
     final accelerating = _accelerating;
     if (_accelerating && generation == session.sourceGeneration) {
       unawaited(
@@ -79,11 +103,11 @@ final class PlaybackShortcutController extends ChangeNotifier {
     if (accelerating && !_disposed) notifyListeners();
   }
 
-  void _beginRateHold() {
+  void _beginRateHold({double? rate}) {
     // Record the hold before awaiting the engine so early release restores
     // even a pending rate change.
     _accelerating = true;
-    unawaited(session.beginTemporaryRate(settings().holdRate));
+    unawaited(session.beginTemporaryRate(rate ?? settings().holdRate));
     notifyListeners();
   }
 
@@ -104,7 +128,44 @@ final class PlaybackShortcutController extends ChangeNotifier {
         _holdGeneration != session.sourceGeneration) {
       return;
     }
-    _beginRateHold();
+    _touchHoldWasFixed = isRateFixed;
+    _touchHoldCommitted = false;
+    final rate = _touchHoldWasFixed ? 1.0 : settings().holdRate;
+    _touchHoldRate = rate;
+    _beginRateHold(rate: rate);
+  }
+
+  void moveTouchHold({required double dx, required double dy}) {
+    final rate = _touchHoldRate;
+    if (_disposed ||
+        !active() ||
+        !_accelerating ||
+        _holdInput != _RateHoldInput.touch ||
+        _holdGeneration != session.sourceGeneration ||
+        _touchHoldCommitted ||
+        rate == null ||
+        dy > -48 ||
+        -dy <= dx.abs()) {
+      return;
+    }
+    _touchHoldCommitted = true;
+    _fixedRate = _touchHoldWasFixed ? null : rate;
+    _fixedRateGeneration = session.sourceGeneration;
+    final request = Object();
+    _fixedRateRequest = request;
+    // A committed swipe is a manual rate choice. setRate also updates the
+    // temporary hold's restoration target before its native command completes.
+    unawaited(_commitTouchRate(rate, request));
+    _showRateFeedback();
+  }
+
+  Future<void> _commitTouchRate(double rate, Object request) async {
+    await session.setRate(rate);
+    if (_disposed || !identical(_fixedRateRequest, request)) return;
+    if (session.error != null || session.commandRate != rate) {
+      _fixedRate = null;
+      notifyListeners();
+    }
   }
 
   void endTouchHold() {
@@ -222,15 +283,19 @@ final class PlaybackShortcutController extends ChangeNotifier {
       ShortcutAction.faster,
       ShortcutAction.toggleRate,
     }.contains(action)) {
-      _feedback?.cancel();
-      rateFeedback = true;
-      notifyListeners();
-      _feedback = timer(const Duration(milliseconds: 1500), () {
-        rateFeedback = false;
-        notifyListeners();
-      });
+      _showRateFeedback();
     }
     return CommandOutcome.completed;
+  }
+
+  void _showRateFeedback() {
+    _feedback?.cancel();
+    rateFeedback = true;
+    notifyListeners();
+    _feedback = timer(const Duration(milliseconds: 1500), () {
+      rateFeedback = false;
+      notifyListeners();
+    });
   }
 
   @override
@@ -239,6 +304,7 @@ final class PlaybackShortcutController extends ChangeNotifier {
     cancel();
     _feedback?.cancel();
     session.removeListener(_sourceChanged);
+    session.snapshots.removeListener(_sourceChanged);
     super.dispose();
   }
 }

@@ -4849,6 +4849,306 @@ void main() {
     }
   }
 
+  for (final fullscreen in [false, true]) {
+    for (final visible in [false, true]) {
+      testWidgets(
+        'touch rate pin and unpin preserve playback fullscreen=$fullscreen controls=$visible',
+        (tester) async {
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          final window = _FakeWindowService(desktop: false);
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(session, window, const AppSettings.defaults()),
+          );
+          await _pumpFrames(tester);
+          await _showControls(tester);
+          await session.setRate(1.5);
+          await session.seek(const Duration(seconds: 12));
+          if (fullscreen) {
+            await tester.tap(find.byTooltip('全屏（F）'));
+            await _pumpFrames(tester);
+          }
+          if (!visible) {
+            await tester.tapAt(_surfacePoint(tester));
+            await _pumpSurfaceTap(tester);
+          } else {
+            await session.pause();
+          }
+          final playing = engine.currentSnapshot.desiredPlaying;
+          final opens = engine.opens;
+          final generation = session.sourceGeneration;
+          final hold = await _startRateHold(tester);
+          expect(engine.currentSnapshot.rate, 2);
+          expect(find.text('上滑固定倍速'), findsOneWidget);
+          expect(
+            tester.getTopLeft(find.text('上滑固定倍速')).dy,
+            greaterThan(tester.getTopLeft(find.text('长按倍速 2.0x')).dy),
+          );
+          await hold.moveBy(const Offset(0, -60));
+          await _pumpFrames(tester);
+          expect(find.text('已固定倍速'), findsOneWidget);
+          // Continuing to move must not toggle the mode a second time.
+          await hold.moveBy(const Offset(0, -25));
+          await hold.up();
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.rate, 2);
+          expect(find.text('固定倍速 2.0x'), findsOneWidget);
+          await tester.pump(const Duration(seconds: 2));
+          await tester.pump();
+          expect(find.byKey(const ValueKey('player-rate-hud')), findsNothing);
+
+          final normal = await _startRateHold(tester);
+          expect(engine.currentSnapshot.rate, 1);
+          expect(find.text('上滑解除固定'), findsOneWidget);
+          await normal.up();
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.rate, 2);
+
+          final unpin = await _startRateHold(tester);
+          await unpin.moveBy(const Offset(0, -60));
+          await _pumpFrames(tester);
+          expect(find.text('已解除固定'), findsOneWidget);
+          await unpin.moveBy(const Offset(0, -25));
+          await unpin.up();
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.rate, 1);
+          final next = await _startRateHold(tester);
+          expect(engine.currentSnapshot.rate, 2);
+          expect(find.text('上滑固定倍速'), findsOneWidget);
+          await next.up();
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.rate, 1);
+          expect(engine.currentSnapshot.desiredPlaying, playing);
+          expect(engine.currentSnapshot.position, const Duration(seconds: 12));
+          expect(engine.opens, opens);
+          expect(session.sourceGeneration, generation);
+          expect(engine.maxSurfaces, 1);
+          expect(
+            find.byKey(const ValueKey('player-controls')),
+            visible ? findsOneWidget : findsNothing,
+          );
+          expect(window.fullScreen, fullscreen);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  for (final offset in [
+    const Offset(0, -24),
+    const Offset(80, -50),
+    const Offset(0, 60),
+  ]) {
+    testWidgets('touch rate pin ignores non-upward swipe $offset', (
+      tester,
+    ) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, _FakeWindowService(), const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      await session.setRate(1.5);
+      final hold = await _startRateHold(tester);
+      await hold.moveBy(offset);
+      await hold.up();
+      await _pumpFrames(tester);
+      expect(engine.currentSnapshot.rate, 1.5);
+      final next = await _startRateHold(tester);
+      expect(find.text('上滑固定倍速'), findsOneWidget);
+      await next.up();
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    });
+  }
+
+  for (final action in [
+    'cancel',
+    'fullscreen',
+    'source',
+    'manual rate',
+    'keyboard',
+  ]) {
+    testWidgets('touch rate pin handles $action after fixing', (tester) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService();
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      await _pinTouchRate(tester);
+      expect(engine.currentSnapshot.rate, 2);
+      switch (action) {
+        case 'cancel':
+          final hold = await _startRateHold(tester);
+          expect(engine.currentSnapshot.rate, 1);
+          await hold.cancel();
+        case 'fullscreen':
+          await _showControls(tester);
+          await tester.tap(find.byTooltip('全屏（F）'));
+        case 'source':
+          await session.retry();
+        case 'manual rate':
+          await session.setRate(1.25);
+          await session.setRate(2);
+        case 'keyboard':
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+          await tester.pump(const Duration(milliseconds: 450));
+          expect(engine.currentSnapshot.rate, 2);
+          expect(find.text('上滑解除固定'), findsNothing);
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+      }
+      await _pumpFrames(tester);
+      final stillFixed = action != 'source' && action != 'manual rate';
+      const rate = 2.0;
+      expect(engine.currentSnapshot.rate, rate);
+      final hold = await _startRateHold(tester);
+      expect(engine.currentSnapshot.rate, stillFixed ? 1 : 2);
+      expect(find.text(stillFixed ? '上滑解除固定' : '上滑固定倍速'), findsOneWidget);
+      await hold.up();
+      await _pumpFrames(tester);
+      expect(engine.currentSnapshot.rate, rate);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final unpin in [false, true]) {
+    testWidgets('touch rate pin commits pending native rate unpin=$unpin', (
+      tester,
+    ) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, _FakeWindowService(), const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      await session.setRate(1.5);
+      if (unpin) await _pinTouchRate(tester);
+      final gate = Completer<void>();
+      engine.nextRate = gate;
+      final hold = await _startRateHold(tester);
+      await hold.moveBy(const Offset(0, -60));
+      await hold.up();
+      gate.complete();
+      await _pumpFrames(tester);
+      expect(engine.currentSnapshot.rate, unpin ? 1 : 2);
+      final next = await _startRateHold(tester);
+      expect(engine.currentSnapshot.rate, unpin ? 2 : 1);
+      await next.up();
+      await _pumpFrames(tester);
+      expect(engine.currentSnapshot.rate, unpin ? 1 : 2);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    });
+  }
+
+  for (final action in ['hidden', 'background', 'modal']) {
+    testWidgets(
+      'touch rate pin survives $action during temporary normal speed',
+      (tester) async {
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final window = _FakeWindowService();
+        const settings = AppSettings.defaults();
+        addTearDown(session.close);
+        _resumeApp(tester);
+        addTearDown(() => _resumeApp(tester));
+        await tester.pumpWidget(_app(session, window, settings));
+        await _pumpFrames(tester);
+        await _pinTouchRate(tester);
+        final normal = await _startRateHold(tester);
+        expect(engine.currentSnapshot.rate, 1);
+        switch (action) {
+          case 'hidden':
+            await tester.pumpWidget(
+              _app(session, window, settings, active: false),
+            );
+          case 'background':
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.inactive,
+            );
+          case 'modal':
+            unawaited(
+              showDialog<void>(
+                context: tester.element(find.byType(PlaybackPanel)),
+                requestFocus: false,
+                builder: (_) => const AlertDialog(content: Text('modal')),
+              ),
+            );
+        }
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.rate, 2);
+        await normal.moveBy(const Offset(0, -60));
+        await normal.up();
+        switch (action) {
+          case 'hidden':
+            await tester.pumpWidget(_app(session, window, settings));
+          case 'background':
+            _resumeApp(tester);
+          case 'modal':
+            Navigator.of(tester.element(find.text('modal'))).pop();
+        }
+        await _pumpFrames(tester);
+        await tester.pump(const Duration(milliseconds: 300));
+        final next = await _startRateHold(tester);
+        expect(engine.currentSnapshot.rate, 1);
+        expect(find.text('上滑解除固定'), findsOneWidget);
+        await next.up();
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.rate, 2);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  for (final target in [
+    const PgcPlaybackTarget('12', cid: '123'),
+    const OfflinePlaybackTarget('local-task'),
+  ]) {
+    testWidgets(
+      'touch rate pin uses configured speed for ${target.runtimeType}',
+      (tester) async {
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(
+            session,
+            _FakeWindowService(),
+            AppSettings(
+              shortcuts: const ShortcutSettings.defaults().withPlayback(
+                holdRate: 3,
+              ),
+            ),
+            target: target,
+          ),
+        );
+        await _pumpFrames(tester);
+        await _pinTouchRate(tester);
+        expect(engine.currentSnapshot.rate, 3);
+        final next = await _startRateHold(tester);
+        expect(engine.currentSnapshot.rate, 1);
+        expect(find.text('上滑解除固定'), findsOneWidget);
+        await next.up();
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.rate, 3);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
+
   for (final started in [false, true]) {
     for (final cancel in [
       'pointer',
@@ -7163,6 +7463,19 @@ void _expectPlayerSemantics(
   final fullscreenButton = find.byTooltip(fullscreenLabel);
   expect(fullscreenButton, findsOneWidget);
   expect(tester.getSemantics(fullscreenButton).tooltip, fullscreenLabel);
+}
+
+Future<TestGesture> _startRateHold(WidgetTester tester) async {
+  final gesture = await tester.startGesture(_surfacePoint(tester));
+  await tester.pump(const Duration(milliseconds: 450));
+  return gesture;
+}
+
+Future<void> _pinTouchRate(WidgetTester tester) async {
+  final gesture = await _startRateHold(tester);
+  await gesture.moveBy(const Offset(0, -60));
+  await gesture.up();
+  await _pumpFrames(tester);
 }
 
 Future<void> _pumpFrames(WidgetTester tester) async {
