@@ -221,10 +221,10 @@ class ProfileController extends Notifier<ProfileState> {
       if (selected < 0) {
         throw const AppFailure(AppFailureKind.notFound, '该视频已不在当前收藏页，请刷新后重试');
       }
-      final start = items.length > WatchLaterQueue.maximumInitialProfileItems
+      final start = items.length > WatchLaterQueue.maximumInitialItems
           ? (selected - 49).clamp(
               0,
-              items.length - WatchLaterQueue.maximumInitialProfileItems,
+              items.length - WatchLaterQueue.maximumInitialItems,
             )
           : 0;
       final queue = ref
@@ -234,7 +234,7 @@ class ProfileController extends Notifier<ProfileState> {
             sessionEpoch: epoch,
             items: items
                 .skip(start)
-                .take(WatchLaterQueue.maximumInitialProfileItems)
+                .take(WatchLaterQueue.maximumInitialItems)
                 .toList(),
             current: initial ?? items.first.video.id,
             profileSource: ProfileVideoQueueSource(
@@ -246,8 +246,7 @@ class ProfileController extends Notifier<ProfileState> {
             favoriteTitle: title,
             hasMore: result.hasMore,
             nextPage: page + 1,
-            truncated:
-                items.length > WatchLaterQueue.maximumInitialProfileItems,
+            truncated: items.length > WatchLaterQueue.maximumInitialItems,
           );
       state = state.copy(queueLoading: false);
       return queue;

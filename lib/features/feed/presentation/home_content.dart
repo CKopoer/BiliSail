@@ -720,7 +720,18 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   }) async {
     final provider = favoritePlaybackQueueProvider(request);
     if (ref.read(provider).isLoading) return;
-    final queue = await ref.read(provider.notifier).capture();
+    final ({int page, String? cursor})? origin = initial == null
+        ? (page: 1, cursor: null)
+        : ref
+              .read(homeControllerProvider(request.query).notifier)
+              .queuePageFor(initial);
+    if (origin == null) {
+      showAppNotice(context, '该视频已不在当前列表，请刷新后重试');
+      return;
+    }
+    final queue = await ref
+        .read(provider.notifier)
+        .capture(page: origin.page, cursor: origin.cursor, initial: initial);
     if (!mounted ||
         !widget.active ||
         !WorkspaceActivity.isActive(context) ||
@@ -740,9 +751,6 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
     if (queue.indexOf(id) < 0) {
       showAppNotice(context, '该视频不在当前收藏夹播放列表内，请刷新后重试');
       return;
-    }
-    if (queue.truncated) {
-      showAppNotice(context, '收藏夹较大，本次播放前 1000 条内容中的有效视频');
     }
     context.go(
       Uri(

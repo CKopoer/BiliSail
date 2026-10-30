@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
+import '../../../domain/video.dart';
 import '../domain/home_channel.dart';
 import '../domain/home_repository.dart';
 import 'watch_later_removal_controller.dart';
@@ -53,6 +54,18 @@ final class HomeController extends Notifier<HomeState> {
   // valid, but a bounded scan avoids an endless layout-driven request loop.
   static const _maxPagesWithoutNewItems = 3;
   final HomeQuery query;
+  final Map<VideoId, ({int page, String? cursor})> _queuePages = {};
+  ({int page, String? cursor})? queuePageFor(VideoId id) => _queuePages[id];
+  void _trackQueuePage(List<HomeEntry> items, int page, String? cursor) {
+    if (query.channel != HomeChannel.favorites) return;
+    for (final item in items) {
+      final id = VideoId(item.bvid ?? '');
+      if (id.isValid && _queuePages.length < maxFavoriteEntries) {
+        _queuePages.putIfAbsent(id, () => (page: page, cursor: cursor));
+      }
+    }
+  }
+
   bool get _isDynamic =>
       query.channel == HomeChannel.dynamic ||
       query.channel == HomeChannel.videoDynamic;
@@ -116,6 +129,7 @@ final class HomeController extends Notifier<HomeState> {
     final cancellation = RequestCancellation();
     _cancellation = cancellation;
     _page = 0;
+    _queuePages.clear();
     _cursor = null;
     _seenCursors.clear();
     _pagesWithoutNewItems = 0;
@@ -132,6 +146,7 @@ final class HomeController extends Notifier<HomeState> {
       );
       if (!_isCurrent(generation, cancellation, repository)) return;
       final items = _mergeItems(const [], result.items);
+      _trackQueuePage(result.items, 1, result.nextCursor);
       final limitReached = _reachedLimit(items);
       if (_isDynamic &&
           result.hasMore &&
@@ -190,6 +205,7 @@ final class HomeController extends Notifier<HomeState> {
       );
       if (!_isCurrent(generation, cancellation, repository)) return;
       final items = _mergeItems(current, result.items);
+      _trackQueuePage(result.items, _page + 1, result.nextCursor ?? _cursor);
       final limitReached = _reachedLimit(items);
       final cursorStalled =
           _isDynamic &&

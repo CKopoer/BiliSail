@@ -22,7 +22,7 @@ final favoritePlaybackQueueProvider = NotifierProvider.autoDispose
       FavoriteQueueRequest
     >(FavoritePlaybackQueueController.new);
 
-/// Explicit playback reads independently of the retained browser's page limit.
+/// Capture one source page; the playback page owns subsequent requests.
 final class FavoritePlaybackQueueController
     extends Notifier<AsyncValue<WatchLaterQueue?>> {
   FavoritePlaybackQueueController(this.request);
@@ -35,10 +35,15 @@ final class FavoritePlaybackQueueController
     return const AsyncData(null);
   }
 
-  Future<WatchLaterQueue?> capture() async {
+  Future<WatchLaterQueue?> capture({
+    int page = 1,
+    String? cursor,
+    VideoId? initial,
+  }) async {
     if (state.isLoading) return null;
     final query = request.query;
-    if (query.channel != HomeChannel.favorites ||
+    if (page < 1 ||
+        query.channel != HomeChannel.favorites ||
         (query.folderId == null && query.section != '默认收藏夹')) {
       return null;
     }
@@ -56,84 +61,53 @@ final class FavoritePlaybackQueueController
     if (!current()) return null;
     state = const AsyncLoading();
     var timedOut = false;
-    final timer = Timer(const Duration(seconds: 60), () {
+    final timer = Timer(const Duration(seconds: 30), () {
       timedOut = true;
       read.cancel();
     });
     try {
-      final items = <WatchLaterQueueItem>[];
-      final known = <VideoId>{};
-      final seenEntries = <String>{};
-      String? cursor;
-      var emptyPages = 0;
-      var scanned = 0;
-      var truncated = false;
-      for (var page = 1; page <= 100; page++) {
-        final result = await Future.any([
-          repository.load(
-            query,
-            page: page,
-            cursor: cursor,
-            cancellation: read,
-          ),
-          cancelled.future.then<HomePage>((_) {
-            throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
-          }),
-        ]);
-        if (!current()) return null;
-        var newEntries = 0;
-        for (final entry in result.items) {
-          if (scanned >= WatchLaterQueueRegistry.maximumItems) {
-            truncated = true;
-            break;
-          }
-          scanned++;
-          if (seenEntries.add(entry.id)) newEntries++;
-          final id = VideoId(entry.bvid ?? '');
-          if (entry.kind != HomeEntryKind.video ||
-              !id.isValid ||
-              !known.add(id)) {
-            continue;
-          }
-          items.add(
-            WatchLaterQueueItem(
-              entryId: entry.id,
-              aid: entry.aid,
-              video: VideoSummary(
-                id: id,
-                access: entry.access,
-                title: entry.title,
-                coverUrl: entry.coverUrl?.toString() ?? '',
-                author: entry.authorName,
-                authorId: UserId.tryParse(entry.authorMid),
-                duration: entry.duration ?? Duration.zero,
-              ),
-              playCountText: entry.playCountText,
-              danmakuCountText: entry.danmakuCountText,
-            ),
-          );
-        }
-        truncated |=
-            result.hasMore && scanned >= WatchLaterQueueRegistry.maximumItems;
-        if (!result.hasMore || truncated) break;
-        emptyPages = newEntries == 0 ? emptyPages + 1 : 0;
-        if (emptyPages >= 3 || page == 100) {
-          throw const AppFailure(AppFailureKind.protocol, '收藏夹分页没有前进，请重试');
-        }
-        cursor = result.nextCursor;
-      }
+      final result = await Future.any([
+        repository.load(query, page: page, cursor: cursor, cancellation: read),
+        cancelled.future.then<HomePage>((_) {
+          throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
+        }),
+      ]);
       if (!current()) return null;
+      final items = homeQueueItems(result.items);
       if (items.isEmpty) {
-        throw const AppFailure(AppFailureKind.notFound, '收藏夹内暂无可播放的视频');
+        throw const AppFailure(AppFailureKind.notFound, '当前收藏页暂无可播放的视频');
       }
+      final index = initial == null
+          ? 0
+          : items.indexWhere((item) => item.video.id == initial);
+      if (index < 0) {
+        throw const AppFailure(AppFailureKind.notFound, '该视频已不在当前收藏页，请刷新后重试');
+      }
+      final start = items.length > WatchLaterQueue.maximumInitialItems
+          ? (index - 49).clamp(
+              0,
+              items.length - WatchLaterQueue.maximumInitialItems,
+            )
+          : 0;
       final queue = ref
           .read(watchLaterQueueRegistryProvider)
           .capture(
             scope: query.scope,
             sessionEpoch: epoch,
-            items: items,
+            items: items
+                .skip(start)
+                .take(WatchLaterQueue.maximumInitialItems)
+                .toList(),
+            homeSource: HomeQueueSource(
+              query: query,
+              title: request.title,
+              cursor: result.nextCursor ?? cursor,
+            ),
             favoriteTitle: request.title,
-            truncated: truncated,
+            current: initial ?? items.first.video.id,
+            hasMore: result.hasMore,
+            nextPage: page + 1,
+            truncated: items.length > WatchLaterQueue.maximumInitialItems,
           );
       state = AsyncData(queue);
       return queue;
@@ -152,9 +126,34 @@ final class FavoritePlaybackQueueController
       return null;
     } finally {
       timer.cancel();
+      read.cancel();
       if (ref.mounted && identical(_read, read) && state.isLoading) {
         state = const AsyncData(null);
       }
     }
   }
+}
+
+List<WatchLaterQueueItem> homeQueueItems(List<HomeEntry> entries) {
+  final known = <VideoId>{};
+  return [
+    for (final entry in entries)
+      if (VideoId(entry.bvid ?? '') case final id
+          when entry.kind == HomeEntryKind.video && id.isValid && known.add(id))
+        WatchLaterQueueItem(
+          entryId: entry.id,
+          aid: entry.aid,
+          video: VideoSummary(
+            id: id,
+            access: entry.access,
+            title: entry.title,
+            coverUrl: entry.coverUrl?.toString() ?? '',
+            author: entry.authorName,
+            authorId: UserId.tryParse(entry.authorMid),
+            duration: entry.duration ?? Duration.zero,
+          ),
+          playCountText: entry.playCountText,
+          danmakuCountText: entry.danmakuCountText,
+        ),
+  ];
 }

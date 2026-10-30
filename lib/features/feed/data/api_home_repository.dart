@@ -1,12 +1,15 @@
 import '../../../shared/data/dynamic_post_mapper.dart';
 import '../../../shared/data/video_access_mapper.dart';
 
+import 'dart:math';
+
 import 'package:bili_api/bili_api.dart';
 
 import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../domain/home_repository.dart';
+import '../domain/home_channel.dart';
 import '../../video/domain/video_actions_repository.dart';
 
 final class ApiHomeRepository
@@ -24,6 +27,50 @@ final class ApiHomeRepository
   final HomeClient client;
   final ApiRequests requests;
   final String Function() _accountScope;
+  static const _snapshotPrefix = 'local-favorite-';
+  static const _snapshotPageSize = 99;
+  static const _maximumSnapshotItems = 5000;
+  final _snapshotNonce = Random.secure().nextInt(1 << 32).toRadixString(16);
+  final Map<String, ({HomeQuery query, int epoch, List<HomeEntry> items})>
+  _snapshots = {};
+  RequestCancellation? _snapshotLifetime;
+  int _nextSnapshot = 0;
+
+  HomePage _snapshotPage(String key, HomeQuery query, int page) {
+    final snapshot = _snapshots[key];
+    if (snapshot == null ||
+        snapshot.query != query ||
+        snapshot.epoch != requests.sessionEpoch) {
+      throw const AppFailure(AppFailureKind.notFound, '收藏列表快照已失效，请刷新后重试');
+    }
+    _snapshots.remove(key);
+    _snapshots[key] = snapshot;
+    final start = (page - 1) * _snapshotPageSize;
+    return HomePage(
+      List.unmodifiable(snapshot.items.skip(start).take(_snapshotPageSize)),
+      hasMore: start + _snapshotPageSize < snapshot.items.length,
+      nextCursor: key,
+    );
+  }
+
+  HomePage _publishSnapshot(HomeQuery query, List<HomeEntry> items, int page) {
+    if (_snapshotLifetime == null || _snapshotLifetime!.isCancelled) {
+      final lifetime = _snapshotLifetime = RequestCancellation();
+      lifetime.onCancel(_snapshots.clear);
+      requests.trackLifetime(lifetime);
+    }
+    final key = '$_snapshotPrefix$_snapshotNonce-${++_nextSnapshot}';
+    _snapshots[key] = (
+      query: query,
+      epoch: requests.sessionEpoch,
+      items: List.unmodifiable(items.take(_maximumSnapshotItems)),
+    );
+    while (_snapshots.length > 16) {
+      _snapshots.remove(_snapshots.keys.first);
+    }
+    return _snapshotPage(key, query, page);
+  }
+
   @override
   String get accountScope => _accountScope();
   @override
@@ -99,6 +146,10 @@ final class ApiHomeRepository
     if (query.scope != accountScope) {
       throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
     }
+    if (page < 1) throw ArgumentError.value(page, 'page');
+    if (cursor != null && cursor.startsWith(_snapshotPrefix)) {
+      return _snapshotPage(cursor, query, page);
+    }
     final result = await client.load(
       channel: query.channel.name,
       section: query.section,
@@ -111,8 +162,17 @@ final class ApiHomeRepository
     if (query.scope != accountScope) {
       throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
     }
+    final items = List<HomeEntry>.unmodifiable(result.items.map(_entry));
+    // Some collected UGC endpoints ignore ps and return the complete collection.
+    // Expose bounded local pages without changing watch-later's full-list flow.
+    if (query.channel == HomeChannel.favorites &&
+        (query.folderId != null || query.section == '默认收藏夹') &&
+        !result.hasMore &&
+        items.length > _snapshotPageSize) {
+      return _publishSnapshot(query, items, page);
+    }
     return HomePage(
-      List.unmodifiable(result.items.map(_entry)),
+      items,
       hasMore: result.hasMore,
       nextCursor: result.nextCursor,
     );

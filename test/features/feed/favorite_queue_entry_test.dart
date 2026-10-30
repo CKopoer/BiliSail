@@ -71,7 +71,7 @@ void main() {
   for (final section in ['默认收藏夹', '我创建的收藏夹', '我的收藏与订阅']) {
     for (final playAll in [true, false]) {
       testWidgets(
-        '$section ${playAll ? 'play all' : 'select item'} includes unseen pages',
+        '$section ${playAll ? 'play all' : 'select item'} starts with a single source page',
         (tester) async {
           await mount(tester, section);
           if (section != '默认收藏夹') {
@@ -101,11 +101,13 @@ void main() {
                 scope: 'user:7',
                 sessionEpoch: 4,
               )!;
-          expect(queue.items, hasLength(25));
-          expect(queue.items.last.video.id.value, 'BV0000000025');
+          expect(queue.items, hasLength(24));
+          expect(queue.items.last.video.id.value, 'BV0000000024');
+          expect(queue.hasMore, true);
+          expect(queue.homeSource, isNotNull);
           expect(queue.title, section == '默认收藏夹' ? section : '测试收藏夹');
           expect(queue.isWatchLater, isFalse);
-          expect(repository.pages.skip(readsBefore), [1, 2]);
+          expect(repository.pages.skip(readsBefore), [1]);
           expect(tester.takeException(), isNull);
         },
       );
@@ -133,6 +135,45 @@ void main() {
       await tester.pumpAndSettle();
       expect(router.routeInformationProvider.value.uri.path, '/');
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'clicking a video on a later browser page does not add the earlier page',
+    (tester) async {
+      await mount(tester, '默认收藏夹');
+      final query = (
+        channel: HomeChannel.favorites,
+        section: '默认收藏夹',
+        scope: 'user:7',
+        folderId: null as String?,
+      );
+      await container.read(homeControllerProvider(query).notifier).loadMore();
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('视频 25'),
+        400,
+        scrollable: find.descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      final before = repository.pages.length;
+      await tester.tap(find.text('视频 25'));
+      await tester.pumpAndSettle();
+      final uri = router.routeInformationProvider.value.uri;
+      final queue = container
+          .read(watchLaterQueueRegistryProvider)
+          .resolve(
+            uri.queryParameters['queue'],
+            scope: 'user:7',
+            sessionEpoch: 4,
+          )!;
+      expect(queue.items, hasLength(1));
+      expect(queue.items.single.video.id.value, 'BV0000000025');
+      expect(queue.pages.single.page, 2);
+      expect(queue.hasPrevious, true);
+      expect(repository.pages.skip(before), [2]);
     },
   );
 

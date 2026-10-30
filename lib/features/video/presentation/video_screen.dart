@@ -29,7 +29,7 @@ import '../../../shared/ui/video_card_interaction_scope.dart';
 import '../../feed/application/home_repository_provider.dart';
 import '../../feed/application/watch_later_removal_controller.dart';
 import '../../feed/domain/home_repository.dart';
-import '../../profile/application/profile_playback_queue.dart';
+import '../application/playback_queue_controller.dart';
 import '../domain/video_actions_repository.dart';
 import '../domain/video_card_interactions.dart';
 import 'video_author_header.dart';
@@ -181,8 +181,8 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     }
     final tab = _tab ?? 0;
     final profileQueue = switch (widget.queue) {
-      final original? when original.profileSource != null => ref.watch(
-        profilePlaybackQueueProvider(original.id),
+      final original? when original.isPaged => ref.watch(
+        playbackQueueProvider(original.id),
       ),
       _ => null,
     };
@@ -719,7 +719,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       _loadingNextQueue = true;
       try {
         await ref
-            .read(profilePlaybackQueueProvider(queue.id).notifier)
+            .read(playbackQueueProvider(queue.id).notifier)
             .prepareAdjacent(widget.id, direction);
       } finally {
         _loadingNextQueue = false;
@@ -783,25 +783,23 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       scope: session.accountScope(),
       epoch: session.sessionEpoch(),
     );
-    if (queue.profileSource != null) {
-      ref
-          .read(profilePlaybackQueueProvider(queue.id).notifier)
-          .rememberCurrent(id);
+    if (queue.isPaged) {
+      ref.read(playbackQueueProvider(queue.id).notifier).rememberCurrent(id);
     }
     widget.onOpenQueueVideo?.call(id);
   }
 
   bool _canPageQueue(int direction) {
     final queue = _effectiveQueue;
-    if (queue == null || queue.profileSource == null) return false;
+    if (queue == null || !queue.isPaged) return false;
     if (queue.indexOf(widget.id) < 0) return queue.pageOf(widget.id) != null;
     return direction > 0 ? queue.hasMore : queue.hasPrevious;
   }
 
   WatchLaterQueue? get _validQueue {
     final queue = switch (widget.queue) {
-      final original? when original.profileSource != null =>
-        ref.read(profilePlaybackQueueProvider(original.id)).queue,
+      final original? when original.isPaged =>
+        ref.read(playbackQueueProvider(original.id)).queue,
       final original => original,
     };
     return queue != null &&
@@ -823,10 +821,8 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
 
   Future<void> _loadMoreQueue({bool previous = false}) async {
     final queue = _validQueue;
-    if (queue == null || queue.profileSource == null) return;
-    final controller = ref.read(
-      profilePlaybackQueueProvider(queue.id).notifier,
-    );
+    if (queue == null || !queue.isPaged) return;
+    final controller = ref.read(playbackQueueProvider(queue.id).notifier);
     await (previous
         ? controller.loadPrevious(widget.id)
         : controller.loadMore(widget.id));
@@ -836,7 +832,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
         .where((part) => part.cid == _lastCid)
         .firstOrNull;
     if (!_loadingNextQueue &&
-        ref.read(profilePlaybackQueueProvider(queue.id)).nextMessage == null &&
+        ref.read(playbackQueueProvider(queue.id)).nextMessage == null &&
         _completionWaiting?.id == widget.id &&
         _completionWaiting?.generation == _queueSession?.sourceGeneration &&
         video != null &&

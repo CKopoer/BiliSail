@@ -10,7 +10,7 @@ import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/profile/application/profile_controller.dart';
-import 'package:bilisail/features/profile/application/profile_playback_queue.dart';
+import 'package:bilisail/features/video/application/playback_queue_controller.dart';
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
@@ -102,13 +102,10 @@ void main() {
         hasMore: true,
         nextPage: 2,
       )!;
-  ProfilePlaybackQueueController paging(WatchLaterQueue queue) {
-    final sub = container.listen(
-      profilePlaybackQueueProvider(queue.id),
-      (_, _) {},
-    );
+  PlaybackQueueController paging(WatchLaterQueue queue) {
+    final sub = container.listen(playbackQueueProvider(queue.id), (_, _) {});
     addTearDown(sub.close);
-    return container.read(profilePlaybackQueueProvider(queue.id).notifier);
+    return container.read(playbackQueueProvider(queue.id).notifier);
   }
 
   test('play all starts from page one with the selected sort and no search, including guests', () async {
@@ -186,15 +183,12 @@ void main() {
     await Future.wait([first, second]);
     repository.pending = null;
     expect(
-      container.read(profilePlaybackQueueProvider(queue.id)).queue?.items,
+      container.read(playbackQueueProvider(queue.id)).queue?.items,
       hasLength(3),
     );
     repository.failure = const AppFailure(AppFailureKind.network, '加载失败');
     await controller.loadMore(queue.items.first.video.id);
-    expect(
-      container.read(profilePlaybackQueueProvider(queue.id)).message,
-      '加载失败',
-    );
+    expect(container.read(playbackQueueProvider(queue.id)).message, '加载失败');
     repository.failure = null;
     repository.items = [_entry(3)];
     repository.hasMore = false;
@@ -206,9 +200,7 @@ void main() {
       ),
       true,
     );
-    final updated = container
-        .read(profilePlaybackQueueProvider(queue.id))
-        .queue!;
+    final updated = container.read(playbackQueueProvider(queue.id)).queue!;
     expect(updated.items.map((item) => item.video.id), [
       for (var i = 0; i < 4; i++) _entry(i).video?.id,
     ]);
@@ -236,32 +228,24 @@ void main() {
         repository.items = [for (var i = start; i < start + 45; i++) _entry(i)];
         await controller.loadMore(current);
         expect(
-          container
-              .read(profilePlaybackQueueProvider(queue.id))
-              .queue!
-              .items
-              .length,
+          container.read(playbackQueueProvider(queue.id)).queue!.items.length,
           lessThanOrEqualTo(999),
         );
       }
       expect(
-        container.read(profilePlaybackQueueProvider(queue.id)).queue!.items,
+        container.read(playbackQueueProvider(queue.id)).queue!.items,
         hasLength(999),
       );
       repository.items = [for (var i = 999; i < 1044; i++) _entry(i)];
       await controller.loadMore(queue.items.first.video.id);
-      final updated = container
-          .read(profilePlaybackQueueProvider(queue.id))
-          .queue!;
+      final updated = container.read(playbackQueueProvider(queue.id)).queue!;
       expect(updated.items, hasLength(945));
       expect(updated.items.first.video.id, _entry(99).video?.id);
       expect(updated.hasPrevious, true);
       expect(updated.pageOf(queue.items.first.video.id), 1);
       repository.items = [for (var i = 0; i < 99; i++) _entry(i)];
       await controller.loadPrevious(queue.items.first.video.id);
-      final previous = container
-          .read(profilePlaybackQueueProvider(queue.id))
-          .queue!;
+      final previous = container.read(playbackQueueProvider(queue.id)).queue!;
       expect(previous.items, hasLength(999));
       expect(previous.items.first.video.id, _entry(0).video?.id);
       expect(previous.hasPrevious, false);
@@ -270,9 +254,7 @@ void main() {
       await controller.loadMore(current);
       repository.items = [for (var i = 0; i < 99; i++) _entry(i)];
       await controller.prepareAdjacent(current, 1);
-      final restored = container
-          .read(profilePlaybackQueueProvider(queue.id))
-          .queue!;
+      final restored = container.read(playbackQueueProvider(queue.id)).queue!;
       expect(restored.items, hasLength(99));
       expect(restored.adjacent(current, 1)?.video.id, _entry(1).video?.id);
       expect(repository.calls.last.page, 1);
@@ -285,7 +267,7 @@ void main() {
     for (var i = 0; i < 3; i++) {
       await controller.loadMore(queue.items.first.video.id);
     }
-    final state = container.read(profilePlaybackQueueProvider(queue.id));
+    final state = container.read(playbackQueueProvider(queue.id));
     expect(state.queue?.items, hasLength(2));
     expect(state.message, contains('连续多页'));
     expect(state.queue?.hasMore, true);
@@ -303,13 +285,13 @@ void main() {
     await loading;
     expect(read?.isCancelled, true);
     expect(
-      container.read(profilePlaybackQueueProvider(queue.id)).message,
+      container.read(playbackQueueProvider(queue.id)).message,
       contains('超时'),
     );
     pending.complete(ProfilePage(items: [_entry(9)], hasMore: false));
     await tester.pump();
     expect(
-      container.read(profilePlaybackQueueProvider(queue.id)).queue?.items,
+      container.read(playbackQueueProvider(queue.id)).queue?.items,
       hasLength(2),
     );
     repository.pending = null;
@@ -317,7 +299,7 @@ void main() {
     await controller.loadMore(queue.items.first.video.id);
     expect(repository.calls.map((call) => call.page), [2, 2]);
     expect(
-      container.read(profilePlaybackQueueProvider(queue.id)).queue?.items,
+      container.read(playbackQueueProvider(queue.id)).queue?.items,
       hasLength(3),
     );
   });
@@ -328,11 +310,11 @@ void main() {
       () async {
         final queue = capture();
         final sub = container.listen(
-          profilePlaybackQueueProvider(queue.id),
+          playbackQueueProvider(queue.id),
           (_, _) {},
         );
         final controller = container.read(
-          profilePlaybackQueueProvider(queue.id).notifier,
+          playbackQueueProvider(queue.id).notifier,
         );
         final pending = repository.pending = Completer<ProfilePage>();
         final loading = controller.loadMore(queue.items.first.video.id);
@@ -349,10 +331,7 @@ void main() {
         pending.complete(ProfilePage(items: [_entry(9)], hasMore: false));
         await loading;
         if (!close) {
-          expect(
-            container.read(profilePlaybackQueueProvider(queue.id)).queue,
-            isNull,
-          );
+          expect(container.read(playbackQueueProvider(queue.id)).queue, isNull);
           sub.close();
         }
       },

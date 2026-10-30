@@ -1,5 +1,17 @@
 import '../../../domain/video.dart';
 import '../../../domain/user.dart';
+import '../../feed/domain/home_repository.dart';
+
+final class HomeQueueSource {
+  const HomeQueueSource({
+    required this.query,
+    required this.title,
+    this.cursor,
+  });
+  final HomeQuery query;
+  final String title;
+  final String? cursor;
+}
 
 /// A captured space query, paged independently of the originating browser.
 final class ProfileVideoQueueSource {
@@ -15,8 +27,8 @@ final class ProfileVideoQueueSource {
   final String? folderId;
 }
 
-final class ProfileQueuePage {
-  ProfileQueuePage({
+final class PlaybackQueuePage {
+  PlaybackQueuePage({
     required this.page,
     required List<WatchLaterQueueItem> items,
     required this.hasMore,
@@ -34,42 +46,44 @@ final class WatchLaterQueue {
     required this.sessionEpoch,
     required List<WatchLaterQueueItem> items,
     this.profileSource,
+    this.homeSource,
     this.favoriteTitle,
     this.truncated = false,
     this.nextPage = 1,
     this.hasMore = false,
     this.offset = 0,
-    List<ProfileQueuePage> profilePages = const [],
+    List<PlaybackQueuePage> pages = const [],
     Map<VideoId, int> pageHints = const {},
   }) : items = List.unmodifiable(items),
-       profilePages = List.unmodifiable(profilePages),
+       pages = List.unmodifiable(pages),
        pageHints = Map.unmodifiable(pageHints);
 
-  static const maximumInitialProfileItems = 99;
-  static const maximumProfileItems = 999;
+  static const maximumInitialItems = 99;
+  static const maximumPagedItems = 999;
 
   final String id;
   final String scope;
   final int sessionEpoch;
   final List<WatchLaterQueueItem> items;
   final ProfileVideoQueueSource? profileSource;
+  final HomeQueueSource? homeSource;
+  bool get isPaged => profileSource != null || homeSource != null;
   final String? favoriteTitle;
   final bool truncated;
   final int nextPage, offset;
   final bool hasMore;
-  final List<ProfileQueuePage> profilePages;
+  final List<PlaybackQueuePage> pages;
   final Map<VideoId, int> pageHints;
-  bool get hasPrevious =>
-      profilePages.isNotEmpty && profilePages.first.page > 1;
+  bool get hasPrevious => pages.isNotEmpty && pages.first.page > 1;
   int? pageOf(VideoId id) {
-    for (final page in profilePages) {
+    for (final page in pages) {
       if (page.items.any((item) => item.video.id == id)) return page.page;
     }
     return pageHints[id];
   }
 
-  WatchLaterQueue withProfilePages(
-    List<ProfileQueuePage> pages, {
+  WatchLaterQueue withPages(
+    List<PlaybackQueuePage> pages, {
     VideoId? current,
     bool? truncated,
   }) {
@@ -94,17 +108,20 @@ final class WatchLaterQueue {
       sessionEpoch: sessionEpoch,
       items: [for (final page in pages) ...page.items],
       profileSource: profileSource,
+      homeSource: homeSource,
       favoriteTitle: favoriteTitle,
       truncated: truncated ?? this.truncated,
       nextPage: pages.last.page + 1,
       hasMore: pages.last.hasMore,
-      profilePages: pages,
+      pages: pages,
       pageHints: hints,
     );
   }
 
-  bool get isWatchLater => profileSource == null && favoriteTitle == null;
+  bool get isWatchLater =>
+      profileSource == null && homeSource == null && favoriteTitle == null;
   String get title =>
+      homeSource?.title ??
       favoriteTitle ??
       switch (profileSource) {
         final source? => '${source.name}的投稿',
@@ -122,12 +139,13 @@ final class WatchLaterQueue {
     sessionEpoch: sessionEpoch,
     items: [...items.skip(drop), ...added],
     profileSource: profileSource,
+    homeSource: homeSource,
     favoriteTitle: favoriteTitle,
     truncated: truncated,
     nextPage: nextPage,
     hasMore: hasMore,
     offset: offset + drop,
-    profilePages: profilePages,
+    pages: pages,
     pageHints: pageHints,
   );
 
@@ -143,8 +161,27 @@ final class WatchLaterQueue {
       id: id,
       scope: scope,
       sessionEpoch: sessionEpoch,
+      profileSource: profileSource,
+      homeSource: homeSource,
       favoriteTitle: favoriteTitle,
       truncated: truncated,
+      nextPage: nextPage,
+      hasMore: hasMore,
+      offset: offset,
+      pageHints: pageHints,
+      pages: [
+        for (final page in pages)
+          PlaybackQueuePage(
+            page: page.page,
+            hasMore: page.hasMore,
+            items: [
+              for (final item in page.items)
+                if (item.video.id == current ||
+                    !removed.contains(item.removalId))
+                  item,
+            ],
+          ),
+      ],
       items: [
         for (final item in items)
           if (item.video.id == current || !removed.contains(item.removalId))

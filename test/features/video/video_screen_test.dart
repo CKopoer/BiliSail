@@ -56,12 +56,16 @@ import 'package:bilisail/features/video/application/watch_later_queue_registry.d
 
 void main() {
   for (final (width, complete, folderId) in [
-    for (final folderId in [null, '42'])
+    for (final folderId in [null, '42', 'home:42'])
       for (final width in [360.0, 1200.0])
         for (final complete in [false, true]) (width, complete, folderId),
   ]) {
     testWidgets(
-      '${folderId == null ? 'UP' : 'favorite'} playlist loads the next page at EOF once and retains player at $width continuous=$complete',
+      '${folderId == null
+          ? 'UP'
+          : folderId == 'home:42'
+          ? 'My favorite'
+          : 'favorite'} playlist loads the next page at EOF once and retains player at $width continuous=$complete',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = Size(width, 800);
@@ -75,18 +79,34 @@ void main() {
         );
         final session = _ProfilePagingSession(detail);
         addTearDown(session.snapshots.dispose);
-        final repository = _ProfilePagingRepository(expectedFolderId: folderId);
+        final repository = _ProfilePagingRepository(
+          expectedFolderId: folderId == 'home:42' ? '42' : folderId,
+        );
         final registry = WatchLaterQueueRegistry();
         final queue = registry.capture(
           scope: 'user:7',
           sessionEpoch: 0,
           items: [WatchLaterQueueItem(video: detail.summary)],
-          profileSource: ProfileVideoQueueSource(
-            userId: const UserId('7'),
-            name: '测试UP',
-            order: 'pubdate',
-            folderId: folderId,
-          ),
+          profileSource: folderId == 'home:42'
+              ? null
+              : ProfileVideoQueueSource(
+                  userId: const UserId('7'),
+                  name: '测试UP',
+                  order: 'pubdate',
+                  folderId: folderId,
+                ),
+          homeSource: folderId != 'home:42'
+              ? null
+              : const HomeQueueSource(
+                  query: (
+                    channel: HomeChannel.favorites,
+                    section: '默认收藏夹',
+                    scope: 'user:7',
+                    folderId: '42',
+                  ),
+                  title: '测试收藏夹',
+                  cursor: '42',
+                ),
           favoriteTitle: folderId == null ? null : '测试收藏夹',
           hasMore: true,
           nextPage: 2,
@@ -99,6 +119,10 @@ void main() {
             overrides: [
               playbackSessionProvider.overrideWithValue(session),
               profileRepositoryProvider.overrideWithValue(repository),
+              if (folderId == 'home:42')
+                homeRepositoryProvider.overrideWithValue(
+                  _HomeQueuePagingRepository(repository),
+                ),
               watchLaterQueueRegistryProvider.overrideWithValue(registry),
               authControllerProvider.overrideWith(_QueueSignedInAuth.new),
               videoRepositoryProvider.overrideWithValue(
@@ -2342,6 +2366,39 @@ final class _ProfilePagingRepository extends Fake implements ProfileRepository {
     expect(page, 2);
     reads++;
     return pending.future;
+  }
+}
+
+final class _HomeQueuePagingRepository extends Fake implements HomeRepository {
+  _HomeQueuePagingRepository(this.delegate);
+  final _ProfilePagingRepository delegate;
+  @override
+  String get accountScope => delegate.accountScope;
+  @override
+  Future<HomePage> load(
+    HomeQuery query, {
+    required int page,
+    String? cursor,
+    required RequestCancellation cancellation,
+  }) async {
+    expect(query.channel, HomeChannel.favorites);
+    expect(cursor, '42');
+    final result = await delegate.loadEntries(
+      const UserId('7'),
+      ProfileSection.folders,
+      page: page,
+      folderId: query.folderId,
+      cancellation: cancellation,
+    );
+    return HomePage([
+      for (final entry in result.items)
+        HomeEntry(
+          id: entry.id,
+          kind: HomeEntryKind.video,
+          title: entry.title,
+          bvid: entry.video?.id.value,
+        ),
+    ], hasMore: result.hasMore);
   }
 }
 

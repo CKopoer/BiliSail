@@ -10,8 +10,12 @@ import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
+import 'package:bilisail/features/video/application/playback_queue_controller.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../messages/message_fakes.dart';
 
 const _request = (
   query: (
@@ -36,82 +40,99 @@ HomeEntry _entry(int index) => HomeEntry(
 void main() {
   late _Repository repository;
   late ProviderContainer container;
+  late AuthFake auth;
   var epoch = 4;
   final provider = favoritePlaybackQueueProvider(_request);
   setUp(() {
     epoch = 4;
     repository = _Repository();
+    auth = AuthFake();
     container = ProviderContainer(
       overrides: [
         homeRepositoryProvider.overrideWithValue(repository),
         sessionEpochProvider.overrideWithValue(() => epoch),
+        authRepositoryProvider.overrideWithValue(auth),
       ],
     );
     container.listen(provider, (_, _) {});
   });
-  tearDown(() => container.dispose());
+  tearDown(() async {
+    container.dispose();
+    await auth.stream.close();
+  });
   Future<WatchLaterQueue?> capture() =>
       container.read(provider.notifier).capture();
 
-  test(
-    'reads every page in order, skips invalid entries and duplicate videos',
-    () async {
-      repository.pages = {
-        1: HomePage(
-          [
-            const HomeEntry(
-              id: 'invalid',
-              title: '失效',
-              kind: HomeEntryKind.video,
-            ),
-            _entry(1),
-            _entry(2),
-          ],
-          hasMore: true,
-          nextCursor: 'next',
-        ),
-        2: HomePage([_entry(2), _entry(3)], hasMore: false),
-      };
-      final queue = (await capture())!;
-      expect(repository.calls, [1, 2]);
-      expect(repository.cursors, [null, 'next']);
-      expect(queue.items.map((item) => item.video.id.value), [
-        'BV0000000001',
-        'BV0000000002',
-        'BV0000000003',
-      ]);
-      expect(queue.title, '我的收藏夹');
-      expect(queue.isWatchLater, isFalse);
-      expect(queue.items.first.aid, '9007199254740993');
-      expect(queue.items.first.playCountText, '2万');
-      expect(queue.items.first.danmakuCountText, '100');
-      expect(queue.withoutRemoved({'1', '2'}), same(queue));
-      expect(
-        queue.adjacent(const VideoId('BV0000000001'), 1)?.video.id.value,
-        'BV0000000002',
-      );
-      expect(
-        container
-            .read(watchLaterQueueRegistryProvider)
-            .resolve(queue.id, scope: 'user:7', sessionEpoch: 4),
-        same(queue),
-      );
-    },
-  );
+  test('reads only the initial page, preserving metadata and deferring the next page', () async {
+    repository.pages = {
+      1: HomePage(
+        [
+          const HomeEntry(
+            id: 'invalid',
+            title: '失效',
+            kind: HomeEntryKind.video,
+          ),
+          _entry(1),
+          _entry(2),
+        ],
+        hasMore: true,
+        nextCursor: 'next',
+      ),
+      2: HomePage([_entry(2), _entry(3)], hasMore: false),
+    };
+    final queue = (await capture())!;
+    expect(repository.calls, [1]);
+    expect(repository.cursors, [null]);
+    expect(queue.items.map((item) => item.video.id.value), [
+      'BV0000000001',
+      'BV0000000002',
+    ]);
+    expect(queue.title, '我的收藏夹');
+    expect(queue.isWatchLater, isFalse);
+    expect(queue.hasMore, true);
+    final subscription = container.listen(
+      playbackQueueProvider(queue.id),
+      (_, _) {},
+    );
+    addTearDown(subscription.close);
+    await container
+        .read(playbackQueueProvider(queue.id).notifier)
+        .loadMore(queue.items.first.video.id);
+    expect(repository.calls, [1, 2]);
+    expect(repository.cursors, [null, 'next']);
+    expect(
+      container.read(playbackQueueProvider(queue.id)).queue?.items,
+      hasLength(3),
+    );
+    expect(queue.items.first.aid, '9007199254740993');
+    expect(queue.items.first.playCountText, '2万');
+    expect(queue.items.first.danmakuCountText, '100');
+    expect(queue.withoutRemoved({'1', '2'}), same(queue));
+    expect(
+      queue.adjacent(const VideoId('BV0000000001'), 1)?.video.id.value,
+      'BV0000000002',
+    );
+    expect(
+      container
+          .read(watchLaterQueueRegistryProvider)
+          .resolve(queue.id, scope: 'user:7', sessionEpoch: 4),
+      same(container.read(playbackQueueProvider(queue.id)).queue),
+    );
+  });
 
   test(
-    'never publishes a partial queue after a paging failure; retry restarts',
+    'an initial page failure can retry without scanning any subsequent pages',
     () async {
       repository.pages = {
         1: HomePage([_entry(1)], hasMore: true),
       };
-      repository.failPage = 2;
+      repository.failPage = 1;
       expect(await capture(), isNull);
       expect(container.read(provider).error, isA<AppFailure>());
       repository.failPage = null;
       repository.pages[2] = HomePage([_entry(2)], hasMore: false);
-      expect((await capture())!.items, hasLength(2));
-      expect(repository.calls, [1, 2, 1, 2]);
+      expect((await capture())!.items, hasLength(1));
+      expect(repository.calls, [1, 1]);
     },
   );
 
@@ -138,11 +159,17 @@ void main() {
         for (var page = 1; page < 10; page++)
           page: HomePage([_entry(1)], hasMore: true),
       };
-      expect(await capture(), isNull);
+      final queue = (await capture())!;
+      final sub = container.listen(playbackQueueProvider(queue.id), (_, _) {});
+      addTearDown(sub.close);
+      final pager = container.read(playbackQueueProvider(queue.id).notifier);
+      for (var i = 0; i < 3; i++) {
+        await pager.loadMore(queue.items.first.video.id);
+      }
       expect(repository.calls, [1, 2, 3, 4]);
       expect(
-        (container.read(provider).error as AppFailure).kind,
-        AppFailureKind.protocol,
+        container.read(playbackQueueProvider(queue.id)).message,
+        contains('连续多页'),
       );
     },
   );
@@ -152,9 +179,70 @@ void main() {
       1: HomePage(List.generate(1200, _entry), hasMore: false),
     };
     final queue = (await capture())!;
-    expect(queue.items, hasLength(WatchLaterQueueRegistry.maximumItems));
+    expect(queue.items, hasLength(99));
     expect(queue.truncated, isTrue);
     expect(repository.calls, [1]);
+  });
+
+  test('a selected source page supports previous and next pages with a fixed cursor', () async {
+    repository.pages = {
+      for (var page = 1; page <= 3; page++)
+        page: HomePage([
+          for (var n = (page - 1) * 40; n < page * 40; n++) _entry(n),
+        ], hasMore: page < 3),
+    };
+    final queue = (await container
+        .read(provider.notifier)
+        .capture(
+          page: 2,
+          cursor: 'folder-42',
+          initial: VideoId(_entry(50).bvid!),
+        ))!;
+    expect(queue.items, hasLength(40));
+    expect(queue.items.first.video.id.value, _entry(40).bvid);
+    expect(queue.hasPrevious, true);
+    final sub = container.listen(playbackQueueProvider(queue.id), (_, _) {});
+    addTearDown(sub.close);
+    final pager = container.read(playbackQueueProvider(queue.id).notifier);
+    await pager.loadMore(queue.items[10].video.id);
+    await pager.loadPrevious(queue.items[10].video.id);
+    expect(repository.calls, [2, 3, 1]);
+    expect(repository.cursors, everyElement('folder-42'));
+    expect(
+      container.read(playbackQueueProvider(queue.id)).queue?.items,
+      hasLength(120),
+    );
+  });
+
+  test('favorites share the 99 initial and 999 moving window limits', () async {
+    repository.pages = {
+      1: HomePage([for (var n = 0; n < 200; n++) _entry(n)], hasMore: true),
+      2: HomePage([for (var n = 200; n < 650; n++) _entry(n)], hasMore: true),
+      3: HomePage([for (var n = 650; n < 1100; n++) _entry(n)], hasMore: true),
+      4: HomePage([
+        for (var n = 1100; n < 1550; n++) _entry(n),
+      ], hasMore: false),
+    };
+    final queue = (await capture())!;
+    expect(queue.items, hasLength(99));
+    final sub = container.listen(playbackQueueProvider(queue.id), (_, _) {});
+    addTearDown(sub.close);
+    final pager = container.read(playbackQueueProvider(queue.id).notifier);
+    for (var page = 2; page <= 4; page++) {
+      await pager.loadMore(queue.items.first.video.id);
+      expect(
+        container.read(playbackQueueProvider(queue.id)).queue!.items.length,
+        lessThanOrEqualTo(999),
+      );
+    }
+    expect(
+      container.read(playbackQueueProvider(queue.id)).queue?.hasPrevious,
+      true,
+    );
+    expect(
+      container.read(playbackQueueProvider(queue.id)).queue?.hasMore,
+      false,
+    );
   });
 
   for (final change in ['account', 'epoch', 'dispose']) {
@@ -212,7 +300,7 @@ void main() {
   ) async {
     repository.pending = Completer<HomePage>();
     final result = capture();
-    await tester.pump(const Duration(seconds: 60));
+    await tester.pump(const Duration(seconds: 31));
     expect(await result, isNull);
     expect(repository.cancellation!.isCancelled, isTrue);
     expect(

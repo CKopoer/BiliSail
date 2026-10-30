@@ -31,6 +31,7 @@ final class WatchLaterQueueRegistry {
     required int sessionEpoch,
     required List<WatchLaterQueueItem> items,
     ProfileVideoQueueSource? profileSource,
+    HomeQueueSource? homeSource,
     String? favoriteTitle,
     bool truncated = false,
     bool hasMore = false,
@@ -38,6 +39,7 @@ final class WatchLaterQueueRegistry {
     VideoId? current,
   }) {
     if ((profileSource == null &&
+            homeSource == null &&
             !scope.startsWith('user:') &&
             !(scope == 'guest' && favoriteTitle != null)) ||
         items.isEmpty) {
@@ -45,9 +47,8 @@ final class WatchLaterQueueRegistry {
     }
     _purgeOtherSessions(scope, sessionEpoch);
     final id = 'watch-later-$_nonce-${++_nextId}';
-    final limit = profileSource == null
-        ? maximumItems
-        : WatchLaterQueue.maximumInitialProfileItems;
+    final paged = profileSource != null || homeSource != null;
+    final limit = paged ? WatchLaterQueue.maximumInitialItems : maximumItems;
     final bounded = items.take(limit).toList();
     final page = nextPage > 1 ? nextPage - 1 : 1;
     final queue = WatchLaterQueue(
@@ -56,16 +57,15 @@ final class WatchLaterQueueRegistry {
       sessionEpoch: sessionEpoch,
       items: bounded,
       profileSource: profileSource,
+      homeSource: homeSource,
       favoriteTitle: favoriteTitle,
       truncated: truncated || items.length > limit,
       hasMore: hasMore,
       nextPage: nextPage,
-      profilePages: profileSource == null
+      pages: !paged
           ? const []
-          : [ProfileQueuePage(page: page, items: bounded, hasMore: hasMore)],
-      pageHints: profileSource == null
-          ? const {}
-          : {current ?? bounded.first.video.id: page},
+          : [PlaybackQueuePage(page: page, items: bounded, hasMore: hasMore)],
+      pageHints: !paged ? const {} : {current ?? bounded.first.video.id: page},
     );
     _queues[id] = queue;
     _trim();
@@ -78,6 +78,8 @@ final class WatchLaterQueueRegistry {
       _queues[queue.id] = queue;
     }
   }
+
+  WatchLaterQueue? peek(String id) => _queues[id];
 
   /// Cached playback tabs hold their snapshot even if newer queues are opened.
   void retain(String id) {

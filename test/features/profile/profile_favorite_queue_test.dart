@@ -8,7 +8,7 @@ import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/profile/application/profile_controller.dart';
-import 'package:bilisail/features/profile/application/profile_playback_queue.dart';
+import 'package:bilisail/features/video/application/playback_queue_controller.dart';
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
@@ -61,13 +61,10 @@ void main() {
     return controller;
   }
 
-  ProfilePlaybackQueueController paging(WatchLaterQueue queue) {
-    final sub = container.listen(
-      profilePlaybackQueueProvider(queue.id),
-      (_, _) {},
-    );
+  PlaybackQueueController paging(WatchLaterQueue queue) {
+    final sub = container.listen(playbackQueueProvider(queue.id), (_, _) {});
     addTearDown(sub.close);
-    return container.read(profilePlaybackQueueProvider(queue.id).notifier);
+    return container.read(playbackQueueProvider(queue.id).notifier);
   }
 
   for (final isSelf in [true, false]) {
@@ -176,7 +173,7 @@ void main() {
     expect(queue.hasPrevious, true);
     expect(queue.nextPage, 3);
     final all = (await origin.captureFavoriteQueue())!;
-    expect(all.profilePages.single.page, 1);
+    expect(all.pages.single.page, 1);
     expect(all.items, hasLength(40));
   });
 
@@ -194,7 +191,7 @@ void main() {
     );
     await Future.wait([first, second]);
     repository.pending = null;
-    final provider = profilePlaybackQueueProvider(queue.id);
+    final provider = playbackQueueProvider(queue.id);
     expect(container.read(provider).queue?.items, hasLength(41));
     repository.failure = const AppFailure(AppFailureKind.network, '分页失败');
     await controller.loadMore(_video(1).id);
@@ -227,7 +224,7 @@ void main() {
       expect(repository.folderCalls.single.folderId, '42');
       expect(repository.folderCalls.single.user, _user);
       expect(
-        container.read(profilePlaybackQueueProvider(queue.id)).queue?.title,
+        container.read(playbackQueueProvider(queue.id)).queue?.title,
         _folder.title,
       );
     },
@@ -260,10 +257,7 @@ void main() {
       expect(read?.isCancelled, true);
       pending.complete(ProfilePage(items: [_entry(41)], hasMore: false));
       await loading;
-      expect(
-        container.read(profilePlaybackQueueProvider(queue.id)).queue,
-        isNull,
-      );
+      expect(container.read(playbackQueueProvider(queue.id)).queue, isNull);
       expect(await origin.captureFavoriteQueue(), isNull);
     },
   );
@@ -280,7 +274,7 @@ void main() {
       await tester.pump(const Duration(seconds: 31));
       await loading;
       expect(read?.isCancelled, true);
-      final provider = profilePlaybackQueueProvider(queue.id);
+      final provider = playbackQueueProvider(queue.id);
       expect(container.read(provider).message, contains('收藏夹视频加载超时'));
       pending.complete(ProfilePage(items: [_entry(41)], hasMore: false));
       await tester.pump();
