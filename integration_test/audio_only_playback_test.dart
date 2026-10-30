@@ -63,7 +63,8 @@ void main() {
         }
         await request.response.close();
       });
-      final engine = MediaKitEngine();
+      final diagnostics = <PlayerDiagnosticEvent>[];
+      final engine = MediaKitEngine(onDiagnostic: diagnostics.add);
       final session = PlaybackSession(
         engine: engine,
         repository: _Repository(server.port),
@@ -115,8 +116,25 @@ void main() {
         await _withFrames(tester, session.pause());
         await _withFrames(tester, session.seek(const Duration(seconds: 2)));
         observed.clear();
+        diagnostics.clear();
+        final returningSnapshots = <PlaybackSnapshot>[];
+        final returningSubscription = engine.snapshots.listen(
+          returningSnapshots.add,
+        );
         await _withFrames(tester, session.setAudioOnly(false));
+        await returningSubscription.cancel();
         expect(session.error, isNull);
+        expect(
+          diagnostics.where(
+            (event) => event.kind == PlayerDiagnosticKind.openStarted,
+          ),
+          hasLength(1),
+        );
+        expect(
+          returningSnapshots.where((snapshot) => snapshot.isSeeking),
+          isEmpty,
+          reason: 'Returning must load at the listening position without a second seek',
+        );
         expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
         expect(engine.currentSnapshot.desiredPlaying, isFalse);
         expect(
@@ -126,6 +144,36 @@ void main() {
           lessThan(400),
         );
         expect(observed, containsAll(['/video.mp4', '/audio.m4a']));
+        for (final paused in [false, true]) {
+          await _withFrames(tester, session.setAudioOnly(true));
+          await _withFrames(tester, session.seek(const Duration(seconds: 2)));
+          if (!paused) await _withFrames(tester, session.play());
+          diagnostics.clear();
+          returningSnapshots.clear();
+          final subscription = engine.snapshots.listen(returningSnapshots.add);
+          try {
+            await _withFrames(
+              tester,
+              Future.wait([
+                session.setAudioOnly(false),
+                session.setAudioOnly(false),
+              ]).then((_) {}),
+            );
+            expect(session.error, isNull);
+            expect(engine.currentSnapshot.desiredPlaying, !paused);
+            expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
+            expect(
+              diagnostics.where(
+                (event) => event.kind == PlayerDiagnosticKind.openStarted,
+              ),
+              hasLength(1),
+            );
+            expect(returningSnapshots.any((value) => value.isSeeking), isFalse);
+          } finally {
+            await subscription.cancel();
+          }
+          await _withFrames(tester, session.pause());
+        }
         // Foreground intent can change before Android delivers resumed.
         // The effective source must stay audio until the overlay is removed.
         for (final paused in [false, true]) {

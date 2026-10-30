@@ -160,6 +160,39 @@ void main() {
               .abs(),
           lessThan(400),
         );
+        await _withFrames(tester, engine.seek(const Duration(seconds: 1)));
+        expect(
+          (engine.currentSnapshot.position - const Duration(seconds: 1))
+              .inMilliseconds
+              .abs(),
+          lessThan(400),
+        );
+      }
+      // A stale resume record may reach or exceed the current media duration.
+      // Preserve the paused last frame instead of failing video readiness.
+      final duration = engine.currentSnapshot.duration;
+      for (final position in [
+        duration,
+        duration + const Duration(seconds: 5),
+      ]) {
+        await _withFrames(
+          tester,
+          engine.open(
+            DashPairSource(video: video, audio: audio),
+            OpenOptions(
+              play: false,
+              volume: 0,
+              startPosition: position,
+              openTimeout: const Duration(seconds: 8),
+            ),
+          ),
+        );
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(
+          (engine.currentSnapshot.position - duration).inMilliseconds.abs(),
+          lessThan(400),
+        );
+        expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
       }
       expect(tester.takeException(), isNull);
     } finally {

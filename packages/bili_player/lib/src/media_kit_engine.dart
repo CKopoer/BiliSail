@@ -675,6 +675,12 @@ final class MediaKitEngine
               mk.Media(
                 mediaTrack.uri.toString(),
                 httpHeaders: mediaTrack.requestPolicy.headers,
+                // Resume as part of loading, before decoding the first frame.
+                // Opening at zero and seeking afterward buffers twice when
+                // returning from audio-only playback.
+                start: options.startPosition > Duration.zero
+                    ? options.startPosition
+                    : null,
               ),
               play: false,
             )
@@ -804,13 +810,8 @@ final class MediaKitEngine
               .timeout(_remaining(watch, openBudget));
         }
         if (options.startPosition > Duration.zero) {
-          _publish(_snapshot.copyWith(isSeeking: true));
-          await player
-              .seek(options.startPosition)
-              .timeout(_remaining(watch, openBudget));
-          // seek acknowledges the command before its position event arrives.
-          // Output initialization must not decide whether open exposes the
-          // resumed position, especially when the source remains paused.
+          // Media.start is applied by the backend's on_load hook. Confirm its
+          // position event without issuing a second seek after video is ready.
           final duration = player.state.duration;
           final target =
               duration > Duration.zero && options.startPosition > duration

@@ -52,6 +52,18 @@
 
 Android、macOS、iOS、Linux 原生构建／设备验收、真实在线内容及长期听视频未在本轮执行；未据此声明后台播放或性能收益。
 
+## 返回视频的重复加载修复（2026-10-31）
+
+- 三端共用的 `MediaKitEngine.open` 原先从零位置加载并确认视频输出，随后再 seek 到听视频进度，可能出现两次缓冲。现将进度作为 `Media.start` 随打开请求提交，原生加载阶段直接定位；继续等待确认位置、视频解码／输出和独立音轨，不再在画面就绪后无条件 seek。
+- Android 的“返回视频”动作可能先于前台恢复回调到达。前台模式偏好改变而实际仍需后台音频时，更新偏好并保留当前音频源；恢复前台时才打开视频，避免先重复打开音频。
+- 只读对照 PiliPlus 提交 `936072449e82e3d90c28c728c0087bf5136fa441` 的 `lib/plugin/pl_player/controller.dart::_createVideoController`：将续播位置作为 `Media.start` 传入。依赖及许可范围同上，本次独立实现，没有复制应用源码或修改参考仓库／Pub 缓存。
+- 回归断言媒体实际打开次数、返回过程无额外 seek，以及播放／暂停、进度、倍速、音量和迟到请求隔离。原生测试使用本机合成 DASH 分轨及 HTTP 服务，不访问真实账号或在线 CDN。
+- `tool/check.ps1 -SkipPub` 通过：格式、静态分析和打包边界脚本通过，根应用 3679、bili_api 497、bili_player 101、bili_danmaku 136、bili_mux 5 项，共 **4418 项通过、0 失败**。根应用按既有条件跳过 13 项，另 10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过；日志：`build/validation/listening-return-full-check.log`。计数包含本轮共享工作区的同期功能。
+- 定向听视频测试 **35 项通过**。Windows 原生对照中，旧实现因返回过程出现额外 seek 而失败；修复版验证暂停／播放往返、重复点击和前后台回调交错时只打开一次视频，独立音轨、实际视频解码、进度、倍速和音量保持。另覆盖 DASH／渐进视频／纯音频的暂停定位、回退 seek，以及续播位置到达／超过片尾。日志：`build/validation/listening-return-native-before.log`、`build/validation/listening-return-endpoint-before.log`、`build/validation/listening-return-endpoint-after.log`、`build/validation/listening-return-targeted-final.log`。
+- 在独立工作区覆盖本任务的播放源码后，完整 `tool/test-windows-media.ps1` **32 项原生测试通过、0 失败**，包括重播、准备／取消、视频输出、听视频、媒体键、中断恢复、预览、音量均衡及长视频缓冲窗口；日志：`build/validation/listening-return-windows-media.log`。复用已缓存的原生资产，构建钩子继续校验哈希，没有修改来源／TLS／校验规则。
+- 独立的本地合成分轨调试入口热重载成功，运行时错误查询为空；验证后已退出，没有打开用户数据库或真实账号。
+- 本次未执行 Android、macOS、iOS、Linux 原生构建／设备验收，也未进行真实在线内容、长期播放或 Profile／Release 性能测量。
+
 ## 关闭超时复验（2026-10-30）
 
 用户要求处理剩余四个关闭超时并重跑完整检查。当前工作区起点为 `d65f5c2`，已包含 `aa81d10` 的关闭流程调整；本次复查时四项已不再复现，没有新增关闭实现改动。四个用例仍保留原有的 `manager.close().timeout(2s)` 检查，覆盖 Android 应用内、Windows 应用内／独立窗口、macOS 独立窗口。
