@@ -17,6 +17,10 @@ final settingsDefaultsProvider = Provider<AppSettings>(
   (ref) => const AppSettings.defaults(),
 );
 
+final appIconServiceProvider = Provider<AppIconService>(
+  (ref) => const UnsupportedAppIconService(),
+);
+
 final settingsControllerProvider =
     AsyncNotifierProvider<SettingsController, AppSettings>(
       SettingsController.new,
@@ -27,12 +31,27 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
   AppSettings? _persisted;
   int _revision = 0;
   int _shortcutCommitRevision = 0;
+  bool iconRestoreFailed = false;
 
   @override
   Future<AppSettings> build() async {
     ++_revision;
     await _writeQueue;
-    final loaded = await ref.read(settingsRepositoryProvider).load();
+    var loaded = await ref.read(settingsRepositoryProvider).load();
+    iconRestoreFailed = false;
+    try {
+      final actual = await ref
+          .read(appIconServiceProvider)
+          .restore(loaded.appIcon);
+      if (actual != loaded.appIcon) {
+        loaded = loaded.copyWith(appIcon: actual);
+        await ref.read(settingsRepositoryProvider).save(loaded);
+      }
+    } on Exception {
+      // An icon failure must not prevent the rest of the app from starting.
+      // Settings exposes the failure and lets the user retry explicitly.
+      iconRestoreFailed = true;
+    }
     _persisted = loaded;
     return loaded;
   }
@@ -60,6 +79,10 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
 
   Future<void> setTheme(AppThemePreference value) =>
       update((current) => current.copyWith(theme: value));
+  Future<void> setAppIcon(AppIconPreference value) async {
+    await _updateSettings((current) => current, appIcon: value);
+  }
+
   Future<void> setRecommendations(RecommendationSettings value) =>
       update((current) => current.copyWith(recommendations: value));
   Future<void> setNavigationMode(WorkspaceNavigationMode value) =>
@@ -183,8 +206,15 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
   Future<void> resetToDefaults() async {
     final defaults = ref.read(settingsDefaultsProvider);
     await _updateSettings(
-      (current) => defaults.copyWith(shortcuts: current.shortcuts),
+      (current) => defaults.copyWith(
+        shortcuts: current.shortcuts,
+        appIcon: current.appIcon,
+      ),
       shortcuts: defaults.shortcuts,
+      appIcon:
+          ref.read(appIconServiceProvider).surface == AppIconSurface.unsupported
+          ? null
+          : defaults.appIcon,
     );
   }
 
@@ -197,6 +227,7 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
   Future<AppSettings> _updateSettings(
     FutureOr<AppSettings> Function(AppSettings) cb, {
     ShortcutSettings? shortcuts,
+    AppIconPreference? appIcon,
   }) async {
     final previous = state.asData?.value ?? await future;
     final shortcutRevision = _shortcutCommitRevision;
@@ -205,18 +236,41 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
         (candidate is Future<AppSettings> ? await candidate : candidate)
             .normalized();
     final revision = ++_revision;
-    state = AsyncData(next);
+    state = AsyncData(next.copyWith(appIcon: state.requireValue.appIcon));
     final repository = ref.read(settingsRepositoryProvider);
     final write = _writeQueue.then((_) async {
       // A queued appearance/player setting must preserve a shortcut snapshot
       // committed after this optimistic update was prepared.
-      final persisted = shortcuts != null
+      final candidate = shortcuts != null
           ? next.copyWith(shortcuts: shortcuts)
           : shortcutRevision == _shortcutCommitRevision
           ? next
           : next.copyWith(shortcuts: _persisted?.shortcuts ?? next.shortcuts);
-      await repository.save(persisted);
+      // Icon changes are committed only after the OS and storage both succeed.
+      // Concurrent theme/player edits keep the most recently committed icon.
+      final previousIcon = _persisted?.appIcon ?? previous.appIcon;
+      final persisted = candidate.copyWith(appIcon: appIcon ?? previousIcon);
+      final icons = ref.read(appIconServiceProvider);
+      try {
+        if (appIcon != null) await icons.apply(appIcon);
+        await repository.save(persisted);
+      } catch (_) {
+        if (appIcon != null) {
+          try {
+            await icons.apply(previousIcon);
+          } on Exception {
+            iconRestoreFailed = true;
+          }
+        }
+        rethrow;
+      }
       _persisted = persisted;
+      if (ref.mounted) {
+        state = AsyncData(
+          state.requireValue.copyWith(appIcon: persisted.appIcon),
+        );
+        if (appIcon != null) iconRestoreFailed = false;
+      }
       if (shortcuts != null) {
         // Reset shortcuts only after saving, just like an explicit shortcut edit.
         ++_shortcutCommitRevision;

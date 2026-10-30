@@ -23,7 +23,7 @@ iOS 原生播放器沿用锁定 media-kit 依赖，独立 bili_mux 继续从固�
 - Bilibili 标题、封面、弹幕和媒体由服务端动态取得，未作为应用素材内置。测试的音视频由 FFmpeg 合成，生成命令见 [测试媒体说明](test/fixtures/media/README.md)。
 - 界面业务图标采用上述 Bili 图标字体，通用操作保留 Flutter Material 图标；构建产物 `data/flutter_assets/NOTICES.Z` 包含 Flutter 工具收集的包许可文本，但不能替代手动记录的 UWP 资源许可审查。用户界面“关于”提供 Flutter 的许可证页。
 
-2026-10-07 应用启动图标已改为按“BiliSail / 哔帆”设计的小电视与船帆角标，由内置 `image_gen` 辅助生成，替代原 UWP 启动图标。当前采用第二轮 C 版，保留三个候选方案和第一版帆船方案。Bilibili 官网及其下载中心的小电视作为视觉参考和生成输入，官网原图未直接打包；具体 URL、提示词、SHA-256 和采用边界见 [品牌资源说明](assets/branding/README.md)。本应用仍为独立第三方客户端，品牌参考不构成官方授权、合作或背书；业务图标的既有来源登记不变。
+2026-10-07 应用启动图标已改为按“BiliSail / 哔帆”设计的小电视与船帆角标，由内置 `image_gen` 辅助生成，替代原 UWP 启动图标。当前默认采用第二轮 C 版，保留三个候选方案和第一版帆船方案。2026-10-30 按用户要求另加入可选粉红小电视，矢量取自 Simple Icons 固定提交 `90646e4bf7f3b89df6c37e65baf3e7bc759a517c` 的 `icons/bilibili.svg`，按源项目 CC0 使用，保留[许可原文](assets/branding/bilibili_LICENSE.md)并在“关于 → 许可证”展示；仅改变填色、边距和输出尺寸，不打包蓝色版本。具体来源、摘要和采用边界见[品牌资源说明](assets/branding/README.md)。CC0 不授予商标权，Bilibili 标识权利仍归其权利人；本应用仍为独立第三方客户端，不构成官方授权、合作或背书。业务图标的既有来源登记不变。
 
 空降助手可选访问 [BilibiliSponsorBlock API](https://github.com/hanydd/BilibiliSponsorBlock/wiki/API) 的 `bsbsb.top` 服务，默认关闭。客户端按公开协议独立实现，无第三方源码或资源复制；只读查询不携带 Bilibili 凭据。服务范围、字段与未在线验证项见 [验证记录](docs/validation/ui-controls.md)。
 

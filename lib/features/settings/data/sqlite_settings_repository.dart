@@ -108,6 +108,11 @@ class SqliteSettingsRepository implements SettingsRepository {
               .where((item) => item.name == decoded['theme'])
               .firstOrNull ??
           AppThemePreference.system,
+      appIcon:
+          AppIconPreference.values
+              .where((item) => item.name == decoded['appIcon'])
+              .firstOrNull ??
+          AppIconPreference.bilisail,
       danmakuEnabled: boolean('danmakuEnabled', true),
       danmakuOpacity: number('danmakuOpacity', 0.8),
       danmakuFontScale: danmakuFontScale.isFinite
@@ -228,7 +233,8 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 33,
+        'schemaVersion': 34,
+        'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
         'sidebarStyle': value.sidebarStyle.name,

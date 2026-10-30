@@ -14,6 +14,46 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+static void app_icon_error(FlMethodCall* call, const gchar* message) {
+  g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
+      fl_method_error_response_new("invalid_icon", message, nullptr));
+  fl_method_call_respond(call, response, nullptr);
+}
+
+static void app_icon_method_call(FlMethodChannel* channel, FlMethodCall* call,
+                                 gpointer user_data) {
+  if (g_strcmp0(fl_method_call_get_name(call), "setIcon") != 0) {
+    g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
+        fl_method_not_implemented_response_new());
+    fl_method_call_respond(call, response, nullptr);
+    return;
+  }
+  FlValue* args = fl_method_call_get_args(call);
+  FlValue* bytes = fl_value_get_type(args) == FL_VALUE_TYPE_MAP
+      ? fl_value_lookup_string(args, "image") : nullptr;
+  if (!bytes || fl_value_get_type(bytes) != FL_VALUE_TYPE_UINT8_LIST) {
+    app_icon_error(call, "Invalid application icon.");
+    return;
+  }
+  g_autoptr(GdkPixbufLoader) loader = gdk_pixbuf_loader_new();
+  g_autoptr(GError) error = nullptr;
+  const bool written = gdk_pixbuf_loader_write(loader, fl_value_get_uint8_list(bytes),
+                                               fl_value_get_length(bytes), &error);
+  const bool closed = gdk_pixbuf_loader_close(loader, nullptr);
+  if (!written || !closed) {
+    app_icon_error(call, "Cannot decode the application icon.");
+    return;
+  }
+  GdkPixbuf* icon = gdk_pixbuf_loader_get_pixbuf(loader);
+  if (!icon) {
+    app_icon_error(call, "Empty application icon.");
+    return;
+  }
+  gtk_window_set_icon(GTK_WINDOW(user_data), icon);
+  gtk_window_set_default_icon(icon);
+  fl_method_call_respond_success(call, nullptr, nullptr);
+}
+
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
@@ -74,6 +114,14 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+  g_autoptr(FlStandardMethodCodec) icon_codec = fl_standard_method_codec_new();
+  FlMethodChannel* icon_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "bilisail/app_icon", FL_METHOD_CODEC(icon_codec));
+  fl_method_channel_set_method_call_handler(icon_channel, app_icon_method_call,
+                                           window, nullptr);
+  g_object_set_data_full(G_OBJECT(view), "bilisail-app-icon-channel", icon_channel,
+                         g_object_unref);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

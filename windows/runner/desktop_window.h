@@ -20,7 +20,8 @@ class DesktopWindowChannel {
  public:
   using ViewResolver = std::function<HWND(int64_t)>;
   DesktopWindowChannel(flutter::BinaryMessenger* messenger,
-                       ViewResolver resolve_view);
+                       ViewResolver resolve_view,
+                       std::function<void(HWND)> apply_icon);
   ~DesktopWindowChannel();
   DesktopWindowChannel(const DesktopWindowChannel&) = delete;
   DesktopWindowChannel& operator=(const DesktopWindowChannel&) = delete;
@@ -28,6 +29,7 @@ class DesktopWindowChannel {
  private:
   flutter::MethodChannel<flutter::EncodableValue> channel_;
   ViewResolver resolve_view_;
+  std::function<void(HWND)> apply_icon_;
   playback_window::WindowGeometrySession geometry_;
   int64_t frame_view_ = -1;
   std::unique_ptr<playback_window::PlaybackWindowFrame> playback_frame_;

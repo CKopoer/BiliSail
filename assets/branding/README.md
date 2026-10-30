@@ -16,6 +16,19 @@
 
 当前图稿 SHA-256：`8bfa0684f99c9a530abf155f480e4ca1ef1c7a57b7c7c463f602980397b5d3e9`。
 
+## 可选图标（2026-10-30）
+
+“设置 → 外观 → 应用图标”仅提供默认的哔帆图标与“粉红小电视”，不提供蓝色版本。
+
+- [bilibili_source.svg](bilibili_source.svg) 原样取自 [Simple Icons 的 Bilibili 图标](https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/bilibili.svg)，固定提交 `90646e4bf7f3b89df6c37e65baf3e7bc759a517c`，SHA-256 为 `0b31005ccf765a9d37be2c42f1d36e44572ccadb088250626d9905ae5d4f3d21`，源项目为 CC0，保留[许可原文](bilibili_LICENSE.md)。这份独立矢量素材不是原船帆图稿、官网旧版 JPEG 或 `biliicon.ttf` 的字标。
+- [bilibili_pink.svg](bilibili_pink.svg) 仅设置 `#FB7299` 填色和安全边距，通过固定开发工具 `resvg-py 0.5.0` 渲染为透明 [bilibili_pink.png](bilibili_pink.png)，1254 × 1254，SHA-256 为 `1f28bac11797840eab6e5d1ffc8479cc48b7827599540defd2f5ac19404b9aee`。不增加应用运行依赖。
+- `generate_app_icons.py` 从两份高分辨率图稿生成 Android 五种密度、Windows 七种 ICO 尺寸与 iPhone/iPad 的 `BilibiliIcon.appiconset`（iOS 合成白底 RGB）。macOS/Linux 从 Flutter 资产读取 1254px 原图，不修改安装目录。
+- Android 通过两个启动别名切换桌面图标，主 Activity 始终启用；正式与 `.test` 开发包分别保持自己的选择。iOS 通过系统备用图标 API 切换。桌面刷新速度、旧固定快捷方式及系统提示由系统决定。
+- Windows 改变运行中窗口的大/小图标，新播放窗口沿用选择，播放窗标题栏返回按钮仍保留；任务栏分组与固定入口可能继续使用安装图标。macOS 只改变运行中的 Dock 图标；Linux 只改变窗口图标，Wayland/桌面环境可能优先显示 `.desktop` 中的安装图标。已有快捷方式、安装包、访达、启动台和 Linux 应用菜单图标不自动替换。
+- 选择保存在现有设置快照，旧值或非法值回退哔帆，恢复默认同步恢复图标。移动端启动读取系统保留的图标，避免 iOS 启动时重复弹提示；桌面启动重新应用已保存选择。切换与保存串行，保存失败尝试恢复原生图标，失败会显示重试提示。
+
+验证与未测项见[应用图标切换记录](../../docs/validation/app-icon-switching.md)。Bilibili 标识的权利仍归原权利人，本次采用不声明品牌或素材再分发授权。
+
 放大前 C 原图 SHA-256：`9afcde924a2464fbfe0664b4a5d3e6d9eb32d98447da562c59d94a2239d39df8`。
 
 第一版保留原图 SHA-256：`92011d5873166eb9e8eca38d032ff162ba95f05a103f293701e3ad8273f73df6`。
@@ -33,10 +46,10 @@ pwsh -NoProfile -File tool/scale_app_icon.ps1
 生成平台资源的命令：
 
 ```text
-uv run --with pillow==12.3.0 python tool/generate_app_icons.py
+uv run --with pillow==12.3.0 --with resvg-py==0.5.0 python tool/generate_app_icons.py
 ```
 
-该命令从保存的 PNG 等比缩放，保留 alpha；不重新调用生成服务。生成服务具有随机性，提示词用于追踪设计，不能保证重生成相同像素。没有新增应用运行依赖。
+该命令从保存的品牌 PNG 与小电视 SVG 构建平台资源，保留 alpha；不重新调用生成服务。历史品牌图稿的生成服务具有随机性，提示词用于追踪设计，不能保证重生成相同像素。没有新增应用运行依赖。运行 `uv run --with pillow==12.3.0 python tool/check_app_icons.py` 可检查两套尺寸、像素与 iOS 不透明格式。
 
 MSIX 的 `tool/build-release.ps1` 同样读取 `app_icon.png`，继续生成 targetsize、unplated、lightunplated 与 PRI。替换资源不等于系统已安装应用的图标缓存立即更新，也不代表 Android/macOS 设备显示已验收。
 

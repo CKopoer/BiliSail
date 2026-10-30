@@ -46,6 +46,9 @@ Future<void> main(List<String> arguments) async {
     yield LicenseEntryWithLineBreaks([
       'HarmonyOS Sans',
     ], license.replaceAll('\u0000', ''));
+    yield LicenseEntryWithLineBreaks([
+      'Simple Icons (Bilibili)',
+    ], await rootBundle.loadString('assets/branding/bilibili_LICENSE.md'));
   });
   MacOSApplicationWindow? applicationWindow;
   void smokeStage(String stage) {

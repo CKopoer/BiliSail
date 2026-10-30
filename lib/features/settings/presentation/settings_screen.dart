@@ -20,6 +20,7 @@ import '../domain/app_update.dart';
 import '../domain/app_settings.dart';
 import '../domain/settings_category.dart';
 import 'shortcut_settings_section.dart';
+import 'app_icon_settings.dart';
 import 'recommendation_settings_section.dart';
 import 'cdn_settings_tile.dart';
 
@@ -302,6 +303,7 @@ final class _SettingsCategoryPageState
                     children: [
                       if (widget.category == SettingsCategory.appearance)
                         _section('外观', [
+                          AppIconSettings(value: s.appIcon),
                           _choices('页面导航模式', s.navigationMode, const {
                             WorkspaceNavigationMode.singlePage: '单标签页',
                             WorkspaceNavigationMode.dualTabs: '双标签页',

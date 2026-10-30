@@ -1,4 +1,6 @@
 import '../../../domain/playback_rates.dart';
+import '../../../domain/app_icon.dart';
+export '../../../domain/app_icon.dart';
 import '../../../domain/audio_normalization.dart';
 export '../../../domain/audio_normalization.dart'
     show AudioNormalizationMode, AudioNormalizationLabel;
@@ -55,6 +57,7 @@ final class AppSettings {
     this.recommendations = const RecommendationSettings.defaults(),
     this.shortcuts = const ShortcutSettings.defaults(),
     this.theme = AppThemePreference.system,
+    this.appIcon = AppIconPreference.bilisail,
     this.navigationMode = WorkspaceNavigationMode.dualTabs,
     this.navigationBarMode = NavigationBarMode.automatic,
     this.sidebarStyle = SidebarStyle.automatic,
@@ -132,6 +135,7 @@ final class AppSettings {
     this.playerControlsMode = PlayerControlsMode.click,
     this.fullscreenSwipeControls = true,
   }) : theme = AppThemePreference.system,
+       appIcon = AppIconPreference.bilisail,
        font = AppFontPreference.harmonyOsSans,
        systemFontFamily = '',
        cacheImages = true,
@@ -183,6 +187,7 @@ final class AppSettings {
   final ShortcutSettings shortcuts;
   final RecommendationSettings recommendations;
   final AppThemePreference theme;
+  final AppIconPreference appIcon;
   final WorkspaceNavigationMode navigationMode;
   final NavigationBarMode navigationBarMode;
   final SidebarStyle sidebarStyle;
@@ -266,6 +271,7 @@ final class AppSettings {
     RecommendationSettings? recommendations,
     ShortcutSettings? shortcuts,
     AppThemePreference? theme,
+    AppIconPreference? appIcon,
     WorkspaceNavigationMode? navigationMode,
     NavigationBarMode? navigationBarMode,
     SidebarStyle? sidebarStyle,
@@ -328,6 +334,7 @@ final class AppSettings {
     shortcuts: shortcuts ?? this.shortcuts,
     recommendations: recommendations ?? this.recommendations,
     theme: theme ?? this.theme,
+    appIcon: appIcon ?? this.appIcon,
     navigationMode: navigationMode ?? this.navigationMode,
     navigationBarMode: navigationBarMode ?? this.navigationBarMode,
     sidebarStyle: sidebarStyle ?? this.sidebarStyle,

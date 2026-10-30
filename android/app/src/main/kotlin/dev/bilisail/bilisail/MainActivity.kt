@@ -10,9 +10,11 @@ class MainActivity : AudioServiceActivity() {
     private var imageExport: ImageExportHandler? = null
     private var windowBrightness: WindowBrightnessHandler? = null
     private var mobileWindow: MobileWindowHandler? = null
+    private var appIcon: AppIconHandler? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        appIcon = AppIconHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         downloadStorage = DownloadStorageHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         imageExport = ImageExportHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         windowBrightness = WindowBrightnessHandler(this, flutterEngine.dartExecutor.binaryMessenger)
@@ -51,6 +53,8 @@ class MainActivity : AudioServiceActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        appIcon?.close()
+        appIcon = null
         mobileWindow?.close()
         mobileWindow = null
         windowBrightness?.close()

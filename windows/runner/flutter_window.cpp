@@ -32,6 +32,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  app_icon_channel_ = std::make_unique<AppIconChannel>(
+      flutter_controller_->engine()->messenger());
   system_media_channel_ = std::make_unique<SystemMediaControlsChannel>(
       flutter_controller_->engine()->messenger(), GetHandle());
   system_fonts_channel_ =
@@ -51,7 +53,8 @@ bool FlutterWindow::OnCreate() {
       flutter_controller_->view()->GetNativeWindow(),
       resolve_view);
   desktop_window_channel_ = std::make_unique<DesktopWindowChannel>(
-      flutter_controller_->engine()->messenger(), resolve_view);
+      flutter_controller_->engine()->messenger(), resolve_view,
+      [this](HWND window) { app_icon_channel_->ApplyTo(window); });
   application_exit_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(),
@@ -93,6 +96,7 @@ void FlutterWindow::OnDestroy() {
   system_media_channel_.reset();
   image_export_channel_.reset();
   desktop_window_channel_.reset();
+  app_icon_channel_.reset();
   text_input_channel_.reset();
   system_fonts_channel_.reset();
   if (flutter_controller_) {

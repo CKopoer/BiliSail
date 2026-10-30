@@ -9,6 +9,7 @@ final class MacOSApplication {
   private let exitChannel: FlutterMethodChannel
   private var systemFontsChannel: FlutterMethodChannel?
   private var imageExportChannel: FlutterMethodChannel?
+  private var appIconChannel: FlutterMethodChannel?
   private var passportCookies: PassportWebCookies?
   private var desktopWindows: DesktopWindowController?
   private var focusObservers: [NSObjectProtocol] = []
@@ -130,6 +131,21 @@ final class MacOSApplication {
       result(NSFontManager.shared.availableFontFamilies)
     }
     systemFontsChannel = channel
+    let iconChannel = FlutterMethodChannel(name: "bilisail/app_icon", binaryMessenger: engine.binaryMessenger)
+    iconChannel.setMethodCallHandler { call, result in
+      guard call.method == "setIcon" else { result(FlutterMethodNotImplemented); return }
+      guard let arguments = call.arguments as? [String: Any],
+            let name = arguments["icon"] as? String,
+            name == "bilisail" || name == "bilibili",
+            let bytes = arguments["image"] as? FlutterStandardTypedData,
+            let image = NSImage(data: bytes.data) else {
+        result(FlutterError(code: "invalid_icon", message: "Invalid application icon.", details: nil))
+        return
+      }
+      NSApp.applicationIconImage = image
+      result(nil)
+    }
+    appIconChannel = iconChannel
     imageExportChannel = registerImageExport(
       messenger: engine.binaryMessenger
     )

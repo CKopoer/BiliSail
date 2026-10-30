@@ -134,10 +134,11 @@ class CaptionBackButton {
   bool UpdateIcon() {
     const HICON replacement = BackIcon(window_, enabled_);
     if (!replacement) return false;
+    const HICON previous = icon_;
+    icon_ = replacement;
     SendMessage(window_, WM_SETICON, ICON_SMALL,
                  reinterpret_cast<LPARAM>(replacement));
-    if (icon_) DestroyIcon(icon_);
-    icon_ = replacement;
+    if (previous) DestroyIcon(previous);
     return true;
   }
 
@@ -161,6 +162,13 @@ class CaptionBackButton {
                                      LPARAM lparam, UINT_PTR subclass_id,
                                      DWORD_PTR reference) {
     auto* const self = reinterpret_cast<CaptionBackButton*>(reference);
+    if (message == WM_SETICON && wparam == ICON_SMALL && self->attached_ &&
+        self->icon_ && reinterpret_cast<HICON>(lparam) != self->icon_) {
+      // Keep the Back caption visible while updating the icon restored on detach.
+      const HICON previous = self->original_icon_;
+      self->original_icon_ = reinterpret_cast<HICON>(lparam);
+      return reinterpret_cast<LRESULT>(previous);
+    }
     if (message == WM_NCHITTEST) {
       const LRESULT hit = DefSubclassProc(window, message, wparam, lparam);
       if ((hit == HTCAPTION || hit == HTSYSMENU) &&
@@ -209,10 +217,12 @@ class CaptionBackButton {
 };
 
 DesktopWindowChannel::DesktopWindowChannel(flutter::BinaryMessenger* messenger,
-                                         ViewResolver resolve_view)
+                                         ViewResolver resolve_view,
+                                         std::function<void(HWND)> apply_icon)
     : channel_(messenger, "bilisail/desktop_window",
                &flutter::StandardMethodCodec::GetInstance()),
-      resolve_view_(std::move(resolve_view)) {
+      resolve_view_(std::move(resolve_view)),
+      apply_icon_(std::move(apply_icon)) {
   channel_.SetMethodCallHandler(
       [this](const auto& call, auto result) {
         const auto* arguments = call.arguments()
@@ -267,6 +277,7 @@ DesktopWindowChannel::DesktopWindowChannel(flutter::BinaryMessenger* messenger,
           return;
         }
         if (call.method_name() == "setPlaybackTitleBar") {
+          apply_icon_(window);
           const auto dark_entry = arguments->find(flutter::EncodableValue("dark"));
           const auto* dark = dark_entry != arguments->end()
                                  ? std::get_if<bool>(&dark_entry->second)
