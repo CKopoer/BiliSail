@@ -238,7 +238,9 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
                                 onPressed: widget.onLoadMore,
                                 child: Text(
                                   widget.loadMoreMessage == null
-                                      ? '加载更多投稿'
+                                      ? widget.queue.favoriteTitle == null
+                                            ? '加载更多投稿'
+                                            : '加载更多视频'
                                       : '重试',
                                 ),
                               ),

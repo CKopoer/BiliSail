@@ -7,11 +7,7 @@ import '../../../core/platform/external_links.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
-import '../../../domain/app_failure.dart';
-import '../../../core/network/api_requests.dart';
 import '../../../shared/ui/app_notice.dart';
-import '../../feed/application/favorite_playback_queue.dart';
-import '../../feed/domain/home_channel.dart';
 import '../../live/domain/live_room.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 import '../../../shared/ui/state_view.dart';
@@ -270,39 +266,17 @@ class _ProfileSectionPage extends ConsumerStatefulWidget {
 }
 
 class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
-  FavoriteQueueRequest? _favoriteRequest;
-
   void _openFavoriteVideo(VideoSummary video) {
-    final request = _favoriteRequest;
-    if (request != null) _playFavorites(request, initial: video.id);
+    _playFavorites(initial: video.id);
   }
 
-  Future<void> _playFavorites(
-    FavoriteQueueRequest request, {
-    VideoId? initial,
-  }) async {
-    final provider = favoritePlaybackQueueProvider(request);
-    if (ref.read(provider).isLoading) return;
-    final queue = await ref.read(provider.notifier).capture();
-    if (!mounted ||
-        !widget.active ||
-        !WorkspaceActivity.isActive(context) ||
-        _favoriteRequest != request) {
-      return;
-    }
+  void _playFavorites({VideoId? initial}) {
+    if (!widget.active || !WorkspaceActivity.isActive(context)) return;
+    final queue = ref
+        .read(profileControllerProvider(widget.id).notifier)
+        .captureFavoriteQueue();
     if (queue == null) {
-      final error = ref.read(provider).error;
-      if (error != null) {
-        showAppNotice(
-          context,
-          error is AppFailure ? error.message : '收藏夹暂时无法加载，请重试',
-        );
-      }
-      return;
-    }
-    final repository = ref.read(profileRepositoryProvider);
-    if (repository.accountScope != queue.scope ||
-        ref.read(sessionEpochProvider)() != queue.sessionEpoch) {
+      showAppNotice(context, '收藏夹内暂无可播放的视频');
       return;
     }
     final index = initial == null ? 0 : queue.indexOf(initial);
@@ -310,7 +284,6 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
       showAppNotice(context, '该视频不在当前收藏夹播放列表内，请刷新后重试');
       return;
     }
-    if (queue.truncated) showAppNotice(context, '收藏夹较大，本次播放前 1000 条内容中的有效视频');
     widget.onOpenPlaylist?.call(queue.items[index].video, queue.id);
   }
 
@@ -349,21 +322,6 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
       ),
     );
     final controller = ref.read(profileControllerProvider(widget.id).notifier);
-    final favoriteRequest = _favoriteRequest =
-        widget.section == ProfileSection.folders && folderId != null
-        ? (
-            query: (
-              channel: HomeChannel.favorites,
-              section: '默认收藏夹',
-              scope: ref.read(profileRepositoryProvider).accountScope,
-              folderId: folderId,
-            ),
-            title: folderTitle ?? '收藏夹',
-          )
-        : null;
-    final favoriteQueue = favoriteRequest == null
-        ? null
-        : ref.watch(favoritePlaybackQueueProvider(favoriteRequest));
     final session = (widget.id, generation);
     final listKey = (
       session,
@@ -442,36 +400,32 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
                   ],
                   if (widget.section == ProfileSection.folders &&
                       folderId != null)
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                    Row(
                       children: [
-                        TextButton.icon(
+                        IconButton(
+                          tooltip: '返回收藏夹',
                           onPressed: controller.closeFolder,
                           icon: const Icon(Icons.arrow_back),
-                          label: const Text('返回收藏夹'),
                         ),
-                        Text(folderTitle ?? ''),
-                        if (favoriteRequest != null)
-                          TextButton.icon(
-                            key: const ValueKey('profile-favorite-play-all'),
-                            onPressed:
-                                widget.onOpenPlaylist == null ||
-                                    favoriteQueue!.isLoading ||
-                                    list.items.isEmpty
-                                ? null
-                                : () => _playFavorites(favoriteRequest),
-                            icon: favoriteQueue!.isLoading
-                                ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.playlist_play),
-                            label: Text(
-                              favoriteQueue.isLoading ? '加载中' : '播放全部',
-                            ),
+                        Expanded(
+                          child: Text(
+                            folderTitle ?? '',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
+                        ),
+                        TextButton.icon(
+                          key: const ValueKey('profile-favorite-play-all'),
+                          onPressed:
+                              widget.onOpenPlaylist == null ||
+                                  !list.items.any(
+                                    (entry) => entry.video?.id.isValid == true,
+                                  )
+                              ? null
+                              : () => _playFavorites(),
+                          icon: const Icon(Icons.playlist_play),
+                          label: const Text('播放全部'),
+                        ),
                       ],
                     ),
                   if (list.items.isEmpty && list.loading)

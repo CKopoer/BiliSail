@@ -246,13 +246,13 @@ void main() {
         final sortRect = tester.getRect(sort);
         final play = find.byKey(const ValueKey('profile-play-all'));
         final playRect = tester.getRect(play);
-        expect(playRect.left, 16);
+        expect(playRect.right, width - 16);
         expect(searchRect.left, 16);
         expect(searchRect.right, width - 16);
         expect(searchRect.top, greaterThanOrEqualTo(playRect.bottom + 8));
         expect(searchRect.top, greaterThanOrEqualTo(sortRect.bottom + 8));
         if (scale == 1) {
-          expect(sortRect.right, width - 16);
+          expect(sortRect.left, 16);
           expect(playRect.center.dy, closeTo(sortRect.center.dy, .01));
         }
         await tester.tap(play);
@@ -272,7 +272,7 @@ void main() {
     );
   }
 
-  testWidgets('wide toolbar places search at the trailing edge', (
+  testWidgets('wide toolbar places play all at the trailing edge', (
     tester,
   ) async {
     final keyword = TextEditingController();
@@ -293,9 +293,9 @@ void main() {
       find.byKey(const ValueKey('profile-video-sort')),
     );
     final play = tester.getRect(find.byKey(const ValueKey('profile-play-all')));
-    expect(play.left, 16);
-    expect(sort.left, greaterThanOrEqualTo(play.right + 12));
-    expect(search.right, 884);
+    expect(play.right, 884);
+    expect(sort.left, 16);
+    expect(play.left, greaterThanOrEqualTo(search.right + 12));
     expect(search.left, greaterThan(sort.right + 100));
     expect(search.center.dy, closeTo(sort.center.dy, .01));
     expect(search.center.dy, closeTo(play.center.dy, .01));

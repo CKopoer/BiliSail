@@ -1,51 +1,98 @@
+import 'dart:async';
+
 import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
-import 'package:bilisail/features/feed/application/home_repository_provider.dart';
-import 'package:bilisail/features/feed/domain/home_repository.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/profile/application/profile_controller.dart';
+import 'package:bilisail/features/profile/application/profile_playback_queue.dart';
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 import 'package:bilisail/features/video/application/video_author_controller.dart';
+import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../messages/message_fakes.dart';
 import '../../support/follow_repository_fake.dart';
+import '../messages/message_fakes.dart';
+
+const _user = UserId('7');
+const _folder = ProfileEntry(
+  id: '42',
+  kind: ProfileEntryKind.folder,
+  title: '公开收藏夹',
+);
 
 void main() {
+  late AuthFake auth;
+  late _Profile repository;
+  late ProviderContainer container;
+  setUp(() {
+    auth = AuthFake();
+    repository = _Profile();
+    container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(auth),
+        profileRepositoryProvider.overrideWithValue(repository),
+        videoAuthorRepositoryProvider.overrideWithValue(FollowRepositoryFake()),
+        sessionEpochProvider.overrideWithValue(() => repository.sessionEpoch),
+      ],
+    );
+  });
+  tearDown(() async {
+    container.dispose();
+    await auth.stream.close();
+  });
+
+  Future<ProfileController> openFolder() async {
+    final sub = container.listen(profileControllerProvider(_user), (_, _) {});
+    addTearDown(sub.close);
+    await Future<void>.delayed(Duration.zero);
+    final controller = container.read(
+      profileControllerProvider(_user).notifier,
+    );
+    controller.openFolder(_folder);
+    await Future<void>.delayed(Duration.zero);
+    return controller;
+  }
+
+  ProfilePlaybackQueueController paging(WatchLaterQueue queue) {
+    final sub = container.listen(
+      profilePlaybackQueueProvider(queue.id),
+      (_, _) {},
+    );
+    addTearDown(sub.close);
+    return container.read(profilePlaybackQueueProvider(queue.id).notifier);
+  }
+
   for (final isSelf in [true, false]) {
     for (final playAll in [true, false]) {
       testWidgets(
-        '${isSelf ? 'own' : 'UP'} profile favorites ${playAll ? 'play all' : 'select video'} opens ordered queue',
+        '${isSelf ? 'own' : 'UP'} favorites ${playAll ? 'play all' : 'select video'} captures loaded pages without fetching',
         (tester) async {
-          final auth = AuthFake();
-          final home = _Home();
-          final container = ProviderContainer(
-            overrides: [
-              authRepositoryProvider.overrideWithValue(auth),
-              profileRepositoryProvider.overrideWithValue(_Profile()),
-              homeRepositoryProvider.overrideWithValue(home),
-              videoAuthorRepositoryProvider.overrideWithValue(
-                FollowRepositoryFake(),
-              ),
-              sessionEpochProvider.overrideWithValue(() => 4),
-            ],
-          );
-          addTearDown(container.dispose);
-          addTearDown(auth.stream.close);
+          final width = isSelf ? 375.0 : 1100.0;
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = Size(width, 900);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          addTearDown(tester.view.resetPhysicalSize);
           final opened = <(VideoSummary, String)>[];
           await tester.pumpWidget(
             UncontrolledProviderScope(
               container: container,
               child: MaterialApp(
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(context)
+                      .copyWith(textScaler: TextScaler.linear(isSelf ? 1 : 2)),
+                  child: child!,
+                ),
                 home: Scaffold(
                   body: ProfileScreen(
-                    id: const UserId('7'),
+                    id: _user,
                     isSelf: isSelf,
                     initialSection: ProfileSection.folders,
                     onOpenPlaylist: (video, queueId) =>
@@ -58,54 +105,222 @@ void main() {
             ),
           );
           await tester.pumpAndSettle();
-          await tester.tap(find.text('公开收藏夹'));
+          await tester.tap(find.text(_folder.title));
           await tester.pumpAndSettle();
-          expect(
-            tester
-                .widget<TextButton>(
-                  find.byKey(const ValueKey('profile-favorite-play-all')),
-                )
-                .onPressed,
-            isNotNull,
+          final button = find.byKey(
+            const ValueKey('profile-favorite-play-all'),
           );
+          expect(tester.widget<TextButton>(button).onPressed, isNotNull);
+          expect(tester.getRect(button).right, width - 16);
           expect(find.byIcon(Icons.playlist_play), findsOneWidget);
-          await tester.tap(
-            playAll
-                ? find.byKey(const ValueKey('profile-favorite-play-all'))
-                : find.text('视频 2'),
-          );
+          final reads = repository.folderCalls.length;
+          expect(reads, 1);
+          await tester.tap(playAll ? button : find.text('视频 2'));
           await tester.pumpAndSettle();
           expect(opened, hasLength(1));
-          expect(
-            opened.single.$1.id,
-            VideoId(playAll ? 'BV0000000001' : 'BV0000000002'),
-          );
+          expect(opened.single.$1.id, _video(playAll ? 1 : 2).id);
           final queue = container
               .read(watchLaterQueueRegistryProvider)
               .resolve(opened.single.$2, scope: 'guest', sessionEpoch: 4)!;
-          expect(queue.title, '公开收藏夹');
-          expect(queue.items, hasLength(2));
-          expect(home.queries.every((q) => q.folderId == '42'), isTrue);
+          expect(queue.title, _folder.title);
+          expect(queue.items, hasLength(40));
+          expect(queue.hasMore, true);
+          expect(queue.nextPage, 2);
+          expect(queue.profileSource?.folderId, '42');
+          expect(queue.profileSource?.userId, _user);
+          expect(repository.folderCalls, hasLength(reads));
           expect(tester.takeException(), isNull);
         },
       );
     }
   }
+
+  test(
+    'capture filters unavailable and repeated videos without a read',
+    () async {
+      repository.pages[1] = [
+        _entry(1),
+        const ProfileEntry(
+          id: 'invalid',
+          kind: ProfileEntryKind.video,
+          title: '失效视频',
+        ),
+        ProfileEntry(
+          id: 'duplicate',
+          kind: ProfileEntryKind.video,
+          title: '重复视频',
+          video: _video(1),
+        ),
+      ];
+      final controller = await openFolder();
+      final reads = repository.folderCalls.length;
+      final queue = controller.captureFavoriteQueue()!;
+      expect(queue.items.map((item) => item.video.id), [_video(1).id]);
+      expect(repository.folderCalls, hasLength(reads));
+      expect(queue.isWatchLater, false);
+      controller.closeFolder();
+      expect(controller.captureFavoriteQueue(), isNull);
+    },
+  );
+
+  test('each playback request reads one page, deduplicates and retries the failed page', () async {
+    final origin = await openFolder();
+    final queue = origin.captureFavoriteQueue()!;
+    final controller = paging(queue);
+    repository.folderCalls.clear();
+    final pending = repository.pending = Completer<ProfilePage>();
+    final first = controller.loadMore(_video(1).id);
+    final second = controller.loadMore(_video(1).id);
+    expect(repository.folderCalls.map((call) => call.page), [2]);
+    pending.complete(
+      ProfilePage(items: [_entry(40), _entry(41)], hasMore: true),
+    );
+    await Future.wait([first, second]);
+    repository.pending = null;
+    final provider = profilePlaybackQueueProvider(queue.id);
+    expect(container.read(provider).queue?.items, hasLength(41));
+    repository.failure = const AppFailure(AppFailureKind.network, '分页失败');
+    await controller.loadMore(_video(1).id);
+    expect(container.read(provider).message, '分页失败');
+    repository.failure = null;
+    await controller.loadMore(_video(1).id);
+    expect(repository.folderCalls.map((call) => call.page), [2, 3, 3]);
+    expect(repository.folderCalls.every((call) => call.folderId == '42'), true);
+    expect(container.read(provider).queue?.hasMore, false);
+    expect(container.read(provider).queue?.items.last.video.id, _video(120).id);
+    expect(container.read(provider).message, isNull);
+  });
+
+  test(
+    'changing the browser folder cannot retarget an existing playback queue',
+    () async {
+      final origin = await openFolder();
+      final queue = origin.captureFavoriteQueue()!;
+      final controller = paging(queue);
+      origin.openFolder(
+        const ProfileEntry(
+          id: '99',
+          kind: ProfileEntryKind.folder,
+          title: '另一个收藏夹',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      repository.folderCalls.clear();
+      await controller.loadMore(_video(1).id);
+      expect(repository.folderCalls.single.folderId, '42');
+      expect(repository.folderCalls.single.user, _user);
+      expect(
+        container.read(profilePlaybackQueueProvider(queue.id)).queue?.title,
+        _folder.title,
+      );
+    },
+  );
+
+  test(
+    'playback recovers the clipped boundary page at the browser limit',
+    () async {
+      repository.pages[1] = [for (var n = 1; n <= 510; n++) _entry(n)];
+      repository.lastPage = 1;
+      final origin = await openFolder();
+      final queue = origin.captureFavoriteQueue()!;
+      expect(queue.items, hasLength(500));
+      expect(queue.hasMore, true);
+      expect(queue.nextPage, 1);
+      final controller = paging(queue);
+      repository.folderCalls.clear();
+      await controller.loadMore(_video(1).id);
+      final updated = container
+          .read(profilePlaybackQueueProvider(queue.id))
+          .queue!;
+      expect(updated.items, hasLength(510));
+      expect(updated.items.last.video.id, _video(510).id);
+      expect(updated.hasMore, false);
+      expect(repository.folderCalls.map((call) => call.page), [1]);
+    },
+  );
+
+  test(
+    'account changes cancel pending folder paging and discard its late result',
+    () async {
+      final origin = await openFolder();
+      final queue = origin.captureFavoriteQueue()!;
+      final controller = paging(queue);
+      final pending = repository.pending = Completer<ProfilePage>();
+      final loading = controller.loadMore(_video(1).id);
+      final read = repository.read;
+      repository.sessionEpoch++;
+      repository.pending = null;
+      auth.emit(const AuthState(status: AuthStatus.signedIn, mid: '8'));
+      await Future<void>.delayed(Duration.zero);
+      expect(read?.isCancelled, true);
+      pending.complete(ProfilePage(items: [_entry(41)], hasMore: false));
+      await loading;
+      expect(
+        container.read(profilePlaybackQueueProvider(queue.id)).queue,
+        isNull,
+      );
+      expect(origin.captureFavoriteQueue(), isNull);
+    },
+  );
+
+  testWidgets(
+    'folder paging times out and retries without accepting late data',
+    (tester) async {
+      final origin = (await tester.runAsync(openFolder))!;
+      final queue = origin.captureFavoriteQueue()!;
+      final controller = paging(queue);
+      final pending = repository.pending = Completer<ProfilePage>();
+      final loading = controller.loadMore(_video(1).id);
+      final read = repository.read;
+      await tester.pump(const Duration(seconds: 31));
+      await loading;
+      expect(read?.isCancelled, true);
+      final provider = profilePlaybackQueueProvider(queue.id);
+      expect(container.read(provider).message, contains('收藏夹视频加载超时'));
+      pending.complete(ProfilePage(items: [_entry(41)], hasMore: false));
+      await tester.pump();
+      expect(container.read(provider).queue?.items, hasLength(40));
+      repository.pending = null;
+      await controller.loadMore(_video(1).id);
+      expect(container.read(provider).queue?.items, hasLength(80));
+    },
+  );
 }
 
 VideoSummary _video(int index) => VideoSummary(
-  id: VideoId('BV000000000$index'),
+  id: VideoId('BV${index.toString().padLeft(10, '0')}'),
   title: '视频 $index',
   coverUrl: '',
   author: 'UP',
   duration: Duration.zero,
 );
 
+ProfileEntry _entry(int index) => ProfileEntry(
+  id: '$index',
+  kind: ProfileEntryKind.video,
+  title: '视频 $index',
+  video: _video(index),
+);
+
+typedef _Call = ({
+  UserId user,
+  ProfileSection section,
+  String? folderId,
+  int page,
+});
+
 final class _Profile implements ProfileRepository {
   @override
   String get accountScope => 'guest';
   @override
-  int get sessionEpoch => 4;
+  int sessionEpoch = 4;
+  final folderCalls = <_Call>[];
+  final pages = <int, List<ProfileEntry>>{};
+  int lastPage = 3;
+  Completer<ProfilePage>? pending;
+  AppFailure? failure;
+  RequestCancellation? read;
+
   @override
   Future<UserProfile> loadProfile(
     UserId id, {
@@ -126,48 +341,30 @@ final class _Profile implements ProfileRepository {
     String keyword = '',
     String? folderId,
     required RequestCancellation cancellation,
-  }) async => ProfilePage(
-    items: folderId == null
-        ? [
-            const ProfileEntry(
-              id: '42',
-              kind: ProfileEntryKind.folder,
-              title: '公开收藏夹',
-            ),
-          ]
-        : [
-            for (var n = 1; n <= 2; n++)
-              ProfileEntry(
-                id: '$n',
-                kind: ProfileEntryKind.video,
-                title: '视频 $n',
-                video: _video(n),
-              ),
-          ],
-    hasMore: false,
-  );
-}
-
-final class _Home implements HomeRepository {
-  @override
-  String get accountScope => 'guest';
-  final queries = <HomeQuery>[];
-  @override
-  Future<HomePage> load(
-    HomeQuery query, {
-    required int page,
-    String? cursor,
-    required RequestCancellation cancellation,
   }) async {
-    queries.add(query);
-    return HomePage([
-      for (var n = 1; n <= 2; n++)
-        HomeEntry(
-          id: '$n',
-          kind: HomeEntryKind.video,
-          title: '视频 $n',
-          bvid: _video(n).id.value,
-        ),
-    ], hasMore: false);
+    if (section != ProfileSection.folders) {
+      return const ProfilePage(items: [], hasMore: false);
+    }
+    if (folderId == null) {
+      return const ProfilePage(items: [_folder], hasMore: false);
+    }
+    folderCalls.add((
+      user: id,
+      section: section,
+      folderId: folderId,
+      page: page,
+    ));
+    read = cancellation;
+    if (failure case final error?) throw error;
+    return pending?.future ??
+        ProfilePage(
+          items:
+              pages[page] ??
+              [
+                for (var n = (page - 1) * 40 + 1; n <= page * 40; n++)
+                  _entry(n),
+              ],
+          hasMore: page < lastPage,
+        );
   }
 }

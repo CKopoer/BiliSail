@@ -382,12 +382,12 @@ class ProfileVideoToolbar extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              OverflowBar(
+                alignment: MainAxisAlignment.spaceBetween,
+                overflowAlignment: OverflowBarAlignment.end,
                 spacing: 12,
-                runSpacing: 8,
-                children: [playAll, sort],
+                overflowSpacing: 8,
+                children: [sort, playAll],
               ),
               const SizedBox(height: 8),
               search,
@@ -396,8 +396,6 @@ class ProfileVideoToolbar extends StatelessWidget {
         }
         return Row(
           children: [
-            playAll,
-            const SizedBox(width: 12),
             sort,
             const SizedBox(width: 16),
             Expanded(
@@ -409,6 +407,8 @@ class ProfileVideoToolbar extends StatelessWidget {
                 ),
               ),
             ),
+            const SizedBox(width: 12),
+            playAll,
           ],
         );
       },

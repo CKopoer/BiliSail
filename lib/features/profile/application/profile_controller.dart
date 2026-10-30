@@ -151,6 +151,38 @@ class ProfileController extends Notifier<ProfileState> {
       ref.read(profileRepositoryProvider).accountScope == scope &&
       ref.read(profileRepositoryProvider).sessionEpoch == epoch;
 
+  WatchLaterQueue? captureFavoriteQueue() {
+    final folderId = state.folderId;
+    final list = state.lists[ProfileSection.folders];
+    if (state.section != ProfileSection.folders ||
+        folderId == null ||
+        list == null ||
+        list.page == 0 ||
+        list.isHidden) {
+      return null;
+    }
+    final repository = ref.read(profileRepositoryProvider);
+    final capped = list.items.length >= 500;
+    return ref
+        .read(watchLaterQueueRegistryProvider)
+        .capture(
+          scope: repository.accountScope,
+          sessionEpoch: repository.sessionEpoch,
+          items: profileQueueItems(list.items),
+          favoriteTitle: state.folderTitle ?? '收藏夹',
+          profileSource: ProfileVideoQueueSource(
+            userId: id,
+            name: state.profile?.name ?? 'UP主',
+            order: state.order,
+            folderId: folderId,
+          ),
+          hasMore: list.hasMore || capped,
+          // Replay the browser's boundary page to recover any clipped tail.
+          // The playback pager deduplicates it before advancing to the next page.
+          nextPage: capped ? list.page : list.page + 1,
+        );
+  }
+
   Future<WatchLaterQueue?> playAll() async {
     if (state.queueLoading) return null;
     final repository = ref.read(profileRepositoryProvider);

@@ -55,12 +55,13 @@ import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 
 void main() {
-  for (final (width, complete) in [
-    for (final width in [360.0, 1200.0])
-      for (final complete in [false, true]) (width, complete),
+  for (final (width, complete, folderId) in [
+    for (final folderId in [null, '42'])
+      for (final width in [360.0, 1200.0])
+        for (final complete in [false, true]) (width, complete, folderId),
   ]) {
     testWidgets(
-      'UP playlist loads the next page at EOF once and retains player at $width continuous=$complete',
+      '${folderId == null ? 'UP' : 'favorite'} playlist loads the next page at EOF once and retains player at $width continuous=$complete',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = Size(width, 800);
@@ -74,17 +75,19 @@ void main() {
         );
         final session = _ProfilePagingSession(detail);
         addTearDown(session.snapshots.dispose);
-        final repository = _ProfilePagingRepository();
+        final repository = _ProfilePagingRepository(expectedFolderId: folderId);
         final registry = WatchLaterQueueRegistry();
         final queue = registry.capture(
           scope: 'user:7',
           sessionEpoch: 0,
           items: [WatchLaterQueueItem(video: detail.summary)],
-          profileSource: const ProfileVideoQueueSource(
-            userId: UserId('7'),
+          profileSource: ProfileVideoQueueSource(
+            userId: const UserId('7'),
             name: '测试UP',
             order: 'pubdate',
+            folderId: folderId,
           ),
+          favoriteTitle: folderId == null ? null : '测试收藏夹',
           hasMore: true,
           nextPage: 2,
         )!;
@@ -128,7 +131,8 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
         await tester.pump(const Duration(milliseconds: 100));
-        expect(find.text('测试UP的投稿'), findsOneWidget);
+        final title = folderId == null ? '测试UP的投稿' : '测试收藏夹';
+        expect(find.text(title), findsOneWidget);
         expect(repository.reads, 1);
         expect(commands?.hasNext, true);
         if (complete) {
@@ -168,9 +172,9 @@ void main() {
         expect(panel.queue.items, hasLength(2));
         expect(panel.onRemove, isNull);
         expect(panel.queue.withoutRemoved({next.value}), same(panel.queue));
-        await tester.tap(find.text('测试UP的投稿'));
+        await tester.tap(find.text(title));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('测试UP的投稿'));
+        await tester.tap(find.text(title));
         await tester.pumpAndSettle();
         expect(created, 1);
         expect(disposed, 0);
@@ -2304,6 +2308,8 @@ final class _RelatedCardOperations implements VideoCardOperations {
 }
 
 final class _ProfilePagingRepository extends Fake implements ProfileRepository {
+  _ProfilePagingRepository({this.expectedFolderId});
+  final String? expectedFolderId;
   @override
   String get accountScope => 'user:7';
   @override
@@ -2321,6 +2327,13 @@ final class _ProfilePagingRepository extends Fake implements ProfileRepository {
     String? folderId,
     required RequestCancellation cancellation,
   }) {
+    expect(id, const UserId('7'));
+    expect(
+      section,
+      expectedFolderId == null ? ProfileSection.videos : ProfileSection.folders,
+    );
+    expect(folderId, expectedFolderId);
+    expect(page, 2);
     reads++;
     return pending.future;
   }

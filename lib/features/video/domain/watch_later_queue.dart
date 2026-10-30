@@ -1,16 +1,18 @@
 import '../../../domain/video.dart';
 import '../../../domain/user.dart';
 
-/// Public submissions are read lazily, independently of the space's filters.
+/// A captured space query, paged independently of the originating browser.
 final class ProfileVideoQueueSource {
   const ProfileVideoQueueSource({
     required this.userId,
     required this.name,
     required this.order,
+    this.folderId,
   });
 
   final UserId userId;
   final String name, order;
+  final String? folderId;
 }
 
 /// An account-scoped queue shared by watch-later, favorites and submissions.

@@ -79,6 +79,7 @@ class ProfilePlaybackQueueController
     final queue = state.queue;
     final source = queue?.profileSource;
     if (queue == null || source == null || !queue.hasMore) return;
+    final label = source.folderId == null ? '投稿' : '收藏夹视频';
     final repository = ref.read(profileRepositoryProvider);
     final read = _read = RequestCancellation();
     bool valid() =>
@@ -106,7 +107,7 @@ class ProfilePlaybackQueueController
     if (capacity < 50) {
       state = ProfilePlaybackQueueState(
         queue: queue,
-        message: '继续播放后可加载更多投稿',
+        message: '继续播放后可加载更多$label',
         capacityBlocked: true,
       );
       return;
@@ -116,15 +117,18 @@ class ProfilePlaybackQueueController
       final result = await repository
           .loadEntries(
             source.userId,
-            ProfileSection.videos,
+            source.folderId == null
+                ? ProfileSection.videos
+                : ProfileSection.folders,
             page: queue.nextPage,
             order: source.order,
+            folderId: source.folderId,
             cancellation: read,
           )
           .timeout(
             const Duration(seconds: 30),
             onTimeout: () {
-              throw const AppFailure(AppFailureKind.timeout, '投稿加载超时，请重试');
+              throw AppFailure(AppFailureKind.timeout, '$label加载超时，请重试');
             },
           );
       if (!valid()) return;
@@ -133,7 +137,7 @@ class ProfilePlaybackQueueController
           .where((item) => known.add(item.video.id))
           .toList();
       if (added.length > capacity) {
-        throw const AppFailure(AppFailureKind.protocol, '投稿分页超出队列容量，请继续播放后重试');
+        throw AppFailure(AppFailureKind.protocol, '$label分页超出队列容量，请继续播放后重试');
       }
       final drop =
           (queue.items.length +
@@ -151,7 +155,7 @@ class ProfilePlaybackQueueController
       state = ProfilePlaybackQueueState(
         queue: updated,
         message: updated.hasMore && _emptyPages >= 3
-            ? '连续多页没有新投稿，请重试继续加载'
+            ? '连续多页没有新$label，请重试继续加载'
             : null,
       );
     } on AppFailure catch (error) {
@@ -167,7 +171,7 @@ class ProfilePlaybackQueueController
       if (valid()) {
         state = ProfilePlaybackQueueState(
           queue: queue,
-          message: '投稿暂时无法加载，请重试',
+          message: '$label暂时无法加载，请重试',
         );
       }
     } finally {
