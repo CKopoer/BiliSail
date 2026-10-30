@@ -178,7 +178,6 @@ void main() {
       },
     );
   }
-
   for (final (cached, comments, width) in [
     for (final cached in [false, true])
       for (final comments in [false, true])
