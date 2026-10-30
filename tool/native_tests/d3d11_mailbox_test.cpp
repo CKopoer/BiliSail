@@ -50,8 +50,9 @@ void SubmitGreenFrame(D3D11Renderer& renderer) {
   context->Flush();
 }
 
-void CheckPixels(D3D11Renderer& renderer) {
-  const auto texture = OpenFrame(renderer);
+void CheckPixels(D3D11Renderer& renderer,
+                 const ComPtr<ID3D11Texture2D>& retained = {}) {
+  const auto texture = retained ? retained : OpenFrame(renderer);
   D3D11_TEXTURE2D_DESC desc{};
   texture->GetDesc(&desc);
   desc.Usage = D3D11_USAGE_STAGING;
@@ -84,8 +85,19 @@ void ExerciseRenderer() {
     std::this_thread::sleep_for(5ms);
   }
   CheckPixels(renderer);
-  renderer.SetSize(640, 360);
-  CheckDimensions(renderer, 640, 360);
+  // A paused video supplies only one redraw after a viewport change. It must
+  // already be a completed frame, rather than an unpainted initial read slot.
+  for (const auto width : {640, 256, 960, 320}) {
+    const auto retained = OpenFrame(renderer);
+    renderer.SetSize(width, width * 9 / 16);
+    // A Flutter frame descriptor may outlive the resize that released these
+    // slots. Its retained resource must remain usable until its release
+    // callback.
+    CheckPixels(renderer, retained);
+    SubmitGreenFrame(renderer);
+    CheckDimensions(renderer, width, width * 9 / 16);
+    CheckPixels(renderer);
+  }
   for (int frame = 0; frame < 12; ++frame) {
     SubmitGreenFrame(renderer);
     std::this_thread::sleep_for(5ms);

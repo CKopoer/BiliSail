@@ -56,7 +56,8 @@ function(bilisail_patch_video_sources source output)
   # Copied sources keep their upstream ../common includes.
   file(COPY "${source}/../common" DESTINATION "${output}/..")
   foreach(file video_output_dispose.inc video_output_manager_dispose.inc
-      video_output_dimensions.inc video_output_viewport.inc)
+      video_output_dimensions.inc video_output_viewport.inc video_output_resize.inc
+      mailbox_first_frame.inc)
     configure_file("${BILISAIL_VIDEO_PATCH_DIR}/${file}" "${output}/${file}" COPYONLY)
   endforeach()
 
@@ -84,6 +85,42 @@ function(bilisail_patch_video_sources source output)
   std::mutex texture_release_mutex_;
   std::condition_variable textures_released_;
   size_t pending_texture_releases_ = 0;]=])
+  bilisail_replace_once("${output}/video_output.h" "  std::mutex textures_mutex_ = std::mutex();" [=[
+  Microsoft::WRL::ComPtr<ID3D11Texture2D> last_video_texture_;
+  HANDLE last_video_handle_ = nullptr;
+  FlutterDesktopPixelBuffer last_pixel_buffer_{};
+  std::mutex textures_mutex_ = std::mutex();]=])
+
+  # A first/paused redraw cannot depend on a later ProducerCommit to promote
+  # its fence. Steady-state mailbox frames retain their non-blocking path.
+  bilisail_replace_once("${output}/mailbox_swap_chain.h"
+    "  int write_slot_ = 0;  // producer-private"
+    "  bool has_completed_frame_ = false;\n  int write_slot_ = 0;  // producer-private")
+  bilisail_replace_once("${output}/mailbox_swap_chain.h" "  int32_t width() const { return width_; }" [=[
+  ID3D11Texture2D* ReadTextureSnapshot() const {
+    return has_completed_frame_
+        ? slots_[latest_completed_slot_.load(std::memory_order_acquire)].texture.Get()
+        : nullptr;
+  }
+
+  int32_t width() const { return width_; }]=])
+  bilisail_replace_once("${output}/mailbox_swap_chain.cc"
+    "  context4_->Signal(ws.fence.Get(), ++ws.fence_value);"
+    "  context4_->Signal(ws.fence.Get(), ++ws.fence_value);\n#include \"mailbox_first_frame.inc\"")
+  bilisail_replace_once("${output}/mailbox_swap_chain.cc"
+    "          latest_completed_slot_.store(pend, std::memory_order_release);"
+    "          latest_completed_slot_.store(pend, std::memory_order_release);\n          has_completed_frame_ = true;")
+  bilisail_replace_once("${output}/mailbox_swap_chain.cc"
+    "  latest_completed_slot_.store(2, std::memory_order_relaxed);"
+    "  latest_completed_slot_.store(2, std::memory_order_relaxed);\n  has_completed_frame_ = false;")
+  bilisail_replace_once("${output}/mailbox_swap_chain.cc" "#include <iostream>"
+    "#include <iostream>\n#include <memory>")
+  bilisail_replace_once("${output}/d3d11_renderer.h" "  HANDLE ConsumerAcquire();" [=[
+  HANDLE ConsumerAcquire();
+  // Caller serializes this snapshot with SetSize and ProducerCommit.
+  ID3D11Texture2D* ReadTextureSnapshot() const {
+    return mailbox_swap_chain_->ReadTextureSnapshot();
+  }]=])
 
   file(READ "${output}/video_output.cc" text)
   string(FIND "${text}" "VideoOutput::~VideoOutput() {" begin)
@@ -119,6 +156,18 @@ function(bilisail_patch_video_sources source output)
     "#include \"video_output_viewport.inc\"\n\nvoid VideoOutput::CheckAndResize() {")
   bilisail_replace_once("${output}/video_output.cc"
     "registrar_->texture_registrar()->UnregisterTexture(" "UnregisterTexture(")
+  file(READ "${output}/video_output.cc" text)
+  string(FIND "${text}" "void VideoOutput::Resize(" resize_begin)
+  string(FIND "${text}" "#include \"video_output_dimensions.inc\"" resize_end)
+  if(resize_begin LESS 0 OR resize_end LESS resize_begin)
+    message(FATAL_ERROR "media_kit_video resize method boundary changed")
+  endif()
+  math(EXPR resize_length "${resize_end} - ${resize_begin}")
+  string(SUBSTRING "${text}" ${resize_begin} ${resize_length} old_resize)
+  bilisail_replace_once("${output}/video_output.cc" "${old_resize}"
+    "#include \"video_output_resize.inc\"\n")
+  bilisail_replace_once("${output}/video_output.cc" "void VideoOutput::Render() {"
+    "void VideoOutput::Render() {\n  std::lock_guard<std::mutex> lock(textures_mutex_);")
   if("$ENV{BILISAIL_VIDEO_RENDER_TRACE}" STREQUAL "1")
     # Opt-in Profile probe only; regular builds have no per-frame trace work.
     bilisail_replace_once("${output}/video_output.h" "#include <optional>"
