@@ -744,6 +744,9 @@ final class _BiliAppShellState extends State<BiliAppShell>
     tab: tab,
     child: Builder(
       builder: (context) => Scaffold(
+        backgroundColor: _compactChannels
+            ? Theme.of(context).colorScheme.surface
+            : null,
         floatingActionButton:
             _usesBottomNavigation(
                   MediaQuery.sizeOf(context).width -
