@@ -357,6 +357,8 @@ class PlaybackSession extends ChangeNotifier {
   bool get isResolving => _resolving;
   int get sourceGeneration => _generation;
   String get sourceAccountScope => _scope;
+  bool get sourceMatchesAccount =>
+      _scope == accountScope() && _epoch == sessionEpoch();
 
   /// Carry the user's play/pause choice across a video route's loading gap.
   /// A completed source is the one exception: advancing starts the next item.
@@ -1941,6 +1943,27 @@ class PlaybackSession extends ChangeNotifier {
       return;
     }
     _desiredPlaying = !_desiredPlaying;
+    if (_resolving) {
+      _notify();
+      return;
+    }
+    await _command(_syncPlayback);
+    await _saveProgress();
+  }
+
+  /// Idempotent system play commands must never toggle a playing source off.
+  Future<void> play() async {
+    if (_disposed || _closing) return;
+    if (error != null && !_resolving) {
+      _desiredPlaying = true;
+      await retry();
+      return;
+    }
+    if (snapshots.value.phase == PlaybackPhase.ended && !_resolving) {
+      await togglePlaying();
+      return;
+    }
+    _desiredPlaying = true;
     if (_resolving) {
       _notify();
       return;

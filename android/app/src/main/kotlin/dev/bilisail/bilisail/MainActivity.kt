@@ -2,10 +2,10 @@ package dev.bilisail.bilisail
 
 import android.content.Intent
 import android.content.res.Configuration
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 
-class MainActivity : FlutterActivity() {
+class MainActivity : AudioServiceActivity() {
     private var downloadStorage: DownloadStorageHandler? = null
     private var imageExport: ImageExportHandler? = null
     private var windowBrightness: WindowBrightnessHandler? = null

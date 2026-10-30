@@ -24,6 +24,8 @@ dependencies:
   window_manager: 0.5.2
   url_launcher: 6.3.3
   package_info_plus: 10.2.2
+  audio_service: 0.18.19
+  audio_service_mpris: 1.0.0-beta.3
   bili_api:
     path: packages/bili_api
   bili_player:

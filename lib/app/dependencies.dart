@@ -15,6 +15,8 @@ import '../domain/media_cdn.dart';
 import '../domain/audio_quality.dart';
 import '../core/logging/playback_diagnostic_log.dart';
 import '../core/platform/window_service.dart';
+import '../core/platform/audio_service_media_controls.dart';
+import '../core/platform/system_media_controls.dart';
 import '../core/platform/detached_playback_window.dart';
 import '../core/platform/file_access_service.dart';
 import '../features/downloads/application/download_controller.dart';
@@ -239,7 +241,14 @@ class AppDependencies {
         ),
       ),
     );
+    SystemMediaControls? systemMedia;
+    try {
+      systemMedia = await createSystemMediaControls();
+    } catch (_) {
+      reportSystemMediaFailure();
+    }
     final playback = PlaybackManager(
+      systemMediaControls: systemMedia,
       createSession: () {
         final repository = OfflinePlaybackRepository(
           downloads: downloads,

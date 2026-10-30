@@ -292,6 +292,8 @@ Android 初期只承诺前台下载与重启恢复；后台持续下载必须另
 
 ## 8. 后端验收与诊断
 
+2026-10-30 接入系统媒体通知和控制：Android 媒体通知、Apple 正在播放、Windows SMTC、Linux MPRIS 通过共享会话管理器观察同一播放器，系统命令沿用会话和源／账号隔离；多标签只选一个系统目标。接入不改变移动后台暂停策略，逐平台构建与设备边界见[系统媒体通知与控制](validation/system-media-controls.md)。
+
 M0 必测：三端带真实请求头的分轨音视频、暂停/seek/倍速、音画同步、前后台、全屏、线路失效、HLS/FLV、密集弹幕以及 30 分钟持续播放。
 
 记录首帧、seek 到恢复画面、buffering 时长、backend error、视频 dropped frames（后端提供时）、Flutter UI/raster 帧耗时、CPU/GPU/内存。Flutter 帧率与视频解码掉帧是两个指标，不能互相代替。

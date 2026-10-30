@@ -32,6 +32,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  system_media_channel_ = std::make_unique<SystemMediaControlsChannel>(
+      flutter_controller_->engine()->messenger(), GetHandle());
   system_fonts_channel_ =
       RegisterSystemFonts(flutter_controller_->engine()->messenger());
   image_export_channel_ = std::make_unique<ImageExportChannel>(
@@ -88,6 +90,7 @@ bool FlutterWindow::OnCreate() {
 void FlutterWindow::OnDestroy() {
   intercept_main_window_close_ = false;
   application_exit_channel_.reset();
+  system_media_channel_.reset();
   image_export_channel_.reset();
   desktop_window_channel_.reset();
   text_input_channel_.reset();
@@ -103,6 +106,10 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == SystemMediaControlsChannel::kCommandMessage && system_media_channel_) {
+    system_media_channel_->DispatchCommands();
+    return 0;
+  }
   // This runner window owns the engine. Do not use a global plugin delegate:
   // SDK-managed playback HWNDs share those delegates and must close separately.
   if (message == WM_CLOSE && intercept_main_window_close_ &&

@@ -1,15 +1,29 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 
+import '../../../core/platform/system_media_controls.dart';
 import 'playback_session.dart';
+import 'playback_system_media_controller.dart';
 
 final playbackManagerProvider = Provider<PlaybackManager?>((ref) => null);
 
 /// Owns one independent session per open playback page. Single-page navigation
 /// suspends other sessions without replacing their source or user intent.
-final class PlaybackManager {
-  PlaybackManager({required this._createSession});
+final class PlaybackManager extends ChangeNotifier {
+  PlaybackManager({
+    required this._createSession,
+    SystemMediaControls? systemMediaControls,
+  }) {
+    if (systemMediaControls != null) {
+      _systemMedia = PlaybackSystemMediaController(this, systemMediaControls);
+    }
+  }
+
+  PlaybackSystemMediaController? _systemMedia;
+  Iterable<PlaybackSession> get sessions => _sessions.values;
+  PlaybackSession? get selectedSession => _sessions[_selectedTabId];
 
   final PlaybackSession Function() _createSession;
   final _sessions = <String, PlaybackSession>{};
@@ -32,6 +46,7 @@ final class PlaybackManager {
       scheduleMicrotask(() {
         if (_closed || !identical(_sessions[tabId], session)) return;
         if (_activeTabId == tabId) _selectedTabId = tabId;
+        notifyListeners();
         unawaited(_applyPolicy());
       });
       return session;
@@ -49,6 +64,7 @@ final class PlaybackManager {
     _allowConcurrent = allowConcurrent;
     _activeTabId = activeTabId;
     if (_sessions.containsKey(activeTabId)) _selectedTabId = activeTabId;
+    notifyListeners();
     return _applyPolicy();
   }
 
@@ -77,6 +93,7 @@ final class PlaybackManager {
     if (!identical(_sessions[tabId], session)) return;
     _sessions.remove(tabId);
     if (_selectedTabId == tabId) _selectedTabId = null;
+    notifyListeners();
     final closing = session.close();
     _releases.add(closing);
     unawaited(closing.whenComplete(() => _releases.remove(closing)));
@@ -84,6 +101,7 @@ final class PlaybackManager {
 
   Future<void> stop() async {
     ++_revision;
+    _systemMedia?.clear();
     await Future.wait([for (final session in _sessions.values) session.stop()]);
   }
 
@@ -92,11 +110,20 @@ final class PlaybackManager {
     _closed = true;
     ++_revision;
     final sessions = _sessions.values.toList();
-    _sessions.clear();
-    await _commands;
-    await Future.wait([
-      ..._releases,
-      for (final session in sessions) session.close(),
-    ]);
+    try {
+      final systemMedia = _systemMedia;
+      if (systemMedia != null) await systemMedia.close();
+    } finally {
+      _sessions.clear();
+      try {
+        await _commands;
+        await Future.wait([
+          ..._releases,
+          for (final session in sessions) session.close(),
+        ]);
+      } finally {
+        super.dispose();
+      }
+    }
   }
 }

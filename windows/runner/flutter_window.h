@@ -11,6 +11,7 @@
 #include "image_export.h"
 #include "text_input.h"
 #include "desktop_window.h"
+#include "system_media_controls.h"
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
@@ -37,6 +38,7 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<TextInputChannel> text_input_channel_;
   std::unique_ptr<ImageExportChannel> image_export_channel_;
   std::unique_ptr<DesktopWindowChannel> desktop_window_channel_;
+  std::unique_ptr<SystemMediaControlsChannel> system_media_channel_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       application_exit_channel_;
   bool intercept_main_window_close_ = false;
