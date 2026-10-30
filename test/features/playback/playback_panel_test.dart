@@ -109,7 +109,7 @@ void main() {
                 of: find.byKey(const ValueKey('player-controls')),
                 matching: find.byType(IconButton),
               ),
-              findsNWidgets(session.canListen ? 4 : 3),
+              findsNWidgets(session.canListen ? 5 : 4),
             );
             for (final key in [
               'player-control-title-layer',
@@ -132,9 +132,10 @@ void main() {
                   .canRequestFocus,
               isFalse,
             );
-            for (final tooltip in ['更多播放选项', '发送弹幕', '音量', '字幕']) {
+            for (final tooltip in ['发送弹幕', '音量', '字幕']) {
               expect(find.byTooltip(tooltip), findsNothing);
             }
+            expect(find.byTooltip('更多播放选项').hitTestable(), findsOneWidget);
             expect(
               find.byTooltip('听视频').hitTestable(),
               session.canListen ? findsOneWidget : findsNothing,
@@ -211,6 +212,95 @@ void main() {
 
   for (final mode in PlayerControlsMode.values) {
     testWidgets(
+      'small window more menu opens and saves settings in ${mode.name} mode',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(320, 800);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final settings = _Settings()
+          ..value = AppSettings(playerControlsMode: mode);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(
+            session,
+            _FakeWindowService(),
+            settings.value,
+            width: 320,
+            textScale: 2,
+            settingsRepository: settings,
+          ),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        await session.pause();
+        await session.seek(const Duration(seconds: 35));
+        final generation = session.sourceGeneration;
+        for (final (index, title) in const [
+          (0, '播放配置'),
+          (1, '弹幕配置'),
+          (2, '字幕样式'),
+          (3, '空降助手'),
+        ]) {
+          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.pumpAndSettle();
+          await tester.pump(const Duration(seconds: 6));
+          final option = find.widgetWithText(
+            PopupMenuItem<VoidCallback>,
+            title,
+          );
+          await tester.ensureVisible(option);
+          await tester.tap(option);
+          await tester.pumpAndSettle();
+          expect(find.text('播放器设置'), findsOneWidget);
+          expect(
+            DefaultTabController.of(tester.element(find.byType(TabBar))).index,
+            index,
+          );
+          if (index == 0) {
+            final autoPlay = find.widgetWithText(SwitchListTile, '自动播放新视频');
+            await tester.scrollUntilVisible(
+              autoPlay,
+              150,
+              scrollable: find.descendant(
+                of: find.byType(Dialog),
+                matching: find.byWidgetPredicate(
+                  (widget) =>
+                      widget is Scrollable &&
+                      widget.axisDirection == AxisDirection.down,
+                ),
+              ),
+            );
+            await Scrollable.ensureVisible(
+              tester.element(autoPlay),
+              alignment: .5,
+            );
+            await tester.pumpAndSettle();
+            final previous = settings.value.autoPlay;
+            await tester.tap(autoPlay);
+            await tester.pumpAndSettle();
+            expect(settings.value.autoPlay, !previous);
+          }
+          await tester.tap(find.byTooltip('关闭'));
+          await tester.pumpAndSettle();
+          expect(find.byTooltip('更多播放选项').hitTestable(), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        }
+        expect(session.sourceGeneration, generation);
+        expect(engine.opens, 1);
+        expect(engine.currentSnapshot.position, const Duration(seconds: 35));
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(engine.maxSurfaces, 1);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
+
+  for (final mode in PlayerControlsMode.values) {
+    testWidgets(
       'small window subtitle and listening buttons work in ${mode.name} mode',
       (tester) async {
         tester.view.devicePixelRatio = 1;
@@ -237,7 +327,7 @@ void main() {
         await session.setVolume(31);
         await _pumpFrames(tester);
         final generation = session.sourceGeneration;
-        for (final tooltip in ['字幕', '听视频', '关闭弹幕', '全屏（F）']) {
+        for (final tooltip in ['字幕', '听视频', '关闭弹幕', '更多播放选项', '全屏（F）']) {
           expect(find.byTooltip(tooltip).hitTestable(), findsOneWidget);
         }
         await tester.tap(find.byTooltip('字幕'));
@@ -4318,40 +4408,45 @@ void main() {
     await _pumpFrames(tester);
   });
 
-  testWidgets('compact menu keeps quality and playback rate available', (
-    tester,
-  ) async {
-    final engine = _FakeEngine();
-    final session = _session(engine);
-    addTearDown(session.close);
-    await tester.pumpWidget(
-      _app(session, _FakeWindowService(), const AppSettings.defaults()),
+  for (final fullscreen in [false, true]) {
+    testWidgets(
+      'compact menu keeps quality and playback rate available fullscreen=$fullscreen',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 900);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(session, _FakeWindowService(), const AppSettings.defaults()),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        if (fullscreen) {
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+        }
+        await session.pause();
+        await tester.tap(find.byTooltip('更多播放选项'));
+        await tester.pumpAndSettle();
+        expect(find.text('清晰度 720P'), findsOneWidget);
+        expect(find.text('清晰度 1080P'), findsOneWidget);
+        final rate = find.widgetWithText(
+          CheckedPopupMenuItem<VoidCallback>,
+          '播放速度 3.0x',
+        );
+        await tester.ensureVisible(rate);
+        await tester.tap(rate);
+        await tester.pumpAndSettle();
+        expect(engine.currentSnapshot.rate, 3);
+        expect(engine.opens, 1);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
     );
-    await _pumpFrames(tester);
-    await _showControls(tester);
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 900);
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.tap(find.byTooltip('全屏（F）'));
-    await _pumpFrames(tester);
-    await session.pause();
-    await tester.tap(find.byTooltip('更多播放选项'));
-    await tester.pumpAndSettle();
-    expect(find.text('清晰度 720P'), findsOneWidget);
-    expect(find.text('清晰度 1080P'), findsOneWidget);
-    final rate = find.widgetWithText(
-      CheckedPopupMenuItem<VoidCallback>,
-      '播放速度 3.0x',
-    );
-    await tester.ensureVisible(rate);
-    await tester.tap(rate);
-    await tester.pumpAndSettle();
-    expect(engine.currentSnapshot.rate, 3);
-    expect(engine.opens, 1);
-    await tester.pumpWidget(const SizedBox());
-    await _pumpFrames(tester);
-  });
+  }
 
   for (final brightness in Brightness.values) {
     testWidgets('live menu follows video menu theme in ${brightness.name}', (
@@ -4427,7 +4522,6 @@ void main() {
 
   for (final compact in [false, true]) {
     for (final fullscreen in [false, true]) {
-      if (compact && !fullscreen) continue;
       testWidgets(
         'live quality, auto and line choices work compact=$compact fullscreen=$fullscreen',
         (tester) async {

@@ -2254,6 +2254,7 @@ class _ControlBar extends StatelessWidget {
               if (session.subtitleTracks.isNotEmpty) slot(subtitleButton),
               if (session.canListen) slot(listenButton),
               slot(danmakuButton),
+              slot(_moreOptions(context)),
               slot(fullscreenButton),
             ],
           ),
