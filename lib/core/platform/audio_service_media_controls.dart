@@ -32,8 +32,10 @@ Future<SystemMediaControls> createSystemMediaControls() async {
         androidNotificationChannelName: '视频播放',
         androidNotificationChannelDescription: '播放状态与媒体控制',
         androidNotificationIcon: 'drawable/ic_media_notification',
-        androidNotificationOngoing: true,
-        androidStopForegroundOnPause: true,
+        // Reopening audio or advancing a playlist briefly pauses the engine.
+        // Keep the foreground service until stop/close so background playback
+        // does not depend on permission to start a new foreground service.
+        androidStopForegroundOnPause: false,
         preloadArtwork: false,
         artDownscaleWidth: 512,
         artDownscaleHeight: 512,

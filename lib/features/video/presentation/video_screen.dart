@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bili_player/bili_player.dart';
 
 import '../../../domain/user.dart';
@@ -265,6 +267,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                       (queue?.hasMore ?? false)),
               onCompleted: () =>
                   _changePart(video, selected, 1, completed: true),
+              onRelatedCompleted: widget.queue == null
+                  ? () => _playRelated(video, selected)
+                  : null,
               toggleInfo: toggleInfo,
               child: Focus(
                 child: Builder(
@@ -603,6 +608,60 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
           ),
       ],
     );
+  }
+
+  Future<void> _playRelated(VideoDetail video, VideoPart selected) async {
+    if (widget.id != video.summary.id || widget.onAdvanceVideo == null) return;
+    final session = ref.read(playbackSessionProvider);
+    final generation = session.sourceGeneration;
+    List<VideoSummary> related;
+    // The page retains this provider until navigation/disposal; its transport
+    // owns cancellation. A completion can arrive before recommendations load.
+    final subscription = ref.listenManual(
+      filteredRelatedVideosProvider(video.summary.id),
+      (_, _) {},
+    );
+    try {
+      related = await ref
+          .read(filteredRelatedVideosProvider(video.summary.id).future)
+          .timeout(const Duration(seconds: 25));
+    } catch (error) {
+      if (mounted &&
+          session.sourceGeneration == generation &&
+          session.sourceMatchesAccount) {
+        showAppNotice(context, _failure(error, '相关视频加载失败，已停止连续播放'));
+      }
+      return;
+    } finally {
+      subscription.close();
+    }
+    if (!mounted ||
+        !session.continuousRelatedPlaybackEnabled ||
+        !session.sourceMatchesAccount ||
+        session.sourceGeneration != generation ||
+        session.snapshots.value.phase != PlaybackPhase.ended ||
+        widget.id != video.summary.id ||
+        widget.queue != null) {
+      return;
+    }
+    final next = related
+        .where((item) => item.id != video.summary.id)
+        .firstOrNull;
+    if (next == null ||
+        !session.prepareNextVideo(
+          video.summary.id,
+          selected.cid,
+          nextId: next.id,
+          completed: true,
+        )) {
+      return;
+    }
+    _pendingAdvance = (
+      id: next.id,
+      scope: session.accountScope(),
+      epoch: session.sessionEpoch(),
+    );
+    widget.onAdvanceVideo?.call(next.id, null);
   }
 
   VideoSequenceTarget? _adjacentSource(

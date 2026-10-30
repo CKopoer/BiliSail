@@ -54,6 +54,7 @@ void main() {
           autoPlay: false,
           videoCardHoverPlayback: !defaults.videoCardHoverPlayback,
           continuousPlayback: true,
+          continuousRelatedPlayback: true,
           preferredQuality: 120,
           defaultPlaybackRate: 2,
           defaultVolume: 20,

@@ -126,6 +126,35 @@ void main() {
           lessThan(400),
         );
         expect(observed, containsAll(['/video.mp4', '/audio.m4a']));
+        observed.clear();
+        await _withFrames(tester, session.setBackgroundAudio(true));
+        expect(session.audioOnly, isTrue);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(observed, isNotEmpty);
+        expect(observed.every((path) => path == '/audio.m4a'), isTrue);
+        observed.clear();
+        await _withFrames(
+          tester,
+          session.open(
+            _detail,
+            const VideoPart(
+              cid: '43',
+              page: 2,
+              title: '下一 P',
+              duration: Duration(seconds: 6),
+            ),
+          ),
+        );
+        expect(session.audioOnly, isTrue);
+        expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
+        expect(engine.inspectDiagnostics().hasVideoOutput, isFalse);
+        expect(observed, isNotEmpty);
+        expect(observed.every((path) => path == '/audio.m4a'), isTrue);
+        await _withFrames(tester, session.pause());
+        await _withFrames(tester, session.setBackgroundAudio(false));
+        expect(session.audioOnly, isFalse);
+        expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
         expect(forbiddenHeaders, 0);
         expect(tester.takeException(), isNull);
       } finally {

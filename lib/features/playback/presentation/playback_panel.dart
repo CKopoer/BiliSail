@@ -158,6 +158,15 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       if (!mounted || !identical(_activityRequest, activityRequest)) return;
       if (active) {
         _configure();
+        final lifecycle = WidgetsBinding.instance.lifecycleState;
+        if (widget.window.supportsBackgroundAudio) {
+          unawaited(
+            _session.setBackgroundAudio(
+              lifecycle == AppLifecycleState.hidden ||
+                  lifecycle == AppLifecycleState.paused,
+            ),
+          );
+        }
         unawaited(
           _session.activate(
             this,
@@ -200,7 +209,6 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     scheduleMicrotask(() {
       final commands = _pageCommands.value;
       if (!mounted ||
-          !widget.settings.continuousPlayback ||
           !_session.ownsPlayback(this) ||
           _session.isLive ||
           _session.contentTarget is OfflinePlaybackTarget ||
@@ -208,11 +216,16 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
           _session.snapshots.value.phase != PlaybackPhase.ended ||
           _session.detail?.summary.id != widget.detail?.summary.id ||
           _session.part?.cid != widget.part?.cid ||
-          _session.contentTarget != widget.target ||
-          commands?.hasNext != true) {
+          _session.contentTarget != widget.target) {
         return;
       }
-      commands?.onCompleted?.call();
+      if (commands?.hasNext == true) {
+        if (widget.settings.continuousPlayback) {
+          commands?.onCompleted?.call();
+        }
+      } else if (widget.settings.continuousRelatedPlayback) {
+        commands?.onRelatedCompleted?.call();
+      }
     });
   }
 
@@ -262,7 +275,15 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     }
     // A video can keep playing behind another workspace tab. System lifecycle
     // still applies to its owner even when the page has no visible surface.
-    if (_session.ownsPlayback(this) &&
+    if (widget.window.supportsBackgroundAudio) {
+      if (state == AppLifecycleState.resumed) {
+        unawaited(_session.setBackgroundAudio(false));
+      } else if (_session.ownsPlayback(this) &&
+          (state == AppLifecycleState.paused ||
+              state == AppLifecycleState.hidden)) {
+        unawaited(_session.setBackgroundAudio(true));
+      }
+    } else if (_session.ownsPlayback(this) &&
         !widget.window.hasDesktopWindow &&
         (state == AppLifecycleState.paused ||
             state == AppLifecycleState.hidden)) {

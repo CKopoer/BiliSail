@@ -681,6 +681,41 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
   });
+  for (final failSave in [false, true]) {
+    testWidgets(
+      'related autoplay saves independently and rolls back: $failSave',
+      (tester) async {
+        final repository = _SettingsRepository()..failSave = failSave;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: MaterialApp(
+              builder: AppNoticeHost.builder,
+              home: const Scaffold(
+                body: SettingsScreen(category: SettingsCategory.playback),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final toggle = find.widgetWithText(SwitchListTile, '连续播放相关视频');
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+        await tester.ensureVisible(toggle);
+        await tester.pumpAndSettle();
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(repository.settings.continuousRelatedPlayback, !failSave);
+        expect(repository.settings.continuousPlayback, isFalse);
+        expect(repository.settings.autoPlay, isTrue);
+        ProviderScope.containerOf(tester.element(toggle))
+            .invalidate(settingsControllerProvider);
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(toggle).value, !failSave);
+      },
+    );
+  }
   for (final inPlayer in [false, true]) {
     testWidgets('player control modes save and reload (player: $inPlayer)', (
       tester,

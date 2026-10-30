@@ -107,6 +107,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
   Future<void> setVideoCardHoverPlayback(bool value) =>
       update((current) => current.copyWith(videoCardHoverPlayback: value));
 
+  Future<void> setContinuousRelatedPlayback(bool value) =>
+      update((current) => current.copyWith(continuousRelatedPlayback: value));
   Future<void> setContinuousPlayback(bool value) =>
       update((current) => current.copyWith(continuousPlayback: value));
   Future<void> setResumePlayback(bool value) =>

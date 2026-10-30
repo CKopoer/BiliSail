@@ -294,7 +294,7 @@ Android 初期只承诺前台下载与重启恢复；后台持续下载必须另
 
 ## 8. 后端验收与诊断
 
-2026-10-30 接入系统媒体通知和控制：Android 媒体通知、Apple 正在播放、Windows SMTC、Linux MPRIS 通过共享会话管理器观察同一播放器，系统命令沿用会话和源／账号隔离；多标签只选一个系统目标。接入不改变移动后台暂停策略，逐平台构建与设备边界见[系统媒体通知与控制](validation/system-media-controls.md)。
+2026-10-30 接入系统媒体通知和控制：Android 媒体通知、Apple 正在播放、Windows SMTC、Linux MPRIS 通过共享会话管理器观察同一播放器，系统命令沿用会话和源／账号隔离；多标签只选一个系统目标。随后 Android 增加退后台自动听视频、回前台恢复原模式，前台服务保留到停止／关闭，详见[Android 后台听视频](validation/android-background-playback.md)。其他移动平台沿用后台暂停策略，逐平台构建与设备边界见[系统媒体通知与控制](validation/system-media-controls.md)。
 
 M0 必测：三端带真实请求头的分轨音视频、暂停/seek/倍速、音画同步、前后台、全屏、线路失效、HLS/FLV、密集弹幕以及 30 分钟持续播放。
 

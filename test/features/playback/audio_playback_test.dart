@@ -55,6 +55,203 @@ void main() {
   });
   tearDown(() => session.close());
 
+  for (final manual in [false, true]) {
+    for (final paused in [false, true]) {
+      test('background audio restores manual=$manual paused=$paused', () async {
+        await session.open(_detail, _part);
+        if (manual) await session.setAudioOnly(true);
+        await session.seek(const Duration(minutes: 3));
+        await session.setRate(1.5);
+        await session.setVolume(32);
+        if (paused) await session.pause();
+        await session.setBackgroundAudio(true);
+        expect(session.audioOnly, isTrue);
+        expect(engine.sources.last, isA<ProgressiveSource>());
+        expect(engine.currentSnapshot.position, const Duration(minutes: 3));
+        expect(engine.currentSnapshot.desiredPlaying, !paused);
+        final opens = engine.sources.length;
+        await session.setBackgroundAudio(true);
+        expect(engine.sources, hasLength(opens));
+        await session.setBackgroundAudio(false);
+        expect(session.audioOnly, manual);
+        expect(
+          engine.sources.last,
+          manual ? isA<ProgressiveSource>() : isA<DashPairSource>(),
+        );
+        expect(engine.currentSnapshot.position, const Duration(minutes: 3));
+        expect(engine.currentSnapshot.rate, 1.5);
+        expect(engine.currentSnapshot.volume, 32);
+        expect(engine.currentSnapshot.desiredPlaying, !paused);
+      });
+    }
+  }
+
+  test(
+    'resuming after system stop clears background without reopening',
+    () async {
+      await session.open(_detail, _part);
+      await session.setBackgroundAudio(true);
+      await session.stop();
+      final opens = engine.sources.length;
+      await session.setBackgroundAudio(false);
+      expect(engine.sources, hasLength(opens));
+      await session.retry();
+      expect(session.audioOnly, isFalse);
+      expect(engine.sources.last, isA<DashPairSource>());
+    },
+  );
+
+  test('background return rejects pending audio resolution', () async {
+    await session.open(_detail, _part);
+    final pending = Completer<PlaybackMedia>();
+    repository.pending = pending;
+    final background = session.setBackgroundAudio(true);
+    await Future<void>.delayed(Duration.zero);
+    await session.setBackgroundAudio(false);
+    pending.complete(repository.media);
+    await background;
+    expect(session.audioOnly, isFalse);
+    expect(engine.sources.whereType<ProgressiveSource>(), isEmpty);
+    expect(engine.sources.last, isA<DashPairSource>());
+  });
+
+  test('background during initial resolution replaces pending video', () async {
+    final pending = Completer<PlaybackMedia>();
+    repository.pending = pending;
+    final opening = session.open(_detail, _part);
+    await Future<void>.delayed(Duration.zero);
+    await session.setBackgroundAudio(true);
+    pending.complete(repository.media);
+    await opening;
+    expect(session.audioOnly, isTrue);
+    expect(
+      engine.sources.every((source) => source is ProgressiveSource),
+      isTrue,
+    );
+    await session.setBackgroundAudio(false);
+    expect(engine.sources.last, isA<DashPairSource>());
+  });
+
+  test('background overlay never leaks into navigation checkpoints', () async {
+    final owner = Object();
+    session.attach(owner);
+    await session.activate(owner, _detail, _part);
+    await session.setBackgroundAudio(true);
+    const second = VideoPart(
+      cid: 'two',
+      page: 2,
+      title: 'P2',
+      duration: Duration(minutes: 10),
+    );
+    await session.activate(owner, _detail, second);
+    expect(session.audioOnly, isTrue);
+    await session.setBackgroundAudio(false);
+    expect(session.audioOnly, isFalse);
+    await session.activate(owner, _detail, _part);
+    expect(session.audioOnly, isFalse);
+    await session.setAudioOnly(true);
+    expect(
+      session.prepareNextVideo(
+        _detail.summary.id,
+        _part.cid,
+        nextId: _detail.summary.id,
+        nextCid: second.cid,
+      ),
+      isTrue,
+    );
+    await session.activate(owner, _detail, second);
+    expect(
+      session.audioOnly,
+      isTrue,
+      reason: 'next intent overrides an earlier video-mode checkpoint',
+    );
+    await session.setBackgroundAudio(true);
+    await session.setBackgroundAudio(false);
+    expect(session.audioOnly, isTrue);
+  });
+
+  test(
+    'unsupported background media pauses without opening mixed video',
+    () async {
+      repository.media = _media(
+        kind: PlaybackMediaKind.progressive,
+        audio: false,
+      );
+      await session.open(_detail, _part);
+      final opens = engine.sources.length;
+      await session.setBackgroundAudio(true);
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      expect(engine.sources, hasLength(opens));
+      await session.setBackgroundAudio(false);
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+    },
+  );
+
+  test(
+    'return after background EOF does not replay the finished item',
+    () async {
+      await session.open(_detail, _part);
+      await session.setBackgroundAudio(true);
+      engine.publish(
+        engine.value.copyWith(
+          phase: PlaybackPhase.ended,
+          position: const Duration(minutes: 10),
+        ),
+      );
+      await session.setBackgroundAudio(false);
+      expect(session.audioOnly, isFalse);
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+    },
+  );
+
+  testWidgets(
+    'Android hidden owner listens in background and restores on resume',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [playbackSessionProvider.overrideWithValue(session)],
+          child: MaterialApp(
+            home: Scaffold(
+              body: PlaybackPanel(
+                detail: _detail,
+                part: _part,
+                settings: AppSettings(
+                  danmakuEnabled: false,
+                  resumePlayback: false,
+                ),
+                window: _AndroidWindow(),
+                onToggleComments: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      expect(session.audioOnly, isFalse);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(session.audioOnly, isTrue);
+      expect(engine.currentSnapshot.desiredPlaying, isTrue);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(session.audioOnly, isFalse);
+      expect(engine.sources.last, isA<DashPairSource>());
+      expect(engine.currentSnapshot.desiredPlaying, isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   for (final target in [
     null,
     const PgcPlaybackTarget('42', cid: 'one'),
@@ -601,4 +798,13 @@ class _Window extends WindowService {
     bool value, {
     FullScreenOrientation? orientation,
   }) async {}
+}
+
+class _AndroidWindow extends _Window {
+  @override
+  bool get supportsBackgroundAudio => true;
+  @override
+  bool get hasDesktopWindow => false;
+  @override
+  Stream<FullScreenOrientation> get deviceOrientations => const Stream.empty();
 }

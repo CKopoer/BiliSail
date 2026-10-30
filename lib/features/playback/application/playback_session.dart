@@ -229,7 +229,11 @@ class PlaybackSession extends ChangeNotifier {
   String? contentTitle;
   bool get isLive => contentTarget is LivePlaybackTarget;
   bool _audioOnly = false;
+  bool _foregroundAudioOnly = false;
+  bool _backgroundAudio = false;
   bool get audioOnly => _audioOnly;
+  bool get continuousRelatedPlaybackEnabled =>
+      _settings.continuousRelatedPlayback;
   bool get canListen =>
       !isLive &&
       media?.kind == PlaybackMediaKind.dash &&
@@ -445,7 +449,7 @@ class PlaybackSession extends ChangeNotifier {
       desiredPlaying: _desiredPlaying,
       subtitleLabel: _subtitlePreference,
       voice: _voice,
-      audioOnly: _audioOnly,
+      audioOnly: _foregroundAudioOnly,
     );
     _checkpoints[owner] = checkpoint;
     if (_settings.navigationMode != WorkspaceNavigationMode.multipleTabs) {
@@ -550,7 +554,10 @@ class PlaybackSession extends ChangeNotifier {
       target: target,
       title: title,
       voice: restored?.voice ?? const PlaybackVoice.original(),
-      audioOnly: restored?.audioOnly ?? (sameOwner && sameKind && _audioOnly),
+      audioOnly: nextPlaying != null
+          ? _foregroundAudioOnly
+          : restored?.audioOnly ??
+                (sameOwner && sameKind && _foregroundAudioOnly),
     );
   }
 
@@ -664,7 +671,10 @@ class PlaybackSession extends ChangeNotifier {
       return;
     }
     final generation = ++_generation;
-    final requestedAudioOnly = audioOnly ?? _audioOnly;
+    _foregroundAudioOnly = audioOnly ?? _foregroundAudioOnly;
+    final requestedAudioOnly =
+        _foregroundAudioOnly ||
+        (_backgroundAudio && target is! LivePlaybackTarget);
     _audioOnly = requestedAudioOnly;
     _audioRecovery = null;
     // Capture source settings together; a preference change during resolution
@@ -2328,7 +2338,7 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> setAudioOnly(bool enabled) async {
     if (_disposed ||
         _closing ||
-        enabled == _audioOnly ||
+        enabled == _foregroundAudioOnly ||
         (enabled && (!canListen || _resolving))) {
       return;
     }
@@ -2347,6 +2357,23 @@ class PlaybackSession extends ChangeNotifier {
       volume: media == null ? _openingVolume : snapshots.value.volume,
       desiredPlaying: _desiredPlaying,
     );
+  }
+
+  // Android lifecycle is an overlay on the user's per-page listening choice.
+  // Keep it across next-source opens, but never capture it in page checkpoints.
+  Future<void> setBackgroundAudio(bool enabled) async {
+    if (_disposed || _closing || enabled == _backgroundAudio) return;
+    _backgroundAudio = enabled;
+    if (media == null && !_resolving && error == null) return;
+    if (enabled && (isLive || (media != null && !canListen))) {
+      await pause();
+      return;
+    }
+    final effective = _foregroundAudioOnly || (enabled && !isLive);
+    if (effective != _audioOnly) {
+      if (snapshots.value.phase == PlaybackPhase.ended) _desiredPlaying = false;
+      await retry();
+    }
   }
 
   Future<void> changeLiveLine(int line) async {
@@ -2450,6 +2477,7 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> stop({bool clearCheckpoints = true}) async {
     _audioRecovery = null;
     _audioOnly = false;
+    _foregroundAudioOnly = false;
     _nextSourceIntent = null;
     if (clearCheckpoints) {
       _checkpoints.clear();

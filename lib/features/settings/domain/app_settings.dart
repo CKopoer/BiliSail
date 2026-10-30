@@ -72,6 +72,7 @@ final class AppSettings {
     this.defaultShowComments = false,
     this.videoCardHoverPlayback = true,
     this.continuousPlayback = false,
+    this.continuousRelatedPlayback = false,
     this.resumePlayback = true,
     this.showCollapsedProgress = true,
     this.highEnergyProgressEnabled = false,
@@ -141,6 +142,7 @@ final class AppSettings {
        autoPlay = true,
        defaultShowComments = false,
        continuousPlayback = false,
+       continuousRelatedPlayback = false,
        resumePlayback = true,
        showCollapsedProgress = true,
        preferredQuality = 80,
@@ -204,6 +206,7 @@ final class AppSettings {
   final bool defaultShowComments;
   final bool videoCardHoverPlayback;
   final bool continuousPlayback;
+  final bool continuousRelatedPlayback;
   final bool resumePlayback;
   final bool showCollapsedProgress;
   final bool highEnergyProgressEnabled;
@@ -280,6 +283,7 @@ final class AppSettings {
     bool? defaultShowComments,
     bool? videoCardHoverPlayback,
     bool? continuousPlayback,
+    bool? continuousRelatedPlayback,
     bool? resumePlayback,
     bool? showCollapsedProgress,
     bool? highEnergyProgressEnabled,
@@ -344,6 +348,8 @@ final class AppSettings {
     videoCardHoverPlayback:
         videoCardHoverPlayback ?? this.videoCardHoverPlayback,
     continuousPlayback: continuousPlayback ?? this.continuousPlayback,
+    continuousRelatedPlayback:
+        continuousRelatedPlayback ?? this.continuousRelatedPlayback,
     resumePlayback: resumePlayback ?? this.resumePlayback,
     showCollapsedProgress: showCollapsedProgress ?? this.showCollapsedProgress,
     highEnergyProgressEnabled:

@@ -18,6 +18,33 @@ void main() {
   });
   tearDown(() => database.close());
   test(
+    'related autoplay defaults, invalid snapshots, save and reset',
+    () async {
+      expect(AppSettings().continuousRelatedPlayback, isFalse);
+      expect(const AppSettings.defaults().continuousRelatedPlayback, isFalse);
+      for (final value in <Object?>[null, 'true', 1, true, false]) {
+        await database.writeSetting(
+          'preferences.v1',
+          jsonEncode({
+            'schemaVersion': 32,
+            'continuousRelatedPlayback': value,
+            'continuousPlayback': true,
+            'autoPlay': false,
+          }),
+        );
+        final loaded = await repository.load();
+        expect(loaded.continuousRelatedPlayback, value is bool ? value : false);
+        expect(loaded.continuousPlayback, isTrue);
+        expect(loaded.autoPlay, isFalse);
+        await repository.save(loaded.copyWith(continuousRelatedPlayback: true));
+        expect((await repository.load()).continuousRelatedPlayback, isTrue);
+      }
+      await repository.save(const AppSettings.defaults());
+      expect((await repository.load()).continuousRelatedPlayback, isFalse);
+      expect(database.schemaVersion, 3);
+    },
+  );
+  test(
     'stream and audio preferences migrate, validate, reset and reload',
     () async {
       await database.writeSetting(
@@ -55,7 +82,7 @@ void main() {
         final snapshot = jsonDecode(
           (await database.readSetting('preferences.v1'))!,
         );
-        expect(snapshot['schemaVersion'], 32);
+        expect(snapshot['schemaVersion'], 33);
         expect(snapshot['liveStreamPreference'], preference.toJson());
       }
       await repository.save(const AppSettings.defaults());
