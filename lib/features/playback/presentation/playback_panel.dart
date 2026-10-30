@@ -2146,6 +2146,30 @@ class _ControlBar extends StatelessWidget {
       onPressed: () => unawaited(session.setAudioOnly(true)),
       icon: const Icon(Icons.headphones_rounded, size: 20),
     );
+    final subtitleButton = PopupMenuButton<int>(
+      tooltip: '字幕',
+      initialValue: session.selectedSubtitle,
+      onOpened: () => onMenuChanged(true),
+      onCanceled: () => onMenuChanged(false),
+      onSelected: (track) {
+        onMenuChanged(false);
+        unawaited(session.selectSubtitle(track));
+      },
+      icon: const Icon(Icons.closed_caption_outlined, size: 20),
+      itemBuilder: (_) => [
+        CheckedPopupMenuItem(
+          value: -1,
+          checked: session.selectedSubtitle == -1,
+          child: const Text('关闭字幕'),
+        ),
+        for (var i = 0; i < session.subtitleTracks.length; i++)
+          CheckedPopupMenuItem(
+            value: i,
+            checked: session.selectedSubtitle == i,
+            child: Text(_subtitleLabel(session.subtitleTracks[i])),
+          ),
+      ],
+    );
     final volumeButton = PopupMenuButton<void>(
       tooltip: '音量',
       icon: Icon(
@@ -2176,11 +2200,11 @@ class _ControlBar extends StatelessWidget {
           if (composer != null) ExcludeFocus(child: Offstage(child: composer)),
           Row(
             key: const ValueKey('small-window-control-row'),
-            // This layout intentionally exposes exactly these three actions.
-            // Additional actions belong to the full toolbar or fullscreen.
             children: [
               slot(play),
               const Spacer(),
+              if (session.subtitleTracks.isNotEmpty) slot(subtitleButton),
+              if (session.canListen) slot(listenButton),
               slot(danmakuButton),
               slot(fullscreenButton),
             ],
@@ -2301,33 +2325,7 @@ class _ControlBar extends StatelessWidget {
           ),
           layout.rateWidth,
         ),
-      if (session.subtitleTracks.isNotEmpty)
-        slot(
-          PopupMenuButton<int>(
-            tooltip: '字幕',
-            initialValue: session.selectedSubtitle,
-            onOpened: () => onMenuChanged(true),
-            onCanceled: () => onMenuChanged(false),
-            onSelected: (track) {
-              onMenuChanged(false);
-              unawaited(session.selectSubtitle(track));
-            },
-            icon: const Icon(Icons.closed_caption_outlined, size: 20),
-            itemBuilder: (_) => [
-              CheckedPopupMenuItem(
-                value: -1,
-                checked: session.selectedSubtitle == -1,
-                child: const Text('关闭字幕'),
-              ),
-              for (var i = 0; i < session.subtitleTracks.length; i++)
-                CheckedPopupMenuItem(
-                  value: i,
-                  checked: session.selectedSubtitle == i,
-                  child: Text(_subtitleLabel(session.subtitleTracks[i])),
-                ),
-            ],
-          ),
-        ),
+      if (session.subtitleTracks.isNotEmpty) slot(subtitleButton),
       if (session.voiceTracks.isNotEmpty)
         slot(
           PopupMenuButton<String>(

@@ -60,7 +60,7 @@ void main() {
       ('offline', const OfflinePlaybackTarget('local-task')),
     ]) {
       testWidgets(
-        'small window keeps only three working controls for $content ${mode.name}',
+        'small window keeps essential controls for $content ${mode.name}',
         (tester) async {
           tester.view.devicePixelRatio = 1;
           tester.view.physicalSize = const Size(1400, 1000);
@@ -108,7 +108,7 @@ void main() {
                 of: find.byKey(const ValueKey('player-controls')),
                 matching: find.byType(IconButton),
               ),
-              findsNWidgets(3),
+              findsNWidgets(session.canListen ? 4 : 3),
             );
             for (final key in [
               'player-control-title-layer',
@@ -132,9 +132,13 @@ void main() {
                   .canRequestFocus,
               isFalse,
             );
-            for (final tooltip in ['更多播放选项', '发送弹幕', '音量', '听视频']) {
+            for (final tooltip in ['更多播放选项', '发送弹幕', '音量', '字幕']) {
               expect(find.byTooltip(tooltip), findsNothing);
             }
+            expect(
+              find.byTooltip('听视频').hitTestable(),
+              session.canListen ? findsOneWidget : findsNothing,
+            );
             expect(find.byTooltip('全屏（F）').hitTestable(), findsOneWidget);
             expect(tester.takeException(), isNull);
           }
@@ -179,6 +183,101 @@ void main() {
         },
       );
     }
+  }
+
+  for (final mode in PlayerControlsMode.values) {
+    testWidgets(
+      'small window subtitle and listening buttons work in ${mode.name} mode',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1400, 1000);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final engine = _FakeEngine();
+        final session = _session(engine, repository: _MenuRepository());
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(
+            session,
+            _FakeWindowService(),
+            AppSettings(playerControlsMode: mode),
+            width: 320,
+            textScale: 2,
+          ),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        await session.pause();
+        await session.seek(const Duration(seconds: 35));
+        await session.setRate(1.5);
+        await session.setVolume(31);
+        await _pumpFrames(tester);
+        final generation = session.sourceGeneration;
+        for (final tooltip in ['字幕', '听视频', '关闭弹幕', '全屏（F）']) {
+          expect(find.byTooltip(tooltip).hitTestable(), findsOneWidget);
+        }
+        await tester.tap(find.byTooltip('字幕'));
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(seconds: 6));
+        await tester.tap(
+          find.widgetWithText(CheckedPopupMenuItem<int>, '中文 · AI'),
+        );
+        await _pumpFrames(tester);
+        expect(session.selectedSubtitle, 0);
+        expect(find.text('字幕回归'), findsOneWidget);
+        await _showControls(tester);
+        await tester.tap(find.byTooltip('字幕'));
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<CheckedPopupMenuItem<int>>(
+                find.widgetWithText(CheckedPopupMenuItem<int>, '中文 · AI'),
+              )
+              .checked,
+          isTrue,
+        );
+        await tester.tap(
+          find.widgetWithText(CheckedPopupMenuItem<int>, 'English · AI 翻译'),
+        );
+        await _pumpFrames(tester);
+        expect(session.selectedSubtitle, 1);
+        await tester.tap(find.byTooltip('字幕'));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.widgetWithText(CheckedPopupMenuItem<int>, '关闭字幕'),
+        );
+        await _pumpFrames(tester);
+        expect(session.selectedSubtitle, -1);
+        expect(find.text('字幕回归'), findsNothing);
+        expect(session.sourceGeneration, generation);
+        expect(engine.opens, 1);
+
+        await tester.tap(find.byTooltip('听视频'));
+        await _pumpFrames(tester);
+        expect(session.audioOnly, isTrue);
+        expect(find.byType(VideoSurface), findsNothing);
+        expect(
+          find.byKey(const ValueKey('audio-return-video')),
+          findsOneWidget,
+        );
+        expect(engine.currentSnapshot.position, const Duration(seconds: 35));
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(engine.currentSnapshot.rate, 1.5);
+        expect(engine.currentSnapshot.volume, 31);
+        await tester.tap(find.byKey(const ValueKey('audio-return-video')));
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        expect(session.audioOnly, isFalse);
+        expect(find.byType(VideoSurface), findsOneWidget);
+        expect(find.byTooltip('听视频').hitTestable(), findsOneWidget);
+        expect(engine.currentSnapshot.position, const Duration(seconds: 35));
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(engine.maxSurfaces, 1);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
   }
 
   for (final width in [390.0, 999.0, 1000.0]) {
