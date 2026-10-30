@@ -7,7 +7,7 @@
 - 章节起止时间决定轨道划分；已播放、已缓冲和未播放部分保留各自颜色，悬停片段略微增粗。无章节的视频使用连续轨道。
 - 标题能放下时显示在片段上方，短片段隐藏常驻标题。右侧章节菜单始终提供完整标题和起点，可点击跳转。隐藏控制栏时的底部细进度也保留章节分隔。
 - 鼠标悬停或触摸拖动显示该时间对应的预览帧、时间和章节名。卡片贴近指针，并在播放器左右边缘避让；小窗优先保留时间，空间不足时隐藏图片和章节名。图片不可用不影响时间提示与 seek。
-- 拖动过程只更新本地预览，松开才提交一次 seek；悬停不 seek、不暂停，也不创建额外播放器。直播不显示点播时间轴。
+- 拖动过程只更新本地预览，松开才提交一次 seek；点击、拖动松开及章节菜单跳转都保留目标进度，直到会话完成跳转后再交回确认时钟，失败则清除目标。悬停不 seek、不暂停，也不创建额外播放器。直播不显示点播时间轴。
 - 换 P、换视频、播放源更新或停止会清除预览；隐藏控件、页面离开及全屏布局切换由 OverlayPortal 的组件生命周期移除悬浮层。
 
 ## 端点与边界
@@ -118,3 +118,13 @@ flutter test integration_test/windows_storyboard_pvdata_test.dart -d windows --n
 `tool/check.ps1 -SkipPub` 通过根应用和四个独立包的格式、静态分析、测试及平台边界脚本：根应用 1908 项、`bili_api` 426 项、`bili_player` 51 项、`bili_danmaku` 86 项、`bili_mux` 2 项通过；`bili_mux` 另 7 项因未设置 `BILI_MUX_LIBRARY` 条件跳过。日志为 `artifacts/storyboard-pvdata-check.log`。文档相对链接和本轮差异空白检查通过。
 
 提交前将本任务暂存区单独导出源码快照，排除并行高能进度条、设置和依赖修改；快照静态分析与 10 个 Dart 文件格式检查通过，协议回归 39 项、应用播放相关回归 184 项通过。日志为 `artifacts/storyboard-commit-analysis.log`、`artifacts/storyboard-commit-targeted.log`。前述全工程检查数量对应当时整个工作区，本提交只包含本任务及公开二进制读取所需的有界传输支持。
+
+## 2026-10-30 点击跳转的进度回跳修复
+
+- 原因：`PlaybackTimelineBar` 在 `onChangeEnd` 中先清空 `_drag`，随后通过无返回值的回调发起异步 seek。后端尚未确认时，Slider 恢复使用旧的 `snapshot.position`，出现「目标 → 旧位置 → 目标」的闪动。既有 fake engine 立即完成 seek，原测试未覆盖等待窗口。此前画面横滑的修复仅覆盖 `PlayerSeekControls`，没有覆盖进度条点击／拖动提交路径。
+- 生命周期排查：普通／全屏、播放／暂停四组面板测试记录同一个时间轴 State，点击松开后实例保持不变；新增缓冲、seeking 状态和旧位置采样的检查。此次修复保留现有组件层级及播放源 key，不通过重建播放器解决显示问题。
+- 修复：回调返回会话 seek 的 Future，进度条分别保留交互中的拖动位置与提交后等待确认的目标；`finally` 清理目标。新手势、新 seek、切源或禁用使旧操作失效，迟到完成不能清空新目标，销毁后不更新 State。章节菜单沿用同一提交逻辑；面板在提交前核对当前源代次和页面／应用活动状态，防止切源或失活后提交旧目标。预览不写入会话确认位置、续播或弹幕时钟。
+- 验证在基于 `1a3771e`、仅叠加本次差异的独立检出目录进行，避免其他运行进程占用主工作区测试 DLL；依赖通过锁文件解析，不包含同期听视频／后台播放／设置等未提交改动。SQLite 与 media-kit 复用本机缓存，SHA-256 与固定依赖清单一致，并继续经过原构建钩子的完整性校验；没有修改 Pub 缓存或绕过校验。
+- 修复前四组点击回归均复现目标约 126 秒回退到旧 30 秒位置，State 身份检查通过。修复后完整面板、时间轴及触控板定向回归 341 项通过，补充的章节等待确认用例连同最终时间轴 15 项通过；覆盖旧时钟采样、缓冲／seeking、失败清理、连续操作、切源、禁用及销毁。[修复前复现日志](../../build/validation/timeline-click/before.log)、[面板等定向日志](../../build/validation/timeline-click/targeted-isolated.log)、[最终时间轴日志](../../build/validation/timeline-click/timeline-final.log)。
+- `tool/check.ps1 -SkipPub` 最终完整通过，此前已执行五份锁文件的 `--enforce-lockfile` 解析：格式、完整静态分析、打包边界脚本通过；根应用 3519、`bili_api` 496、`bili_player` 96、`bili_danmaku` 118、`bili_mux` 5，共 **4234 项测试通过**。根应用 13 项 Windows 符号链接测试因权限跳过；mux 10 项原生测试因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生验证。[完整检查日志](../../build/validation/timeline-click/check-final.log)。文档相对链接与 `git diff --check` 通过。
+- 本轮只修改共享 Flutter 呈现层，未改变原生播放器接口；未构建安装包或执行 Android／Windows／macOS 实机视觉验收。DTD 未发现活动调试应用，热重载尝试返回无连接；不将 Widget 回归视作设备或性能验收。

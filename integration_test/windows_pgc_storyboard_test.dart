@@ -97,7 +97,7 @@ void main() {
                                 sourceGeneration: 1,
                                 playerBoundsKey: playerKey,
                                 storyboard: shot,
-                                onSeek: seeks.add,
+                                onSeek: (position) async => seeks.add(position),
                                 onPreviewRequest: () {},
                               ),
                             ),

@@ -43,7 +43,8 @@ class PlaybackTimelineBar extends StatefulWidget {
   final List<VideoChapter> chapters;
   final int sourceGeneration;
   final GlobalKey playerBoundsKey;
-  final ValueChanged<Duration> onSeek;
+  // Completes after the session has confirmed the backend position.
+  final Future<void> Function(Duration) onSeek;
   final VoidCallback onPreviewRequest;
   final VideoStoryboard? storyboard;
   final bool storyboardLoading;
@@ -61,6 +62,8 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
   final _barKey = GlobalKey();
   Duration? _preview;
   double? _drag;
+  Duration? _pendingSeek;
+  int _seekRevision = 0;
   bool _hovering = false;
   double? _layoutWidth;
   _ChapterTitleInputs? _chapterTitleInputs;
@@ -95,6 +98,8 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
         widget.duration <= Duration.zero) {
       _preview = null;
       _drag = null;
+      _pendingSeek = null;
+      _seekRevision++;
       _hovering = false;
       // OverlayPortal cannot change visibility during a widget update/build.
       // Clearing the position removes the preview content in this frame.
@@ -132,14 +137,33 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
     setState(() => _preview = null);
   }
 
+  Future<void> _seek(Duration position) async {
+    final revision = ++_seekRevision;
+    setState(() {
+      _drag = null;
+      _pendingSeek = position;
+    });
+    if (!_hovering) _hide();
+    try {
+      await widget.onSeek(position);
+    } finally {
+      // A newer gesture or a different source owns the displayed target now.
+      if (mounted && revision == _seekRevision) {
+        setState(() => _pendingSeek = null);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final total = widget.duration.inMilliseconds.toDouble();
     final enabled = total > 0;
-    final value = (_drag ?? widget.position.inMilliseconds.toDouble()).clamp(
-      0.0,
-      enabled ? total : 1.0,
-    );
+    // Releasing the pointer must not expose the old clock before seek confirms.
+    final value =
+        (_drag ??
+                _pendingSeek?.inMilliseconds.toDouble() ??
+                widget.position.inMilliseconds.toDouble())
+            .clamp(0.0, enabled ? total : 1.0);
     final chapters = normalizeChapters(widget.chapters, widget.duration);
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -228,7 +252,7 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
                                     widget.onMenuChanged?.call(false),
                                 onSelected: (chapter) {
                                   widget.onMenuChanged?.call(false);
-                                  if (mounted) widget.onSeek(chapter.start);
+                                  if (mounted) _seek(chapter.start);
                                 },
                                 itemBuilder: (_) => [
                                   for (final chapter in chapters)
@@ -294,6 +318,8 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
                                 ),
                             onChangeStart: enabled
                                 ? (value) {
+                                    _seekRevision++;
+                                    _pendingSeek = null;
                                     _drag = value;
                                     _show(
                                       Duration(milliseconds: value.round()),
@@ -310,14 +336,9 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
                                   }
                                 : null,
                             onChangeEnd: enabled
-                                ? (value) {
-                                    final position = Duration(
-                                      milliseconds: value.round(),
-                                    );
-                                    setState(() => _drag = null);
-                                    widget.onSeek(position);
-                                    if (!_hovering) _hide();
-                                  }
+                                ? (value) => _seek(
+                                    Duration(milliseconds: value.round()),
+                                  )
                                 : null,
                           ),
                         ),

@@ -34,6 +34,7 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/playback/presentation/player_seek_controls.dart';
+import 'package:bilisail/features/playback/presentation/playback_timeline_bar.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
@@ -578,6 +579,136 @@ void main() {
       );
     }
   }
+
+  for (final fullscreen in [false, true]) {
+    for (final playing in [false, true]) {
+      testWidgets(
+        'timeline click keeps target and state until confirmation (fullscreen: $fullscreen, playing: $playing)',
+        (tester) async {
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(
+              session,
+              _FakeWindowService(),
+              const AppSettings.defaults().copyWith(
+                playerControlsMode: PlayerControlsMode.click,
+              ),
+            ),
+          );
+          await _pumpFrames(tester);
+          await _showControls(tester);
+          if (fullscreen) {
+            await tester.tap(find.byTooltip('全屏（F）'));
+            await _pumpFrames(tester);
+          }
+          if (playing != session.snapshots.value.desiredPlaying) {
+            await session.togglePlaying();
+          }
+          await session.seek(const Duration(seconds: 30));
+          await _pumpFrames(tester);
+          final timeline = find.byType(PlaybackTimelineBar);
+          final state = tester.state(timeline);
+          final slider = find.byKey(const ValueKey('playback-timeline-slider'));
+          final track = tester.getRect(slider);
+          final opens = engine.opens;
+          final seeks = engine.seeks;
+          final gate = Completer<void>();
+          addTearDown(() {
+            if (!gate.isCompleted) gate.complete();
+          });
+          engine.nextSeek = gate;
+          final click = await tester.startGesture(
+            Offset(track.left + track.width * .7, track.center.dy),
+            kind: PointerDeviceKind.mouse,
+          );
+          await tester.pump();
+          final target = tester.widget<Slider>(slider).value.roundToDouble();
+          expect(target, greaterThan(100000));
+          expect(engine.seeks, seeks);
+          await click.up();
+          await _pumpFrames(tester);
+          expect(engine.seeks, seeks + 1);
+          expect(tester.state(timeline), same(state));
+          expect(tester.widget<Slider>(slider).value, target);
+
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              position: const Duration(seconds: 31),
+              phase: PlaybackPhase.buffering,
+              isSeeking: true,
+              isBuffering: true,
+            ),
+          );
+          await _pumpFrames(tester);
+          expect(tester.state(timeline), same(state));
+          expect(tester.widget<Slider>(slider).value, target);
+          gate.complete();
+          await _pumpFrames(tester);
+          expect(
+            engine.currentSnapshot.position.inMilliseconds,
+            target.round(),
+          );
+          expect(tester.widget<Slider>(slider).value, target);
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              position:
+                  engine.currentSnapshot.position + const Duration(seconds: 1),
+              phase: playing ? PlaybackPhase.playing : PlaybackPhase.paused,
+              isSeeking: false,
+              isBuffering: false,
+            ),
+          );
+          await _pumpFrames(tester);
+          expect(tester.state(timeline), same(state));
+          expect(tester.widget<Slider>(slider).value, target + 1000);
+          expect(engine.opens, opens);
+          expect(engine.seeks, seeks + 1);
+          expect(engine.currentSnapshot.desiredPlaying, playing);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets('a failed timeline seek releases its pending target', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(session, _FakeWindowService(), const AppSettings.defaults()),
+    );
+    await _pumpFrames(tester);
+    await _showControls(tester);
+    await session.pause();
+    await session.seek(const Duration(seconds: 30));
+    await _pumpFrames(tester);
+    final gate = Completer<void>();
+    engine.nextSeek = gate;
+    final slider = find.byKey(const ValueKey('playback-timeline-slider'));
+    await tester.tapAt(tester.getRect(slider).center);
+    await _pumpFrames(tester);
+    expect(tester.widget<Slider>(slider).value, 90000);
+    gate.completeError(
+      PlayerFailure(
+        PlayerFailureKind.nativePlayback,
+        'Seek confirmation timed out',
+        engine.currentSnapshot.generation,
+      ),
+    );
+    await _pumpFrames(tester);
+    expect(tester.widget<Slider>(slider).value, 30000);
+    expect(session.error, 'Seek confirmation timed out');
+    expect(engine.currentSnapshot.desiredPlaying, isFalse);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
 
   testWidgets('a failed picture seek releases its pending progress', (
     tester,

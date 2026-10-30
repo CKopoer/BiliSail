@@ -257,7 +257,7 @@ void main() {
                   chapters: const [],
                   sourceGeneration: 1,
                   playerBoundsKey: bounds,
-                  onSeek: seeks.add,
+                  onSeek: (position) async => seeks.add(position),
                   onPreviewRequest: () {},
                 ),
               ),

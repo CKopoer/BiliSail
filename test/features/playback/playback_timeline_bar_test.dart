@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 import 'dart:io';
@@ -30,6 +31,127 @@ const _chapters = [
 ];
 
 void main() {
+  testWidgets('new seek and drag survive older seek completion', (
+    tester,
+  ) async {
+    final harness = _Harness()..position = const Duration(seconds: 5);
+    final first = Completer<void>();
+    final second = Completer<void>();
+    harness.seek = (position) =>
+        position.inSeconds == 20 ? first.future : second.future;
+    await tester.pumpWidget(harness.build());
+    final slider = find.byKey(const ValueKey('playback-timeline-slider'));
+    void start(double value) {
+      final bar = tester.widget<Slider>(slider);
+      bar.onChangeStart!(bar.value);
+      bar.onChanged!(value);
+    }
+
+    start(20000);
+    tester.widget<Slider>(slider).onChangeEnd!(20000);
+    await tester.pump();
+    expect(tester.widget<Slider>(slider).value, 20000);
+    start(40000);
+    first.complete();
+    await tester.pump();
+    expect(tester.widget<Slider>(slider).value, 40000);
+    tester.widget<Slider>(slider).onChangeEnd!(40000);
+    await tester.pump();
+    expect(tester.widget<Slider>(slider).value, 40000);
+    harness.position = const Duration(seconds: 21);
+    await tester.pumpWidget(harness.build());
+    expect(tester.widget<Slider>(slider).value, 40000);
+    harness.position = const Duration(seconds: 40);
+    second.complete();
+    await tester.pumpWidget(harness.build());
+    expect(tester.widget<Slider>(slider).value, 40000);
+    harness.position = const Duration(seconds: 41);
+    await tester.pumpWidget(harness.build());
+    expect(tester.widget<Slider>(slider).value, 41000);
+    expect(harness.seeks, const [Duration(seconds: 20), Duration(seconds: 40)]);
+  });
+
+  testWidgets('older seek cannot clear a newer pending seek', (tester) async {
+    final harness = _Harness();
+    final first = Completer<void>();
+    final second = Completer<void>();
+    harness.seek = (position) =>
+        position.inSeconds == 20 ? first.future : second.future;
+    await tester.pumpWidget(harness.build());
+    final slider = find.byKey(const ValueKey('playback-timeline-slider'));
+    for (final value in [20000.0, 40000.0]) {
+      final bar = tester.widget<Slider>(slider);
+      bar.onChangeStart!(bar.value);
+      bar.onChanged!(value);
+      bar.onChangeEnd!(value);
+      await tester.pump();
+    }
+    first.complete();
+    await tester.pump();
+    expect(tester.widget<Slider>(slider).value, 40000);
+    harness.position = const Duration(seconds: 40);
+    second.complete();
+    await tester.pumpWidget(harness.build());
+    expect(tester.widget<Slider>(slider).value, 40000);
+  });
+
+  testWidgets('chapter selection keeps target until confirmation', (
+    tester,
+  ) async {
+    final harness = _Harness();
+    final gate = Completer<void>();
+    harness.seek = (_) => gate.future;
+    await tester.pumpWidget(harness.build());
+    await tester.tap(find.byKey(const ValueKey('playback-chapters-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PopupMenuItem<VideoChapter>, '主要内容'));
+    await tester.pumpAndSettle();
+    final slider = find.byKey(const ValueKey('playback-timeline-slider'));
+    expect(harness.seeks, const [Duration(seconds: 20)]);
+    expect(tester.widget<Slider>(slider).value, 20000);
+    harness.position = const Duration(seconds: 20);
+    gate.complete();
+    await tester.pumpWidget(harness.build());
+    expect(tester.widget<Slider>(slider).value, 20000);
+  });
+
+  for (final change in ['source', 'disabled', 'dispose']) {
+    testWidgets('pending seek is invalidated on $change', (tester) async {
+      final harness = _Harness()..keyByGeneration = false;
+      final gate = Completer<void>();
+      harness.seek = (_) => gate.future;
+      await tester.pumpWidget(harness.build());
+      final slider = find.byKey(const ValueKey('playback-timeline-slider'));
+      final bar = tester.widget<Slider>(slider);
+      bar.onChangeStart!(0);
+      bar.onChanged!(40000);
+      bar.onChangeEnd!(40000);
+      await tester.pump();
+      expect(tester.widget<Slider>(slider).value, 40000);
+      if (change == 'dispose') {
+        await tester.pumpWidget(const SizedBox());
+      } else {
+        if (change == 'source') {
+          harness.generation++;
+          harness.position = const Duration(seconds: 5);
+        } else {
+          harness.duration = Duration.zero;
+        }
+        await tester.pumpWidget(harness.build());
+        expect(
+          tester.widget<Slider>(slider).value,
+          change == 'source' ? 5000 : 0,
+        );
+      }
+      gate.complete();
+      await tester.pump();
+      if (change == 'source') {
+        expect(tester.widget<Slider>(slider).value, 5000);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('chapter titles reuse measurement across progress, hover and '
       'width changes; typography and source changes invalidate', (
     tester,
@@ -542,6 +664,8 @@ class _Harness {
   Duration position = Duration.zero;
   List<VideoChapter> chapters = _chapters;
   bool rtl = false;
+  bool keyByGeneration = true;
+  Future<void> Function(Duration)? seek;
   final trend = ValueNotifier<HighEnergyTrend?>(null);
 
   Widget build() => MaterialApp(
@@ -564,7 +688,7 @@ class _Harness {
                       right: 0,
                       bottom: 40,
                       child: PlaybackTimelineBar(
-                        key: ValueKey(generation),
+                        key: ValueKey(keyByGeneration ? generation : 0),
                         position: position,
                         duration: duration,
                         buffered: const Duration(seconds: 45),
@@ -572,7 +696,10 @@ class _Harness {
                         highEnergy: trend,
                         sourceGeneration: generation,
                         playerBoundsKey: player,
-                        onSeek: seeks.add,
+                        onSeek: (position) async {
+                          seeks.add(position);
+                          await seek?.call(position);
+                        },
                         onPreviewRequest: () => previews++,
                       ),
                     ),

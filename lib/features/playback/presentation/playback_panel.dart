@@ -1797,59 +1797,60 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                       snapshot.duration,
                                                       snapshot.buffered,
                                                     ),
-                                                    builder: (context, snapshot) =>
-                                                        ValueListenableBuilder<
-                                                          Duration?
-                                                        >(
-                                                          valueListenable:
-                                                              _swipeSeekPreview,
-                                                          builder: (context, preview, _) => PlaybackTimelineBar(
-                                                            key: ValueKey(
-                                                              session
-                                                                  .sourceGeneration,
-                                                            ),
-                                                            playerBoundsKey:
-                                                                _playerBoundsKey,
-                                                            position:
-                                                                preview ??
-                                                                snapshot
-                                                                    .position,
-                                                            duration: snapshot
-                                                                .duration,
-                                                            buffered: snapshot
-                                                                .buffered,
-                                                            chapters: session
-                                                                .chapters,
-                                                            highEnergy: session
-                                                                .highEnergy,
-                                                            storyboard: session
-                                                                .storyboard,
-                                                            storyboardLoading:
-                                                                session
-                                                                    .storyboardLoading,
-                                                            storyboardMessage:
-                                                                session
-                                                                    .storyboardMessage,
-                                                            sourceGeneration:
-                                                                session
-                                                                    .sourceGeneration,
-                                                            onPreviewRequest:
-                                                                () => unawaited(
-                                                                  session
-                                                                      .ensureStoryboard(),
-                                                                ),
-                                                            onSeek:
-                                                                (
-                                                                  position,
-                                                                ) => unawaited(
-                                                                  session.seek(
-                                                                    position,
-                                                                  ),
-                                                                ),
-                                                            onMenuChanged:
-                                                                _onControlsMenuChanged,
-                                                          ),
+                                                    builder: (context, snapshot) => ValueListenableBuilder<Duration?>(
+                                                      valueListenable:
+                                                          _swipeSeekPreview,
+                                                      builder: (context, preview, _) => PlaybackTimelineBar(
+                                                        key: ValueKey(
+                                                          session
+                                                              .sourceGeneration,
                                                         ),
+                                                        playerBoundsKey:
+                                                            _playerBoundsKey,
+                                                        position:
+                                                            preview ??
+                                                            snapshot.position,
+                                                        duration:
+                                                            snapshot.duration,
+                                                        buffered:
+                                                            snapshot.buffered,
+                                                        chapters:
+                                                            session.chapters,
+                                                        highEnergy:
+                                                            session.highEnergy,
+                                                        storyboard:
+                                                            session.storyboard,
+                                                        storyboardLoading: session
+                                                            .storyboardLoading,
+                                                        storyboardMessage: session
+                                                            .storyboardMessage,
+                                                        sourceGeneration: session
+                                                            .sourceGeneration,
+                                                        onPreviewRequest: () =>
+                                                            unawaited(
+                                                              session
+                                                                  .ensureStoryboard(),
+                                                            ),
+                                                        onSeek: (position) async {
+                                                          if (widget.active &&
+                                                              _appActive &&
+                                                              session.sourceGeneration ==
+                                                                  sourceGeneration &&
+                                                              !session
+                                                                  .isResolving &&
+                                                              session.media !=
+                                                                  null &&
+                                                              session.error ==
+                                                                  null) {
+                                                            await session.seek(
+                                                              position,
+                                                            );
+                                                          }
+                                                        },
+                                                        onMenuChanged:
+                                                            _onControlsMenuChanged,
+                                                      ),
+                                                    ),
                                                   ),
                                                 Padding(
                                                   padding:
