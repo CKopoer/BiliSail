@@ -90,10 +90,12 @@ void main() {
     late PlaybackSession session;
     var scope = 'guest';
     var epoch = 0;
+    var now = Duration.zero;
 
     setUp(() async {
       scope = 'guest';
       epoch = 0;
+      now = Duration.zero;
       engine = _FakeEngine();
       repository = _FakeRepository(autoResolve: true);
       session = PlaybackSession(
@@ -102,6 +104,7 @@ void main() {
         progress: _FakeProgress(),
         accountScope: () => scope,
         sessionEpoch: () => epoch,
+        startupNow: () => now,
       );
       session.configureSettings(
         AppSettings(autoPlay: true, resumePlayback: false),
@@ -112,7 +115,10 @@ void main() {
     });
     tearDown(() => session.close());
 
-    void interrupt({int? generation}) {
+    void interrupt({
+      int? generation,
+      PlayerFailureKind kind = PlayerFailureKind.videoInterrupted,
+    }) {
       engine.emit(
         engine.currentSnapshot.copyWith(
           phase: PlaybackPhase.failed,
@@ -122,33 +128,138 @@ void main() {
       );
       engine._failures.add(
         PlayerFailure(
-          PlayerFailureKind.videoInterrupted,
+          kind,
           'video interrupted',
           generation ?? engine.currentSnapshot.generation,
         ),
       );
     }
 
+    test('reloads at video boundary, retaining quality/rate/volume', () async {
+      interrupt();
+      await _flush();
+      expect(engine.openOptions, hasLength(2));
+      expect(
+        engine.openOptions.last.startPosition,
+        const Duration(seconds: 20),
+      );
+      expect(engine.openOptions.last.rate, 2);
+      expect(engine.openOptions.last.volume, 35);
+      expect(session.media?.quality, 64);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      expect(session.error, isNull);
+      interrupt();
+      await _flush();
+      expect(engine.openOptions, hasLength(2));
+      expect(session.error, isNull);
+      expect(session.auxiliaryMessage, contains('2/2'));
+      expect(engine.currentSnapshot.desiredPlaying, false);
+    });
+
+    test('audio/native failure also automatically reloads the pair', () async {
+      interrupt(kind: PlayerFailureKind.nativePlayback);
+      await _flush();
+      expect(engine.openOptions, hasLength(2));
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      expect(
+        engine.openOptions.last.startPosition,
+        const Duration(seconds: 20),
+      );
+      expect(session.error, isNull);
+    });
+
     test(
-      'reloads once at video boundary, retaining quality/rate/volume',
+      'interrupted media prefers refreshed backup URLs for both tracks',
+      () async {
+        repository.resolvedMedia = _backupMedia();
+        interrupt();
+        await _flush();
+        final source = engine.sources.last as DashPairSource;
+        expect(source.video.uri, _backupMedia().video.urls.last);
+        expect(source.audio?.uri, _backupMedia().audio?.urls.last);
+      },
+    );
+
+    test(
+      'startup CDN fallback and automatic refresh share three native opens',
+      () async {
+        repository.resolvedMedia = _backupMedia();
+        engine.nextOpenFailure = PlayerFailureKind.nativePlayback;
+        engine.onOpenFailure = () {
+          engine.nextOpenFailure = PlayerFailureKind.nativePlayback;
+        };
+        await session.open(_detail('two'), _part('two'));
+        await _flush();
+        expect(engine.openOptions, hasLength(4));
+        expect(session.error, isNotNull);
+        engine.onOpenFailure = null;
+      },
+    );
+
+    test(
+      'repeated interruptions back off and exhaust three native opens',
       () async {
         interrupt();
         await _flush();
-        expect(engine.openOptions, hasLength(2));
-        expect(
-          engine.openOptions.last.startPosition,
-          const Duration(seconds: 20),
-        );
-        expect(engine.openOptions.last.rate, 2);
-        expect(engine.openOptions.last.volume, 35);
-        expect(session.media?.quality, 64);
-        expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
-        expect(session.error, isNull);
         interrupt();
         await _flush();
         expect(engine.openOptions, hasLength(2));
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        expect(engine.openOptions, hasLength(3));
+        interrupt();
+        await _flush();
+        expect(engine.openOptions, hasLength(3));
         expect(session.error, 'video interrupted');
-        expect(engine.currentSnapshot.desiredPlaying, false);
+      },
+    );
+
+    for (final action in [
+      'pause',
+      'permission',
+      'stop',
+      'replace',
+      'scope',
+      'epoch',
+      'close',
+    ]) {
+      test('$action cancels a delayed retry', () async {
+        interrupt();
+        await _flush();
+        interrupt();
+        switch (action) {
+          case 'pause':
+            await session.pause();
+          case 'permission':
+            await session.setPlaybackAllowed(false);
+          case 'stop':
+            await session.stop();
+          case 'replace':
+            await session.open(_detail('two'), _part('two'));
+          case 'scope':
+            scope = 'another';
+          case 'epoch':
+            epoch++;
+          case 'close':
+            await session.close();
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        expect(engine.openOptions, hasLength(action == 'replace' ? 3 : 2));
+      });
+    }
+
+    test(
+      'loading failure refreshes URLs and shares the fallback open limit',
+      () async {
+        engine.nextOpenFailure = PlayerFailureKind.nativePlayback;
+        engine.onOpenFailure = () {
+          engine.nextOpenFailure = PlayerFailureKind.nativePlayback;
+        };
+        await session.open(_detail('two'), _part('two'));
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        // Three opens for the new source including its ordinary CDN fallback.
+        expect(engine.openOptions, hasLength(4));
+        expect(session.error, isNotNull);
+        engine.onOpenFailure = null;
       },
     );
 
@@ -164,6 +275,32 @@ void main() {
       await _flush();
       expect(engine.openOptions, hasLength(6));
     });
+
+    test(
+      'healthy playback re-arms recovery for a later independent outage',
+      () async {
+        interrupt();
+        await _flush();
+        interrupt();
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        expect(engine.openOptions, hasLength(3));
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            position: const Duration(seconds: 21),
+          ),
+        );
+        now = const Duration(seconds: 31);
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            position: const Duration(seconds: 22),
+          ),
+        );
+        interrupt();
+        await _flush();
+        expect(engine.openOptions, hasLength(4));
+        expect(session.error, isNull);
+      },
+    );
 
     for (final action in [
       'pause',
@@ -1561,7 +1698,13 @@ void main() {
           exhaustedBy == 'noBackup' || exhaustedBy == 'invalidSource' ? 1 : 2,
         ),
       );
-      expect(session.error, isNotNull);
+      expect(
+        session.error,
+        exhaustedBy == 'invalidSource' ? isNotNull : isNull,
+      );
+      if (exhaustedBy != 'invalidSource') {
+        expect(session.auxiliaryMessage, contains('自动重试'));
+      }
       expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
       expect(repository.qualities, hasLength(1));
     });
@@ -1750,7 +1893,7 @@ void main() {
   }
 
   test(
-    'single URL retains the full startup budget and never repeats it',
+    'single URL uses at most 35 seconds before refreshing its URL',
     () async {
       final engine = _FakeEngine()
         ..nextOpenFailure = PlayerFailureKind.nativePlayback;
@@ -1764,8 +1907,8 @@ void main() {
       await session.open(_detail('one'), _part('one'));
       expect(engine.openOptions, hasLength(1));
       expect(
-        engine.openOptions.single.openTimeout,
-        const Duration(seconds: 35),
+        engine.openOptions.single.openTimeout.inMilliseconds,
+        inInclusiveRange(34000, 35000),
       );
     },
   );
@@ -3070,7 +3213,11 @@ void main() {
         accountScope: () => 'user:1',
       );
       addTearDown(session.close);
-      final opening = session.open(_detail('11'), _part('11'));
+      final opening = session.open(
+        _detail('11'),
+        _part('11'),
+        desiredPlaying: false,
+      );
       await _flush();
       nativeReady.completeError(
         const PlayerFailure(
@@ -5357,6 +5504,7 @@ final class _FakeRepository implements PlaybackRepository {
     this.mediaDuration = const Duration(minutes: 2),
   });
   bool autoResolve;
+  PlaybackMedia? resolvedMedia;
   AudioLoudness? loudness;
   bool failNextResolve = false;
   final Duration mediaDuration;
@@ -5389,7 +5537,8 @@ final class _FakeRepository implements PlaybackRepository {
     }
     if (autoResolve) {
       return Future.value(
-        _media(cid, quality, mediaDuration, loudness: loudness),
+        resolvedMedia ??
+            _media(cid, quality, mediaDuration, loudness: loudness),
       );
     }
     final gate = Completer<PlaybackMedia>();

@@ -66,7 +66,7 @@
 
 本轮修复：
 
-- [DashVideoContinuity](../../packages/bili_player/lib/src/dash_video_continuity.dart)仅对带外部音轨的 DASH 监控主视频缓冲。播放位置超过视频缓冲 500ms、缓冲端点持续不变至少 1 秒、且距离正常结尾超过 2 秒时，报告 `videoInterrupted`。暂停、seek、正常 buffering、源替换、未知缓冲和正常 EOF 不触发；不增加逐帧 Provider 更新、FFI 查询或定时轮询。
+- 当时的 `DashVideoContinuity`（2026-10-30 已由 [NativePlaybackHealth](../../packages/bili_player/lib/src/native_playback_health.dart)替代）仅对带外部音轨的 DASH 监控主视频缓冲。播放位置超过视频缓冲 500ms、缓冲端点持续不变至少 1 秒、且距离正常结尾超过 2 秒时，报告 `videoInterrupted`。暂停、seek、正常 buffering、源替换、未知缓冲和正常 EOF 不触发；当时不增加逐帧 Provider 更新、FFI 查询或定时轮询。双轨监测和统一重试的后续边界见[2026-10-30 修复记录](audio-video-recovery-2026-10-30.md)。
 - [MediaKitEngine](../../packages/bili_player/lib/src/media_kit_engine.dart)先保留视频缓冲边界并冻结待处理的位置事件，再实际暂停 native player，随后报告专用失败。仅把 phase 标成 failed 不会停止外部音频。暂停超时/失败时释放旧 player；旧 generation 的异步操作不能改变新源。失败后的迟到位置事件也不能覆盖恢复位置。
 - [PlaybackSession](../../lib/features/playback/application/playback_session.dart)在当前账号与源仍有效、用户仍要播放且播放许可有效时，重新解析并重载一次，从视频缓冲边界继续，保留清晰度、倍速、音量、内容与配音选择。重载沿用已有打开/备用地址预算，重载后的再次视频中断明确报错；手动重试或新的视频可以重新获得一次恢复机会。暂停、切页互斥、stop、close、换源及账号 scope/epoch 变化取消排队的恢复，恢复期间的用户暂停继续生效。
 - 脱敏诊断新增 `videoInterrupted` 事件和失败分类，记录触发时的位置、视频缓冲和状态，不记录媒体 URL、凭据或原生正文。没有调整硬解偏好、缓存容量、media-kit fork 或 Windows 原生补丁。

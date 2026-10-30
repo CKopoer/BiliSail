@@ -6812,6 +6812,214 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final (width, fullscreen) in [
+    (320.0, false),
+    (1200.0, false),
+    (1200.0, true),
+  ]) {
+    for (final controlsVisible in [false, true]) {
+      testWidgets(
+        'central loading spans buffering and retry backoff width=$width fullscreen=$fullscreen controls=$controlsVisible',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = const Size(1400, 1000);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final engine = _FakeEngine();
+          final repository = _FakePlaybackRepository();
+          final session = _session(engine, repository: repository);
+          final window = _FakeWindowService();
+          final resolving = Completer<void>();
+          final playing = Completer<void>();
+          addTearDown(() async {
+            if (!resolving.isCompleted) resolving.complete();
+            if (!playing.isCompleted) playing.complete();
+            await session.close();
+          });
+          await tester.pumpWidget(
+            _app(
+              session,
+              window,
+              AppSettings(
+                danmakuEnabled: false,
+                autoPlay: true,
+                playerControlsMode: PlayerControlsMode.click,
+              ),
+              width: width,
+            ),
+          );
+          await _pumpFrames(tester);
+          if (fullscreen || controlsVisible) await _showControls(tester);
+          if (fullscreen) {
+            await tester.tap(find.byTooltip('全屏（F）'));
+            await _pumpFrames(tester);
+            if (!controlsVisible) {
+              await tester.tapAt(_surfacePoint(tester));
+              await _pumpSurfaceTap(tester);
+            }
+          }
+          final controls = find.byKey(const ValueKey('player-controls'));
+          expect(controls, controlsVisible ? findsOneWidget : findsNothing);
+          final message = find.text('正在准备音视频…');
+          void expectLoading() {
+            expect(message, findsOneWidget);
+            final centered = find
+                .ancestor(
+                  of: message,
+                  matching: find.byWidgetPredicate(
+                    (widget) => widget is Center && widget.child is Column,
+                  ),
+                )
+                .last;
+            final surface = find.byKey(
+              const ValueKey('player-surface-tap-target'),
+            );
+            expect(
+              (tester.getCenter(centered) - tester.getCenter(surface)).distance,
+              lessThan(1),
+            );
+          }
+
+          void interrupt() {
+            engine._emit(
+              engine.currentSnapshot.copyWith(
+                phase: PlaybackPhase.failed,
+                desiredPlaying: false,
+                isBuffering: false,
+              ),
+            );
+            engine._failures.add(
+              PlayerFailure(
+                PlayerFailureKind.nativePlayback,
+                'fixture stream interrupted',
+                engine.currentSnapshot.generation,
+              ),
+            );
+          }
+
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              phase: PlaybackPhase.buffering,
+              isBuffering: true,
+            ),
+          );
+          await tester.pump();
+          expectLoading();
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              phase: PlaybackPhase.playing,
+              isBuffering: false,
+            ),
+          );
+          await tester.pump();
+          expect(message, findsNothing);
+
+          // The first automatic reload succeeds immediately. The next failure
+          // waits a full second while native phase remains failed.
+          interrupt();
+          await tester.pump();
+          expect(engine.opens, 2);
+          expect(message, findsNothing);
+          interrupt();
+          await tester.pump();
+          expect(session.isResolving, false);
+          expectLoading();
+          await tester.pump(const Duration(milliseconds: 999));
+          expectLoading();
+          expect(engine.opens, 2);
+
+          repository.nextResolve = resolving;
+          engine.nextPlay = playing;
+          await tester.pump(const Duration(milliseconds: 1));
+          expect(session.isResolving, true);
+          expectLoading();
+          resolving.complete();
+          await tester.pump();
+          expect(engine.opens, 3);
+          expect(session.isResolving, false);
+          expectLoading();
+          // A native playing event can precede initial audio validation.
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              phase: PlaybackPhase.playing,
+              desiredPlaying: true,
+            ),
+          );
+          await tester.pump();
+          expectLoading();
+          playing.complete();
+          await tester.pump();
+          expect(message, findsNothing);
+
+          interrupt();
+          await tester.pump();
+          expect(session.error, 'fixture stream interrupted');
+          expect(message, findsNothing);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
+  for (final action in ['pause', 'permission', 'stop', 'replace']) {
+    testWidgets('central retry hint clears on $action', (tester) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(
+          session,
+          _FakeWindowService(),
+          AppSettings(danmakuEnabled: false, autoPlay: true),
+          width: 320,
+        ),
+      );
+      await _pumpFrames(tester);
+      void interrupt() {
+        engine._emit(
+          engine.currentSnapshot.copyWith(
+            phase: PlaybackPhase.failed,
+            desiredPlaying: false,
+            isBuffering: false,
+          ),
+        );
+        engine._failures.add(
+          PlayerFailure(
+            PlayerFailureKind.videoInterrupted,
+            'fixture stream interrupted',
+            engine.currentSnapshot.generation,
+          ),
+        );
+      }
+
+      interrupt();
+      await tester.pump();
+      interrupt();
+      await tester.pump();
+      expect(find.text('正在准备音视频…'), findsOneWidget);
+      switch (action) {
+        case 'pause':
+          await session.pause();
+        case 'permission':
+          await session.setPlaybackAllowed(false);
+        case 'stop':
+          await session.stop();
+        case 'replace':
+          await session.open(_detail, _part, force: true);
+      }
+      await tester.pump();
+      expect(find.text('正在准备音视频…'), findsNothing);
+      await tester.pump(const Duration(seconds: 2));
+      expect(engine.opens, action == 'replace' ? 3 : 2);
+      expect(find.text('正在准备音视频…'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    });
+  }
+
   for (final fullscreen in [false, true]) {
     testWidgets('ended playback hides stale buffering fullscreen=$fullscreen', (
       tester,
@@ -7316,6 +7524,7 @@ final class _FakeEngine implements PlayerEngine, VideoOutputSource {
   Completer<void>? nextRate;
   Completer<void>? nextVolume;
   Completer<void>? nextSeek;
+  Completer<void>? nextPlay;
 
   @override
   Stream<PlaybackSnapshot> get snapshots => _snapshots.stream;
@@ -7348,9 +7557,14 @@ final class _FakeEngine implements PlayerEngine, VideoOutputSource {
   }
 
   @override
-  Future<void> play() async => _emit(
-    _current.copyWith(phase: PlaybackPhase.playing, desiredPlaying: true),
-  );
+  Future<void> play() async {
+    final gate = nextPlay;
+    nextPlay = null;
+    if (gate != null) await gate.future;
+    _emit(
+      _current.copyWith(phase: PlaybackPhase.playing, desiredPlaying: true),
+    );
+  }
 
   @override
   Future<void> pause() async {
@@ -7432,6 +7646,7 @@ final class _FakePlaybackRepository implements PlaybackRepository {
   _FakePlaybackRepository([this.gate]);
 
   final Completer<void>? gate;
+  Completer<void>? nextResolve;
 
   @override
   Future<PlaybackMedia> resolve(
@@ -7441,7 +7656,8 @@ final class _FakePlaybackRepository implements PlaybackRepository {
     VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
     required RequestCancellation cancellation,
   }) async {
-    final waitForRelease = gate;
+    final waitForRelease = nextResolve ?? gate;
+    nextResolve = null;
     if (waitForRelease != null) await waitForRelease.future;
     return PlaybackMedia(
       video: PlaybackTrack(

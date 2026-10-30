@@ -9,7 +9,7 @@ import 'player_diagnostics.dart';
 import 'native_readiness.dart';
 import 'native_media_options.dart';
 import 'native_error_monitor.dart';
-import 'dash_video_continuity.dart';
+import 'native_playback_health.dart';
 import 'native_load_observer.dart';
 import 'native_audio_gain.dart';
 import 'native_video_frame_queue.dart';
@@ -30,12 +30,10 @@ final class MediaKitEngine
         enabledOverride: experimentalVideoFrameQueue,
       ) {
     _nativeErrors = NativeErrorMonitor(
-      onStalled: (generation) => _fail(
-        PlayerFailure(
-          PlayerFailureKind.nativePlayback,
-          '播放器报告异常后进度持续停滞，请重新加载或切换清晰度。',
-          generation,
-        ),
+      onStalled: (generation) => _interruptPlayback(
+        _snapshot.position,
+        generation,
+        PlayerFailureKind.nativePlayback,
       ),
       onRecovered: (_) => _diagnose(PlayerDiagnosticKind.recovered),
     );
@@ -53,10 +51,12 @@ final class MediaKitEngine
   /// This reports configuration, not the number of frames currently buffered.
   bool get videoFrameQueueActive => _videoFrameQueueActive;
   late final NativeErrorMonitor _nativeErrors;
-  final _dashContinuity = DashVideoContinuity();
+  final _playbackHealth = NativePlaybackHealth();
   final _continuityClock = Stopwatch()..start();
   bool _watchDashContinuity = false;
   bool _dashInterruptionPending = false;
+  Timer? _healthTimer;
+  bool _healthSampling = false;
   NativeLoadObserver? _nativeLoad;
 
   void _diagnose(
@@ -234,13 +234,83 @@ final class MediaKitEngine
     _videoOutput.updateVideoDimensions(value.videoDimensions);
     _nativeErrors.update(value);
     _snapshots.add(value);
-    if (_watchDashContinuity && !_dashInterruptionPending) {
-      final boundary = _dashContinuity.update(value, _continuityClock.elapsed);
-      if (boundary != null) _interruptDashVideo(boundary, value.generation);
+    if (!identical(value, _snapshot)) return;
+    final watch =
+        value.desiredPlaying &&
+        !value.isSeeking &&
+        !_dashInterruptionPending &&
+        const {
+          PlaybackPhase.playing,
+          PlaybackPhase.buffering,
+          PlaybackPhase.paused,
+        }.contains(value.phase);
+    if (watch) {
+      _healthTimer ??= Timer.periodic(
+        const Duration(milliseconds: 250),
+        (_) => unawaited(_samplePlaybackHealth()),
+      );
+    } else {
+      _healthTimer?.cancel();
+      _healthTimer = null;
+      _playbackHealth.reset();
     }
   }
 
-  void _interruptDashVideo(Duration boundary, int generation) {
+  Future<void> _samplePlaybackHealth() async {
+    if (_healthSampling || _healthTimer == null) return;
+    _healthSampling = true;
+    final timer = _healthTimer;
+    final generation = _generation;
+    final player = _player;
+    final before = _snapshot;
+    Duration? audioPosition;
+    try {
+      final platform = player?.platform;
+      if (_watchDashContinuity && platform is mk.NativePlayer) {
+        try {
+          final value = double.tryParse(
+            await platform
+                .getProperty('audio-pts')
+                .timeout(const Duration(seconds: 1)),
+          );
+          if (value != null && value.isFinite) {
+            audioPosition = Duration(microseconds: (value * 1000000).round());
+          }
+        } on Object {
+          // An exhausted audio track can stop exposing its clock.
+        }
+      }
+      if (_disposed ||
+          generation != _generation ||
+          !identical(player, _player) ||
+          !identical(timer, _healthTimer) ||
+          before.isSeeking != _snapshot.isSeeking ||
+          (_snapshot.position - before.position).abs() >
+              const Duration(seconds: 1)) {
+        return;
+      }
+      final failure = _playbackHealth.update(
+        _snapshot,
+        _continuityClock.elapsed,
+        paired: _watchDashContinuity,
+        audioPosition: audioPosition,
+      );
+      if (failure != null) {
+        _interruptPlayback(failure.position, generation, failure.kind);
+      }
+    } finally {
+      _healthSampling = false;
+    }
+  }
+
+  void _interruptPlayback(
+    Duration boundary,
+    int generation,
+    PlayerFailureKind kind,
+  ) {
+    if (_disposed || generation != _generation || _dashInterruptionPending) {
+      return;
+    }
     _dashInterruptionPending = true;
     // Snapshot delivery is synchronous. Defer commands/publications until the
     // current event has finished, and respect a queued pause/seek/source change.
@@ -248,13 +318,12 @@ final class MediaKitEngine
       unawaited(
         _serial(() async {
           if (_disposed || generation != _generation) return;
-          if (_snapshot.phase != PlaybackPhase.playing ||
-              !_snapshot.desiredPlaying ||
+          if (!_snapshot.desiredPlaying ||
               _snapshot.isSeeking ||
-              _snapshot.isBuffering ||
-              _snapshot.buffered != boundary) {
+              _snapshot.phase == PlaybackPhase.failed ||
+              _snapshot.phase == PlaybackPhase.ended) {
             _dashInterruptionPending = false;
-            _dashContinuity.reset();
+            _playbackHealth.reset();
             return;
           }
           final player = _player;
@@ -262,7 +331,9 @@ final class MediaKitEngine
             _dashInterruptionPending = false;
             return;
           }
-          _diagnose(PlayerDiagnosticKind.videoInterrupted);
+          if (kind == PlayerFailureKind.videoInterrupted) {
+            _diagnose(PlayerDiagnosticKind.videoInterrupted);
+          }
           _publish(
             _snapshot.copyWith(
               position: boundary,
@@ -283,13 +354,7 @@ final class MediaKitEngine
           _publish(
             _snapshot.copyWith(position: boundary, desiredPlaying: false),
           );
-          _fail(
-            PlayerFailure(
-              PlayerFailureKind.videoInterrupted,
-              '视频流已中断，音频已暂停，请重新加载或切换清晰度。',
-              generation,
-            ),
-          );
+          _fail(PlayerFailure(kind, '音视频加载中断，已暂停播放，请重新加载或切换线路。', generation));
         }),
       );
     });
@@ -328,7 +393,9 @@ final class MediaKitEngine
 
   int _advanceGeneration() {
     _nativeErrors.reset();
-    _dashContinuity.reset();
+    _healthTimer?.cancel();
+    _healthTimer = null;
+    _playbackHealth.reset();
     _dashInterruptionPending = false;
     final value = ++_generation;
     _videoOutput.advanceGeneration(value);
@@ -415,6 +482,7 @@ final class MediaKitEngine
       // media_kit enables disk caching by default. Keep a transient bounded
       // window in memory instead of accumulating an append-only cache file.
       'cache-on-disk': 'no',
+      'cache-pause': 'yes',
       // mpv uses the larger of these two windows when network cache is enabled.
       'cache-secs': seconds.toString(),
       'demuxer-readahead-secs': seconds.toString(),
@@ -431,8 +499,8 @@ final class MediaKitEngine
       final applied = await platform
           .getProperty(entry.key)
           .timeout(_remaining(watch, budget));
-      final matches = entry.key == 'cache-on-disk'
-          ? applied == 'no'
+      final matches = entry.key == 'cache-on-disk' || entry.key == 'cache-pause'
+          ? applied == entry.value
           : double.tryParse(applied) == seconds;
       if (!matches) {
         throw PlayerFailure(
@@ -935,6 +1003,7 @@ final class MediaKitEngine
     // completion observable until an explicit seek/play or source replacement.
     bool canChangePhase() =>
         active() &&
+        !_dashInterruptionPending &&
         _snapshot.phase != PlaybackPhase.failed &&
         _snapshot.phase != PlaybackPhase.ended;
     _subscriptions.add(
@@ -1049,7 +1118,9 @@ final class MediaKitEngine
   Future<void> _releasePlayer() async {
     _watchDashContinuity = false;
     _dashInterruptionPending = false;
-    _dashContinuity.reset();
+    _healthTimer?.cancel();
+    _healthTimer = null;
+    _playbackHealth.reset();
     _videoFrameQueueActive = false;
     final load = _nativeLoad;
     _nativeLoad = null;
@@ -1095,6 +1166,13 @@ final class MediaKitEngine
           'Native playback command failed.',
           generation,
         );
+        try {
+          await player.pause().timeout(const Duration(seconds: 2));
+        } on Object {
+          if (generation == _generation && !_disposed) await _releasePlayer();
+        }
+        if (generation != _generation || _disposed) return;
+        _publish(_snapshot.copyWith(desiredPlaying: false));
         _fail(failure);
         throw failure;
       }

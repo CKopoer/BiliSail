@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
@@ -14,19 +15,126 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  for (final automatic in [false, true]) {
-    testWidgets(
-      'truncated DASH video stops audio; automatic=$automatic',
-      (tester) => _runStall(tester, automatic),
-    );
+  testWidgets(
+    'temporary video underrun waits with audio then resumes together',
+    _runBuffering,
+  );
+
+  for (final audioFault in [false, true]) {
+    for (final automatic in [false, true]) {
+      testWidgets(
+        'truncated DASH ${audioFault ? 'audio' : 'video'} stops pair; automatic=$automatic',
+        (tester) => _runStall(tester, automatic, audioFault),
+      );
+    }
   }
 }
 
-Future<void> _runStall(WidgetTester tester, bool automatic) async {
+Future<void> _runBuffering(WidgetTester tester) async {
   initializePlayerBackend();
   final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
   expect(fixtures, isNotNull);
   final bytes = await File('$fixtures/video.mp4').readAsBytes();
+  final cutoff = bytes.length ~/ 3;
+  final resume = Completer<void>();
+  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+  server.listen((request) async {
+    final range = request.headers.value(HttpHeaders.rangeHeader);
+    final start = range == null
+        ? 0
+        : int.parse(RegExp(r'bytes=(\d+)-').firstMatch(range)!.group(1)!);
+    final response = request.response;
+    response.bufferOutput = false;
+    response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+    response.headers.contentType = ContentType('video', 'mp4');
+    response.contentLength = bytes.length - start;
+    if (range != null) {
+      response.statusCode = 206;
+      response.headers.set(
+        HttpHeaders.contentRangeHeader,
+        'bytes $start-${bytes.length - 1}/${bytes.length}',
+      );
+    }
+    try {
+      if (start < cutoff) response.add(bytes.sublist(start, cutoff));
+      await response.flush();
+      await resume.future;
+      response.add(bytes.sublist(start < cutoff ? cutoff : start));
+      await response.close();
+    } on SocketException {
+      // A cancelled player closes its HTTP request before fixture cleanup.
+    }
+  });
+  final failures = <PlayerFailure>[];
+  final engine = MediaKitEngine();
+  final subscription = engine.failures.listen(failures.add);
+  try {
+    await tester.pumpWidget(MaterialApp(home: VideoSurface(engine: engine)));
+    await _withFrames(
+      tester,
+      engine.open(
+        DashPairSource(
+          video: MediaTrack(
+            uri: Uri.parse('http://127.0.0.1:${server.port}/video.mp4'),
+            requestPolicy: MediaRequestPolicy(),
+          ),
+          audio: MediaTrack(
+            uri: File('$fixtures/audio.m4a').uri,
+            requestPolicy: MediaRequestPolicy(),
+          ),
+        ),
+        const OpenOptions(play: true, volume: 0, rate: 2),
+      ),
+    );
+    final watch = Stopwatch()..start();
+    while ((!engine.currentSnapshot.isBuffering ||
+            engine.currentSnapshot.position < const Duration(seconds: 2)) &&
+        watch.elapsed < const Duration(seconds: 4)) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(engine.currentSnapshot.isBuffering, true);
+    final waitingAt = engine.currentSnapshot.position;
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      (engine.currentSnapshot.position - waitingAt).abs(),
+      lessThan(const Duration(milliseconds: 250)),
+    );
+    expect(failures, isEmpty);
+    resume.complete();
+    while (engine.currentSnapshot.position < const Duration(seconds: 6) &&
+        watch.elapsed < const Duration(seconds: 10)) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+    expect(
+      engine.currentSnapshot.position,
+      greaterThan(const Duration(seconds: 6)),
+    );
+    expect(failures, isEmpty);
+    debugPrint(
+      'TEMPORARY_VIDEO_BUFFER waitedAtMs=${waitingAt.inMilliseconds} '
+      'resumedAtMs=${engine.currentSnapshot.position.inMilliseconds} failures=0',
+    );
+  } finally {
+    if (!resume.isCompleted) resume.complete();
+    await subscription.cancel();
+    await _withFrames(tester, engine.dispose());
+    await tester.pumpWidget(const SizedBox.shrink());
+    await server.close(force: true);
+  }
+}
+
+Future<void> _runStall(
+  WidgetTester tester,
+  bool automatic,
+  bool audioFault,
+) async {
+  initializePlayerBackend();
+  final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
+  expect(fixtures, isNotNull);
+  final bytes = await File(
+    '$fixtures/${audioFault ? 'audio.m4a' : 'video.mp4'}',
+  ).readAsBytes();
   final cutoff = bytes.length ~/ 3;
   var broken = true;
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -71,11 +179,15 @@ Future<void> _runStall(WidgetTester tester, bool automatic) async {
   });
   final source = DashPairSource(
     video: MediaTrack(
-      uri: Uri.parse('http://127.0.0.1:${server.port}/video.mp4'),
+      uri: audioFault
+          ? File('$fixtures/video.mp4').uri
+          : Uri.parse('http://127.0.0.1:${server.port}/video.mp4'),
       requestPolicy: MediaRequestPolicy(),
     ),
     audio: MediaTrack(
-      uri: File('$fixtures/audio.m4a').uri,
+      uri: audioFault
+          ? Uri.parse('http://127.0.0.1:${server.port}/audio.m4a')
+          : File('$fixtures/audio.m4a').uri,
       requestPolicy: MediaRequestPolicy(),
     ),
   );
@@ -105,7 +217,7 @@ Future<void> _runStall(WidgetTester tester, bool automatic) async {
         (!automatic ||
             engine.currentSnapshot.phase == PlaybackPhase.playing &&
                 engine.currentSnapshot.position > const Duration(seconds: 6));
-    while (watch.elapsed < const Duration(seconds: 12) && !done()) {
+    while (watch.elapsed < const Duration(seconds: 20) && !done()) {
       await tester.pump(const Duration(milliseconds: 100));
     }
     debugPrint(
@@ -115,11 +227,18 @@ Future<void> _runStall(WidgetTester tester, bool automatic) async {
       'failures=${failures.length}',
     );
     expect(failures, hasLength(1));
-    expect(failures.single.kind, PlayerFailureKind.videoInterrupted);
     expect(
-      events.any((e) => e.kind == PlayerDiagnosticKind.videoInterrupted),
-      true,
+      failures.single.kind,
+      audioFault
+          ? PlayerFailureKind.nativePlayback
+          : PlayerFailureKind.videoInterrupted,
     );
+    if (!audioFault) {
+      expect(
+        events.any((e) => e.kind == PlayerDiagnosticKind.videoInterrupted),
+        true,
+      );
+    }
     if (automatic) {
       expect(session?.error, isNull);
       expect(engine.currentSnapshot.generation, greaterThan(initialGeneration));
@@ -134,10 +253,18 @@ Future<void> _runStall(WidgetTester tester, bool automatic) async {
     }
     expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
     final stoppedAt = engine.currentSnapshot.position;
+    // Failed snapshots deliberately freeze their checkpoint. Read media_kit's
+    // independent native position as well, so that freeze cannot hide audio
+    // continuing to play underneath a failed application snapshot.
+    final nativeStoppedAt = engine.inspectDiagnostics().position;
     await tester.pump(const Duration(seconds: 1));
     expect(
       (engine.currentSnapshot.position - stoppedAt).inMilliseconds.abs(),
       lessThan(250),
+    );
+    expect(
+      (engine.inspectDiagnostics().position - nativeStoppedAt).abs(),
+      lessThan(const Duration(milliseconds: 250)),
     );
 
     broken = false;

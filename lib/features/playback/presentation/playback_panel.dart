@@ -1472,6 +1472,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                             ),
                             if (session.error == null &&
                                 (session.isResolving ||
+                                    session.isRecovering ||
                                     snapshot.phase != PlaybackPhase.ended &&
                                         snapshot.isBuffering ||
                                     snapshot.phase == PlaybackPhase.opening))

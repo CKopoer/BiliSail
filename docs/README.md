@@ -156,6 +156,7 @@
 | [弹幕速度与播放倍速](validation/danmaku-playback-rate.md) | 按播放时间加载／触发，独立动画时间控制滚动和停留，暂停／seek／时间窗回归 |
 | [密集弹幕性能优化](validation/danmaku-performance.md) | Windows Profile 热点、分帧准备、阴影图像缓存、参考实现比较与验证边界 |
 | [播放错误排查](validation/native-playback-errors.md) | 原生日志误判、错误态控制栏与本地脱敏日志 |
+| [双轨同步与自动重试](validation/audio-video-recovery-2026-10-30.md) | 单轨提前耗尽、同步暂停、无日志停滞、共享恢复预算与取消 |
 | [Windows 首帧停滞修复](validation/windows-playback-flag-abi-2026-10-23.md) | libmpv FLAG 类型宽度、seek 位置确认、来源审计与诊断清理 |
 | [开发协作约定](../AGENTS.md) | 后续开发与自动化代理必须遵守的仓库规则 |
 
