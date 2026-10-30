@@ -1,0 +1,228 @@
+import 'dart:io';
+
+import 'package:bili_player/bili_player.dart';
+import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
+      LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+
+  testWidgets(
+    'listening requests only audio, then restores paused DASH video',
+    (tester) async {
+      initializePlayerBackend();
+      final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
+      expect(fixtures, isNotNull);
+      final files = {
+        '/video.mp4': await File('$fixtures/video.mp4').readAsBytes(),
+        '/audio.m4a': await File('$fixtures/audio.m4a').readAsBytes(),
+      };
+      final observed = <String>[];
+      var forbiddenHeaders = 0;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        observed.add(request.uri.path);
+        final bytes = files[request.uri.path];
+        if (request.headers.value('referer') != 'https://www.bilibili.com/') {
+          forbiddenHeaders++;
+          request.response.statusCode = 403;
+        } else if (bytes == null) {
+          request.response.statusCode = 404;
+        } else {
+          final range = RegExp(r'^bytes=(\d+)-(\d*)$')
+              .firstMatch(request.headers.value('range') ?? '');
+          final start = int.tryParse(range?.group(1) ?? '') ?? 0;
+          final requestedEnd =
+              int.tryParse(range?.group(2) ?? '') ?? bytes.length - 1;
+          final end = requestedEnd.clamp(0, bytes.length - 1);
+          if (start > end) {
+            request.response.statusCode = 416;
+          } else {
+            request.response.headers.set('Accept-Ranges', 'bytes');
+            request.response.headers.contentType = ContentType(
+              request.uri.path == '/audio.m4a' ? 'audio' : 'video',
+              'mp4',
+            );
+            if (range != null) {
+              request.response.statusCode = 206;
+              request.response.headers.set(
+                'Content-Range',
+                'bytes $start-$end/${bytes.length}',
+              );
+            }
+            request.response.contentLength = end - start + 1;
+            request.response.add(bytes.sublist(start, end + 1));
+          }
+        }
+        await request.response.close();
+      });
+      final engine = MediaKitEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _Repository(server.port),
+        progress: _Progress(),
+        accountScope: () => 'guest',
+      );
+      session.configureSettings(
+        AppSettings(autoPlay: true, resumePlayback: false),
+      );
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ListenableBuilder(
+              listenable: session,
+              builder: (_, _) => session.audioOnly
+                  ? const ColoredBox(color: Colors.black)
+                  : VideoSurface(engine: engine),
+            ),
+          ),
+        );
+        await _withFrames(tester, session.open(_detail, _part));
+        expect(session.error, isNull);
+        expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
+        await _withFrames(tester, session.pause());
+        await _withFrames(tester, session.seek(const Duration(seconds: 2)));
+        await _withFrames(tester, session.setRate(1.5));
+        await _withFrames(tester, session.setVolume(3));
+        observed.clear();
+        await _withFrames(tester, session.setAudioOnly(true));
+        expect(session.error, isNull);
+        expect(session.audioOnly, isTrue);
+        expect(observed, isNotEmpty);
+        expect(observed.every((path) => path == '/audio.m4a'), isTrue);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        await _withFrames(tester, session.togglePlaying());
+        for (
+          var i = 0;
+          i < 40 && !engine.inspectDiagnostics().hasDecodedAudio;
+          i++
+        ) {
+          await tester.pump(const Duration(milliseconds: 25));
+        }
+        expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
+        expect(engine.inspectDiagnostics().hasDecodedVideo, isFalse);
+        expect(engine.inspectDiagnostics().hasVideoOutput, isFalse);
+        expect(engine.currentSnapshot.rate, 1.5);
+        expect(engine.currentSnapshot.volume, 3);
+        expect(observed.every((path) => path == '/audio.m4a'), isTrue);
+        await _withFrames(tester, session.pause());
+        await _withFrames(tester, session.seek(const Duration(seconds: 2)));
+        observed.clear();
+        await _withFrames(tester, session.setAudioOnly(false));
+        expect(session.error, isNull);
+        expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(
+          (engine.currentSnapshot.position - const Duration(seconds: 2))
+              .inMilliseconds
+              .abs(),
+          lessThan(400),
+        );
+        expect(observed, containsAll(['/video.mp4', '/audio.m4a']));
+        expect(forbiddenHeaders, 0);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _withFrames(tester, session.close());
+        await tester.pumpWidget(const SizedBox.shrink());
+        await server.close(force: true);
+      }
+    },
+  );
+}
+
+const _part = VideoPart(
+  cid: '42',
+  page: 1,
+  title: '音频模式验证',
+  duration: Duration(seconds: 6),
+);
+const _detail = VideoDetail(
+  summary: VideoSummary(
+    id: VideoId('BV1abc123456'),
+    title: '音频模式验证',
+    coverUrl: '',
+    author: 'fixture',
+    duration: Duration(seconds: 6),
+  ),
+  description: '',
+  parts: [_part],
+);
+
+class _Repository extends Fake implements PlaybackRepository {
+  _Repository(this.port);
+  final int port;
+  @override
+  Future<PlaybackMedia> resolve(
+    VideoId video,
+    String cid, {
+    required int quality,
+    VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
+    required RequestCancellation cancellation,
+  }) async => PlaybackMedia(
+    video: PlaybackTrack(
+      urls: [Uri.parse('http://127.0.0.1:$port/video.mp4')],
+      codec: 'avc1',
+      bandwidth: 1000,
+    ),
+    audio: PlaybackTrack(
+      urls: [Uri.parse('http://127.0.0.1:$port/audio.m4a')],
+      codec: 'mp4a',
+      bandwidth: 128,
+    ),
+    quality: 80,
+    qualities: const [80],
+    duration: const Duration(seconds: 6),
+    headers: const {'Referer': 'https://www.bilibili.com/'},
+  );
+  @override
+  Future<List<TimedComment>> comments(
+    String cid,
+    int segment, {
+    required RequestCancellation cancellation,
+  }) async => [];
+  @override
+  Future<List<SubtitleTrack>> subtitles(
+    VideoId video,
+    String cid, {
+    required RequestCancellation cancellation,
+  }) async => [];
+}
+
+class _Progress extends Fake implements PlaybackProgressStore {
+  @override
+  Future<void> write(
+    String scope,
+    VideoSummary video,
+    VideoPart part,
+    Duration position,
+    Duration duration, {
+    String? episodeId,
+  }) async {}
+}
+
+Future<void> _withFrames(WidgetTester tester, Future<void> operation) async {
+  var done = false;
+  Object? failure;
+  final completion = operation.then<void>(
+    (_) => done = true,
+    onError: (Object error, StackTrace stack) {
+      failure = error;
+      done = true;
+    },
+  );
+  final watch = Stopwatch()..start();
+  while (!done && watch.elapsed < const Duration(seconds: 50)) {
+    await tester.pump(const Duration(milliseconds: 16));
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+  expect(done, isTrue, reason: 'Native operation timed out');
+  await completion;
+  if (failure case final error?) throw error;
+}

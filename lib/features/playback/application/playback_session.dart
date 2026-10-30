@@ -228,6 +228,12 @@ class PlaybackSession extends ChangeNotifier {
   ContentPlaybackTarget? contentTarget;
   String? contentTitle;
   bool get isLive => contentTarget is LivePlaybackTarget;
+  bool _audioOnly = false;
+  bool get audioOnly => _audioOnly;
+  bool get canListen =>
+      !isLive &&
+      media?.kind == PlaybackMediaKind.dash &&
+      (media?.audio?.urls.isNotEmpty ?? false);
   String get title => contentTitle ?? detail?.summary.title ?? '播放器';
   PlaybackMedia? media;
   String? error;
@@ -299,6 +305,7 @@ class PlaybackSession extends ChangeNotifier {
     final selected = part;
     if (_disposed ||
         _closing ||
+        _audioOnly ||
         !_ownerVisible ||
         _highEnergySurfaces.isEmpty ||
         !_settings.highEnergyProgressEnabled ||
@@ -438,6 +445,7 @@ class PlaybackSession extends ChangeNotifier {
       desiredPlaying: _desiredPlaying,
       subtitleLabel: _subtitlePreference,
       voice: _voice,
+      audioOnly: _audioOnly,
     );
     _checkpoints[owner] = checkpoint;
     if (_settings.navigationMode != WorkspaceNavigationMode.multipleTabs) {
@@ -542,6 +550,7 @@ class PlaybackSession extends ChangeNotifier {
       target: target,
       title: title,
       voice: restored?.voice ?? const PlaybackVoice.original(),
+      audioOnly: restored?.audioOnly ?? (sameOwner && sameKind && _audioOnly),
     );
   }
 
@@ -608,7 +617,7 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   void _resumeCommentPresentation() {
-    if (!_ownerVisible || !commentsEnabled) return;
+    if (!_ownerVisible || !commentsEnabled || _audioOnly) return;
     final snapshot = snapshots.value;
     // Hidden time is not a paused animation. Rebuild only the current media
     // window so comments seen before hiding cannot resume with a stale age.
@@ -621,7 +630,7 @@ class PlaybackSession extends ChangeNotifier {
   void _syncDanmaku(PlaybackSnapshot snapshot) {
     danmaku.sync(
       confirmedPosition: snapshot.position,
-      playing: snapshot.phase == PlaybackPhase.playing,
+      playing: !_audioOnly && snapshot.phase == PlaybackPhase.playing,
       buffering: snapshot.isBuffering,
       seeking: snapshot.isSeeking,
       rate: snapshot.rate,
@@ -642,10 +651,12 @@ class PlaybackSession extends ChangeNotifier {
     PlaybackVoice? voice,
     int? liveLine,
     LiveStreamPreference? liveStream,
+    bool? audioOnly,
   }) async {
     if (_disposed || _closing) return;
     if (target == null && (video == null || selected == null)) return;
     if (!force &&
+        (audioOnly == null || audioOnly == _audioOnly) &&
         detail?.summary.id == video?.summary.id &&
         part?.cid == selected?.cid &&
         contentTarget == target &&
@@ -653,6 +664,8 @@ class PlaybackSession extends ChangeNotifier {
       return;
     }
     final generation = ++_generation;
+    final requestedAudioOnly = audioOnly ?? _audioOnly;
+    _audioOnly = requestedAudioOnly;
     _audioRecovery = null;
     // Capture source settings together; a preference change during resolution
     // applies to the next open rather than half of this source generation.
@@ -884,6 +897,13 @@ class PlaybackSession extends ChangeNotifier {
       if (resolved.kind == PlaybackMediaKind.dash && audio == null) {
         throw const AppFailure(AppFailureKind.playback, '未取得点播音频轨道');
       }
+      if (requestedAudioOnly &&
+          (isLive ||
+              resolved.kind != PlaybackMediaKind.dash ||
+              audio == null ||
+              audio.urls.isEmpty)) {
+        throw const AppFailure(AppFailureKind.playback, '当前内容没有独立音轨，请返回视频播放');
+      }
       // Live lines follow url_info order, independently of VOD CDN preferences.
       final liveLineIndex =
           isLive &&
@@ -901,7 +921,9 @@ class PlaybackSession extends ChangeNotifier {
       final audioBackup = audio == null
           ? null
           : backupMediaCdnUrl(audio.urls, mediaCdn);
-      final hasBackup = videoBackup != null || audioBackup != null;
+      final hasBackup = requestedAudioOnly
+          ? audioBackup != null
+          : videoBackup != null || audioBackup != null;
       final recovery = _PlaybackStartupRecovery(
         now: startupNow ?? () => _clock.elapsed,
         hasBackup: hasBackup,
@@ -945,7 +967,16 @@ class PlaybackSession extends ChangeNotifier {
               generation,
               PlaybackStartupStage.nativeOpen,
               () => engine.open(
-                resolved.kind == PlaybackMediaKind.liveHls
+                requestedAudioOnly && audio != null && audioUri != null
+                    ? ProgressiveSource(
+                        MediaTrack(
+                          uri: audioUri,
+                          requestPolicy: policy,
+                          codec: audio.codec,
+                          bandwidth: audio.bandwidth,
+                        ),
+                      )
+                    : resolved.kind == PlaybackMediaKind.liveHls
                     ? ManifestSource(
                         MediaTrack(uri: videoUri, requestPolicy: policy),
                         isLive: true,
@@ -1571,7 +1602,8 @@ class PlaybackSession extends ChangeNotifier {
 
   void _ensureComments(Duration position) {
     final cid = danmakuCid;
-    if (!_ownerVisible ||
+    if (_audioOnly ||
+        !_ownerVisible ||
         !commentsEnabled ||
         cid == null ||
         _resolving ||
@@ -2287,6 +2319,30 @@ class PlaybackSession extends ChangeNotifier {
     );
   }
 
+  Future<void> setAudioOnly(bool enabled) async {
+    if (_disposed ||
+        _closing ||
+        enabled == _audioOnly ||
+        (enabled && (!canListen || _resolving))) {
+      return;
+    }
+    await open(
+      detail,
+      part,
+      target: contentTarget,
+      title: contentTitle,
+      quality: _quality,
+      force: true,
+      audioOnly: enabled,
+      position: media == null ? _openingPosition : snapshots.value.position,
+      rate:
+          _temporaryRateOriginal ??
+          (media == null ? _openingRate : snapshots.value.rate),
+      volume: media == null ? _openingVolume : snapshots.value.volume,
+      desiredPlaying: _desiredPlaying,
+    );
+  }
+
   Future<void> changeLiveLine(int line) async {
     final current = media;
     if (!isLive ||
@@ -2387,6 +2443,7 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> stop({bool clearCheckpoints = true}) async {
     _audioRecovery = null;
+    _audioOnly = false;
     _nextSourceIntent = null;
     if (clearCheckpoints) {
       _checkpoints.clear();
@@ -2527,6 +2584,7 @@ final class _PlaybackCheckpoint {
     this.subtitleLabel,
     this.target,
     this.voice = const PlaybackVoice.original(),
+    this.audioOnly = false,
   });
   final VideoId? videoId;
   final String? cid;
@@ -2542,6 +2600,7 @@ final class _PlaybackCheckpoint {
   final bool desiredPlaying;
   final String? subtitleLabel;
   final PlaybackVoice voice;
+  final bool audioOnly;
 }
 
 String sponsorCategoryLabel(String category) => switch (category) {

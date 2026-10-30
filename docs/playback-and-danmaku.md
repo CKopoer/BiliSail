@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-10-30 增加共享“听视频”模式：独立 DASH 音轨单独打开，普通／全屏使用常驻音频控件，保留播放意图和导航检查点。能力范围、PiliPlus 参考与逐平台验证见[听视频](validation/listen-video.md)。
+
 2026-10-29 开始切换至固定提交的 Predidit canvas_danmaku / media-kit。弹幕继续由本项目控制器持有确认媒体／单调到达时钟、布局和预算，绘制使用上游批量 Canvas 管线；播放器改用 Native Assets 和 Windows D3D11。旧 ANGLE／库插件描述属于历史实现，当前依赖、采用边界和验证见[切换方案](predidit-media-migration.md)。
 
 2026-10-28 手机普通页面保持竖屏窄屏布局；横向视频播放时由物理旋转进入／退出全屏，竖屏点全屏按钮仍可请求横屏。宽屏播放页旋转只调整整体布局，保留当前全屏选择；折叠／展开和分屏边界不冒充旋转手势。保留媒体源、进度、信息标签和滚动位置，Android 16 通过原生窗口接口隐藏系统栏。当前尺寸与所有权规则见[主窗口、播放器旋转与折叠边界](validation/adaptive-window-rotation.md)，最初接入与构建记录见[手机旋转全屏](validation/responsive-player.md#手机旋转全屏2026-10-28)。

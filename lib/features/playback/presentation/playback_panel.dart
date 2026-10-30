@@ -27,6 +27,7 @@ import '../domain/content_playback.dart';
 import 'player_settings_dialog.dart';
 import 'player_swipe_controls.dart';
 import 'player_seek_controls.dart';
+import 'audio_playback_view.dart';
 import 'playback_timeline_bar.dart';
 import 'playback_snapshot_builder.dart';
 import 'live_stream_menu.dart';
@@ -1099,6 +1100,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
       hasComposer: widget.danmakuComposerBuilder != null,
       hasSubtitles: session.subtitleTracks.isNotEmpty,
       hasVoices: session.voiceTracks.isNotEmpty,
+      hasListen: session.canListen,
       hasNextButton:
           !session.isLive && session.contentTarget is! OfflinePlaybackTarget,
       textStyle: DefaultTextStyle.of(context).style,
@@ -1154,6 +1156,44 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                 builder: (context, snapshot) {
                   final sourceGeneration = session.sourceGeneration;
                   final settings = widget.settings.value;
+                  if (session.audioOnly) {
+                    return AudioPlaybackView(
+                      key: _playerBoundsKey,
+                      session: session,
+                      snapshot: snapshot,
+                      fullScreen: widget.fullScreen,
+                      onFullScreen: _toggleFullScreen,
+                      commands: widget.pageCommands.value,
+                      navigation: ValueListenableBuilder<PlaybackNavigation?>(
+                        valueListenable: widget.navigation,
+                        builder: (context, actions, _) => Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (actions?.showInPlayer ?? false)
+                              IconButton(
+                                key: const ValueKey('player-back'),
+                                tooltip: '返回',
+                                onPressed: widget.fullScreen
+                                    ? _toggleFullScreen
+                                    : actions == null
+                                    ? null
+                                    : () => widget.onNavigate(actions.onBack),
+                                icon: const Icon(Icons.arrow_back_rounded),
+                              ),
+                            if (actions?.showInPlayer ?? false)
+                              IconButton(
+                                key: const ValueKey('player-home'),
+                                tooltip: '回到主页',
+                                onPressed: actions == null
+                                    ? null
+                                    : () => widget.onNavigate(actions.onHome),
+                                icon: const Icon(Icons.home_outlined),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
                   final controls =
                       widget.controlsVisible.value || session.error != null;
                   return WidthLayoutBuilder(
@@ -2101,6 +2141,11 @@ class _ControlBar extends StatelessWidget {
             : Colors.white54,
       ),
     );
+    final listenButton = IconButton(
+      tooltip: '听视频',
+      onPressed: () => unawaited(session.setAudioOnly(true)),
+      icon: const Icon(Icons.headphones_rounded, size: 20),
+    );
     final volumeButton = PopupMenuButton<void>(
       tooltip: '音量',
       icon: Icon(
@@ -2144,6 +2189,7 @@ class _ControlBar extends StatelessWidget {
       );
     }
     final secondary = <Widget>[
+      if (session.canListen) slot(listenButton),
       slot(
         IconButton(
           tooltip: '弹幕配置',
@@ -2408,6 +2454,17 @@ class _ControlBar extends StatelessWidget {
       action();
     },
     itemBuilder: (_) => [
+      if (session.canListen)
+        PopupMenuItem(
+          value: () => unawaited(session.setAudioOnly(true)),
+          child: const Row(
+            children: [
+              Icon(Icons.headphones_rounded, size: 20),
+              SizedBox(width: 12),
+              Text('听视频'),
+            ],
+          ),
+        ),
       if ((session.detail?.parts.length ?? 0) > 1)
         if (pageCommands case final commands?)
           PopupMenuItem(
@@ -2596,6 +2653,7 @@ typedef _ControlsLayoutInputs = ({
   bool hasComposer,
   bool hasSubtitles,
   bool hasVoices,
+  bool hasListen,
   bool hasNextButton,
   TextStyle textStyle,
   TextDirection textDirection,
@@ -2636,7 +2694,8 @@ class _ControlsLayout {
                 (8 +
                     (inputs.hasNextButton ? 1 : 0) +
                     (inputs.hasSubtitles ? 1 : 0) +
-                    (inputs.hasVoices ? 1 : 0)) +
+                    (inputs.hasVoices ? 1 : 0) +
+                    (inputs.hasListen ? 1 : 0)) +
             timeWidth +
             rateWidth +
             qualityWidth +
