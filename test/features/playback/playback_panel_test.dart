@@ -52,6 +52,135 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final mode in PlayerControlsMode.values) {
+    for (final (content, target) in <(String, ContentPlaybackTarget?)>[
+      ('video', null),
+      ('pgc', const PgcPlaybackTarget('12', cid: '123')),
+      ('live', const LivePlaybackTarget('12')),
+      ('offline', const OfflinePlaybackTarget('local-task')),
+    ]) {
+      testWidgets(
+        'small window keeps only three working controls for $content ${mode.name}',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = const Size(1400, 1000);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          final window = _FakeWindowService();
+          addTearDown(session.close);
+          var settings = AppSettings(playerControlsMode: mode);
+          var toggles = 0;
+          await tester.pumpWidget(
+            StatefulBuilder(
+              builder: (context, setState) => _app(
+                session,
+                window,
+                settings,
+                width: 320,
+                textScale: 2,
+                target: target,
+                onBack: () {},
+                onHome: () {},
+                showNavigationInPlayer: true,
+                nextPart: () {},
+                composer: (_) => const TextField(key: Key('small-editor')),
+                overlay: (_) => const Text('画面弹幕'),
+                onToggleComments: () => setState(() {
+                  toggles++;
+                  settings = settings.copyWith(
+                    danmakuEnabled: !settings.danmakuEnabled,
+                  );
+                }),
+              ),
+            ),
+          );
+          await _pumpFrames(tester);
+          await _showControls(tester);
+          final generation = session.sourceGeneration;
+          await session.seek(const Duration(seconds: 35));
+          await _pumpFrames(tester);
+          final position = session.snapshots.value.position;
+          void expectMinimalControls() {
+            expect(
+              find.descendant(
+                of: find.byKey(const ValueKey('player-controls')),
+                matching: find.byType(IconButton),
+              ),
+              findsNWidgets(3),
+            );
+            for (final key in [
+              'player-control-title-layer',
+              'compact-playback-actions',
+              'playback-timeline-slider',
+              'player-next-episode',
+              'player-back',
+              'player-home',
+            ]) {
+              expect(find.byKey(ValueKey(key)), findsNothing);
+            }
+            expect(find.byKey(const Key('small-editor')), findsNothing);
+            final hiddenEditor = find.descendant(
+              of: find.byKey(const Key('small-editor'), skipOffstage: false),
+              matching: find.byType(EditableText, skipOffstage: false),
+            );
+            expect(
+              tester
+                  .widget<EditableText>(hiddenEditor)
+                  .focusNode
+                  .canRequestFocus,
+              isFalse,
+            );
+            for (final tooltip in ['更多播放选项', '发送弹幕', '音量', '听视频']) {
+              expect(find.byTooltip(tooltip), findsNothing);
+            }
+            expect(find.byTooltip('全屏（F）').hitTestable(), findsOneWidget);
+            expect(tester.takeException(), isNull);
+          }
+
+          expectMinimalControls();
+          await tester.tap(find.byTooltip('暂停（空格）'));
+          await _pumpFrames(tester);
+          expect(session.snapshots.value.desiredPlaying, isFalse);
+          await tester.tap(find.byTooltip('播放（空格）'));
+          await _pumpFrames(tester);
+          expect(session.snapshots.value.desiredPlaying, isTrue);
+          await tester.tap(find.byTooltip('关闭弹幕'));
+          await _pumpFrames(tester);
+          expect(find.text('画面弹幕'), findsNothing);
+          await tester.tap(find.byTooltip('开启弹幕'));
+          await _pumpFrames(tester);
+          expect(find.text('画面弹幕'), findsOneWidget);
+          expect(toggles, 2);
+          await session.pause();
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+          expect(window.fullScreen, isTrue);
+          expect(find.byTooltip('音量'), findsOneWidget);
+          expect(find.byKey(const Key('small-editor')), findsOneWidget);
+          expect(session.snapshots.value.desiredPlaying, isFalse);
+          await tester.tap(find.byTooltip('退出全屏（Esc）'));
+          await _pumpFrames(tester);
+          expect(window.fullScreen, isFalse);
+          expectMinimalControls();
+          expect(session.snapshots.value.position, position);
+          expect(session.sourceGeneration, generation);
+          expect(engine.opens, 1);
+          expect(engine.maxSurfaces, 1);
+          await tester.tapAt(_surfacePoint(tester));
+          await _pumpSurfaceTap(tester);
+          expect(
+            find.byKey(const ValueKey('player-collapsed-progress')),
+            findsNothing,
+          );
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
   for (final width in [390.0, 999.0, 1000.0]) {
     testWidgets('video sidebar toggle stays outside fullscreen at $width', (
       tester,
@@ -630,6 +759,10 @@ void main() {
   testWidgets(
     'top controls show navigation and viewers without title or skip status',
     (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1400, 1000);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       final engine = _FakeEngine();
       final session = _session(engine);
       addTearDown(session.close);
@@ -640,7 +773,7 @@ void main() {
         session,
         _FakeWindowService(),
         const AppSettings.defaults(),
-        width: 320,
+        width: 1200,
         textScale: 2,
         active: active,
         viewers: viewers,
@@ -787,6 +920,10 @@ void main() {
   ]) {
     testWidgets('progress repaint stays inside HUD: controls $controlsVisible, '
         'fullscreen $fullScreen', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1400, 1000);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       final engine = _FakeEngine();
       final session = _session(engine, repository: _MenuRepository());
       addTearDown(session.close);
@@ -801,6 +938,7 @@ void main() {
               danmakuEnabled: false,
               playerControlsMode: PlayerControlsMode.click,
             ),
+            width: 1200,
           ),
         ),
       );
@@ -927,13 +1065,6 @@ void main() {
       }
 
       expectClearance();
-      if (width == 400) {
-        final oldBottom = tester.getRect(background).bottom;
-        await tester.tap(find.byTooltip('发送弹幕'));
-        await tester.pump();
-        expectClearance();
-        expect(tester.getRect(background).bottom, lessThan(oldBottom));
-      }
       await tester.tap(find.byTooltip('全屏（F）'));
       await _pumpFrames(tester);
       expectClearance();
@@ -1100,7 +1231,7 @@ void main() {
     expect(session.danmaku.position, const Duration(seconds: 2));
   });
 
-  for (final fullScreen in [false, true]) {
+  for (final fullScreen in [true]) {
     testWidgets(
       'keyboard resize retains video content, draft, focus and one source fullscreen=$fullScreen',
       (tester) async {
@@ -2810,6 +2941,7 @@ void main() {
       final slider = find.byKey(const ValueKey('player-volume-slider'));
 
       for (final fullscreen in [false, true]) {
+        if (width == 320 && !fullscreen) continue;
         if (fullscreen) {
           await tester.tap(find.byTooltip('全屏（F）'));
           await _pumpFrames(tester);
@@ -3676,7 +3808,7 @@ void main() {
       for (final width in [800.0, 640.0, 480.0, 320.0]) {
         await resize(width);
         expect(
-          find.byKey(const ValueKey('compact-control-row')),
+          find.byKey(const ValueKey('small-window-control-row')),
           findsOneWidget,
         );
         expect(
@@ -3690,23 +3822,7 @@ void main() {
         );
         expect(find.byTooltip('全屏（F）').hitTestable(), findsOneWidget);
       }
-      await tester.tap(find.byTooltip('发送弹幕'));
-      await tester.pump();
-      expect(
-        tester.widget<TextField>(field).controller?.text ??
-            tester
-                .widget<EditableText>(
-                  find.descendant(
-                    of: field,
-                    matching: find.byType(EditableText),
-                  ),
-                )
-                .controller
-                .text,
-        '保留弹幕草稿',
-      );
-      await tester.tap(find.byTooltip('收起弹幕输入'));
-      await tester.pump();
+      expect(find.byTooltip('发送弹幕'), findsNothing);
       await tester.tap(find.byTooltip('播放（空格）'));
       await _pumpFrames(tester);
       expect(engine.currentSnapshot.desiredPlaying, isTrue);
@@ -3719,7 +3835,10 @@ void main() {
       expect(engine.maxSurfaces, 1);
       expect(engine.currentSnapshot.position, const Duration(seconds: 45));
       await resize(940, textScale: 2);
-      expect(find.byKey(const ValueKey('compact-control-row')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('small-window-control-row')),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       await _pumpFrames(tester);
@@ -3727,7 +3846,7 @@ void main() {
   );
 
   for (final pgc in [false, true]) {
-    for (final fullScreen in [false, true]) {
+    for (final fullScreen in [true]) {
       testWidgets(
         'compact transport stays at bottom left while composing pgc=$pgc fullscreen=$fullScreen',
         (tester) async {
@@ -3869,6 +3988,12 @@ void main() {
     );
     await _pumpFrames(tester);
     await _showControls(tester);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.tap(find.byTooltip('全屏（F）'));
+    await _pumpFrames(tester);
     await session.pause();
     await tester.tap(find.byTooltip('更多播放选项'));
     await tester.pumpAndSettle();
@@ -3961,6 +4086,7 @@ void main() {
 
   for (final compact in [false, true]) {
     for (final fullscreen in [false, true]) {
+      if (compact && !fullscreen) continue;
       testWidgets(
         'live quality, auto and line choices work compact=$compact fullscreen=$fullscreen',
         (tester) async {
@@ -4189,6 +4315,7 @@ void main() {
 
   for (final compact in [false, true]) {
     for (final fullscreen in [false, true]) {
+      if (compact && !fullscreen) continue;
       for (final menu in ['quality', 'rate', 'subtitle', 'voice']) {
         testWidgets(
           'dynamic $menu menu applies after idle compact=$compact fullscreen=$fullscreen',
@@ -5522,8 +5649,9 @@ void main() {
               }
               for (final region in [
                 controls,
-                find.byKey(const ValueKey('player-control-title-layer')),
-                if (width == 320 && live)
+                if (width != 320 || fullscreen)
+                  find.byKey(const ValueKey('player-control-title-layer')),
+                if (width == 320 && live && fullscreen)
                   find.byKey(const ValueKey('compact-playback-actions')),
                 controls,
               ]) {
@@ -5638,6 +5766,7 @@ void main() {
   for (final content in ['video', 'pgc', 'live']) {
     for (final fullScreen in [false, true]) {
       for (final compact in [false, true]) {
+        if (compact && !fullScreen) continue;
         testWidgets(
           'dynamic controls preserve IME composition through idle and exit '
           'content=$content fullscreen=$fullScreen compact=$compact',
@@ -6009,7 +6138,7 @@ void main() {
       );
       await _pumpFrames(tester);
       expect(find.byKey(const ValueKey('player-controls')), findsOneWidget);
-      expect(find.byTooltip('更多播放选项').hitTestable(), findsOneWidget);
+      expect(find.byTooltip('音量').hitTestable(), findsOneWidget);
       expect(find.byKey(const ValueKey('player-back')), findsNothing);
       expect(find.byKey(const ValueKey('player-home')), findsNothing);
       expect(find.byTooltip('全屏（F）').hitTestable(), findsOneWidget);
@@ -6124,6 +6253,9 @@ void main() {
         await _pumpFrames(tester);
         await _showControls(tester);
         expect(tester.takeException(), isNull);
+        tester.view.physicalSize = Size(width, 1000);
+        await tester.tap(find.byTooltip('全屏（F）'));
+        await _pumpFrames(tester);
         if (find.byTooltip('发送弹幕').evaluate().isNotEmpty) {
           await tester.tap(find.byTooltip('发送弹幕'));
           await tester.pump();
@@ -6137,7 +6269,7 @@ void main() {
         await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
         await _pumpFrames(tester);
         expect(engine.pauses, pauses);
-        expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
+        expect(find.byTooltip('退出全屏（Esc）'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
         await _pumpFrames(tester);
@@ -6166,6 +6298,8 @@ void main() {
     );
     await _pumpFrames(tester);
     await _showControls(tester);
+    await tester.tap(find.byTooltip('全屏（F）'));
+    await _pumpFrames(tester);
     await tester.tap(find.byTooltip('更多播放选项'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -6669,7 +6803,7 @@ Widget _app(
   WindowService window,
   AppSettings settings, {
   double textScale = 1,
-  double width = 400,
+  double width = 800,
   ThemeData? theme,
   WidgetBuilder? composer,
   WidgetBuilder? overlay,
@@ -6683,6 +6817,7 @@ Widget _app(
   PlaybackViewerRepository? viewers,
   bool showNavigationInPlayer = false,
   SettingsRepository? settingsRepository,
+  VoidCallback? onToggleComments,
 }) => ProviderScope(
   overrides: [
     playbackSessionProvider.overrideWithValue(session),
@@ -6720,19 +6855,21 @@ Widget _app(
           body: Column(
             children: [
               const TextField(key: Key('search-field')),
-              SizedBox(
-                width: width,
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: PlaybackPanel(
-                    detail: target == null ? _detail : null,
-                    part: target == null ? _part : null,
-                    target: target,
-                    settings: settings,
-                    onToggleComments: () {},
-                    window: window,
-                    danmakuComposerBuilder: composer,
-                    danmakuOverlayBuilder: overlay,
+              Flexible(
+                child: SizedBox(
+                  width: width,
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: PlaybackPanel(
+                      detail: target == null ? _detail : null,
+                      part: target == null ? _part : null,
+                      target: target,
+                      settings: settings,
+                      onToggleComments: onToggleComments ?? () {},
+                      window: window,
+                      danmakuComposerBuilder: composer,
+                      danmakuOverlayBuilder: overlay,
+                    ),
                   ),
                 ),
               ),

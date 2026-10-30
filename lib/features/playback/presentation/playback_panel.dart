@@ -1163,6 +1163,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                         snapshot,
                         width - 20,
                       );
+                      final smallWindow = layout.compact && !widget.fullScreen;
                       return ColoredBox(
                         key: _playerBoundsKey,
                         color: Colors.black,
@@ -1322,7 +1323,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
-                            if (layout.compact &&
+                            if (!smallWindow &&
+                                layout.compact &&
                                 session.isLive &&
                                 !_composeExpanded &&
                                 session.error == null &&
@@ -1353,34 +1355,37 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
-                            Positioned(
-                              key: const ValueKey('player-control-title-layer'),
-                              left: 0,
-                              right: 0,
-                              top: 0,
-                              child: _PlaybackViewers(
-                                request: _appVisible
-                                    ? _viewerRequest(session)
-                                    : null,
-                                builder: (viewers) => _controlsVisibility(
-                                  visible: controls,
-                                  hoverRegion: 'title',
-                                  child: _PlayerTopBar(
-                                    navigation: widget.navigation,
-                                    fullScreen: widget.fullScreen,
-                                    onExitFullScreen: _toggleFullScreen,
-                                    onNavigate: widget.onNavigate,
-                                    viewers: viewers,
+                            if (!smallWindow)
+                              Positioned(
+                                key: const ValueKey(
+                                  'player-control-title-layer',
+                                ),
+                                left: 0,
+                                right: 0,
+                                top: 0,
+                                child: _PlaybackViewers(
+                                  request: _appVisible
+                                      ? _viewerRequest(session)
+                                      : null,
+                                  builder: (viewers) => _controlsVisibility(
+                                    visible: controls,
+                                    hoverRegion: 'title',
+                                    child: _PlayerTopBar(
+                                      navigation: widget.navigation,
+                                      fullScreen: widget.fullScreen,
+                                      onExitFullScreen: _toggleFullScreen,
+                                      onNavigate: widget.onNavigate,
+                                      viewers: viewers,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
                             PlaybackSnapshotBuilder(
                               snapshots: session.snapshots,
                               select: (_) => session.currentSponsor,
                               builder: (context, _) {
                                 final segment = session.currentSponsor;
-                                if (segment == null) {
+                                if (segment == null || smallWindow) {
                                   return const SizedBox.shrink();
                                 }
                                 return Positioned(
@@ -1485,7 +1490,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
-                            if (!controls &&
+                            if (!smallWindow &&
+                                !controls &&
                                 settings.showCollapsedProgress &&
                                 !session.isLive &&
                                 snapshot.duration.inMilliseconds > 0)
@@ -1701,8 +1707,9 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                             child: Column(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                if (session.auxiliaryMessage !=
-                                                    null)
+                                                if (!smallWindow &&
+                                                    session.auxiliaryMessage !=
+                                                        null)
                                                   Padding(
                                                     padding:
                                                         const EdgeInsets.symmetric(
@@ -1719,7 +1726,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                       ),
                                                     ),
                                                   ),
-                                                if (!session.isLive)
+                                                if (!smallWindow &&
+                                                    !session.isLive)
                                                   PlaybackSnapshotBuilder(
                                                     snapshots:
                                                         session.snapshots,
@@ -2108,6 +2116,33 @@ class _ControlBar extends StatelessWidget {
     );
     Widget slot(Widget child, [double width = _ControlsLayout.buttonWidth]) =>
         SizedBox(width: width, height: 40, child: child);
+    final composerBuilder = danmakuComposerBuilder;
+    final composer = composerBuilder == null
+        ? null
+        : KeyedSubtree(
+            key: composerKey,
+            child: Builder(builder: composerBuilder),
+          );
+    if (layout.compact && !fullScreen) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Keep an existing draft across width changes without editor focus.
+          if (composer != null) ExcludeFocus(child: Offstage(child: composer)),
+          Row(
+            key: const ValueKey('small-window-control-row'),
+            // This layout intentionally exposes exactly these three actions.
+            // Additional actions belong to the full toolbar or fullscreen.
+            children: [
+              slot(play),
+              const Spacer(),
+              slot(danmakuButton),
+              slot(fullscreenButton),
+            ],
+          ),
+        ],
+      );
+    }
     final secondary = <Widget>[
       slot(
         IconButton(
@@ -2274,13 +2309,6 @@ class _ControlBar extends StatelessWidget {
         ),
       slot(volumeButton),
     ];
-    final composerBuilder = danmakuComposerBuilder;
-    final composer = composerBuilder == null
-        ? null
-        : KeyedSubtree(
-            key: composerKey,
-            child: Builder(builder: composerBuilder),
-          );
     final showPlayInBar = !session.isLive || session.error != null;
     final showNext = layout.inputs.hasNextButton;
     // Keep transport controls at the bottom left even when the editor is open.

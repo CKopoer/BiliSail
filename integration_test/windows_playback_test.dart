@@ -748,7 +748,9 @@ void main() {
           expect(
             find.byKey(
               ValueKey(
-                width >= 940 ? 'standard-control-row' : 'compact-control-row',
+                width >= 940
+                    ? 'standard-control-row'
+                    : 'small-window-control-row',
               ),
             ),
             findsOneWidget,
