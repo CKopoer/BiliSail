@@ -160,7 +160,10 @@ void main() {
       await mount(tester);
       controller().openFolder(_folder);
       await tester.pumpAndSettle();
-      final wide = tester.getSize(find.byType(VideoCard).first).width;
+      expect(
+        tester.getSize(find.byType(VideoCard).first).width,
+        closeTo(297.6, .01),
+      );
       await mount(
         tester,
         width: 375,
@@ -170,7 +173,7 @@ void main() {
       );
       expect(
         tester.getSize(find.byType(VideoCard).first).width,
-        lessThan(wide),
+        closeTo(343, .01),
       );
       final card = tester.widget<VideoCard>(find.byType(VideoCard).first);
       card.onTap();

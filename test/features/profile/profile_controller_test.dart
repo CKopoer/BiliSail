@@ -462,7 +462,7 @@ void main() {
         expect(find.byType(ProfileVideoCard), findsNothing);
         expect(find.byType(VideoCard).evaluate().length, lessThan(30));
         final rect = tester.getRect(find.byType(VideoCard).first);
-        expect(rect.width, closeTo(width == 1920 ? 361.6 : 343, .1));
+        expect(rect.width, closeTo(width == 1920 ? 298 : 343, .1));
         await tester.tap(find.text('收藏作者').first);
         expect(author, const UserId('9'));
         await tester.tap(find.text('收藏视频').first);

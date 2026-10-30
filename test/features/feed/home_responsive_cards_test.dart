@@ -35,9 +35,9 @@ void main() {
         (640.0, 1.0, 3),
         (979.0, 1.0, 3),
         (980.0, 1.0, 3),
-        (1299.0, 1.0, 3),
-        (1300.0, 1.0, 4),
-        (1920.0, 1.0, 5),
+        (1139.0, 1.0, 3),
+        (1140.0, 1.0, 4),
+        (1920.0, 1.0, 6),
         (447.0, 2.0, 1),
         (448.0, 2.0, 2),
         (799.0, 2.0, 2),
@@ -51,7 +51,7 @@ void main() {
         await tester.pumpAndSettle();
 
         final slots = _slots(tester);
-        expect(slots.length, inInclusiveRange(columns + 1, 6));
+        expect(slots.length, inInclusiveRange(columns + 1, 8));
         final first = tester.getRect(slots.first);
         final last = tester.getRect(slots[columns - 1]);
         final next = tester.getRect(slots[columns]);
@@ -148,7 +148,7 @@ final class _Repository implements HomeRepository {
       return const HomePage([], hasMore: false);
     }
     return HomePage([
-      for (var index = 0; index < 6; index++)
+      for (var index = 0; index < 8; index++)
         HomeEntry(
           id: '${index + 1}',
           title: '第${index + 1}张卡片的长标题，用于检查窄屏布局与文字缩放',

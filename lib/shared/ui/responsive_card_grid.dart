@@ -13,7 +13,7 @@ const _desktopSpacing = 20.0;
   // Sample the 15px card title. Android's nonlinear font scaling leaves large
   // reference sizes unchanged, so scaling a card width misses enlarged text.
   final titleScale = textScaler.scale(15) / 15;
-  final minimum = (300 * titleScale).clamp(300, 450);
+  final minimum = (260 * titleScale).clamp(260, 450);
   // Two cards remain readable on phones; tablet rows can use three smaller
   // cards before the regular desktop minimum permits additional columns.
   final compactMinimum = (140 * titleScale).clamp(140, 210);

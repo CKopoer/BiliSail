@@ -341,7 +341,7 @@ void main() {
       await tester.pumpAndSettle();
       final cards = find.byType(VideoCard);
       final compact = width < 600;
-      final columns = compact ? 2 : 5;
+      final columns = compact ? 2 : 6;
       final inset = compact ? 4.0 : 28.0;
       final gap = compact ? 6.0 : 20.0;
       final first = tester.getRect(cards.first);

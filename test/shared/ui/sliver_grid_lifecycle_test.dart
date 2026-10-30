@@ -154,7 +154,7 @@ void main() {
     testWidgets(
       '$kind invalidates cached row layout on width and text scaling',
       (tester) async {
-        tester.view.physicalSize = const Size(700, 600);
+        tester.view.physicalSize = const Size(1099, 600);
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
@@ -196,16 +196,19 @@ void main() {
           expect(next.top, greaterThan(first.bottom));
         }
 
-        expectColumns(3, 700);
+        expectColumns(3, 1099);
+        tester.view.physicalSize = const Size(1100, 600);
+        await tester.pumpAndSettle();
+        expectColumns(4, 1100);
         tester.view.physicalSize = const Size(1400, 600);
         await tester.pumpAndSettle();
-        expectColumns(4, 1400);
+        expectColumns(5, 1400);
         scale.value = 2;
         await tester.pumpAndSettle();
         expectColumns(3, 1400);
         scale.value = 1;
         await tester.pumpAndSettle();
-        expectColumns(4, 1400);
+        expectColumns(5, 1400);
         expect(tester.takeException(), isNull);
       },
     );

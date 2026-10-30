@@ -10,7 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('desktop grid fills the width with five larger cards', (
+  testWidgets('desktop grid fills the width with six flexible cards', (
     tester,
   ) async {
     _setViewport(tester, 1920);
@@ -18,12 +18,12 @@ void main() {
 
     final cards = find.byType(VideoCard);
     final first = tester.getRect(cards.at(0));
-    final fifth = tester.getRect(cards.at(4));
     final sixth = tester.getRect(cards.at(5));
-    expect(fifth.top, first.top);
-    expect(sixth.top, greaterThan(first.bottom));
-    expect(first.width, closeTo(360, 1));
-    expect(fifth.right, closeTo(1880, 1));
+    final seventh = tester.getRect(cards.at(6));
+    expect(sixth.top, first.top);
+    expect(seventh.top, greaterThan(first.bottom));
+    expect(first.width, closeTo(296.67, .01));
+    expect(sixth.right, closeTo(1880, 1));
     expect(tester.takeException(), isNull);
   });
 
@@ -105,13 +105,21 @@ void main() {
       (600.0, 1.0, 3),
       (939.0, 1.0, 3),
       (940.0, 1.0, 3),
-      (1259.0, 1.0, 3),
-      (1260.0, 1.0, 4),
+      (1099.0, 1.0, 3),
+      (1100.0, 1.0, 4),
+      (1379.0, 1.0, 4),
+      (1380.0, 1.0, 5),
+      (1659.0, 1.0, 5),
+      (1660.0, 1.0, 6),
+      (1411.0, 1.3, 3),
+      (1412.0, 1.3, 4),
       (439.0, 2.0, 1),
       (440.0, 2.0, 2),
       (720.0, 2.0, 2),
       (759.0, 2.0, 2),
       (760.0, 2.0, 3),
+      (1859.0, 2.0, 3),
+      (1860.0, 2.0, 4),
     ]) {
       await tester.pumpWidget(_gridApp(width: width, scale: scale));
       await tester.pumpAndSettle();
