@@ -461,6 +461,10 @@ void main() {
     tester,
   ) async {
     await mount(tester);
+    if (find.byType(TextField).evaluate().isEmpty) {
+      await tester.tap(find.byKey(const ValueKey('profile-search-toggle')));
+      await tester.pumpAndSettle();
+    }
     await tester.enterText(find.byType(TextField), '关键词');
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
@@ -538,6 +542,10 @@ void main() {
     'session change disposes retained pages and resets their scroll',
     (tester) async {
       await mount(tester);
+      if (find.byType(TextField).evaluate().isEmpty) {
+        await tester.tap(find.byKey(const ValueKey('profile-search-toggle')));
+        await tester.pumpAndSettle();
+      }
       await tester.enterText(find.byType(TextField), '旧账号关键词');
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
@@ -554,6 +562,10 @@ void main() {
       expect(_position(tester), isNot(same(old)));
       expect(_position(tester).pixels, 0);
       expect(state().lists.keys, [ProfileSection.videos]);
+      if (find.byType(TextField).evaluate().isEmpty) {
+        await tester.tap(find.byKey(const ValueKey('profile-search-toggle')));
+        await tester.pumpAndSettle();
+      }
       expect(
         tester.widget<TextField>(find.byType(TextField)).controller?.text,
         '',

@@ -194,14 +194,6 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       removals?.removed ?? const {},
       current: widget.id,
     );
-    if (queue != null &&
-        queue.hasMore &&
-        profileQueue?.canPrefetch(widget.id) == true &&
-        queue.items.length - queue.indexOf(widget.id) <= 5) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _validQueue?.id == queue.id) _loadMoreQueue();
-      });
-    }
     // Start the related read alongside detail without rebuilding the player
     // and intro header when only that read changes.
     ref.listen(relatedVideosProvider(widget.id), (_, _) {});
@@ -264,7 +256,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
               hasNext:
                   !transitioning &&
                   (_adjacentSource(video, selected, 1) != null ||
-                      (queue?.hasMore ?? false)),
+                      _canPageQueue(1)),
               onCompleted: () =>
                   _changePart(video, selected, 1, completed: true),
               onRelatedCompleted: widget.queue == null
@@ -510,8 +502,20 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                   : null,
                               pendingRemovals: removals?.pending ?? const {},
                               onLoadMore: queue.hasMore ? _loadMoreQueue : null,
-                              loadingMore: profileQueue?.loading ?? false,
-                              loadMoreMessage: profileQueue?.message,
+                              onLoadPrevious: queue.hasPrevious
+                                  ? () => _loadMoreQueue(previous: true)
+                                  : null,
+                              loadingMore:
+                                  profileQueue != null &&
+                                  profileQueue.loading &&
+                                  profileQueue.direction > 0,
+                              loadingPrevious:
+                                  profileQueue != null &&
+                                  profileQueue.loading &&
+                                  profileQueue.direction < 0,
+                              loadMoreMessage: profileQueue?.nextMessage,
+                              loadPreviousMessage:
+                                  profileQueue?.previousMessage,
                               collapsedChild: infoTabs,
                             ),
                     );
@@ -703,7 +707,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
             .firstOrNull ??
         selected;
     var next = _adjacentSource(video, current, direction);
-    if (next == null && direction == 1 && (_effectiveQueue?.hasMore ?? false)) {
+    if (next == null && _canPageQueue(direction)) {
       if (_loadingNextQueue) return;
       final queue = _effectiveQueue;
       if (queue == null) return;
@@ -716,7 +720,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       try {
         await ref
             .read(profilePlaybackQueueProvider(queue.id).notifier)
-            .loadMore(widget.id);
+            .prepareAdjacent(widget.id, direction);
       } finally {
         _loadingNextQueue = false;
       }
@@ -779,7 +783,19 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       scope: session.accountScope(),
       epoch: session.sessionEpoch(),
     );
+    if (queue.profileSource != null) {
+      ref
+          .read(profilePlaybackQueueProvider(queue.id).notifier)
+          .rememberCurrent(id);
+    }
     widget.onOpenQueueVideo?.call(id);
+  }
+
+  bool _canPageQueue(int direction) {
+    final queue = _effectiveQueue;
+    if (queue == null || queue.profileSource == null) return false;
+    if (queue.indexOf(widget.id) < 0) return queue.pageOf(widget.id) != null;
+    return direction > 0 ? queue.hasMore : queue.hasPrevious;
   }
 
   WatchLaterQueue? get _validQueue {
@@ -805,19 +821,22 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     );
   }
 
-  Future<void> _loadMoreQueue() async {
+  Future<void> _loadMoreQueue({bool previous = false}) async {
     final queue = _validQueue;
     if (queue == null || queue.profileSource == null) return;
-    await ref
-        .read(profilePlaybackQueueProvider(queue.id).notifier)
-        .loadMore(widget.id);
+    final controller = ref.read(
+      profilePlaybackQueueProvider(queue.id).notifier,
+    );
+    await (previous
+        ? controller.loadPrevious(widget.id)
+        : controller.loadMore(widget.id));
     if (!mounted || _validQueue?.id != queue.id) return;
     final video = _lastVideo;
     final selected = video?.parts
         .where((part) => part.cid == _lastCid)
         .firstOrNull;
     if (!_loadingNextQueue &&
-        ref.read(profilePlaybackQueueProvider(queue.id)).message == null &&
+        ref.read(profilePlaybackQueueProvider(queue.id)).nextMessage == null &&
         _completionWaiting?.id == widget.id &&
         _completionWaiting?.generation == _queueSession?.sourceGeneration &&
         video != null &&

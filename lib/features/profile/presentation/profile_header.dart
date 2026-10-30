@@ -296,7 +296,7 @@ String profileSectionLabel(ProfileSection section) => switch (section) {
   ProfileSection.followers => '粉丝',
 };
 
-class ProfileVideoToolbar extends StatelessWidget {
+class ProfileVideoToolbar extends StatefulWidget {
   const ProfileVideoToolbar({
     super.key,
     required this.order,
@@ -314,8 +314,28 @@ class ProfileVideoToolbar extends StatelessWidget {
   final bool playAllLoading;
 
   @override
+  State<ProfileVideoToolbar> createState() => _ProfileVideoToolbarState();
+}
+
+class _ProfileVideoToolbarState extends State<ProfileVideoToolbar> {
+  late bool _searchExpanded = widget.keywordController.text.isNotEmpty;
+  final _searchFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final order = widget.order;
+    final keywordController = widget.keywordController;
+    final onOrderChanged = widget.onOrderChanged;
+    final onSearch = widget.onSearch;
+    final playAllLoading = widget.playAllLoading;
+    final onPlayAll = widget.onPlayAll;
     final playAll = Semantics(
       liveRegion: playAllLoading,
       value: playAllLoading ? '正在加载播放列表' : null,
@@ -359,10 +379,22 @@ class ProfileVideoToolbar extends StatelessWidget {
     final search = TextField(
       key: const ValueKey('profile-video-search'),
       controller: keywordController,
+      focusNode: _searchFocus,
       textInputAction: TextInputAction.search,
       style: theme.textTheme.bodyMedium,
       decoration: InputDecoration(
         hintText: '搜索投稿',
+        filled: true,
+        fillColor: theme.colorScheme.surfaceContainerLow,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        prefixIcon: const Icon(Icons.search, size: 18),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
@@ -387,10 +419,37 @@ class ProfileVideoToolbar extends StatelessWidget {
                 overflowAlignment: OverflowBarAlignment.end,
                 spacing: 12,
                 overflowSpacing: 8,
-                children: [sort, playAll],
+                children: [
+                  sort,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        key: const ValueKey('profile-search-toggle'),
+                        tooltip: _searchExpanded ? '收起搜索' : '展开搜索',
+                        isSelected: _searchExpanded,
+                        onPressed: () {
+                          setState(() => _searchExpanded = !_searchExpanded);
+                          if (_searchExpanded) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted && _searchExpanded) {
+                                _searchFocus.requestFocus();
+                              }
+                            });
+                          } else {
+                            _searchFocus.unfocus();
+                          }
+                        },
+                        icon: Icon(
+                          _searchExpanded ? Icons.close : Icons.search,
+                        ),
+                      ),
+                      playAll,
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              search,
+              if (_searchExpanded) ...[const SizedBox(height: 8), search],
             ],
           );
         }

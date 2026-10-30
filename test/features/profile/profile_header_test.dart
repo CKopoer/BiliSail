@@ -241,6 +241,9 @@ void main() {
         );
         expect(tester.takeException(), isNull);
         final search = find.byKey(const ValueKey('profile-video-search'));
+        expect(search, findsNothing);
+        await tester.tap(find.byKey(const ValueKey('profile-search-toggle')));
+        await tester.pumpAndSettle();
         final sort = find.byKey(const ValueKey('profile-video-sort'));
         final searchRect = tester.getRect(search);
         final sortRect = tester.getRect(sort);
@@ -330,6 +333,10 @@ void main() {
         final play = find.byKey(const ValueKey('profile-play-all'));
         final sort = find.byKey(const ValueKey('profile-video-sort'));
         final search = find.byKey(const ValueKey('profile-video-search'));
+        if (width < 600) {
+          await tester.tap(find.byKey(const ValueKey('profile-search-toggle')));
+          await tester.pumpAndSettle();
+        }
         final before = [
           for (final finder in [play, sort, search]) tester.getRect(finder),
         ];

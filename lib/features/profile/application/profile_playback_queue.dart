@@ -19,39 +19,31 @@ final class ProfilePlaybackQueueState {
     this.queue,
     this.loading = false,
     this.message,
-    this.capacityBlocked = false,
+    this.direction = 1,
   });
   final WatchLaterQueue? queue;
   final bool loading;
   final String? message;
-  final bool capacityBlocked;
-
-  bool canPrefetch(VideoId current) {
-    final value = queue;
-    if (value == null || loading || !value.hasMore) return false;
-    final index = value.indexOf(current);
-    if (index < 0) return false;
-    return message == null ||
-        (capacityBlocked &&
-            WatchLaterQueueRegistry.maximumItems - value.items.length + index >=
-                50);
-  }
+  final int direction;
+  String? get nextMessage => direction > 0 ? message : null;
+  String? get previousMessage => direction < 0 ? message : null;
 }
 
-/// The playback page owns paging; closing the originating space cannot stop it.
+/// The playback page owns the bounded window and its independent requests.
 class ProfilePlaybackQueueController
     extends Notifier<ProfilePlaybackQueueState> {
   ProfilePlaybackQueueController(this.id);
   final String id;
   RequestCancellation? _read;
   Future<void>? _pending;
-  int _emptyPages = 0;
+  final Map<int, int> _emptyPages = {};
 
   @override
   ProfilePlaybackQueueState build() {
     ref.watch(authControllerProvider);
     _read?.cancel();
     _pending = null;
+    _emptyPages.clear();
     final repository = ref.read(profileRepositoryProvider);
     ref.onDispose(() => _read?.cancel());
     return ProfilePlaybackQueueState(
@@ -65,20 +57,81 @@ class ProfilePlaybackQueueController
     );
   }
 
+  void rememberCurrent(VideoId current) {
+    final queue = state.queue;
+    if (queue == null || queue.profilePages.isEmpty) return;
+    final updated = queue.withProfilePages(
+      queue.profilePages,
+      current: current,
+    );
+    ref.read(watchLaterQueueRegistryProvider).update(updated);
+    state = ProfilePlaybackQueueState(
+      queue: updated,
+      loading: state.loading,
+      message: state.message,
+      direction: state.direction,
+    );
+  }
+
   Future<void> loadMore(VideoId current) {
+    final queue = state.queue;
+    if (queue == null || !queue.hasMore) return Future.value();
+    return _request(queue.nextPage, current, 1);
+  }
+
+  Future<void> loadPrevious(VideoId current) {
+    final queue = state.queue;
+    if (queue == null || !queue.hasPrevious) return Future.value();
+    return _request(queue.profilePages.first.page - 1, current, -1);
+  }
+
+  Future<void> prepareAdjacent(VideoId current, int direction) async {
+    final pending = _pending;
+    if (pending != null) await pending;
+    if (!ref.mounted) return;
+    var queue = state.queue;
+    if (queue == null) return;
+    if (queue.indexOf(current) < 0) {
+      final page = queue.pageOf(current);
+      if (page == null) return;
+      await _request(page, current, direction, replace: true);
+      if (!ref.mounted || state.message != null) return;
+    }
+    for (var attempt = 0; attempt < 3 && ref.mounted; attempt++) {
+      queue = state.queue;
+      if (queue == null || queue.adjacent(current, direction) != null) return;
+      if (direction > 0 ? !queue.hasMore : !queue.hasPrevious) return;
+      await (direction > 0 ? loadMore(current) : loadPrevious(current));
+      if (!ref.mounted || state.message != null) return;
+    }
+  }
+
+  Future<void> _request(
+    int page,
+    VideoId current,
+    int direction, {
+    bool replace = false,
+  }) {
     final pending = _pending;
     if (pending != null) return pending;
     late final Future<void> next;
-    next = _loadMore(current).whenComplete(() {
-      if (identical(_pending, next)) _pending = null;
-    });
+    next = _loadPage(page, current, direction, replace: replace).whenComplete(
+      () {
+        if (identical(_pending, next)) _pending = null;
+      },
+    );
     return _pending = next;
   }
 
-  Future<void> _loadMore(VideoId current) async {
+  Future<void> _loadPage(
+    int page,
+    VideoId current,
+    int direction, {
+    required bool replace,
+  }) async {
     final queue = state.queue;
     final source = queue?.profileSource;
-    if (queue == null || source == null || !queue.hasMore) return;
+    if (queue == null || source == null || page < 1) return;
     final label = source.folderId == null ? '投稿' : '收藏夹视频';
     final repository = ref.read(profileRepositoryProvider);
     final read = _read = RequestCancellation();
@@ -97,22 +150,11 @@ class ProfilePlaybackQueueController
                 ) !=
             null;
     if (!valid()) return;
-    // Retain a bounded window. Only already passed entries may be evicted.
-    final index = queue.indexOf(current);
-    if (index < 0) return;
-    final capacity =
-        WatchLaterQueueRegistry.maximumItems -
-        queue.items.length +
-        index.clamp(0, queue.items.length);
-    if (capacity < 50) {
-      state = ProfilePlaybackQueueState(
-        queue: queue,
-        message: '继续播放后可加载更多$label',
-        capacityBlocked: true,
-      );
-      return;
-    }
-    state = ProfilePlaybackQueueState(queue: queue, loading: true);
+    state = ProfilePlaybackQueueState(
+      queue: queue,
+      loading: true,
+      direction: direction,
+    );
     try {
       final result = await repository
           .loadEntries(
@@ -120,7 +162,7 @@ class ProfilePlaybackQueueController
             source.folderId == null
                 ? ProfileSection.videos
                 : ProfileSection.folders,
-            page: queue.nextPage,
+            page: page,
             order: source.order,
             folderId: source.folderId,
             cancellation: read,
@@ -132,29 +174,47 @@ class ProfilePlaybackQueueController
             },
           );
       if (!valid()) return;
-      final known = queue.items.map((item) => item.video.id).toSet();
+      final known = replace
+          ? <VideoId>{}
+          : queue.items.map((item) => item.video.id).toSet();
       final added = profileQueueItems(result.items)
           .where((item) => known.add(item.video.id))
           .toList();
-      if (added.length > capacity) {
-        throw AppFailure(AppFailureKind.protocol, '$label分页超出队列容量，请继续播放后重试');
+      if (replace && added.isEmpty) {
+        throw AppFailure(AppFailureKind.notFound, '当前视频所在页暂无可播放内容');
       }
-      final drop =
-          (queue.items.length +
-                  added.length -
-                  WatchLaterQueueRegistry.maximumItems)
-              .clamp(0, index.clamp(0, queue.items.length));
-      final updated = queue.append(
-        added,
-        nextPage: queue.nextPage + 1,
+      final incoming = ProfileQueuePage(
+        page: page,
+        items: added.take(WatchLaterQueue.maximumProfileItems).toList(),
         hasMore: result.hasMore && !result.isHidden,
-        drop: drop,
       );
-      _emptyPages = added.isEmpty ? _emptyPages + 1 : 0;
+      final pages = replace
+          ? [incoming]
+          : direction > 0
+          ? [...queue.profilePages, incoming]
+          : [incoming, ...queue.profilePages];
+      int count() => pages.fold(0, (sum, value) => sum + value.items.length);
+      while (pages.length > 1 &&
+          (count() > WatchLaterQueue.maximumProfileItems ||
+              pages.length > WatchLaterQueue.maximumProfileItems)) {
+        pages.removeAt(direction > 0 ? 0 : pages.length - 1);
+      }
+      final latest = state.queue ?? queue;
+      final updated = latest.withProfilePages(
+        pages,
+        current: current,
+        truncated: added.length > WatchLaterQueue.maximumProfileItems,
+      );
+      final empty = _emptyPages[direction] = added.isEmpty
+          ? (_emptyPages[direction] ?? 0) + 1
+          : 0;
       ref.read(watchLaterQueueRegistryProvider).update(updated);
       state = ProfilePlaybackQueueState(
         queue: updated,
-        message: updated.hasMore && _emptyPages >= 3
+        direction: direction,
+        message:
+            empty >= 3 &&
+                (direction > 0 ? updated.hasMore : updated.hasPrevious)
             ? '连续多页没有新$label，请重试继续加载'
             : null,
       );
@@ -162,6 +222,7 @@ class ProfilePlaybackQueueController
       if (valid()) {
         state = ProfilePlaybackQueueState(
           queue: queue,
+          direction: direction,
           message: error.kind == AppFailureKind.cancelled
               ? null
               : error.message,
@@ -171,6 +232,7 @@ class ProfilePlaybackQueueController
       if (valid()) {
         state = ProfilePlaybackQueueState(
           queue: queue,
+          direction: direction,
           message: '$label暂时无法加载，请重试',
         );
       }

@@ -130,6 +130,84 @@ void main() {
   });
 
   testWidgets(
+    'scrolling both edges requests adjacent pages and retains the visible anchor',
+    (tester) async {
+      var start = 20, end = 40;
+      var previousAvailable = true;
+      var previousReads = 0, nextReads = 0;
+      late StateSetter update;
+      final current = _item(20).video.id;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 380,
+                height: 600,
+                child: StatefulBuilder(
+                  builder: (context, setState) {
+                    update = setState;
+                    return WatchLaterQueuePanel(
+                      queue: WatchLaterQueue(
+                        id: 'moving',
+                        scope: 'user:7',
+                        sessionEpoch: 0,
+                        items: [for (var i = start; i < end; i++) _item(i)],
+                      ),
+                      current: current,
+                      expanded: true,
+                      onToggle: () {},
+                      onSelect: (_) {},
+                      onLoadPrevious: previousAvailable
+                          ? () => previousReads++
+                          : null,
+                      onLoadMore: () => nextReads++,
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(previousReads, 0);
+      expect(nextReads, 0);
+      final list = find.byKey(const ValueKey('watch-later-queue-list'));
+      await tester.drag(list, const Offset(0, 300));
+      await tester.pumpAndSettle();
+      expect(previousReads, greaterThan(0));
+      final anchor = find.byKey(ValueKey('watch-later-queue-${current.value}'));
+      final before = tester.getRect(anchor).top;
+      update(() {
+        start = 0;
+        previousAvailable = false;
+      });
+      await tester.pumpAndSettle();
+      expect(tester.getRect(anchor).top, closeTo(before, 1));
+      expect(nextReads, 0);
+      await tester.drag(list, const Offset(0, -10000));
+      await tester.pumpAndSettle();
+      expect(nextReads, greaterThan(0));
+      final tail = find.byKey(
+        ValueKey('watch-later-queue-${_item(39).video.id.value}'),
+      );
+      final oldTailTop = tester.getRect(tail).top;
+      final reads = nextReads;
+      update(() {
+        start = 20;
+        end = 60;
+        previousAvailable = true;
+      });
+      await tester.pumpAndSettle();
+      expect(tester.getRect(tail).top, closeTo(oldTailTop, 1));
+      expect(nextReads, reads);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'queue heading folds, selected row scrolls into view, and rows navigate',
     (tester) async {
       tester.view.devicePixelRatio = 1;

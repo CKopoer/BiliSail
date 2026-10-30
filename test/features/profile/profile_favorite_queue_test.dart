@@ -73,7 +73,7 @@ void main() {
   for (final isSelf in [true, false]) {
     for (final playAll in [true, false]) {
       testWidgets(
-        '${isSelf ? 'own' : 'UP'} favorites ${playAll ? 'play all' : 'select video'} captures loaded pages without fetching',
+        '${isSelf ? 'own' : 'UP'} favorites ${playAll ? 'play all' : 'select video'} loads only its first source page',
         (tester) async {
           final width = isSelf ? 375.0 : 1100.0;
           tester.view.devicePixelRatio = 1;
@@ -128,7 +128,7 @@ void main() {
           expect(queue.nextPage, 2);
           expect(queue.profileSource?.folderId, '42');
           expect(queue.profileSource?.userId, _user);
-          expect(repository.folderCalls, hasLength(reads));
+          expect(repository.folderCalls, hasLength(reads + 1));
           expect(tester.takeException(), isNull);
         },
       );
@@ -136,7 +136,7 @@ void main() {
   }
 
   test(
-    'capture filters unavailable and repeated videos without a read',
+    'capture reads one source page and filters unavailable and repeated videos',
     () async {
       repository.pages[1] = [
         _entry(1),
@@ -154,18 +154,35 @@ void main() {
       ];
       final controller = await openFolder();
       final reads = repository.folderCalls.length;
-      final queue = controller.captureFavoriteQueue()!;
+      final queue = (await controller.captureFavoriteQueue())!;
       expect(queue.items.map((item) => item.video.id), [_video(1).id]);
-      expect(repository.folderCalls, hasLength(reads));
+      expect(repository.folderCalls, hasLength(reads + 1));
       expect(queue.isWatchLater, false);
       controller.closeFolder();
-      expect(controller.captureFavoriteQueue(), isNull);
+      expect(await controller.captureFavoriteQueue(), isNull);
     },
   );
 
+  test('selecting a video captures only its originating page, not earlier loaded pages', () async {
+    final origin = await openFolder();
+    await origin.load();
+    final before = repository.folderCalls.length;
+    final queue = (await origin.captureFavoriteQueue(initial: _video(50).id))!;
+    expect(repository.folderCalls, hasLength(before + 1));
+    expect(repository.folderCalls.last.page, 2);
+    expect(queue.items, hasLength(40));
+    expect(queue.items.first.video.id, _video(41).id);
+    expect(queue.indexOf(_video(50).id), 9);
+    expect(queue.hasPrevious, true);
+    expect(queue.nextPage, 3);
+    final all = (await origin.captureFavoriteQueue())!;
+    expect(all.profilePages.single.page, 1);
+    expect(all.items, hasLength(40));
+  });
+
   test('each playback request reads one page, deduplicates and retries the failed page', () async {
     final origin = await openFolder();
-    final queue = origin.captureFavoriteQueue()!;
+    final queue = (await origin.captureFavoriteQueue())!;
     final controller = paging(queue);
     repository.folderCalls.clear();
     final pending = repository.pending = Completer<ProfilePage>();
@@ -195,7 +212,7 @@ void main() {
     'changing the browser folder cannot retarget an existing playback queue',
     () async {
       final origin = await openFolder();
-      final queue = origin.captureFavoriteQueue()!;
+      final queue = (await origin.captureFavoriteQueue())!;
       final controller = paging(queue);
       origin.openFolder(
         const ProfileEntry(
@@ -216,34 +233,22 @@ void main() {
     },
   );
 
-  test(
-    'playback recovers the clipped boundary page at the browser limit',
-    () async {
-      repository.pages[1] = [for (var n = 1; n <= 510; n++) _entry(n)];
-      repository.lastPage = 1;
-      final origin = await openFolder();
-      final queue = origin.captureFavoriteQueue()!;
-      expect(queue.items, hasLength(500));
-      expect(queue.hasMore, true);
-      expect(queue.nextPage, 1);
-      final controller = paging(queue);
-      repository.folderCalls.clear();
-      await controller.loadMore(_video(1).id);
-      final updated = container
-          .read(profilePlaybackQueueProvider(queue.id))
-          .queue!;
-      expect(updated.items, hasLength(510));
-      expect(updated.items.last.video.id, _video(510).id);
-      expect(updated.hasMore, false);
-      expect(repository.folderCalls.map((call) => call.page), [1]);
-    },
-  );
+  test('an oversized source page retains at most 99 videos', () async {
+    repository.pages[1] = [for (var n = 1; n <= 510; n++) _entry(n)];
+    repository.lastPage = 1;
+    final origin = await openFolder();
+    final queue = (await origin.captureFavoriteQueue())!;
+    expect(queue.items, hasLength(99));
+    expect(queue.hasMore, false);
+    expect(queue.nextPage, 2);
+    expect(queue.truncated, true);
+  });
 
   test(
     'account changes cancel pending folder paging and discard its late result',
     () async {
       final origin = await openFolder();
-      final queue = origin.captureFavoriteQueue()!;
+      final queue = (await origin.captureFavoriteQueue())!;
       final controller = paging(queue);
       final pending = repository.pending = Completer<ProfilePage>();
       final loading = controller.loadMore(_video(1).id);
@@ -259,7 +264,7 @@ void main() {
         container.read(profilePlaybackQueueProvider(queue.id)).queue,
         isNull,
       );
-      expect(origin.captureFavoriteQueue(), isNull);
+      expect(await origin.captureFavoriteQueue(), isNull);
     },
   );
 
@@ -267,7 +272,7 @@ void main() {
     'folder paging times out and retries without accepting late data',
     (tester) async {
       final origin = (await tester.runAsync(openFolder))!;
-      final queue = origin.captureFavoriteQueue()!;
+      final queue = (await origin.captureFavoriteQueue())!;
       final controller = paging(queue);
       final pending = repository.pending = Completer<ProfilePage>();
       final loading = controller.loadMore(_video(1).id);

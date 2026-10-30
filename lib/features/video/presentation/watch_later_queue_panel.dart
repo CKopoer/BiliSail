@@ -19,8 +19,11 @@ final class WatchLaterQueuePanel extends StatefulWidget {
     this.pendingRemovals = const {},
     this.collapsedChild,
     this.onLoadMore,
+    this.onLoadPrevious,
     this.loadingMore = false,
+    this.loadingPrevious = false,
     this.loadMoreMessage,
+    this.loadPreviousMessage,
   });
 
   final WatchLaterQueue queue;
@@ -33,6 +36,9 @@ final class WatchLaterQueuePanel extends StatefulWidget {
   final VoidCallback? onLoadMore;
   final bool loadingMore;
   final String? loadMoreMessage;
+  final VoidCallback? onLoadPrevious;
+  final bool loadingPrevious;
+  final String? loadPreviousMessage;
 
   /// Lazily mount the details on first collapse, then retain their state.
   final Widget? collapsedChild;
@@ -43,14 +49,58 @@ final class WatchLaterQueuePanel extends StatefulWidget {
 
 final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
   final ScrollController _scroll = ScrollController();
-  int? _positionedIndex;
+  VideoId? _positionedCurrent;
+  double? _rowHeight;
+  bool _adjustingScroll = false;
+  bool get _hasLeading =>
+      widget.onLoadPrevious != null ||
+      widget.loadingPrevious ||
+      widget.loadPreviousMessage != null;
+
+  void _jumpTo(double pixels) {
+    _adjustingScroll = true;
+    try {
+      _scroll.jumpTo(pixels.clamp(0.0, _scroll.position.maxScrollExtent));
+    } finally {
+      _adjustingScroll = false;
+    }
+  }
 
   @override
   void didUpdateWidget(covariant WatchLaterQueuePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.queue.id != widget.queue.id ||
         oldWidget.expanded != widget.expanded) {
-      _positionedIndex = null;
+      _positionedCurrent = null;
+    } else if (!identical(oldWidget.queue.items, widget.queue.items) &&
+        _scroll.hasClients &&
+        _rowHeight != null &&
+        oldWidget.queue.items.isNotEmpty) {
+      final oldLeading =
+          oldWidget.onLoadPrevious != null ||
+              oldWidget.loadingPrevious ||
+              oldWidget.loadPreviousMessage != null
+          ? 1
+          : 0;
+      final oldIndex = (_scroll.offset / _rowHeight!).floor() - oldLeading;
+      final anchorIndex = oldIndex.clamp(0, oldWidget.queue.items.length - 1);
+      final newIndex = widget.queue.indexOf(
+        oldWidget.queue.items[anchorIndex].video.id,
+      );
+      if (newIndex >= 0) {
+        final target =
+            _scroll.offset +
+            (newIndex - anchorIndex + (_hasLeading ? 1 : 0) - oldLeading) *
+                _rowHeight!;
+        final items = widget.queue.items;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted &&
+              _scroll.hasClients &&
+              identical(widget.queue.items, items)) {
+            _jumpTo(target);
+          }
+        });
+      }
     }
   }
 
@@ -117,7 +167,9 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
                     Icon(Icons.equalizer, size: 15, color: scheme.primary),
                     const SizedBox(width: 5),
                     Text(
-                      '${widget.queue.offset + index + 1}/${widget.queue.offset + widget.queue.items.length}${widget.queue.hasMore || widget.queue.truncated ? '+' : ''}',
+                      index < 0
+                          ? '${widget.queue.items.length} 项'
+                          : '${widget.queue.offset + index + 1}/${widget.queue.offset + widget.queue.items.length}${widget.queue.hasPrevious || widget.queue.hasMore || widget.queue.truncated ? '+' : ''}',
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
@@ -183,27 +235,42 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
             double.infinity,
           ) +
           20;
-      if (index >= 0 && _positionedIndex != index) {
-        _positionedIndex = index;
+      _rowHeight = rowHeight;
+      if (_positionedCurrent != widget.current) {
+        _positionedCurrent = widget.current;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || !_scroll.hasClients) return;
-          final start = index * rowHeight;
+          if (!mounted || !_scroll.hasClients || index < 0) return;
+          final start = (index + (_hasLeading ? 1 : 0)) * rowHeight;
           final end = start + rowHeight;
           final visibleStart = _scroll.offset;
           final visibleEnd = visibleStart + _scroll.position.viewportDimension;
           if (start < visibleStart || end > visibleEnd) {
-            _scroll.jumpTo(start.clamp(0.0, _scroll.position.maxScrollExtent));
+            _jumpTo(start);
           }
         });
       }
       return NotificationListener<ScrollNotification>(
         onNotification: (notification) {
-          if (notification.depth == 0 &&
-              notification is ScrollUpdateNotification &&
-              notification.metrics.extentAfter < 300 &&
-              !widget.loadingMore &&
-              widget.loadMoreMessage == null) {
-            widget.onLoadMore?.call();
+          if (notification.depth == 0 && !_adjustingScroll) {
+            final delta = switch (notification) {
+              ScrollUpdateNotification(:final scrollDelta) => scrollDelta ?? 0,
+              OverscrollNotification(:final overscroll) => overscroll,
+              _ => 0.0,
+            };
+            if (delta > 0 &&
+                notification.metrics.extentAfter < 300 &&
+                !widget.loadingMore &&
+                !widget.loadingPrevious &&
+                widget.loadMoreMessage == null) {
+              widget.onLoadMore?.call();
+            }
+            if (delta < 0 &&
+                notification.metrics.extentBefore < 300 &&
+                !widget.loadingMore &&
+                !widget.loadingPrevious &&
+                widget.loadPreviousMessage == null) {
+              widget.onLoadPrevious?.call();
+            }
           }
           return false;
         },
@@ -213,61 +280,79 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
           itemExtent: rowHeight,
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount:
+              (_hasLeading ? 1 : 0) +
               widget.queue.items.length +
-              (widget.onLoadMore == null && widget.loadMoreMessage == null
+              (widget.onLoadMore == null &&
+                      !widget.loadingMore &&
+                      widget.loadMoreMessage == null
                   ? 0
                   : 1),
-          itemBuilder: (context, itemIndex) =>
-              itemIndex == widget.queue.items.length
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: widget.loadingMore
-                        ? const CircularProgressIndicator()
-                        : Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (widget.loadMoreMessage case final message?)
-                                Text(
-                                  message,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              TextButton(
-                                onPressed: widget.onLoadMore,
-                                child: Text(
-                                  widget.loadMoreMessage == null
-                                      ? widget.queue.favoriteTitle == null
-                                            ? '加载更多投稿'
-                                            : '加载更多视频'
-                                      : '重试',
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
-                )
-              : _QueueRow(
-                  key: ValueKey(widget.queue.items[itemIndex].removalId),
-                  item: widget.queue.items[itemIndex],
-                  selected: itemIndex == index,
-                  coverWidth: coverWidth,
-                  onTap: () =>
-                      widget.onSelect(widget.queue.items[itemIndex].video.id),
-                  onRemove: itemIndex == index || widget.onRemove == null
-                      ? null
-                      : () => widget.onRemove?.call(
-                          widget.queue.items[itemIndex],
-                        ),
-                  removing: widget.pendingRemovals.contains(
-                    widget.queue.items[itemIndex].removalId,
-                  ),
-                ),
+          itemBuilder: (context, itemIndex) {
+            final contentIndex = itemIndex - (_hasLeading ? 1 : 0);
+            if (contentIndex < 0) return _edge(previous: true);
+            if (contentIndex == widget.queue.items.length) {
+              return _edge(previous: false);
+            }
+            return _QueueRow(
+              key: ValueKey(widget.queue.items[contentIndex].removalId),
+              item: widget.queue.items[contentIndex],
+              selected: contentIndex == index,
+              coverWidth: coverWidth,
+              onTap: () =>
+                  widget.onSelect(widget.queue.items[contentIndex].video.id),
+              onRemove: contentIndex == index || widget.onRemove == null
+                  ? null
+                  : () =>
+                        widget.onRemove?.call(widget.queue.items[contentIndex]),
+              removing: widget.pendingRemovals.contains(
+                widget.queue.items[contentIndex].removalId,
+              ),
+            );
+          },
         ),
       );
     },
   );
+
+  Widget _edge({required bool previous}) {
+    final loading = previous ? widget.loadingPrevious : widget.loadingMore;
+    final message = previous
+        ? widget.loadPreviousMessage
+        : widget.loadMoreMessage;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: loading
+            ? const CircularProgressIndicator()
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (message != null)
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  TextButton(
+                    onPressed: previous
+                        ? widget.onLoadPrevious
+                        : widget.onLoadMore,
+                    child: Text(
+                      message != null
+                          ? '重试'
+                          : previous
+                          ? '加载之前的视频'
+                          : widget.queue.favoriteTitle == null
+                          ? '加载更多投稿'
+                          : '加载更多视频',
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
 }
 
 final class _QueueBodyTransition extends StatefulWidget {

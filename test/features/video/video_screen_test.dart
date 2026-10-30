@@ -133,13 +133,19 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
         final title = folderId == null ? '测试UP的投稿' : '测试收藏夹';
         expect(find.text(title), findsOneWidget);
-        expect(repository.reads, 1);
+        expect(repository.reads, 0);
         expect(commands?.hasNext, true);
         if (complete) {
           commands?.onCompleted?.call();
           commands?.onCompleted?.call();
+        } else {
+          tester
+              .widget<WatchLaterQueuePanel>(find.byType(WatchLaterQueuePanel))
+              .onLoadMore
+              ?.call();
         }
         await tester.pump();
+        expect(repository.reads, 1);
         repository.pending.complete(
           ProfilePage(
             items: [

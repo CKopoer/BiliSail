@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
+import '../../../domain/video.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../video/application/watch_later_queue_registry.dart';
 import '../../video/domain/watch_later_queue.dart';
@@ -17,6 +18,7 @@ final profileControllerProvider = NotifierProvider.autoDispose
 final class ProfileListState {
   const ProfileListState({
     this.items = const [],
+    this.videoPages = const {},
     this.page = 0,
     this.pagesWithoutNewItems = 0,
     this.cursor,
@@ -26,6 +28,7 @@ final class ProfileListState {
     this.message,
   });
   final List<ProfileEntry> items;
+  final Map<VideoId, int> videoPages;
   final int page, pagesWithoutNewItems;
   final String? cursor, message;
   final bool loading, hasMore, isHidden;
@@ -151,55 +154,50 @@ class ProfileController extends Notifier<ProfileState> {
       ref.read(profileRepositoryProvider).accountScope == scope &&
       ref.read(profileRepositoryProvider).sessionEpoch == epoch;
 
-  WatchLaterQueue? captureFavoriteQueue() {
+  Future<WatchLaterQueue?> captureFavoriteQueue({VideoId? initial}) {
     final folderId = state.folderId;
     final list = state.lists[ProfileSection.folders];
+    final page = initial == null ? 1 : list?.videoPages[initial];
     if (state.section != ProfileSection.folders ||
         folderId == null ||
         list == null ||
         list.page == 0 ||
-        list.isHidden) {
-      return null;
+        list.isHidden ||
+        page == null) {
+      return Future.value();
     }
-    final repository = ref.read(profileRepositoryProvider);
-    final capped = list.items.length >= 500;
-    return ref
-        .read(watchLaterQueueRegistryProvider)
-        .capture(
-          scope: repository.accountScope,
-          sessionEpoch: repository.sessionEpoch,
-          items: profileQueueItems(list.items),
-          favoriteTitle: state.folderTitle ?? '收藏夹',
-          profileSource: ProfileVideoQueueSource(
-            userId: id,
-            name: state.profile?.name ?? 'UP主',
-            order: state.order,
-            folderId: folderId,
-          ),
-          hasMore: list.hasMore || capped,
-          // Replay the browser's boundary page to recover any clipped tail.
-          // The playback pager deduplicates it before advancing to the next page.
-          nextPage: capped ? list.page : list.page + 1,
-        );
+    return _captureQueue(page: page, folderId: folderId, initial: initial);
   }
 
-  Future<WatchLaterQueue?> playAll() async {
+  Future<WatchLaterQueue?> playAll() => _captureQueue(page: 1);
+
+  Future<WatchLaterQueue?> _captureQueue({
+    required int page,
+    String? folderId,
+    VideoId? initial,
+  }) async {
     if (state.queueLoading) return null;
     final repository = ref.read(profileRepositoryProvider);
     final scope = repository.accountScope, epoch = repository.sessionEpoch;
     final generation = _generation;
     final order = state.order;
     final name = state.profile?.name ?? 'UP主';
+    final title = folderId == null ? null : state.folderTitle ?? '收藏夹';
     _queueRead.cancel();
     final read = _queueRead = RequestCancellation();
+    bool current() =>
+        _current(generation, scope, epoch) &&
+        identical(_queueRead, read) &&
+        (folderId == null || state.folderId == folderId);
     state = state.copy(queueLoading: true, clearQueueMessage: true);
     try {
       final result = await repository
           .loadEntries(
             id,
-            ProfileSection.videos,
-            page: 1,
+            folderId == null ? ProfileSection.videos : ProfileSection.folders,
+            page: page,
             order: order,
+            folderId: folderId,
             cancellation: read,
           )
           .timeout(
@@ -209,30 +207,52 @@ class ProfileController extends Notifier<ProfileState> {
               throw const AppFailure(AppFailureKind.timeout, '播放列表加载超时，请重试');
             },
           );
-      if (!_current(generation, scope, epoch) || read.isCancelled) return null;
+      if (!current() || read.isCancelled) return null;
       final items = profileQueueItems(result.items);
       if (items.isEmpty) {
-        state = state.copy(queueLoading: false, queueMessage: '暂无可播放的公开投稿');
-        return null;
+        throw AppFailure(
+          AppFailureKind.notFound,
+          folderId == null ? '暂无可播放的公开投稿' : '当前收藏页暂无可播放的视频',
+        );
       }
+      final selected = initial == null
+          ? 0
+          : items.indexWhere((item) => item.video.id == initial);
+      if (selected < 0) {
+        throw const AppFailure(AppFailureKind.notFound, '该视频已不在当前收藏页，请刷新后重试');
+      }
+      final start = items.length > WatchLaterQueue.maximumInitialProfileItems
+          ? (selected - 49).clamp(
+              0,
+              items.length - WatchLaterQueue.maximumInitialProfileItems,
+            )
+          : 0;
       final queue = ref
           .read(watchLaterQueueRegistryProvider)
           .capture(
             scope: scope,
             sessionEpoch: epoch,
-            items: items,
+            items: items
+                .skip(start)
+                .take(WatchLaterQueue.maximumInitialProfileItems)
+                .toList(),
+            current: initial ?? items.first.video.id,
             profileSource: ProfileVideoQueueSource(
               userId: id,
               name: name,
               order: order,
+              folderId: folderId,
             ),
+            favoriteTitle: title,
             hasMore: result.hasMore,
-            nextPage: 2,
+            nextPage: page + 1,
+            truncated:
+                items.length > WatchLaterQueue.maximumInitialProfileItems,
           );
       state = state.copy(queueLoading: false);
       return queue;
     } on AppFailure catch (error) {
-      if (_current(generation, scope, epoch)) {
+      if (current()) {
         state = state.copy(
           queueLoading: false,
           queueMessage: error.kind == AppFailureKind.cancelled
@@ -241,8 +261,13 @@ class ProfileController extends Notifier<ProfileState> {
         );
       }
     } catch (_) {
-      if (_current(generation, scope, epoch)) {
+      if (current()) {
         state = state.copy(queueLoading: false, queueMessage: '播放列表暂时无法加载，请重试');
+      }
+    } finally {
+      read.cancel();
+      if (ref.mounted && identical(_queueRead, read) && state.queueLoading) {
+        state = state.copy(queueLoading: false);
       }
     }
     return null;
@@ -371,6 +396,7 @@ class ProfileController extends Notifier<ProfileState> {
       section,
       ProfileListState(
         items: base.items,
+        videoPages: base.videoPages,
         page: base.page,
         pagesWithoutNewItems: previousEmptyPages,
         cursor: base.cursor,
@@ -407,6 +433,12 @@ class ProfileController extends Notifier<ProfileState> {
         unique.putIfAbsent(entry.id, () => entry);
       }
       final bounded = unique.values.take(500).toList(growable: false);
+      final videoPages = {...base.videoPages};
+      for (final entry in result.items) {
+        if (entry.video case final video?) {
+          videoPages.putIfAbsent(video.id, () => page);
+        }
+      }
       final cursorAdvanced =
           section != ProfileSection.dynamics ||
           (result.cursor != null && result.cursor != base.cursor);
@@ -418,6 +450,11 @@ class ProfileController extends Notifier<ProfileState> {
         section,
         ProfileListState(
           items: List.unmodifiable(bounded),
+          videoPages: Map.unmodifiable({
+            for (final entry in bounded)
+              if (entry.video case final video?)
+                video.id: videoPages[video.id] ?? page,
+          }),
           page: page,
           pagesWithoutNewItems: emptyPages,
           cursor: result.cursor,
@@ -433,6 +470,7 @@ class ProfileController extends Notifier<ProfileState> {
           section,
           ProfileListState(
             items: base.items,
+            videoPages: base.videoPages,
             page: base.page,
             pagesWithoutNewItems: previousEmptyPages,
             cursor: base.cursor,
@@ -449,6 +487,7 @@ class ProfileController extends Notifier<ProfileState> {
           section,
           ProfileListState(
             items: base.items,
+            videoPages: base.videoPages,
             page: base.page,
             pagesWithoutNewItems: previousEmptyPages,
             cursor: base.cursor,

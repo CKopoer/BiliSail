@@ -225,24 +225,59 @@ void main() {
     );
   });
 
-  test('a bounded window drops only played entries and continues beyond 1000 submissions', () async {
-    final queue = capture(count: 1000);
-    final controller = paging(queue);
-    await controller.loadMore(queue.items.first.video.id);
-    expect(repository.calls, isEmpty);
-    final blocked = container.read(profilePlaybackQueueProvider(queue.id));
-    expect(blocked.canPrefetch(queue.items.first.video.id), false);
-    expect(blocked.canPrefetch(queue.items[995].video.id), true);
-    repository.items = [for (var i = 1000; i < 1030; i++) _entry(i)];
-    await controller.loadMore(queue.items[995].video.id);
-    final updated = container
-        .read(profilePlaybackQueueProvider(queue.id))
-        .queue!;
-    expect(updated.items, hasLength(1000));
-    expect(updated.offset, 30);
-    expect(updated.indexOf(queue.items[995].video.id), 965);
-    expect(updated.items.last.video.id, _entry(1029).video?.id);
-  });
+  test(
+    'initial 99 videos grow to a 999-video window with reversible paging',
+    () async {
+      final queue = capture(count: 99);
+      final controller = paging(queue);
+      final current = queue.items.first.video.id;
+      for (var page = 2; page <= 21; page++) {
+        final start = 99 + (page - 2) * 45;
+        repository.items = [for (var i = start; i < start + 45; i++) _entry(i)];
+        await controller.loadMore(current);
+        expect(
+          container
+              .read(profilePlaybackQueueProvider(queue.id))
+              .queue!
+              .items
+              .length,
+          lessThanOrEqualTo(999),
+        );
+      }
+      expect(
+        container.read(profilePlaybackQueueProvider(queue.id)).queue!.items,
+        hasLength(999),
+      );
+      repository.items = [for (var i = 999; i < 1044; i++) _entry(i)];
+      await controller.loadMore(queue.items.first.video.id);
+      final updated = container
+          .read(profilePlaybackQueueProvider(queue.id))
+          .queue!;
+      expect(updated.items, hasLength(945));
+      expect(updated.items.first.video.id, _entry(99).video?.id);
+      expect(updated.hasPrevious, true);
+      expect(updated.pageOf(queue.items.first.video.id), 1);
+      repository.items = [for (var i = 0; i < 99; i++) _entry(i)];
+      await controller.loadPrevious(queue.items.first.video.id);
+      final previous = container
+          .read(profilePlaybackQueueProvider(queue.id))
+          .queue!;
+      expect(previous.items, hasLength(999));
+      expect(previous.items.first.video.id, _entry(0).video?.id);
+      expect(previous.hasPrevious, false);
+      expect(repository.calls.last.page, 1);
+      repository.items = [for (var i = 999; i < 1044; i++) _entry(i)];
+      await controller.loadMore(current);
+      repository.items = [for (var i = 0; i < 99; i++) _entry(i)];
+      await controller.prepareAdjacent(current, 1);
+      final restored = container
+          .read(profilePlaybackQueueProvider(queue.id))
+          .queue!;
+      expect(restored.items, hasLength(99));
+      expect(restored.adjacent(current, 1)?.video.id, _entry(1).video?.id);
+      expect(repository.calls.last.page, 1);
+    },
+  );
 
   test('repeated duplicate pages stop automatic paging with an explicit retry message', () async {
     final queue = capture();

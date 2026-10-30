@@ -369,6 +369,10 @@ void main() {
     await tester.tap(find.text('用户甲'));
     expect(opened, const UserId('9'));
     expect(tester.takeException(), isNull);
+    if (find.byType(TextField).evaluate().isEmpty) {
+      await tester.tap(find.byKey(const ValueKey('profile-search-toggle')));
+      await tester.pumpAndSettle();
+    }
     await tester.enterText(find.byType(TextField), '关键词');
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();

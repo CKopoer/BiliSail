@@ -15,6 +15,17 @@ final class ProfileVideoQueueSource {
   final String? folderId;
 }
 
+final class ProfileQueuePage {
+  ProfileQueuePage({
+    required this.page,
+    required List<WatchLaterQueueItem> items,
+    required this.hasMore,
+  }) : items = List.unmodifiable(items);
+  final int page;
+  final List<WatchLaterQueueItem> items;
+  final bool hasMore;
+}
+
 /// An account-scoped queue shared by watch-later, favorites and submissions.
 final class WatchLaterQueue {
   WatchLaterQueue({
@@ -28,7 +39,14 @@ final class WatchLaterQueue {
     this.nextPage = 1,
     this.hasMore = false,
     this.offset = 0,
-  }) : items = List.unmodifiable(items);
+    List<ProfileQueuePage> profilePages = const [],
+    Map<VideoId, int> pageHints = const {},
+  }) : items = List.unmodifiable(items),
+       profilePages = List.unmodifiable(profilePages),
+       pageHints = Map.unmodifiable(pageHints);
+
+  static const maximumInitialProfileItems = 99;
+  static const maximumProfileItems = 999;
 
   final String id;
   final String scope;
@@ -39,6 +57,52 @@ final class WatchLaterQueue {
   final bool truncated;
   final int nextPage, offset;
   final bool hasMore;
+  final List<ProfileQueuePage> profilePages;
+  final Map<VideoId, int> pageHints;
+  bool get hasPrevious =>
+      profilePages.isNotEmpty && profilePages.first.page > 1;
+  int? pageOf(VideoId id) {
+    for (final page in profilePages) {
+      if (page.items.any((item) => item.video.id == id)) return page.page;
+    }
+    return pageHints[id];
+  }
+
+  WatchLaterQueue withProfilePages(
+    List<ProfileQueuePage> pages, {
+    VideoId? current,
+    bool? truncated,
+  }) {
+    final hints = {...pageHints};
+    final currentPage = current == null
+        ? null
+        : pageOf(current) ??
+              pages
+                  .where((p) => p.items.any((item) => item.video.id == current))
+                  .firstOrNull
+                  ?.page;
+    if (current != null && currentPage != null) {
+      hints.remove(current);
+      hints[current] = currentPage;
+    }
+    while (hints.length > 64) {
+      hints.remove(hints.keys.first);
+    }
+    return WatchLaterQueue(
+      id: id,
+      scope: scope,
+      sessionEpoch: sessionEpoch,
+      items: [for (final page in pages) ...page.items],
+      profileSource: profileSource,
+      favoriteTitle: favoriteTitle,
+      truncated: truncated ?? this.truncated,
+      nextPage: pages.last.page + 1,
+      hasMore: pages.last.hasMore,
+      profilePages: pages,
+      pageHints: hints,
+    );
+  }
+
   bool get isWatchLater => profileSource == null && favoriteTitle == null;
   String get title =>
       favoriteTitle ??
@@ -63,6 +127,8 @@ final class WatchLaterQueue {
     nextPage: nextPage,
     hasMore: hasMore,
     offset: offset + drop,
+    profilePages: profilePages,
+    pageHints: pageHints,
   );
 
   /// Keep the current source navigable if another page removes it while playing.

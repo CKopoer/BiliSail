@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../domain/video.dart';
 import '../domain/watch_later_queue.dart';
 
 final watchLaterQueueRegistryProvider = Provider<WatchLaterQueueRegistry>(
@@ -34,6 +35,7 @@ final class WatchLaterQueueRegistry {
     bool truncated = false,
     bool hasMore = false,
     int nextPage = 1,
+    VideoId? current,
   }) {
     if ((profileSource == null &&
             !scope.startsWith('user:') &&
@@ -43,16 +45,27 @@ final class WatchLaterQueueRegistry {
     }
     _purgeOtherSessions(scope, sessionEpoch);
     final id = 'watch-later-$_nonce-${++_nextId}';
+    final limit = profileSource == null
+        ? maximumItems
+        : WatchLaterQueue.maximumInitialProfileItems;
+    final bounded = items.take(limit).toList();
+    final page = nextPage > 1 ? nextPage - 1 : 1;
     final queue = WatchLaterQueue(
       id: id,
       scope: scope,
       sessionEpoch: sessionEpoch,
-      items: items.take(maximumItems).toList(),
+      items: bounded,
       profileSource: profileSource,
       favoriteTitle: favoriteTitle,
-      truncated: truncated || items.length > maximumItems,
+      truncated: truncated || items.length > limit,
       hasMore: hasMore,
       nextPage: nextPage,
+      profilePages: profileSource == null
+          ? const []
+          : [ProfileQueuePage(page: page, items: bounded, hasMore: hasMore)],
+      pageHints: profileSource == null
+          ? const {}
+          : {current ?? bounded.first.video.id: page},
     );
     _queues[id] = queue;
     _trim();

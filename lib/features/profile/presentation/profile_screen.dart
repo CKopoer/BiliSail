@@ -270,13 +270,25 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
     _playFavorites(initial: video.id);
   }
 
-  void _playFavorites({VideoId? initial}) {
+  Future<void> _playFavorites({VideoId? initial}) async {
     if (!widget.active || !WorkspaceActivity.isActive(context)) return;
-    final queue = ref
-        .read(profileControllerProvider(widget.id).notifier)
-        .captureFavoriteQueue();
+    final provider = profileControllerProvider(widget.id);
+    final before = ref.read(provider);
+    final queue = await ref
+        .read(provider.notifier)
+        .captureFavoriteQueue(initial: initial);
+    if (!mounted || !widget.active || !WorkspaceActivity.isActive(context)) {
+      return;
+    }
+    final after = ref.read(provider);
+    if (before.sessionGeneration != after.sessionGeneration ||
+        before.folderId != after.folderId) {
+      return;
+    }
     if (queue == null) {
-      showAppNotice(context, '收藏夹内暂无可播放的视频');
+      if (after.queueMessage case final message?) {
+        showAppNotice(context, message);
+      }
       return;
     }
     final index = initial == null ? 0 : queue.indexOf(initial);
@@ -414,17 +426,34 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        TextButton.icon(
-                          key: const ValueKey('profile-favorite-play-all'),
-                          onPressed:
-                              widget.onOpenPlaylist == null ||
-                                  !list.items.any(
-                                    (entry) => entry.video?.id.isValid == true,
-                                  )
-                              ? null
-                              : () => _playFavorites(),
-                          icon: const Icon(Icons.playlist_play),
-                          label: const Text('播放全部'),
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final loading = ref.watch(
+                              profileControllerProvider(widget.id)
+                                  .select((s) => s.queueLoading),
+                            );
+                            return TextButton.icon(
+                              key: const ValueKey('profile-favorite-play-all'),
+                              onPressed:
+                                  loading ||
+                                      widget.onOpenPlaylist == null ||
+                                      !list.items.any(
+                                        (entry) =>
+                                            entry.video?.id.isValid == true,
+                                      )
+                                  ? null
+                                  : () => _playFavorites(),
+                              icon: loading
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.playlist_play),
+                              label: const Text('播放全部'),
+                            );
+                          },
                         ),
                       ],
                     ),
