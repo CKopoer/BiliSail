@@ -126,6 +126,34 @@ void main() {
           lessThan(400),
         );
         expect(observed, containsAll(['/video.mp4', '/audio.m4a']));
+        // Foreground intent can change before Android delivers resumed.
+        // The effective source must stay audio until the overlay is removed.
+        for (final paused in [false, true]) {
+          await _withFrames(tester, session.setAudioOnly(true));
+          await _withFrames(tester, session.seek(const Duration(seconds: 2)));
+          await _withFrames(tester, paused ? session.pause() : session.play());
+          await _withFrames(tester, session.setBackgroundAudio(true));
+          final sourceGeneration = session.sourceGeneration;
+          final nativeGeneration = engine.currentSnapshot.generation;
+          await _withFrames(tester, session.setAudioOnly(false));
+          await _withFrames(tester, session.setAudioOnly(false));
+          expect(session.audioOnly, isTrue);
+          expect(session.sourceGeneration, sourceGeneration);
+          expect(engine.currentSnapshot.generation, nativeGeneration);
+          await _withFrames(tester, session.setBackgroundAudio(false));
+          expect(session.error, isNull);
+          expect(session.audioOnly, isFalse);
+          expect(session.sourceGeneration, sourceGeneration + 1);
+          expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
+          expect(engine.currentSnapshot.desiredPlaying, !paused);
+          expect(engine.currentSnapshot.rate, 1.5);
+          expect(engine.currentSnapshot.volume, 3);
+          expect(
+            engine.currentSnapshot.position,
+            greaterThanOrEqualTo(const Duration(milliseconds: 1500)),
+          );
+          await _withFrames(tester, session.pause());
+        }
         await _withFrames(tester, session.play());
         final framePolicy = binding.framePolicy;
         binding.framePolicy =

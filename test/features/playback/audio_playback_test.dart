@@ -116,6 +116,74 @@ void main() {
     expect(engine.sources.last, isA<DashPairSource>());
   });
 
+  for (final paused in [false, true]) {
+    test(
+      'return to video during background audio only opens video once paused=$paused',
+      () async {
+        await session.open(_detail, _part);
+        await session.setAudioOnly(true);
+        await session.seek(const Duration(minutes: 3));
+        await session.setRate(1.5);
+        await session.setVolume(32);
+        if (paused) await session.pause();
+        await session.setBackgroundAudio(true);
+        final opens = engine.sources.length;
+        final generation = session.sourceGeneration;
+
+        // The return action can arrive before the resumed lifecycle callback.
+        await session.setAudioOnly(false);
+        expect(engine.sources, hasLength(opens));
+        expect(session.sourceGeneration, generation);
+        expect(session.audioOnly, isTrue);
+
+        final pending = Completer<PlaybackMedia>();
+        repository.pending = pending;
+        final returning = session.setBackgroundAudio(false);
+        await Future<void>.delayed(Duration.zero);
+        await session.setAudioOnly(false);
+        await session.setBackgroundAudio(false);
+        pending.complete(repository.media);
+        await returning;
+
+        expect(session.audioOnly, isFalse);
+        expect(engine.sources, hasLength(opens + 1));
+        expect(engine.sources.last, isA<DashPairSource>());
+        expect(engine.currentSnapshot.position, const Duration(minutes: 3));
+        expect(engine.currentSnapshot.rate, 1.5);
+        expect(engine.currentSnapshot.volume, 32);
+        expect(engine.currentSnapshot.desiredPlaying, !paused);
+      },
+    );
+  }
+
+  for (final paused in [false, true]) {
+    test(
+      'enabling listening during background only changes foreground intent paused=$paused',
+      () async {
+        await session.open(_detail, _part);
+        await session.seek(const Duration(minutes: 3));
+        await session.setRate(1.5);
+        await session.setVolume(32);
+        if (paused) await session.pause();
+        await session.setBackgroundAudio(true);
+        final opens = engine.sources.length;
+        final generation = session.sourceGeneration;
+
+        await session.setAudioOnly(true);
+        await session.setAudioOnly(true);
+        await session.setBackgroundAudio(false);
+
+        expect(session.audioOnly, isTrue);
+        expect(session.sourceGeneration, generation);
+        expect(engine.sources, hasLength(opens));
+        expect(engine.currentSnapshot.position, const Duration(minutes: 3));
+        expect(engine.currentSnapshot.rate, 1.5);
+        expect(engine.currentSnapshot.volume, 32);
+        expect(engine.currentSnapshot.desiredPlaying, !paused);
+      },
+    );
+  }
+
   test('background during initial resolution replaces pending video', () async {
     final pending = Completer<PlaybackMedia>();
     repository.pending = pending;

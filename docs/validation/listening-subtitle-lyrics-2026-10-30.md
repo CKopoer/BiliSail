@@ -27,6 +27,7 @@
 - 移除歌词行重复显示全文的 `Tooltip`，保留字幕文本、点击跳转和完整无障碍语义。现有 26 项字幕组件测试通过，没有为这项样式调整新增测试。日志：`build/validation/audio-lyrics-no-tooltip-targeted.log`。
 - 完整 `tool/check.ps1 -SkipPub` 的格式、静态分析和打包边界检查通过；根测试 3677 通过、13 跳过、2 失败。两项失败为 `audio_playback_test.dart` 的后台音频返回视频用例（播放／暂停两种状态），实际打开媒体源 3 次、预期 2 次，直接测试播放会话而不挂载歌词组件。本次未修改该会话路径，也不将全量检查报告为通过。日志：`build/validation/audio-lyrics-no-tooltip-check.log`。
 - 补跑四包测试通过：bili_api 497、bili_player 101、bili_danmaku 136、bili_mux 5 项；10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。日志：`build/validation/audio-lyrics-no-tooltip-packages.log`。
+- 上述两项后台切源失败的后续修正、隔离对照和 Windows 原生验证见[后台听视频修正记录](android-background-playback.md#后台返回视频重复开源修正2026-10-31)。
 - 当前无可连接的 DTD 调试应用，热重载未能执行；本次未进行平台构建或真机验证。
 
 ### 2026-10-31 点击跳转与半屏高度

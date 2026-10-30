@@ -54,3 +54,13 @@ Android 锁屏、系统媒体按钮、长时间后台、真实账号和在线媒
 - Windows 本地分轨原生对照：只在隔离源码副本临时撤掉独立音轨标记，严格无帧用例在后台切源处 **8 秒超时**；恢复标记后 **1 项通过**，并确认后台无 post-frame 回调、只请求音轨、进度推进、后台下一 P、前台恢复视频及手动暂停意图。对照期间保留视频控件生命周期修正，单独复现控制器初始化等待。日志：`build/validation/background-audio/runtime/native-background-before-strict.log`、`native-background-final.log`。
 - 当前共享工作区的普通入口 Android arm64 开发 Release／AOT 重建通过，包名 `dev.bilisail.bilisail.test`、版本 `1.2.5+1`／12501，签名与不可调试检查通过。测试包仍位于 `build/development/android-arm64/BiliSail-test-arm64-release.apk`，SHA-256：`b0ba63ce486f1b817252170fb3181f57e813604062baffbf92b25f9b191acb15`。日志：`build/validation/background-pause-fix/android-release.log`。没有连接 Android 设备或安装操作，系统锁屏、长时间后台和真实媒体仍需实机确认。
 - Windows 独立调试入口热重载成功；补齐调试入口自己的 `AppNoticeHost` 后，运行时错误查询为空，验证后已退出。该入口不加载真实账号或用户数据库。
+
+## 后台返回视频重复开源修正（2026-10-31）
+
+- 后台覆盖仍生效时，用户的“返回视频”操作只更新前台模式意图；实际模式仍为音频，因此不重新解析 URL、不重开音轨，也不递增源代次。收到前台生命周期通知后才恢复 DASH 视频。相同规则也适用于后台手动开启听视频，回前台继续使用已有音轨。
+- `setAudioOnly` 先保存用户意图，再比较结合后台覆盖后的有效模式；只在有效模式变化时打开媒体。重复用户操作或重复生命周期通知不会增加切源次数，播放／暂停、位置、倍速和音量继续保留。
+- 在 `5920670` 的隔离工作树只加入本任务回归测试，旧实现稳定复现 4 项失败：返回视频与开启听视频两个方向，各含播放／暂停状态。应用四行修正后，35 项听视频测试全部通过；包含延迟解析期间重复返回视频／恢复前台的竞态。对照日志：`build/validation/audio-return-baseline-tests.log`、`audio-return-fixed-tests.log`。
+- Windows 隔离 Debug 构建和本地分轨原生回归 **1 项通过**：播放／暂停两种状态下，后台更改前台意图不改变会话／原生源代次；移除后台覆盖只恢复一次 DASH，真实视频解码、位置不归零、倍速、音量与播放意图通过。沿用原用例的无帧后台切音轨／换 P／恢复视频检查，只访问本机 HTTP fixture，不读取真实账号或用户数据库。日志：`build/validation/audio-return-windows-native.log`。隔离产物是集成测试入口，不能作为普通日常运行包。
+- 隔离依赖按五份锁文件离线解析；原生下载冷缓存准备曾等待网络，随后复用主工作区相同固定版本的下载缓存及现有 Windows mux 资产，保留构建钩子的哈希校验，没有修改 Pub 缓存或 TLS 规则。本轮未连接 Android 设备，没有执行 Android 安装、前后台实机验收或长时间播放／性能测量；没有可连接的 DTD 调试应用，热重载未能执行。
+- 同一隔离快照执行完整 `tool/check.ps1 -SkipPub` 通过：格式、静态分析、打包边界脚本通过，根应用 **3672**、bili_api **497**、bili_player **101**、bili_danmaku **136**、bili_mux **5** 项，共 **4411 项通过、0 失败**。根应用 13 项既有条件跳过；另 10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计原生覆盖。日志：`build/validation/audio-return-full-check.log`。
+- 当前主工作区另外复跑 35 项听视频测试全部通过，确认修正与同期工作区代码组合后的行为。日志：`build/validation/audio-return-main-tests.log`。本任务仅提交模式判断、对应单元／原生回归和验证记录，保留其他播放功能的修改。

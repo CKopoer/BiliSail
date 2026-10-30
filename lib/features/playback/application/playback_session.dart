@@ -2574,6 +2574,10 @@ class PlaybackSession extends ChangeNotifier {
         (enabled && (!canListen || _resolving))) {
       return;
     }
+    // Foreground intent can change before Android reports its resumed state.
+    // Keep the background audio source until the effective mode changes.
+    _foregroundAudioOnly = enabled;
+    if ((enabled || (_backgroundAudio && !isLive)) == _audioOnly) return;
     await open(
       detail,
       part,
