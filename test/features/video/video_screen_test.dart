@@ -49,7 +49,136 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/video_card_fake_engine.dart';
 
+import 'package:bili_player/bili_player.dart';
+import 'package:bilisail/features/profile/application/profile_controller.dart';
+import 'package:bilisail/features/profile/domain/profile_repository.dart';
+import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
+
 void main() {
+  for (final (width, complete) in [
+    for (final width in [360.0, 1200.0])
+      for (final complete in [false, true]) (width, complete),
+  ]) {
+    testWidgets(
+      'UP playlist loads the next page at EOF once and retains player at $width continuous=$complete',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 800);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        const current = VideoId('BV1abc123456');
+        const next = VideoId('BV2abc123456');
+        final detail = await const _VideoRepository().loadDetail(
+          current,
+          cancellation: RequestCancellation(),
+        );
+        final session = _ProfilePagingSession(detail);
+        addTearDown(session.snapshots.dispose);
+        final repository = _ProfilePagingRepository();
+        final registry = WatchLaterQueueRegistry();
+        final queue = registry.capture(
+          scope: 'user:7',
+          sessionEpoch: 0,
+          items: [WatchLaterQueueItem(video: detail.summary)],
+          profileSource: const ProfileVideoQueueSource(
+            userId: UserId('7'),
+            name: '测试UP',
+            order: 'pubdate',
+          ),
+          hasMore: true,
+          nextPage: 2,
+        )!;
+        final opened = <VideoId>[];
+        var created = 0, disposed = 0;
+        PlaybackPageCommands? commands;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              playbackSessionProvider.overrideWithValue(session),
+              profileRepositoryProvider.overrideWithValue(repository),
+              watchLaterQueueRegistryProvider.overrideWithValue(registry),
+              authControllerProvider.overrideWith(_QueueSignedInAuth.new),
+              videoRepositoryProvider.overrideWithValue(
+                const _VideoRepository(includeCollection: false),
+              ),
+              videoExtrasRepositoryProvider.overrideWithValue(
+                _ExtrasRepository(),
+              ),
+            ],
+            child: InputTestApp(
+              home: Scaffold(
+                body: VideoScreen(
+                  id: current,
+                  queue: queue,
+                  initialCid: detail.parts.last.cid,
+                  onOpenQueueVideo: opened.add,
+                  playerBuilder: (context, _, _) {
+                    commands = PlaybackPageCommands.maybeOf(context);
+                    return _TrackedPlayer(
+                      onCreate: () => created++,
+                      onDispose: () => disposed++,
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+        // The pending page displays a spinner; settling would run its timeout.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.text('测试UP的投稿'), findsOneWidget);
+        expect(repository.reads, 1);
+        expect(commands?.hasNext, true);
+        if (complete) {
+          commands?.onCompleted?.call();
+          commands?.onCompleted?.call();
+        }
+        await tester.pump();
+        repository.pending.complete(
+          ProfilePage(
+            items: [
+              ProfileEntry(
+                id: next.value,
+                kind: ProfileEntryKind.video,
+                title: '下一条投稿',
+                video: VideoSummary(
+                  id: next,
+                  title: '下一条投稿',
+                  coverUrl: '',
+                  author: 'UP',
+                  duration: const Duration(minutes: 1),
+                ),
+              ),
+            ],
+            hasMore: false,
+          ),
+        );
+        await tester.pump();
+        await tester.pumpAndSettle();
+        expect(opened, complete ? [next] : isEmpty);
+        expect(
+          session.advances,
+          complete ? [(id: next, completed: true)] : isEmpty,
+        );
+        final panel = tester.widget<WatchLaterQueuePanel>(
+          find.byType(WatchLaterQueuePanel),
+        );
+        expect(panel.queue.items, hasLength(2));
+        expect(panel.onRemove, isNull);
+        expect(panel.queue.withoutRemoved({next.value}), same(panel.queue));
+        await tester.tap(find.text('测试UP的投稿'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('测试UP的投稿'));
+        await tester.pumpAndSettle();
+        expect(created, 1);
+        expect(disposed, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final (cached, comments, width) in [
     for (final cached in [false, true])
       for (final comments in [false, true])
@@ -2079,6 +2208,61 @@ final class _RelatedCardOperations implements VideoCardOperations {
   bool isAdded(VideoId id) => writtenIds.contains(id);
   @override
   bool isUncertain(VideoId id) => false;
+}
+
+final class _ProfilePagingRepository extends Fake implements ProfileRepository {
+  @override
+  String get accountScope => 'user:7';
+  @override
+  int get sessionEpoch => 0;
+  final pending = Completer<ProfilePage>();
+  int reads = 0;
+  @override
+  Future<ProfilePage> loadEntries(
+    UserId id,
+    ProfileSection section, {
+    required int page,
+    String? cursor,
+    String order = 'pubdate',
+    String keyword = '',
+    String? folderId,
+    required RequestCancellation cancellation,
+  }) {
+    reads++;
+    return pending.future;
+  }
+}
+
+final class _ProfilePagingSession extends Fake implements PlaybackSession {
+  _ProfilePagingSession(this.detail);
+  @override
+  final VideoDetail detail;
+  @override
+  VideoPart get part => detail.parts.last;
+  @override
+  String Function() get accountScope =>
+      () => 'user:7';
+  @override
+  int Function() get sessionEpoch =>
+      () => 0;
+  @override
+  int get sourceGeneration => 1;
+  @override
+  final snapshots = ValueNotifier(
+    const PlaybackSnapshot(phase: PlaybackPhase.ended, generation: 1),
+  );
+  final advances = <({VideoId id, bool completed})>[];
+  @override
+  bool prepareNextVideo(
+    VideoId id,
+    String cid, {
+    required VideoId nextId,
+    String? nextCid,
+    bool completed = false,
+  }) {
+    advances.add((id: nextId, completed: completed));
+    return true;
+  }
 }
 
 final class _UnusedPlaybackRepository extends Fake

@@ -29,8 +29,14 @@ final class WatchLaterQueueRegistry {
     required String scope,
     required int sessionEpoch,
     required List<WatchLaterQueueItem> items,
+    ProfileVideoQueueSource? profileSource,
+    bool hasMore = false,
+    int nextPage = 1,
   }) {
-    if (!scope.startsWith('user:') || items.isEmpty) return null;
+    if ((profileSource == null && !scope.startsWith('user:')) ||
+        items.isEmpty) {
+      return null;
+    }
     _purgeOtherSessions(scope, sessionEpoch);
     final id = 'watch-later-$_nonce-${++_nextId}';
     final queue = WatchLaterQueue(
@@ -38,10 +44,20 @@ final class WatchLaterQueueRegistry {
       scope: scope,
       sessionEpoch: sessionEpoch,
       items: items.take(maximumItems).toList(),
+      profileSource: profileSource,
+      hasMore: hasMore,
+      nextPage: nextPage,
     );
     _queues[id] = queue;
     _trim();
     return queue;
+  }
+
+  void update(WatchLaterQueue queue) {
+    final old = _queues[queue.id];
+    if (old?.scope == queue.scope && old?.sessionEpoch == queue.sessionEpoch) {
+      _queues[queue.id] = queue;
+    }
   }
 
   /// Cached playback tabs hold their snapshot even if newer queues are opened.

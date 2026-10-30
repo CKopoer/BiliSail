@@ -740,6 +740,12 @@ final class _WorkspacePage extends ConsumerWidget {
                               context.go('/user/${user.value}'),
                           onOpenVideo: (video) =>
                               context.go('/video/${video.id.value}'),
+                          onOpenPlaylist: (video, queueId) => context.go(
+                            Uri(
+                              path: '/video/${video.id.value}',
+                              queryParameters: {'queue': queueId},
+                            ).toString(),
+                          ),
                           onOpenLiveRoom: (room) =>
                               context.go('/live/${room.value}'),
                           onLogin: () => showAppDialog<void>(

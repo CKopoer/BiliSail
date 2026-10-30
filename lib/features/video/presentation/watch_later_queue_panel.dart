@@ -18,6 +18,9 @@ final class WatchLaterQueuePanel extends StatefulWidget {
     this.onRemove,
     this.pendingRemovals = const {},
     this.collapsedChild,
+    this.onLoadMore,
+    this.loadingMore = false,
+    this.loadMoreMessage,
   });
 
   final WatchLaterQueue queue;
@@ -27,6 +30,9 @@ final class WatchLaterQueuePanel extends StatefulWidget {
   final ValueChanged<VideoId> onSelect;
   final ValueChanged<WatchLaterQueueItem>? onRemove;
   final Set<String> pendingRemovals;
+  final VoidCallback? onLoadMore;
+  final bool loadingMore;
+  final String? loadMoreMessage;
 
   /// Lazily mount the details on first collapse, then retain their state.
   final Widget? collapsedChild;
@@ -99,12 +105,19 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
                       child: const Icon(Icons.keyboard_arrow_down, size: 20),
                     ),
                     const SizedBox(width: 4),
-                    Text('稍后再看', style: Theme.of(context).textTheme.titleSmall),
+                    Flexible(
+                      child: Text(
+                        widget.queue.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     Icon(Icons.equalizer, size: 15, color: scheme.primary),
                     const SizedBox(width: 5),
                     Text(
-                      '${index + 1}/${widget.queue.items.length}',
+                      '${widget.queue.offset + index + 1}/${widget.queue.offset + widget.queue.items.length}${widget.queue.hasMore ? '+' : ''}',
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
@@ -183,24 +196,72 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
           }
         });
       }
-      return ListView.builder(
-        key: const ValueKey('watch-later-queue-list'),
-        controller: _scroll,
-        itemExtent: rowHeight,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: widget.queue.items.length,
-        itemBuilder: (context, itemIndex) => _QueueRow(
-          key: ValueKey(widget.queue.items[itemIndex].removalId),
-          item: widget.queue.items[itemIndex],
-          selected: itemIndex == index,
-          coverWidth: coverWidth,
-          onTap: () => widget.onSelect(widget.queue.items[itemIndex].video.id),
-          onRemove: itemIndex == index || widget.onRemove == null
-              ? null
-              : () => widget.onRemove?.call(widget.queue.items[itemIndex]),
-          removing: widget.pendingRemovals.contains(
-            widget.queue.items[itemIndex].removalId,
-          ),
+      return NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.depth == 0 &&
+              notification is ScrollUpdateNotification &&
+              notification.metrics.extentAfter < 300 &&
+              !widget.loadingMore &&
+              widget.loadMoreMessage == null) {
+            widget.onLoadMore?.call();
+          }
+          return false;
+        },
+        child: ListView.builder(
+          key: const ValueKey('watch-later-queue-list'),
+          controller: _scroll,
+          itemExtent: rowHeight,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount:
+              widget.queue.items.length +
+              (widget.onLoadMore == null && widget.loadMoreMessage == null
+                  ? 0
+                  : 1),
+          itemBuilder: (context, itemIndex) =>
+              itemIndex == widget.queue.items.length
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: widget.loadingMore
+                        ? const CircularProgressIndicator()
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (widget.loadMoreMessage case final message?)
+                                Text(
+                                  message,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              TextButton(
+                                onPressed: widget.onLoadMore,
+                                child: Text(
+                                  widget.loadMoreMessage == null
+                                      ? '加载更多投稿'
+                                      : '重试',
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                )
+              : _QueueRow(
+                  key: ValueKey(widget.queue.items[itemIndex].removalId),
+                  item: widget.queue.items[itemIndex],
+                  selected: itemIndex == index,
+                  coverWidth: coverWidth,
+                  onTap: () =>
+                      widget.onSelect(widget.queue.items[itemIndex].video.id),
+                  onRemove: itemIndex == index || widget.onRemove == null
+                      ? null
+                      : () => widget.onRemove?.call(
+                          widget.queue.items[itemIndex],
+                        ),
+                  removing: widget.pendingRemovals.contains(
+                    widget.queue.items[itemIndex].removalId,
+                  ),
+                ),
         ),
       );
     },

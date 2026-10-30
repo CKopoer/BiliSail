@@ -4,6 +4,8 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../video/application/watch_later_queue_registry.dart';
+import '../../video/domain/watch_later_queue.dart';
 import '../domain/profile_repository.dart';
 
 final profileRepositoryProvider = Provider<ProfileRepository>(
@@ -43,6 +45,8 @@ final class ProfileState {
     this.keyword = '',
     this.folderId,
     this.folderTitle,
+    this.queueLoading = false,
+    this.queueMessage,
   });
   final UserProfile? profile;
 
@@ -55,6 +59,8 @@ final class ProfileState {
   final ProfileSection section;
   final Map<ProfileSection, ProfileListState> lists;
   final String order, keyword;
+  final bool queueLoading;
+  final String? queueMessage;
   ProfileListState get current => lists[section] ?? const ProfileListState();
   ProfileState copy({
     UserProfile? profile,
@@ -72,6 +78,9 @@ final class ProfileState {
     String? folderId,
     String? folderTitle,
     bool closeFolder = false,
+    bool? queueLoading,
+    String? queueMessage,
+    bool clearQueueMessage = false,
   }) => ProfileState(
     sessionGeneration: sessionGeneration,
     profile: profile ?? this.profile,
@@ -89,6 +98,8 @@ final class ProfileState {
     keyword: keyword ?? this.keyword,
     folderId: closeFolder ? null : folderId ?? this.folderId,
     folderTitle: closeFolder ? null : folderTitle ?? this.folderTitle,
+    queueLoading: queueLoading ?? this.queueLoading,
+    queueMessage: clearQueueMessage ? null : queueMessage ?? this.queueMessage,
   );
 }
 
@@ -99,6 +110,7 @@ class ProfileController extends Notifier<ProfileState> {
   int _liveRoomGeneration = 0;
   RequestCancellation _profileRead = RequestCancellation();
   RequestCancellation _liveRoomRead = RequestCancellation();
+  RequestCancellation _queueRead = RequestCancellation();
   final Map<ProfileSection, RequestCancellation> _reads = {};
   final Map<ProfileSection, int> _versions = {};
   @override
@@ -123,6 +135,7 @@ class ProfileController extends Notifier<ProfileState> {
   void _cancel() {
     _profileRead.cancel();
     _liveRoomRead.cancel();
+    _queueRead.cancel();
     for (final read in _reads.values) {
       read.cancel();
     }
@@ -137,6 +150,72 @@ class ProfileController extends Notifier<ProfileState> {
       generation == _generation &&
       ref.read(profileRepositoryProvider).accountScope == scope &&
       ref.read(profileRepositoryProvider).sessionEpoch == epoch;
+
+  Future<WatchLaterQueue?> playAll() async {
+    if (state.queueLoading) return null;
+    final repository = ref.read(profileRepositoryProvider);
+    final scope = repository.accountScope, epoch = repository.sessionEpoch;
+    final generation = _generation;
+    final order = state.order;
+    final name = state.profile?.name ?? 'UP主';
+    _queueRead.cancel();
+    final read = _queueRead = RequestCancellation();
+    state = state.copy(queueLoading: true, clearQueueMessage: true);
+    try {
+      final result = await repository
+          .loadEntries(
+            id,
+            ProfileSection.videos,
+            page: 1,
+            order: order,
+            cancellation: read,
+          )
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              read.cancel();
+              throw const AppFailure(AppFailureKind.timeout, '播放列表加载超时，请重试');
+            },
+          );
+      if (!_current(generation, scope, epoch) || read.isCancelled) return null;
+      final items = profileQueueItems(result.items);
+      if (items.isEmpty) {
+        state = state.copy(queueLoading: false, queueMessage: '暂无可播放的公开投稿');
+        return null;
+      }
+      final queue = ref
+          .read(watchLaterQueueRegistryProvider)
+          .capture(
+            scope: scope,
+            sessionEpoch: epoch,
+            items: items,
+            profileSource: ProfileVideoQueueSource(
+              userId: id,
+              name: name,
+              order: order,
+            ),
+            hasMore: result.hasMore,
+            nextPage: 2,
+          );
+      state = state.copy(queueLoading: false);
+      return queue;
+    } on AppFailure catch (error) {
+      if (_current(generation, scope, epoch)) {
+        state = state.copy(
+          queueLoading: false,
+          queueMessage: error.kind == AppFailureKind.cancelled
+              ? null
+              : error.message,
+        );
+      }
+    } catch (_) {
+      if (_current(generation, scope, epoch)) {
+        state = state.copy(queueLoading: false, queueMessage: '播放列表暂时无法加载，请重试');
+      }
+    }
+    return null;
+  }
+
   Future<void> loadProfile() async {
     _profileRead.cancel();
     _profileRead = RequestCancellation();
@@ -349,3 +428,11 @@ class ProfileController extends Notifier<ProfileState> {
     }
   }
 }
+
+List<WatchLaterQueueItem> profileQueueItems(List<ProfileEntry> entries) => [
+  ...{
+    for (final entry in entries)
+      if (entry.video case final video? when video.id.isValid)
+        video.id: WatchLaterQueueItem(video: video),
+  }.values,
+];

@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/platform/external_links.dart';
+import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../live/domain/live_room.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/retained_tab_view.dart';
+import '../../../shared/ui/scroll_collapsing_header.dart';
 import '../../../shared/ui/user_follow_button.dart';
 import '../../auth/application/auth_controller.dart';
 import 'profile_header.dart';
@@ -23,6 +25,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
     required this.id,
     this.onOpenUser,
     this.onOpenVideo,
+    this.onOpenPlaylist,
     this.onOpenLiveRoom,
     this.onMessage,
     this.onLogin,
@@ -32,6 +35,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
   final UserId id;
   final void Function(UserId)? onOpenUser;
   final void Function(VideoSummary)? onOpenVideo;
+  final void Function(VideoSummary, String queueId)? onOpenPlaylist;
   final void Function(RoomId)? onOpenLiveRoom;
   final ValueChanged<UserProfile>? onMessage;
   final VoidCallback? onLogin;
@@ -114,103 +118,123 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final scrollBehavior = ScrollConfiguration.of(context);
     return LayoutBuilder(
       key: ValueKey(session),
-      builder: (context, constraints) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Keep the shared header outside all tab lists. Long introductions
-          // can scroll within it, leaving room for navigation and content.
-          ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: constraints.maxHeight * .5),
-            child: ScrollConfiguration(
-              behavior: scrollBehavior.copyWith(scrollbars: false),
-              child: SingleChildScrollView(
-                key: const ValueKey('profile-header-scroll'),
-                primary: false,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (p != null)
-                      ProfileHeader(
-                        profile: p,
-                        isSelf: isSelf,
-                        followAction: isSelf
-                            ? null
-                            : UserFollowButton(
-                                key: const ValueKey('profile-follow'),
-                                id: widget.id,
-                                onLogin: widget.onLogin,
-                              ),
-                        messageAction: isSelf
-                            ? null
-                            : OutlinedButton.icon(
-                                key: const ValueKey('profile-message'),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(80, 40),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
+      builder: (context, constraints) => ScrollHeaderRegion(
+        enabled: constraints.maxWidth < 600,
+        identity: session,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Keep the shared header outside all tab lists. Long introductions
+            // can scroll within it, leaving room for navigation and content.
+            ScrollCollapsingHeader(
+              key: const ValueKey('profile-collapsing-header'),
+              child: NotificationListener<UserScrollNotification>(
+                // A long biography has its own scroll area; keep it readable.
+                onNotification: (_) => true,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * .5,
+                  ),
+                  child: ScrollConfiguration(
+                    behavior: scrollBehavior.copyWith(scrollbars: false),
+                    child: SingleChildScrollView(
+                      key: const ValueKey('profile-header-scroll'),
+                      primary: false,
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (p != null)
+                            ProfileHeader(
+                              profile: p,
+                              isSelf: isSelf,
+                              followAction: isSelf
+                                  ? null
+                                  : UserFollowButton(
+                                      key: const ValueKey('profile-follow'),
+                                      id: widget.id,
+                                      onLogin: widget.onLogin,
+                                    ),
+                              messageAction: isSelf
+                                  ? null
+                                  : OutlinedButton.icon(
+                                      key: const ValueKey('profile-message'),
+                                      style: OutlinedButton.styleFrom(
+                                        minimumSize: const Size(80, 40),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                      ),
+                                      onPressed: signedIn
+                                          ? widget.onMessage == null
+                                                ? null
+                                                : () =>
+                                                      widget.onMessage?.call(p)
+                                          : widget.onLogin,
+                                      icon: const Icon(
+                                        Icons.mail_outline,
+                                        size: 18,
+                                      ),
+                                      label: const Text('私信'),
+                                    ),
+                              onSelectSection: controller.select,
+                              liveRoom: liveRoom,
+                              onOpenLiveRoom: switch ((
+                                liveRoom,
+                                widget.onOpenLiveRoom,
+                              )) {
+                                (final room?, final open?) => () => open(
+                                  room.id,
                                 ),
-                                onPressed: signedIn
-                                    ? widget.onMessage == null
-                                          ? null
-                                          : () => widget.onMessage?.call(p)
-                                    : widget.onLogin,
-                                icon: const Icon(Icons.mail_outline, size: 18),
-                                label: const Text('私信'),
-                              ),
-                        onSelectSection: controller.select,
-                        liveRoom: liveRoom,
-                        onOpenLiveRoom: switch ((
-                          liveRoom,
-                          widget.onOpenLiveRoom,
-                        )) {
-                          (final room?, final open?) => () => open(room.id),
-                          _ => null,
-                        },
+                                _ => null,
+                              },
+                            ),
+                          if (profileMessage case final message?)
+                            StateView.error(
+                              message: message,
+                              onAction: controller.loadProfile,
+                            ),
+                          if (liveRoomMessage case final message?)
+                            StateView.error(
+                              message: '直播间：$message',
+                              onAction: controller.loadLiveRoom,
+                            ),
+                        ],
                       ),
-                    if (profileMessage case final message?)
-                      StateView.error(
-                        message: message,
-                        onAction: controller.loadProfile,
-                      ),
-                    if (liveRoomMessage case final message?)
-                      StateView.error(
-                        message: '直播间：$message',
-                        onAction: controller.loadLiveRoom,
-                      ),
-                  ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: ProfileSectionNavigation(
-              section: section,
-              progress: _pagingProgress,
-              onSelected: controller.select,
-            ),
-          ),
-          Expanded(
-            child: RetainedTabView<ProfileSection>(
-              progress: _pagingProgress,
-              tabs: ProfileSection.values,
-              value: section,
-              onChanged: controller.select,
-              viewKey: const ValueKey('profile-section-swipe'),
-              pageBuilder: (context, section, active) => _ProfileSectionPage(
-                id: widget.id,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: ProfileSectionNavigation(
                 section: section,
-                active: active,
-                onOpenVideo: widget.onOpenVideo,
-                onOpenUser: widget.onOpenUser,
+                progress: _pagingProgress,
+                onSelected: controller.select,
               ),
             ),
-          ),
-        ],
+            Expanded(
+              child: RetainedTabView<ProfileSection>(
+                progress: _pagingProgress,
+                tabs: ProfileSection.values,
+                value: section,
+                onChanged: controller.select,
+                viewKey: const ValueKey('profile-section-swipe'),
+                pageBuilder: (context, section, active) => _ProfileSectionPage(
+                  id: widget.id,
+                  section: section,
+                  active: active,
+                  onOpenVideo: widget.onOpenVideo,
+                  onOpenUser: widget.onOpenUser,
+                  onOpenPlaylist: widget.onOpenPlaylist,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -225,6 +249,7 @@ class _ProfileSectionPage extends ConsumerStatefulWidget {
     required this.active,
     this.onOpenVideo,
     this.onOpenUser,
+    this.onOpenPlaylist,
   });
 
   final UserId id;
@@ -232,6 +257,7 @@ class _ProfileSectionPage extends ConsumerStatefulWidget {
   final bool active;
   final ValueChanged<VideoSummary>? onOpenVideo;
   final ValueChanged<UserId>? onOpenUser;
+  final void Function(VideoSummary, String queueId)? onOpenPlaylist;
 
   @override
   ConsumerState<_ProfileSectionPage> createState() =>
@@ -240,6 +266,24 @@ class _ProfileSectionPage extends ConsumerStatefulWidget {
 
 class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
   void _openLink(Uri uri) => ref.read(externalLinkOpenerProvider)(uri);
+
+  Future<void> _playAll() async {
+    final queue = await ref
+        .read(profileControllerProvider(widget.id).notifier)
+        .playAll();
+    if (!mounted ||
+        !widget.active ||
+        !WorkspaceActivity.isActive(context) ||
+        queue == null) {
+      return;
+    }
+    final repository = ref.read(profileRepositoryProvider);
+    if (repository.accountScope != queue.scope ||
+        repository.sessionEpoch != queue.sessionEpoch) {
+      return;
+    }
+    widget.onOpenPlaylist?.call(queue.items.first.video, queue.id);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -297,6 +341,46 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (widget.section == ProfileSection.videos) ...[
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final (loading, message) = ref.watch(
+                          profileControllerProvider(widget.id)
+                              .select((s) => (s.queueLoading, s.queueMessage)),
+                        );
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                key: const ValueKey('profile-play-all'),
+                                onPressed:
+                                    loading || widget.onOpenPlaylist == null
+                                    ? null
+                                    : _playAll,
+                                icon: loading
+                                    ? const SizedBox.square(
+                                        dimension: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.play_circle_outline,
+                                        size: 18,
+                                      ),
+                                label: Text(loading ? '正在加载播放列表…' : '播放全部'),
+                              ),
+                            ),
+                            if (message != null)
+                              Text(
+                                message,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
                     _ProfileVideoFilters(
                       order: order,
                       keyword: keyword,

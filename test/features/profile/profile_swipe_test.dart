@@ -198,7 +198,7 @@ void main() {
   testWidgets(
     'vertical scrolling keeps the header and tabs fixed without moving hidden lists',
     (tester) async {
-      await mount(tester);
+      await mount(tester, width: 900);
       final header = find.byType(ProfileHeader);
       final navigation = find.byType(ProfileSectionNavigation);
       final headerRect = tester.getRect(header);
@@ -226,6 +226,59 @@ void main() {
       expect(tester.getRect(header), headerRect);
       expect(tester.getRect(navigation), navigationRect);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final reduced in [false, true]) {
+    testWidgets(
+      'narrow profile collapses up and restores down with retained lists reduced=$reduced',
+      (tester) async {
+        await mount(tester, disableAnimations: reduced);
+        final header = find.byKey(const ValueKey('profile-collapsing-header'));
+        final navigation = find.byType(ProfileSectionNavigation);
+        final headerHeight = tester.getSize(header).height;
+        final initialTop = tester.getTopLeft(navigation).dy;
+        final videos = _position(tester);
+        await tester.drag(_surface, const Offset(0, -340));
+        await tester.pumpAndSettle();
+        expect(tester.getSize(header).height, 0);
+        expect(
+          tester.getTopLeft(navigation).dy,
+          closeTo(initialTop - headerHeight, .1),
+        );
+        expect(videos.pixels, greaterThan(0));
+        final saved = videos.pixels;
+        controller().select(ProfileSection.dynamics);
+        await tester.pumpAndSettle();
+        expect(
+          tester.getSize(header).height,
+          0,
+          reason: 'Horizontal paging does not restore the header',
+        );
+        await tester.drag(_surface, const Offset(0, -200));
+        await tester.pumpAndSettle();
+        expect(videos.pixels, closeTo(saved, .1));
+        await tester.drag(_surface, const Offset(0, 120));
+        await tester.pumpAndSettle();
+        expect(tester.getSize(header).height, headerHeight);
+        controller().select(ProfileSection.videos);
+        await tester.pumpAndSettle();
+        expect(_position(tester), same(videos));
+        expect(videos.pixels, closeTo(saved, .1));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'hidden profile scroll notifications do not collapse its header',
+    (tester) async {
+      await mount(tester, active: false);
+      final header = find.byKey(const ValueKey('profile-collapsing-header'));
+      final height = tester.getSize(header).height;
+      await tester.drag(_surface, const Offset(0, -300));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(header).height, height);
     },
   );
 
@@ -291,7 +344,16 @@ void main() {
         await tester.drag(_surface, const Offset(0, -180));
         await tester.pumpAndSettle();
         expect(list.pixels, greaterThan(0));
-        expect(tester.getRect(_surface), contentRect);
+        expect(
+          tester.getRect(_surface).height,
+          greaterThan(contentRect.height),
+        );
+        expect(
+          tester
+              .getSize(find.byKey(const ValueKey('profile-collapsing-header')))
+              .height,
+          0,
+        );
         expect(_currentList(tester).hitTestable(), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
@@ -569,6 +631,7 @@ void main() {
       platform: TargetPlatform.windows,
       scrollBehavior: const SmoothScrollBehavior(),
       disableAnimations: true,
+      width: 900,
     );
     final position = _position(tester);
     final headerRect = tester.getRect(find.byType(ProfileHeader));
