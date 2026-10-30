@@ -13,7 +13,7 @@ abstract interface class PgcDanmakuRepository {
   String get accountScope;
   int get sessionEpoch;
 
-  Future<void> send(
+  Future<String?> send(
     PgcDanmakuTarget target,
     String text,
     Duration position, {

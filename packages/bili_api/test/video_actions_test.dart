@@ -16,6 +16,37 @@ ApiCookieJar cookies() =>
       'bili_jct=fixture-csrf; Path=/; Secure',
     ]);
 void main() {
+  test(
+    'danmaku acknowledgements preserve style and optional IDs without replay',
+    () async {
+      final transport = _Transport();
+      final client = VideoActionsClient(
+        BiliApiClient(transport: transport, cookieJar: cookies()),
+      );
+      for (final (mode, color, data, id) in [
+        (1, 0xffffff, null, null),
+        (4, 0x00a1d6, {'dmid': 9007199254740993}, '9007199254740993'),
+        (5, 0xff6699, {'dmid_str': '9007199254740995'}, '9007199254740995'),
+      ]) {
+        transport.result = response(data);
+        expect(
+          await client.sendDanmaku(
+            'BV1234567890',
+            '42',
+            'styled',
+            Duration.zero,
+            mode: mode,
+            color: color,
+          ),
+          id,
+        );
+        expect(transport.fields['mode'], '$mode');
+        expect(transport.fields['color'], '$color');
+      }
+      expect(transport.posts, 3);
+    },
+  );
+
   test('comment writes require CSRF, retain targets and never retry', () async {
     final transport = _Transport();
     final api = BiliApiClient(transport: transport, cookieJar: cookies());
@@ -65,7 +96,8 @@ void main() {
       'del_media_ids': '13',
       'csrf': 'fixture-csrf',
     });
-    await client.sendDanmaku(
+    transport.result = response({'dmid_str': '9007199254740993'});
+    final id = await client.sendDanmaku(
       'BV1234567890',
       '9007199254740993',
       '测试 & % +',
@@ -73,6 +105,7 @@ void main() {
       mode: 5,
       color: 0x123456,
     );
+    expect(id, '9007199254740993');
     expect(transport.fields['oid'], '9007199254740993');
     expect(transport.fields['msg'], '测试 & % +');
     expect(transport.fields['progress'], '12345');

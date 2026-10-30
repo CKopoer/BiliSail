@@ -261,7 +261,7 @@ class FakeActions implements VideoActionsRepository {
     RequestCancellation cancellation,
   ) => write('watchLater');
   @override
-  Future<void> sendDanmaku(
+  Future<String?> sendDanmaku(
     VideoActionTarget target,
     String cid,
     String message,
@@ -269,9 +269,10 @@ class FakeActions implements VideoActionsRepository {
     int mode,
     int color,
     RequestCancellation cancellation,
-  ) {
+  ) async {
     sentText = message;
     sentPosition = position;
-    return write('send:$cid:$mode:$color');
+    await write('send:$cid:$mode:$color');
+    return '9007199254740993';
   }
 }

@@ -82,6 +82,10 @@ final class LiveDanmakuController extends ChangeNotifier {
   int _maxOnScreen = 0;
   double get _top => _topInset.clamp(0, _height - _bottomInset);
   double get _availableHeight => (_height - _bottomInset - _top) * _area;
+  // Match admission and resize capacity without truncating tall/small-text
+  // layouts to 24 rows. The visible-item budget keeps the index bounded.
+  int get _laneCount =>
+      (_availableHeight / _laneHeight).floor().clamp(0, maxVisible);
   double _laneHeight = DanmakuTextLayouts.minFontSize + 5;
   int _maxPerSecond = 20, _windowCount = 0;
   Duration _windowAt = Duration.zero;
@@ -255,7 +259,7 @@ final class LiveDanmakuController extends ChangeNotifier {
     if (_width > 0 && _height > 0) {
       // Text shaping and rasters do not depend on viewport size. Keep arrival
       // times and project scroll progress onto the new width in frame().
-      final lanes = (_availableHeight / _laneHeight).floor().clamp(0, 24);
+      final lanes = _laneCount;
       _removeVisibleWhere((item) => item.lane >= lanes);
     }
     notifyListeners();
@@ -390,7 +394,7 @@ final class LiveDanmakuController extends ChangeNotifier {
       return false;
     });
     _laneHeight = textHeight + _lineSpacing;
-    final laneCount = (_availableHeight / _laneHeight).floor().clamp(0, 24);
+    final laneCount = _laneCount;
     _removeVisibleWhere((item) => item.lane >= laneCount);
     _laneIndexBuildCount++;
     final lanes = List.generate(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/video.dart';
 import '../../../shared/ui/app_notice.dart';
+import '../../../shared/ui/danmaku_send_style_button.dart';
 import '../../playback/application/playback_session.dart';
 import '../application/video_actions_controller.dart';
 
@@ -23,7 +24,6 @@ class VideoDanmakuComposer extends ConsumerStatefulWidget {
 
 class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
   final _text = TextEditingController();
-  int _mode = 1, _color = 0xffffff;
   @override
   void dispose() {
     _text.dispose();
@@ -59,16 +59,32 @@ class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
       return;
     }
     final sendingCid = widget.part.cid;
+    final generation = session.sourceGeneration;
+    final position = session.snapshots.value.position;
+    final style = session.danmakuSendStyle.value;
     final successful = await ref
         .read(provider.notifier)
         .send(
           widget.part.cid,
           text,
-          session.snapshots.value.position,
-          _mode,
-          _color,
+          position,
+          style.mode,
+          style.color,
+          onSent: (id) => session.showSentDanmaku(
+            cid: sendingCid,
+            generation: generation,
+            id: id,
+            text: text,
+            position: position,
+            mode: style.mode,
+            color: style.color,
+          ),
         );
-    if (!mounted || widget.part.cid != sendingCid) return;
+    if (!mounted ||
+        widget.part.cid != sendingCid ||
+        session.sourceGeneration != generation) {
+      return;
+    }
     if (successful && _text.text.trim() == text) _text.clear();
     final message = ref.read(provider).message;
     if (message != null) {
@@ -83,6 +99,7 @@ class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
     final state = ref.watch(
       videoActionsControllerProvider((id: widget.detail.summary.id, aid: aid)),
     );
+    final session = ref.watch(playbackSessionProvider);
     return Container(
       height: (MediaQuery.textScalerOf(context).scale(12) + 20).clamp(
         36,
@@ -94,34 +111,10 @@ class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
       ),
       child: Row(
         children: [
-          PopupMenuButton<(int, int)>(
-            tooltip: '发送弹幕样式',
-            icon: const Icon(Icons.text_fields, size: 18),
-            onSelected: (v) => setState(() {
-              _mode = v.$1;
-              _color = v.$2;
-            }),
-            itemBuilder: (_) => [
-              for (final (mode, label) in const [
-                (1, '滚动'),
-                (5, '顶部'),
-                (4, '底部'),
-              ])
-                PopupMenuItem(
-                  value: (mode, _color),
-                  child: Text('${_mode == mode ? '✓ ' : ''}$label'),
-                ),
-              for (final (color, label) in const [
-                (0xffffff, '白色'),
-                (0xff6699, '粉色'),
-                (0xffd700, '金色'),
-                (0x00a1d6, '蓝色'),
-              ])
-                PopupMenuItem(
-                  value: (_mode, color),
-                  child: Text('${_color == color ? '✓ ' : ''}$label'),
-                ),
-            ],
+          DanmakuSendStyleButton(
+            style: session.danmakuSendStyle,
+            onChanged: session.setDanmakuSendStyle,
+            enabled: !state.busy,
           ),
           Expanded(
             child: TextField(

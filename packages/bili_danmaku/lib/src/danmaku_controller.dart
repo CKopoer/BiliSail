@@ -79,7 +79,10 @@ final class DanmakuController extends ChangeNotifier {
   Duration get _displayPosition => position - _offset;
   double get _top => _topInset.clamp(0, _height - _bottomInset);
   double get _availableHeight => (_height - _bottomInset - _top) * _area;
-  int get _laneCount => (_availableHeight / _laneHeight).floor().clamp(0, 24);
+  // Rows follow the configured area. No more than maxVisible rows can be
+  // occupied, so the visible-item budget also bounds collision-index storage.
+  int get _laneCount =>
+      (_availableHeight / _laneHeight).floor().clamp(0, maxVisible);
   Duration get _scrollLifetime =>
       Duration(microseconds: (scrollDuration.inMicroseconds / _speed).round());
 

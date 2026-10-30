@@ -159,6 +159,7 @@ final class _DanmakuSettingsControlsState
           1,
           (s, v) => s.copyWith(danmakuArea: v),
         ),
+        const Text('从顶部向下使用的最大区域，弹幕较少时不会铺满。'),
         _slider(
           '字号缩放',
           'danmaku-font-scale',
@@ -207,7 +208,7 @@ final class _DanmakuSettingsControlsState
           suffix: ' px',
         ),
         _slider(
-          '同屏密度（0 为不限）',
+          '同屏数量（0 为自动）',
           'danmaku-on-screen',
           s.danmakuMaxOnScreen.toDouble(),
           0,
@@ -216,6 +217,7 @@ final class _DanmakuSettingsControlsState
           divisions: 120,
           suffix: ' 条',
         ),
+        const Text('同屏最多 120 条；实际数量还受每秒数量、显示区域和防重叠轨道限制。'),
         _slider(
           '每秒最大数量（0 为不限）',
           'danmaku-density',

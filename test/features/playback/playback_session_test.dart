@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:bili_danmaku/bili_danmaku.dart';
+
 import 'package:bilisail/domain/playback_rates.dart';
 import 'package:bilisail/domain/audio_normalization.dart';
 import 'package:bilisail/core/input/input_stroke.dart';
@@ -27,6 +29,65 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final (mode, expected) in [
+    (1, DanmakuMode.scroll),
+    (4, DanmakuMode.bottom),
+    (5, DanmakuMode.top),
+  ]) {
+    test(
+      'acknowledged $mode send keeps style, reconciles ID and rejects stale source',
+      () async {
+        final repository = _FakeRepository(autoResolve: true);
+        final session = PlaybackSession(
+          engine: _FakeEngine(),
+          repository: repository,
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+          danmakuNow: () => Duration.zero,
+        );
+        addTearDown(session.close);
+        session.configureSettings(AppSettings(danmakuMinimumWeight: 5));
+        await session.open(_detail('one'), _part('one'));
+        session.danmaku.setViewport(width: 1280, height: 720);
+        final generation = session.sourceGeneration;
+        session.showSentDanmaku(
+          cid: 'one',
+          generation: generation,
+          id: '9007199254740993',
+          text: 'styled',
+          position: Duration.zero,
+          mode: mode,
+          color: 0x123456,
+        );
+        final visible = session.danmaku.frame().single;
+        expect(visible.event.mode, expected);
+        expect(visible.event.color.toARGB32(), 0xff123456);
+        repository.pendingComments['one:1']!.complete([
+          TimedComment(
+            id: '9007199254740993',
+            position: Duration.zero,
+            text: 'styled',
+            mode: mode,
+            color: 0x123456,
+            fontSize: 25,
+            weight: 8,
+          ),
+        ]);
+        await _flush();
+        expect(session.danmaku.frame(), hasLength(1));
+        await session.open(_detail('two'), _part('two'));
+        session.showSentDanmaku(
+          cid: 'one',
+          generation: generation,
+          text: 'late',
+          position: Duration.zero,
+          mode: mode,
+          color: 0xffffff,
+        );
+        expect(session.danmaku.frame(), isEmpty);
+      },
+    );
+  }
   test('live stream preference follows room changes, switches and navigation checkpoints', () async {
     const saved = LiveStreamPreference(
       protocol: 'http_hls',

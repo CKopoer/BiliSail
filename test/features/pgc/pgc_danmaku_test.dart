@@ -49,6 +49,9 @@ void main() {
       );
       harness.repository.pending!.complete();
       expect(await sending, true);
+      expect(harness.session.sent, [
+        (id: '9007199254740993', text: '你好 & + %', mode: 5, color: 0x123456),
+      ]);
       expect(harness.state.busy, false);
       expect(harness.state.message, '弹幕已发送');
     },
@@ -101,6 +104,7 @@ void main() {
       expect(harness.state.busy, false);
       harness.repository.pending!.complete();
       expect(await sending, false);
+      expect(harness.session.sent, isEmpty);
       expect(harness.state.message, isNull);
       expect(harness.repository.calls, 1);
     },
@@ -139,6 +143,33 @@ void main() {
       false,
     );
     expect(harness.repository.calls, 1);
+    expect(harness.session.sent, isEmpty);
+  });
+
+  testWidgets('PGC style survives composer replacement before sending', (
+    tester,
+  ) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    await _pumpComposer(tester, harness);
+    for (final label in ['底部', '蓝色']) {
+      await tester.tap(find.byTooltip('发送弹幕样式'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+    await _pumpComposer(
+      tester,
+      harness,
+      composerKey: const ValueKey('fullscreen'),
+    );
+    await tester.enterText(find.byType(TextField), 'blue bottom');
+    await tester.tap(find.text('发送'));
+    await tester.pumpAndSettle();
+    expect(harness.repository.mode, 4);
+    expect(harness.repository.color, 0x00a1d6);
+    expect(harness.session.sent.single.mode, 4);
+    expect(harness.session.sent.single.color, 0x00a1d6);
   });
 
   testWidgets('guest composer requests login without writing', (tester) async {
@@ -203,6 +234,7 @@ Future<void> _pumpComposer(
   _Harness harness, {
   VoidCallback? onLogin,
   double textScale = 1,
+  Key? composerKey,
 }) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
@@ -214,6 +246,7 @@ Future<void> _pumpComposer(
           child: Scaffold(
             backgroundColor: Colors.black,
             body: PgcDanmakuComposer(
+              key: composerKey,
               episode: _episode,
               onLogin: onLogin ?? () {},
             ),
@@ -266,7 +299,7 @@ final class _Repository implements PgcDanmakuRepository {
   Completer<void>? pending;
   Object? failure;
   @override
-  Future<void> send(
+  Future<String?> send(
     PgcDanmakuTarget target,
     String text,
     Duration position, {
@@ -283,10 +316,30 @@ final class _Repository implements PgcDanmakuRepository {
     this.cancellation = cancellation;
     if (failure case final error?) throw error;
     await pending?.future;
+    return '9007199254740993';
   }
 }
 
 final class _Session extends ChangeNotifier implements PlaybackSession {
+  @override
+  final danmakuSendStyle = ValueNotifier<({int mode, int color})>((
+    mode: 1,
+    color: 0xffffff,
+  ));
+  @override
+  void setDanmakuSendStyle(({int mode, int color}) style) =>
+      danmakuSendStyle.value = style;
+  final sent = <({String? id, String text, int mode, int color})>[];
+  @override
+  void showSentDanmaku({
+    required String cid,
+    required int generation,
+    required String text,
+    required Duration position,
+    required int mode,
+    required int color,
+    String? id,
+  }) => sent.add((id: id, text: text, mode: mode, color: color));
   @override
   int sourceGeneration = 1;
   @override
@@ -327,6 +380,7 @@ final class _Session extends ChangeNotifier implements PlaybackSession {
   @override
   void dispose() {
     snapshots.dispose();
+    danmakuSendStyle.dispose();
     super.dispose();
   }
 

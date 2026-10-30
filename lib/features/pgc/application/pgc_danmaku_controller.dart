@@ -113,7 +113,7 @@ final class PgcDanmakuController extends Notifier<PgcDanmakuState> {
         _matchesSource(session);
     state = PgcDanmakuState(signedIn: true, busy: true);
     try {
-      await repository.send(
+      final id = await repository.send(
         target,
         message,
         position,
@@ -122,6 +122,15 @@ final class PgcDanmakuController extends Notifier<PgcDanmakuState> {
         cancellation: cancellation,
       );
       if (!current()) return false;
+      session.showSentDanmaku(
+        cid: target.cid,
+        generation: sourceGeneration,
+        id: id,
+        text: message,
+        position: position,
+        mode: mode,
+        color: color,
+      );
       state = const PgcDanmakuState(signedIn: true, message: '弹幕已发送');
       return true;
     } catch (error) {

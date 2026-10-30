@@ -16,6 +16,46 @@ import 'video_actions_bar_test.dart'
     show FakeActions, FakeAuth, testDetail, testPart;
 
 void main() {
+  testWidgets(
+    'send style survives composer replacement and reaches local echo',
+    (tester) async {
+      final repo = FakeActions();
+      final session = FakeComposerSession();
+      addTearDown(session.dispose);
+      await pumpComposer(tester, repo, session: session);
+      for (final label in ['顶部', '粉色']) {
+        await tester.tap(find.byTooltip('发送弹幕样式'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+      }
+      await pumpComposer(
+        tester,
+        repo,
+        session: session,
+        composerKey: const ValueKey('fullscreen'),
+      );
+      await tester.tap(find.byTooltip('发送弹幕样式'));
+      await tester.pumpAndSettle();
+      expect(find.text('✓ 顶部'), findsOneWidget);
+      expect(find.text('✓ 粉色'), findsOneWidget);
+      await tester.tap(find.text('✓ 顶部'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'styled message');
+      await tester.tap(find.text('发送'));
+      await tester.pumpAndSettle();
+      expect(repo.calls, contains('send:${testPart.cid}:5:${0xff6699}'));
+      expect(session.sent, [
+        (
+          id: '9007199254740993',
+          text: 'styled message',
+          mode: 5,
+          color: 0xff6699,
+        ),
+      ]);
+    },
+  );
+
   for (final width in [320.0, 800.0, 1920.0]) {
     testWidgets('composer fits width $width at large text', (tester) async {
       tester.view.devicePixelRatio = 1;
@@ -90,15 +130,17 @@ Future<void> pumpComposer(
   bool signedIn = true,
   VoidCallback? onLogin,
   double textScale = 1,
+  FakeComposerSession? session,
+  Key? composerKey,
 }) async {
-  final session = FakeComposerSession();
-  addTearDown(session.dispose);
+  final playback = session ?? FakeComposerSession();
+  if (session == null) addTearDown(playback.dispose);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         authRepositoryProvider.overrideWithValue(FakeAuth(signedIn)),
         videoActionsRepositoryProvider.overrideWithValue(repo),
-        playbackSessionProvider.overrideWithValue(session),
+        playbackSessionProvider.overrideWithValue(playback),
       ],
       child: MaterialApp(
         builder: AppNoticeHost.builder,
@@ -107,6 +149,7 @@ Future<void> pumpComposer(
           child: Scaffold(
             backgroundColor: Colors.black,
             body: VideoDanmakuComposer(
+              key: composerKey,
               detail: testDetail,
               part: testPart,
               onLogin: onLogin ?? () {},
@@ -120,6 +163,27 @@ Future<void> pumpComposer(
 }
 
 class FakeComposerSession extends ChangeNotifier implements PlaybackSession {
+  @override
+  int get sourceGeneration => 1;
+  @override
+  final danmakuSendStyle = ValueNotifier<({int mode, int color})>((
+    mode: 1,
+    color: 0xffffff,
+  ));
+  @override
+  void setDanmakuSendStyle(({int mode, int color}) style) =>
+      danmakuSendStyle.value = style;
+  final sent = <({String? id, String text, int mode, int color})>[];
+  @override
+  void showSentDanmaku({
+    required String cid,
+    required int generation,
+    required String text,
+    required Duration position,
+    required int mode,
+    required int color,
+    String? id,
+  }) => sent.add((id: id, text: text, mode: mode, color: color));
   @override
   VideoDetail? get detail => testDetail;
   @override
@@ -145,6 +209,7 @@ class FakeComposerSession extends ChangeNotifier implements PlaybackSession {
   @override
   void dispose() {
     snapshots.dispose();
+    danmakuSendStyle.dispose();
     super.dispose();
   }
 

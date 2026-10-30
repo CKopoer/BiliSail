@@ -58,12 +58,12 @@ final class ApiVideoActionsRepository implements VideoActionsRepository {
       ),
     );
   }, cancellation: cancellation);
-  Future<void> _write(
-    Future<void> Function(ApiRequestContext) operation,
+  Future<T> _write<T>(
+    Future<T> Function(ApiRequestContext) operation,
     RequestCancellation cancellation,
   ) => requests.run((context) async {
     try {
-      await operation(context);
+      return await operation(context);
     } on ApiFailure catch (e) {
       if (context.cancellation?.isCancelled == true) rethrow;
       if (e.category == ApiFailureCategory.network ||
@@ -92,7 +92,7 @@ final class ApiVideoActionsRepository implements VideoActionsRepository {
   Future<void> watchLater(VideoActionTarget t, RequestCancellation c) =>
       _write((ctx) => client.watchLater(t.id.value, context: ctx), c);
   @override
-  Future<void> sendDanmaku(
+  Future<String?> sendDanmaku(
     VideoActionTarget t,
     String cid,
     String message,

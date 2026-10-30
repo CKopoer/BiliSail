@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/video.dart';
 import '../../../shared/ui/app_notice.dart';
+import '../../../shared/ui/danmaku_send_style_button.dart';
+import '../../playback/application/playback_session.dart';
 import '../application/pgc_danmaku_controller.dart';
 import '../domain/pgc_danmaku_repository.dart';
 import '../domain/pgc_repository.dart';
@@ -22,7 +24,6 @@ final class PgcDanmakuComposer extends ConsumerStatefulWidget {
 
 final class _PgcDanmakuComposerState extends ConsumerState<PgcDanmakuComposer> {
   final _text = TextEditingController();
-  int _mode = 1, _color = 0xffffff;
 
   PgcDanmakuTarget get _target => (
     episodeId: widget.episode.episodeId,
@@ -55,9 +56,10 @@ final class _PgcDanmakuComposerState extends ConsumerState<PgcDanmakuComposer> {
     }
     final text = _text.text.trim();
     if (text.isEmpty) return;
+    final style = ref.read(playbackSessionProvider).danmakuSendStyle.value;
     final success = await ref
         .read(provider.notifier)
-        .send(text, mode: _mode, color: _color);
+        .send(text, mode: style.mode, color: style.color);
     if (!mounted || _target != target) return;
     if (success && _text.text.trim() == text) _text.clear();
     final message = ref.read(provider).message;
@@ -68,6 +70,7 @@ final class _PgcDanmakuComposerState extends ConsumerState<PgcDanmakuComposer> {
   Widget build(BuildContext context) {
     if (!widget.episode.playable) return const SizedBox.shrink();
     final state = ref.watch(pgcDanmakuControllerProvider(_target));
+    final session = ref.watch(playbackSessionProvider);
     return Container(
       height: (MediaQuery.textScalerOf(context).scale(12) + 20).clamp(
         36,
@@ -79,34 +82,10 @@ final class _PgcDanmakuComposerState extends ConsumerState<PgcDanmakuComposer> {
       ),
       child: Row(
         children: [
-          PopupMenuButton<(int, int)>(
-            tooltip: '发送弹幕样式',
-            icon: const Icon(Icons.text_fields, size: 18),
-            onSelected: (value) => setState(() {
-              _mode = value.$1;
-              _color = value.$2;
-            }),
-            itemBuilder: (_) => [
-              for (final (mode, label) in const [
-                (1, '滚动'),
-                (5, '顶部'),
-                (4, '底部'),
-              ])
-                PopupMenuItem(
-                  value: (mode, _color),
-                  child: Text('${_mode == mode ? '✓ ' : ''}$label'),
-                ),
-              for (final (color, label) in const [
-                (0xffffff, '白色'),
-                (0xff6699, '粉色'),
-                (0xffd700, '金色'),
-                (0x00a1d6, '蓝色'),
-              ])
-                PopupMenuItem(
-                  value: (_mode, color),
-                  child: Text('${_color == color ? '✓ ' : ''}$label'),
-                ),
-            ],
+          DanmakuSendStyleButton(
+            style: session.danmakuSendStyle,
+            onChanged: session.setDanmakuSendStyle,
+            enabled: !state.busy,
           ),
           Expanded(
             child: TextField(

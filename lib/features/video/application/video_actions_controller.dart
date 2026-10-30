@@ -207,12 +207,17 @@ class VideoActionsController extends Notifier<VideoActionsState> {
     String message,
     Duration position,
     int mode,
-    int color,
-  ) => _perform(
-    'send',
-    (r, c) => r.sendDanmaku(target, cid, message, position, mode, color, c),
-    (s) => s,
-  );
+    int color, {
+    void Function(String? id)? onSent,
+  }) async {
+    String? id;
+    final success = await _perform('send', (r, c) async {
+      id = await r.sendDanmaku(target, cid, message, position, mode, color, c);
+    }, (s) => s);
+    if (success) onSent?.call(id);
+    return success;
+  }
+
   static bool _cancelled(Object e) =>
       e is AppFailure && e.kind == AppFailureKind.cancelled;
   static String _message(Object e) =>

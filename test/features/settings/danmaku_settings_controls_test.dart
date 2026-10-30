@@ -91,6 +91,7 @@ void main() {
           const Duration(milliseconds: -500),
         );
         for (final entry in {
+          'danmaku-area': 1.0,
           'danmaku-font-scale': 0.0,
           'danmaku-density': 0.0,
           'danmaku-on-screen': .1,
@@ -111,6 +112,7 @@ void main() {
           );
           await tester.pumpAndSettle();
         }
+        expect(repository.value.danmakuArea, 1);
         expect(repository.value.danmakuFontScale, .2);
         expect(repository.value.danmakuMaxPerSecond, 0);
         expect(repository.value.danmakuMaxOnScreen, 12);

@@ -280,6 +280,12 @@ class PlaybackSession extends ChangeNotifier {
     const PlaybackSnapshot(phase: PlaybackPhase.idle, generation: 0),
   );
   late final DanmakuController danmaku;
+  final danmakuSendStyle = ValueNotifier<({int mode, int color})>((
+    mode: 1,
+    color: 0xffffff,
+  ));
+  final _sentComments = <TimedComment>[];
+  int _sentCommentSequence = 0;
   final _segments = <int, CommentSegment>{};
   bool _commentsConfigured = false;
   Object? _commentRefreshRequest;
@@ -793,6 +799,7 @@ class PlaybackSession extends ChangeNotifier {
     }
     _segmentRequests.clear();
     _segments.clear();
+    _sentComments.clear();
     _commentRefreshRequest = null;
     _failedSegments.clear();
     _prefetchFailedSegments.clear();
@@ -1866,6 +1873,48 @@ class PlaybackSession extends ChangeNotifier {
     });
   }
 
+  void setDanmakuSendStyle(({int mode, int color}) style) {
+    if (_disposed ||
+        !const [1, 4, 5].contains(style.mode) ||
+        style.color < 0 ||
+        style.color > 0xffffff) {
+      return;
+    }
+    danmakuSendStyle.value = style;
+  }
+
+  void showSentDanmaku({
+    required String cid,
+    required int generation,
+    required String text,
+    required Duration position,
+    required int mode,
+    required int color,
+    String? id,
+  }) {
+    if (_disposed ||
+        _closing ||
+        generation != sourceGeneration ||
+        cid != danmakuCid ||
+        media == null ||
+        _scope != accountScope() ||
+        _epoch != sessionEpoch()) {
+      return;
+    }
+    _sentComments.add(
+      TimedComment(
+        id: id ?? 'sent:$generation:${_sentCommentSequence++}',
+        position: position,
+        text: text,
+        mode: mode,
+        color: color,
+        fontSize: 25,
+      ),
+    );
+    if (_sentComments.length > danmaku.maxVisible) _sentComments.removeAt(0);
+    _refreshCommentWindow(snapshots.value.position);
+  }
+
   void _refreshCommentWindow(Duration position) {
     if (_disposed || !_ownerVisible || !commentsEnabled) return;
     final displayPosition = position - _settings.danmakuOffset;
@@ -1874,14 +1923,20 @@ class PlaybackSession extends ChangeNotifier {
         ? requiredHistory
         : const Duration(seconds: 16);
     final events = mergeCommentWindow(
-      _segments.values,
+      [
+        if (_sentComments.isNotEmpty) CommentSegment(_sentComments),
+        ..._segments.values,
+      ],
       displayPosition - history,
       displayPosition + const Duration(seconds: 60),
     );
     final density = <int, int>{};
+    final ids = <String>{};
+    final sentIds = {for (final event in _sentComments) event.id};
     danmaku.replaceEvents(
       events
           .where((event) {
+            if (!ids.add(event.id)) return false;
             final modeEnabled = switch (event.mode) {
               4 => _settings.danmakuBottomEnabled,
               5 => _settings.danmakuTopEnabled,
@@ -1890,13 +1945,17 @@ class PlaybackSession extends ChangeNotifier {
             if (!modeEnabled ||
                 (_settings.danmakuBlockColored &&
                     (event.color & 0xffffff) != 0xffffff) ||
-                (_settings.danmakuMinimumWeight > 0 &&
+                (!sentIds.contains(event.id) &&
+                    _settings.danmakuMinimumWeight > 0 &&
                     event.weight < _settings.danmakuMinimumWeight) ||
                 _settings.danmakuBlockedWords.any(
                   (word) => word.isNotEmpty && event.text.contains(word),
                 )) {
               return false;
             }
+            // Locally acknowledged sends have already passed the explicit
+            // write path; a dense remote second must not hide their feedback.
+            if (sentIds.contains(event.id)) return true;
             final second = event.position.inSeconds;
             final count = (density[second] ?? 0) + 1;
             density[second] = count;
@@ -2678,6 +2737,7 @@ class PlaybackSession extends ChangeNotifier {
     }
     _segmentRequests.clear();
     _commentRefreshRequest = null;
+    _sentComments.clear();
     // Capture the old progress before invalidating the source. A same-source
     // reopen during the write must advance generation instead of reusing it.
     final savedProgress = _saveProgress();
@@ -2720,6 +2780,7 @@ class PlaybackSession extends ChangeNotifier {
     await attempt(engine.dispose);
     await attempt(() async => snapshots.dispose());
     await attempt(() async => highEnergy.dispose());
+    await attempt(() async => danmakuSendStyle.dispose());
     await attempt(() async => danmaku.dispose());
     _clock.stop();
     super.dispose();

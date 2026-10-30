@@ -202,7 +202,7 @@ final class _Repository implements VideoActionsRepository {
     RequestCancellation cancellation,
   ) => write();
   @override
-  Future<void> sendDanmaku(
+  Future<String?> sendDanmaku(
     VideoActionTarget target,
     String cid,
     String message,
@@ -210,5 +210,8 @@ final class _Repository implements VideoActionsRepository {
     int mode,
     int color,
     RequestCancellation cancellation,
-  ) => write();
+  ) async {
+    await write();
+    return '9007199254740993';
+  }
 }

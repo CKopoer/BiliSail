@@ -65,7 +65,7 @@ abstract interface class VideoActionsRepository {
     VideoActionTarget target,
     RequestCancellation cancellation,
   );
-  Future<void> sendDanmaku(
+  Future<String?> sendDanmaku(
     VideoActionTarget target,
     String cid,
     String message,

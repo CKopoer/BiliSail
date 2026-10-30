@@ -170,7 +170,7 @@ final class VideoActionsClient {
     }, context: context);
   }
 
-  Future<void> sendDanmaku(
+  Future<String?> sendDanmaku(
     String bvid,
     String cid,
     String message,
@@ -189,7 +189,7 @@ final class VideoActionsClient {
         color > 0xffffff) {
       throw ArgumentError('Invalid danmaku');
     }
-    await api.submitForm('/x/v2/dm/post', 'danmaku_send', {
+    final data = await api.submitForm('/x/v2/dm/post', 'danmaku_send', {
       'bvid': bvid,
       'oid': cid,
       'type': '1',
@@ -202,6 +202,14 @@ final class VideoActionsClient {
       'plat': '1',
       'rnd': '${DateTime.now().millisecondsSinceEpoch ~/ 1000}',
     }, context: context);
+    // Acknowledged writes remain successful when no ID is supplied. Preserve
+    // string IDs without a floating-point conversion for local reconciliation.
+    if (data is Map<String, Object?>) {
+      final id = data['dmid_str'] ?? data['dmid'];
+      if (id is String && RegExp(r'^[1-9]\d*$').hasMatch(id)) return id;
+      if (id is int && id > 0) return '$id';
+    }
+    return null;
   }
 
   static void _bvid(String bvid) {

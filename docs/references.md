@@ -4,6 +4,8 @@
 
 ## 1. 来源快照
 
+弹幕区域与发送样式修复只读参考 PiliPlus 提交 `936072449e82e3d90c28c728c0087bf5136fa441` 的 [弹幕适配](../../PiliPlus/lib/plugin/pl_player/utils/danmaku_options.dart)、[发送面板](../../PiliPlus/lib/pages/video/send_danmaku/view.dart)、[视频控制器](../../PiliPlus/lib/pages/video/controller.dart) 与 [发送请求](../../PiliPlus/lib/http/danmaku.dart)。仅参考配置比例、会话保留发送样式和成功回显行为，独立实现，未复制 GPLv3 应用源码、资源或新增依赖；来源锁文件、修复原因和验证边界见 [显示区域与发送样式](validation/danmaku-display-area.md)。
+
 2026-10-28 CDN 扩展只读参考同一 PiliPlus 提交 `936072449e82e3d90c28c728c0087bf5136fa441` 的 [CDN 目录](../../PiliPlus/lib/models/common/video/cdn_type.dart)、[选择与测速](../../PiliPlus/lib/pages/setting/widgets/select_dialog.dart)、[URL 行为](../../PiliPlus/lib/utils/video_utils.dart) 和 [设置入口](../../PiliPlus/lib/pages/setting/models/video_settings.dart)。仅借鉴节点信息、交互与公开视频分段测速的行为，独立实现设置仓储／控制器／UI 和有界传输；未复制 GPLv3 应用源码或引入依赖，具体替换边界、原始备用与在线结果见 [CDN 设置与测速](validation/video-cdn.md)。
 
 2026-10-16 按用户指定只读参考 [PiliPlus](../../PiliPlus/README.md)（`936072449e82e3d90c28c728c0087bf5136fa441`），并修改用户的 [media-kit fork](../../media-kit/README.md)。PiliPlus 应用为 GPLv3，仅借鉴行为；其实际使用的两个 media-kit 分支为 MIT，移植保留版权头并记录精确提交。采用内容、各分支差异、弹幕独立优化、原生资产和验证边界见 [移植记录](validation/piliplus-media-kit-port.md)。

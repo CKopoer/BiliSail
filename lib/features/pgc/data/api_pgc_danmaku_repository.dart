@@ -24,7 +24,7 @@ final class ApiPgcDanmakuRepository implements PgcDanmakuRepository {
   int get sessionEpoch => requests.sessionEpoch;
 
   @override
-  Future<void> send(
+  Future<String?> send(
     PgcDanmakuTarget target,
     String text,
     Duration position, {
@@ -33,7 +33,7 @@ final class ApiPgcDanmakuRepository implements PgcDanmakuRepository {
     required RequestCancellation cancellation,
   }) => requests.run((context) async {
     try {
-      await client.sendDanmaku(
+      return await client.sendDanmaku(
         target.video.value,
         target.cid,
         text,
