@@ -20,6 +20,18 @@
 
 播放/暂停按钮右侧新增“下一集”：宽屏与窄屏均位于底部控件栏左侧，展开弹幕输入时仍保留。连续播放关闭时仍可手动使用，没有下一项时禁用；直播与单文件离线播放不显示。手动切换保留播放/暂停意图，已结束时切换继续播放。自动切换从下一项零点开始，不读取该项本地或云端续播位置。
 
+## 完播后手动重播（2026-10-31）
+
+点播结束后，再次点击播放按钮或收到系统播放命令时，先跳转到零点，等后端确认位置后明确发送播放命令。复用当前媒体源和播放器，保留倍速、音量与清晰度；普通暂停后继续仍从暂停位置播放。重播等待期间的手动暂停和播放许可撤销仍然生效。
+
+播放阶段和 `desiredPlaying` 是独立状态。结束后跳转可能保留旧的播放意图，不能仅根据该标记跳过播放命令。会话回归覆盖结束时意图标记的两种取值、按钮／系统播放入口，以及跳转期间的暂停和许可撤销；原生回归入口为 [playback_replay_test.dart](../../integration_test/playback_replay_test.dart)，使用本地 DASH 音视频分轨检查实际完播、零点重播、双轨解码和普通暂停恢复。
+
+本轮 `tool/check.ps1 -SkipPub` 在执行时的工作区快照通过：根应用 3677、API 497、播放器 101、弹幕 136、mux 5，共 4416 项；13 项符号链接用例和 10 项未配置 `BILI_MUX_LIBRARY` 的原生 mux 用例跳过。追加的重播竞态定向回归和受影响文件静态分析通过，日志为 `build/replay-check.log`、`build/replay-race-tests.log`、`build/replay-target-analysis.log`。
+
+Windows 在独立源码副本重新编译并通过上述原生完播／重播用例，播放会话源码与本次提交暂存内容一致，日志为 `build/replay-native-after.log`；普通 Windows EOF 原路径可重播，保留旧意图的边界由 fake engine 回归覆盖。Android/macOS 实机与人工音画同步未验证；没有活动 DTD/debug 会话可供热重载，原生验证使用重新编译的测试进程。
+
+Windows 受控媒体回归的基础播放、重播、诊断、启动、就绪、听视频、系统媒体控制、断流、预览、音量均衡和缓冲组最终均通过，未开启公网烟测。主脚本在音量均衡组启动前因 Flutter 临时报告 `Could not determine engine revision` 退出，确认固定 SDK 正常后单独续跑最后两组通过；日志为 `build/replay-snapshot-windows-media.log` 和 `build/replay-windows-media-remaining.log`。
+
 ## 实现
 
 `video_playback_sequence.dart`、`pgc_playback_sequence.dart` 为纯 Dart 顺序规则，页面提供共享 `PlaybackPageCommands`。`PlaybackPanel` 订阅确认结束状态，延后至当前事件结束再执行，并核对播放 owner、source generation、当前媒体身份与最新设置；同源重复结束事件只推进一次。`PlaybackSession.prepareNextVideo` 记录播放意图、起始位置及账号 scope/session epoch，换源时检查并消费。合集加载下一视频详情期间保留当前播放器 owner；标签路由原地更新，隐藏播放标签推进不抢焦点。

@@ -5196,9 +5196,58 @@ void main() {
     },
   );
 
-  test(
-    'tapping play after completion seeks to zero and resumes immediately',
-    () async {
+  for (final desiredPlaying in [false, true]) {
+    for (final systemPlay in [false, true]) {
+      test(
+        'replay after completion starts at zero with desiredPlaying=$desiredPlaying and systemPlay=$systemPlay',
+        () async {
+          final engine = _FakeEngine();
+          final session = PlaybackSession(
+            engine: engine,
+            repository: _FakeRepository(autoResolve: true),
+            progress: _FakeProgress(),
+            accountScope: () => 'guest',
+          );
+          addTearDown(session.close);
+          await session.open(_detail('ended'), _part('ended'));
+          await session.setRate(1.5);
+          await session.setVolume(35);
+          final generation = engine.currentSnapshot.generation;
+          final plays = engine.playCount;
+          engine.emit(
+            engine.currentSnapshot.copyWith(
+              phase: PlaybackPhase.ended,
+              position: const Duration(minutes: 2),
+              desiredPlaying: desiredPlaying,
+            ),
+          );
+          await (systemPlay ? session.play() : session.togglePlaying());
+          expect(engine.seekTargets.last, Duration.zero);
+          expect(engine.currentSnapshot.position, Duration.zero);
+          expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+          expect(engine.playCount, plays + 1);
+          expect(engine.currentSnapshot.generation, generation);
+          expect(engine.currentSnapshot.rate, 1.5);
+          expect(engine.currentSnapshot.volume, 35);
+          expect(engine.openOptions, hasLength(1));
+          engine.emit(
+            engine.currentSnapshot.copyWith(
+              position: const Duration(seconds: 10),
+            ),
+          );
+          await session.togglePlaying();
+          expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+          await session.togglePlaying();
+          expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+          expect(engine.currentSnapshot.position, const Duration(seconds: 10));
+          expect(engine.seekTargets, [Duration.zero]);
+        },
+      );
+    }
+  }
+
+  for (final action in ['pause', 'permission']) {
+    test('replay respects $action while seeking from EOF', () async {
       final engine = _FakeEngine();
       final session = PlaybackSession(
         engine: engine,
@@ -5206,23 +5255,39 @@ void main() {
         progress: _FakeProgress(),
         accountScope: () => 'guest',
       );
+      addTearDown(session.close);
       await session.open(_detail('ended'), _part('ended'));
       engine.emit(
         engine.currentSnapshot.copyWith(
           phase: PlaybackPhase.ended,
           position: const Duration(minutes: 2),
-          desiredPlaying: false,
         ),
       );
-      await session.togglePlaying();
-      expect(engine.seekTargets.last, Duration.zero);
+      final plays = engine.playCount;
+      final seeking = Completer<void>();
+      engine.nextSeek = seeking;
+      final replay = session.togglePlaying();
+      await _flush();
+      if (action == 'pause') {
+        await session.pause();
+      } else {
+        await session.setPlaybackAllowed(false);
+      }
+      seeking.complete();
+      await replay;
+      expect(engine.playCount, plays);
       expect(engine.currentSnapshot.position, Duration.zero);
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      if (action == 'pause') {
+        await session.play();
+      } else {
+        await session.setPlaybackAllowed(true);
+      }
+      expect(engine.playCount, plays + 1);
       expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
-      await session.togglePlaying();
-      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
-      await session.close();
-    },
-  );
+      expect(engine.seekTargets, [Duration.zero]);
+    });
+  }
 
   test('close releases resources even when stop throws', () async {
     final engine = _FakeEngine();
@@ -5854,6 +5919,7 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
   PlayerFailureKind? nextOpenFailure;
   void Function()? onOpenFailure;
   Completer<void>? nextPlay;
+  Completer<void>? nextSeek;
   int playFailuresRemaining = 0;
   PlayerFailureKind playFailureKind = PlayerFailureKind.nativePlayback;
 
@@ -5956,7 +6022,19 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
   @override
   Future<void> seek(Duration target) async {
     seekTargets.add(target);
-    emit(_current.copyWith(position: target));
+    final generation = _current.generation;
+    final pending = nextSeek;
+    nextSeek = null;
+    if (pending != null) await pending.future;
+    if (disposed || generation != _current.generation) return;
+    emit(
+      _current.copyWith(
+        position: target,
+        phase: _current.phase == PlaybackPhase.ended
+            ? PlaybackPhase.paused
+            : _current.phase,
+      ),
+    );
   }
 
   @override

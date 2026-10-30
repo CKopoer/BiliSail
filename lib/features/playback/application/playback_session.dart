@@ -2195,7 +2195,7 @@ class PlaybackSession extends ChangeNotifier {
         danmaku.seekConfirmed(engine.currentSnapshot.position);
         _lastCommentWindow = null;
         _ensureComments(engine.currentSnapshot.position);
-        await _syncPlayback();
+        await _syncPlayback(forcePlay: true);
         if (_disposed || generation != _generation) return;
         await _saveProgress();
       } on PlayerFailure catch (failure) {
@@ -2331,7 +2331,10 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  Future<void> _syncPlayback({bool forcePause = false}) {
+  Future<void> _syncPlayback({
+    bool forcePause = false,
+    bool forcePlay = false,
+  }) {
     final generation = _generation;
     final operation = (_playbackCommands ?? Future<void>.value()).then((
       _,
@@ -2343,7 +2346,10 @@ class PlaybackSession extends ChangeNotifier {
           await engine.pause();
         }
       } else if (!_resolving && media != null) {
-        if (_desiredPlaying && !engine.currentSnapshot.desiredPlaying) {
+        // Phase and play intent are independent. Explicit replay must issue
+        // play even when seeking out of EOF retains the previous play intent.
+        if (_desiredPlaying &&
+            (forcePlay || !engine.currentSnapshot.desiredPlaying)) {
           await _playWithAudioRecovery();
         } else if (!_desiredPlaying &&
             (forcePause || engine.currentSnapshot.desiredPlaying)) {
