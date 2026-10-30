@@ -1124,6 +1124,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
       hasListen: session.canListen,
       hasNextButton:
           !session.isLive && session.contentTarget is! OfflinePlaybackTarget,
+      isLive: session.isLive,
       textStyle: DefaultTextStyle.of(context).style,
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
@@ -2283,22 +2284,6 @@ class _ControlBar extends StatelessWidget {
             onPressed: () => onSettings(2),
           ),
         ),
-      if (session.contentTarget == null)
-        slot(
-          IconButton(
-            tooltip: session.sponsorLoading
-                ? '正在查询空降片段'
-                : (session.sponsorMessage ?? '空降助手'),
-            icon: Icon(
-              Icons.airplanemode_active,
-              size: 20,
-              color: settings.sponsorBlockMode == SponsorBlockMode.disabled
-                  ? Colors.white54
-                  : const Color(0xffff9ab8),
-            ),
-            onPressed: () => onSettings(3),
-          ),
-        ),
       slot(danmakuButton),
       if (media != null && session.isLive)
         slot(
@@ -2700,6 +2685,7 @@ typedef _ControlsLayoutInputs = ({
   bool hasVoices,
   bool hasListen,
   bool hasNextButton,
+  bool isLive,
   TextStyle textStyle,
   TextDirection textDirection,
   TextScaler textScaler,
@@ -2733,10 +2719,12 @@ class _ControlsLayout {
       null => 0,
     };
     composerMinWidth = 200 * inputs.textScaler.scale(12) / 12;
+    // Count only rendered buttons; subtitle style is absent from live playback.
     compact =
         inputs.width <
         buttonWidth *
-                (8 +
+                (6 +
+                    (inputs.isLive ? 0 : 1) +
                     (inputs.hasNextButton ? 1 : 0) +
                     (inputs.hasSubtitles ? 1 : 0) +
                     (inputs.hasVoices ? 1 : 0) +

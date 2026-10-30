@@ -4063,6 +4063,23 @@ void main() {
           isFalse,
         );
       }
+      await resize(900);
+      expect(
+        find.byKey(const ValueKey('standard-control-row')),
+        findsOneWidget,
+      );
+      expect(tester.getSize(field).width, greaterThanOrEqualTo(200));
+      expect(find.byIcon(Icons.airplanemode_active), findsNothing);
+      await tester.tap(find.byTooltip('播放配置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(Tab, '空降助手'));
+      await tester.pumpAndSettle();
+      expect(
+        DefaultTabController.of(tester.element(find.byType(TabBar))).index,
+        3,
+      );
+      await tester.tap(find.byTooltip('关闭'));
+      await tester.pumpAndSettle();
       for (final width in [800.0, 640.0, 480.0, 320.0]) {
         await resize(width);
         expect(
@@ -4102,6 +4119,72 @@ void main() {
       await _pumpFrames(tester);
     },
   );
+
+  for (final (content, target, width)
+      in <(String, ContentPlaybackTarget?, double)>[
+        ('video', null, 900),
+        ('pgc', const PgcPlaybackTarget('12', cid: '123'), 900),
+        ('live', const LivePlaybackTarget('12'), 560),
+        ('offline', const OfflinePlaybackTarget('local-task'), 860),
+      ]) {
+    testWidgets('toolbar uses a smaller compact threshold for $content', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1400, 1000);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService();
+      addTearDown(session.close);
+      Future<void> resize(double width) async {
+        await tester.pumpWidget(
+          _app(
+            session,
+            window,
+            const AppSettings.defaults(),
+            width: width,
+            target: target,
+            composer: (_) => const TextField(key: Key('threshold-composer')),
+          ),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        expect(tester.takeException(), isNull);
+      }
+
+      await resize(width);
+      await session.pause();
+      expect(
+        find.byKey(const ValueKey('standard-control-row')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.airplanemode_active), findsNothing);
+      expect(
+        tester.getSize(find.byKey(const Key('threshold-composer'))).width,
+        greaterThanOrEqualTo(200),
+      );
+      await resize(width - 80);
+      expect(
+        find.byKey(const ValueKey('small-window-control-row')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byTooltip('全屏（F）'));
+      await _pumpFrames(tester);
+      expect(
+        find.byKey(const ValueKey('standard-control-row')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.airplanemode_active), findsNothing);
+      expect(engine.opens, 1);
+      expect(engine.maxSurfaces, 1);
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    });
+  }
 
   for (final pgc in [false, true]) {
     for (final fullScreen in [true]) {
