@@ -220,49 +220,56 @@ void main() {
     (375.0, 2.0),
     (500.0, 1.0),
   ]) {
-    testWidgets('toolbar fits one row at width $width and text scale $scale', (
-      tester,
-    ) async {
-      final keyword = TextEditingController();
-      addTearDown(keyword.dispose);
-      String? order, searched;
-      await pumpLayout(
-        tester,
-        ProfileVideoToolbar(
-          order: 'pubdate',
-          keywordController: keyword,
-          onOrderChanged: (value) => order = value,
-          onSearch: (value) => searched = value,
-        ),
-        width: width,
-        scale: scale,
-      );
-      expect(tester.takeException(), isNull);
-      final search = find.byKey(const ValueKey('profile-video-search'));
-      final sort = find.byKey(const ValueKey('profile-video-sort'));
-      final searchRect = tester.getRect(search);
-      final sortRect = tester.getRect(sort);
-      expect(searchRect.center.dy, closeTo(sortRect.center.dy, .01));
-      expect(searchRect.right, width - 16);
-      expect(searchRect.left, greaterThanOrEqualTo(sortRect.right + 12));
-      expect(searchRect.width, lessThanOrEqualTo(260));
-      expect(searchRect.width, greaterThan(80));
-      if (width <= 375) {
-        expect(searchRect.width, lessThan(260));
-        expect(searchRect.left, closeTo(sortRect.right + 12, .01));
-      }
-      await tester.tap(sort);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('最多播放').last);
-      await tester.pumpAndSettle();
-      expect(order, 'click');
-      await tester.enterText(search, '测试投稿');
-      await tester.testTextInput.receiveAction(TextInputAction.search);
-      expect(searched, '测试投稿');
-      searched = null;
-      await tester.tap(find.byTooltip('搜索投稿'));
-      expect(searched, '测试投稿');
-    });
+    testWidgets(
+      'narrow toolbar groups playback and sort above search at $width/$scale',
+      (tester) async {
+        final keyword = TextEditingController();
+        addTearDown(keyword.dispose);
+        String? order, searched;
+        var plays = 0;
+        await pumpLayout(
+          tester,
+          ProfileVideoToolbar(
+            order: 'pubdate',
+            keywordController: keyword,
+            onOrderChanged: (value) => order = value,
+            onSearch: (value) => searched = value,
+            onPlayAll: () => plays++,
+          ),
+          width: width,
+          scale: scale,
+        );
+        expect(tester.takeException(), isNull);
+        final search = find.byKey(const ValueKey('profile-video-search'));
+        final sort = find.byKey(const ValueKey('profile-video-sort'));
+        final searchRect = tester.getRect(search);
+        final sortRect = tester.getRect(sort);
+        final play = find.byKey(const ValueKey('profile-play-all'));
+        final playRect = tester.getRect(play);
+        expect(playRect.left, 16);
+        expect(searchRect.left, 16);
+        expect(searchRect.right, width - 16);
+        expect(searchRect.top, greaterThanOrEqualTo(playRect.bottom + 8));
+        expect(searchRect.top, greaterThanOrEqualTo(sortRect.bottom + 8));
+        if (scale == 1) {
+          expect(sortRect.right, width - 16);
+          expect(playRect.center.dy, closeTo(sortRect.center.dy, .01));
+        }
+        await tester.tap(play);
+        expect(plays, 1);
+        await tester.tap(sort);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('最多播放').last);
+        await tester.pumpAndSettle();
+        expect(order, 'click');
+        await tester.enterText(search, '测试投稿');
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        expect(searched, '测试投稿');
+        searched = null;
+        await tester.tap(find.byTooltip('搜索投稿'));
+        expect(searched, '测试投稿');
+      },
+    );
   }
 
   testWidgets('wide toolbar places search at the trailing edge', (
@@ -285,9 +292,72 @@ void main() {
     final sort = tester.getRect(
       find.byKey(const ValueKey('profile-video-sort')),
     );
+    final play = tester.getRect(find.byKey(const ValueKey('profile-play-all')));
+    expect(play.left, 16);
+    expect(sort.left, greaterThanOrEqualTo(play.right + 12));
     expect(search.right, 884);
     expect(search.left, greaterThan(sort.right + 100));
     expect(search.center.dy, closeTo(sort.center.dy, .01));
+    expect(search.center.dy, closeTo(play.center.dy, .01));
     expect(tester.takeException(), isNull);
   });
+
+  for (final width in [375.0, 900.0]) {
+    testWidgets(
+      'playback loading keeps toolbar stable and search draft at $width',
+      (tester) async {
+        final keyword = TextEditingController();
+        addTearDown(keyword.dispose);
+        late StateSetter update;
+        var loading = false;
+        await pumpLayout(
+          tester,
+          StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return ProfileVideoToolbar(
+                order: 'pubdate',
+                keywordController: keyword,
+                onOrderChanged: (_) {},
+                onSearch: (_) {},
+                onPlayAll: () {},
+                playAllLoading: loading,
+              );
+            },
+          ),
+          width: width,
+        );
+        final play = find.byKey(const ValueKey('profile-play-all'));
+        final sort = find.byKey(const ValueKey('profile-video-sort'));
+        final search = find.byKey(const ValueKey('profile-video-search'));
+        final before = [
+          for (final finder in [play, sort, search]) tester.getRect(finder),
+        ];
+        await tester.enterText(search, '保留搜索草稿');
+        update(() => loading = true);
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(tester.widget<FilledButton>(play).onPressed, isNull);
+        expect(
+          find.descendant(
+            of: play,
+            matching: find.byType(CircularProgressIndicator),
+          ),
+          findsOneWidget,
+        );
+        expect([
+          for (final finder in [play, sort, search]) tester.getRect(finder),
+        ], before);
+        await tester.binding.setSurfaceSize(
+          Size(width < 600 ? 900 : 375, 1400),
+        );
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(keyword.text, '保留搜索草稿');
+        expect(tester.widget<TextField>(search).controller, same(keyword));
+        update(() => loading = false);
+        await tester.pumpAndSettle();
+        expect(tester.widget<FilledButton>(play).onPressed, isNotNull);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

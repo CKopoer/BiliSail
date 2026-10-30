@@ -414,43 +414,29 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: TextButton.icon(
-                                key: const ValueKey('profile-play-all'),
-                                onPressed:
-                                    loading || widget.onOpenPlaylist == null
-                                    ? null
-                                    : _playAll,
-                                icon: loading
-                                    ? const SizedBox.square(
-                                        dimension: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.play_circle_outline,
-                                        size: 18,
-                                      ),
-                                label: Text(loading ? '正在加载播放列表…' : '播放全部'),
-                              ),
+                            _ProfileVideoFilters(
+                              order: order,
+                              keyword: keyword,
+                              onOrderChanged: (value) =>
+                                  controller.filter(order: value),
+                              onSearch: (value) =>
+                                  controller.filter(keyword: value),
+                              onPlayAll: widget.onOpenPlaylist == null
+                                  ? null
+                                  : _playAll,
+                              playAllLoading: loading,
                             ),
                             if (message != null)
-                              Text(
-                                message,
-                                style: Theme.of(context).textTheme.bodySmall,
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  message,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
                               ),
                           ],
                         );
                       },
-                    ),
-                    _ProfileVideoFilters(
-                      order: order,
-                      keyword: keyword,
-                      onOrderChanged: (value) =>
-                          controller.filter(order: value),
-                      onSearch: (value) => controller.filter(keyword: value),
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -600,10 +586,14 @@ class _ProfileVideoFilters extends StatefulWidget {
     required this.keyword,
     required this.onOrderChanged,
     required this.onSearch,
+    this.onPlayAll,
+    this.playAllLoading = false,
   });
 
   final String order, keyword;
   final ValueChanged<String> onOrderChanged, onSearch;
+  final VoidCallback? onPlayAll;
+  final bool playAllLoading;
 
   @override
   State<_ProfileVideoFilters> createState() => _ProfileVideoFiltersState();
@@ -618,6 +608,8 @@ class _ProfileVideoFiltersState extends State<_ProfileVideoFilters> {
     keywordController: _keyword,
     onOrderChanged: widget.onOrderChanged,
     onSearch: widget.onSearch,
+    onPlayAll: widget.onPlayAll,
+    playAllLoading: widget.playAllLoading,
   );
 
   @override

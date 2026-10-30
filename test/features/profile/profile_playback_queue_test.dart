@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
 
+import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
@@ -13,6 +16,8 @@ import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -36,6 +41,22 @@ ProfileEntry _entry(int index) {
 }
 
 void main() {
+  if (const bool.fromEnvironment('PROFILE_TOOLBAR_PREVIEW')) {
+    setUpAll(() async {
+      await (FontLoader('HarmonyOS Sans')..addFont(
+            rootBundle.load(
+              'assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf',
+            ),
+          ))
+          .load();
+      await (FontLoader(
+        'BiliIcons',
+      )..addFont(rootBundle.load('assets/fonts/biliicon.ttf'))).load();
+      await (FontLoader(
+        'MaterialIcons',
+      )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+    });
+  }
   late _Repository repository;
   late AuthFake auth;
   late ProviderContainer container;
@@ -300,6 +321,71 @@ void main() {
     );
   }
 
+  if (const bool.fromEnvironment('PROFILE_TOOLBAR_PREVIEW')) {
+    for (final (width, dark, scale) in [
+      (375.0, false, 1.0),
+      (1100.0, false, 1.0),
+      (375.0, true, 1.0),
+      (320.0, false, 2.0),
+    ]) {
+      testWidgets('profile toolbar preview $width dark=$dark scale=$scale', (
+        tester,
+      ) async {
+        tester.view.physicalSize = Size(width, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        repository.hasMore = false;
+        repository.items = [for (var i = 0; i < 8; i++) _entry(i)];
+        final theme = dark ? BiliTheme.dark() : BiliTheme.light();
+        final boundaryKey = GlobalKey();
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              theme: theme,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: Scaffold(
+                backgroundColor: theme.colorScheme.surface,
+                body: RepaintBoundary(
+                  key: boundaryKey,
+                  child: ColoredBox(
+                    color: theme.colorScheme.surface,
+                    child: ProfileScreen(
+                      id: _id,
+                      isSelf: true,
+                      onOpenPlaylist: (_, _) {},
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(boundaryKey),
+        );
+        await tester.runAsync(() async {
+          final frame = await boundary.toImage(pixelRatio: 1.5);
+          final bytes = await frame.toByteData(format: ui.ImageByteFormat.png);
+          frame.dispose();
+          if (bytes == null) throw StateError('Preview image was empty');
+          final file = File(
+            'build/validation/profile-toolbar-preview/$width-${dark ? 'dark' : 'light'}-$scale.png',
+          );
+          await file.parent.create(recursive: true);
+          await file.writeAsBytes(bytes.buffer.asUint8List());
+        });
+      });
+    }
+  }
+
   for (final width in [320.0, 1100.0]) {
     testWidgets('play all button opens the UP playlist at width=$width', (
       tester,
@@ -328,10 +414,20 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      final play = find.byKey(const ValueKey('profile-play-all'));
+      final buttonRect = tester.getRect(play);
       final pending = repository.pending = Completer<ProfilePage>();
-      await tester.tap(find.byKey(const ValueKey('profile-play-all')));
+      await tester.tap(play);
       await tester.pump();
-      expect(find.text('正在加载播放列表…'), findsOneWidget);
+      expect(tester.widget<FilledButton>(play).onPressed, isNull);
+      expect(
+        find.descendant(
+          of: play,
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.getRect(play), buttonRect);
       pending.complete(ProfilePage(items: [_entry(9)], hasMore: true));
       await tester.pumpAndSettle();
       expect(selected?.id, _entry(9).video?.id);

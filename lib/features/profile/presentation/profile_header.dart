@@ -303,18 +303,44 @@ class ProfileVideoToolbar extends StatelessWidget {
     required this.keywordController,
     required this.onOrderChanged,
     required this.onSearch,
+    this.onPlayAll,
+    this.playAllLoading = false,
   });
 
   final String order;
   final TextEditingController keywordController;
   final ValueChanged<String> onOrderChanged, onSearch;
+  final VoidCallback? onPlayAll;
+  final bool playAllLoading;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final playAll = Semantics(
+      liveRegion: playAllLoading,
+      value: playAllLoading ? '正在加载播放列表' : null,
+      child: FilledButton.tonalIcon(
+        key: const ValueKey('profile-play-all'),
+        onPressed: playAllLoading ? null : onPlayAll,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          backgroundColor: theme.colorScheme.primaryContainer,
+          foregroundColor: theme.colorScheme.onPrimaryContainer,
+        ),
+        icon: playAllLoading
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.play_arrow_rounded, size: 18),
+        label: const Text('播放全部'),
+      ),
+    );
     final sort = DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: DropdownButtonHideUnderline(
@@ -323,7 +349,7 @@ class ProfileVideoToolbar extends StatelessWidget {
           value: order,
           isDense: true,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(8),
           style: theme.textTheme.bodyMedium,
           icon: const Icon(Icons.expand_more, size: 18),
           items: const [
@@ -357,20 +383,42 @@ class ProfileVideoToolbar extends StatelessWidget {
       ),
       onSubmitted: onSearch,
     );
-    return Row(
-      children: [
-        sort,
-        const SizedBox(width: 12),
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 260),
-              child: search,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 600) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
+                children: [playAll, sort],
+              ),
+              const SizedBox(height: 8),
+              search,
+            ],
+          );
+        }
+        return Row(
+          children: [
+            playAll,
+            const SizedBox(width: 12),
+            sort,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: search,
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
