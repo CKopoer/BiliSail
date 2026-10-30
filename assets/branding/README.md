@@ -22,7 +22,8 @@
 
 - [bilibili_source.svg](bilibili_source.svg) 原样取自 [Simple Icons 的 Bilibili 图标](https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/bilibili.svg)，固定提交 `90646e4bf7f3b89df6c37e65baf3e7bc759a517c`，SHA-256 为 `0b31005ccf765a9d37be2c42f1d36e44572ccadb088250626d9905ae5d4f3d21`，源项目为 CC0，保留[许可原文](bilibili_LICENSE.md)。这份独立矢量素材不是原船帆图稿、官网旧版 JPEG 或 `biliicon.ttf` 的字标。
 - [bilibili_pink.svg](bilibili_pink.svg) 仅设置 `#FB7299` 填色和安全边距，通过固定开发工具 `resvg-py 0.5.0` 渲染为透明 [bilibili_pink.png](bilibili_pink.png)，1254 × 1254，SHA-256 为 `1f28bac11797840eab6e5d1ffc8479cc48b7827599540defd2f5ac19404b9aee`。不增加应用运行依赖。
-- `generate_app_icons.py` 从两份高分辨率图稿生成 Android 五种密度、Windows 七种 ICO 尺寸与 iPhone/iPad 的 `BilibiliIcon.appiconset`（iOS 合成白底 RGB）。macOS/Linux 从 Flutter 资产读取 1254px 原图，不修改安装目录。
+- `generate_app_icons.py` 从两份高分辨率图稿生成 Android 五种密度、Windows 七种 ICO 尺寸与 iPhone/iPad 的 `BilibiliIcon.appiconset`（iOS 合成白底 RGB）。Linux 从 Flutter 资产读取 1254px 原图，不修改安装目录。
+- 2026-10-31 修正 macOS 切换后的尺寸：哔帆通过 AppKit 恢复安装时的系统图标，避免用原始 PNG 覆盖；粉红小电视使用专用 [bilibili_pink_macos.icns](bilibili_pink_macos.icns)。其 1024px 透明画布居中放置 820px 图稿，四周各 102px 留白，包含 16/32/64/128/256/512/1024px 及对应 Retina 表示；原生明确设置 512pt 逻辑尺寸。应用内预览及侧边栏继续使用原 PNG，侧边栏随已提交的设置切换并保持 36 × 36 逻辑像素。
 - Android 通过两个启动别名切换桌面图标，主 Activity 始终启用；正式与 `.test` 开发包分别保持自己的选择。iOS 通过系统备用图标 API 切换。桌面刷新速度、旧固定快捷方式及系统提示由系统决定。
 - Windows 改变运行中窗口的大/小图标，新播放窗口沿用选择，播放窗标题栏返回按钮仍保留；任务栏分组与固定入口可能继续使用安装图标。macOS 只改变运行中的 Dock 图标；Linux 只改变窗口图标，Wayland/桌面环境可能优先显示 `.desktop` 中的安装图标。已有快捷方式、安装包、访达、启动台和 Linux 应用菜单图标不自动替换。
 - 选择保存在现有设置快照，旧值或非法值回退哔帆，恢复默认同步恢复图标。移动端启动读取系统保留的图标，避免 iOS 启动时重复弹提示；桌面启动重新应用已保存选择。切换与保存串行，保存失败尝试恢复原生图标，失败会显示重试提示。

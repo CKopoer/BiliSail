@@ -69,6 +69,7 @@ flutter:
     - assets/icons/
     - assets/branding/app_icon.png
     - assets/branding/bilibili_pink.png
+    - assets/branding/bilibili_pink_macos.icns
     - assets/branding/bilibili_LICENSE.md
     - assets/fonts/harmonyos_sans/LICENSE.txt
   fonts:

@@ -42,12 +42,23 @@ final class NativeAppIconService implements AppIconService {
     if (surface == AppIconSurface.unsupported) {
       throw UnsupportedError('Application icons are unavailable');
     }
+    // macOS restores the installed default through AppKit. Only its alternate
+    // uses a Dock-specific ICNS with logical sizes and transparent padding.
+    final imageAsset = switch (defaultTargetPlatform) {
+      TargetPlatform.macOS when icon == AppIconPreference.bilibili =>
+        'assets/branding/bilibili_pink_macos.icns',
+      TargetPlatform.linux => icon.asset,
+      _ => null,
+    };
+    final image = imageAsset == null ? null : await rootBundle.load(imageAsset);
     await channel
         .invokeMethod<void>('setIcon', {
           'icon': icon.name,
-          if (surface == AppIconSurface.dock ||
-              defaultTargetPlatform == TargetPlatform.linux)
-            'image': (await rootBundle.load(icon.asset)).buffer.asUint8List(),
+          if (image != null)
+            'image': image.buffer.asUint8List(
+              image.offsetInBytes,
+              image.lengthInBytes,
+            ),
         })
         .timeout(const Duration(seconds: 15));
   }

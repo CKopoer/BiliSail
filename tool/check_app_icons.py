@@ -50,6 +50,25 @@ for name, source, android, windows, ios in (
                 check_png(f"macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_{size}.png", original, size)
             check_png("linux/packaging/dev.bilisail.bilisail.png", original, 256)
 
+with Image.open(ROOT / "assets/branding/bilibili_pink.png") as original:
+    dock = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+    dock.alpha_composite(original.resize((820, 820), Image.Resampling.LANCZOS), (102, 102))
+with Image.open(ROOT / "assets/branding/bilibili_pink_macos.icns") as icon:
+    representations = icon.info["sizes"]
+    assert set(representations) == {
+        (16, 16, 1), (16, 16, 2), (32, 32, 1), (32, 32, 2), (64, 64, 1),
+        (128, 128, 1), (128, 128, 2), (256, 256, 1), (256, 256, 2),
+        (512, 512, 1), (512, 512, 2),
+    }, representations
+    for pixels in (16, 32, 64, 128, 256, 512, 1024):
+        size = next(size for size in representations if size[0] * size[2] == pixels)
+        actual = icon.icns.getimage(size).convert("RGBA")
+        expected = dock.resize((pixels, pixels), Image.Resampling.LANCZOS)
+        assert actual.size == (pixels, pixels)
+        assert actual.tobytes() == expected.tobytes(), ("macOS Dock", pixels)
+        assert actual.getpixel((0, 0))[3] == 0
+        checked += 1
+
 source = ROOT / "assets/branding/bilibili_source.svg"
 print(f"Icon resources checked: {checked}; both runtime sources: 1254x1254 RGBA")
 print(f"Bilibili vector SHA-256: {hashlib.sha256(source.read_bytes()).hexdigest()}")

@@ -76,6 +76,63 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final width in [800.0, 1680.0]) {
+    _workspaceTestWidgets(
+      'sidebar brand follows restored and repeatedly changed icons at width=$width',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 900);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final settings = _SettingsRepository()
+          ..settings = AppSettings(appIcon: AppIconPreference.bilibili);
+        final router = createBiliRouter(
+          initialLocation: '/settings',
+          playerBuilder: (_, _, _) => const SizedBox(),
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(settings),
+              appIconServiceProvider.overrideWithValue(_AppIcons()),
+              feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+              homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            ],
+            child: InputTestApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final shell = tester.state(find.byType(BiliAppShell));
+        final pager = tester.element(
+          find.byKey(const ValueKey('settings-category-swipe')),
+        );
+        final logo = find.byKey(const ValueKey('workspace-brand-logo'));
+        String asset() =>
+            (tester.widget<Image>(logo).image as AssetImage).assetName;
+        expect(asset(), AppIconPreference.bilibili.asset);
+        for (final icon in [
+          AppIconPreference.bilisail,
+          AppIconPreference.bilibili,
+          AppIconPreference.bilisail,
+        ]) {
+          await tester.tap(find.widgetWithText(ChoiceChip, icon.label));
+          await tester.pumpAndSettle();
+          expect(settings.settings.appIcon, icon);
+          expect(asset(), icon.asset);
+          expect(tester.getSize(logo), const Size(36, 36));
+          expect(tester.state(find.byType(BiliAppShell)), same(shell));
+          expect(
+            tester.element(
+              find.byKey(const ValueKey('settings-category-swipe')),
+            ),
+            same(pager),
+          );
+          expect(tester.takeException(), isNull);
+        }
+      },
+    );
+  }
   for (final manualChoice in [false, true]) {
     _workspaceTestWidgets(
       'video deep link applies delayed comment preference unless selected manually=$manualChoice',
@@ -2429,6 +2486,15 @@ final class _HistoryRepository implements LibraryRepository {
     String? cursor,
     required RequestCancellation cancellation,
   }) async => const WatchHistoryPage([], hasMore: false);
+}
+
+final class _AppIcons implements AppIconService {
+  @override
+  AppIconSurface get surface => AppIconSurface.dock;
+  @override
+  Future<AppIconPreference> restore(AppIconPreference saved) async => saved;
+  @override
+  Future<void> apply(AppIconPreference icon) async {}
 }
 
 final class _SettingsRepository implements SettingsRepository {

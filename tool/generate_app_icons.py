@@ -1,11 +1,32 @@
 """Regenerate: uv run --with pillow==12.3.0 --with resvg-py==0.5.0 python tool/generate_app_icons.py."""
+import io
 import json
+import struct
 from pathlib import Path
 
 from PIL import Image
 import resvg_py
 
 root = Path(__file__).resolve().parent.parent
+
+
+def save_dock_icon(image, path):
+    # Include small 1x representations as well as Retina variants; Pillow's
+    # built-in ICNS writer omits the 16/32/64px 1x entries.
+    chunks = []
+    for kind, size in {
+        b"icp4": 16, b"icp5": 32, b"icp6": 64,
+        b"ic07": 128, b"ic08": 256, b"ic09": 512, b"ic10": 1024,
+        b"ic11": 32, b"ic12": 64, b"ic13": 256, b"ic14": 512,
+    }.items():
+        stream = io.BytesIO()
+        image.resize((size, size), Image.Resampling.LANCZOS).save(stream, format="PNG")
+        data = stream.getvalue()
+        chunks.append(kind + struct.pack(">I", 8 + len(data)) + data)
+    payload = b"".join(chunks)
+    path.write_bytes(b"icns" + struct.pack(">I", 8 + len(payload)) + payload)
+
+
 with Image.open(root / "assets/branding/app_icon.png") as image:
     image = image.convert("RGBA")
     for density, size in {"mdpi": 48, "hdpi": 72, "xhdpi": 96,
@@ -38,6 +59,11 @@ svg = svg.replace('viewBox="0 0 24 24"',
     resvg_py.svg_to_bytes(svg_string=svg))
 with Image.open(root / "assets/branding/bilibili_pink.png") as original:
     image = original.convert("RGBA")
+    # Dock overrides bypass the installed app-icon presentation. Give the
+    # alternate its own padded, multi-resolution canvas; keep other OS assets.
+    dock = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+    dock.alpha_composite(image.resize((820, 820), Image.Resampling.LANCZOS), (102, 102))
+    save_dock_icon(dock, root / "assets/branding/bilibili_pink_macos.icns")
     for density, size in {"mdpi": 48, "hdpi": 72, "xhdpi": 96,
                           "xxhdpi": 144, "xxxhdpi": 192}.items():
         image.resize((size, size), Image.Resampling.LANCZOS).save(

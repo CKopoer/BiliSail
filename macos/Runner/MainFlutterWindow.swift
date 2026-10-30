@@ -136,12 +136,25 @@ final class MacOSApplication {
       guard call.method == "setIcon" else { result(FlutterMethodNotImplemented); return }
       guard let arguments = call.arguments as? [String: Any],
             let name = arguments["icon"] as? String,
-            name == "bilisail" || name == "bilibili",
-            let bytes = arguments["image"] as? FlutterStandardTypedData,
+            name == "bilisail" || name == "bilibili" else {
+        result(FlutterError(code: "invalid_icon", message: "Invalid application icon.", details: nil))
+        return
+      }
+      if name == "bilisail" {
+        // AppKit restores the installed icon and its original Dock sizing.
+        // Replacing it with a raw PNG changes Launch Services' presentation.
+        NSApp.applicationIconImage = nil
+        result(nil)
+        return
+      }
+      guard let bytes = arguments["image"] as? FlutterStandardTypedData,
             let image = NSImage(data: bytes.data) else {
         result(FlutterError(code: "invalid_icon", message: "Invalid application icon.", details: nil))
         return
       }
+      // The ICNS retains all pixel representations; points are independent of
+      // the source bitmap resolution, including on Retina displays.
+      image.size = NSSize(width: 512, height: 512)
       NSApp.applicationIconImage = image
       result(nil)
     }

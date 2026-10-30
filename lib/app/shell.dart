@@ -130,6 +130,7 @@ final class BiliAppShell extends StatefulWidget {
     this.windowControlsBuilder,
     this.dragRegionBuilder,
     this.shortcuts = const ShortcutSettings.defaults(),
+    this.appIcon = AppIconPreference.bilisail,
     this.navigationMode,
     this.sidebarStyle = SidebarStyle.automatic,
     this.navigationBarMode = NavigationBarMode.automatic,
@@ -141,6 +142,7 @@ final class BiliAppShell extends StatefulWidget {
     this.onExitRequested,
   });
   final ShortcutSettings shortcuts;
+  final AppIconPreference appIcon;
   final WorkspaceNavigationMode? navigationMode;
   final SidebarStyle sidebarStyle;
   final NavigationBarMode navigationBarMode;
@@ -1495,7 +1497,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Image.asset(
-                          'assets/branding/app_icon.png',
+                          widget.appIcon.asset,
                           key: const ValueKey('workspace-brand-logo'),
                           width: 36,
                           height: 36,

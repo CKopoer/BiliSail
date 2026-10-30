@@ -53,6 +53,21 @@ void main() {
       if (platform != TargetPlatform.windows) {
         expect((calls.single.arguments as Map)['image'], isA<Uint8List>());
       }
+      if (platform == TargetPlatform.macOS) {
+        final bytes = (calls.single.arguments as Map)['image'] as Uint8List;
+        expect(String.fromCharCodes(bytes.take(4)), 'icns');
+      }
     });
   }
+  test(
+    'macOS restores the installed default without replacing it with PNG data',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      for (var cycle = 0; cycle < 2; cycle++) {
+        await service.apply(AppIconPreference.bilibili);
+        await service.restore(AppIconPreference.bilisail);
+        expect(calls.last.arguments, {'icon': 'bilisail'});
+      }
+    },
+  );
 }
