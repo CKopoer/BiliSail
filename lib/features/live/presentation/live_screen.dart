@@ -324,22 +324,19 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                 child: Offstage(offstage: !_infoVisible, child: sidebar),
               ),
             ),
-            Positioned(
-              right: wide && _infoVisible ? 380 : 0,
-              top: wide
-                  ? math.max(
-                      0.0,
-                      playerHeight / 2 - PlaybackSidebarToggle.size.height / 2,
-                    )
-                  : 0,
-              child: PlaybackSidebarToggle(
-                tooltip: _infoVisible ? '收起直播信息' : '展开直播信息',
-                icon: wide
-                    ? (_infoVisible ? Icons.chevron_right : Icons.chevron_left)
-                    : (_infoVisible ? Icons.expand_less : Icons.expand_more),
-                onPressed: () => setState(() => _infoVisible = !_infoVisible),
+            if (wide)
+              Positioned(
+                right: _infoVisible ? 380 : 0,
+                top: math.max(
+                  0.0,
+                  playerHeight / 2 - PlaybackSidebarToggle.size.height / 2,
+                ),
+                child: PlaybackSidebarToggle(
+                  tooltip: _infoVisible ? '收起直播信息' : '展开直播信息',
+                  icon: _infoVisible ? Icons.chevron_right : Icons.chevron_left,
+                  onPressed: () => setState(() => _infoVisible = !_infoVisible),
+                ),
               ),
-            ),
           ],
         );
       },

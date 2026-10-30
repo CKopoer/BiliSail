@@ -503,26 +503,20 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                         final playerWithToggle = Stack(
                           children: [
                             player,
-                            Positioned(
-                              right: 0,
-                              top:
-                                  (wide || !showInfo
-                                          ? constraints.maxHeight
-                                          : constraints.maxWidth * 9 / 16) /
-                                      2 -
-                                  PlaybackSidebarToggle.size.height / 2,
-                              child: PlaybackSidebarToggle(
-                                tooltip: showInfo ? '收起视频信息' : '展开视频信息',
-                                icon: wide
-                                    ? (showInfo
-                                          ? Icons.chevron_right
-                                          : Icons.chevron_left)
-                                    : (showInfo
-                                          ? Icons.expand_less
-                                          : Icons.expand_more),
-                                onPressed: toggleInfo,
+                            if (wide)
+                              Positioned(
+                                right: 0,
+                                top:
+                                    constraints.maxHeight / 2 -
+                                    PlaybackSidebarToggle.size.height / 2,
+                                child: PlaybackSidebarToggle(
+                                  tooltip: showInfo ? '收起视频信息' : '展开视频信息',
+                                  icon: showInfo
+                                      ? Icons.chevron_right
+                                      : Icons.chevron_left,
+                                  onPressed: toggleInfo,
+                                ),
                               ),
-                            ),
                           ],
                         );
                         if (wide) {

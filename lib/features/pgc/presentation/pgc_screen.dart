@@ -347,29 +347,22 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                       child: Offstage(offstage: !showInfo, child: info),
                     ),
                   ),
-                  Positioned(
-                    right: showInfo && wide ? infoWidth : 8,
-                    top: wide || !showInfo
-                        ? math.max(
-                            0,
-                            visiblePlayerHeight / 2 -
-                                PlaybackSidebarToggle.size.height / 2,
-                          )
-                        : math.max(
-                            0,
-                            playerHeight / 2 -
-                                PlaybackSidebarToggle.size.height / 2,
-                          ),
-                    child: PlaybackSidebarToggle(
-                      tooltip: showInfo ? '收起影视信息' : '展开影视信息',
-                      onPressed: toggleInfo,
-                      icon: wide
-                          ? (showInfo
-                                ? Icons.chevron_right
-                                : Icons.chevron_left)
-                          : (showInfo ? Icons.expand_less : Icons.expand_more),
+                  if (wide)
+                    Positioned(
+                      right: showInfo ? infoWidth : 8,
+                      top: math.max(
+                        0,
+                        visiblePlayerHeight / 2 -
+                            PlaybackSidebarToggle.size.height / 2,
+                      ),
+                      child: PlaybackSidebarToggle(
+                        tooltip: showInfo ? '收起影视信息' : '展开影视信息',
+                        onPressed: toggleInfo,
+                        icon: showInfo
+                            ? Icons.chevron_right
+                            : Icons.chevron_left,
+                      ),
                     ),
-                  ),
                 ],
               );
             },

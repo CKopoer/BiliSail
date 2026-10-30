@@ -218,7 +218,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byTooltip('收起影视信息'), findsOneWidget);
+      expect(
+        find.byTooltip('收起影视信息'),
+        width >= 1000 ? findsOneWidget : findsNothing,
+      );
       final tiles = find.byWidgetPredicate(
         (widget) =>
             widget is InkWell &&
@@ -243,10 +246,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('收起'), findsOneWidget);
       expect(playerBuilds, before);
-      await tester.tap(find.byTooltip('收起影视信息'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('展开影视信息'));
-      await tester.pumpAndSettle();
+      if (width >= 1000) {
+        await tester.tap(find.byTooltip('收起影视信息'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('展开影视信息'));
+        await tester.pumpAndSettle();
+      }
       expect(playerBuilds, before);
       final intro = tester
           .widget<CustomScrollView>(find.byKey(const ValueKey('pgc-intro')))
@@ -362,7 +367,10 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.byTooltip('收起影视信息'), findsOneWidget);
+        expect(
+          find.byTooltip('收起影视信息'),
+          width >= 1000 ? findsOneWidget : findsNothing,
+        );
         final player = tester.state(find.byType(_TrackedPlayer));
         final intro = tester
             .widget<CustomScrollView>(find.byKey(const ValueKey('pgc-intro')))
@@ -429,7 +437,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.byTooltip('收起影视信息'), findsOneWidget);
+        expect(find.byTooltip('收起影视信息'), findsNothing);
         await tester.tap(find.byKey(const Key('keyboard-editor')));
         await tester.pumpAndSettle();
         final focus = FocusManager.instance.primaryFocus;
@@ -498,7 +506,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byTooltip('收起影视信息'), findsOneWidget);
+      expect(
+        find.byTooltip('收起影视信息'),
+        width >= 1000 ? findsOneWidget : findsNothing,
+      );
       expect(commentBuilds, 0);
       final pager = find.byKey(const ValueKey('pgc-info-swipe'));
       final player = tester.state(find.byType(_TrackedPlayer));
@@ -999,9 +1010,20 @@ void main() {
     expect(introScroll?.offset, 40);
     await tester.tap(find.byKey(const ValueKey('pgc-tab-评论')));
     await tester.pumpAndSettle();
+    for (final width in [999.0, 1000.0, 999.0]) {
+      tester.view.physicalSize = Size(width, 800);
+      await tester.pumpAndSettle();
+      expect(
+        find.byTooltip('收起影视信息'),
+        width >= 1000 ? findsOneWidget : findsNothing,
+      );
+      expect(find.text('评论区已接入'), findsOneWidget);
+      expect(created, 1);
+      expect(disposed, 0);
+    }
     tester.view.physicalSize = const Size(480, 800);
     await tester.pumpAndSettle();
-    expect(find.byTooltip('收起影视信息'), findsOneWidget);
+    expect(find.byTooltip('收起影视信息'), findsNothing);
     expect(created, 1);
     expect(disposed, 0);
     expect(find.text('评论区已接入'), findsOneWidget);
@@ -1009,9 +1031,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('切换为正序'), findsOneWidget);
     expect(introScroll?.offset, 40);
+    tester.view.physicalSize = const Size(1200, 450);
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('收起影视信息'));
     await tester.pumpAndSettle();
-    tester.view.physicalSize = const Size(1200, 450);
+    expect(find.byTooltip('展开影视信息'), findsOneWidget);
+    tester.view.physicalSize = const Size(999, 450);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('展开影视信息'), findsNothing);
+    tester.view.physicalSize = const Size(1000, 450);
     await tester.pumpAndSettle();
     expect(find.byTooltip('展开影视信息'), findsOneWidget);
     expect(created, 1);

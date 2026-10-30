@@ -23,6 +23,7 @@ import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:bilisail/shared/ui/playback_navigation.dart';
 import 'package:bilisail/shared/ui/playback_info_tabs.dart';
+import 'package:bilisail/shared/ui/playback_sidebar_toggle.dart';
 import 'package:bilisail/features/playback/application/playback_viewers_controller.dart';
 import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -51,6 +52,79 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final width in [390.0, 999.0, 1000.0]) {
+    testWidgets('video sidebar toggle stays outside fullscreen at $width', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = Size(width, 844);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService();
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            playbackSessionProvider.overrideWithValue(session),
+            settingsRepositoryProvider.overrideWithValue(_Settings()),
+            videoDetailProvider(_detail.summary.id)
+                .overrideWith((_) => _detail),
+            relatedVideosProvider(_detail.summary.id)
+                .overrideWith((_) => const []),
+            videoTagsProvider(_detail.summary.id).overrideWith((_) => const []),
+          ],
+          child: InputTestApp(
+            home: Scaffold(
+              body: VideoScreen(
+                id: _detail.summary.id,
+                playerBuilder: (_, detail, part) => PlaybackPanel(
+                  detail: detail,
+                  part: part,
+                  settings: const AppSettings.defaults(),
+                  onToggleComments: () {},
+                  window: window,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await _pumpFrames(tester);
+      await tester.tap(find.text('评论'));
+      await tester.pumpAndSettle();
+      await session.pause();
+      final generation = session.sourceGeneration;
+      final sidebar = find.byType(PlaybackSidebarToggle);
+      expect(sidebar, width >= 1000 ? findsOneWidget : findsNothing);
+      await _showControls(tester);
+      await tester.tap(find.byTooltip('全屏（F）'));
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isTrue);
+      expect(sidebar.hitTestable(), findsNothing);
+      expect(
+        find.descendant(of: find.byType(Dialog), matching: sidebar),
+        findsNothing,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      expect(sidebar, width >= 1000 ? findsOneWidget : findsNothing);
+      expect(
+        tester.widget<PlaybackInfoTabs>(find.byType(PlaybackInfoTabs)).value,
+        1,
+      );
+      expect(session.sourceGeneration, generation);
+      expect(engine.opens, 1);
+      expect(engine.maxSurfaces, 1);
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final mode in PlayerControlsMode.values) {
     for (final (content, target) in <(String, ContentPlaybackTarget?)>[
       ('video', null),

@@ -600,7 +600,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byTooltip('收起视频信息'), findsOneWidget);
+      expect(
+        find.byTooltip('收起视频信息'),
+        width >= 1000 ? findsOneWidget : findsNothing,
+      );
       if (folded) {
         await tester.tap(find.text('稍后再看'));
         await tester.pumpAndSettle();
@@ -858,7 +861,10 @@ void main() {
         expect(find.widgetWithText(ActionChip, tag), findsNothing);
         tester.view.physicalSize = Size(width >= 1000 ? 360 : 1100, 800);
         await tester.pumpAndSettle();
-        expect(find.byTooltip('收起视频信息'), findsOneWidget);
+        expect(
+          find.byTooltip('收起视频信息'),
+          width >= 1000 ? findsNothing : findsOneWidget,
+        );
         expect(find.text('测试简介'), findsNothing);
         expect(find.text('标签'), findsNothing);
         await tester.tap(find.text('展开'));
@@ -1019,7 +1025,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('简介'), findsOneWidget);
         expect(find.text('评论'), findsOneWidget);
-        expect(find.byTooltip('收起视频信息'), findsOneWidget);
+        expect(
+          find.byTooltip('收起视频信息'),
+          initialSize.width >= 1000 ? findsOneWidget : findsNothing,
+        );
         expect(
           tester.getSize(find.byType(_TrackedPlayer)).height,
           initialSize.width >= 1000
@@ -1032,23 +1041,31 @@ void main() {
           tester.view.physicalSize = Size(width, 660);
           await tester.pumpAndSettle();
           expect(find.text('暂无评论信息'), findsOneWidget);
-          expect(find.byTooltip('收起视频信息'), findsOneWidget);
+          expect(
+            find.byTooltip('收起视频信息'),
+            width >= 1000 ? findsOneWidget : findsNothing,
+          );
           expect(
             tester.getSize(find.byType(_TrackedPlayer)).height,
             width >= 1000 ? 660 : width * 9 / 16,
           );
         }
+        tester.view.physicalSize = const Size(1000, 660);
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('收起视频信息'));
         await tester.pumpAndSettle();
         expect(
           tester.getSize(find.byType(_TrackedPlayer)),
-          const Size(480, 660),
+          const Size(1000, 660),
         );
         for (final width in [1100.0, 480.0]) {
           tester.view.physicalSize = Size(width, 660);
           await tester.pumpAndSettle();
           expect(find.text('评论'), findsNothing);
-          expect(find.byTooltip('展开视频信息'), findsOneWidget);
+          expect(
+            find.byTooltip('展开视频信息'),
+            width >= 1000 ? findsOneWidget : findsNothing,
+          );
           expect(tester.getSize(find.byType(_TrackedPlayer)), Size(width, 660));
         }
         final commands = tester.widget<PlaybackPageCommands>(
@@ -1057,7 +1074,7 @@ void main() {
         commands.toggleInfo();
         await tester.pumpAndSettle();
         expect(find.text('暂无评论信息'), findsOneWidget);
-        expect(find.byTooltip('收起视频信息'), findsOneWidget);
+        expect(find.byTooltip('收起视频信息'), findsNothing);
         expect(tester.getSize(find.byType(_TrackedPlayer)).height, 270);
         expect(created, 1);
         expect(disposed, 0);

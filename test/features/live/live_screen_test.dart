@@ -125,6 +125,39 @@ void main() {
     ]);
   }
 
+  testWidgets('sidebar toggle follows the live split layout breakpoint', (
+    tester,
+  ) async {
+    await showPage(tester, width: 390);
+    await tester.pumpAndSettle();
+    final player = tester.state(find.byType(_PlayerProbe));
+    expect(find.byTooltip('收起直播信息'), findsNothing);
+    expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
+    for (final width in [899.0, 900.0, 1280.0, 390.0, 900.0]) {
+      await tester.binding.setSurfaceSize(Size(width, 800));
+      await tester.pumpAndSettle();
+      expect(
+        find.byTooltip('收起直播信息'),
+        width >= 900 ? findsOneWidget : findsNothing,
+      );
+      expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
+      expect(tester.state(find.byType(_PlayerProbe)), same(player));
+    }
+    await tester.tap(find.byTooltip('收起直播信息'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('live-chat-list')), findsNothing);
+    await tester.binding.setSurfaceSize(const Size(899, 800));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('展开直播信息'), findsNothing);
+    await tester.binding.setSurfaceSize(const Size(900, 800));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('展开直播信息'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
+    expect(tester.state(find.byType(_PlayerProbe)), same(player));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('chat and audience updates retain player and unrelated views', (
     tester,
   ) async {
