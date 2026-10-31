@@ -29,6 +29,8 @@ class LiveStreamMenuButton extends StatelessWidget {
     return Tooltip(
       message: '直播清晰度与线路',
       child: TextButton(
+        // The control bar already reserves the label's 8-pixel side padding.
+        style: TextButton.styleFrom(padding: EdgeInsets.zero),
         onPressed: () => unawaited(
           showLiveStreamPicker(
             context,
