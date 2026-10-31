@@ -342,7 +342,10 @@ final class ImageByteCache {
   static bool isPublicImageUri(Uri uri) =>
       uri.scheme == 'https' &&
       uri.userInfo.isEmpty &&
-      (uri.host == 'hdslb.com' ||
+      // Private message originals use a separate, credential-free image CDN.
+      // The private viewer loads them in memory, bypassing the disk cache.
+      (uri.host == 'message.biliimg.com' ||
+          uri.host == 'hdslb.com' ||
           uri.host.endsWith('.hdslb.com') ||
           uri.host == 'bilibili.com' ||
           uri.host.endsWith('.bilibili.com'));

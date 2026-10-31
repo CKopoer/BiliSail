@@ -222,6 +222,18 @@ Android 在当前页面没有可返回层级时显示“退出哔帆？”确认
 
 本轮未构建安装包，Android、Windows、macOS 真实私信图片与系统保存／复制仍待设备验收。已尝试发现调试进程并热重载，当前没有可连接的 Flutter 调试应用，热重载未执行。
 
+## 2026-10-31：私信原图 CDN 白名单修复
+
+在已登录的 Windows Release 中复现：私信缩略图正常，点击后立即显示“原图无法读取，请重试”。原图仓储复用公开图片传输的 URL 校验，而校验只接受 `hdslb.com`、`bilibili.com` 及其子域；本次会话的三张图片来自 `message.biliimg.com`，因此在发起下载前抛出 `FormatException`。使用现有安全存储中的会话进行只读定位，三张图片不带账号凭据直接请求均返回 HTTP 200、JPEG；没有保存真实图片 URL、账号凭据或聊天内容为 fixture。
+
+[图片 URL 校验](../../lib/core/storage/image_byte_cache.dart)增加精确主机 `message.biliimg.com`，保留 HTTPS、无 URL 内嵌凭据及每次重定向校验。[原图仓储](../../lib/features/image_viewer/data/network_original_image_repository.dart)继续只在内存读取，不经过公开图片磁盘缓存；超时、体积／像素限制、关闭取消和账号隔离沿用原实现。
+
+[仓储回归](../../test/features/image_viewer/original_image_repository_test.dart)新增两项：新 CDN 原图加载与 HTTP 升级 HTTPS 时保留路径／查询参数，以及拒绝伪装后缀、未接入子域、根域、内嵌凭据和非 HTTP(S) 地址。使用生成的 PNG；第一项在修复前以相同 `FormatException` 失败，修复后通过。原图仓储／控制器／查看器、私信图片入口、图片传输与缓存定向测试共 50 项通过。Windows Debug 只读复测中，同一会话的三张原图均成功下载并解析为 1280×960，未执行消息发送或系统导出。
+
+正常 `lib/main.dart` 入口的 Windows Debug 构建与热重载通过；从“我的消息”进入原会话，点击图片后原图正常显示，放大后可关闭并回到原会话，运行时错误工具未发现异常。Release 仅用于修复前复现，本轮未重建 Release；Android／macOS 设备和系统保存／复制本轮未验收。本机诊断入口与日志保留在忽略目录 `build/validation/`，Debug 构建已恢复普通应用入口。
+
+`tool/check.ps1 -SkipPub` 全量通过：根应用 3856、bili_api 536、bili_player 105、bili_danmaku 145、bili_mux 5 项，共 4647 项通过，格式、静态分析和打包边界检查通过。根应用另有 13 项 Windows 符号链接权限相关用例跳过，mux 另有 10 项因未配置 `BILI_MUX_LIBRARY` 跳过，未计为原生集成通过。日志为 `build/validation/private-image-check-2026-10-31.log`；本文 18 个本地链接及 `git diff --check` 通过。
+
 ## 未验证或未实现
 
 真实文本发送、真实已读写操作没有在线执行，仅模拟验证协议/行为；Android/macOS 原生构建和设备运行本轮未验证。图片上传、表情选择、完整富消息渲染和后台推送未实现；系统历史超过最近 20 条使用官方消息页。没有新增依赖或数据库 migration，也没有修改原生播放实现。

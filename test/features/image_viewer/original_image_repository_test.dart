@@ -11,6 +11,53 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final source = Uri.parse('https://i0.hdslb.com/long.png');
   test(
+    'private message CDN originals load without rewriting their URL',
+    () async {
+      final bytes = _png(4, 6);
+      final sources = <Uri>[];
+      final repository = NetworkOriginalImageRepository(
+        loader: (uri, _) async {
+          sources.add(uri);
+          return bytes;
+        },
+      );
+      for (final scheme in ['https', 'http']) {
+        final source = Uri.parse(
+          '$scheme://message.biliimg.com/bfs/im/fixture.jpg?fixture=original',
+        );
+        final image = await repository.load(source, RequestCancellation());
+        expect(sources.last, source.replace(scheme: 'https'));
+        expect(image.bytes, bytes);
+        expect((image.width, image.height), (4, 6));
+      }
+    },
+  );
+
+  test('message CDN support still rejects untrusted original URLs', () async {
+    var loads = 0;
+    final repository = NetworkOriginalImageRepository(
+      loader: (_, _) async {
+        loads++;
+        return _png(4, 6);
+      },
+    );
+    for (final url in [
+      'https://message.biliimg.com.example.com/image.jpg',
+      'https://other.biliimg.com/image.jpg',
+      'https://biliimg.com/image.jpg',
+      'https://user:password@message.biliimg.com/image.jpg',
+      'file:///message.biliimg.com/image.jpg',
+    ]) {
+      await expectLater(
+        repository.load(Uri.parse(url), RequestCancellation()),
+        throwsFormatException,
+        reason: url,
+      );
+    }
+    expect(loads, 0);
+  });
+
+  test(
     'long and wide originals over 16384 load and decode a bounded preview',
     () async {
       for (final (width, height) in [(128, 24000), (24000, 128)]) {
