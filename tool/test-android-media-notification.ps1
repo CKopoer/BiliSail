@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'android-media-notification.ps1')
 $checks = 0
-$names = @('ic_media_notification', 'audio_service_play_arrow', 'audio_service_pause', 'audio_service_stop')
+$names = @('ic_media_notification', 'audio_service_play_arrow', 'audio_service_pause', 'audio_service_stop', 'ic_media_rewind_10', 'ic_media_forward_10')
 # Match aapt's actual compiled resource output, including the non-value spec row.
 function New-MediaResourceReport([string]$PackageId) {
   return ($names | ForEach-Object {

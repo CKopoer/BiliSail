@@ -46,7 +46,9 @@ final class PlaybackSystemMediaController {
       _listeners.containsKey(session) &&
       session.sourceMatchesAccount &&
       _suppressed[session] != session.sourceGeneration &&
-      (session.isResolving || session.media != null);
+      (session.isResolving ||
+          (session.media != null &&
+              session.snapshots.value.phase != PlaybackPhase.ended));
 
   void _sync({bool force = false}) {
     if (_closed) return;
@@ -148,7 +150,15 @@ final class PlaybackSystemMediaController {
       case SystemMediaAction.stopAll:
         await manager.stop();
       case SystemMediaAction.seek:
-        final position = command.position;
+      case SystemMediaAction.rewind:
+      case SystemMediaAction.fastForward:
+        final position = switch (command.action) {
+          SystemMediaAction.rewind =>
+            session.snapshots.value.position - const Duration(seconds: 10),
+          SystemMediaAction.fastForward =>
+            session.snapshots.value.position + const Duration(seconds: 10),
+          _ => command.position,
+        };
         final duration = session.snapshots.value.duration;
         if (session.isLive || position == null || duration <= Duration.zero) {
           return;

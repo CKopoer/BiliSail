@@ -24,7 +24,7 @@ SystemMediaState state({bool live = false, bool playing = true}) =>
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
-    'audio handler exposes play/pause, stop and VOD seek and clears to idle',
+    'audio handler exposes ten-second controls and clears to idle',
     () async {
       final controls = AudioServiceMediaControls();
       addTearDown(controls.close);
@@ -34,24 +34,28 @@ void main() {
       expect(controls.handler.mediaItem.value?.title, 'title');
       expect(
         controls.handler.playbackState.value.controls.map((e) => e.action),
-        [MediaAction.pause, MediaAction.stop],
+        [MediaAction.rewind, MediaAction.pause, MediaAction.fastForward],
       );
       expect(
         controls.handler.playbackState.value.systemActions,
         contains(MediaAction.seek),
       );
       expect(controls.handler.playbackState.value.speed, 1.5);
+      await controls.handler.rewind();
+      await controls.handler.fastForward();
       await controls.handler.pause();
       await controls.handler.play();
       await controls.handler.seek(const Duration(seconds: 8));
       await controls.handler.stop();
       expect(commands.map((c) => c.action), [
+        SystemMediaAction.rewind,
+        SystemMediaAction.fastForward,
         SystemMediaAction.pause,
         SystemMediaAction.play,
         SystemMediaAction.seek,
         SystemMediaAction.stop,
       ]);
-      expect(commands[2].position, const Duration(seconds: 8));
+      expect(commands[4].position, const Duration(seconds: 8));
       controls.publish(null);
       expect(controls.handler.mediaItem.value, isNull);
       expect(
@@ -59,7 +63,7 @@ void main() {
         AudioProcessingState.idle,
       );
       await controls.handler.play();
-      expect(commands.length, 4);
+      expect(commands.length, 6);
     },
   );
 
@@ -73,6 +77,12 @@ void main() {
       expect(controls.handler.mediaItem.value?.isLive, isTrue);
       expect(controls.handler.mediaItem.value?.duration, isNull);
       expect(controls.handler.playbackState.value.systemActions, isEmpty);
+      expect(
+        controls.handler.playbackState.value.controls.map((e) => e.action),
+        [MediaAction.play],
+      );
+      await controls.handler.rewind();
+      await controls.handler.fastForward();
       expect(
         controls.handler.playbackState.value.updatePosition,
         Duration.zero,

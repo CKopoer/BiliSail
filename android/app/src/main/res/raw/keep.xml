@@ -1,2 +1,2 @@
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/ic_media_notification,@drawable/audio_service_play_arrow,@drawable/audio_service_pause,@drawable/audio_service_stop" />
+    tools:keep="@drawable/ic_media_notification,@drawable/audio_service_play_arrow,@drawable/audio_service_pause,@drawable/audio_service_stop,@drawable/ic_media_rewind_10,@drawable/ic_media_forward_10" />

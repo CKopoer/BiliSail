@@ -57,3 +57,11 @@ flutter test integration_test/windows_system_media_test.dart -d windows
 - `tool/check.ps1 -SkipPub` 通过：格式、静态分析、打包边界检查通过；根应用 3649 项通过、13 项既有跳过，bili_api 497、bili_player 101、bili_danmaku 136、bili_mux 5 项通过。mux 另有 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生通过。日志：`build/android-media-notification-check.log`。
 - 普通入口开发 Release／AOT APK 构建通过，并通过新增的实际资源检查；`aapt2` 确认四个 drawable 均存在，资源压缩报告明确按 keep 规则保留媒体按钮。产物为 `build/development/android-arm64/BiliSail-test-arm64-release.apk`，包名 `dev.bilisail.bilisail.test`，版本 `1.2.5+1`／12501，沿用原开发签名、不可调试；SHA-256 `6c160f047c039a04b5605218d2c98f38a41678e2a100a06de8fee1297e714174`。日志：`build/android-media-notification-release.log`、`build/android-media-notification-fixed.log`。构建复用本机已有 arm64 mux 资产，没有执行安装或清理数据。
 - 本轮不修改播放状态、后台策略、凭据、SDK、依赖或安全存储；没有修改 Pub 缓存。未连接 Android 设备，通知栏实际操作仍需设备验收。
+
+## 播放通知样式与完播清理（2026-10-31）
+
+- 对照本机 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 的 `lib/services/audio_handler.dart`，点播系统媒体卡片提供后退 10 秒、播放／暂停、前进 10 秒；直播不提供跳转。Android 系统版本和厂商决定最终卡片布局及按钮位置。按钮调用现有会话并按实时位置和时长限制，保留系统停止命令；图标由本项目独立绘制，未复制 GPL 应用源码或资源。
+- 自然完播后该会话退出系统媒体目标；没有其他可用会话时清除媒体条目与通知，多标签时回退到其他未结束会话。重播或连播新源重新发布；暂停与缓冲不清除。账号、source generation 和旧指令隔离仍然适用。
+- 新增 Android 两个动态引用图标的资源保留和 APK 检查，防止 Release 压缩导致媒体按钮不可用。具体设备的通知栏、锁屏样式、按钮与完播清除仍需 Android 实机验收。
+- 定向系统媒体测试 17 项及 Android 通知资源边界检查 25 项通过；独立包测试 bili_api 497、bili_player 101、bili_danmaku 136、bili_mux 5 项通过，mux 另有 10 项因未设置 `BILI_MUX_LIBRARY` 跳过。`flutter analyze --no-pub` 通过。初次根检查在同期临时集成探针的格式检查处中断；该探针移除后分别运行检查脚本 Lint、RootTests 和 PackageTests 阶段，均通过。根测试 3697 项通过、13 项跳过。
+- Android 普通入口开发 Release 构建及 APK 资源检查通过，复用既有 mux 资产；构建时工作区存在同期修改，产物并非只含本轮变更。未连接设备，未安装；未验证通知栏／锁屏的实际按钮、自动连播衔接与清除。

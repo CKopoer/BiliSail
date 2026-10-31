@@ -94,10 +94,23 @@ final class AudioServiceMediaControls extends SystemMediaControls {
     handler.playbackState.add(
       PlaybackState(
         controls: [
+          if (state.canSeek)
+            const MediaControl(
+              androidIcon: 'drawable/ic_media_rewind_10',
+              label: '后退 10 秒',
+              action: MediaAction.rewind,
+            ),
           state.playing ? MediaControl.pause : MediaControl.play,
-          MediaControl.stop,
+          if (state.canSeek)
+            const MediaControl(
+              androidIcon: 'drawable/ic_media_forward_10',
+              label: '前进 10 秒',
+              action: MediaAction.fastForward,
+            ),
         ],
-        androidCompactActionIndices: const [0, 1],
+        androidCompactActionIndices: state.canSeek
+            ? const [0, 1, 2]
+            : const [0],
         systemActions: {if (state.canSeek) MediaAction.seek},
         processingState: switch (state.phase) {
           SystemMediaPhase.loading => AudioProcessingState.loading,
@@ -120,7 +133,10 @@ final class AudioServiceMediaControls extends SystemMediaControls {
     final state = _state;
     if (_closed ||
         state == null ||
-        (action == SystemMediaAction.seek && !state.canSeek)) {
+        ((action == SystemMediaAction.seek ||
+                action == SystemMediaAction.rewind ||
+                action == SystemMediaAction.fastForward) &&
+            !state.canSeek)) {
       return;
     }
     await onCommand?.call(
@@ -153,6 +169,11 @@ final class _MediaHandler extends BaseAudioHandler {
   @override
   Future<void> seek(Duration position) =>
       controls._command(SystemMediaAction.seek, position);
+  @override
+  Future<void> rewind() => controls._command(SystemMediaAction.rewind);
+  @override
+  Future<void> fastForward() =>
+      controls._command(SystemMediaAction.fastForward);
   @override
   Future<void> onTaskRemoved() => controls._command(SystemMediaAction.stopAll);
 }

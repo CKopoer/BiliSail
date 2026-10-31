@@ -1,6 +1,6 @@
 enum SystemMediaPhase { loading, ready, buffering, completed, failed }
 
-enum SystemMediaAction { play, pause, stop, stopAll, seek }
+enum SystemMediaAction { play, pause, stop, stopAll, seek, rewind, fastForward }
 
 final class SystemMediaCommand {
   const SystemMediaCommand(this.id, this.action, {this.position});

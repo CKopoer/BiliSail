@@ -77,6 +77,57 @@ void main() {
     },
   );
 
+  test(
+    'ten-second controls use the current position and clamp to duration',
+    () async {
+      await open('video');
+      final engine = engines.single;
+      engine.advance(const Duration(seconds: 4));
+      await controls.command(SystemMediaAction.rewind);
+      expect(engine.currentSnapshot.position, Duration.zero);
+      engine.advance(const Duration(seconds: 15));
+      await controls.command(SystemMediaAction.fastForward);
+      expect(engine.currentSnapshot.position, const Duration(seconds: 20));
+    },
+  );
+
+  test(
+    'completion clears controls, rejects stale commands and replay republishes',
+    () async {
+      final session = await open('video');
+      final engine = engines.single;
+      final id = controls.state!.id;
+      engine.publish(engine.snapshot.copyWith(phase: PlaybackPhase.ended));
+      expect(controls.state, isNull);
+      await controls.onCommand!(SystemMediaCommand(id, SystemMediaAction.play));
+      expect(engine.currentSnapshot.phase, PlaybackPhase.ended);
+      await session.play();
+      expect(controls.state?.title, 'video');
+      expect(controls.state?.playing, isTrue);
+      engine.publish(engine.snapshot.copyWith(phase: PlaybackPhase.ended));
+      expect(controls.state, isNull);
+      await session.open(
+        systemMediaVideo('next'),
+        systemMediaPart,
+        force: true,
+      );
+      expect(controls.state?.title, 'next');
+    },
+  );
+
+  test('completion falls back to another retained session', () async {
+    await open('one');
+    await open('two');
+    engines.last.publish(
+      engines.last.snapshot.copyWith(phase: PlaybackPhase.ended),
+    );
+    expect(controls.state?.title, 'one');
+    engines.first.publish(
+      engines.first.snapshot.copyWith(phase: PlaybackPhase.ended),
+    );
+    expect(controls.state, isNull);
+  });
+
   test('selected media owns controls across normal pages', () async {
     final first = await open('one');
     await open('two');
