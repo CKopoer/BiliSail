@@ -144,6 +144,47 @@ void RequireBounds(HWND window, const playback_window::Bounds& expected) {
           "User Restore lost the remembered normal rectangle.");
 }
 
+void DrainWindowMessages(HWND window) {
+  MSG message{};
+  while (PeekMessage(&message, window, 0, 0, PM_REMOVE)) {
+    TranslateMessage(&message);
+    DispatchMessage(&message);
+  }
+}
+
+void RunTransitionTests() {
+  const TestWindow test;
+  const HWND window = test.get();
+  playback_window::FirstShowTransitions transitions(window, 100);
+  Require(!transitions.pending(), "Ordinary creation suppressed animations.");
+  transitions.Suppress();
+  Require(transitions.pending(), "Cannot suppress the initial DWM transition.");
+  playback_window::FirstShowTransitions::RestoreAfterFirstShow(window);
+  Require(transitions.pending(), "Animations resumed inside the first-show stack.");
+  DrainWindowMessages(window);
+  Require(!transitions.pending(), "Animations remained disabled after composition.");
+
+  auto old = std::make_unique<playback_window::FirstShowTransitions>(window, 101);
+  old->Suppress();
+  playback_window::FirstShowTransitions::RestoreAfterFirstShow(window);
+  old.reset();
+  playback_window::FirstShowTransitions current(window, 102);
+  current.Suppress();
+  DrainWindowMessages(window);
+  Require(current.pending(), "A stale restore message changed the new lease.");
+  playback_window::FirstShowTransitions::RestoreAfterFirstShow(window);
+  DrainWindowMessages(window);
+  Require(!current.pending(), "The current lease did not restore animations.");
+
+  {
+    playback_window::FirstShowTransitions cancelled(window, 103);
+    cancelled.Suppress();
+    Require(cancelled.pending(), "Cancellation fixture did not suppress animations.");
+  }
+  playback_window::FirstShowTransitions unprepared(window, 104);
+  Require(!unprepared.pending(), "Cancelled first show retained a transition hook.");
+}
+
 void RunFrameTests() {
   const TestWindow test;
   const HWND window = test.get();
@@ -418,6 +459,7 @@ int main() {
     window_class.lpszClassName = L"BiliSailGeometryTestWindow";
     Require(RegisterClassW(&window_class) != 0, "Cannot register test window class.");
     RunTests();
+    RunTransitionTests();
     RunFrameTests();
     RunInitialSizeTests();
     UnregisterClassW(window_class.lpszClassName, window_class.hInstance);

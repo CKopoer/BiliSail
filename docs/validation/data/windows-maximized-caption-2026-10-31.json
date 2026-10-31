@@ -1,0 +1,634 @@
+{
+  "schema": 1,
+  "date": "2026-10-31",
+  "platform": "Windows x64",
+  "mode": "Profile/AOT",
+  "capture": "DXGI desktop duplication, nominal 120 fps, variable-rate lossless FFV1, top 1920x160",
+  "frame_accounting": "Use actual encoded frames and their presentation timestamps, decoded with -fps_mode passthrough; no CFR duplicates inserted.",
+  "scope": "All observed caption-visible frames in eight remembered-maximized reopens per case on this machine; not a guarantee that capture samples every physical display refresh.",
+  "display_work_area": [
+    1920,
+    1032
+  ],
+  "device_pixel_ratio": 1,
+  "expected_caption_border_y": 44,
+  "expected_back_button_y": [
+    16,
+    27
+  ],
+  "measurement_columns_x": [
+    120,
+    500,
+    1000,
+    1800
+  ],
+  "warm_up_excluded": "The first group opens normally then maximizes to establish session geometry.",
+  "native_media": {
+    "video": "test/fixtures/media/video.mp4",
+    "audio": "test/fixtures/media/audio.m4a",
+    "decoded_audio_and_video_in_all_eight_trials": true,
+    "measurement_marker": "A 16px blue stripe below the unchanged production caption."
+  },
+  "results": {
+    "baseline": {
+      "nominal_capture_fps": 120.0,
+      "encoded_frame_count_including_warm_up_and_gaps": 1071,
+      "trials": [
+        {
+          "sample": 0,
+          "captured_visible_frames": 46,
+          "frames_with_different_border_or_button_position": 14,
+          "first_captured_border_y": [
+            57,
+            57,
+            57,
+            57
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 1,
+          "captured_visible_frames": 49,
+          "frames_with_different_border_or_button_position": 16,
+          "first_captured_border_y": [
+            58,
+            58,
+            58,
+            58
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 2,
+          "captured_visible_frames": 44,
+          "frames_with_different_border_or_button_position": 14,
+          "first_captured_border_y": [
+            60,
+            60,
+            60,
+            60
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 3,
+          "captured_visible_frames": 46,
+          "frames_with_different_border_or_button_position": 13,
+          "first_captured_border_y": [
+            57,
+            57,
+            57,
+            57
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 4,
+          "captured_visible_frames": 48,
+          "frames_with_different_border_or_button_position": 15,
+          "first_captured_border_y": [
+            60,
+            60,
+            60,
+            60
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 5,
+          "captured_visible_frames": 47,
+          "frames_with_different_border_or_button_position": 16,
+          "first_captured_border_y": [
+            62,
+            62,
+            62,
+            62
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 6,
+          "captured_visible_frames": 49,
+          "frames_with_different_border_or_button_position": 13,
+          "first_captured_border_y": [
+            55,
+            55,
+            55,
+            55
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 7,
+          "captured_visible_frames": 47,
+          "frames_with_different_border_or_button_position": 15,
+          "first_captured_border_y": [
+            60,
+            60,
+            60,
+            60
+          ],
+          "first_captured_back_button_y": null
+        }
+      ],
+      "captured_visible_frames": 376,
+      "frames_with_different_border_or_button_position": 116
+    },
+    "presize-deferred": {
+      "nominal_capture_fps": 120.0,
+      "encoded_frame_count_including_warm_up_and_gaps": 1081,
+      "trials": [
+        {
+          "sample": 0,
+          "captured_visible_frames": 47,
+          "frames_with_different_border_or_button_position": 14,
+          "first_captured_border_y": [
+            60,
+            60,
+            60,
+            60
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 1,
+          "captured_visible_frames": 45,
+          "frames_with_different_border_or_button_position": 15,
+          "first_captured_border_y": [
+            63,
+            63,
+            63,
+            63
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 2,
+          "captured_visible_frames": 47,
+          "frames_with_different_border_or_button_position": 15,
+          "first_captured_border_y": [
+            63,
+            63,
+            63,
+            63
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 3,
+          "captured_visible_frames": 46,
+          "frames_with_different_border_or_button_position": 15,
+          "first_captured_border_y": [
+            60,
+            60,
+            60,
+            60
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 4,
+          "captured_visible_frames": 47,
+          "frames_with_different_border_or_button_position": 15,
+          "first_captured_border_y": [
+            58,
+            58,
+            58,
+            58
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 5,
+          "captured_visible_frames": 51,
+          "frames_with_different_border_or_button_position": 16,
+          "first_captured_border_y": [
+            60,
+            60,
+            60,
+            60
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 6,
+          "captured_visible_frames": 49,
+          "frames_with_different_border_or_button_position": 13,
+          "first_captured_border_y": [
+            57,
+            57,
+            57,
+            57
+          ],
+          "first_captured_back_button_y": null
+        },
+        {
+          "sample": 7,
+          "captured_visible_frames": 48,
+          "frames_with_different_border_or_button_position": 14,
+          "first_captured_border_y": [
+            62,
+            62,
+            62,
+            62
+          ],
+          "first_captured_back_button_y": null
+        }
+      ],
+      "captured_visible_frames": 380,
+      "frames_with_different_border_or_button_position": 117
+    },
+    "no-transition": {
+      "nominal_capture_fps": 120.0,
+      "encoded_frame_count_including_warm_up_and_gaps": 1072,
+      "trials": [
+        {
+          "sample": 0,
+          "captured_visible_frames": 49,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 1,
+          "captured_visible_frames": 52,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 2,
+          "captured_visible_frames": 51,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 3,
+          "captured_visible_frames": 50,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 4,
+          "captured_visible_frames": 54,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 5,
+          "captured_visible_frames": 55,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 6,
+          "captured_visible_frames": 51,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 7,
+          "captured_visible_frames": 49,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        }
+      ],
+      "captured_visible_frames": 411,
+      "frames_with_different_border_or_button_position": 0
+    },
+    "scoped-fix": {
+      "nominal_capture_fps": 120.0,
+      "encoded_frame_count_including_warm_up_and_gaps": 1060,
+      "trials": [
+        {
+          "sample": 0,
+          "captured_visible_frames": 48,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 1,
+          "captured_visible_frames": 48,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 2,
+          "captured_visible_frames": 44,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 3,
+          "captured_visible_frames": 49,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 4,
+          "captured_visible_frames": 47,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 5,
+          "captured_visible_frames": 48,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 6,
+          "captured_visible_frames": 50,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        },
+        {
+          "sample": 7,
+          "captured_visible_frames": 46,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ]
+        }
+      ],
+      "captured_visible_frames": 380,
+      "frames_with_different_border_or_button_position": 0
+    },
+    "native-playback-final": {
+      "nominal_capture_fps": 120.0,
+      "encoded_frame_count_including_warm_up_and_gaps": 1334,
+      "trials": [
+        {
+          "sample": 0,
+          "captured_visible_frames": 62,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ],
+          "decoded_audio_and_video": true
+        },
+        {
+          "sample": 1,
+          "captured_visible_frames": 64,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ],
+          "decoded_audio_and_video": true
+        },
+        {
+          "sample": 2,
+          "captured_visible_frames": 63,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ],
+          "decoded_audio_and_video": true
+        },
+        {
+          "sample": 3,
+          "captured_visible_frames": 68,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ],
+          "decoded_audio_and_video": true
+        },
+        {
+          "sample": 4,
+          "captured_visible_frames": 62,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ],
+          "decoded_audio_and_video": true
+        },
+        {
+          "sample": 5,
+          "captured_visible_frames": 63,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ],
+          "decoded_audio_and_video": true
+        },
+        {
+          "sample": 6,
+          "captured_visible_frames": 68,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ],
+          "decoded_audio_and_video": true
+        },
+        {
+          "sample": 7,
+          "captured_visible_frames": 61,
+          "frames_with_different_border_or_button_position": 0,
+          "first_captured_border_y": [
+            44,
+            44,
+            44,
+            44
+          ],
+          "first_captured_back_button_y": [
+            16,
+            27
+          ],
+          "decoded_audio_and_video": true
+        }
+      ],
+      "captured_visible_frames": 511,
+      "frames_with_different_border_or_button_position": 0
+    }
+  }
+}

@@ -52,6 +52,8 @@
 
 ## 最大化重开时顶部栏闪变（2026-10-31）
 
+**复测状态：用户随后确认跳动仍存在。以下首轮结果只证明 Flutter 首帧布局尺寸已匹配，不证明实际呈现的顶部栏稳定；进一步复查见下一节。**
+
 用户确认仅在最大化播放窗中出现“先低后高”的顶部栏。标题栏组件一直固定为 44 逻辑像素，没有高度动画；问题在首帧布局与首次可见状态不一致：隐藏 HWND 保留普通尺寸，SDK 先渲染普通尺寸的场景，首帧回调才触发原生最大化，随后 Flutter 再渲染最大化尺寸。旧探针连续 8 次记录到首帧标题栏宽度 1120、客户区 1120×791，而首次可见及稳定客户区已是 1920×1032；首次最大化期间会短暂使用旧尺寸的场景。
 
 - 原生恢复几何时，若存在待执行的首次最大化，则返回所在显示器工作区的物理尺寸。Windows 自绘标题栏下，该尺寸等于最大化后的客户区。普通窗口继续沿用准备好的实际客户区。
@@ -60,3 +62,54 @@
 - `tool/test-window-geometry.ps1` 通过，覆盖首次可见尺寸与自绘客户区一致、普通窗口不使用最大化尺寸、取消后清理，以及既有最大化／还原／缩放／全屏／旧 owner 隔离。窗口服务、独立窗口生命周期、顶部栏和工作区播放窗口的 54 项定向测试通过，日志为 `build/caption-targeted-tests.log`。
 - `tool/check.ps1 -SkipPub` 通过：根应用 3681、API 497、播放器 101、弹幕 136、封装包 5，共 4420 项通过。根应用 13 项按既有条件跳过，mux 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过；格式、静态分析和打包边界检查通过，日志为 `build/caption-full-check.log`。最终改动文件另行静态分析通过。
 - Windows mux 资产重新构建成功；探针执行后已重新构建普通 `lib/main.dart` 的 Windows Profile 和 Release，未遗留探针入口。日志为 `build/caption-ordinary-profile-build.log` 和 `build/caption-ordinary-release-build.log`；可试用入口为 `build/windows/x64/runner/Release/bilisail.exe`，需保留整个 Release 目录。没有可连接的 DTD／调试应用，本轮通过重新构建验证；未测试跨显示器 DPI、Windows 10、真实账号或公网视频，Android/macOS 未构建或实机验证。
+
+## 顶部栏仍跳动的复查（2026-10-31）
+
+**本节保留尚未取得过渡帧时的分析；后续像素对照否定了“只调整原生几何即可解决”的假设，最终结论与修复见下一节。**
+
+用户补充：文字和按钮大小不变，栏高变大时按钮整排向下移动。这更符合顶部内容的垂直偏移／裁切，不支持将现象直接解释为整帧缩放。当前运行的安装包 `data/app.so` 已包含首轮新增的尺寸校验错误字符串，不能归因于完全未包含首轮 Dart 修改的旧包。
+
+在 `0a91cba` 的隔离 worktree `artifacts/caption-analysis-workspace` 中，增加原生窗口消息记录，并使用无账号、无网络的 Profile 加载态探针。本轮未修改主工作区生产代码，未替换已有 Release 目录或正在运行的安装版。以下是取证结果，而非再次修复成功的结论：
+
+- Flutter 标题栏始终为 44 逻辑像素。首轮保留的 8 次最大化探针，以及本轮原始流程、延后显示和提前调整子窗口的对照，首帧与稳定场景均为 1920×1032、标题栏均为 1920×44、DPR 为 1。没有发现 Flutter 顶部栏自身发生高度动画。
+- 首轮只通过 `SizedBox` 预设场景大小。原生加载态仍为 1120×791：父 HWND 已经可见且最大化时，子 HWND 随后才在 `WM_SIZE` 中从 1120×791 调整到 1920×1032。这一可见阶段的几何切换未被首轮探针的“第一帧等于稳定帧”断言覆盖。
+- Windows 自绘边框在普通状态将客户区扩展至外框顶边；最大化时必须保留本机 8 物理像素的顶边框 inset，使外框 top=-8、客户区 top=0。顶部内容先被偏移／裁切、随后恢复，与用户反馈相符，但本轮没有捕获到实际跳动帧，不能把具体的 8 像素可见裁切写成已证实事实。客户区计算的系统语义见 [WM_NCCALCSIZE](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-nccalcsize)。
+- `InitialShowMaximizer` 在 SDK 的 `ShowWindow(SW_SHOWNORMAL)` 尚未返回时，于 `WM_WINDOWPOSCHANGED` 内嵌套调用 `ShowWindow(SW_MAXIMIZE)`。原始流程在首次可见阶段收到两次 `WM_SIZE(SIZE_MAXIMIZED)`；将首次最大化排入后续原生消息后，普通尺寸通知全部在隐藏状态完成，首次可见阶段只剩一次最大化尺寸通知。两种流程最终几何相同，不能仅凭消息数量认定视觉问题已消除。
+- 另一对照在首次绘制前就将原生子 HWND 调整为 1920×1032；其 prepared、visible、settled 三个阶段的 view 尺寸均一致，消除了可见后的子窗口尺寸调整。原流程和此对照的 Flutter 标题栏高度均为 44，进一步说明首轮布局检查不能代替像素验收。
+
+原始记录位于该隔离目录的 `caption-nested-trace.log`／`caption-nested-probe.json`、`caption-deferred-trace.log`／`caption-deferred-probe.json`、`caption-presized-trace.log`／`caption-presized-probe.json`。在原生显示后暂停的诊断截图中看到稳定 44 像素标题栏；在窗口过程内部阻塞的截图未获得可用的顶部栏画面，均不能当作已捕获用户描述的过渡帧。
+
+目前最有证据支持的排查方向是首次最大化期间的原生客户区／子窗口呈现时序，而非 Dart 标题栏高度。后续修正应让首次可见前的原生子窗口尺寸、顶边 inset 和场景一致，并消除显示回调中的嵌套窗口呈现；仍须在实际播放页验证顶部边界与按钮屏幕位置的过渡帧。本轮仅完成分析及隔离对照，没有提交新的生产修复，也未重新宣称视觉问题已解决。
+
+## 实际呈现取证与最终修复（2026-10-31）
+
+本轮捕获到问题帧：旧流程顶部栏下边界先在屏幕 y=30，随后回到 y=44；返回箭头的可见像素从 y=2–13 移至 y=16–27，字形没有缩放。Flutter 布局始终为 44，原生最终客户区也正确，但 **DWM 在窗口首次最大化显示时执行的过渡仍会临时偏移／裁切自绘顶部内容**。因此首轮只预设 Flutter 场景尺寸，无法消除实际画面的跳动；8 像素顶边 inset 的早期假设也不能解释已捕获的 14 像素位移。
+
+在隔离 worktree 中用相同窗口宿主做单变量对照：提前设置子窗口尺寸并延后最大化仍跳动；仅设置该播放窗禁用 DWM 过渡后不再跳动。[最终实现](../../windows/runner/playback_window_first_show.h)只对准备以最大化状态首次显示的隐藏播放窗设置 `DWMWA_TRANSITIONS_FORCEDISABLED`。显示完成后投递原生消息，离开首次显示的窗口过程调用栈，再通过 `DwmFlush()` 等待待提交画面呈现并恢复窗口过渡。普通窗口及后续窗口动画沿用原行为，没有修改系统全局动画设置。API 语义见 [Microsoft 的逐窗口过渡说明](https://devblogs.microsoft.com/oldnewthing/20121003-00/?p=6423/)和 [DwmFlush](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmflush)。
+
+过渡控制与窗口 owner 一起持有；取消打开、owner 替换、窗口销毁均清理，旧 owner 排队的恢复消息不能解除新 owner 的控制。回调只保存 owner 值，不引用可能被重入关闭释放的对象。
+
+### 屏幕画面验收
+
+本机 Windows x64、Profile/AOT、DPR=1、最大化客户区 1920×1032。使用 DXGI Desktop Duplication 录制屏幕顶部 1920×160，FFV1 无损编码，采集配置为 120 fps。实际编码为可变帧率；分析按原始帧 PTS 分组，使用 `-fps_mode passthrough` 解码并核对编码／解码帧数，不把 CFR 补帧计为独立证据。每组先普通打开、最大化、关闭作预热，再连续最大化重开 8 次，预热不计入下表。下边界在 x=120、500、1000、1800 四列测量，箭头同时检查上下边界。
+
+| 对照 | 重开次数 | 捕获的可见帧 | 边界或按钮位置异常的帧 |
+| --- | ---: | ---: | ---: |
+| 修复前流程 | 8 | 376 | 116 |
+| 提前设置子窗口尺寸并延后最大化 | 8 | 380 | 117 |
+| 禁用该播放窗 DWM 过渡的诊断对照 | 8 | 411 | 0 |
+| 最终代码，首次呈现后恢复过渡 | 8 | 380 | 0 |
+| 最终代码，真实音视频播放 | 8 | 511 | 0 |
+
+最后一组使用真实 `PlaybackPanel`、`MediaKitEngine` 和仓库本地分轨 `video.mp4`／`audio.m4a`，每次均确认音频和视频已解码，并等待原生会话关闭后再重开；无网络、账号或观看记录写入。仅在原有顶部栏下增加 16 像素蓝色测量条，未替换顶部栏组件。8 次重开的首个及随后所有捕获到的可见帧，下边界均为 y=44、箭头均为 y=16–27。测试期间诊断窗口保持前台；被遮挡和产物不匹配的试验不纳入结果。
+
+逐次结果见 [像素数据](data/windows-maximized-caption-2026-10-31.json)，代表帧见下图。完整录像、逐帧坐标和解码探针留在忽略目录 `artifacts/caption-analysis-workspace/pixels/`，包括 `baseline.mkv`、`presize-deferred.mkv`、`no-transition.mkv`、`scoped-fix.mkv`、`native-playback-final.mkv` 及同名 JSON；分析脚本为该 worktree 内的 `analyze_caption.py` 和 `write_caption_evidence.py`。
+
+![修复前的过渡帧与修复后首次显示](data/windows-maximized-caption-2026-10-31.png)
+
+### 回归与交付
+
+- `tool/test-window-geometry.ps1` 通过。新增原生回归覆盖恢复必须排队、呈现后解除控制、取消清理及旧 owner 消息隔离，既有首次最大化、还原、最小化、全屏与重入关闭回归保留。
+- `tool/check.ps1 -SkipPub` 通过：根应用 3752、API 499、播放器 105、弹幕 145、封装包 5，共 4506 项通过。根应用 13 项按既有条件跳过；mux 原生 10 项因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生通过。格式、静态分析和打包边界检查通过，日志为 `build/caption-dwm-full-check.log`。
+- 普通入口 `lib/main.dart` 的 Windows Release 重新构建通过，日志为 `build/caption-dwm-release-build.log`；产物为 `build/windows/x64/runner/Release/bilisail.exe`，需保留完整 Release 目录。已核对录屏所用 Profile 原生头文件与生产源码一致，并核对 Release 包含新的恢复消息。没有替换正在运行的安装版。
+- 本轮确认范围为本机受控加载态及真实本地音视频播放的最大化重开；屏幕采集不保证覆盖每次物理刷新。未做 Windows 10、其他硬件、跨显示器 DPI、公网视频／账号流程或 Android/macOS 实机验收。原生代码通过重新构建验证。

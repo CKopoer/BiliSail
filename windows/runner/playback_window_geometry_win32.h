@@ -9,6 +9,7 @@
 #include <optional>
 
 #include "playback_window_geometry.h"
+#include "playback_window_first_show.h"
 
 namespace playback_window {
 
@@ -140,7 +141,8 @@ class InitialWindowSize {
 // SDK's normal placement completes. Later user Restore commands pass through.
 class InitialShowMaximizer {
  public:
-  explicit InitialShowMaximizer(HWND window) : window_(window) {}
+  InitialShowMaximizer(HWND window, int64_t owner)
+      : window_(window), transitions_(window, owner) {}
   ~InitialShowMaximizer() { Cancel(); }
   InitialShowMaximizer(const InitialShowMaximizer&) = delete;
   InitialShowMaximizer& operator=(const InitialShowMaximizer&) = delete;
@@ -151,6 +153,7 @@ class InitialShowMaximizer {
       ShowWindow(window_, SW_MAXIMIZE);
       return true;
     }
+    transitions_.Suppress();
     return SetWindowSubclass(window_, WindowProc, SubclassId(), kArmed) != FALSE;
   }
 
@@ -216,12 +219,14 @@ class InitialShowMaximizer {
           (GetWindowLongPtr(window, GWL_STYLE) & WS_CAPTION) == WS_CAPTION) {
         ShowWindow(window, SW_MAXIMIZE);
       }
+      FirstShowTransitions::RestoreAfterFirstShow(window);
       return result;
     }
     return DefSubclassProc(window, message, wparam, lparam);
   }
 
   HWND window_;
+  FirstShowTransitions transitions_;
 };
 
 // Own both the saved geometry and the first-show hook under the same view lease.
@@ -235,7 +240,7 @@ class WindowGeometrySession {
     if (!RestoreNormalBounds(window, geometry_)) return false;
     auto initial_size = std::make_unique<InitialWindowSize>(window);
     if (!initial_size->Prepare()) return false;
-    auto initial_show = std::make_unique<InitialShowMaximizer>(window);
+    auto initial_show = std::make_unique<InitialShowMaximizer>(window, owner);
     if (!initial_show->Prepare(maximized)) return false;
     geometry_.Begin(view, owner);
     initial_size_ = std::move(initial_size);
