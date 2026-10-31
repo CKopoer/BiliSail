@@ -185,7 +185,9 @@ jobs:
           if (@($refs | ConvertFrom-Json | Where-Object { $_.ref -eq "refs/tags/$tag" }).Count) {
             throw "Tag $tag already exists. Use a new version."
           }
-          $assets = @(Get-ChildItem release-assets -File | ForEach-Object { $_.FullName })
+          $assets = @(Get-ChildItem release-assets -File |
+            Where-Object { $_.Name -notmatch '\.(build-info\.json|mux-source\.zip)(\.sha256)?$' } |
+            ForEach-Object { $_.FullName })
           if (!$assets.Count) { throw 'No build assets were downloaded.' }
           $notes = @"
           BiliSail（哔帆）$env:RELEASE_VERSION 预览构建。
@@ -193,10 +195,10 @@ jobs:
           国内下载：[夸克网盘](https://pan.quark.cn/s/ffceda8afc83)。
 
           - 源码提交：$env:GITHUB_SHA
-          - Flutter 3.47.6；各平台 SDK 信息见 build-info.json。
+          - Flutter 3.47.6；各平台 SDK、签名信息及 mux 源码归档见 [Actions 构建记录]($env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID) 中所列的来源构建产物。
           - 仅包含本次选中的平台；包旁附 SHA-256 校验文件。
-          - Windows 同时提供 MSIX、MSI 和 EXE 安装包；EXE 内嵌同一 MSI，任选一种安装。MSI 向导可选择安装目录，EXE 通过 Options → Browse 选择，升级默认沿用原目录。三者复用同一签名证书，测试签名需先信任包旁的 .cer；签名种类及 MSI 内部版本见 build-info.json。
-          - Android 复用仓库配置的固定 release keystore，证书 SHA-256 见 build-info.json；macOS 仅 ad-hoc 签名，未 notarize。
+          - Windows 同时提供 MSIX、MSI 和 EXE 安装包；EXE 内嵌同一 MSI，任选一种安装。MSI 向导可选择安装目录，EXE 通过 Options → Browse 选择，升级默认沿用原目录。三者复用同一签名证书，测试签名需先信任包旁的 .cer。
+          - Android 复用仓库配置的固定 release keystore；macOS 仅 ad-hoc 签名，未 notarize。
           - macOS 分别提供 Apple Silicon arm64 与 Intel x64 DMG，按芯片选择；打开后将 BiliSail.app 拖到 Applications 安装。
           - iOS 提供 arm64 未签名 IPA，安装前须使用自己的 Apple 证书及 provisioning profile 签名；GitHub Actions token 只用于上传产物和 Release。
           - Linux x64 提供 AppImage 与 Flatpak。AppImage 基线为 Ubuntu 24.04，Flatpak 使用 Freedesktop 25.08 runtime；图形使用 X11／XWayland，登录需可用的系统 Secret Service。

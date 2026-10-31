@@ -1,9 +1,11 @@
 const assert = require('node:assert/strict');
+const { execFile } = require('node:child_process');
 const { createHash } = require('node:crypto');
-const { mkdtemp, writeFile, readFile, rm } = require('node:fs/promises');
+const { cp, mkdtemp, writeFile, readFile, rm } = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
+const { promisify } = require('node:util');
 const { planReleaseBuilds, downloadReusedArtifacts, verifyReleaseAssets } = require('./release-ci-reuse.cjs');
 
 const version = '1.2.5+0';
@@ -239,6 +241,47 @@ async function makeAssets(t, targets = allTargets) {
 
 test('accepts complete packages for all six targets including BOM metadata and CRLF checksums', async (t) => {
   await verifyReleaseAssets(await makeAssets(t));
+});
+
+test('draft uploads packages and their checksums while keeping build metadata and mux sources in Actions', async (t) => {
+  const expected = await makeAssets(t);
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'bilisail-release-draft-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const assetsDirectory = path.join(directory, 'release-assets');
+  await cp(expected.directory, assetsDirectory, { recursive: true });
+  await verifyReleaseAssets({ ...expected, directory: assetsDirectory });
+
+  const workflow = await readFile(path.join(__dirname, '../.github/workflows/release.yml'), 'utf8');
+  const script = /      - name: Create preview draft with all selected packages[\s\S]*?        run: \|\r?\n([\s\S]*?)      - name: Keep the latest 15 releases/.exec(workflow)?.[1];
+  assert.ok(script, 'Expected the production draft creation step.');
+  const scriptPath = path.join(directory, 'create-draft.ps1');
+  await writeFile(scriptPath, `
+function gh {
+  $global:LASTEXITCODE = 0
+  if ($args[0] -eq 'api') { return '[]' }
+  if ($args[0] -ne 'release' -or $args[1] -ne 'create') { throw 'Unexpected gh command.' }
+  ConvertTo-Json -InputObject @($args) | Set-Content -LiteralPath gh-arguments.json -Encoding utf8
+}
+${script.replace(/^          /gm, '')}`);
+  await promisify(execFile)('pwsh', ['-NoProfile', '-File', scriptPath], {
+    cwd: directory,
+    env: { ...process.env, RELEASE_VERSION: version, GITHUB_SHA: context.sha,
+      GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'CKopoer/BiliSail', GITHUB_RUN_ID: '1234' },
+  });
+
+  const args = JSON.parse((await readFile(path.join(directory, 'gh-arguments.json'), 'utf8')).replace(/^\uFEFF/, ''));
+  assert.deepEqual(args.slice(0, 3), ['release', 'create', `v${version}`]);
+  const packages = ['android-arm64.apk', 'windows-x64.msix', 'windows-x64.msi', 'windows-x64.exe',
+    'windows-x64.cer', 'macos-arm64.dmg', 'macos-x64.dmg', 'ios-arm64-unsigned.ipa',
+    'linux-x64.AppImage', 'linux-x64.flatpak'].map((suffix) => `BiliSail-${version}-${suffix}`);
+  const attachments = [...packages.flatMap((name) => [name, name + '.sha256']), 'THIRD_PARTY_NOTICES.md'];
+  assert.deepEqual(args.slice(3, args.indexOf('--repo')).map((file) => path.basename(file)).sort(), attachments.sort());
+  assert.ok(args.includes('--draft'));
+  assert.ok(args.includes('--prerelease'));
+  const notes = await readFile(path.join(directory, 'release-notes.md'), 'utf8');
+  assert.ok(notes.includes('[Actions 构建记录](https://github.com/CKopoer/BiliSail/actions/runs/1234)'));
+  assert.ok(!notes.includes('见 build-info.json'));
+  await verifyReleaseAssets({ ...expected, directory: assetsDirectory });
 });
 
 test('accepts the same source lockfile checked out with Windows line endings', async (t) => {

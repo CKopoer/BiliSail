@@ -47,7 +47,12 @@ Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d1
 - Android 的 `.apk`、Windows 的 `.msix` / `.msi` / `.exe`、macOS 的 `.dmg`、Linux 的 `.AppImage` / `.flatpak`，命名均为 `BiliSail-<version>-<target>.<extension>`；iOS 使用 `BiliSail-<version>-ios-arm64-unsigned.ipa`。
 - Windows 包旁的 `.cer`，只含签名证书公钥。
 - `.build-info.json`：源码 revision 与 `sourceDirty`、Flutter/engine/Dart 版本、目标、签名类型、Android 签名证书 SHA-256、Windows MSI 内部版本与 WiX 版本、runner image、根锁文件 SHA-256；macOS 的 `macosValidation` 保存发布门槛的通过状态。
+- `.mux-source.zip`：mux 组件源码归档及重建说明。
 - 每个上述文件对应的 `.sha256`，格式兼容 `sha256sum -c`。
+
+Release 草稿只附安装包、Windows 公钥证书及它们的 `.sha256`，另附 `THIRD_PARTY_NOTICES.md`。`.build-info.json`、`.mux-source.zip` 和这两类文件的 `.sha256` 继续保存在 Actions artifacts 中并参与上传前校验，不加入 Release 附件；草稿说明链接到本次 Actions 记录，可从构建来源汇总定位对应产物。
+
+2026-10-31 附件筛选验证：`node --test tool/test-release-ci-reuse.cjs` 的 54 项测试通过，新增回归直接执行工作流的 PowerShell 草稿步骤并模拟 `gh`，核对六个目标的完整附件集合及原始 Actions 文件保留。Release／CI 工作流通过 actionlint，本文件 38 条本地链接和 `git diff --check` 通过。`tool/check.ps1 -SkipPub` 的打包边界、格式、静态分析及 4645 项离线测试通过；13 项 Windows symlink 用例因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。日志保存在 `build/release-asset-selection-check.log`；本轮未运行远端 Release 或创建实际草稿。
 
 ### README 下载链接自动更新
 
