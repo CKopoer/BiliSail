@@ -2,6 +2,18 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'macos-release-validation.ps1')
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 
+# Use the actual JSON boundary: PowerShell turns an ISO string into DateTime,
+# whose ordinary string conversion loses its UTC offset and precision.
+$expectedStartedUtc = [DateTimeOffset]::Parse('2026-10-31T07:00:00.1234560+00:00')
+$jsonStartedUtc = ('{"started":"' + $expectedStartedUtc.ToString('o') + '"}' | ConvertFrom-Json -AsHashtable).started
+foreach ($timestamp in @($expectedStartedUtc, $expectedStartedUtc.UtcDateTime, $jsonStartedUtc, $expectedStartedUtc.ToString('o'))) {
+  $roundtrip = ConvertTo-MacOSStackTimestamp $timestamp
+  if ($roundtrip -notmatch '^2026-10-31T07:00:00\.1234560(Z|\+00:00)$' -or
+      [DateTimeOffset]::Parse($roundtrip) -ne $expectedStartedUtc) {
+    throw 'A parsed process timestamp lost its offset or fractional precision before stack collection.'
+  }
+}
+
 function Assert-Rejected([scriptblock]$Action) {
   $rejected = $false
   try { & $Action } catch { $rejected = $true }

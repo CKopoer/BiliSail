@@ -97,6 +97,8 @@ Windows x64 / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过格式、
 
 监督父进程另记录 worker 的 PID、启动时间与退出码；worker 本身被原生信号终止时，使用相同边界采集本次 `pwsh` 的 `*.worker.crash.json`，与应用报告分开。Release 框架没有符号时，保留 sample 中的 load address、模块偏移、采样次数和层级，不因缺失符号而丢弃 Flutter 帧。标准库单元测试使用合成双 JSON IPS、旧文本报告和 sample 栈，覆盖错误 PID／名称／时间拒绝、损坏数据、容量上限、敏感字段剔除、受限等待及原子发布；已接入根检查。
 
+受控 SIGSEGV 验证另发现 PowerShell JSON 边界的问题：`ConvertFrom-Json` 会将 ISO 启动时间转为 `DateTime`，随后 `[string]` 参数绑定会使用本地文化格式，丢失时区／精度，导致采集器在匹配报告前拒绝输入。采集入口现保留日期对象，并以 UTC round-trip ISO 格式传给 Python；回归从实际 JSON 反序列化结果验证时间、时区和小数秒不变。这是采集路径修复，不解释原应用的 SIGSEGV。
+
 本地 Windows / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过，4506 项 Dart／Flutter 测试通过（根 3752、API 499、播放器 105、弹幕 145、封装 5），13 项符号链接和 10 项未配置原生 mux 的用例按环境跳过。15 项 Python 采集器测试和 14 项真实子进程监督回归通过，采集器覆盖率为 94%。新工作区首次原生媒体资产下载吞吐较低，检查在下载阶段被中止；复用同一固定 SHA-256 的本地 archive 后，由原构建钩子重新校验并解包，后续完整检查通过。五份锁文件保持原值。
 
 ### 本轮 runner 复现证据
