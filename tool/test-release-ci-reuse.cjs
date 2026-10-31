@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { execFile } = require('node:child_process');
 const { createHash } = require('node:crypto');
-const { cp, mkdtemp, writeFile, readFile, rm } = require('node:fs/promises');
+const { cp, mkdir, mkdtemp, writeFile, readFile, rm } = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
@@ -272,6 +272,23 @@ async function makeAssets(t, targets = allTargets) {
 
 test('accepts complete packages for all six targets including BOM metadata and CRLF checksums', async (t) => {
   await verifyReleaseAssets(await makeAssets(t));
+});
+
+test('reports installer build directories and missing files without weakening asset verification', async (t) => {
+  const expected = await makeAssets(t);
+  for (const directory of ['installer-native', 'installer-artwork']) {
+    await mkdir(path.join(expected.directory, directory));
+    await writeFile(path.join(expected.directory, directory, 'build-only.txt'), 'not a release asset');
+  }
+  const missing = `BiliSail-${version}-windows-x64.msi.sha256`;
+  await rm(path.join(expected.directory, missing));
+  await assert.rejects(verifyReleaseAssets(expected), (error) => {
+    assert.ok(error.message.includes(`Missing: ["${missing}"]`));
+    assert.ok(error.message.includes('Unexpected: ["installer-artwork/","installer-native/"]'));
+    return true;
+  });
+  await writeFile(path.join(expected.directory, missing), 'checksum');
+  await assert.rejects(verifyReleaseAssets(expected), /Missing: \[\]\. Unexpected: \["installer-artwork\/","installer-native\/"\]/);
 });
 
 test('draft uploads packages and their checksums while keeping build metadata and mux sources in Actions', async (t) => {

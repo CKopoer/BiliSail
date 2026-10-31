@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD 与安装包
 
-更新日期：2026-10-31。配置覆盖 Android arm64、Windows x64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
+更新日期：2026-11-01。配置覆盖 Android arm64、Windows x64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
 
 ## 入口与分工
 
@@ -106,6 +106,22 @@ Release 草稿及全部附件上传成功后，使用 GitHub 官方 [actions/git
 本机 Windows / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过打包边界、格式、静态分析及 4651 项 Dart／Flutter 测试（根应用 3860、API 536、播放器 105、弹幕 145、封装 5）。13 项 Windows 符号链接用例因权限不足、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不能计作原生覆盖。JavaScript 语法、两份工作流的 actionlint 1.7.12、本文 38 条本地链接及 `git diff --check` 通过，五份锁文件无修改。完整检查日志为 `build/release-reuse-fix-check.log`；没有执行新安装包构建、设备测试或修复后的远端 Release。
 
 重跑旧 Release run 仍使用旧提交，不会取得本次脚本修复。修复进入新提交后，应先取得该提交的同版本 CI 产物，再新建启用复用的 Release；提交不同的旧产物仍不会复用。
+
+## Release 产物混入 Windows 安装器中间文件（2026-11-01）
+
+[失败任务](https://github.com/CKopoer/BiliSail/actions/runs/41220937672/job/124595231809) 对应提交 `463358953dec5832ed29a831593ab0a1dd88dabd`、版本 `1.2.6+0`。六个目标都成功复用同提交的 [CI 41218198314](https://github.com/CKopoer/BiliSail/actions/runs/41218198314)；下载成功后，`verifyReleaseAssets` 因文件集合不符而停止，未执行草稿创建。
+
+根因在 [MSI 打包辅助函数](../../tool/windows-installers.ps1)：`New-WindowsMsi` 按安装包的目标目录创建 `installer-native` 和 `installer-artwork`，把 CMake 输出、WiX SDK、辅助 DLL 与界面图片留在 `release/`。CI 上传 `release/*` 时会递归包含这些目录；[Windows 来源 job](https://github.com/CKopoer/BiliSail/actions/runs/41218198314/job/124588925880) 记录实际上传了 124 个文件，超出 Windows 约定的 12 个文件（四种分发文件、metadata、mux 源码及各自校验）。此前测试直接构造干净的产物目录，未覆盖安装器生成中间文件的行为。
+
+修复由 [正式打包入口](../../tool/build-release.ps1) 把已有 `installer-work` 传入 `New-WindowsMsi`，原生辅助文件和图片统一放到工作目录，并与 EXE 打包复用；最终安装包仍输出到 `release/`，随安装包分发的 UI 源码、许可及 SDK 头文件仍保留在 payload。严格文件集合、SHA-256 和来源校验继续执行；[校验脚本](../../tool/release-ci-reuse.cjs) 额外列出 `Missing` 与 `Unexpected`，目录名附 `/`，便于后续定位。
+
+[安装器回归](../../tool/test-windows-installers.ps1) 使用生产 MSI／EXE 编排函数和受控编译／WiX 替身，实际创建辅助文件、SDK 头文件及图片，确认它们留在工作目录、`release/` 只有最终包且 payload 保留所需源码。用旧 MSI 实现运行新增回归会失败，修复后通过；[Release 回归](../../tool/test-release-ci-reuse.cjs) 的 60 项测试通过，包含多余目录、缺失校验文件的诊断及原有来源／篡改拒绝场景。这些是脚本与文件系统验证，不能替代真实 WiX 编译、签名、安装或设备验收。
+
+另下载来源 CI 的真实 Windows artifact（ID `13049273310`），确认 ZIP 的 SHA-256 与 GitHub 记录一致。归档共 124 个文件；解压后校验结果为 `Missing: []`、`Unexpected: ["installer-artwork/","installer-native/"]`。在独立本地副本中仅复制原归档的 12 个顶层文件，SHA-256 与版本、源码、Flutter、锁文件来源校验全部通过，原始归档保持完整。日志为 `build/validation/release-real-artifact-verification.log`；这是故障定位验证，不会将整理后的旧包上传或当作修复提交的新产物。
+
+本机 Windows / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过打包边界、格式、静态分析及 4651 项 Dart／Flutter 测试（根应用 3860、API 536、播放器 105、弹幕 145、封装 5）。13 项 Windows 符号链接用例因权限不足、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。修改的 PowerShell／JavaScript 语法、两份工作流的 actionlint 1.7.12、本文 43 条本地链接及 `git diff --check` 通过。检查日志为 `build/release-directory-fix-check.log`，五份锁文件无修改。本轮未执行新的平台安装包构建、签名、设备操作或远端 Release。
+
+旧 CI artifact 中的多余文件不会因推送修复而消失。后续先等待修复提交的 CI 构建成功，再以该提交新建 Release；重跑旧 run 仍使用旧脚本及旧产物。本轮不修改既有 artifact 或 Release。
 
 ## Android 固定签名与覆盖升级
 

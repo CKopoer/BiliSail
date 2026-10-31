@@ -37,13 +37,14 @@ function Initialize-WindowsInstallerTools([string]$ToolsDirectory) {
   return $wix
 }
 
-function New-WindowsMsi([string]$Wix, [string]$Staging, [string]$Destination, [string]$Version) {
+function New-WindowsMsi([string]$Wix, [string]$Staging, [string]$Destination, [string]$Version, [string]$WorkingDirectory) {
   foreach ($required in @('bilisail.exe', 'flutter_windows.dll', 'libmpv-2.dll', 'data/icudtl.dat', 'data/flutter_assets/AssetManifest.bin', 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'THIRD_PARTY_NOTICES.md')) {
     if (!(Test-Path -LiteralPath (Join-Path $Staging $required) -PathType Leaf)) { throw "Windows payload is missing $required." }
   }
   # Build before MSIX adds package identity, icons and PRI to this directory.
   if (Test-Path -LiteralPath (Join-Path $Staging 'AppxManifest.xml')) { throw 'MSI payload must be staged before MSIX packaging.' }
-  $native = Join-Path (Split-Path $Destination -Parent) 'installer-native'
+  # The package directory is uploaded recursively; keep build-only files outside it.
+  $native = Join-Path $WorkingDirectory 'installer-native'
   $helper = Build-WindowsInstallerNative $native
   # Ship the source of the adapted WiX UI together with its file-scoped MS-RL.
   $uiSource = Join-Path $Staging 'data/licenses/wix/installer-ui'
@@ -60,7 +61,7 @@ function New-WindowsMsi([string]$Wix, [string]$Staging, [string]$Destination, [s
       if (Test-Path -LiteralPath $headerPath) { Copy-Item -LiteralPath $headerPath -Destination $uiSource -Force }
     }
   }
-  $artwork = Join-Path (Split-Path $Destination -Parent) 'installer-artwork'
+  $artwork = Join-Path $WorkingDirectory 'installer-artwork'
   New-WindowsInstallerArtwork $artwork
   Invoke-WixCommand $Wix @('build', (Join-Path $script:WindowsPackagingRoot 'Installer.wxs'), (Join-Path $script:WindowsPackagingRoot 'InstallerUI.wxs'), '-culture', 'zh-CN', '-arch', 'x64', '-ext', "WixToolset.UI.wixext/$script:WindowsWixVersion", '-d', "InstallerUIHelper=$helper", '-d', "InstallerArtwork=$artwork", '-d', "PayloadDirectory=$Staging", '-d', "MsiVersion=$(Get-WindowsMsiVersion $Version)", '-d', "DisplayVersion=$Version", '-d', "AppIcon=$(Join-Path $script:WindowsPackagingRoot '../runner/resources/app_icon.ico')", '-pdbtype', 'none', '-o', $Destination)
 }

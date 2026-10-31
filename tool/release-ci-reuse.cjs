@@ -93,9 +93,13 @@ async function verifyReleaseAssets({ directory, version, targets, sourceRevision
   }).sort();
   const entries = await readdir(directory, { withFileTypes: true });
   const actualFiles = entries.map((entry) => entry.name).sort();
-  if (entries.some((entry) => !entry.isFile()) ||
-      JSON.stringify(actualFiles) !== JSON.stringify(expectedFiles)) {
-    throw new Error('Release assets must contain exactly the selected packages, metadata, sources and checksums.');
+  const missing = expectedFiles.filter((name) =>
+    !entries.some((entry) => entry.name === name && entry.isFile()));
+  const unexpected = entries.filter((entry) => !entry.isFile() || !expectedFiles.includes(entry.name))
+    .map((entry) => entry.name + (entry.isDirectory() ? '/' : '')).sort();
+  if (missing.length || unexpected.length) {
+    throw new Error('Release assets must contain exactly the selected packages, metadata, sources and checksums. ' +
+      `Missing: ${JSON.stringify(missing)}. Unexpected: ${JSON.stringify(unexpected)}.`);
   }
   for (const name of actualFiles.filter((file) => !file.endsWith('.sha256'))) {
     const checksum = await readFile(path.join(directory, name + '.sha256'), 'utf8');

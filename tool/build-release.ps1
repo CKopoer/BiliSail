@@ -22,7 +22,7 @@ function Invoke-BuildCommand([string]$Executable, [string[]]$Parameters) {
 function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [string]$Version, [string]$Wix, [string]$WorkingDirectory) {
   $msi = [System.IO.Path]::ChangeExtension($Destination, '.msi')
   $setup = [System.IO.Path]::ChangeExtension($Destination, '.exe')
-  New-WindowsMsi $Wix $Staging $msi $Version
+  New-WindowsMsi $Wix $Staging $msi $Version $WorkingDirectory
   $sdkTool = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/makeappx.exe" |
     Sort-Object FullName -Descending | Select-Object -First 1
   if (!$sdkTool) { throw 'Windows SDK MakeAppx.exe was not found.' }
