@@ -44,10 +44,27 @@ final class ApiFailure implements Exception {
 
 final class ApiCancellation {
   final Completer<void> _cancelled = Completer<void>();
+  final Set<void Function()> _listeners = {};
   bool get isCancelled => _cancelled.isCompleted;
   Future<void> get whenCancelled => _cancelled.future;
+
+  // Attempt signals need immediate propagation and detach after completion.
+  void Function() onCancel(void Function() listener) {
+    if (isCancelled) {
+      listener();
+      return () {};
+    }
+    _listeners.add(listener);
+    return () => _listeners.remove(listener);
+  }
+
   void cancel() {
-    if (!_cancelled.isCompleted) _cancelled.complete();
+    if (isCancelled) return;
+    _cancelled.complete();
+    for (final listener in _listeners.toList()) {
+      listener();
+    }
+    _listeners.clear();
   }
 }
 

@@ -60,6 +60,7 @@ final class BiliApiClient {
 
   static final _api = Uri.https('api.bilibili.com', '/');
   static final _passport = Uri.https('passport.bilibili.com', '/');
+  static const _readAttemptTimeout = Duration(seconds: 2);
 
   /// Pin one deadline and account epoch across a multi-step protocol read.
   ApiRequestContext boundedReadContext(ApiRequestContext? context) =>
@@ -243,6 +244,7 @@ final class BiliApiClient {
         active,
         epoch,
         maxAttempts: feedback ? 1 : 3,
+        readOnly: !feedback,
         maxBytes: 2 * 1024 * 1024,
       );
     }
@@ -475,6 +477,7 @@ final class BiliApiClient {
       endpoint,
       context,
       maxAttempts: 1,
+      readOnly: false,
       referer: 'https://message.bilibili.com/',
     );
     _decodeJson(response, endpoint);
@@ -2112,6 +2115,7 @@ final class BiliApiClient {
     String endpoint,
     ApiRequestContext? context, {
     int? maxAttempts,
+    bool readOnly = true,
     String referer = 'https://www.bilibili.com/',
   }) async {
     if (context?.cancellation?.isCancelled ?? false) {
@@ -2141,6 +2145,7 @@ final class BiliApiClient {
       // The official progress preview retries on the next interaction, rather
       // than replaying a failed videoshot request inside the same interaction.
       maxAttempts: maxAttempts ?? (endpoint == 'video_storyboard' ? 1 : 3),
+      readOnly: readOnly,
     );
     if (epoch != null && _sessionProvider?.sessionEpoch != epoch ||
         context?.cancellation?.isCancelled == true) {
@@ -2306,6 +2311,7 @@ final class BiliApiClient {
     ApiRequestContext? context,
     int? epoch, {
     int maxAttempts = 3,
+    bool readOnly = true,
     int? maxBytes,
   }) async {
     final deadline = context?.deadline ?? _clock().add(timeout);
@@ -2319,22 +2325,18 @@ final class BiliApiClient {
         throw ApiFailure(ApiFailureCategory.timeout, endpoint);
       }
       try {
-        final transport = _transport;
-        final read = maxBytes != null && transport is ApiBoundedTransport
-            ? (transport as ApiBoundedTransport).getBounded(
-                uri,
-                headers: headers,
-                timeout: remaining,
-                maxBytes: maxBytes,
-                cancellation: context?.cancellation,
-              )
-            : transport.get(
-                uri,
-                headers: headers,
-                timeout: remaining,
-                cancellation: context?.cancellation,
-              );
-        final response = await read.timeout(remaining);
+        // A stalled read must leave room for another attempt in the same budget.
+        final attemptTimeout = readOnly && remaining > _readAttemptTimeout
+            ? _readAttemptTimeout
+            : remaining;
+        final response = await _readAttempt(
+          uri,
+          endpoint,
+          headers,
+          attemptTimeout,
+          context?.cancellation,
+          maxBytes: maxBytes,
+        );
         if (attempt + 1 < maxAttempts &&
             const [500, 502, 503, 504].contains(response.statusCode)) {
           await _retryDelay(attempt, deadline, context?.cancellation);
@@ -2360,6 +2362,49 @@ final class BiliApiClient {
       await _retryDelay(attempt, deadline, context?.cancellation);
     }
     throw ApiFailure(ApiFailureCategory.timeout, endpoint);
+  }
+
+  Future<ApiHttpResponse> _readAttempt(
+    Uri uri,
+    String endpoint,
+    Map<String, String> headers,
+    Duration timeout,
+    ApiCancellation? cancellation, {
+    int? maxBytes,
+  }) async {
+    final attemptCancellation = ApiCancellation();
+    final removeListener = cancellation?.onCancel(attemptCancellation.cancel);
+    try {
+      final transport = _transport;
+      final read = maxBytes != null && transport is ApiBoundedTransport
+          ? (transport as ApiBoundedTransport).getBounded(
+              uri,
+              headers: headers,
+              timeout: timeout,
+              maxBytes: maxBytes,
+              cancellation: attemptCancellation,
+            )
+          : transport.get(
+              uri,
+              headers: headers,
+              timeout: timeout,
+              cancellation: attemptCancellation,
+            );
+      return await Future.any<ApiHttpResponse>([
+        read,
+        attemptCancellation.whenCancelled.then<ApiHttpResponse>(
+          (_) => throw ApiFailure(ApiFailureCategory.cancelled, endpoint),
+        ),
+      ]).timeout(timeout);
+    } on TimeoutException {
+      attemptCancellation.cancel();
+      throw ApiFailure(ApiFailureCategory.timeout, endpoint);
+    } on ApiFailure {
+      attemptCancellation.cancel();
+      rethrow;
+    } finally {
+      removeListener?.call();
+    }
   }
 
   Future<void> _retryDelay(

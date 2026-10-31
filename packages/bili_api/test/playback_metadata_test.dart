@@ -197,29 +197,32 @@ void main() {
     },
   );
 
-  test('descriptor and binary read share one deadline', () async {
-    var now = DateTime.utc(2026);
-    final transport = _Transport(
-      {},
-      shot: _shot,
-      onGet: (uri) {
-        if (uri.path == '/x/player/videoshot') {
-          now = now.add(const Duration(seconds: 3));
-        }
-      },
-    );
-    await PlaybackMetadataClient(
-      BiliApiClient(
-        transport: transport,
-        clock: () => now,
-        timeout: const Duration(seconds: 12),
-      ),
-    ).storyboard('BV1abc123456', '2');
-    expect(transport.timeouts, [
-      const Duration(seconds: 12),
-      const Duration(seconds: 9),
-    ]);
-  });
+  test(
+    'descriptor and binary read cap attempts and share one deadline',
+    () async {
+      var now = DateTime.utc(2026);
+      final transport = _Transport(
+        {},
+        shot: _shot,
+        onGet: (uri) {
+          if (uri.path == '/x/player/videoshot') {
+            now = now.add(const Duration(milliseconds: 1500));
+          }
+        },
+      );
+      await PlaybackMetadataClient(
+        BiliApiClient(
+          transport: transport,
+          clock: () => now,
+          timeout: const Duration(seconds: 3),
+        ),
+      ).storyboard('BV1abc123456', '2');
+      expect(transport.timeouts, [
+        const Duration(seconds: 2),
+        const Duration(milliseconds: 1500),
+      ]);
+    },
+  );
 
   test(
     'exhausted descriptor budget cannot start the pvdata download',
