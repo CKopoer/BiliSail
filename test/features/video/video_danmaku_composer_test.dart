@@ -4,6 +4,7 @@ import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/video/application/video_actions_controller.dart';
+import 'package:bilisail/features/video/domain/video_actions_repository.dart';
 import 'package:bilisail/features/video/presentation/video_danmaku_composer.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
@@ -126,7 +127,7 @@ void main() {
 
 Future<void> pumpComposer(
   WidgetTester tester,
-  FakeActions repo, {
+  VideoActionsRepository repo, {
   bool signedIn = true,
   VoidCallback? onLogin,
   double textScale = 1,

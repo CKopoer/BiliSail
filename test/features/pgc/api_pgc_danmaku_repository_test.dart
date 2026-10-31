@@ -35,6 +35,7 @@ void main() {
     expect(transport.fields['msg'], '中文 & + %');
     expect(transport.fields['progress'], '12345');
     expect(transport.fields['mode'], '5');
+    expect(transport.fields['color'], '${0x123456}');
     expect(transport.fields['csrf'], 'fixture-csrf');
     expect(repository.sessionEpoch, requests.sessionEpoch);
   });

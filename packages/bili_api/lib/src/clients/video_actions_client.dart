@@ -25,8 +25,10 @@ final class ApiFavoriteFolder {
 
 /// Web Cookie/CSRF endpoints. No App token assumptions or mutation retries.
 final class VideoActionsClient {
-  const VideoActionsClient(this.api);
+  const VideoActionsClient(this.api, {DateTime Function() clock = DateTime.now})
+    : _clock = clock;
   final BiliApiClient api;
+  final DateTime Function() _clock;
 
   Future<ApiVideoActionState> loadState(
     String bvid,
@@ -200,7 +202,8 @@ final class VideoActionsClient {
       'fontsize': '25',
       'pool': '0',
       'plat': '1',
-      'rnd': '${DateTime.now().millisecondsSinceEpoch ~/ 1000}',
+      // Match the Web send nonce's microsecond precision; keep progress in ms.
+      'rnd': '${_clock().microsecondsSinceEpoch}',
     }, context: context);
     // Acknowledged writes remain successful when no ID is supplied. Preserve
     // string IDs without a floating-point conversion for local reconciliation.

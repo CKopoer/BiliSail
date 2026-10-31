@@ -6,6 +6,58 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final effect in DanmakuTextEffect.values) {
+    for (final ratio in [1.0, 1.25, 2.0]) {
+      test('text preserves RGB with ${effect.name} at DPR $ratio', () async {
+        final layouts = DanmakuTextLayouts(8)
+          ..style = DanmakuTextStyle(fontFamily: 'Ahem', effect: effect);
+        addTearDown(layouts.clear);
+        // Repeat the cached pass so cache hits also preserve per-item colors.
+        for (final cacheRaster in [false, true, true]) {
+          for (final color in const [
+            Color(0xffff6699),
+            Color(0xffffd700),
+            Color(0xff00a1d6),
+            Color(0xffe70012),
+            Color(0xffffffff),
+          ]) {
+            final recorder = ui.PictureRecorder();
+            final canvas = Canvas(recorder)..scale(ratio);
+            layouts.beginFrame(canvas, ratio);
+            layouts.paint(
+              'M',
+              color,
+              24,
+              canvas,
+              const Offset(6, 6),
+              pixelRatio: ratio,
+              cacheRaster: cacheRaster,
+            );
+            layouts.endFrame();
+            final picture = recorder.endRecording();
+            final bitmap = await picture.toImage(
+              (48 * ratio).ceil(),
+              (48 * ratio).ceil(),
+            );
+            final data = (await bitmap.toByteData())!.buffer.asUint8List();
+            final rgb = color.toARGB32() & 0xffffff;
+            var found = false;
+            for (var i = 0; i < data.length; i += 4) {
+              if (data[i + 3] == 255 &&
+                  (data[i] << 16 | data[i + 1] << 8 | data[i + 2]) == rgb) {
+                found = true;
+                break;
+              }
+            }
+            bitmap.dispose();
+            picture.dispose();
+            expect(found, isTrue, reason: '$color, cacheRaster: $cacheRaster');
+          }
+        }
+      });
+    }
+  }
+
   test(
     'small scaled text keeps its requested font size and measured width',
     () {
