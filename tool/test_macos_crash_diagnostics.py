@@ -118,6 +118,29 @@ class CrashDiagnosticsTest(unittest.TestCase):
             diagnostics.parse_report("\ufeff" + self.ips(), 42, 1793430000)
         )
 
+    def test_worker_identity_is_explicit_and_does_not_match_other_processes(self):
+        raw = self.ips(procName="pwsh")
+        self.assertIsNone(diagnostics.parse_report(raw, 42, 1793430000))
+        self.assertIsNotNone(diagnostics.parse_report(raw, 42, 1793430000, "pwsh"))
+        self.assertIsNone(diagnostics.parse_report(raw, 42, 1793430000, "OtherApp"))
+        sample = (
+            "Process: pwsh [42]\n  99 Thread_123\n + 99 main (in pwsh) + 1 [0x1000]\n"
+        )
+        self.assertIsNone(diagnostics.parse_sample(sample, 42))
+        self.assertIsNotNone(diagnostics.parse_sample(sample, 42, "pwsh"))
+        self.assertIsNone(diagnostics.parse_sample(sample, 42, "OtherApp"))
+        self.assertEqual(
+            diagnostics.collect_crash([], 42, 0, 0, "OtherApp"),
+            {"status": "unavailable"},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "pwsh-current.ips").write_text(raw, encoding="utf-8")
+            self.assertEqual(
+                diagnostics.collect_crash([root], 42, 1793430000, 0, "pwsh")["status"],
+                "collected",
+            )
+
     def test_malformed_or_other_report_type_is_rejected(self):
         for raw in ("private", "{}", self.ips().replace('"309"', '"288"', 1)):
             with self.subTest(raw=raw[:20]):

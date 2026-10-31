@@ -102,6 +102,7 @@ try {
       throw "The independent supervisor did not preserve the phase budgets in '$scenario'."
     }
     if ($status.processId -le 0 -or ![DateTimeOffset]::Parse($status.processStartedUtc)) { throw 'Owned native process identity was not recorded.' }
+    if ($status.workerProcessId -le 0 -or ![DateTimeOffset]::Parse($status.workerStartedUtc) -or $null -eq $status.workerExitCode) { throw 'Worker process identity or exit code was not recorded.' }
     switch ($scenario) {
       { $_ -in @('slow-launch', 'flood', 'long-line-recovery') } {
         if ($failure -or $status.timedOut -or !$status.acknowledged -or !$status.outputDrained -or $status.exitCode -ne 0) {

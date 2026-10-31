@@ -77,16 +77,18 @@ function Wait-MacOSSmokeSupervisor([System.Diagnostics.Process]$Process, [int]$T
 function Save-MacOSNativeStack {
   param(
     [ValidateSet('crash', 'sample')][string]$Mode,
-    [int]$ProcessId, [string]$StartedUtc, [string]$Phase, [string]$WorkingDirectory
+    [int]$ProcessId, [string]$StartedUtc, [string]$Phase, [string]$WorkingDirectory,
+    [ValidateSet('BiliSail', 'pwsh')][string]$ProcessName = 'BiliSail'
   )
   if (!$IsMacOS -or $ProcessId -le 0 -or !$StartedUtc) { return }
   $start = [System.Diagnostics.ProcessStartInfo]::new()
   $start.FileName = 'python3'
   $start.UseShellExecute = $false
+  $name = if ($ProcessName -eq 'pwsh') { "$Phase.worker.$Mode.json" } else { "$Phase.$Mode.json" }
   foreach ($argument in @(
     (Join-Path $PSScriptRoot 'macos_crash_diagnostics.py'), '--mode', $Mode,
-    '--pid', "$ProcessId", '--started', $StartedUtc, '--phase', $Phase,
-    '--output', (Join-Path $WorkingDirectory "$Phase.$Mode.json")
+    '--pid', "$ProcessId", '--started', $StartedUtc, '--phase', $Phase, '--process-name', $ProcessName,
+    '--output', (Join-Path $WorkingDirectory $name)
   )) { $start.ArgumentList.Add($argument) }
   $collector = [System.Diagnostics.Process]::new()
   $collector.StartInfo = $start
@@ -136,6 +138,7 @@ function Invoke-MacOSReleaseSmokePhase {
   $supervisorTimeoutSeconds = $LaunchTimeoutSeconds + $TimeoutSeconds + 30
   $clock = [System.Diagnostics.Stopwatch]::StartNew()
   $started = $false
+  $workerStartedUtc = [DateTimeOffset]::UtcNow.ToString('o')
   try {
     $started = $worker.Start()
     if (!$started) { throw 'Could not launch the macOS smoke supervisor.' }
@@ -144,12 +147,19 @@ function Invoke-MacOSReleaseSmokePhase {
     $status.supervisorTimeoutSeconds = $supervisorTimeoutSeconds
     $status.supervisorElapsedMilliseconds = $clock.ElapsedMilliseconds
     $status.supervisorTimedOut = $timedOut
+    $status.workerProcessId = $worker.Id
+    $status.workerStartedUtc = $workerStartedUtc
+    $status.workerExitCode = $worker.ExitCode
     if ($timedOut) {
       $status.timedOut = $true
       $status.timeoutKind = 'supervisor'
       $status.acknowledged = $false
     }
     Write-MacOSSmokeStatus $resultPath $status
+    Write-Host "macOS smoke worker '$Phase' exited with code $($worker.ExitCode)."
+    if (!$timedOut -and $worker.ExitCode -in @(132, 133, 134, 135, 136, 138, 139)) {
+      Save-MacOSNativeStack -Mode crash -ProcessName pwsh -ProcessId $worker.Id -StartedUtc $workerStartedUtc -Phase $Phase -WorkingDirectory $WorkingDirectory
+    }
     if (!$status.timedOut -and $status.exitCode -in @(132, 133, 134, 135, 136, 138, 139)) {
       Save-MacOSNativeStack -Mode crash -ProcessId $status.processId -StartedUtc $status.processStartedUtc -Phase $Phase -WorkingDirectory $WorkingDirectory
     }

@@ -108,11 +108,11 @@ def _exception(value: object) -> dict:
     }
 
 
-def _ips(report: dict, pid: int, started: float) -> dict | None:
+def _ips(report: dict, pid: int, started: float, process_name: str) -> dict | None:
     launched = timestamp(report.get("procLaunch"))
     if (
         report.get("pid") != pid
-        or report.get("procName") != "BiliSail"
+        or report.get("procName") != process_name
         or launched is None
         or launched < started - 2
     ):
@@ -177,8 +177,10 @@ def _ips(report: dict, pid: int, started: float) -> dict | None:
     }
 
 
-def _legacy(raw: str, pid: int, started: float) -> dict | None:
-    process = re.search(r"^Process:\s+BiliSail\s+\[(\d+)\]\s*$", raw, re.M)
+def _legacy(raw: str, pid: int, started: float, process_name: str) -> dict | None:
+    process = re.search(
+        rf"^Process:\s+{re.escape(process_name)}\s+\[(\d+)\]\s*$", raw, re.M
+    )
     captured = re.search(r"^Date/Time:\s+(.+)$", raw, re.M)
     captured_time = timestamp(captured[1].strip()) if captured else None
     if (
@@ -227,22 +229,30 @@ def _legacy(raw: str, pid: int, started: float) -> dict | None:
     }
 
 
-def parse_report(raw: str, pid: int, started: float) -> dict | None:
+def parse_report(
+    raw: str, pid: int, started: float, process_name: str = "BiliSail"
+) -> dict | None:
+    if process_name not in {"BiliSail", "pwsh"}:
+        return None
     raw = raw.lstrip("\ufeff \t\r\n")
     if not raw.lstrip().startswith("{"):
-        return _legacy(raw, pid, started)
+        return _legacy(raw, pid, started, process_name)
     try:
         header, end = json.JSONDecoder().raw_decode(raw.lstrip())
         if str(_object(header).get("bug_type")) != "309":
             return None
         report = json.loads(raw.lstrip()[end:].strip())
-        return _ips(_object(report), pid, started)
+        return _ips(_object(report), pid, started, process_name)
     except (ValueError, TypeError, RecursionError):
         return None
 
 
-def parse_sample(raw: str, pid: int) -> dict | None:
-    if not re.search(rf"^Process:\s+BiliSail\s+\[{pid}\]\s*$", raw, re.M):
+def parse_sample(raw: str, pid: int, process_name: str = "BiliSail") -> dict | None:
+    if process_name not in {"BiliSail", "pwsh"}:
+        return None
+    if not re.search(
+        rf"^Process:\s+{re.escape(process_name)}\s+\[{pid}\]\s*$", raw, re.M
+    ):
         return None
     threads = []
     current = None
@@ -284,14 +294,20 @@ def parse_sample(raw: str, pid: int) -> dict | None:
 
 
 def collect_crash(
-    directories: list[Path], pid: int, started: float, wait_seconds: int = 20
+    directories: list[Path],
+    pid: int,
+    started: float,
+    wait_seconds: int = 20,
+    process_name: str = "BiliSail",
 ) -> dict:
+    if process_name not in {"BiliSail", "pwsh"}:
+        return {"status": "unavailable"}
     deadline = time.monotonic() + wait_seconds
     while True:
         candidates = []
         for directory in directories:
             try:
-                for path in islice(directory.glob("BiliSail*"), 256):
+                for path in islice(directory.glob(f"{process_name}*"), 256):
                     if path.is_symlink():
                         continue
                     stat = path.stat()
@@ -309,7 +325,10 @@ def collect_crash(
                     raw = stream.read(MAX_REPORT_BYTES + 1)
                 if len(raw) <= MAX_REPORT_BYTES:
                     report = parse_report(
-                        raw.decode("utf-8", errors="replace"), pid, started
+                        raw.decode("utf-8", errors="replace"),
+                        pid,
+                        started,
+                        process_name,
                     )
                     if report is not None:
                         return {"status": "collected", **report}
@@ -320,7 +339,7 @@ def collect_crash(
         time.sleep(0.5)
 
 
-def collect_sample(pid: int) -> dict:
+def collect_sample(pid: int, process_name: str = "BiliSail") -> dict:
     try:
         # Raw output remains in memory and is never written to an artifact/log.
         completed = subprocess.run(
@@ -331,7 +350,7 @@ def collect_sample(pid: int) -> dict:
         )
         if len(completed.stdout) <= MAX_REPORT_BYTES:
             parsed = parse_sample(
-                completed.stdout.decode("utf-8", errors="replace"), pid
+                completed.stdout.decode("utf-8", errors="replace"), pid, process_name
             )
             if parsed is not None:
                 return {"status": "collected", **parsed}
@@ -347,6 +366,9 @@ def main() -> int:
     parser.add_argument("--pid", type=int, required=True)
     parser.add_argument("--started", required=True)
     parser.add_argument(
+        "--process-name", choices=["BiliSail", "pwsh"], default="BiliSail"
+    )
+    parser.add_argument(
         "--phase",
         choices=["startup", "write", "read-delete", "verify-deleted", "cleanup"],
         required=True,
@@ -359,7 +381,7 @@ def main() -> int:
         return 1
     try:
         result = (
-            collect_sample(args.pid)
+            collect_sample(args.pid, args.process_name)
             if args.mode == "sample"
             else collect_crash(
                 [
@@ -368,11 +390,19 @@ def main() -> int:
                 ],
                 args.pid,
                 started,
+                process_name=args.process_name,
             )
         )
     except (OSError, ValueError, TypeError, RecursionError):
         result = {"status": "collector_error"}
-    result.update({"version": 1, "phase": args.phase, "processId": args.pid})
+    result.update(
+        {
+            "version": 1,
+            "phase": args.phase,
+            "processId": args.pid,
+            "processName": args.process_name,
+        }
+    )
     try:
         temporary = args.output.with_suffix(args.output.suffix + ".new")
         temporary.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
