@@ -7,7 +7,10 @@ import 'package:flutter/widgets.dart';
 // Observe from application bootstrap, before native window creation. Hosts in
 // widget tests also subscribe without requiring the production entry point.
 final class WindowInputFocus with WidgetsBindingObserver {
+  WindowInputFocus({this._nativeSnapshotTimeout = const Duration(seconds: 2)});
+
   static final instance = WindowInputFocus();
+  Duration _nativeSnapshotTimeout;
   final _listeners = <VoidCallback>{};
   int? viewId;
   bool observed = false;
@@ -30,7 +33,7 @@ final class WindowInputFocus with WidgetsBindingObserver {
       final eventRevision = revision;
       final snapshot = await _channel
           .invokeMapMethod<String, Object?>('getWindowFocus')
-          .timeout(const Duration(seconds: 2));
+          .timeout(_nativeSnapshotTimeout);
       if (request != _snapshotRequest) return;
       if (eventRevision != revision) {
         // A known newer focus wins. A blur can precede a new window's omitted
@@ -75,7 +78,10 @@ final class WindowInputFocus with WidgetsBindingObserver {
   bool _applicationLifetime = false;
 
   // Call at application bootstrap, before the explicit macOS main window.
-  void initialize() {
+  void initialize({Duration? nativeSnapshotTimeout}) {
+    if (nativeSnapshotTimeout != null) {
+      _nativeSnapshotTimeout = nativeSnapshotTimeout;
+    }
     _applicationLifetime = true;
     _observe();
   }

@@ -43,11 +43,12 @@ function Confirm-MacOSSmokeResult([int]$ExitCode, [string]$Output, [string]$Phas
 
 function Get-MacOSSmokeDiagnosticLines([string]$Text) {
   foreach ($line in ($Text -split '\r?\n')) {
-    if ($line -cmatch '^BILISAIL_FOCUS_STAGE:(foreground|prepare|present|primary|space|passed)$' -or
+    if ($line -cmatch '^BILISAIL_FOCUS_STAGE:(foreground|foreground-focus|foreground-ready|prepare|present|primary|space|passed)$' -or
         $line -cmatch '^BILISAIL_NATIVE_STAGE:(application|engine-create|plugins-register|plugins-ready|engine-run|engine-running)$' -or
         $line -cmatch '^BILISAIL_RELEASE_STAGE:(dart-entry|window-create|window-ready|dependencies|dependencies-ready|first-frame-wait|first-frame|playback-windows|credentials|closed)$' -or
         $line -cmatch '^BILISAIL_CREDENTIAL_STAGE:(empty|write-first|read-first|write-second|read-second|read-restart|delete|deleted|cleanup-bootstrap|cleanup-recommendation)$' -or
-        $line -cmatch '^BILISAIL_RELEASE_SMOKE_FAILED:(startup|write|read-delete|verify-deleted|cleanup)$') {
+        $line -cmatch '^BILISAIL_RELEASE_SMOKE_FAILED:(startup|write|read-delete|verify-deleted|cleanup)$' -or
+        $line -cmatch '^BILISAIL_RELEASE_SMOKE_ERROR:(timeout|platform|state|format|framework|asynchronous|other)$') {
       $Matches[0]
     } elseif ($line -cmatch 'BILISAIL_FOCUS_NATIVE revision=(\d+) active=([01]) key=([01]) view=(\d+|<null>) responder=[A-Za-z0-9_.]+ inView=([01])$') {
       "BILISAIL_FOCUS_NATIVE revision=$($Matches[1]) active=$($Matches[2]) key=$($Matches[3]) view=$($Matches[4]) inView=$($Matches[5])"
@@ -179,7 +180,7 @@ function Invoke-MacOSReleaseSmokePhase {
       if (!$status.timedOut -and $status.Contains('launchMilliseconds') -and $null -eq $status.launchMilliseconds) {
         throw "macOS Release smoke phase '$Phase' exited before Dart entry."
       }
-      throw "macOS Release smoke phase '$Phase' failed (last stage: $($status.lastStage), timeout: $($status.timeoutKind))."
+      throw "macOS Release smoke phase '$Phase' failed (last stage: $($status.lastStage), error: $($status.errorKind), timeout: $($status.timeoutKind))."
     }
     if ($status.timedOut -or !$status.outputDrained -or $null -eq $status.launchMilliseconds) {
       throw "macOS Release smoke phase '$Phase' has an incomplete supervisor result."
@@ -248,7 +249,7 @@ function Invoke-MacOSReleaseSmokePhaseCore {
     $processStartedMilliseconds = $clock.ElapsedMilliseconds
     Write-Host "macOS Release smoke phase '$Phase' launched."
     $resultPath = Join-Path $WorkingDirectory "$Phase.result.json"
-    $progress = [ordered]@{ phase = $Phase; processId = $process.Id; processStartedUtc = $startedUtc; timedOut = $false; timeoutKind = $null; acknowledged = $false; lastStage = $null; stages = @() }
+    $progress = [ordered]@{ phase = $Phase; processId = $process.Id; processStartedUtc = $startedUtc; timedOut = $false; timeoutKind = $null; acknowledged = $false; lastStage = $null; errorKind = $null; stages = @() }
     Write-MacOSSmokeStatus $resultPath $progress
     # Raw output stays in bounded memory; only complete, whitelisted lines can
     # update a diagnostic snapshot or acknowledge the probe.
@@ -262,6 +263,7 @@ function Invoke-MacOSReleaseSmokePhaseCore {
     $stderrPresent = $false
     $dartEntryMilliseconds = $null
     $lastStage = $null
+    $errorKind = $null
     $stages = [System.Collections.Generic.List[object]]::new()
     $diagnosticCount = 0
     $timedOut = $false
@@ -272,6 +274,15 @@ function Invoke-MacOSReleaseSmokePhaseCore {
         foreach ($line in @(Read-MacOSSmokePipe $pipe)) {
           if (!$pipe.stderr -and $line -ceq $marker) { $acknowledged = $true }
           foreach ($diagnostic in @(Get-MacOSSmokeDiagnosticLines $line)) {
+            if ($diagnostic -cmatch '^BILISAIL_RELEASE_SMOKE_ERROR:(\w+)$') {
+              # Preserve the first failure category, including framework errors
+              # that are caught and followed by a final generic state error.
+              if ($null -eq $errorKind) {
+                $errorKind = $Matches[1]
+                $progress.errorKind = $errorKind
+                Write-MacOSSmokeStatus $resultPath $progress
+              }
+            }
             if ($diagnostic -ceq 'BILISAIL_RELEASE_STAGE:dart-entry' -and $null -eq $dartEntryMilliseconds) {
               $dartEntryMilliseconds = $clock.ElapsedMilliseconds
             }
@@ -329,6 +340,7 @@ function Invoke-MacOSReleaseSmokePhaseCore {
       outputDrained = $outputDrained
       oversizedLines = $pipes[0].oversizedLines + $pipes[1].oversizedLines
       lastStage = $lastStage
+      errorKind = $errorKind
       processStartMilliseconds = $processStartedMilliseconds
       launchMilliseconds = $dartEntryMilliseconds
       probeMilliseconds = if ($null -ne $dartEntryMilliseconds) { $clock.ElapsedMilliseconds - $dartEntryMilliseconds } else { $null }

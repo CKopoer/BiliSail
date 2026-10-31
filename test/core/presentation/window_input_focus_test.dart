@@ -8,6 +8,37 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const channel = MethodChannel('bilisail/application_window');
 
+  testWidgets('interactive focus reads still fail after two seconds', (
+    tester,
+  ) async {
+    final focus = WindowInputFocus();
+    final reply = Completer<Map<String, Object?>>();
+    var reads = 0;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      _,
+    ) {
+      reads++;
+      return reply.future;
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    final result = expectLater(
+      focus.synchronizeNativeFocus(),
+      throwsA(isA<TimeoutException>()),
+    );
+    await tester.pump(const Duration(seconds: 2));
+    await result;
+    reply.complete({'viewId': 100, 'revision': 1});
+    await tester.pump();
+    expect(reads, 1);
+    expect(focus.observed, isFalse);
+    expect(focus.viewId, isNull);
+  });
+
   for (final focused in [true, false]) {
     testWidgets('native snapshot restores missing focus: $focused', (
       tester,

@@ -13,6 +13,23 @@ import '../core/presentation/app_input_host.dart';
 import '../core/presentation/window_input_focus.dart';
 import '../core/storage/credential_store.dart';
 
+// Match the existing outer probe budget. A virtual Mac's platform queue can
+// take longer than the interactive two-second focus RPC limit even when its
+// eventual key-window snapshot is correct. The supervisor still kills the
+// entire probe after 60 seconds; this does not give each step a new budget.
+const releaseSmokeFocusTimeout = Duration(seconds: 60);
+
+String releaseSmokeErrorMarker(Object error) {
+  final kind = switch (error) {
+    TimeoutException() => 'timeout',
+    PlatformException() => 'platform',
+    StateError() => 'state',
+    FormatException() => 'format',
+    _ => 'other',
+  };
+  return 'BILISAIL_RELEASE_SMOKE_ERROR:$kind';
+}
+
 enum ReleaseCredentialStep {
   empty('empty'),
   writeFirst('write-first'),
@@ -47,6 +64,7 @@ Future<void> verifyMacOSPlaybackWindows(
   // never reactivate playback to hide its missing initial focus event.
   stderr.writeln('BILISAIL_FOCUS_STAGE:foreground');
   await mainWindow.service.activate();
+  stderr.writeln('BILISAIL_FOCUS_STAGE:foreground-focus');
   final foregroundWait = Stopwatch()..start();
   final nativeFocus = WindowInputFocus.instance;
   do {
@@ -57,6 +75,7 @@ Future<void> verifyMacOSPlaybackWindows(
   if (nativeFocus.viewId != mainWindow.window.viewId) {
     throw StateError('Smoke requires a foreground main window');
   }
+  stderr.writeln('BILISAIL_FOCUS_STAGE:foreground-ready');
   final baseline = dispatcher.views.length;
   final explicitViews = dispatcher.views.where(
     (view) => view.viewId != dispatcher.implicitView?.viewId,

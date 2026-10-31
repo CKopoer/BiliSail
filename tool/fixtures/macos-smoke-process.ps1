@@ -31,6 +31,13 @@ switch ($scenario) {
     Start-Sleep -Milliseconds 700
   }
   'failure' { [Console]::Error.WriteLine('native private https://example.invalid/?token=private'); exit 7 }
+  'classified-failure' {
+    [Console]::Error.WriteLine('BILISAIL_FOCUS_STAGE:foreground-focus')
+    [Console]::Error.WriteLine('BILISAIL_RELEASE_SMOKE_ERROR:timeout')
+    [Console]::Error.WriteLine('BILISAIL_RELEASE_SMOKE_ERROR:state')
+    [Console]::Error.WriteLine('BILISAIL_RELEASE_SMOKE_ERROR:https://example.invalid/?token=private')
+    exit 1
+  }
   'missing-ack' { exit 0 }
   'stderr-ack' { [Console]::Error.WriteLine($marker); exit 0 }
   'unterminated-ack' { [Console]::Out.Write($marker); exit 0 }

@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:bilisail/app/release_smoke.dart';
+import 'package:bilisail/core/presentation/window_input_focus.dart';
 import 'package:bilisail/core/storage/app_database.dart';
 import 'package:bilisail/core/storage/credential_store.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/feed/data/app_recommendation_identity_store.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,6 +18,74 @@ ReleaseSmokeRequest request(String phase) =>
         as ReleaseSmokeRequest;
 
 void main() {
+  for (final responds in [true, false]) {
+    testWidgets('smoke focus uses its bounded probe budget: $responds', (
+      tester,
+    ) async {
+      const channel = MethodChannel('bilisail/application_window');
+      final focus = WindowInputFocus(
+        nativeSnapshotTimeout: releaseSmokeFocusTimeout,
+      );
+      final reply = Completer<Map<String, Object?>>();
+      var reads = 0;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        _,
+      ) {
+        reads++;
+        return reply.future;
+      });
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+      var completed = false;
+      final pending = focus.synchronizeNativeFocus().then(
+        (_) => completed = true,
+      );
+      final result = responds
+          ? expectLater(pending, completes)
+          : expectLater(pending, throwsA(isA<TimeoutException>()));
+      // Reproduce the failed runner's delayed native reply with virtual time.
+      await tester.pump(const Duration(seconds: 16));
+      expect(completed, isFalse);
+      expect(focus.observed, isFalse);
+      if (responds) {
+        reply.complete({'viewId': 100, 'revision': 1});
+        await tester.pump();
+        await result;
+        expect(completed, isTrue);
+        expect(focus.viewId, 100);
+        expect(focus.source, 'native');
+      } else {
+        await tester.pump(const Duration(seconds: 44));
+        await result;
+        reply.complete({'viewId': 100, 'revision': 1});
+        await tester.pump();
+        expect(completed, isFalse);
+        expect(focus.observed, isFalse);
+      }
+      expect(reads, 1);
+    });
+  }
+
+  test('smoke failure categories never include exception data', () {
+    const sensitive = 'private https://example.invalid/?token=private';
+    for (final (error, kind) in <(Object, String)>[
+      (TimeoutException(sensitive), 'timeout'),
+      (PlatformException(code: sensitive, message: sensitive), 'platform'),
+      (StateError(sensitive), 'state'),
+      (const FormatException(sensitive), 'format'),
+      (Exception(sensitive), 'other'),
+    ]) {
+      expect(
+        releaseSmokeErrorMarker(error),
+        'BILISAIL_RELEASE_SMOKE_ERROR:$kind',
+      );
+    }
+  });
+
   test(
     'startup guest cleanup keeps both production credential stores intact',
     () async {

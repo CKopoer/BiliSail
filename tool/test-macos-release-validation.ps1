@@ -55,8 +55,13 @@ Write-Output 'macOS release entitlement and smoke acknowledgement checks passed 
 $safe = @(Get-MacOSSmokeDiagnosticLines @'
 BILISAIL_RELEASE_STAGE:first-frame-wait
 BILISAIL_FOCUS_STAGE:foreground
+BILISAIL_FOCUS_STAGE:foreground-focus
+BILISAIL_FOCUS_STAGE:foreground-ready
 BILISAIL_FOCUS_NATIVE revision=3 active=1 key=1 view=2 responder=FlutterView inView=1
 BILISAIL_RELEASE_SMOKE_FAILED:startup
+BILISAIL_RELEASE_SMOKE_ERROR:timeout
+BILISAIL_RELEASE_SMOKE_ERROR:framework
+BILISAIL_RELEASE_SMOKE_ERROR:asynchronous
 BILISAIL_CREDENTIAL_STAGE:write-first
 BILISAIL_CREDENTIAL_STAGE:read-second
 BILISAIL_CREDENTIAL_STAGE:cleanup-recommendation
@@ -64,11 +69,13 @@ BILISAIL_NATIVE_STAGE:plugins-register
 BILISAIL_RELEASE_STAGE:dart-entry
 BILISAIL_NATIVE_STAGE:plugins-register private
 BILISAIL_CREDENTIAL_STAGE:write-first private
+BILISAIL_RELEASE_SMOKE_ERROR:timeout private
+BILISAIL_RELEASE_SMOKE_ERROR:https://example.invalid/?token=private
 BILISAIL_CREDENTIAL_STAGE:https://example.invalid/?token=private
 BILISAIL_RELEASE_STAGE:https://example.invalid/?token=private
 native https://example.invalid/?token=private
 '@)
-if ($safe.Count -ne 9 -or ($safe -join "`n") -match 'private|FlutterView|https:') {
+if ($safe.Count -ne 14 -or ($safe -join "`n") -match 'private|FlutterView|https:') {
   throw 'macOS smoke diagnostics leaked non-whitelisted output.'
 }
 
@@ -98,7 +105,7 @@ $pwsh = (Get-Process -Id $PID).Path
 $smokeTestDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "bilisail smoke $([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $smokeTestDirectory | Out-Null
 try {
-  $scenarios = @('slow-launch', 'launch-timeout', 'native-hang', 'probe-timeout', 'duplicate-entry', 'failure', 'missing-ack', 'stderr-ack', 'no-entry', 'flood', 'unterminated-ack', 'unterminated-output', 'long-line-recovery')
+  $scenarios = @('slow-launch', 'launch-timeout', 'native-hang', 'probe-timeout', 'duplicate-entry', 'failure', 'classified-failure', 'missing-ack', 'stderr-ack', 'no-entry', 'flood', 'unterminated-ack', 'unterminated-output', 'long-line-recovery')
   foreach ($scenario in $scenarios) {
     Remove-Item -LiteralPath (Join-Path $smokeTestDirectory 'verify-deleted.result.json') -Force -ErrorAction SilentlyContinue
     $launchLimit = if ($scenario -eq 'launch-timeout') { 1 } elseif ($scenario -eq 'native-hang') { 3 } else { 10 }
@@ -143,6 +150,13 @@ try {
       }
       'failure' {
         if (!$failure -or $status.timedOut -or $status.exitCode -ne 7) { throw 'A failed child was accepted.' }
+      }
+      'classified-failure' {
+        if (!$failure -or $status.timedOut -or $status.exitCode -ne 1 -or
+            $status.errorKind -cne 'timeout' -or $status.lastStage -cne 'BILISAIL_FOCUS_STAGE:foreground-focus' -or
+            $failure -notmatch 'error: timeout') {
+          throw 'The first sanitized error category or focus stage was lost.'
+        }
       }
       { $_ -in @('missing-ack', 'stderr-ack', 'unterminated-ack') } {
         if (!$failure -or $status.acknowledged -or $status.timedOut) { throw 'A missing stdout acknowledgement was accepted.' }

@@ -109,6 +109,18 @@ Windows x64 / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过格式、
 - 同产物在 macOS 26 Intel 的[对照运行](https://github.com/CKopoer/BiliSail/actions/runs/41186197530)也发生超时，设备为 `Apple Paravirtual device`，因此没有更换正式 CI runner 或放宽门槛。另一次对照中 worker 提前退出且未保存应用退出码，促使补充 worker 身份／退出码和独立崩溃采集。
 - 本轮尚未复现原生 139，也未取得当次 SIGSEGV 的系统报告。以上线程栈证明了独立的图形等待现场，尚不能证明它与原生崩溃同源。应用启动崩溃的根因与修复仍待匹配的崩溃报告确认；设备安装、真实账号和音画验收未执行。
 
+## 2026-10-31：Intel 启动探测的焦点查询预算
+
+[CI #253 的 x64 任务](https://github.com/CKopoer/BiliSail/actions/runs/41210169441/job/124565190485) 对应提交 `d673a657ba0286a820d8328ea74f16e5efb78da9`。编译、签名、依赖组装和主窗首帧均已完成；其余五个构建目标、离线检查和原生 mux 回归通过。脱敏 `startup.result.json` 记录 `exitCode=1`、`timedOut=false`、`supervisorTimedOut=false`，最后阶段为 `foreground`，不能归为编译或监督脚本超时。
+
+日志中，`foreground` 到下一次原生焦点快照间隔约 16 秒；该快照仍为 `active=1 key=1 view=1 inView=1`，紧接着 Dart 主动报出启动失败。源码在这一阶段调用 `WindowInputFocus.synchronizeNativeFocus`，单次平台通道查询另限 2 秒。上述证据支持短查询限额与慢平台队列冲突，但旧探测只记录通用失败，无法恢复当次具体异常类型或底层等待调用；不把本次记录当作已定位图形驱动、Keychain 或历史 SIGSEGV 的根因。
+
+显式 macOS release smoke 现在在窗口创建前为共享焦点观察器注入 60 秒查询预算，与既有外层探测执行预算一致，避免主窗与 `AppInputHost` 的焦点查询仍受交互用的 2 秒限制。普通启动仍用原 2 秒默认值；总探测限额仍由外部 worker 从 Dart 入口开始计时，查询、重读或其他步骤均不能续期。首帧、两轮独立播放窗、初始焦点、Space 输入、回收、签名和跨进程凭据门槛全部保留，没有自动重试或跳过。
+
+`foreground-focus`／`foreground-ready` 将激活调用与焦点查询分开记录。Dart 失败仅输出固定类别 `timeout/platform/state/format/framework/asynchronous/other`；worker 在 `errorKind` 保存首个白名单类别，异常消息、平台错误详情、栈和网络原始行仍不落盘。虚拟时间回归覆盖原生回复延迟 16 秒仍能确认焦点、超过 60 秒失败且迟到回复不修改状态、普通查询仍在 2 秒失败；真实子进程回归覆盖失败类别、阶段保留及敏感输出拒绝。
+
+Windows / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过格式、静态分析、打包边界及 4651 项离线测试（根应用 3860、API 536、播放器 105、弹幕 145、封装 5）。13 项符号链接用例因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过；15 项真实子进程监督回归通过，五份锁文件无改动，本文件 14 条本地链接及 `git diff --check` 通过。日志在 `build/ci-41210169441-fix-check.log`。没有可连接的 DTD／调试应用，未执行热重载；Windows 主机不具备 macOS 原生 GUI 验证能力。修复后的远端构建结果待对应 CI 记录，设备安装、真实账号、音画及性能验收未执行。
+
 ## 旧数据与升级单独验收
 
 Keychain 后端选择改变不会自动迁移原 Data Protection Keychain 的条目。传统 Keychain 中已有的同服务／同 key 条目沿用原身份；旧 Data Protection 条目的可访问性受原签名、provisioning 和系统授权影响，不能假设移除 Sharing 后仍可读取。不尝试用缺权限的新签名强读旧库，也不自动删除旧后端条目；无法恢复时按现有登录流程重新登录。

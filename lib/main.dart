@@ -22,7 +22,6 @@ Future<void> main(List<String> arguments) async {
   if (Platform.isAndroid) {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
-  WindowInputFocus.instance.initialize();
   ReleaseSmokeRequest? smoke;
   var smokeHadError = false;
   try {
@@ -30,11 +29,18 @@ Future<void> main(List<String> arguments) async {
   } on FormatException {
     exit(1);
   }
+  WindowInputFocus.instance.initialize(
+    nativeSnapshotTimeout: smoke == null ? null : releaseSmokeFocusTimeout,
+  );
   if (smoke != null) {
     // Do not log exception details, which can include plugin or network data.
-    FlutterError.onError = (_) => smokeHadError = true;
+    FlutterError.onError = (_) {
+      smokeHadError = true;
+      stderr.writeln('BILISAIL_RELEASE_SMOKE_ERROR:framework');
+    };
     PlatformDispatcher.instance.onError = (_, _) {
       smokeHadError = true;
+      stderr.writeln('BILISAIL_RELEASE_SMOKE_ERROR:asynchronous');
       return true;
     };
   }
@@ -121,8 +127,9 @@ Future<void> main(List<String> arguments) async {
       await stdout.flush();
       exit(0);
     }
-  } catch (_) {
+  } catch (error) {
     if (smoke != null) {
+      stderr.writeln(releaseSmokeErrorMarker(error));
       stderr.writeln('BILISAIL_RELEASE_SMOKE_FAILED:${smoke.phase}');
       exit(1);
     }
