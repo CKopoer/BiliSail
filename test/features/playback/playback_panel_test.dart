@@ -20,6 +20,13 @@ import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bilisail/shared/ui/danmaku_composer_draft.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/features/video/application/video_actions_controller.dart';
+import 'package:bilisail/features/video/presentation/video_danmaku_composer.dart';
+
+import '../video/video_actions_bar_test.dart' show FakeActions, FakeAuth;
+
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:bilisail/shared/ui/playback_navigation.dart';
 import 'package:bilisail/shared/ui/playback_info_tabs.dart';
@@ -53,6 +60,237 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  testWidgets(
+    'changing the owner source or hiding it dismisses the send dialog',
+    (tester) async {
+      final session = _session(_FakeEngine());
+      final window = _FakeWindowService();
+      addTearDown(session.close);
+      ContentPlaybackTarget? target;
+      var active = true;
+      late StateSetter rebuild;
+      await tester.pumpWidget(
+        StatefulBuilder(
+          builder: (context, setState) {
+            rebuild = setState;
+            return _app(
+              session,
+              window,
+              const AppSettings.defaults(),
+              width: 320,
+              target: target,
+              active: active,
+              composer: (context) => TextField(
+                controller: DanmakuComposerDraft.maybeOf(context),
+                key: const Key('owner-draft'),
+              ),
+            );
+          },
+        ),
+      );
+      await _pumpFrames(tester);
+      await _showControls(tester);
+      await tester.tap(find.byTooltip('发送弹幕'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('owner-draft')), '旧源草稿');
+      rebuild(() => target = const PgcPlaybackTarget('12', cid: '123'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('player-danmaku-dialog')), findsNothing);
+      expect(tester.takeException(), isNull);
+      await _showControls(tester);
+      await tester.tap(find.byTooltip('发送弹幕'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('owner-draft')))
+            .controller!
+            .text,
+        isEmpty,
+      );
+      rebuild(() => active = false);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('player-danmaku-dialog')), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+  );
+
+  for (final width in [320.0, 390.0, 800.0, 1400.0]) {
+    for (final textScale in [1.0, 2.0]) {
+      testWidgets(
+        'small-window send dialog adapts at $width text=$textScale and retains draft',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = Size(width, 800);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          addTearDown(tester.view.resetViewInsets);
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          final window = _FakeWindowService();
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(
+              session,
+              window,
+              AppSettings(playerControlsMode: PlayerControlsMode.dynamic),
+              width: 320,
+              textScale: textScale,
+              scopedComposer: true,
+              composer: (context) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Consumer(
+                    builder: (_, ref, _) =>
+                        Text(ref.watch(_composerScopeProvider)),
+                  ),
+                  TextField(
+                    key: const Key('dialog-editor'),
+                    controller: DanmakuComposerDraft.maybeOf(context),
+                  ),
+                ],
+              ),
+            ),
+          );
+          await _pumpFrames(tester);
+          await _showControls(tester);
+          await session.pause();
+          await session.seek(const Duration(seconds: 35));
+          final generation = session.sourceGeneration;
+          await tester.tap(find.byTooltip('发送弹幕'));
+          await tester.pumpAndSettle();
+          final dialog = find.byKey(const ValueKey('player-danmaku-dialog'));
+          expect(dialog, findsOneWidget);
+          expect(find.text('房间草稿'), findsOneWidget);
+          final field = find.byKey(const Key('dialog-editor'));
+          await tester.enterText(field, '保留发送草稿');
+          await tester.pump(const Duration(seconds: 6));
+          expect(dialog, findsOneWidget);
+          expect(find.byKey(const ValueKey('player-controls')), findsOneWidget);
+          tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+          await tester.pumpAndSettle();
+          final rect = tester.getRect(
+            find.descendant(of: dialog, matching: find.byType(Material)).first,
+          );
+          expect(rect.width, lessThanOrEqualTo(560));
+          expect(rect.left, greaterThanOrEqualTo(12));
+          expect(rect.bottom, lessThanOrEqualTo(500));
+          expect(
+            tester.widget<Dialog>(find.byType(Dialog)).alignment,
+            width < 600 ? Alignment.bottomCenter : Alignment.center,
+          );
+          expect(find.text('保留发送草稿'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          await tester.tap(find.byTooltip('关闭发送窗口'));
+          await tester.pumpAndSettle();
+          tester.view.resetViewInsets();
+          await tester.pumpAndSettle();
+          await _showControls(tester);
+          await tester.tap(find.byTooltip('发送弹幕'));
+          await tester.pumpAndSettle();
+          expect(find.text('保留发送草稿'), findsOneWidget);
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pumpAndSettle();
+          expect(dialog, findsNothing);
+          await _showControls(tester);
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+          if (find.byTooltip('发送弹幕').evaluate().isNotEmpty) {
+            await tester.tap(find.byTooltip('发送弹幕'));
+            await _pumpFrames(tester);
+          }
+          expect(find.text('保留发送草稿'), findsOneWidget);
+          expect(session.sourceGeneration, generation);
+          expect(session.snapshots.value.position, const Duration(seconds: 35));
+          expect(session.snapshots.value.desiredPlaying, isFalse);
+          expect(engine.opens, 1);
+          expect(engine.maxSurfaces, 1);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
+  testWidgets(
+    'dialog sends once through the video composer and clears shared draft',
+    (tester) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final actions = FakeActions();
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(FakeAuth(true)),
+            videoActionsRepositoryProvider.overrideWithValue(actions),
+          ],
+          child: _app(
+            session,
+            _FakeWindowService(),
+            const AppSettings.defaults(),
+            width: 320,
+            composer: (_) => VideoDanmakuComposer(
+              detail: VideoDetail(
+                summary: _detail.summary,
+                description: '',
+                parts: [_part],
+                aid: '1',
+              ),
+              part: _part,
+              onLogin: () {},
+            ),
+          ),
+        ),
+      );
+      await _pumpFrames(tester);
+      await _showControls(tester);
+      await session.pause();
+      await session.seek(const Duration(seconds: 35));
+      await tester.tap(find.byTooltip('发送弹幕'));
+      await tester.pumpAndSettle();
+      final field = find.descendant(
+        of: find.byType(Dialog),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(field, '单次弹幕');
+      await tester.tap(find.byTooltip('关闭发送窗口'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('发送弹幕'));
+      await tester.pumpAndSettle();
+      expect(find.text('单次弹幕'), findsOneWidget);
+      expect(actions.calls.where((call) => call.startsWith('send:')), isEmpty);
+      actions.pending = Completer<void>();
+      await tester.tap(find.widgetWithText(TextButton, '发送'));
+      await tester.pump();
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, '发送中'))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byTooltip('关闭发送窗口'));
+      await tester.pumpAndSettle();
+      actions.pending!.complete();
+      await tester.pumpAndSettle();
+      expect(
+        actions.calls.where((call) => call.startsWith('send:')),
+        hasLength(1),
+      );
+      expect(actions.sentPosition, const Duration(seconds: 35));
+      await tester.tap(find.byTooltip('发送弹幕'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+      await session.retry();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('player-danmaku-dialog')), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+  );
+
   for (final (content, target) in <(String, ContentPlaybackTarget?)>[
     ('video', null),
     ('pgc', const PgcPlaybackTarget('12', cid: '123')),
@@ -153,7 +391,7 @@ void main() {
       ('offline', const OfflinePlaybackTarget('local-task')),
     ]) {
       testWidgets(
-        'small window keeps essential controls for $content ${mode.name}',
+        'small window retains all available controls for $content ${mode.name}',
         (tester) async {
           tester.view.devicePixelRatio = 1;
           tester.view.physicalSize = const Size(1400, 1000);
@@ -196,22 +434,21 @@ void main() {
           await session.seek(const Duration(seconds: 35));
           await _pumpFrames(tester);
           var position = session.snapshots.value.position;
-          void expectMinimalControls() {
+          void expectAllControls() {
             expect(
               find.descendant(
                 of: find.byKey(const ValueKey('player-controls')),
                 matching: find.byType(IconButton),
               ),
               findsNWidgets(
-                !session.isLive && target is! OfflinePlaybackTarget ? 5 : 4,
+                !session.isLive && target is! OfflinePlaybackTarget ? 7 : 6,
               ),
             );
-            for (final key in [
-              'compact-playback-actions',
-              'player-back',
-              'player-home',
-            ]) {
+            for (final key in ['compact-playback-actions']) {
               expect(find.byKey(ValueKey(key)), findsNothing);
+            }
+            for (final key in ['player-back', 'player-home']) {
+              expect(find.byKey(ValueKey(key)).hitTestable(), findsOneWidget);
             }
             final top = find.byKey(
               const ValueKey('player-control-title-layer'),
@@ -277,9 +514,16 @@ void main() {
                   .canRequestFocus,
               isFalse,
             );
-            for (final tooltip in ['发送弹幕', '音量', '字幕']) {
-              expect(find.byTooltip(tooltip), findsNothing);
+            for (final tooltip in [
+              '发送弹幕',
+              '音量',
+              if (session.isLive) '直播清晰度与线路' else '清晰度',
+              if (!session.isLive) '播放速度',
+            ]) {
+              expect(find.byTooltip(tooltip), findsOneWidget);
             }
+            expect(find.byTooltip('发送弹幕').hitTestable(), findsOneWidget);
+            expect(find.byTooltip('字幕'), findsNothing);
             expect(find.byTooltip('更多播放选项').hitTestable(), findsOneWidget);
             expect(
               find.byTooltip('听视频').hitTestable(),
@@ -295,7 +539,7 @@ void main() {
             expect(tester.takeException(), isNull);
           }
 
-          expectMinimalControls();
+          expectAllControls();
           if (!session.isLive && target is! OfflinePlaybackTarget) {
             await tester.tap(find.byKey(const ValueKey('player-next-episode')));
             await _pumpFrames(tester);
@@ -337,7 +581,7 @@ void main() {
           await tester.tap(find.byTooltip('退出全屏（Esc）'));
           await _pumpFrames(tester);
           expect(window.fullScreen, isFalse);
-          expectMinimalControls();
+          expectAllControls();
           expect(session.snapshots.value.position, position);
           expect(session.sourceGeneration, generation);
           expect(engine.opens, 1);
@@ -346,12 +590,7 @@ void main() {
             await tester.pump(const Duration(seconds: 3));
             await tester.pump(const Duration(milliseconds: 216));
           } else {
-            final surface = find.byKey(
-              const ValueKey('player-surface-tap-target'),
-            );
-            await tester.tapAt(
-              tester.getTopLeft(surface) + const Offset(30, 60),
-            );
+            await tester.tapAt(_surfacePoint(tester));
             await _pumpSurfaceTap(tester);
           }
           expect(
@@ -506,9 +745,18 @@ void main() {
         await session.setVolume(31);
         await _pumpFrames(tester);
         final generation = session.sourceGeneration;
-        for (final tooltip in ['字幕', '听视频', '关闭弹幕', '更多播放选项', '全屏（F）']) {
-          expect(find.byTooltip(tooltip).hitTestable(), findsOneWidget);
+        for (final tooltip in [
+          '字幕',
+          '语音翻译',
+          '听视频',
+          '关闭弹幕',
+          '更多播放选项',
+          '全屏（F）',
+        ]) {
+          expect(find.byTooltip(tooltip), findsOneWidget);
         }
+        await tester.ensureVisible(find.byTooltip('字幕'));
+        await _pumpFrames(tester);
         await tester.tap(find.byTooltip('字幕'));
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pump(const Duration(seconds: 6));
@@ -3877,12 +4125,7 @@ void main() {
       const bufferKey = ValueKey('player-collapsed-buffer');
       expect(find.byKey(progressKey), findsNothing);
       expect(find.byKey(bufferKey), findsNothing);
-      await tester.tapAt(
-        tester.getTopLeft(
-              find.byKey(const ValueKey('player-surface-tap-target')),
-            ) +
-            const Offset(130, 70),
-      );
+      await tester.tapAt(_surfacePoint(tester));
       await tester.pump(const Duration(milliseconds: 400));
       expect(
         tester.widget<LinearProgressIndicator>(find.byKey(progressKey)).value,
@@ -4443,11 +4686,11 @@ void main() {
         expect(field, findsNothing);
         expect(
           tester.getSize(find.byKey(const ValueKey('player-controls'))).height,
-          lessThan(110),
+          lessThan(140),
         );
         expect(find.byTooltip('全屏（F）').hitTestable(), findsOneWidget);
       }
-      expect(find.byTooltip('发送弹幕'), findsNothing);
+      expect(find.byTooltip('发送弹幕').hitTestable(), findsOneWidget);
       await tester.tap(find.byTooltip('播放（空格）'));
       await _pumpFrames(tester);
       expect(engine.currentSnapshot.desiredPlaying, isTrue);
@@ -8183,7 +8426,7 @@ void _usePhoneDisplay(WidgetTester tester) {
 
 Offset _surfacePoint(WidgetTester tester) =>
     tester.getTopLeft(find.byKey(const ValueKey('player-surface-tap-target'))) +
-    const Offset(130, 70);
+    const Offset(130, 54);
 
 void _resumeApp(WidgetTester tester) {
   if (tester.binding.lifecycleState == AppLifecycleState.paused) {

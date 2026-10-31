@@ -14,6 +14,9 @@ import '../../../core/presentation/android_system_ui.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/width_layout_builder.dart';
+import '../../../shared/ui/app_dialog.dart';
+import '../../../shared/ui/danmaku_composer_draft.dart';
+import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../domain/video.dart';
 import '../../../domain/playback_rates.dart';
 import '../../settings/domain/app_settings.dart';
@@ -25,6 +28,7 @@ import '../application/playback_viewers_controller.dart';
 import '../domain/playback_repository.dart';
 import '../domain/content_playback.dart';
 import 'player_settings_dialog.dart';
+import 'player_danmaku_dialog.dart';
 import 'casting_dialog.dart';
 import '../application/casting_controller.dart';
 import 'player_swipe_controls.dart';
@@ -74,6 +78,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   late final ValueNotifier<AppSettings> _settings;
   final _pageCommands = ValueNotifier<PlaybackPageCommands?>(null);
   final _navigation = ValueNotifier<PlaybackNavigation?>(null);
+  final _danmakuDraft = TextEditingController();
   int? _handledCompletionGeneration;
   // Inline and fullscreen views are recreated, but share the page's intent.
   late final ValueNotifier<bool> _controlsVisible;
@@ -231,7 +236,10 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         widget.part?.cid != oldWidget.part?.cid ||
         widget.target != oldWidget.target;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || (!_active && !_session.ownsPlayback(this))) return;
+      if (!mounted) return;
+      // The dialog's editor lives on another route and may still be mounted.
+      if (sourceChanged) _danmakuDraft.clear();
+      if (!_active && !_session.ownsPlayback(this)) return;
       if (sourceChanged) {
         unawaited(
           _session.activate(
@@ -290,6 +298,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _controlsVisible.dispose();
     _pageCommands.dispose();
     _navigation.dispose();
+    _danmakuDraft.dispose();
     super.dispose();
   }
 
@@ -650,9 +659,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
                 onToggleComments: () => widget.onToggleComments(),
                 danmakuComposerBuilder: widget.danmakuComposerBuilder == null
                     ? null
-                    : (context) =>
-                          widget.danmakuComposerBuilder?.call(context) ??
-                          const SizedBox.shrink(),
+                    : (context) => _buildDanmakuComposer(context),
                 danmakuOverlayBuilder: widget.danmakuOverlayBuilder == null
                     ? null
                     : (context) =>
@@ -713,7 +720,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             controlsVisible: _controlsVisible,
             shortcuts: _shortcuts,
             onToggleComments: widget.onToggleComments,
-            danmakuComposerBuilder: widget.danmakuComposerBuilder,
+            danmakuComposerBuilder: widget.danmakuComposerBuilder == null
+                ? null
+                : _buildDanmakuComposer,
             danmakuOverlayBuilder: widget.danmakuOverlayBuilder,
             onFullScreen: _enterFullScreen,
             pageCommands: _pageCommands,
@@ -723,6 +732,27 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             active: _active && _surfaceReady,
           ),
   );
+
+  Widget _buildDanmakuComposer(BuildContext context) {
+    final generation = _session.sourceGeneration;
+    final epoch = _session.sessionEpoch();
+    return DanmakuComposerDraft(
+      controller: _danmakuDraft,
+      clearSent: (text) {
+        if (mounted &&
+            _session.sourceGeneration == generation &&
+            _session.sessionEpoch() == epoch &&
+            _danmakuDraft.text.trim() == text) {
+          _danmakuDraft.clear();
+        }
+      },
+      child: Builder(
+        builder: (context) =>
+            widget.danmakuComposerBuilder?.call(context) ??
+            const SizedBox.shrink(),
+      ),
+    );
+  }
 
   void _navigateFromPlayer(VoidCallback action) {
     _shortcuts.cancel();
@@ -780,6 +810,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   late AppLifecycleState? _appLifecycleState;
   bool _controlEditorFocused = false;
   int _openControlsMenus = 0;
+  ModalRoute<void>? _composerDialogRoute;
+  bool _composerDialogOpen = false;
   late int _sourceGeneration;
   late bool _hasError;
   late PlayerControlsMode _controlsMode;
@@ -824,6 +856,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     if (_sourceGeneration == generation && _hasError == hasError) return;
     _sourceGeneration = generation;
     _hasError = hasError;
+    _dismissComposerDialog();
     if (!_dynamicControls) _scheduleControlsHide();
   }
 
@@ -866,6 +899,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   void didUpdateWidget(covariant _PlayerView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.active != widget.active) {
+      if (!widget.active) _dismissComposerDialog();
       _swipeSeekPreview.value = null;
       _syncHighEnergyVisibility();
       _mouseInside = false;
@@ -886,6 +920,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _dismissComposerDialog();
     _controlsHideTimer?.cancel();
     _pressedPointers.clear();
     WidgetsBinding.instance.removeObserver(this);
@@ -1034,6 +1069,43 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     try {
       await showPlayerSettings(context, tab: tab);
     } finally {
+      widget.shortcuts.cancel();
+      _onControlsMenuChanged(false);
+    }
+  }
+
+  void _dismissComposerDialog() {
+    final route = _composerDialogRoute;
+    _composerDialogRoute = null;
+    if (route == null) return;
+    // Deactivation/disposal can run during a build. Remove only our route once
+    // the current tree update has finished, without popping a newer modal.
+    scheduleMicrotask(() {
+      if (route.isActive) route.navigator?.removeRoute(route);
+    });
+  }
+
+  Future<void> _openComposerDialog(BuildContext context) async {
+    final builder = widget.danmakuComposerBuilder;
+    if (_composerDialogOpen || builder == null || !widget.active) return;
+    _composerDialogOpen = true;
+    final container = ProviderScope.containerOf(context);
+    widget.shortcuts.cancel();
+    _onControlsMenuChanged(true);
+    try {
+      await showAppDialog<void>(
+        context: context,
+        builder: (context) {
+          _composerDialogRoute = ModalRoute.of<void>(context);
+          return UncontrolledProviderScope(
+            container: container,
+            child: PlayerDanmakuDialog(composer: Builder(builder: builder)),
+          );
+        },
+      );
+    } finally {
+      _composerDialogRoute = null;
+      _composerDialogOpen = false;
       widget.shortcuts.cancel();
       _onControlsMenuChanged(false);
     }
@@ -1477,7 +1549,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                               right: 0,
                               top: 0,
                               child: _PlaybackViewers(
-                                request: _appVisible && !smallWindow
+                                request: _appVisible
                                     ? _viewerRequest(session)
                                     : null,
                                 builder: (viewers) => _controlsVisibility(
@@ -1486,7 +1558,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   retainDynamicPress: true,
                                   child: _PlayerTopBar(
                                     navigation: widget.navigation,
-                                    showNavigation: !smallWindow,
+                                    showNavigation: true,
                                     fullScreen: widget.fullScreen,
                                     onExitFullScreen: _toggleFullScreen,
                                     onNavigate: widget.onNavigate,
@@ -1502,7 +1574,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                               select: (_) => session.currentSponsor,
                               builder: (context, _) {
                                 final segment = session.currentSponsor;
-                                if (segment == null || smallWindow) {
+                                if (segment == null) {
                                   return const SizedBox.shrink();
                                 }
                                 return Positioned(
@@ -1922,6 +1994,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                           () => _composeExpanded =
                                                               !_composeExpanded,
                                                         ),
+                                                    onOpenComposer:
+                                                        _openComposerDialog,
                                                     session: session,
                                                     settings: settings,
                                                     snapshot: snapshot,
@@ -2144,6 +2218,7 @@ class _ControlBar extends StatelessWidget {
     required this.composerKey,
     required this.composeExpanded,
     required this.onToggleComposer,
+    required this.onOpenComposer,
     required this.session,
     required this.settings,
     required this.snapshot,
@@ -2172,6 +2247,7 @@ class _ControlBar extends StatelessWidget {
   final GlobalKey composerKey;
   final bool composeExpanded;
   final VoidCallback onToggleComposer;
+  final Future<void> Function(BuildContext) onOpenComposer;
 
   @override
   Widget build(BuildContext context) {
@@ -2264,35 +2340,6 @@ class _ControlBar extends StatelessWidget {
             key: composerKey,
             child: Builder(builder: composerBuilder),
           );
-    if (layout.compact && !fullScreen) {
-      final showNext = layout.inputs.hasNextButton;
-      final buttonCount =
-          4 + (showNext ? 1 : 0) + (session.subtitleTracks.isNotEmpty ? 1 : 0);
-      final timeAboveRow =
-          layout.inputs.width <
-          buttonCount * _ControlsLayout.buttonWidth + layout.timeWidth;
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Keep an existing draft across width changes without editor focus.
-          if (composer != null) ExcludeFocus(child: Offstage(child: composer)),
-          if (timeAboveRow) Align(alignment: Alignment.centerLeft, child: time),
-          Row(
-            key: const ValueKey('small-window-control-row'),
-            children: [
-              slot(play),
-              if (showNext)
-                slot(_NextButton(session: session, commands: pageCommands)),
-              if (timeAboveRow) const Spacer() else Expanded(child: time),
-              if (session.subtitleTracks.isNotEmpty) slot(subtitleButton),
-              slot(danmakuButton),
-              slot(_moreOptions(context)),
-              slot(fullscreenButton),
-            ],
-          ),
-        ],
-      );
-    }
     final secondary = <Widget>[
       slot(danmakuButton),
       if (media != null && session.isLive)
@@ -2395,6 +2442,52 @@ class _ControlBar extends StatelessWidget {
         ),
       slot(volumeButton),
     ];
+    if (layout.compact && !fullScreen) {
+      final showNext = layout.inputs.hasNextButton;
+      return Column(
+        key: const ValueKey('small-window-control-row'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // The inline instance retains local widget state while the dialog
+          // shares the player's draft and existing feature send controller.
+          if (composer != null) ExcludeFocus(child: Offstage(child: composer)),
+          Row(
+            children: [
+              slot(play),
+              if (showNext)
+                slot(_NextButton(session: session, commands: pageCommands)),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FittedBox(fit: BoxFit.scaleDown, child: time),
+                ),
+              ),
+              slot(fullscreenButton),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: _ScrollablePlayerTools(
+                  children: [
+                    if (composer != null)
+                      slot(
+                        IconButton(
+                          tooltip: '发送弹幕',
+                          onPressed: () => unawaited(onOpenComposer(context)),
+                          icon: const Icon(Icons.edit_outlined, size: 20),
+                        ),
+                      ),
+                    ...secondary,
+                  ],
+                ),
+              ),
+              slot(_moreOptions(context)),
+            ],
+          ),
+        ],
+      );
+    }
     final showPlayInBar = !session.isLive || session.error != null;
     final showNext = layout.inputs.hasNextButton;
     // Keep transport controls at the bottom left even when the editor is open.
@@ -2611,6 +2704,48 @@ class _ControlBar extends StatelessWidget {
     const PlaybackVoice.original(),
     ...session.voiceTracks,
   ];
+}
+
+class _ScrollablePlayerTools extends StatefulWidget {
+  const _ScrollablePlayerTools({required this.children});
+  final List<Widget> children;
+
+  @override
+  State<_ScrollablePlayerTools> createState() => _ScrollablePlayerToolsState();
+}
+
+class _ScrollablePlayerToolsState extends State<_ScrollablePlayerTools> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => Scrollbar(
+      controller: _scroll,
+      thumbVisibility: true,
+      child: ScrollConfiguration(
+        behavior: const SmoothScrollBehavior(horizontalMouseWheel: true),
+        child: SingleChildScrollView(
+          key: const ValueKey('small-window-tools'),
+          controller: _scroll,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(bottom: 4),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: widget.children,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 String _subtitleLabel(SubtitleTrack track) {

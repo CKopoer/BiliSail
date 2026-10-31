@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/video.dart';
 import '../../../shared/ui/app_notice.dart';
+import '../../../shared/ui/danmaku_composer_draft.dart';
 import '../../../shared/ui/danmaku_send_style_button.dart';
 import '../../playback/application/playback_session.dart';
 import '../application/video_actions_controller.dart';
@@ -23,18 +24,27 @@ class VideoDanmakuComposer extends ConsumerStatefulWidget {
 }
 
 class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
-  final _text = TextEditingController();
+  final _localText = TextEditingController();
+  late TextEditingController _text;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _text = DanmakuComposerDraft.maybeOf(context) ?? _localText;
+  }
+
   @override
   void dispose() {
-    _text.dispose();
+    _localText.dispose();
     super.dispose();
   }
 
   @override
   void didUpdateWidget(VideoDanmakuComposer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.part.cid != widget.part.cid ||
-        oldWidget.detail.summary.id != widget.detail.summary.id) {
+    if (identical(_text, _localText) &&
+        (oldWidget.part.cid != widget.part.cid ||
+            oldWidget.detail.summary.id != widget.detail.summary.id)) {
       _text.clear();
     }
   }
@@ -62,6 +72,7 @@ class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
     final generation = session.sourceGeneration;
     final position = session.snapshots.value.position;
     final style = session.danmakuSendStyle.value;
+    final clearSentDraft = DanmakuComposerDraft.clearSentOf(context);
     final successful = await ref
         .read(provider.notifier)
         .send(
@@ -80,6 +91,7 @@ class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
             color: style.color,
           ),
         );
+    if (successful) clearSentDraft?.call(text);
     if (!mounted ||
         widget.part.cid != sendingCid ||
         session.sourceGeneration != generation) {

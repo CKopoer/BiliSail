@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/video.dart';
 import '../../../shared/ui/app_notice.dart';
+import '../../../shared/ui/danmaku_composer_draft.dart';
 import '../../../shared/ui/danmaku_send_style_button.dart';
 import '../../playback/application/playback_session.dart';
 import '../application/pgc_danmaku_controller.dart';
@@ -23,7 +24,14 @@ final class PgcDanmakuComposer extends ConsumerStatefulWidget {
 }
 
 final class _PgcDanmakuComposerState extends ConsumerState<PgcDanmakuComposer> {
-  final _text = TextEditingController();
+  final _localText = TextEditingController();
+  late TextEditingController _text;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _text = DanmakuComposerDraft.maybeOf(context) ?? _localText;
+  }
 
   PgcDanmakuTarget get _target => (
     episodeId: widget.episode.episodeId,
@@ -33,16 +41,17 @@ final class _PgcDanmakuComposerState extends ConsumerState<PgcDanmakuComposer> {
 
   @override
   void dispose() {
-    _text.dispose();
+    _localText.dispose();
     super.dispose();
   }
 
   @override
   void didUpdateWidget(covariant PgcDanmakuComposer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.episode.id != widget.episode.id ||
-        oldWidget.episode.cid != widget.episode.cid ||
-        oldWidget.episode.bvid != widget.episode.bvid) {
+    if (identical(_text, _localText) &&
+        (oldWidget.episode.id != widget.episode.id ||
+            oldWidget.episode.cid != widget.episode.cid ||
+            oldWidget.episode.bvid != widget.episode.bvid)) {
       _text.clear();
     }
   }
@@ -57,9 +66,11 @@ final class _PgcDanmakuComposerState extends ConsumerState<PgcDanmakuComposer> {
     final text = _text.text.trim();
     if (text.isEmpty) return;
     final style = ref.read(playbackSessionProvider).danmakuSendStyle.value;
+    final clearSentDraft = DanmakuComposerDraft.clearSentOf(context);
     final success = await ref
         .read(provider.notifier)
         .send(text, mode: style.mode, color: style.color);
+    if (success) clearSentDraft?.call(text);
     if (!mounted || _target != target) return;
     if (success && _text.text.trim() == text) _text.clear();
     final message = ref.read(provider).message;
