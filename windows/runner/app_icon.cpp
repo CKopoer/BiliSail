@@ -33,15 +33,30 @@ AppIconChannel::AppIconChannel(flutter::BinaryMessenger* messenger)
       result->Error("icon_load_failed", "Cannot load the application icon.");
       return;
     }
+    HRESULT shell_result = shell_app_icon::CurrentIdentity(identity_);
+    if (SUCCEEDED(shell_result)) {
+      shell_result = shell_app_icon::UpdateStartMenu(identity_, resource);
+    }
+    if (FAILED(shell_result)) {
+      result->Error("shell_icon_failed", "Cannot update the Start menu icon.");
+      return;
+    }
     resource_id_ = resource;
+    apply_result_ = S_OK;
     EnumWindows([](HWND window, LPARAM data) -> BOOL {
       DWORD process = 0;
       GetWindowThreadProcessId(window, &process);
       if (process == GetCurrentProcessId()) {
-        reinterpret_cast<AppIconChannel*>(data)->ApplyTo(window);
+        auto* self = reinterpret_cast<AppIconChannel*>(data);
+        const HRESULT applied = self->ApplyTo(window);
+        if (FAILED(applied)) self->apply_result_ = applied;
       }
       return TRUE;
     }, reinterpret_cast<LPARAM>(this));
+    if (FAILED(apply_result_)) {
+      result->Error("taskbar_icon_failed", "Cannot update the taskbar icon.");
+      return;
+    }
     result->Success();
   });
 }
@@ -76,16 +91,17 @@ HICON AppIconChannel::Load(int resource, int width, int height) {
   return icons_.emplace(key, std::move(icon)).first->second.get();
 }
 
-void AppIconChannel::ApplyTo(HWND window) {
-  if (!resource_id_) return;
+HRESULT AppIconChannel::ApplyTo(HWND window) {
+  if (!resource_id_) return S_FALSE;
   const UINT dpi = GetDpiForWindow(window);
   const HICON large_icon = Load(resource_id_, GetSystemMetricsForDpi(SM_CXICON, dpi),
                                 GetSystemMetricsForDpi(SM_CYICON, dpi));
   const HICON small_icon = Load(resource_id_, GetSystemMetricsForDpi(SM_CXSMICON, dpi),
                                 GetSystemMetricsForDpi(SM_CYSMICON, dpi));
-  if (!large_icon || !small_icon) return;
+  if (!large_icon || !small_icon) return HRESULT_FROM_WIN32(ERROR_RESOURCE_NOT_FOUND);
   SendMessage(window, WM_SETICON, ICON_BIG,
               reinterpret_cast<LPARAM>(large_icon));
   SendMessage(window, WM_SETICON, ICON_SMALL,
               reinterpret_cast<LPARAM>(small_icon));
+  return shell_app_icon::ApplyToWindow(window, identity_, resource_id_);
 }

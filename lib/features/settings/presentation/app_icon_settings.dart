@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -55,7 +56,9 @@ final class _AppIconSettingsState extends ConsumerState<AppIconSettings> {
           Text(switch (surface) {
             AppIconSurface.launcher => '切换桌面启动图标。系统可能显示提示，桌面刷新可能需要稍等片刻。',
             AppIconSurface.window =>
-              '切换运行中的窗口图标，任务栏显示由系统决定。安装包、已有快捷方式和固定图标保持原样。',
+              defaultTargetPlatform == TargetPlatform.windows
+                  ? '切换窗口图标；EXE/MSI 同步运行中的任务栏和已有开始菜单入口。MSIX 任务栏显示由系统决定，开始菜单及已有固定图标保持原样。其他快捷方式不变。'
+                  : '切换运行中的窗口图标，任务栏显示由系统决定。安装包、已有快捷方式和固定图标保持原样。',
             AppIconSurface.dock => '切换运行中的 Dock 图标，重启后会重新应用。访达与启动台图标保持原样。',
             AppIconSurface.unsupported => '',
           }, style: Theme.of(context).textTheme.bodySmall),

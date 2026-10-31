@@ -11,6 +11,8 @@
 #include <tuple>
 #include <type_traits>
 
+#include "shell_app_icon.h"
+
 class AppIconChannel {
  public:
   explicit AppIconChannel(flutter::BinaryMessenger* messenger);
@@ -20,7 +22,7 @@ class AppIconChannel {
   AppIconChannel(AppIconChannel&&) = delete;
   AppIconChannel& operator=(AppIconChannel&&) = delete;
 
-  void ApplyTo(HWND window);
+  HRESULT ApplyTo(HWND window);
 
  private:
   struct IconDeleter {
@@ -32,6 +34,8 @@ class AppIconChannel {
   flutter::MethodChannel<flutter::EncodableValue> channel_;
   std::map<std::tuple<int, int, int>, Icon> icons_;
   int resource_id_ = 0;
+  shell_app_icon::Identity identity_;
+  HRESULT apply_result_ = S_OK;
 };
 
 #endif  // RUNNER_APP_ICON_H_

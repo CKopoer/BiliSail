@@ -1,6 +1,6 @@
 # 应用图标切换
 
-日期：2026-10-30；2026-10-31 补充 Dock 尺寸与侧边栏同步修复。
+日期：2026-10-30；2026-10-31 补充 Dock 尺寸、侧边栏与 Windows Shell 同步。
 
 ## 行为与边界
 
@@ -10,17 +10,37 @@
 | --- | --- | --- |
 | Android | 两个 activity-alias 的桌面启动图标；API 33 起原子切换，旧系统先启用目标再禁用旧别名，主 Activity 不禁用 | 包管理器中的应用图标、旧手动固定入口可能仍使用安装图标；桌面可能延迟刷新 |
 | iOS/iPadOS | 通过 `setAlternateIconName` 切换主屏幕图标，Xcode 为 iPhone/iPad 打包备用图标 | 系统负责提示及刷新 |
-| Windows | 运行中的窗口图标，新播放窗口沿用；播放窗返回按钮保留 | EXE、MSIX、安装包、已有快捷方式及固定任务栏图标 |
+| Windows | 运行窗口及任务栏的 Shell 图标属性，新播放窗口沿用；EXE/MSI 同步当前用户的已有开始菜单入口 | EXE、安装包、MSIX 的开始菜单资源、已有固定任务栏入口及其他快捷方式；Shell 最终显示仍需逐安装类型验收 |
 | macOS | 运行中的 Dock 图标；哔帆恢复系统默认，粉红小电视按专用 ICNS 和留白应用 | 应用 bundle、访达、启动台 |
 | Linux | GTK 窗口图标与随后新建窗口的默认图标 | 应用菜单与 `.desktop` 图标；Wayland/桌面环境可忽略窗口图标 |
 
-不修改已安装二进制、应用 bundle 或用户快捷方式。沿用根应用 MethodChannel，未增加 Pub 依赖，四个独立包不感知业务图标。
+不修改已安装二进制或应用 bundle。Windows 仅处理本应用约定路径、指向当前 EXE 的开始菜单入口，不扫描或修改其他用户快捷方式。沿用根应用 MethodChannel，未增加 Pub 依赖，四个独立包不感知业务图标。
 
 纯 Dart 契约为 `lib/domain/app_icon.dart`，平台适配为 `lib/core/platform/app_icon_service.dart`，由 app 组合根注入设置控制器。`AppSettings.appIcon` 存入 `preferences.v1`，快照 schema 递增到 34，SQLite 表结构及数据库版本保持不变。缺失/非法值回退哔帆，恢复默认也恢复图标。
 
 图标变更串行完成系统应用与设置保存后才发布选中值；失败时尝试恢复原生图标，后续主题等设置写入只合并已提交的图标，避免重新写入失败选择。移动端启动读取操作系统实际保留的选择并同步快照，避免 iOS 重复改图标提示，也修复原生完成而 SQLite 提交中断的状态；桌面启动按保存值重新应用。图标恢复失败保留其他设置并在选项中提示重试。
 
 Android 正式包与 `.test` 开发包使用各自 packageName，别名类名固定在生产 namespace；不访问其他包。首次从旧版本升级时，桌面对旧 MainActivity 固定入口的处理及位置保留需实机验收。
+
+## Windows Shell 同步（2026-10-31）
+
+此前仅发送 `WM_SETICON`，没有向 Shell 指定任务栏分组图标。现在 [Shell 适配器](../../windows/runner/shell_app_icon.cpp) 通过 `SHGetPropertyStoreForWindow` 设置 `System.AppUserModel.RelaunchIconResource`，普通 EXE 同时设置重启命令和显示名，最后设置 `System.AppUserModel.ID`。微软明确说明[提交 ID 会通知任务栏刷新，其他属性须先设置](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-appusermodel-id)。图标直接引用 EXE 中已有的 `101/102` 资源，无需覆盖 EXE 或额外导出 ICO。
+
+- 普通 EXE 的 ID 按安装路径保持稳定，同一安装往返换图标不改变身份，原地升级保留分组；不同开发/安装目录互不合并。MSIX 通过 `GetCurrentApplicationUserModelId` 保留系统包身份，避免破坏启动和分组。包的任务栏最终显示可能仍由注册图标决定，不能把属性提交成功当作 MSIX 视觉验收通过。
+- 开始菜单只检查 `FOLDERID_Programs` 与 `FOLDERID_CommonPrograms` 下的 `BiliSail/BiliSail.lnk`，并核对目标文件身份。没有入口则不新建；入口指向另一安装或开发构建则跳过，不修改其目标。用户自行改名、移动的入口不在此次范围。
+- 个人偏好写入当前用户入口。全用户入口通过标准 `IPersistStream` 克隆为同相对位置的当前用户入口，保留参数、工作目录和其他属性；全用户原件不写入，不提权、不影响其他用户。当前用户副本属于快捷方式，卸载另一安装后可能需要用户手动清理；本轮未扩大 MSI 卸载逻辑去删除用户副本。
+- 使用 [`IShellLink::SetIconLocation`](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishelllinkw-seticonlocation) 与属性存储更新当前用户入口，经临时文件保存、原子替换后发送定向 [`SHChangeNotify`](https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shchangenotify)。保存失败保留原入口并回报失败，沿用设置控制器的原生/SQLite 保存失败回退。
+- MSIX 的开始菜单图片来自签名包清单。[包内资源不允许运行时写入](https://learn.microsoft.com/en-us/windows/uwp/porting/desktop-to-uwp-behind-the-scenes)，本轮不篡改包、不创建伪装的额外入口。已有固定任务栏快捷方式也不修改，不调用未公开的固定接口、删除图标缓存或重启 Explorer。
+
+原生回归入口为 [tool/test-windows-app-icon.ps1](../../tool/test-windows-app-icon.ps1)，使用隔离的临时目录和真实 Shell COM 接口，覆盖缺失入口、只读全用户入口、当前用户副本、参数保留、恢复默认、目标锁定时保留原件与临时文件清理、其他安装隔离、MSIX 跳过，以及真实窗口属性和稳定 ID 的反复切换。它不写真实开始菜单或用户设置；不能代替 Shell 视觉验收。
+
+本轮验证：原生 Shell 回归、Windows `desktop_app_icon_test` 集成测试及调试热重载通过，未发现运行时错误。另在已开启开发者模式的本机注册独立全信任测试包，确认实际包身份识别及三次图标属性提交成功，随后注销该测试包，没有修改正式 MSIX 的安装、凭据或设置。该探针仅验证包环境下的 API，不代表任务栏/开始菜单最终图像已验收。
+
+`tool/check.ps1 -SkipPub` 通过：根应用 3716 项通过、13 项 Windows 符号链接权限跳过；`bili_api` 498、`bili_player` 105、`bili_danmaku` 145、`bili_mux` 5 项通过。mux 另有 10 项因未配置 `BILI_MUX_LIBRARY` 跳过，不计原生覆盖；格式、静态分析与打包边界检查通过。日志为 `build/app-icon-shell-check.log`。当前工作区含其他同期修改，本轮只调整图标适配器、原生回归、外观说明和本文。
+
+普通 `lib/main.dart` 的 Windows Release 构建通过，产物为 `build/windows/x64/runner/Release/bilisail.exe`；日志 `build/app-icon-shell-release.log`。普通入口 Debug 构建、启动及最终热重载通过，未发现运行时错误，已通过 Flutter daemon 正常退出本轮调试进程；日志 `build/app-icon-shell-final-run.log`。未重新制作或安装正式安装包。
+
+未验证：新正式 MSIX、EXE/MSI 的实际 Shell 图像、已固定入口、全用户/当前用户菜单合并显示、卸载与安装目录迁移。其他四个平台的运行行为未改动，本轮未进行其构建和设备验证。
 
 ## Dock 尺寸与侧边栏同步（2026-10-31）
 
