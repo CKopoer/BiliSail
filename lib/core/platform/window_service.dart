@@ -12,7 +12,7 @@ import 'window_size_policy.dart';
 enum FullScreenOrientation { portrait, landscape }
 
 class WindowService {
-  bool get supportsBackgroundAudio => Platform.isAndroid;
+  bool get supportsBackgroundAudio => Platform.isAndroid || Platform.isIOS;
 
   static const _orientationChannel = EventChannel(
     'bilisail/device_orientation',

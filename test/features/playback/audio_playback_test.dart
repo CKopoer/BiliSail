@@ -57,225 +57,91 @@ void main() {
 
   for (final manual in [false, true]) {
     for (final paused in [false, true]) {
-      test('background audio restores manual=$manual paused=$paused', () async {
-        await session.open(_detail, _part);
-        if (manual) await session.setAudioOnly(true);
-        await session.seek(const Duration(minutes: 3));
-        await session.setRate(1.5);
-        await session.setVolume(32);
-        if (paused) await session.pause();
-        await session.setBackgroundAudio(true);
-        expect(session.audioOnly, isTrue);
-        expect(engine.sources.last, isA<ProgressiveSource>());
-        expect((engine.sources.last as ProgressiveSource).isAudioOnly, isTrue);
-        expect(engine.currentSnapshot.position, const Duration(minutes: 3));
-        expect(engine.currentSnapshot.desiredPlaying, !paused);
-        final opens = engine.sources.length;
-        await session.setBackgroundAudio(true);
-        expect(engine.sources, hasLength(opens));
-        await session.setBackgroundAudio(false);
-        expect(session.audioOnly, manual);
-        expect(
-          engine.sources.last,
-          manual ? isA<ProgressiveSource>() : isA<DashPairSource>(),
-        );
-        expect(engine.currentSnapshot.position, const Duration(minutes: 3));
-        expect(engine.currentSnapshot.rate, 1.5);
-        expect(engine.currentSnapshot.volume, 32);
-        expect(engine.currentSnapshot.desiredPlaying, !paused);
-      });
+      testWidgets(
+        'Android retains source in background manual=$manual paused=$paused',
+        (tester) async {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [playbackSessionProvider.overrideWithValue(session)],
+              child: MaterialApp(
+                home: Scaffold(
+                  body: PlaybackPanel(
+                    detail: _detail,
+                    part: _part,
+                    settings: AppSettings(
+                      danmakuEnabled: false,
+                      resumePlayback: false,
+                    ),
+                    window: _AndroidWindow(),
+                    onToggleComments: () {},
+                  ),
+                ),
+              ),
+            ),
+          );
+          for (var i = 0; i < 12; i++) {
+            await tester.pump(const Duration(milliseconds: 16));
+          }
+          if (manual) await session.setAudioOnly(true);
+          await session.seek(const Duration(minutes: 3));
+          await session.setRate(1.5);
+          await session.setVolume(32);
+          if (paused) await session.pause();
+          final generation = session.sourceGeneration;
+          final nativeGeneration = engine.currentSnapshot.generation;
+          final source = engine.sources.last;
+          final opens = engine.sources.length;
+          try {
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.inactive,
+            );
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.hidden,
+            );
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.paused,
+            );
+            await tester.pump();
+            expect(session.audioOnly, manual);
+            expect(engine.sources, hasLength(opens));
+            expect(engine.sources.last, same(source));
+            expect(engine.currentSnapshot.desiredPlaying, !paused);
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.hidden,
+            );
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.inactive,
+            );
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.resumed,
+            );
+            await tester.pump();
+            expect(session.sourceGeneration, generation);
+            expect(engine.currentSnapshot.generation, nativeGeneration);
+            expect(engine.sources, hasLength(opens));
+            expect(session.audioOnly, manual);
+            expect(engine.currentSnapshot.position, const Duration(minutes: 3));
+            expect(engine.currentSnapshot.rate, 1.5);
+            expect(engine.currentSnapshot.volume, 32);
+            expect(engine.currentSnapshot.desiredPlaying, !paused);
+          } finally {
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.resumed,
+            );
+            await tester.pumpWidget(const SizedBox.shrink());
+          }
+        },
+      );
     }
   }
 
-  test(
-    'resuming after system stop clears background without reopening',
-    () async {
-      await session.open(_detail, _part);
-      await session.setBackgroundAudio(true);
-      await session.stop();
-      final opens = engine.sources.length;
-      await session.setBackgroundAudio(false);
-      expect(engine.sources, hasLength(opens));
-      await session.retry();
-      expect(session.audioOnly, isFalse);
-      expect(engine.sources.last, isA<DashPairSource>());
-    },
-  );
-
-  test('background return rejects pending audio resolution', () async {
-    await session.open(_detail, _part);
-    final pending = Completer<PlaybackMedia>();
-    repository.pending = pending;
-    final background = session.setBackgroundAudio(true);
-    await Future<void>.delayed(Duration.zero);
-    await session.setBackgroundAudio(false);
-    pending.complete(repository.media);
-    await background;
-    expect(session.audioOnly, isFalse);
-    expect(engine.sources.whereType<ProgressiveSource>(), isEmpty);
-    expect(engine.sources.last, isA<DashPairSource>());
-  });
-
-  for (final paused in [false, true]) {
-    test(
-      'return to video during background audio only opens video once paused=$paused',
-      () async {
-        await session.open(_detail, _part);
-        await session.setAudioOnly(true);
-        await session.seek(const Duration(minutes: 3));
-        await session.setRate(1.5);
-        await session.setVolume(32);
-        if (paused) await session.pause();
-        await session.setBackgroundAudio(true);
-        final opens = engine.sources.length;
-        final generation = session.sourceGeneration;
-
-        // The return action can arrive before the resumed lifecycle callback.
-        await session.setAudioOnly(false);
-        expect(engine.sources, hasLength(opens));
-        expect(session.sourceGeneration, generation);
-        expect(session.audioOnly, isTrue);
-
-        final pending = Completer<PlaybackMedia>();
-        repository.pending = pending;
-        final returning = session.setBackgroundAudio(false);
-        await Future<void>.delayed(Duration.zero);
-        await session.setAudioOnly(false);
-        await session.setBackgroundAudio(false);
-        pending.complete(repository.media);
-        await returning;
-
-        expect(session.audioOnly, isFalse);
-        expect(engine.sources, hasLength(opens + 1));
-        expect(engine.sources.last, isA<DashPairSource>());
-        expect(engine.currentSnapshot.position, const Duration(minutes: 3));
-        expect(engine.currentSnapshot.rate, 1.5);
-        expect(engine.currentSnapshot.volume, 32);
-        expect(engine.currentSnapshot.desiredPlaying, !paused);
-      },
-    );
-  }
-
-  for (final paused in [false, true]) {
-    test(
-      'enabling listening during background only changes foreground intent paused=$paused',
-      () async {
-        await session.open(_detail, _part);
-        await session.seek(const Duration(minutes: 3));
-        await session.setRate(1.5);
-        await session.setVolume(32);
-        if (paused) await session.pause();
-        await session.setBackgroundAudio(true);
-        final opens = engine.sources.length;
-        final generation = session.sourceGeneration;
-
-        await session.setAudioOnly(true);
-        await session.setAudioOnly(true);
-        await session.setBackgroundAudio(false);
-
-        expect(session.audioOnly, isTrue);
-        expect(session.sourceGeneration, generation);
-        expect(engine.sources, hasLength(opens));
-        expect(engine.currentSnapshot.position, const Duration(minutes: 3));
-        expect(engine.currentSnapshot.rate, 1.5);
-        expect(engine.currentSnapshot.volume, 32);
-        expect(engine.currentSnapshot.desiredPlaying, !paused);
-      },
-    );
-  }
-
-  test('background during initial resolution replaces pending video', () async {
-    final pending = Completer<PlaybackMedia>();
-    repository.pending = pending;
-    final opening = session.open(_detail, _part);
-    await Future<void>.delayed(Duration.zero);
-    await session.setBackgroundAudio(true);
-    pending.complete(repository.media);
-    await opening;
-    expect(session.audioOnly, isTrue);
-    expect(
-      engine.sources.every((source) => source is ProgressiveSource),
-      isTrue,
-    );
-    await session.setBackgroundAudio(false);
-    expect(engine.sources.last, isA<DashPairSource>());
-  });
-
-  test('background overlay never leaks into navigation checkpoints', () async {
-    final owner = Object();
-    session.attach(owner);
-    await session.activate(owner, _detail, _part);
-    await session.setBackgroundAudio(true);
-    const second = VideoPart(
-      cid: 'two',
-      page: 2,
-      title: 'P2',
-      duration: Duration(minutes: 10),
-    );
-    await session.activate(owner, _detail, second);
-    expect(session.audioOnly, isTrue);
-    await session.setBackgroundAudio(false);
-    expect(session.audioOnly, isFalse);
-    await session.activate(owner, _detail, _part);
-    expect(session.audioOnly, isFalse);
-    await session.setAudioOnly(true);
-    expect(
-      session.prepareNextVideo(
-        _detail.summary.id,
-        _part.cid,
-        nextId: _detail.summary.id,
-        nextCid: second.cid,
-      ),
-      isTrue,
-    );
-    await session.activate(owner, _detail, second);
-    expect(
-      session.audioOnly,
-      isTrue,
-      reason: 'next intent overrides an earlier video-mode checkpoint',
-    );
-    await session.setBackgroundAudio(true);
-    await session.setBackgroundAudio(false);
-    expect(session.audioOnly, isTrue);
-  });
-
-  test(
-    'unsupported background media pauses without opening mixed video',
-    () async {
+  testWidgets(
+    'Android background retains progressive media and playing intent',
+    (tester) async {
       repository.media = _media(
         kind: PlaybackMediaKind.progressive,
         audio: false,
       );
-      await session.open(_detail, _part);
-      final opens = engine.sources.length;
-      await session.setBackgroundAudio(true);
-      expect(engine.currentSnapshot.desiredPlaying, isFalse);
-      expect(engine.sources, hasLength(opens));
-      await session.setBackgroundAudio(false);
-      expect(engine.currentSnapshot.desiredPlaying, isFalse);
-    },
-  );
-
-  test(
-    'return after background EOF does not replay the finished item',
-    () async {
-      await session.open(_detail, _part);
-      await session.setBackgroundAudio(true);
-      engine.publish(
-        engine.value.copyWith(
-          phase: PlaybackPhase.ended,
-          position: const Duration(minutes: 10),
-        ),
-      );
-      await session.setBackgroundAudio(false);
-      expect(session.audioOnly, isFalse);
-      expect(engine.currentSnapshot.desiredPlaying, isFalse);
-    },
-  );
-
-  testWidgets(
-    'Android hidden owner listens in background and restores on resume',
-    (tester) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [playbackSessionProvider.overrideWithValue(session)],
@@ -298,28 +164,70 @@ void main() {
       for (var i = 0; i < 12; i++) {
         await tester.pump(const Duration(milliseconds: 16));
       }
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      await tester.pump();
-      expect(session.audioOnly, isFalse);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-      for (var i = 0; i < 12; i++) {
-        await tester.pump(const Duration(milliseconds: 16));
+      final source = engine.sources.last;
+      final generation = engine.currentSnapshot.generation;
+      try {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        await tester.pump();
+        expect(engine.sources, hasLength(1));
+        expect(engine.sources.last, same(source));
+        expect(engine.currentSnapshot.generation, generation);
+        expect(engine.currentSnapshot.desiredPlaying, isTrue);
+      } finally {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
       }
-      expect(session.audioOnly, isTrue);
-      expect(engine.currentSnapshot.desiredPlaying, isTrue);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      for (var i = 0; i < 12; i++) {
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-      expect(session.audioOnly, isFalse);
-      expect(engine.sources.last, isA<DashPairSource>());
-      expect(engine.currentSnapshot.desiredPlaying, isTrue);
-      await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets('background during source resolution keeps the video request', (
+    tester,
+  ) async {
+    final pending = Completer<PlaybackMedia>();
+    repository.pending = pending;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [playbackSessionProvider.overrideWithValue(session)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: PlaybackPanel(
+              detail: _detail,
+              part: _part,
+              settings: AppSettings(
+                danmakuEnabled: false,
+                resumePlayback: false,
+              ),
+              window: _AndroidWindow(),
+              onToggleComments: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    try {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      pending.complete(repository.media);
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(engine.sources, hasLength(1));
+      expect(engine.sources.single, isA<DashPairSource>());
+      expect(session.audioOnly, isFalse);
+      expect(engine.currentSnapshot.desiredPlaying, isTrue);
+    } finally {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
+  });
 
   for (final target in [
     null,

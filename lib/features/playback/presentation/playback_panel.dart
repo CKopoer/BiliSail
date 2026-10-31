@@ -159,15 +159,6 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       if (!mounted || !identical(_activityRequest, activityRequest)) return;
       if (active) {
         _configure();
-        final lifecycle = WidgetsBinding.instance.lifecycleState;
-        if (widget.window.supportsBackgroundAudio) {
-          unawaited(
-            _session.setBackgroundAudio(
-              lifecycle == AppLifecycleState.hidden ||
-                  lifecycle == AppLifecycleState.paused,
-            ),
-          );
-        }
         unawaited(
           _session.activate(
             this,
@@ -276,15 +267,8 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     }
     // A video can keep playing behind another workspace tab. System lifecycle
     // still applies to its owner even when the page has no visible surface.
-    if (widget.window.supportsBackgroundAudio) {
-      if (state == AppLifecycleState.resumed) {
-        unawaited(_session.setBackgroundAudio(false));
-      } else if (_session.ownsPlayback(this) &&
-          (state == AppLifecycleState.paused ||
-              state == AppLifecycleState.hidden)) {
-        unawaited(_session.setBackgroundAudio(true));
-      }
-    } else if (_session.ownsPlayback(this) &&
+    if (!widget.window.supportsBackgroundAudio &&
+        _session.ownsPlayback(this) &&
         !widget.window.hasDesktopWindow &&
         (state == AppLifecycleState.paused ||
             state == AppLifecycleState.hidden)) {

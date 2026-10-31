@@ -324,7 +324,6 @@ class PlaybackSession extends ChangeNotifier {
   bool get isLive => contentTarget is LivePlaybackTarget;
   bool _audioOnly = false;
   bool _foregroundAudioOnly = false;
-  bool _backgroundAudio = false;
   bool get audioOnly => _audioOnly;
   bool get continuousRelatedPlaybackEnabled =>
       _settings.continuousRelatedPlayback;
@@ -773,9 +772,7 @@ class PlaybackSession extends ChangeNotifier {
       _remainingRecoveryBudget = _PlaybackStartupRecovery.totalBudget;
     }
     _foregroundAudioOnly = audioOnly ?? _foregroundAudioOnly;
-    final requestedAudioOnly =
-        _foregroundAudioOnly ||
-        (_backgroundAudio && target is! LivePlaybackTarget);
+    final requestedAudioOnly = _foregroundAudioOnly;
     _audioOnly = requestedAudioOnly;
     _audioRecovery = null;
     // Capture source settings together; a preference change during resolution
@@ -2574,10 +2571,7 @@ class PlaybackSession extends ChangeNotifier {
         (enabled && (!canListen || _resolving))) {
       return;
     }
-    // Foreground intent can change before Android reports its resumed state.
-    // Keep the background audio source until the effective mode changes.
     _foregroundAudioOnly = enabled;
-    if ((enabled || (_backgroundAudio && !isLive)) == _audioOnly) return;
     await open(
       detail,
       part,
@@ -2593,23 +2587,6 @@ class PlaybackSession extends ChangeNotifier {
       volume: media == null ? _openingVolume : snapshots.value.volume,
       desiredPlaying: _desiredPlaying,
     );
-  }
-
-  // Android lifecycle is an overlay on the user's per-page listening choice.
-  // Keep it across next-source opens, but never capture it in page checkpoints.
-  Future<void> setBackgroundAudio(bool enabled) async {
-    if (_disposed || _closing || enabled == _backgroundAudio) return;
-    _backgroundAudio = enabled;
-    if (media == null && !_resolving && error == null) return;
-    if (enabled && (isLive || (media != null && !canListen))) {
-      await pause();
-      return;
-    }
-    final effective = _foregroundAudioOnly || (enabled && !isLive);
-    if (effective != _audioOnly) {
-      if (snapshots.value.phase == PlaybackPhase.ended) _desiredPlaying = false;
-      await retry();
-    }
   }
 
   Future<void> changeLiveLine(int line) async {

@@ -266,7 +266,7 @@ void main() {
     }
   }
 
-  for (final mode in ['video', 'manual', 'background', 'disabled']) {
+  for (final mode in ['video', 'manual', 'disabled']) {
     testWidgets('parts, collection and related playback preserve $mode mode', (
       tester,
     ) async {
@@ -342,8 +342,7 @@ void main() {
       );
       await _frames(tester);
       if (mode == 'manual') await session.setAudioOnly(true);
-      if (mode == 'background') await session.setBackgroundAudio(true);
-      final listening = mode == 'manual' || mode == 'background';
+      final listening = mode == 'manual';
       for (final expected in ['102', '103']) {
         engine.end();
         engine.end();
@@ -368,10 +367,6 @@ void main() {
           engine.source,
           listening ? isA<ProgressiveSource>() : isA<DashPairSource>(),
         );
-        if (mode == 'background') {
-          await session.setBackgroundAudio(false);
-          expect(session.audioOnly, isFalse);
-        }
         engine.end();
         await _frames(tester);
         expect(advances, 2);
@@ -466,7 +461,7 @@ void main() {
   }
 
   for (final background in [false, true]) {
-    testWidgets('PGC next episode keeps listening background=$background', (
+    testWidgets('PGC next episode keeps playback mode background=$background', (
       tester,
     ) async {
       final engine = _Engine();
@@ -510,7 +505,16 @@ void main() {
       );
       await _frames(tester);
       if (background) {
-        await session.setBackgroundAudio(true);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        addTearDown(
+          () => tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          ),
+        );
       } else {
         await session.setAudioOnly(true);
       }
@@ -518,13 +522,20 @@ void main() {
       engine.end();
       await _frames(tester);
       expect(session.contentTarget, const PgcPlaybackTarget('2', cid: '102'));
-      expect(session.audioOnly, isTrue);
-      expect(engine.source, isA<ProgressiveSource>());
+      expect(session.audioOnly, !background);
+      expect(
+        engine.source,
+        background ? isA<DashPairSource>() : isA<ProgressiveSource>(),
+      );
       expect(engine.options?.startPosition, Duration.zero);
       engine.end();
       await _frames(tester);
       expect(session.contentTarget, const PgcPlaybackTarget('2', cid: '102'));
-      await session.setBackgroundAudio(false);
+      if (background) {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+      }
       expect(session.audioOnly, !background);
       await tester.pumpWidget(const SizedBox.shrink());
       await _frames(tester);
@@ -834,6 +845,8 @@ class _Progress extends Fake implements PlaybackProgressStore {
 
 class _Window extends WindowService {
   bool fullscreen = false;
+  @override
+  bool get supportsBackgroundAudio => true;
   @override
   Future<void> setFullScreen(
     bool value, {
