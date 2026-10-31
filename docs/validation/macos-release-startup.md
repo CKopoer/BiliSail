@@ -97,6 +97,8 @@ Windows x64 / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过格式、
 
 标准库单元测试使用合成双 JSON IPS、旧文本报告和 sample 栈，覆盖错误 PID／名称／时间拒绝、损坏数据、容量上限、敏感字段剔除、受限等待及原子发布；已接入根检查。真实 runner 栈和修复结论待本次诊断构建补充。
 
+本地 Windows / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过，4506 项 Dart／Flutter 测试通过（根 3752、API 499、播放器 105、弹幕 145、封装 5），13 项符号链接和 10 项未配置原生 mux 的用例按环境跳过。13 项 Python 采集器测试和 14 项真实子进程监督回归通过，采集器覆盖率为 94%。新工作区首次原生媒体资产下载吞吐较低，检查在下载阶段被中止；复用同一固定 SHA-256 的本地 archive 后，由原构建钩子重新校验并解包，后续完整检查通过。五份锁文件保持原值。
+
 ## 旧数据与升级单独验收
 
 Keychain 后端选择改变不会自动迁移原 Data Protection Keychain 的条目。传统 Keychain 中已有的同服务／同 key 条目沿用原身份；旧 Data Protection 条目的可访问性受原签名、provisioning 和系统授权影响，不能假设移除 Sharing 后仍可读取。不尝试用缺权限的新签名强读旧库，也不自动删除旧后端条目；无法恢复时按现有登录流程重新登录。

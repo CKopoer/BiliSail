@@ -67,9 +67,12 @@ def timestamp(value: object) -> float | None:
     if not isinstance(value, str) or len(value) > 64:
         return None
     try:
-        parsed = datetime.fromisoformat(
-            re.sub(r"\s+([+-]\d{4})$", r"\1", value).replace("Z", "+00:00")
-        )
+        # Apple's offset has no colon; PowerShell can emit seven fractional
+        # digits. Normalize both for the Python 3.9 shipped with some Xcodes.
+        value = re.sub(r"\s+([+-]\d{4})$", r"\1", value).replace("Z", "+00:00")
+        value = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", value)
+        value = re.sub(r"\.(\d+)", lambda match: "." + (match[1] + "000000")[:6], value)
+        parsed = datetime.fromisoformat(value)
         return parsed.timestamp() if parsed.tzinfo else None
     except ValueError:
         return None
@@ -225,6 +228,7 @@ def _legacy(raw: str, pid: int, started: float) -> dict | None:
 
 
 def parse_report(raw: str, pid: int, started: float) -> dict | None:
+    raw = raw.lstrip("\ufeff \t\r\n")
     if not raw.lstrip().startswith("{"):
         return _legacy(raw, pid, started)
     try:
@@ -261,6 +265,8 @@ def parse_sample(raw: str, pid: int) -> dict | None:
                     "address": int(frame[4], 16),
                 }
             )
+    if not any(thread["frames"] for thread in threads):
+        return None
     return {"format": "sample", "threads": threads}
 
 

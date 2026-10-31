@@ -1,0 +1,61 @@
+name: macOS x64 startup reproduction
+
+on:
+  push:
+    branches: [codex/macos-startup-crash]
+    paths:
+      - .github/workflows/macos-x64-reproduce.yml
+      - tool/macos_crash_diagnostics.py
+      - tool/macos-release-validation.ps1
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  reproduce:
+    runs-on: macos-15-intel
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: BiliSail-macos-x64-1.2.5+3-packages
+          run-id: 41183623821
+          github-token: ${{ github.token }}
+          path: downloaded
+      - name: Open the exact signed application that passed CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mount="$RUNNER_TEMP/bilisail-dmg"
+          mkdir -p "$mount"
+          hdiutil attach downloaded/*.dmg -readonly -nobrowse -mountpoint "$mount"
+          trap 'hdiutil detach "$mount"' EXIT
+          ditto "$mount/BiliSail.app" "$RUNNER_TEMP/BiliSail.app"
+      - name: Reproduce startup without rebuilding or retrying failures
+        shell: pwsh
+        timeout-minutes: 20
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . ./tool/macos-release-validation.ps1
+          Confirm-MacOSReleaseSignature "$env:RUNNER_TEMP/BiliSail.app" $env:RUNNER_TEMP
+          for ($iteration = 1; $iteration -le 10; $iteration++) {
+            Write-Host "Startup repetition $iteration of 10"
+            $directory = "diagnostics/attempt-$iteration"
+            New-Item -ItemType Directory -Path $directory -Force | Out-Null
+            Invoke-MacOSReleaseSmokePhase "$env:RUNNER_TEMP/BiliSail.app/Contents/MacOS/BiliSail" 'startup' ([guid]::NewGuid().ToString('N')) $directory
+          }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        timeout-minutes: 2
+        with:
+          name: macos-x64-reproduction-diagnostics
+          path: |
+            diagnostics/**/*.result.json
+            diagnostics/**/*.crash.json
+            diagnostics/**/*.sample.json
+          if-no-files-found: warn
+          retention-days: 7

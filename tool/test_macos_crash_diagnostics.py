@@ -103,6 +103,21 @@ class CrashDiagnosticsTest(unittest.TestCase):
                     diagnostics.parse_report(self.ips(**overrides), 42, 1793430000)
                 )
 
+    def test_timestamp_normalizes_apple_and_powershell_precision(self):
+        for value in (
+            "2026-10-31 07:00:00.000 +0000",
+            "2026-10-31T07:00:00.0000000+00:00",
+            "2026-10-31T07:00:00Z",
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(diagnostics.timestamp(value), 1793430000)
+        self.assertIsNone(diagnostics.timestamp(None))
+        self.assertIsNone(diagnostics.timestamp("2026-10-31 07:00:00"))
+        self.assertIsNone(diagnostics.parse_report("Process: Other [42]", 42, 0))
+        self.assertIsNotNone(
+            diagnostics.parse_report("\ufeff" + self.ips(), 42, 1793430000)
+        )
+
     def test_malformed_or_other_report_type_is_rejected(self):
         for raw in ("private", "{}", self.ips().replace('"309"', '"288"', 1)):
             with self.subTest(raw=raw[:20]):
@@ -189,6 +204,7 @@ private https://example.invalid/?token=private
         )
         self.assertNotRegex(json.dumps(result), r"private|/Users|DispatchQueue|token")
         self.assertIsNone(diagnostics.parse_sample(raw, 43))
+        self.assertIsNone(diagnostics.parse_sample("Process: BiliSail [42]\n", 42))
 
     def test_collector_filters_size_age_pid_and_ignores_malformed_files(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -251,6 +267,16 @@ private https://example.invalid/?token=private
             return_value=subprocess.CompletedProcess([], 1, b"private", b"private"),
         ):
             self.assertEqual(diagnostics.collect_sample(42), {"status": "unavailable"})
+        sample = b"Process: BiliSail [42]\n  99 Thread_123\n + 99 main (in BiliSail) + 1 [0x1000]\n"
+        with patch.object(
+            diagnostics.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 0, sample, b"private"),
+        ):
+            self.assertEqual(
+                diagnostics.collect_sample(42)["threads"][0]["frames"][0]["symbol"],
+                "main",
+            )
 
     def test_cli_writes_only_sanitized_json_atomically(self):
         with tempfile.TemporaryDirectory() as directory:
