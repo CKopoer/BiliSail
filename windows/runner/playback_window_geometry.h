@@ -46,10 +46,16 @@ inline std::optional<Bounds> FitToWorkArea(const Bounds& saved,
                 width, height};
 }
 
-// The engine's desktop channel owns this finite, memory-only session. A late
+// The engine's desktop channel owns this finite session. A late
 // close from an old view/owner cannot overwrite or retire a newly opened view.
 class GeometrySession {
  public:
+  void Load(const Bounds& normal, bool maximized) {
+    if (IsValid(normal)) {
+      normal_ = normal;
+      maximized_ = maximized;
+    }
+  }
   void Begin(int64_t view, int64_t owner) {
     view_ = view;
     owner_ = owner;

@@ -12,6 +12,7 @@ final class MacOSApplication {
   private var appIconChannel: FlutterMethodChannel?
   private var passportCookies: PassportWebCookies?
   private var desktopWindows: DesktopWindowController?
+  private var mainGeometry: PersistentWindowGeometry?
   private var focusObservers: [NSObjectProtocol] = []
   private var focusRevision: Int64 = 0
   private let focusDiagnostics =
@@ -91,8 +92,10 @@ final class MacOSApplication {
         return
       }
       (NSApp.delegate as? FlutterAppDelegate)?.mainFlutterWindow = window
+      self.mainGeometry?.detach()
       window.contentMinSize = NSSize(width: 420, height: 560)
       window.center()
+      self.mainGeometry = PersistentWindowGeometry(window: window, role: "main")
       result(nil)
     }
 
@@ -202,6 +205,7 @@ final class MacOSApplication {
   }
 
   deinit {
+    mainGeometry?.detach()
     for observer in focusObservers { NotificationCenter.default.removeObserver(observer) }
   }
 
@@ -274,9 +278,7 @@ private final class DesktopWindowController {
   private let channel: FlutterMethodChannel
   private var captions: [Int64: PlaybackTitlebarBack] = [:]
   private var geometryOwner: (view: Int64, owner: Int64)?
-  private var normalPlaybackFrame: NSRect?
-  private var playbackMaximized = false
-  private var geometryTracker: PlaybackGeometryTracker?
+  private var geometryTracker: PersistentWindowGeometry?
 
   init(messenger: FlutterBinaryMessenger) {
     channel = FlutterMethodChannel(
@@ -324,22 +326,8 @@ private final class DesktopWindowController {
       switch call.method {
       case "restoreGeometry":
         self.geometryTracker?.detach()
-        let restoreMaximized = self.playbackMaximized
-        if let saved = self.normalPlaybackFrame,
-           let fitted = PlaybackGeometryTracker.fitToVisibleScreen(saved) {
-          window.setFrame(fitted, display: false)
-        }
         self.geometryOwner = (viewID, owner)
-        self.geometryTracker = PlaybackGeometryTracker(window: window) { [weak self] frame, maximized in
-          guard let self = self, self.geometryOwner?.view == viewID,
-                self.geometryOwner?.owner == owner else { return }
-          if let frame = frame { self.normalPlaybackFrame = frame }
-          self.playbackMaximized = maximized
-        }
-        // Zoom after installing the normal frame, preserving Cocoa's unzoom
-        // rectangle. Fullscreen is deliberately not restored as zoom.
-        if restoreMaximized && !window.isZoomed { window.zoom(nil) }
-        self.geometryTracker?.capture()
+        self.geometryTracker = PersistentWindowGeometry(window: window, role: "playback")
         result(nil)
       case "captureGeometry":
         self.geometryTracker?.capture()
@@ -381,8 +369,65 @@ private final class DesktopWindowController {
   }
 }
 
-// Frame coordinates stay in Cocoa desktop points. This engine-owned tracker
-// keeps one normal rectangle plus zoom state; never writes NSWindow autosave.
+// Native presentation preferences are shared across accounts, with one record
+// per role. Smoke builds use no persistent state or production window geometry.
+private final class PersistentWindowGeometry {
+  private var tracker: PlaybackGeometryTracker?
+  private var normalFrame: NSRect?
+  private var maximized = false
+  private let key: String
+  private let defaults: UserDefaults?
+
+  init(window: NSWindow, role: String) {
+    key = "bilisail.windowGeometry.v1.\(role)"
+    defaults = ProcessInfo.processInfo.arguments.contains("--bilisail-release-smoke")
+      ? nil : UserDefaults.standard
+    if let saved = defaults?.dictionary(forKey: key),
+       let version = saved["version"] as? Int, version == 1,
+       let values = saved["normal"] as? [Double], values.count == 4,
+       let zoomed = saved["maximized"] as? Bool {
+      let frame = NSRect(x: values[0], y: values[1], width: values[2], height: values[3])
+      if let fitted = PlaybackGeometryTracker.fitToVisibleScreen(frame) {
+        normalFrame = fitted
+        maximized = zoomed
+        window.setFrame(fitted, display: false)
+      }
+    }
+    // Seed the ordinary rectangle before zooming; never replace it with the
+    // visible zoomed frame. Observers are installed after restore completes.
+    if normalFrame == nil { normalFrame = window.frame }
+    if maximized && !window.isZoomed { window.zoom(nil) }
+    tracker = PlaybackGeometryTracker(window: window) { [weak self] frame, zoomed in
+      guard let self = self else { return }
+      if let frame = frame { self.normalFrame = frame }
+      self.maximized = zoomed
+      self.save()
+    }
+  }
+
+  private func save() {
+    guard let frame = normalFrame, PlaybackGeometryTracker.valid(frame) else { return }
+    let record: [String: Any] = [
+      "version": 1, "normal": [Double(frame.minX), Double(frame.minY),
+                                 Double(frame.width), Double(frame.height)],
+      "maximized": maximized,
+    ]
+    if let previous = defaults?.dictionary(forKey: key),
+       NSDictionary(dictionary: previous).isEqual(to: record) { return }
+    defaults?.set(record, forKey: key)
+  }
+
+  func capture() { tracker?.capture() }
+  func detach() {
+    tracker?.capture()
+    tracker?.detach()
+    tracker = nil
+  }
+  deinit { detach() }
+}
+
+// Frame coordinates stay in Cocoa desktop points. Preserve normal bounds while
+// zoomed, miniaturized, or transitioning to/from native fullscreen.
 private final class PlaybackGeometryTracker {
   private weak var window: NSWindow?
   private let onCapture: (NSRect?, Bool) -> Void

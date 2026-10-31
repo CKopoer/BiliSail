@@ -42,6 +42,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "advapi32.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "gdi32.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "dwrite.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "windowscodecs.lib" "shlwapi.lib" "shell32.lib")

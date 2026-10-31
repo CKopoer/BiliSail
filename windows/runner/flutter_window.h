@@ -31,6 +31,8 @@ class FlutterWindow : public Win32Window {
  private:
   // The project to run.
   flutter::DartProject project_;
+  playback_window::WindowGeometrySession main_geometry_{
+      playback_window::WindowGeometryStore(L"main")};
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;

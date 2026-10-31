@@ -21,6 +21,9 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
 
+  // Restore before creating the Flutter surface or showing its first frame.
+  if (!main_geometry_.Restore(GetHandle(), 0, 1)) return false;
+
   RECT frame = GetClientArea();
 
   // The size here must match the window dimensions to avoid unnecessary surface
@@ -91,6 +94,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  main_geometry_.Retire(0, 1);
   intercept_main_window_close_ = false;
   application_exit_channel_.reset();
   system_media_channel_.reset();

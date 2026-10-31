@@ -30,7 +30,8 @@ class DesktopWindowChannel {
   flutter::MethodChannel<flutter::EncodableValue> channel_;
   ViewResolver resolve_view_;
   std::function<void(HWND)> apply_icon_;
-  playback_window::WindowGeometrySession geometry_;
+  playback_window::WindowGeometrySession geometry_{
+      playback_window::WindowGeometryStore(L"playback")};
   int64_t frame_view_ = -1;
   std::unique_ptr<playback_window::PlaybackWindowFrame> playback_frame_;
   std::unordered_map<int64_t, std::unique_ptr<CaptionBackButton>> captions_;

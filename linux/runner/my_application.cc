@@ -6,6 +6,7 @@
 #endif
 
 #include "flutter/generated_plugin_registrant.h"
+#include "window_geometry.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -93,6 +94,8 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+  // The destroy signal releases this adapter with its native window.
+  new WindowGeometry(window);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(

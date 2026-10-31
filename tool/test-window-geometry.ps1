@@ -15,7 +15,7 @@ call "$environment" >nul
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /WX /MT "$test" /Fo"$output/" /Fe"$output/playback_window_geometry_test.exe"
 if errorlevel 1 exit /b 1
-cl /nologo /std:c++17 /EHsc /W4 /WX /MT /DNOMINMAX "$nativeTest" /Fo"$output/" /Fe"$output/playback_window_first_show_test.exe" user32.lib comctl32.lib dwmapi.lib
+cl /nologo /std:c++17 /EHsc /W4 /WX /MT /DNOMINMAX "$nativeTest" /Fo"$output/" /Fe"$output/playback_window_first_show_test.exe" user32.lib comctl32.lib dwmapi.lib advapi32.lib
 "@ | Set-Content -LiteralPath $compileScript -Encoding utf8
 & cmd /d /c $compileScript
 if ($LASTEXITCODE -ne 0) { throw 'Geometry unit test compilation failed.' }

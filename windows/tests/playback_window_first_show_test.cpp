@@ -447,10 +447,137 @@ void RunTests() {
     session.Retire(7, 7);
   }
 }
+
+class TestRegistry {
+ public:
+  TestRegistry() : key_(L"Software\\BiliSail\\GeometryTests\\" +
+      std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64())) {}
+  ~TestRegistry() { RegDeleteTreeW(HKEY_CURRENT_USER, key_.c_str()); }
+  const std::wstring& key() const { return key_; }
+ private:
+  std::wstring key_;
+};
+
+void RunPersistenceTests() {
+  const TestRegistry registry;
+  const auto store = [&](const wchar_t* role) {
+    return playback_window::WindowGeometryStore(role, registry.key());
+  };
+  {
+    playback_window::WindowGeometrySession automatic(store(L"automatic"));
+    const TestWindow window;
+    Require(automatic.Restore(window.get(), 20, 20), "Cannot prepare automatic tracking.");
+    ShowWindow(window.get(), SW_SHOWNORMAL);
+    SetWindowPos(window.get(), nullptr, 100, 100, 820, 610,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
+    Sleep(300);
+    DrainWindowMessages(window.get());
+    playback_window::GeometrySession record;
+    store(L"automatic").Load(record);
+    Require(record.normal() && record.normal()->width == 820,
+            "Resize timer did not persist native geometry.");
+    // Destruction must flush another move before the next debounce fires.
+    SetWindowPos(window.get(), nullptr, 100, 100, 840, 610,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
+  }
+  playback_window::GeometrySession destroyed;
+  store(L"automatic").Load(destroyed);
+  Require(destroyed.normal() && destroyed.normal()->width == 840,
+          "Native destruction lost pending geometry.");
+  playback_window::Bounds normal{};
+  {
+    playback_window::WindowGeometrySession main(store(L"main"));
+    const TestWindow window;
+    Require(main.Restore(window.get(), 0, 1), "Cannot prepare persistent main.");
+    ShowWindow(window.get(), SW_SHOWNORMAL);
+    Require(SetWindowPos(window.get(), nullptr, 120, 130, 860, 620,
+                          SWP_NOZORDER | SWP_NOACTIVATE) != FALSE, "Cannot resize main.");
+    RECT frame{};
+    GetWindowRect(window.get(), &frame);
+    normal = playback_window::RectBounds(frame);
+    ShowWindow(window.get(), SW_MAXIMIZE);
+    // No message pump/timer flush between maximize and minimize: keep zoom.
+    ShowWindow(window.get(), SW_MINIMIZE);
+    Require(main.SaveAndHide(window.get(), 0, 1), "Cannot save minimized main.");
+  }
+  {
+    playback_window::WindowGeometrySession playback(store(L"playback"));
+    Require(!playback.saved().normal(), "Main geometry leaked into playback role.");
+    const TestWindow window;
+    Require(playback.Restore(window.get(), 10, 10), "Cannot prepare playback.");
+    ShowWindow(window.get(), SW_SHOWNORMAL);
+    Require(playback.SaveAndHide(window.get(), 10, 10), "Cannot save playback.");
+  }
+  {
+    playback_window::WindowGeometrySession next(store(L"main"));
+    Require(next.saved().normal() && next.saved().maximized(),
+            "Fresh engine lost persisted zoom state.");
+    const TestWindow window;
+    Require(next.Restore(window.get(), 0, 2), "Cannot restore persistent main.");
+    ShowWindow(window.get(), SW_SHOWNORMAL);
+    Require(IsZoomed(window.get()) != FALSE, "Relaunch did not restore maximized.");
+    ShowWindow(window.get(), SW_RESTORE);
+    RequireBounds(window.get(), normal);
+    const auto style = GetWindowLongPtr(window.get(), GWL_STYLE);
+    // Main-window fullscreen can retain WS_CAPTION while removing THICKFRAME.
+    SetWindowLongPtr(window.get(), GWL_STYLE, style & ~WS_THICKFRAME);
+    SetWindowPos(window.get(), nullptr, 0, 0, 1800, 1000, SWP_NOZORDER | SWP_NOACTIVATE);
+    Require(next.Capture(window.get(), 0, 2), "Cannot capture fullscreen.");
+    Require(next.saved().normal()->width == normal.width && !next.saved().maximized(),
+            "Fullscreen overwrote normal rectangle or zoom.");
+    Require(next.SaveAndHide(window.get(), 0, 2), "Cannot close fullscreen main.");
+  }
+  {
+    playback_window::WindowGeometrySession next(store(L"main"));
+    Require(next.saved().normal()->width == normal.width && !next.saved().maximized(),
+            "User restore was not persisted.");
+    const TestWindow pending;
+    Require(next.Restore(pending.get(), 0, 3), "Cannot prepare cancelled main.");
+    next.Retire(0, 3);
+    playback_window::GeometrySession record;
+    store(L"main").Load(record);
+    Require(record.normal()->width == normal.width, "Hidden preparation changed disk state.");
+  }
+  // Verify actual process restart, reading the record through the production store.
+  wchar_t executable[MAX_PATH]{};
+  Require(GetModuleFileNameW(nullptr, executable, MAX_PATH) != 0, "Cannot find test exe.");
+  std::wstring command = L"\"" + std::wstring(executable) + L"\" \"" + registry.key() + L"\"";
+  STARTUPINFOW startup{};
+  startup.cb = sizeof(startup);
+  PROCESS_INFORMATION process{};
+  Require(CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE,
+                          CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process) != FALSE,
+          "Cannot launch fresh process verification.");
+  CloseHandle(process.hThread);
+  const DWORD waited = WaitForSingleObject(process.hProcess, 10000);
+  DWORD exit_code = 1;
+  GetExitCodeProcess(process.hProcess, &exit_code);
+  CloseHandle(process.hProcess);
+  Require(waited == WAIT_OBJECT_0 && exit_code == 0, "Cross-process geometry restore failed.");
+
+  const DWORD corrupt = 42;
+  Require(RegSetKeyValueW(HKEY_CURRENT_USER, registry.key().c_str(), L"main",
+                          REG_BINARY, &corrupt, sizeof(corrupt)) == ERROR_SUCCESS,
+          "Cannot inject corrupt record.");
+  playback_window::WindowGeometrySession invalid(store(L"main"));
+  Require(!invalid.saved().normal(), "Corrupt geometry did not fall back to defaults.");
+  playback_window::WindowGeometrySession untouched(store(L"playback"));
+  Require(untouched.saved().normal().has_value(), "Corruption changed the other role.");
+}
 }  // namespace
 
-int main() {
+int wmain(int argc, wchar_t* argv[]) {
   try {
+    if (argc == 2) {
+      playback_window::GeometrySession main, playback;
+      playback_window::WindowGeometryStore(L"main", argv[1]).Load(main);
+      playback_window::WindowGeometryStore(L"playback", argv[1]).Load(playback);
+      Require(main.normal() && !main.maximized() && playback.normal(),
+              "Fresh process did not read both role records.");
+      Require(main.normal()->width == 860 && playback.normal()->width == 900,
+              "Fresh process did not preserve independent sizes.");
+      return 0;
+    }
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     const IsolatedDesktop desktop;
     WNDCLASSW window_class{};
@@ -462,8 +589,9 @@ int main() {
     RunTransitionTests();
     RunFrameTests();
     RunInitialSizeTests();
+    RunPersistenceTests();
     UnregisterClassW(window_class.lpszClassName, window_class.hInstance);
-    std::cout << "PASS native first show and caption: SDK restore reproduction, directly visible maximized reopen, user Restore, normal bounds, minimize, pending close, reentrant cancellation, stale owner, fullscreen, custom client frame, app brightness and detach\n";
+    std::cout << "PASS native first show, caption and persistence: SDK restore reproduction, directly visible maximized reopen, user Restore, normal bounds, minimize, pending close, reentrant cancellation, stale owner, fullscreen, custom client frame, app brightness, detach, independent roles, cross-process restore and corrupt records\n";
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "FAIL native first show: " << error.what() << '\n';

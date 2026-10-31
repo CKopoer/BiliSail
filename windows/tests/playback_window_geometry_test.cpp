@@ -51,8 +51,12 @@ int main() {
   assert(restored && restored->left == 50 && restored->top == 70);
   assert(restored->width == 1000 && restored->height == 800);
   GeometrySession next_app;
-  assert(!next_app.normal());  // Geometry is not persisted beyond the engine.
+  assert(!next_app.normal());  // Missing persisted state keeps the SDK default.
   assert(!next_app.maximized());
+  next_app.Load(*session.normal(), true);
+  assert(next_app.normal()->width == 1000 && next_app.maximized());
+  next_app.Load(Bounds{0, 0, -1, -1}, false);
+  assert(next_app.normal()->width == 1000 && next_app.maximized());
 
   GeometrySession zoom;
   zoom.Begin(6, 10);

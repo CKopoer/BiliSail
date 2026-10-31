@@ -20,6 +20,7 @@
 | [晴湾第五轮调整](ui-redesign/fifth-round-plan.md) | 消息/下载/设置同层、统一标签与导航图标、窄屏卡片留白、紧凑账号资料 |
 | [晴湾第六轮调整](ui-redesign/sixth-round-plan.md) | 热门内容子标签、动态工具与初始分类、播放窗口会话位置和尺寸记忆 |
 | [晴湾第七轮调整](ui-redesign/seventh-round-plan.md) | 设置标题与分类顺序、消息标签精简、播放窗口最大化恢复优先级 |
+| [桌面窗口状态持久化](validation/window-geometry-persistence.md) | 主窗口／播放窗口独立保存大小、位置与最大化，跨启动恢复及平台验证边界 |
 | [热门四子标签](validation/popular-tabs.md) | 官网协议依据、期数切换与缓存、排行兼容、游客单期风控的验证边界 |
 | [PiliPlus 与 media-kit fork 移植](validation/piliplus-media-kit-port.md) | 固定 Git 依赖、Android Surface、macOS SwiftPM stub 修复、解码与弹幕优化及验证边界 |
 | [下载与离线播放](downloads.md) | 分 P／剧集、下载队列、断点恢复、校验、本地分轨播放及三端验收边界 |

@@ -250,6 +250,8 @@ Android 工作区预测式返回动画随根页面导航栏布局启停：底栏
 
 桌面提供 hover、右键、滚轮、可见焦点、快捷键和窗口尺寸恢复；移动提供返回栈、横竖屏、触控手势和安全区。文本缩放、屏幕阅读器和键盘访问在共享组件层处理。
 
+2026-10-31 主窗口和独立播放窗口分别持久保存普通大小、位置和最大化，跨账号共用，跨启动恢复；最小化／全屏不覆盖普通状态。原生平台适配在业务数据库和首次显示之前恢复本机呈现记录，不作为产品设置或账号数据；平台范围和验证见[桌面窗口状态持久化](validation/window-geometry-persistence.md)。
+
 macOS 内容区触控板向右滑动可通过工作区原有返回入口回退页面或视频历史；左侧箭头随拖动反馈，达到距离阈值后松手确认。共享识别器参与 Flutter 手势竞争，保留内层横向列表及播放器进度条的优先权，模态层阻止底层返回。实现和平台验收边界见 [macOS 触控板滑动返回](validation/macos-trackpad-back.md)。
 
 `PlatformServices` 分成小接口：`WindowService`、`AudioSessionService`、`PowerService`、`MediaControlsService`、`PipService`、`FileAccessService`、`ExternalLinkService`。通过 capability 返回支持状态，页面不散落 `Platform.isWindows`。
