@@ -231,17 +231,20 @@ void main() {
 
   for (final reduced in [false, true]) {
     testWidgets(
-      'narrow profile collapses up and restores down with retained lists reduced=$reduced',
+      'narrow profile pins tabs and restores header after the list top reduced=$reduced',
       (tester) async {
         await mount(tester, disableAnimations: reduced);
-        final header = find.byKey(const ValueKey('profile-collapsing-header'));
+        final header = find.byKey(
+          const ValueKey('profile-collapsing-header'),
+          skipOffstage: false,
+        );
         final navigation = find.byType(ProfileSectionNavigation);
         final headerHeight = tester.getSize(header).height;
         final initialTop = tester.getTopLeft(navigation).dy;
         final videos = _position(tester);
         await tester.drag(_surface, const Offset(0, -340));
         await tester.pumpAndSettle();
-        expect(tester.getSize(header).height, 0);
+        expect(header.hitTestable(), findsNothing);
         expect(
           tester.getTopLeft(navigation).dy,
           closeTo(initialTop - headerHeight, .1),
@@ -251,7 +254,7 @@ void main() {
         controller().select(ProfileSection.dynamics);
         await tester.pumpAndSettle();
         expect(
-          tester.getSize(header).height,
+          header.hitTestable().evaluate().length,
           0,
           reason: 'Horizontal paging does not restore the header',
         );
@@ -260,7 +263,11 @@ void main() {
         expect(videos.pixels, closeTo(saved, .1));
         await tester.drag(_surface, const Offset(0, 120));
         await tester.pumpAndSettle();
-        expect(tester.getSize(header).height, headerHeight);
+        expect(header.hitTestable(), findsNothing);
+        expect(_position(tester).pixels, greaterThan(0));
+        await tester.drag(_surface, const Offset(0, 600));
+        await tester.pumpAndSettle();
+        expect(header.hitTestable(), findsOneWidget);
         controller().select(ProfileSection.videos);
         await tester.pumpAndSettle();
         expect(_position(tester), same(videos));
@@ -276,7 +283,7 @@ void main() {
       await mount(tester, active: false);
       final header = find.byKey(const ValueKey('profile-collapsing-header'));
       final height = tester.getSize(header).height;
-      await tester.drag(_surface, const Offset(0, -300));
+      await tester.drag(_surface, const Offset(0, -300), warnIfMissed: false);
       await tester.pumpAndSettle();
       expect(tester.getSize(header).height, height);
     },
@@ -289,14 +296,19 @@ void main() {
       final videos = _position(tester);
       videos.jumpTo(260);
       await tester.pumpAndSettle();
-      final headerRect = tester.getRect(find.byType(ProfileHeader));
+      final headerRect = tester.getRect(
+        find.byType(ProfileHeader, skipOffstage: false),
+      );
       final navigationRect = tester.getRect(
         find.byType(ProfileSectionNavigation),
       );
       controller().select(ProfileSection.followers);
       await tester.pumpAndSettle();
       expect(videos.pixels, closeTo(260, .1));
-      expect(tester.getRect(find.byType(ProfileHeader)), headerRect);
+      expect(
+        tester.getRect(find.byType(ProfileHeader, skipOffstage: false)),
+        headerRect,
+      );
       expect(
         tester.getRect(find.byType(ProfileSectionNavigation)),
         navigationRect,
@@ -341,7 +353,7 @@ void main() {
           tester.getRect(find.byType(ProfileSectionNavigation)),
           navigationRect,
         );
-        await tester.drag(_surface, const Offset(0, -180));
+        await tester.drag(_surface, Offset(0, -height));
         await tester.pumpAndSettle();
         expect(list.pixels, greaterThan(0));
         expect(
@@ -349,10 +361,8 @@ void main() {
           greaterThan(contentRect.height),
         );
         expect(
-          tester
-              .getSize(find.byKey(const ValueKey('profile-collapsing-header')))
-              .height,
-          0,
+          find.byKey(const ValueKey('profile-collapsing-header')).hitTestable(),
+          findsNothing,
         );
         expect(_currentList(tester).hitTestable(), findsOneWidget);
         expect(tester.takeException(), isNull);
@@ -597,6 +607,7 @@ void main() {
     ) async {
       await mount(
         tester,
+        width: 900,
         platform: TargetPlatform.windows,
         scrollBehavior: const SmoothScrollBehavior(),
       );

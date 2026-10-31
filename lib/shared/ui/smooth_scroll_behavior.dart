@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/presentation/input_scope.dart';
 import '../../core/presentation/workspace_activity.dart';
+import 'scroll_collapsing_header.dart';
 
 /// Keeps local ScrollConfiguration overrides on the same wheel preference.
 final class SmoothScrollScope extends InheritedWidget {
@@ -205,12 +206,14 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
     }
     if (axisDirectionIsReversed(position.axisDirection)) delta = -delta;
     if (!delta.isFinite || delta == 0) return;
-    final next = (position.pixels + delta).clamp(
-      position.minScrollExtent,
-      position.maxScrollExtent,
+    final header = HeaderScrollController.offsetFor(position);
+    final pixels = header?.pixels ?? position.pixels;
+    final next = (pixels + delta).clamp(
+      header?.minScrollExtent ?? position.minScrollExtent,
+      header?.maxScrollExtent ?? position.maxScrollExtent,
     );
     // At an edge, let an enclosing scrollable claim the event instead.
-    if (next == position.pixels) return;
+    if (next == pixels) return;
     GestureBinding.instance.pointerSignalResolver.register(event, (_) {
       if (!mounted ||
           !_active ||
@@ -244,7 +247,7 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
         dampingRatio: _dampingRatio,
       );
       _motion = activity;
-      position.beginActivity(activity);
+      activity.begin();
     }
   }
 
@@ -278,6 +281,7 @@ final class _WheelScrollActivity extends ScrollActivity {
     double delta, {
     required double dampingRatio,
   }) : _position = position,
+       _header = HeaderScrollController.offsetFor(position),
        _spring = SpringDescription.withDampingRatio(
          mass: 1,
          stiffness: 1600,
@@ -292,6 +296,11 @@ final class _WheelScrollActivity extends ScrollActivity {
   static const _maxPendingDistance = 1500.0; // Logical pixels.
   ScrollPosition _position;
   ScrollPosition get position => _position;
+  final HeaderScrollOffset? _header;
+  bool get coordinated => _header != null;
+  double get _pixels => _header?.pixels ?? position.pixels;
+  double get _min => _header?.minScrollExtent ?? position.minScrollExtent;
+  double get _max => _header?.maxScrollExtent ?? position.maxScrollExtent;
   late final Ticker _ticker;
   late ScrollSpringSimulation _simulation;
   Duration _lastElapsed = Duration.zero;
@@ -301,6 +310,14 @@ final class _WheelScrollActivity extends ScrollActivity {
   double _lastDelta = 0;
   double _velocity = 0;
   bool disposed = false;
+
+  void begin() {
+    if (_header case final header?) {
+      header.beginActivity(this);
+    } else {
+      position.beginActivity(this);
+    }
+  }
 
   void addDelta(double delta) {
     final remaining = _targetDistance - _lastSimulationPosition;
@@ -363,11 +380,14 @@ final class _WheelScrollActivity extends ScrollActivity {
     _lastSimulationPosition = value;
     _velocity = simulation.dx(seconds);
     // Apply only the frame's displacement so layout can still correct pixels.
-    final next = (position.pixels + distance).clamp(
-      position.minScrollExtent,
-      position.maxScrollExtent,
-    );
-    final overscroll = delegate.setPixels(next);
+    final next = (_pixels + distance).clamp(_min, _max);
+    final double overscroll;
+    if (_header case final header?) {
+      header.applyDelta(next - _pixels);
+      overscroll = 0;
+    } else {
+      overscroll = delegate.setPixels(next);
+    }
     // A scroll listener can take ownership while setPixels dispatches updates.
     if (!disposed &&
         ((identical(simulation, _simulation) && simulation.isDone(seconds)) ||
@@ -377,12 +397,15 @@ final class _WheelScrollActivity extends ScrollActivity {
     }
   }
 
-  bool get _atBoundary => _lastDelta > 0
-      ? position.pixels >= position.maxScrollExtent
-      : position.pixels <= position.minScrollExtent;
+  bool get _atBoundary => _lastDelta > 0 ? _pixels >= _max : _pixels <= _min;
 
   void stop() {
-    if (!disposed) delegate.goIdle();
+    if (disposed) return;
+    if (_header case final header?) {
+      header.goIdle();
+    } else {
+      delegate.goIdle();
+    }
   }
 
   @override

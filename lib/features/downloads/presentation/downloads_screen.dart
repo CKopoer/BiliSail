@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/ui/app_dialog.dart';
+import '../../../core/presentation/workspace_activity.dart';
+import '../../../shared/ui/scroll_collapsing_header.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/video_codec.dart';
 import '../../../shared/ui/app_cover_image.dart';
@@ -70,6 +72,7 @@ final class DownloadsScreen extends ConsumerStatefulWidget {
 
 final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
   final _searchController = TextEditingController();
+  final _scrollController = HeaderScrollController();
   bool _completed = false;
   String _query = '';
   String _normalizedQuery = '';
@@ -107,6 +110,7 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -138,6 +142,10 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _scrollController.configure(
+      context,
+      active: WorkspaceActivity.isActive(context),
+    );
     final (initialized, failure) = ref.watch(
       downloadControllerProvider.select(
         (state) => (state.initialized, state.failure),
@@ -245,6 +253,7 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
         const Divider(height: 1),
         Expanded(
           child: ListView.builder(
+            controller: _scrollController,
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 72),
             itemCount: shown.length + 3,
             findChildIndexCallback: (key) => switch (key) {

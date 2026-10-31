@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
+import 'package:bilisail/shared/ui/scroll_collapsing_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -34,6 +35,7 @@ void main() {
             .firstWhere(
               (state) =>
                   state.position.axis == Axis.vertical &&
+                  state.widget.controller is HeaderScrollController &&
                   (state.context
                           .getInheritedWidgetOfExactType<WorkspaceActivity>()
                           ?.active ??

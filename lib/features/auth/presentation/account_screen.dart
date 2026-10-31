@@ -103,18 +103,16 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     final overview = ref.watch(accountOverviewProvider);
     final theme = Theme.of(context);
     return SafeArea(
-      child: ScrollHeaderRegion(
+      child: ScrollHeaderLayout(
         enabled: ScrollHeaderRegion.isEnabled(context),
+        header: Material(
+          key: const ValueKey('account-collapsing-profile'),
+          color: theme.colorScheme.surface,
+          child: _profileBar(auth, overview),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ScrollCollapsingHeader(
-              key: const ValueKey('account-collapsing-profile'),
-              child: Material(
-                color: theme.colorScheme.surface,
-                child: _profileBar(auth, overview),
-              ),
-            ),
             Material(
               color: theme.colorScheme.surface,
               child: ScrollConfiguration(

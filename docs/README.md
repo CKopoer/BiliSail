@@ -60,6 +60,7 @@
 | [首版实测记录](validation/m0-results.md) | Windows 原生播放、工程检查、构建结果和未测项 |
 | [界面与多标签验证](validation/uwp-workspace.md) | UWP 风格布局、首页频道、多标签状态与本轮验证边界 |
 | [单标签导航与顶部滚动](validation/single-page-navigation.md) | 单标签恢复、Android 默认值、播放与空间返回链及历史滚动验证 |
+| [顶部连续滚动与子标签吸附](validation/continuous-scroll-headers-2026-10-31.md) | 首页、我的与用户主页的距离联动、淡出、吸附与保留列表生命周期 |
 | [首页子频道协议](validation/home-subtabs.md) | 各首页列表的端点、游标与前序接入记录 |
 | [窄屏一级导航动效](validation/primary-navigation-motion.md) | 底栏不透明滑入、隐藏根分支构建复用与历史验证边界 |
 | [窄屏底栏切换复查](validation/primary-navigation-performance-2026-10-28.md) | Windows/Android 共用分页器活动隔离、设置表单复用和底栏过渡 |

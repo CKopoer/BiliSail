@@ -854,58 +854,72 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                   ),
                                   child: ScrollHeaderRegion(
                                     enabled: compact,
-                                    identity: (
-                                      tab.id,
-                                      sectionForLocation(
-                                        tab.location,
-                                        compact: _compactChannels,
-                                      ),
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        if (_frameShowsBack(context) &&
-                                            widget.windowControlsBuilder ==
-                                                null &&
-                                            tab.isProfile)
-                                          SizedBox(
-                                            key: const ValueKey(
-                                              'workspace-profile-back-header',
+                                    child: ScrollHeaderLayout(
+                                      enabled: compact,
+                                      header:
+                                          compact &&
+                                              tab.location.path != '/search' &&
+                                              !tab.isPlayback &&
+                                              !tab.isProfile &&
+                                              !tab.isMessages &&
+                                              sectionForLocation(
+                                                    tab.location,
+                                                    compact: _compactChannels,
+                                                  ) ==
+                                                  WorkspaceSection.home
+                                          ? _tools(context)
+                                          : const SizedBox.shrink(),
+                                      child: Column(
+                                        children: [
+                                          if (_frameShowsBack(context) &&
+                                              widget.windowControlsBuilder ==
+                                                  null &&
+                                              tab.isProfile)
+                                            SizedBox(
+                                              key: const ValueKey(
+                                                'workspace-profile-back-header',
+                                              ),
+                                              height: 42,
+                                              child: Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: _backButton(),
+                                              ),
                                             ),
-                                            height: 42,
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: _backButton(),
-                                            ),
-                                          ),
-                                        if (tab.location.path != '/search' &&
-                                            !tab.isPlayback &&
-                                            !tab.isProfile &&
-                                            !tab.isMessages)
-                                          LayoutBuilder(
-                                            builder: (context, bounds) =>
-                                                _navigationHeader(
-                                                  context,
-                                                  bounds,
-                                                  _channelBar(
+                                          if (tab.location.path != '/search' &&
+                                              !tab.isPlayback &&
+                                              !tab.isProfile &&
+                                              !tab.isMessages)
+                                            LayoutBuilder(
+                                              builder: (context, bounds) =>
+                                                  _navigationHeader(
                                                     context,
+                                                    bounds,
+                                                    _channelBar(
+                                                      context,
+                                                      compact: compact,
+                                                    ),
+                                                    showTools: compact
+                                                        ? false
+                                                        : null,
                                                     compact: compact,
                                                   ),
-                                                  compact: compact,
-                                                ),
+                                            ),
+                                          Expanded(
+                                            child: PageToolbarLeading(
+                                              leading:
+                                                  tab.isMessages &&
+                                                      _frameShowsBack(
+                                                        context,
+                                                      ) &&
+                                                      widget.windowControlsBuilder ==
+                                                          null
+                                                  ? _backButton()
+                                                  : null,
+                                              child: pages,
+                                            ),
                                           ),
-                                        Expanded(
-                                          child: PageToolbarLeading(
-                                            leading:
-                                                tab.isMessages &&
-                                                    _frameShowsBack(context) &&
-                                                    widget.windowControlsBuilder ==
-                                                        null
-                                                ? _backButton()
-                                                : null,
-                                            child: pages,
-                                          ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -2075,16 +2089,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
       }
       return navigation ?? const SizedBox.shrink();
     }
-    final tools = ScrollCollapsingHeader(
-      enabled:
-          compact &&
-          sectionForLocation(
-                _frameTab(context).location,
-                compact: _compactChannels,
-              ) ==
-              WorkspaceSection.home,
-      child: _tools(context),
-    );
+    final tools = _tools(context);
     return compact || constraints.maxWidth < 760
         ? Column(mainAxisSize: MainAxisSize.min, children: [tools, ?navigation])
         : SizedBox(

@@ -119,96 +119,82 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final scrollBehavior = ScrollConfiguration.of(context);
     return LayoutBuilder(
       key: ValueKey(session),
-      builder: (context, constraints) => ScrollHeaderRegion(
+      builder: (context, constraints) => ScrollHeaderLayout(
         enabled: constraints.maxWidth < 600,
-        identity: session,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Keep the shared header outside all tab lists. Long introductions
-            // can scroll within it, leaving room for navigation and content.
-            ScrollCollapsingHeader(
-              key: const ValueKey('profile-collapsing-header'),
-              child: NotificationListener<UserScrollNotification>(
-                // A long biography has its own scroll area; keep it readable.
-                onNotification: (_) => true,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * .5,
-                  ),
-                  child: ScrollConfiguration(
-                    behavior: scrollBehavior.copyWith(scrollbars: false),
-                    child: SingleChildScrollView(
-                      key: const ValueKey('profile-header-scroll'),
-                      primary: false,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (p != null)
-                            ProfileHeader(
-                              profile: p,
-                              isSelf: isSelf,
-                              followAction: isSelf
-                                  ? null
-                                  : UserFollowButton(
-                                      key: const ValueKey('profile-follow'),
-                                      id: widget.id,
-                                      onLogin: widget.onLogin,
-                                    ),
-                              messageAction: isSelf
-                                  ? null
-                                  : OutlinedButton.icon(
-                                      key: const ValueKey('profile-message'),
-                                      style: OutlinedButton.styleFrom(
-                                        minimumSize: const Size(80, 40),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 8,
-                                        ),
-                                      ),
-                                      onPressed: signedIn
-                                          ? widget.onMessage == null
-                                                ? null
-                                                : () =>
-                                                      widget.onMessage?.call(p)
-                                          : widget.onLogin,
-                                      icon: const Icon(
-                                        Icons.mail_outline,
-                                        size: 18,
-                                      ),
-                                      label: const Text('私信'),
-                                    ),
-                              onSelectSection: controller.select,
-                              liveRoom: liveRoom,
-                              onOpenLiveRoom: switch ((
-                                liveRoom,
-                                widget.onOpenLiveRoom,
-                              )) {
-                                (final room?, final open?) => () => open(
-                                  room.id,
+        // Long introductions retain a bounded, independent scroll area.
+        header: KeyedSubtree(
+          key: const ValueKey('profile-collapsing-header'),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: constraints.maxHeight * .5),
+            child: ScrollConfiguration(
+              behavior: scrollBehavior.copyWith(scrollbars: false),
+              child: SingleChildScrollView(
+                key: const ValueKey('profile-header-scroll'),
+                primary: false,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (p != null)
+                      ProfileHeader(
+                        profile: p,
+                        isSelf: isSelf,
+                        followAction: isSelf
+                            ? null
+                            : UserFollowButton(
+                                key: const ValueKey('profile-follow'),
+                                id: widget.id,
+                                onLogin: widget.onLogin,
+                              ),
+                        messageAction: isSelf
+                            ? null
+                            : OutlinedButton.icon(
+                                key: const ValueKey('profile-message'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(80, 40),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
                                 ),
-                                _ => null,
-                              },
-                            ),
-                          if (profileMessage case final message?)
-                            StateView.error(
-                              message: message,
-                              onAction: controller.loadProfile,
-                            ),
-                          if (liveRoomMessage case final message?)
-                            StateView.error(
-                              message: '直播间：$message',
-                              onAction: controller.loadLiveRoom,
-                            ),
-                        ],
+                                onPressed: signedIn
+                                    ? widget.onMessage == null
+                                          ? null
+                                          : () => widget.onMessage?.call(p)
+                                    : widget.onLogin,
+                                icon: const Icon(Icons.mail_outline, size: 18),
+                                label: const Text('私信'),
+                              ),
+                        onSelectSection: controller.select,
+                        liveRoom: liveRoom,
+                        onOpenLiveRoom: switch ((
+                          liveRoom,
+                          widget.onOpenLiveRoom,
+                        )) {
+                          (final room?, final open?) => () => open(room.id),
+                          _ => null,
+                        },
                       ),
-                    ),
-                  ),
+                    if (profileMessage case final message?)
+                      StateView.error(
+                        message: message,
+                        onAction: controller.loadProfile,
+                      ),
+                    if (liveRoomMessage case final message?)
+                      StateView.error(
+                        message: '直播间：$message',
+                        onAction: controller.loadLiveRoom,
+                      ),
+                  ],
                 ),
               ),
             ),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
               child: ProfileSectionNavigation(

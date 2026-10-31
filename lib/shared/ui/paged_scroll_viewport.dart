@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/presentation/workspace_activity.dart';
 import 'scroll_floating_actions.dart';
+import 'scroll_collapsing_header.dart';
 
 /// Checks pagination after layout as well as when scrolling toward the end.
 /// Keep a distinct key and PageStorageKey for each independently retained list.
@@ -36,7 +37,7 @@ final class PagedScrollViewport extends StatefulWidget {
 }
 
 final class _PagedScrollViewportState extends State<PagedScrollViewport> {
-  late final _scrollController = ScrollController(
+  late final _scrollController = HeaderScrollController(
     keepScrollOffset: widget.keepScrollOffset,
   );
   bool _active = false;
@@ -75,6 +76,10 @@ final class _PagedScrollViewportState extends State<PagedScrollViewport> {
 
   void _syncActivity() {
     final active = widget.active && WorkspaceActivity.isVisible(context);
+    _scrollController.configure(
+      context,
+      active: widget.active && WorkspaceActivity.isActive(context),
+    );
     if (active != _active) {
       _active = active;
       if (active) _scheduleCheck(force: true);

@@ -6,6 +6,7 @@ import 'package:bilisail/features/auth/domain/account_overview.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/auth/presentation/account_screen.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
+import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -65,6 +66,7 @@ void main() {
         find.byKey(const ValueKey('workspace-search')),
         '保留搜索草稿',
       );
+      await tester.pumpAndSettle();
       await tester.drag(
         find.byKey(const ValueKey('list-home')),
         const Offset(0, -240),
@@ -87,6 +89,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('home-avatar')).hitTestable(),
+        collapses ? findsNothing : findsOneWidget,
+      );
+      expect(tester.getTopLeft(channel).dy, originalTop - (collapses ? 52 : 0));
+      await tester.drag(
+        find.byKey(const ValueKey('list-home')),
+        const Offset(0, 1000),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('home-avatar')).hitTestable(),
         findsOneWidget,
       );
       expect(find.text('保留搜索草稿'), findsOneWidget);
@@ -98,7 +110,10 @@ void main() {
       tester,
     ) async {
       await mount(tester, mode: mode, location: '/me', width: width);
-      final profile = find.byKey(const ValueKey('account-collapsing-profile'));
+      final profile = find.byKey(
+        const ValueKey('account-collapsing-profile'),
+        skipOffstage: false,
+      );
       final tabs = find.byKey(const ValueKey('account-tab-strip'));
       final height = tester.getSize(profile).height;
       final originalTop = tester.getTopLeft(tabs).dy;
@@ -106,7 +121,7 @@ void main() {
       final content = tester.element(history);
       await tester.drag(history, const Offset(0, -240));
       await tester.pumpAndSettle();
-      expect(tester.getSize(profile).height, collapses ? 0 : height);
+      expect(profile.hitTestable(), collapses ? findsNothing : findsOneWidget);
       expect(
         tester.getTopLeft(tabs).dy,
         originalTop - (collapses ? height : 0),
@@ -118,10 +133,10 @@ void main() {
       expect(tester.element(history), same(content));
       await tester.tap(find.byKey(const ValueKey('account-tab-watchLater')));
       await tester.pumpAndSettle();
-      expect(tester.getSize(profile).height, collapses ? 0 : height);
+      expect(profile.hitTestable(), collapses ? findsNothing : findsOneWidget);
       await tester.drag(
         find.byKey(const ValueKey('list-watchLater')),
-        const Offset(0, 100),
+        const Offset(0, 300),
       );
       await tester.pumpAndSettle();
       expect(tester.getSize(profile).height, height);
@@ -131,11 +146,18 @@ void main() {
   }
 }
 
-Widget _list(String name) => ListView.builder(
-  key: ValueKey('list-$name'),
-  itemCount: 100,
-  itemExtent: 60,
-  itemBuilder: (_, index) => Text('$name $index'),
+Widget _list(String name) => PagedScrollViewport(
+  active: true,
+  canLoadMore: false,
+  contentVersion: name,
+  onLoadMore: () async {},
+  builder: (controller) => ListView.builder(
+    key: ValueKey('list-$name'),
+    controller: controller,
+    itemCount: 100,
+    itemExtent: 60,
+    itemBuilder: (_, index) => Text('$name $index'),
+  ),
 );
 
 class _AuthRepository implements AuthRepository {
