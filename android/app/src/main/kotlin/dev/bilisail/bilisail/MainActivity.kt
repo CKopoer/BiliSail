@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.util.ViewUtils
 
 class MainActivity : AudioServiceActivity() {
     private var downloadStorage: DownloadStorageHandler? = null
@@ -14,6 +15,7 @@ class MainActivity : AudioServiceActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        updateDisplayMetrics(flutterEngine)
         appIcon = AppIconHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         downloadStorage = DownloadStorageHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         imageExport = ImageExportHandler(this, flutterEngine.dartExecutor.binaryMessenger)
@@ -22,6 +24,7 @@ class MainActivity : AudioServiceActivity() {
     }
 
     override fun onResume() {
+        updateDisplayMetrics(flutterEngine)
         super.onResume()
         mobileWindow?.setResumed(true)
     }
@@ -33,7 +36,14 @@ class MainActivity : AudioServiceActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        updateDisplayMetrics(flutterEngine)
         mobileWindow?.reapplyFullScreen()
+    }
+
+    private fun updateDisplayMetrics(engine: FlutterEngine?) {
+        // audio_service creates its cached engine with an Application context,
+        // so Flutter cannot initialize the full display until an Activity owns it.
+        if (engine != null) ViewUtils.calculateMaximumDisplayMetrics(this, engine)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

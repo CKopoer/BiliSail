@@ -8,6 +8,66 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'cold tablet keeps sidebar choices before the first display update',
+    (tester) async {
+      tester.view.devicePixelRatio = 2.25;
+      tester.view.display.size = const Size(-1, -1);
+      tester.view.physicalSize = const Size(2560, 1600);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.display.resetSize);
+      addTearDown(tester.view.resetPhysicalSize);
+      final mode = ValueNotifier(NavigationBarMode.automatic);
+      addTearDown(mode.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: BiliTheme.light(),
+          home: ValueListenableBuilder(
+            valueListenable: mode,
+            builder: (_, value, _) => BiliAppShell(
+              location: '/',
+              navigationBarMode: value,
+              child: const TextField(key: ValueKey('cold-tablet-draft')),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final draft = find.byKey(const ValueKey('cold-tablet-draft'));
+      final content = tester.element(draft);
+      final bottom = find.byKey(const ValueKey('workspace-bottom-navigation'));
+      expect(bottom, findsNothing);
+      await tester.enterText(draft, '冷启动保留页面');
+      for (final value in NavigationBarMode.values) {
+        mode.value = value;
+        await tester.pumpAndSettle();
+        expect(
+          bottom,
+          value == NavigationBarMode.bottom ? findsOneWidget : findsNothing,
+        );
+        expect(tester.element(draft), same(content));
+      }
+      for (final size in [const Size(1600, 2560), const Size(2560, 1600)]) {
+        tester.view.display.size = size;
+        tester.view.physicalSize = size;
+        await tester.pumpAndSettle();
+        expect(bottom, findsNothing);
+        expect(find.byKey(const ValueKey('channel-live')), findsNothing);
+        expect(tester.element(draft), same(content));
+        expect(find.text('冷启动保留页面'), findsOneWidget);
+      }
+      tester.view.physicalSize = const Size(1000, 1600);
+      await tester.pumpAndSettle();
+      expect(bottom, findsOneWidget);
+      tester.view.physicalSize = const Size(2560, 1600);
+      await tester.pumpAndSettle();
+      expect(bottom, findsNothing);
+      expect(tester.element(draft), same(content));
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
   for (final mode in NavigationBarMode.values) {
     testWidgets(
       'mobile navigation uses the current unfolded display with $mode',

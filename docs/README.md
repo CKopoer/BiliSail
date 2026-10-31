@@ -69,6 +69,7 @@
 | [Android 原生与 PiliPlus 导航对照](validation/android-navigation-reference-comparison-2026-10-26.md) | 状态保留与页面结构、悬停/裁剪优化、图片和骨架候选及后续优先级 |
 | [Android 预测式返回](validation/android-predictive-back.md) | 工作区系统手势预览、取消／确认、返回优先级和验证边界 |
 | [Android 系统手势条背景](validation/android-system-navigation-2026-10-30.md) | 黑底原因、随主题适配的系统栏、安全区绘制与验证边界 |
+| [Android 平板冷启动导航](validation/android-tablet-navigation-cold-start.md) | 缓存引擎屏幕指标初始化、异常尺寸回退、窄屏底栏限制与验证边界 |
 | [排行榜分区参数](validation/ranking-regions.md) | 官网配置动态目录、新分区 ID、刷新撤下处理与风控验证边界 |
 | [影视与直播内置播放](validation/content-playback.md) | 四频道内置入口、三类播放页、影视选集、直播线路与原生验证 |
 | [直播清晰度与线路选择](validation/live-playback-options.md) | 官网与参考协议、统一菜单样式、自动档、主备线路和独立默认清晰度 |

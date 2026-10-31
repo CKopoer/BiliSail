@@ -8,8 +8,25 @@ abstract final class WindowSizePolicy {
   static bool isMobile(TargetPlatform platform) =>
       platform == TargetPlatform.android || platform == TargetPlatform.iOS;
 
-  static Size displaySize(FlutterView view) =>
-      view.display.size / view.display.devicePixelRatio;
+  static Size displaySize(FlutterView view) {
+    final display = view.display;
+    final size = _logicalSize(display.size, display.devicePixelRatio);
+    if (!size.isEmpty) return size;
+    // A cached Android engine can report -1 for both size and density before
+    // its Activity publishes display metrics. Dividing those first yields 1dp.
+    return _logicalSize(view.physicalSize, view.devicePixelRatio);
+  }
+
+  static Size _logicalSize(Size physicalSize, double density) {
+    if (physicalSize.isEmpty ||
+        !physicalSize.isFinite ||
+        !density.isFinite ||
+        density <= 0) {
+      return Size.zero;
+    }
+    final size = physicalSize / density;
+    return size.isFinite ? size : Size.zero;
+  }
 
   static double availableWidth(FlutterView view) =>
       (view.physicalSize.width - view.padding.left - view.padding.right) /
