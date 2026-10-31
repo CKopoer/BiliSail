@@ -181,6 +181,27 @@ void main() {
   );
 
   test(
+    'closing the last playback page clears paused and playing targets',
+    () async {
+      for (final paused in [false, true]) {
+        final session = await open('video');
+        if (paused) await session.pause();
+        final id = controls.state!.id;
+        manager.release('video', session);
+        expect(controls.state, isNull);
+        expect(manager.sessions, isEmpty);
+        await controls.onCommand!(
+          SystemMediaCommand(id, SystemMediaAction.play),
+        );
+        expect(controls.state, isNull);
+      }
+      await open('next');
+      expect(controls.state?.title, 'next');
+      expect(controls.state?.playing, isTrue);
+    },
+  );
+
+  test(
     'account stop clears every target and old actions cannot resume',
     () async {
       await open('one');

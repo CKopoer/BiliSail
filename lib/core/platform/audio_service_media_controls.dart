@@ -32,6 +32,9 @@ Future<SystemMediaControls> createSystemMediaControls() async {
         androidNotificationChannelName: '视频播放',
         androidNotificationChannelDescription: '播放状态与媒体控制',
         androidNotificationIcon: 'drawable/ic_media_notification',
+        // A closed page has no source to resume. Do not retain an Android
+        // resumption card or a media-button receiver for the stopped session.
+        androidResumeOnClick: false,
         // Reopening audio or advancing a playlist briefly pauses the engine.
         // Keep the foreground service until stop/close so background playback
         // does not depend on permission to start a new foreground service.

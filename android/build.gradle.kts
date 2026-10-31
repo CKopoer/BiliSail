@@ -19,6 +19,8 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+apply(from = "patches/audio_service/apply.gradle")
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

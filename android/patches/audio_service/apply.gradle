@@ -1,0 +1,61 @@
+import java.security.MessageDigest
+
+// audio_service 0.18.19 (MIT). Patch a build-local copy, never the Pub cache.
+def patchScript = file('patches/audio_service/apply.gradle')
+def stopTest = file('patches/audio_service/StopNotificationTest.java')
+project(':audio_service') {
+    plugins.withId('com.android.library') {
+        def sources = android.sourceSets.getByName('main').java
+        def upstreamDirectories = sources.srcDirs.toList()
+        def patchedDirectory = layout.buildDirectory.dir('bilisail-patched-java')
+        def prepareSources = tasks.register('prepareBilisailAudioService', Sync) {
+            inputs.file(patchScript)
+            from(upstreamDirectories)
+            into(patchedDirectory)
+            doLast {
+                def source = patchedDirectory.get().file('com/ryanheise/audioservice/AudioService.java').asFile
+                def original = source.getText('UTF-8').replace('\r\n', '\n')
+                def hash = MessageDigest.getInstance('SHA-256')
+                    .digest(original.getBytes('UTF-8')).encodeHex().toString()
+                if (hash != '538dc027311ea070eea883f6dbf6b0e339c6c609cf6b395d018e359caea36938') {
+                    throw new GradleException('audio_service 0.18.19 source changed; review the foreground notification stop patch.')
+                }
+                def before = '''    public void stop() {
+        deactivateMediaSession();
+        stopSelf();
+    }'''
+                def after = '''    public void stop() {
+        // A bound MediaBrowser can keep this service alive after stopSelf().
+        // Stop foreground ownership now: cancel() alone cannot remove an FGS
+        // notification, and onDestroy() may not run until the Activity unbinds.
+        notificationCreated = false;
+        handler.removeCallbacksAndMessages(null);
+        ServiceCompat.stopForeground(this, STOP_FOREGROUND_REMOVE);
+        deactivateMediaSession();
+        releaseWakeLock();
+        stopSelf();
+    }'''
+                if (original.count(before) != 1) {
+                    throw new GradleException('audio_service notification stop patch anchor must occur exactly once.')
+                }
+                source.setText(original.replace(before, after), 'UTF-8')
+            }
+        }
+        sources.setSrcDirs([prepareSources.map { it.destinationDir }])
+        // Kotlin also reads Java declarations; lint consumes the same sources.
+        tasks.matching { it.name.startsWith('compile') || it.name.startsWith('lint') }.configureEach {
+            dependsOn(prepareSources)
+        }
+        def stopRegression = tasks.register('testBilisailAudioServiceStop', Exec) {
+            dependsOn(prepareSources)
+            def javaName = System.getProperty('os.name').startsWith('Windows') ? 'java.exe' : 'java'
+            commandLine(new File(System.getProperty('java.home'), "bin/$javaName"),
+                stopTest,
+                patchedDirectory.get().file('com/ryanheise/audioservice/AudioService.java').asFile,
+                layout.buildDirectory.dir('bilisail-stop-test').get().asFile)
+        }
+        tasks.matching { it.name == 'check' }.configureEach {
+            dependsOn(stopRegression)
+        }
+    }
+}

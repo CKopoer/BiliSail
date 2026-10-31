@@ -65,3 +65,29 @@ flutter test integration_test/windows_system_media_test.dart -d windows
 - 新增 Android 两个动态引用图标的资源保留和 APK 检查，防止 Release 压缩导致媒体按钮不可用。具体设备的通知栏、锁屏样式、按钮与完播清除仍需 Android 实机验收。
 - 定向系统媒体测试 17 项及 Android 通知资源边界检查 25 项通过；独立包测试 bili_api 497、bili_player 101、bili_danmaku 136、bili_mux 5 项通过，mux 另有 10 项因未设置 `BILI_MUX_LIBRARY` 跳过。`flutter analyze --no-pub` 通过。初次根检查在同期临时集成探针的格式检查处中断；该探针移除后分别运行检查脚本 Lint、RootTests 和 PackageTests 阶段，均通过。根测试 3697 项通过、13 项跳过。
 - Android 普通入口开发 Release 构建及 APK 资源检查通过，复用既有 mux 资产；构建时工作区存在同期修改，产物并非只含本轮变更。未连接设备，未安装；未验证通知栏／锁屏的实际按钮、自动连播衔接与清除。
+
+## Android 退出播放页后通知残留（2026-10-31）
+
+页面关闭已通过 `PlaybackManager.release` 移除会话，并由系统媒体控制器发布空目标；问题位于固定 `audio_service` 0.18.19 的 Android 停止路径。工程设置 `androidStopForegroundOnPause: false`，以保留后台暂停／换源能力。插件的 `stop()` 只取消通知并调用 `stopSelf()`，前台归属和唤醒锁直到 `onDestroy()` 才释放。Activity 的 MediaBrowser 仍绑定服务时，销毁会延后；前台服务通知不能单靠通知管理器的 `cancel()` 移除。此外，`notificationCreated` 仍为 true，迟到的封面回调还能重新发布已停止的通知。
+
+- [构建补丁](../../android/patches/audio_service/apply.gradle) 在原生 `stop()` 中立即清除通知发布标记和排队封面回调，调用 `stopForeground(STOP_FOREGROUND_REMOVE)`，再停用媒体会话、释放唤醒锁并停止服务。后续播放仍由插件的正常进入播放路径重新创建通知；暂停、缓冲和多标签目标回退沿用原流程。
+- 补丁只处理 Gradle 构建目录内的源码副本，校验上游完整 `AudioService.java` 的规范化 SHA-256；依赖源码变化时拒绝构建，须重新审查。Java、Kotlin 与 lint 明确依赖副本准备任务；未修改 Pub 缓存、依赖版本或相邻仓库。上游源码及此处引用的方法来自 MIT 的 `audio_service` 0.18.19。
+- Android 配置显式关闭 `androidResumeOnClick`，防止已关闭、无可恢复播放源的会话保留系统恢复卡片或接收恢复广播；仍保留活动会话的系统播放／暂停控制及后台策略。
+- [原生方法回归](../../android/patches/audio_service/StopNotificationTest.java) 从实际源码提取并编译停止、通知更新、媒体停用与唤醒锁释放方法，以绑定服务及前台通知生命周期 fake 验证。未补丁源码失败于“停止后仍拥有前台通知”；补丁源码通过 11 项断言，覆盖即时移除、排队／迟到封面、重复停止和后续新播放。该测试验证原生方法行为，不代替 Android 系统通知栏实测。
+- 新增页面关闭行为回归：播放中／暂停后关闭最后一页均清空系统目标，旧媒体命令失效，之后打开新页正常发布。系统媒体定向测试共 18 项通过。
+
+原生方法回归可在 Android 构建环境中运行：
+
+```powershell
+cd android
+.\gradlew.bat :audio_service:testBilisailAudioServiceStop -PbilisailDevelopmentBuild=true --console=plain
+```
+
+验证结果：
+
+- `tool/check.ps1 -SkipPub` 全部通过：格式、静态分析、打包边界及根应用 3761 项测试通过（13 项既有跳过）；bili_api 499、bili_player 105、bili_danmaku 145、bili_mux 5 项通过。mux 另有 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生通过。日志：`build/android-media-stop-check.log`。
+- Gradle 的 `testBilisailAudioServiceStop` 通过，确认测试读取实际构建副本；`javap` 核对 Release 编译后的 `AudioService.stop()`，包含清除标记、移除回调、`STOP_FOREGROUND_REMOVE` 和唤醒锁释放。日志：`build/android-media-stop-baseline.log`、`build/android-media-stop-native.log`、`build/android-media-stop-gradle-test.log`、`build/android-media-stop-targeted.log`。
+- 普通入口 Android arm64 开发 Release／AOT 构建和 APK 校验通过，复用既有 mux 资产；包名 `dev.bilisail.bilisail.test`、名称 `BiliSail 测试版`、版本 `1.2.5+3`／12503，沿用原开发签名且不可调试。产物 `build/development/android-arm64/BiliSail-test-arm64-release.apk`，SHA-256 `064dc204bf111beb25df3439b44684e420cd3e8cbfe85437d4cbfe4ee4c97890`；日志 `build/android-media-stop-release.log`。构建包含同期工作区修改，未执行安装或数据清理。
+- 连接现有 Windows Profile 应用尝试热重载，VM 明确返回 AOT 模式禁用编译；Android 原生改动以重新构建的 APK 生效，未将热重载计为通过。
+
+当前未连接 Android 设备；仍需在修复后的 APK 中实测播放中返回、暂停后返回、快速开关页面、封面加载中退出和后台恢复。未构建 Apple／Linux 目标，未进行性能测量。
