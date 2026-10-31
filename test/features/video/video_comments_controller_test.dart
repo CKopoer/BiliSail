@@ -1,3 +1,4 @@
+import 'package:bilisail/features/comments/domain/comment_composer.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/core/platform/external_links.dart';
@@ -1109,6 +1110,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('回复 @乙'), findsOneWidget);
     await tester.enterText(find.byType(TextField), '保留这条回复');
+    await tester.pump();
     repo.failure = const CommentWriteUncertain();
     await tester.tap(find.text('发布'));
     await tester.pumpAndSettle();
@@ -1606,6 +1608,9 @@ class _Repo implements VideoCommentsRepository, CommentEmotesRepository {
     String message, {
     String? rootId,
     String? parentId,
+    List<CommentPicture> pictures = const [],
+    Map<String, UserId> mentions = const {},
+    bool syncToDynamic = false,
     required RequestCancellation cancellation,
   }) async {
     await write();

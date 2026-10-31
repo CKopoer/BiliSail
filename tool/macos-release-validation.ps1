@@ -6,7 +6,7 @@ function Confirm-MacOSReleaseEntitlements([string]$EntitlementsXml) {
   $dict = $document.SelectSingleNode('/plist/dict')
   if (!$dict) { throw 'Signed macOS entitlements must contain a plist dictionary.' }
   $nodes = @($dict.ChildNodes | Where-Object { $_.NodeType -eq 'Element' })
-  $required = @('com.apple.security.app-sandbox', 'com.apple.security.network.client', 'com.apple.security.assets.pictures.read-write')
+  $required = @('com.apple.security.app-sandbox', 'com.apple.security.network.client', 'com.apple.security.assets.pictures.read-write', 'com.apple.security.files.user-selected.read-only')
   $seen = @()
   for ($index = 0; $index -lt $nodes.Count; $index += 2) {
     $key = $nodes[$index]

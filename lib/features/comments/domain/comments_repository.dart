@@ -1,5 +1,6 @@
 import '../../../domain/user.dart';
 import '../../../domain/request_cancellation.dart';
+import 'comment_composer.dart';
 
 enum CommentSort { hot, latest }
 
@@ -161,6 +162,9 @@ abstract interface class CommentsRepository {
     String message, {
     String? rootId,
     String? parentId,
+    List<CommentPicture> pictures = const [],
+    Map<String, UserId> mentions = const {},
+    bool syncToDynamic = false,
     required RequestCancellation cancellation,
   });
 }

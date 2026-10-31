@@ -6,9 +6,13 @@ import 'package:bili_api/bili_api.dart';
 import '../../../core/network/api_requests.dart';
 import '../../../domain/request_cancellation.dart';
 import '../domain/comments_repository.dart';
+import '../domain/comment_composer.dart';
 
 final class ApiCommentsRepository
-    implements CommentsRepository, CommentEmotesRepository {
+    implements
+        CommentsRepository,
+        CommentEmotesRepository,
+        CommentComposerRepository {
   ApiCommentsRepository(
     this.api,
     this.requests, {
@@ -169,6 +173,9 @@ final class ApiCommentsRepository
     String message, {
     String? rootId,
     String? parentId,
+    List<CommentPicture> pictures = const [],
+    Map<String, UserId> mentions = const {},
+    bool syncToDynamic = false,
     required RequestCancellation cancellation,
   }) => _write(
     (ctx) async => _entry(
@@ -178,9 +185,40 @@ final class ApiCommentsRepository
         commentType: type.value,
         rootId: rootId,
         parentId: parentId,
+        pictures: [
+          for (final p in pictures)
+            ApiCommentPicture(p.url, p.width, p.height, p.sizeKiB),
+        ],
+        mentions: {for (final e in mentions.entries) e.key: e.value.value},
+        syncToDynamic: syncToDynamic,
         context: ctx,
       ),
     ),
     cancellation,
   );
+
+  @override
+  Future<List<CommentMention>> searchMentions(
+    String keyword,
+    RequestCancellation cancellation,
+  ) => requests.run(
+    (ctx) async => List.unmodifiable([
+      for (final user in await api.searchCommentMentions(keyword, context: ctx))
+        CommentMention(UserId(user.mid), user.name, avatarUrl: user.avatarUrl),
+    ]),
+    cancellation: cancellation,
+  );
+
+  @override
+  Future<CommentPicture> uploadPicture(
+    CommentLocalImage image,
+    RequestCancellation cancellation,
+  ) => requests.run((ctx) async {
+    final p = await api.uploadCommentPicture(
+      image.bytes,
+      image.mimeType,
+      context: ctx,
+    );
+    return CommentPicture(p.url, p.width, p.height, p.sizeKiB);
+  }, cancellation: cancellation);
 }

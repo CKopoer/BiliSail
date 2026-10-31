@@ -420,6 +420,25 @@ final class ApiNavInfo {
   final Uri? avatarUrl;
 }
 
+final class ApiCommentPicture {
+  const ApiCommentPicture(this.url, this.width, this.height, this.sizeKiB);
+  final Uri url;
+  final int width, height;
+  final double sizeKiB;
+  Map<String, Object> toJson() => {
+    'img_src': url.toString(),
+    'img_width': width,
+    'img_height': height,
+    'img_size': sizeKiB,
+  };
+}
+
+final class ApiCommentMention {
+  const ApiCommentMention(this.mid, this.name, this.avatarUrl);
+  final String mid, name;
+  final Uri? avatarUrl;
+}
+
 final class ApiCommentEmotePackage {
   const ApiCommentEmotePackage(this.name, this.items);
   final String name;

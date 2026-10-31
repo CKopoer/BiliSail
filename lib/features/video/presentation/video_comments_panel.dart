@@ -28,6 +28,13 @@ class VideoCommentsPanel extends ConsumerWidget {
       replyCount: detail.replyCount,
       onLogin: onLogin,
       onOpenUser: onOpenUser,
+      playbackPosition: () {
+        final session = ref.read(playbackSessionProvider);
+        return session.media != null &&
+                session.detail?.summary.id == detail.summary.id
+            ? session.snapshots.value.position
+            : null;
+      },
       onSeek: (position) async {
         final session = ref.read(playbackSessionProvider);
         final media = session.media;

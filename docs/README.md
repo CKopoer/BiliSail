@@ -89,6 +89,7 @@
 | [直播在看人数精度](validation/live-viewer-precision.md) | 7777 接口调查、精确人数快照、实时下界文案和四项集成验证 |
 | [隐藏控件进度条与直播发送](validation/collapsed-progress-live-send.md) | 视频／影视底部细进度、直播双发送栏／表情权限和单次写验证 |
 | [评论与直播表情选择](validation/emoticon-picker-tabs.md) | 居中弹窗、系列子标签、草稿插入与权限验证 |
+| [共享评论发送框扩展](validation/comment-composer-2026-10-31.md) | 图片、@用户、同步动态、播放时间与桌面／移动布局及协议验证 |
 | [播放器与标签保留](validation/player-workspace.md) | UWP 播放页、只读子标签和未关闭页面的生命周期修正 |
 | [多标签并发播放](validation/multi-tab-playback.md) | 标签独立播放器、互斥播放、模式切换与资源释放 |
 | [Windows 播放窗打开性能](validation/dual-playback-open-performance-2026-10-28.md) | 首帧前同步等帧热点、窗口初始尺寸、Profile 前后对照与验收 |

@@ -54,11 +54,24 @@ abstract interface class ApiJsonTransport {
   });
 }
 
+abstract interface class ApiMultipartTransport {
+  Future<ApiHttpResponse> postMultipart(
+    Uri uri, {
+    required Map<String, String> fields,
+    required Uint8List bytes,
+    required String mimeType,
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  });
+}
+
 final class DioApiTransport
     implements
         ApiTransport,
         ApiFormTransport,
         ApiJsonTransport,
+        ApiMultipartTransport,
         ApiBoundedTransport {
   DioApiTransport({Dio? dio}) : _dio = dio ?? Dio();
   final Dio _dio;
@@ -167,7 +180,7 @@ final class DioApiTransport
     required Map<String, String> headers,
     required Duration timeout,
     ApiCancellation? cancellation,
-    String? body,
+    Object? body,
     String contentType = Headers.formUrlEncodedContentType,
   }) async {
     if (cancellation?.isCancelled ?? false) {
@@ -225,6 +238,36 @@ final class DioApiTransport
   }
 
   void close() => _dio.close(force: true);
+
+  @override
+  Future<ApiHttpResponse> postMultipart(
+    Uri uri, {
+    required Map<String, String> fields,
+    required Uint8List bytes,
+    required String mimeType,
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  }) => _send(
+    uri,
+    headers: headers,
+    timeout: timeout,
+    cancellation: cancellation,
+    contentType: Headers.multipartFormDataContentType,
+    body: FormData.fromMap({
+      ...fields,
+      'file_up': MultipartFile.fromBytes(
+        bytes,
+        filename:
+            'comment.${mimeType == 'image/png'
+                ? 'png'
+                : mimeType == 'image/gif'
+                ? 'gif'
+                : 'jpg'}',
+        contentType: DioMediaType.parse(mimeType),
+      ),
+    }),
+  );
 
   @override
   Future<ApiHttpResponse> postJson(

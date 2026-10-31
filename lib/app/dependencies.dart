@@ -20,6 +20,7 @@ import '../core/platform/audio_service_media_controls.dart';
 import '../core/platform/system_media_controls.dart';
 import '../core/platform/detached_playback_window.dart';
 import '../core/platform/file_access_service.dart';
+import '../features/comments/data/comment_image_picker.dart';
 import '../features/downloads/application/download_controller.dart';
 import '../features/downloads/data/api_download_source_repository.dart';
 import '../features/downloads/data/sqlite_download_repository.dart';
@@ -498,6 +499,7 @@ class AppDependencies {
         videoExtrasRepositoryProvider.overrideWithValue(
           ApiVideoExtrasRepository(api, requests),
         ),
+        commentImagePickerProvider.overrideWithValue(pickCommentImages),
         videoCommentsRepositoryProvider.overrideWithValue(
           ApiCommentsRepository(
             api,

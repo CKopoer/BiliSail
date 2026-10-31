@@ -1,3 +1,6 @@
+import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/features/comments/domain/comment_composer.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/dynamic_post.dart';
@@ -136,6 +139,9 @@ final class DynamicCommentsFake
     String message, {
     String? rootId,
     String? parentId,
+    List<CommentPicture> pictures = const [],
+    Map<String, UserId> mentions = const {},
+    bool syncToDynamic = false,
     required RequestCancellation cancellation,
   }) async {
     writes.add((aid, message, rootId, parentId));

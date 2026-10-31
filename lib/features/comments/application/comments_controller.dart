@@ -3,12 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/comment_target.dart';
 import '../../../domain/request_cancellation.dart';
+import '../../../domain/user.dart';
 import '../../auth/application/auth_controller.dart';
 import '../domain/comments_repository.dart';
+import '../domain/comment_composer.dart';
 
 final videoCommentsRepositoryProvider = Provider<CommentsRepository>(
   (ref) => throw UnimplementedError('CommentsRepository'),
 );
+final commentImagePickerProvider =
+    Provider<Future<List<CommentLocalImage>> Function(int)>(
+      (ref) => throw UnimplementedError('Comment image picker'),
+    );
 final commentsRepositoryProvider =
     Provider.family<CommentsRepository, CommentTargetType>(
       (ref, type) => type == CommentTargetType.video
@@ -437,22 +443,82 @@ class CommentsController extends Notifier<CommentsState> {
     return true;
   }
 
-  Future<bool> send(String message) async {
+  Future<List<CommentMention>> searchMentions(
+    String keyword,
+    RequestCancellation cancellation,
+  ) async {
+    final r = _repository;
+    if (!state.signedIn || r is! CommentComposerRepository) return const [];
+    final scope = r.accountScope,
+        epoch = r.sessionEpoch,
+        generation = _generation;
+    final users = await (r as CommentComposerRepository).searchMentions(
+      keyword,
+      cancellation,
+    );
+    return _current(generation, scope, epoch) && !cancellation.isCancelled
+        ? users
+        : const [];
+  }
+
+  Future<bool> send(
+    String message, {
+    List<CommentLocalImage> images = const [],
+    Map<String, UserId> mentions = const {},
+    bool syncToDynamic = false,
+  }) async {
     final text = message.trim();
-    if (text.isEmpty || text.length > 1000) return false;
+    if ((text.isEmpty && images.isEmpty) ||
+        text.runes.length > 1000 ||
+        images.length > CommentLocalImage.maxCount ||
+        images.any(
+          (i) => i.bytes.isEmpty || i.bytes.length > CommentLocalImage.maxBytes,
+        )) {
+      return false;
+    }
     final target = state.replyTarget;
     final rootId =
         state.openRoot?.id ??
         (target == null ? null : target.rootId ?? target.id);
     final parentId = target?.id ?? rootId;
+    if (images.isNotEmpty && rootId != null) {
+      state = state.copy(message: '图片仅支持主评论，请取消回复后发布');
+      return false;
+    }
     CommentEntry? sent;
     final ok = await _perform('send', (r) async {
+      final cancellation = _write;
+      final scope = r.accountScope, epoch = r.sessionEpoch;
+      final pictures = <CommentPicture>[];
+      if (images.isNotEmpty) {
+        if (r is! CommentComposerRepository) {
+          throw const AppFailure(AppFailureKind.protocol, '当前无法上传评论图片');
+        }
+        for (final image in images) {
+          if (cancellation.isCancelled) return;
+          pictures.add(
+            await (r as CommentComposerRepository).uploadPicture(
+              image,
+              cancellation,
+            ),
+          );
+        }
+      }
+      if (cancellation.isCancelled || !isCurrentAccount(scope, epoch)) return;
       sent = await r.send(
         oid,
         text,
         rootId: rootId,
         parentId: parentId,
-        cancellation: _write,
+        pictures: pictures,
+        mentions: Map.unmodifiable({
+          for (final entry in mentions.entries)
+            if (text.contains('@${entry.key} ') ||
+                text.endsWith('@${entry.key}'))
+              entry.key: entry.value,
+        }),
+        syncToDynamic: syncToDynamic,
+        cancellation: cancellation,
       );
     });
     final entry = sent;

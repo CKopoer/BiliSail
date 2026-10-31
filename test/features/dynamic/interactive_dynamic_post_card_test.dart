@@ -131,6 +131,7 @@ void main() {
       await tester.tap(find.bySemanticsLabel('回复评论'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), '回复内容');
+      await tester.pump();
       await tester.tap(find.text('发布'));
       await tester.pumpAndSettle();
       expect(comments.writes.single, ('11', '回复内容', '50', '50'));

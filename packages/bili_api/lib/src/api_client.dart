@@ -491,6 +491,7 @@ final class BiliApiClient {
     Map<String, String> fields,
     ApiRequestContext? context, {
     Map<String, Object?>? jsonBody,
+    ({Uint8List bytes, String mimeType})? upload,
   }) async {
     final live = uri.host == 'api.live.bilibili.com';
     final message = uri.host == 'api.vc.bilibili.com';
@@ -507,7 +508,9 @@ final class BiliApiClient {
     final credentials = _mutationCredentials(uri, endpoint);
     final cookie = credentials.cookie, csrf = credentials.csrf;
     final transport = _transport;
-    if (jsonBody == null
+    if (upload != null
+        ? transport is! ApiMultipartTransport
+        : jsonBody == null
         ? transport is! ApiFormTransport
         : transport is! ApiJsonTransport) {
       throw ApiFailure(ApiFailureCategory.unavailable, endpoint);
@@ -534,7 +537,17 @@ final class BiliApiClient {
             : 'https://www.bilibili.com',
         'Cookie': cookie,
       };
-      final operation = jsonBody == null
+      final operation = upload != null
+          ? (transport as ApiMultipartTransport).postMultipart(
+              uri,
+              fields: {...fields, 'csrf': csrf},
+              bytes: upload.bytes,
+              mimeType: upload.mimeType,
+              headers: headers,
+              timeout: budget,
+              cancellation: context?.cancellation,
+            )
+          : jsonBody == null
           ? (transport as ApiFormTransport).postForm(
               uri,
               fields: {
@@ -787,6 +800,14 @@ final class BiliApiClient {
   }) {
     final member = _map(entry['member'], endpoint);
     final content = _map(entry['content'], endpoint);
+    final pictures = List<Uri>.unmodifiable(
+      (content['pictures'] is List<Object?>
+              ? content['pictures'] as List<Object?>
+              : const <Object?>[])
+          .take(9)
+          .map((v) => _commentImage(_commentMap(v)['img_src']))
+          .whereType<Uri>(),
+    );
     final location = _text(
       _commentMap(entry['reply_control'])['location'],
     )?.trim();
@@ -826,15 +847,10 @@ final class BiliApiClient {
             e.key: _commentImage(_commentMap(e.value)['url'])!,
       }),
       mentionedUsers: _commentMentionedUsers(content),
-      pictures: List.unmodifiable(
-        (content['pictures'] is List<Object?>
-                ? content['pictures'] as List<Object?>
-                : const <Object?>[])
-            .take(9)
-            .map((v) => _commentImage(_commentMap(v)['img_src']))
-            .whereType<Uri>(),
-      ),
-      message: _requiredString(content['message'], endpoint),
+      pictures: pictures,
+      message: content['message'] == '' && pictures.isNotEmpty
+          ? ''
+          : _requiredString(content['message'], endpoint),
       likeCount: _count(entry['like']) ?? 0,
       liked: _int(entry['action']) == 1,
       replyCount: _count(entry['rcount'] ?? entry['count']) ?? 0,
@@ -985,6 +1001,9 @@ final class BiliApiClient {
     String message, {
     String? rootId,
     String? parentId,
+    List<ApiCommentPicture> pictures = const [],
+    Map<String, String> mentions = const {},
+    bool syncToDynamic = false,
     int commentType = 1,
     ApiRequestContext? context,
   }) async {
@@ -992,8 +1011,25 @@ final class BiliApiClient {
     _validateCommentType(commentType);
     if (rootId != null) _validateCommentId(rootId);
     if (parentId != null) _validateCommentId(parentId);
-    if (message.trim().isEmpty ||
+    for (final mid in mentions.values) {
+      _validateCommentId(mid);
+    }
+    if ((message.trim().isEmpty && pictures.isEmpty) ||
         message.runes.length > 1000 ||
+        pictures.length > 9 ||
+        (pictures.isNotEmpty && rootId != null) ||
+        pictures.any(
+          (p) =>
+              p.url.scheme != 'https' ||
+              p.url.userInfo.isNotEmpty ||
+              p.url.hasQuery ||
+              !(p.url.host == 'hdslb.com' ||
+                  p.url.host.endsWith('.hdslb.com')) ||
+              p.width <= 0 ||
+              p.height <= 0 ||
+              !p.sizeKiB.isFinite ||
+              p.sizeKiB <= 0,
+        ) ||
         (parentId != null && rootId == null)) {
       throw ArgumentError('Invalid comment content or reply target');
     }
@@ -1004,6 +1040,14 @@ final class BiliApiClient {
         'message': message,
         'root': rootId ?? '0',
         'parent': parentId ?? rootId ?? '0',
+        if (pictures.isNotEmpty)
+          'pictures': jsonEncode(pictures.map((p) => p.toJson()).toList()),
+        if (mentions.isNotEmpty)
+          'at_name_to_mid': jsonEncode({
+            for (final entry in mentions.entries)
+              entry.key: int.parse(entry.value),
+          }),
+        if (syncToDynamic) 'sync_to_dynamic': '1',
       }, context: context),
       'comment_add',
     );
@@ -1012,6 +1056,80 @@ final class BiliApiClient {
       'comment_add',
       submissionMessage: _text(data['success_toast'])?.trim(),
     );
+  }
+
+  Future<List<ApiCommentMention>> searchCommentMentions(
+    String keyword, {
+    ApiRequestContext? context,
+  }) async {
+    if (keyword.runes.length > 50) {
+      throw ArgumentError.value(keyword, 'keyword');
+    }
+    const endpoint = 'comment_mentions';
+    final data = await requestJson(
+      _api.replace(
+        path: '/x/polymer/web-dynamic/v1/mention/search',
+        queryParameters: {
+          if (keyword.trim().isNotEmpty) 'keyword': keyword.trim(),
+        },
+      ),
+      endpoint,
+      context: context,
+    );
+    final items = <String, ApiCommentMention>{};
+    for (final group in _list(data['groups'] ?? const [], endpoint).take(20)) {
+      for (final item in _list(
+        _map(group, endpoint)['items'] ?? const [],
+        endpoint,
+      ).take(100)) {
+        final value = _map(item, endpoint);
+        final mid = _id(value['uid'], endpoint);
+        final name = _text(value['name']);
+        if (RegExp(r'^[1-9][0-9]*$').hasMatch(mid) && name != null) {
+          items[mid] = ApiCommentMention(mid, name, _uri(value['face']));
+        }
+        if (items.length >= 100) return List.unmodifiable(items.values);
+      }
+    }
+    return List.unmodifiable(items.values);
+  }
+
+  Future<ApiCommentPicture> uploadCommentPicture(
+    Uint8List bytes,
+    String mimeType, {
+    ApiRequestContext? context,
+  }) async {
+    if (bytes.isEmpty ||
+        bytes.length > 10 * 1024 * 1024 ||
+        !const {'image/jpeg', 'image/png', 'image/gif'}.contains(mimeType)) {
+      throw ArgumentError('Invalid comment image');
+    }
+    const endpoint = 'comment_picture_upload';
+    final data = _map(
+      await _submitForm(
+        _api.replace(path: '/x/dynamic/feed/draw/upload_bfs'),
+        endpoint,
+        {'category': 'daily', 'biz': 'new_dyn'},
+        context,
+        upload: (bytes: bytes, mimeType: mimeType),
+      ),
+      endpoint,
+    );
+    final url = _uri(data['image_url']);
+    final width = _int(data['image_width']),
+        height = _int(data['image_height']);
+    if (url == null ||
+        url.scheme != 'https' ||
+        url.userInfo.isNotEmpty ||
+        url.hasQuery ||
+        !(url.host == 'hdslb.com' || url.host.endsWith('.hdslb.com')) ||
+        width == null ||
+        width <= 0 ||
+        height == null ||
+        height <= 0) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    return ApiCommentPicture(url, width, height, bytes.length / 1024);
   }
 
   static void _validateCommentType(int type) {

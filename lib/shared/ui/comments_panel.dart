@@ -19,6 +19,8 @@ import 'network_avatar.dart';
 import 'bili_icons.dart';
 import 'comment_rich_content.dart';
 import 'comment_text_styles.dart';
+import 'comment_mention_dialog.dart';
+import '../../features/comments/domain/comment_composer.dart';
 import '../../features/comments/application/comments_controller.dart';
 import '../../features/comments/application/comment_link_resolver.dart';
 import '../../features/comments/domain/comments_repository.dart';
@@ -31,12 +33,14 @@ class CommentsPanel extends ConsumerStatefulWidget {
     this.onSeek,
     this.onLogin,
     this.onOpenUser,
+    this.playbackPosition,
   });
   final CommentTarget target;
   final int? replyCount;
   final ValueChanged<Duration>? onSeek;
   final VoidCallback? onLogin;
   final ValueChanged<UserId>? onOpenUser;
+  final Duration? Function()? playbackPosition;
   @override
   ConsumerState<CommentsPanel> createState() => _CommentsPanelState();
 }
@@ -48,6 +52,11 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   final _focus = FocusNode();
   final _composerFocus = FocusNode(skipTraversal: true);
   final _emotePickerOpen = ValueNotifier(false);
+  final _draftVersion = ValueNotifier(0);
+  final _images = <CommentLocalImage>[];
+  final _mentions = <String, UserId>{};
+  bool _syncToDynamic = false, _pickingImages = false;
+  int _draftGeneration = 0;
   final _topScroll = ScrollController();
   // Detail always opens at the top; do not retain a PageStorage entry per root.
   final _replyScroll = ScrollController(keepScrollOffset: false);
@@ -65,7 +74,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.target != widget.target) {
       _linkCancellation?.cancel();
-      _text.clear();
+      _resetDraft();
       _topOffset = 0;
       _shownRoot = null;
       final target = widget.target;
@@ -90,6 +99,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     _focus.dispose();
     _composerFocus.dispose();
     _emotePickerOpen.dispose();
+    _draftVersion.dispose();
     _topScroll.dispose();
     _replyScroll.dispose();
     super.dispose();
@@ -151,6 +161,134 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
 
   void _handleOpenLink(Uri uri) => unawaited(_openLink(uri));
 
+  void _resetDraft() {
+    ++_draftGeneration;
+    _text.clear();
+    _images.clear();
+    _mentions.clear();
+    _syncToDynamic = false;
+    _pickingImages = false;
+    _emotePickerOpen.value = false;
+    _draftVersion.value++;
+  }
+
+  Future<void> _pickImages() async {
+    if (_pickingImages) return;
+    final generation = _draftGeneration;
+    final target = widget.target;
+    final provider = _provider;
+    final controller = ref.read(provider.notifier);
+    final state = ref.read(provider);
+    _pickingImages = true;
+    _emotePickerOpen.value = true;
+    _draftVersion.value++;
+    try {
+      final images = await ref.read(commentImagePickerProvider)(
+        CommentLocalImage.maxCount - _images.length,
+      );
+      if (!mounted ||
+          generation != _draftGeneration ||
+          widget.target != target ||
+          !controller.isCurrentAccount(
+            state.accountScope,
+            state.sessionEpoch,
+          )) {
+        return;
+      }
+      _images.addAll(images.take(CommentLocalImage.maxCount - _images.length));
+      _draftVersion.value++;
+    } catch (error) {
+      if (mounted &&
+          generation == _draftGeneration &&
+          controller.isCurrentAccount(state.accountScope, state.sessionEpoch)) {
+        showAppNotice(
+          context,
+          error is AppFailure ? error.message : '无法读取图片，请重新选择 JPG、PNG 或 GIF 图片',
+        );
+      }
+    } finally {
+      if (mounted && generation == _draftGeneration) {
+        _pickingImages = false;
+        _emotePickerOpen.value = false;
+        _draftVersion.value++;
+        _focus.requestFocus();
+      }
+    }
+  }
+
+  Future<void> _mention() async {
+    final generation = _draftGeneration;
+    final target = widget.target;
+    final controller = ref.read(_provider.notifier);
+    final state = ref.read(_provider);
+    _emotePickerOpen.value = true;
+    CommentMention? user;
+    try {
+      user = await showAppDialog<CommentMention>(
+        context: context,
+        builder: (_) => CommentMentionDialog(search: controller.searchMentions),
+      );
+    } finally {
+      if (mounted) _emotePickerOpen.value = false;
+    }
+    if (!mounted ||
+        generation != _draftGeneration ||
+        target != widget.target ||
+        !controller.isCurrentAccount(state.accountScope, state.sessionEpoch)) {
+      return;
+    }
+    if (user != null) {
+      _mentions[user.name] = user.id;
+      _text.value = insertCommentEmote(_text.value, '@${user.name} ');
+    }
+    _focus.requestFocus();
+  }
+
+  void _insertPosition() {
+    final position = widget.playbackPosition?.call();
+    if (position == null) {
+      showAppNotice(context, '播放器尚未就绪');
+      return;
+    }
+    final seconds = position.inSeconds;
+    final time = seconds >= 3600
+        ? '${seconds ~/ 3600}:${(seconds ~/ 60 % 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}'
+        : '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
+    _text.value = insertCommentEmote(_text.value, '$time ');
+    _focus.requestFocus();
+  }
+
+  Future<void> _send() async {
+    final state = ref.read(_provider);
+    if (!state.signedIn) {
+      _login();
+      return;
+    }
+    final text = _text.text, target = widget.target;
+    final root = state.openRoot?.id;
+    final version = _draftVersion.value;
+    final generation = _draftGeneration;
+    final ok = await ref
+        .read(_provider.notifier)
+        .send(
+          text,
+          images: List.of(_images),
+          mentions: Map.of(_mentions),
+          syncToDynamic: _syncToDynamic,
+        );
+    if (ok &&
+        mounted &&
+        target == widget.target &&
+        generation == _draftGeneration &&
+        version == _draftVersion.value &&
+        text == _text.text) {
+      final current = ref.read(_provider);
+      if (current.openRoot?.id == root && current.replyTarget == null) {
+        _resetDraft();
+      }
+    }
+  }
+
   Future<void> _emotes() async {
     final target = widget.target;
     final provider = _provider;
@@ -203,7 +341,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       _provider.select((value) => (value.accountScope, value.sessionEpoch)),
       (_, _) {
         _linkCancellation?.cancel();
-        _text.clear();
+        _resetDraft();
         _topOffset = 0;
         _shownRoot = null;
       },
@@ -340,7 +478,12 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     focusNode: _composerFocus,
     child: TextFieldTapRegion(
       child: ListenableBuilder(
-        listenable: Listenable.merge([_composerFocus, _emotePickerOpen]),
+        listenable: Listenable.merge([
+          _composerFocus,
+          _emotePickerOpen,
+          _draftVersion,
+          _text,
+        ]),
         builder: (context, _) => _composerContent(
           expanded: _composerFocus.hasFocus || _emotePickerOpen.value,
           duration: MediaQuery.disableAnimationsOf(context)
@@ -462,6 +605,57 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
                       ),
                     ),
                   ),
+                  if (_images.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 76,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _images.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) => SizedBox.square(
+                          dimension: 76,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.memory(
+                                  _images[index].bytes,
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 160,
+                                  errorBuilder: (_, _, _) =>
+                                      const Icon(Icons.broken_image_outlined),
+                                ),
+                              ),
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: IconButton.filledTonal(
+                                  tooltip: '移除图片 ${index + 1}',
+                                  style: iconStyle,
+                                  onPressed: state.busy
+                                      ? null
+                                      : () {
+                                          _images.removeAt(index);
+                                          _draftVersion.value++;
+                                        },
+                                  icon: const Icon(Icons.close, size: 16),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (state.openRoot != null || state.replyTarget != null)
+                      Text(
+                        '图片仅支持主评论，请取消回复后发布',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.error,
+                        ),
+                      ),
+                  ],
                   ExcludeFocus(
                     excluding: !expanded,
                     child: IgnorePointer(
@@ -479,76 +673,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
                           ),
                         ),
                         child: expanded
-                            ? Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    IconButton(
-                                      tooltip: '选择表情',
-                                      style: iconStyle,
-                                      iconSize: 18,
-                                      onPressed: state.busy ? null : _emotes,
-                                      icon: const Icon(BiliIcons.emoji),
-                                    ),
-                                    const Spacer(),
-                                    FilledButton(
-                                      style: FilledButton.styleFrom(
-                                        minimumSize: const Size(56, 32),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        textStyle: theme.textTheme.labelMedium,
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      onPressed:
-                                          state.busy ||
-                                              state.loading ||
-                                              state.replyLoading ||
-                                              state.uncertain.contains('send')
-                                          ? null
-                                          : () async {
-                                              if (!state.signedIn) {
-                                                _login();
-                                                return;
-                                              }
-                                              final submitted = _text.text;
-                                              final submittedTarget =
-                                                  widget.target;
-                                              final submittedRoot =
-                                                  state.openRoot?.id;
-                                              if (await controller.send(
-                                                    submitted,
-                                                  ) &&
-                                                  mounted &&
-                                                  widget.target ==
-                                                      submittedTarget &&
-                                                  _text.text == submitted) {
-                                                final current = ref.read(
-                                                  _provider,
-                                                );
-                                                if (current.openRoot?.id ==
-                                                        submittedRoot &&
-                                                    current.replyTarget ==
-                                                        null) {
-                                                  _text.clear();
-                                                }
-                                              }
-                                            },
-                                      child: state.busy
-                                          ? const SizedBox.square(
-                                              dimension: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Text('发布'),
-                                    ),
-                                  ],
-                                ),
-                              )
+                            ? _composerToolbar(state, iconStyle)
                             : const SizedBox.shrink(),
                       ),
                     ),
@@ -561,6 +686,145 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       );
     },
   );
+
+  Widget _composerToolbar(CommentsState state, ButtonStyle iconStyle) {
+    final theme = Theme.of(context);
+    final toolStyle = iconStyle.copyWith(
+      minimumSize: const WidgetStatePropertyAll(Size.square(40)),
+    );
+    final canEdit = state.signedIn && !state.busy && !_pickingImages;
+    final replying = state.openRoot != null || state.replyTarget != null;
+    final length = _text.text.runes.length;
+    final canSend =
+        canEdit &&
+        !state.loading &&
+        !state.replyLoading &&
+        !state.uncertain.contains('send') &&
+        length <= 1000 &&
+        (_text.text.trim().isNotEmpty || _images.isNotEmpty) &&
+        !(replying && _images.isNotEmpty);
+    final tools = Wrap(
+      spacing: 2,
+      children: [
+        IconButton(
+          tooltip: '选择表情',
+          style: toolStyle,
+          iconSize: 18,
+          onPressed: canEdit ? _emotes : null,
+          icon: const Icon(BiliIcons.emoji),
+        ),
+        if (!replying)
+          IconButton(
+            tooltip: '添加图片（最多9张，每张10MB）',
+            style: toolStyle,
+            iconSize: 18,
+            onPressed: canEdit && _images.length < CommentLocalImage.maxCount
+                ? _pickImages
+                : null,
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+          ),
+        IconButton(
+          tooltip: '@用户',
+          style: toolStyle,
+          iconSize: 18,
+          onPressed: canEdit ? _mention : null,
+          icon: const Icon(Icons.alternate_email),
+        ),
+        if (widget.playbackPosition != null)
+          IconButton(
+            tooltip: '插入当前播放时间',
+            style: toolStyle,
+            iconSize: 18,
+            onPressed: canEdit ? _insertPosition : null,
+            icon: const Icon(Icons.schedule_outlined),
+          ),
+        IconButton(
+          tooltip: '同步到动态',
+          style: toolStyle,
+          iconSize: 18,
+          isSelected: _syncToDynamic,
+          onPressed: canEdit
+              ? () {
+                  _syncToDynamic = !_syncToDynamic;
+                  _draftVersion.value++;
+                }
+              : null,
+          icon: const Icon(Icons.repeat),
+          selectedIcon: Icon(Icons.repeat, color: theme.colorScheme.primary),
+        ),
+      ],
+    );
+    final submit = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$length/1000',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: length > 1000
+                ? theme.colorScheme.error
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(width: 10),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(56, 32),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            textStyle: theme.textTheme.labelMedium,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: canSend ? _send : null,
+          child: state.busy
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('发布'),
+        ),
+      ],
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_syncToDynamic)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '发布时同步到动态',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked =
+                  constraints.maxWidth < 380 ||
+                  MediaQuery.textScalerOf(context).scale(1) > 1.3;
+              return stacked
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        tools,
+                        const SizedBox(height: 4),
+                        Align(alignment: Alignment.centerRight, child: submit),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: tools),
+                        const SizedBox(width: 8),
+                        submit,
+                      ],
+                    );
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _entry(
     CommentEntry comment, {
