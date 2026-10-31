@@ -120,3 +120,39 @@ jobs:
             diagnostics/**/*.sample.json
           if-no-files-found: warn
           retention-days: 7
+
+  rebuild:
+    name: Fresh Intel build ${{ matrix.repetition }}
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        repetition: [1, 2]
+    env:
+      PUB_HOSTED_URL: https://pub.dev
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.6'
+          channel: stable
+          cache: true
+          pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
+      - name: Build the unchanged application and run every release gate
+        shell: pwsh
+        timeout-minutes: 30
+        run: ./tool/build-release.ps1 -Target macos-x64 -Version '1.2.5+3'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        timeout-minutes: 2
+        with:
+          name: fresh-intel-${{ matrix.repetition }}-diagnostics
+          path: |
+            artifacts/macos-x64/validation/*.result.json
+            artifacts/macos-x64/validation/*.crash.json
+            artifacts/macos-x64/validation/*.sample.json
+          if-no-files-found: warn
+          retention-days: 7
