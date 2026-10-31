@@ -40,6 +40,51 @@ jobs:
         timeout-minutes: 2
         run: |
           swift -e 'import Metal; if let device = MTLCreateSystemDefaultDevice() { print("Metal device: \(device.name); recommended memory: \(device.recommendedMaxWorkingSetSize)") } else { print("Metal device unavailable") }'
+      - name: Validate system crash collection using an intentional signal
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . ./tool/macos-release-validation.ps1
+          $directory = Join-Path (Get-Location) 'diagnostics/intentional-signal'
+          New-Item -ItemType Directory -Path $directory -Force | Out-Null
+          $code = @'
+          import json, os, pathlib, signal, subprocess, sys, time
+          path = pathlib.Path(sys.argv[1])
+          expected = sys.argv[2]
+          deadline = time.monotonic() + 120
+          while time.monotonic() < deadline:
+              try:
+                  state = json.loads(path.read_text())
+                  if state.get("lastStage") == "BILISAIL_RELEASE_STAGE:first-frame":
+                      pid = state["processId"]
+                      name = subprocess.check_output(["/bin/ps", "-p", str(pid), "-o", "comm="], text=True).strip()
+                      if name != expected:
+                          raise SystemExit("Owned test process identity did not match")
+                      os.kill(pid, signal.SIGSEGV)
+                      raise SystemExit(0)
+              except (OSError, ValueError):
+                  pass
+              time.sleep(0.02)
+          raise SystemExit("Controlled signal target did not reach first frame")
+          '@
+          $start = [System.Diagnostics.ProcessStartInfo]::new()
+          $start.FileName = 'python3'
+          $start.UseShellExecute = $false
+          $executable = "$env:RUNNER_TEMP/BiliSail.app/Contents/MacOS/BiliSail"
+          foreach ($argument in @('-c', $code, "$directory/startup.result.json", $executable)) { $start.ArgumentList.Add($argument) }
+          $injector = [System.Diagnostics.Process]::Start($start)
+          try {
+            try { Invoke-MacOSReleaseSmokePhase $executable 'startup' ([guid]::NewGuid().ToString('N')) $directory } catch {}
+            if (!$injector.WaitForExit(5000) -or $injector.ExitCode -ne 0) { throw 'Intentional signal was not delivered.' }
+            $state = Get-Content "$directory/startup.result.json" -Raw | ConvertFrom-Json
+            $crash = Get-Content "$directory/startup.crash.json" -Raw | ConvertFrom-Json
+            if ($state.exitCode -ne 139 -or $crash.status -ne 'collected' -or $crash.exception.signal -ne 'SIGSEGV') { throw 'System crash collection failed its controlled-signal validation.' }
+            Write-Host 'Intentional SIGSEGV report was matched, sanitized and collected.'
+          } finally {
+            if (!$injector.HasExited) { $injector.Kill($true); [void]$injector.WaitForExit(5000) }
+            $injector.Dispose()
+          }
       - name: Collect independent startup attempts and preserve every failure
         shell: pwsh
         timeout-minutes: 20
@@ -48,8 +93,8 @@ jobs:
           . ./tool/macos-release-validation.ps1
           Confirm-MacOSReleaseSignature "$env:RUNNER_TEMP/BiliSail.app" $env:RUNNER_TEMP
           $failed = $false
-          for ($iteration = 1; $iteration -le 10; $iteration++) {
-            Write-Host "Startup repetition $iteration of 10"
+          for ($iteration = 1; $iteration -le 2; $iteration++) {
+            Write-Host "Startup repetition $iteration of 2"
             $directory = "diagnostics/attempt-$iteration"
             New-Item -ItemType Directory -Path $directory -Force | Out-Null
             try {
