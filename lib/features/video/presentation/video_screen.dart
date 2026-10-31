@@ -99,6 +99,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
   int? _tab;
   bool _infoVisible = true;
   bool _descriptionExpanded = false;
+  bool _tagsRequested = false;
   bool _queueExpanded = true;
   VideoDetail? _lastVideo;
   String? _lastCid;
@@ -167,6 +168,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       _selectedCid = widget.initialCid;
       _tab = null;
       _descriptionExpanded = false;
+      _tagsRequested = false;
     }
     if (oldWidget.initialCid != widget.initialCid) {
       _selectedCid = widget.initialCid;
@@ -198,6 +200,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     // Start the related read alongside detail without rebuilding the player
     // and intro header when only that read changes.
     ref.listen(relatedVideosProvider(widget.id), (_, _) {});
+    // Retain the first tag read across description/sliver disposal until this
+    // page closes or changes video, without rebuilding it when tags arrive.
+    if (_tagsRequested) ref.listen(videoTagsProvider(widget.id), (_, _) {});
     final detail = ref.watch(videoDetailProvider(widget.id));
     final loaded = detail.asData?.value;
     final pending = _pendingAdvance;
@@ -308,10 +313,10 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                   tapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
                                 ),
-                                onPressed: () => setState(
-                                  () => _descriptionExpanded =
-                                      !_descriptionExpanded,
-                                ),
+                                onPressed: () => setState(() {
+                                  _descriptionExpanded = !_descriptionExpanded;
+                                  _tagsRequested = true;
+                                }),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -966,7 +971,7 @@ final class _VideoDescriptionTransitionState
 
   @override
   Widget build(BuildContext context) {
-    // Mount tags on expansion and release them only after the exit completes.
+    // Unmount hidden content after exit; the page retains its tag subscription.
     if (!widget.expanded && _controller.isDismissed) {
       return const SizedBox.shrink();
     }

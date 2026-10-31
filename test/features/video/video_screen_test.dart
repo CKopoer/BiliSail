@@ -1067,6 +1067,9 @@ void main() {
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
         const tag = 'Flutter & Dart/中文+测试';
+        final extras = _ExtrasRepository(
+          tags: const [tag, '编程', '教程', '跨平台开发'],
+        );
         String? searched;
         var created = 0;
         await tester.pumpWidget(
@@ -1074,9 +1077,7 @@ void main() {
             overrides: [
               authControllerProvider.overrideWith(_GuestAuthController.new),
               videoRepositoryProvider.overrideWithValue(_VideoRepository()),
-              videoExtrasRepositoryProvider.overrideWithValue(
-                _ExtrasRepository(tags: const [tag, '编程', '教程', '跨平台开发']),
-              ),
+              videoExtrasRepositoryProvider.overrideWithValue(extras),
             ],
             child: InputTestApp(
               theme: BiliTheme.light(),
@@ -1102,8 +1103,10 @@ void main() {
         expect(find.text('标签'), findsNothing);
         expect(find.widgetWithText(ActionChip, tag), findsNothing);
         expect(find.text('展开'), findsOneWidget);
+        expect(extras.tagRequests, 0);
         await tester.tap(find.text('展开'));
         await tester.pumpAndSettle();
+        expect(extras.tagRequests, 1);
         expect(find.text('测试简介'), findsOneWidget);
         expect(find.text('标签'), findsOneWidget);
         await tester.ensureVisible(find.widgetWithText(ActionChip, tag));
@@ -1125,9 +1128,12 @@ void main() {
         expect(find.text('测试简介'), findsNothing);
         expect(find.text('标签'), findsNothing);
         await tester.tap(find.text('展开'));
+        await tester.pump();
+        expect(find.text('正在加载标签…'), findsNothing);
         await tester.pumpAndSettle();
         expect(find.text('测试简介'), findsOneWidget);
         expect(find.text('标签'), findsOneWidget);
+        expect(extras.tagRequests, 1);
         expect(created, 1);
         expect(tester.takeException(), isNull);
       },
@@ -1135,6 +1141,152 @@ void main() {
   }
 
   for (final width in [360.0, 1100.0]) {
+    testWidgets(
+      'tags survive collapse while loading and release on video change at $width',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 800);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        const firstId = VideoId('BV1abc123456');
+        const secondId = VideoId('BV2abc123456');
+        final id = ValueNotifier(firstId);
+        addTearDown(id.dispose);
+        final requests =
+            <
+              ({
+                VideoId id,
+                RequestCancellation signal,
+                Completer<List<String>> result,
+              })
+            >[];
+        final extras = _ExtrasRepository(
+          onLoadTags: (id, signal) {
+            final result = Completer<List<String>>();
+            requests.add((id: id, signal: signal, result: result));
+            return result.future;
+          },
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authControllerProvider.overrideWith(_GuestAuthController.new),
+              videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+              videoExtrasRepositoryProvider.overrideWithValue(extras),
+            ],
+            child: InputTestApp(
+              home: Scaffold(
+                body: ValueListenableBuilder(
+                  valueListenable: id,
+                  builder: (_, id, _) => VideoScreen(
+                    id: id,
+                    playerBuilder: (_, _, _) => const SizedBox.expand(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(requests, isEmpty);
+        await tester.tap(find.text('展开'));
+        await tester.pumpAndSettle();
+        expect(requests, hasLength(1));
+        final first = requests.single;
+        expect(first.id, firstId);
+        await tester.tap(find.text('收起'));
+        await tester.pumpAndSettle();
+        expect(first.signal.isCancelled, isFalse);
+        await tester.tap(find.text('展开'));
+        await tester.pumpAndSettle();
+        expect(requests, hasLength(1));
+        await tester.tap(find.text('收起'));
+        await tester.pumpAndSettle();
+        first.result.complete(['保留的标签']);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('展开'));
+        await tester.pump();
+        expect(find.text('正在加载标签…'), findsNothing);
+        expect(find.widgetWithText(ActionChip, '保留的标签'), findsOneWidget);
+        expect(requests, hasLength(1));
+        await tester.pumpAndSettle();
+
+        id.value = secondId;
+        await tester.pumpAndSettle();
+        expect(first.signal.isCancelled, isTrue);
+        expect(requests, hasLength(1));
+        expect(find.text('保留的标签'), findsNothing);
+        await tester.tap(find.text('展开'));
+        await tester.pumpAndSettle();
+        expect(requests, hasLength(2));
+        final second = requests.last;
+        expect(second.id, secondId);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+        expect(second.signal.isCancelled, isTrue);
+        second.result.complete(['关闭后返回的标签']);
+        await tester.pumpAndSettle();
+        expect(find.text('关闭后返回的标签'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    for (final failed in [false, true]) {
+      testWidgets(
+        'collapsed tags retain ${failed ? 'failure until explicit retry' : 'empty result'} at $width',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = Size(width, 800);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final extras = _ExtrasRepository(
+            onLoadTags: (_, _) async {
+              if (failed) {
+                throw const AppFailure(AppFailureKind.network, '网络不可用');
+              }
+              return const [];
+            },
+          );
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                authControllerProvider.overrideWith(_GuestAuthController.new),
+                videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+                videoExtrasRepositoryProvider.overrideWithValue(extras),
+              ],
+              child: InputTestApp(
+                home: Scaffold(
+                  body: VideoScreen(
+                    id: const VideoId('BV1abc123456'),
+                    playerBuilder: (_, _, _) => const SizedBox.expand(),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('展开'));
+          await tester.pumpAndSettle();
+          expect(extras.tagRequests, 1);
+          await tester.tap(find.text('收起'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('展开'));
+          await tester.pump();
+          expect(find.text('正在加载标签…'), findsNothing);
+          await tester.pumpAndSettle();
+          expect(extras.tagRequests, 1);
+          expect(find.text('标签'), findsNothing);
+          if (failed) {
+            await tester.ensureVisible(find.text('标签加载失败，点击重试'));
+            await tester.tap(find.text('标签加载失败，点击重试'));
+            await tester.pumpAndSettle();
+            expect(extras.tagRequests, 2);
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
     for (final reducedMotion in [false, true]) {
       testWidgets(
         'description transition at $width reducedMotion=$reducedMotion',
@@ -1238,10 +1390,17 @@ void main() {
           await tester.pumpAndSettle();
           expect(description, findsNothing);
           expect(find.widgetWithText(ActionChip, 'Flutter'), findsNothing);
-          expect(container.exists(videoTagsProvider(id)), isFalse);
+          expect(container.exists(videoTagsProvider(id)), isTrue);
           expect(created, 1);
           expect(tester.takeException(), isNull);
-          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: const SizedBox.shrink(),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(container.exists(videoTagsProvider(id)), isFalse);
         },
       );
     }
@@ -2656,16 +2815,22 @@ final class _VideoRepository implements VideoRepository {
 }
 
 final class _ExtrasRepository implements VideoExtrasRepository {
-  _ExtrasRepository({this.tags = const [], this.related});
+  _ExtrasRepository({this.tags = const [], this.related, this.onLoadTags});
   final List<String> tags;
   final List<VideoSummary>? related;
+  final Future<List<String>> Function(VideoId, RequestCancellation)? onLoadTags;
   int relatedRequests = 0;
+  int tagRequests = 0;
   final List<int> commentPages = [];
   @override
   Future<List<String>> loadTags(
     VideoId id, {
     required RequestCancellation cancellation,
-  }) async => tags;
+  }) async {
+    tagRequests++;
+    return onLoadTags?.call(id, cancellation) ?? tags;
+  }
+
   @override
   Future<List<VideoSummary>> loadRelated(
     VideoId id, {
