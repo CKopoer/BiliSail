@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   reproduce:
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -35,6 +35,11 @@ jobs:
           hdiutil attach downloaded/*.dmg -readonly -nobrowse -mountpoint "$mount"
           trap 'hdiutil detach "$mount"' EXIT
           ditto "$mount/BiliSail.app" "$RUNNER_TEMP/BiliSail.app"
+      - name: Identify the runner Metal device
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          swift -e 'import Metal; if let device = MTLCreateSystemDefaultDevice() { print("Metal device: \(device.name); recommended memory: \(device.recommendedMaxWorkingSetSize)") } else { print("Metal device unavailable") }'
       - name: Collect independent startup attempts and preserve every failure
         shell: pwsh
         timeout-minutes: 20
