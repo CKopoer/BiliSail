@@ -68,6 +68,7 @@
 | [窄屏底栏切换复查](validation/primary-navigation-performance-2026-10-28.md) | Windows/Android 共用分页器活动隔离、设置表单复用和底栏过渡 |
 | [窄屏视频卡切页与生命周期分析](validation/narrow-video-card-navigation-analysis-2026-10-30.md) | 页面保留与局部更新、真实账号 Windows Profile、深滚动／快速切换和优化顺序 |
 | [视频卡片往返滚动与测量复用](validation/card-scroll-lifecycle-2026-10-31.md) | 页面/行/卡片/图片的生命周期、有限测量缓存、窄屏两列与宽屏六列性能复查 |
+| [长列表回到顶部](validation/scroll-to-top-performance-2026-10-31.md) | 自然行高定位、不可见沿途行复用、原动画与布局对照及性能验证 |
 | [窄屏视频卡切换优化结果](validation/narrow-video-card-navigation-results-2026-10-30.md) | 空闲内容复用、移除整页平移、1×／3× Windows Profile 对照和验证边界 |
 | [Android 窄屏底栏性能复查](validation/android-primary-switch-2026-10-26.md) | 保留列表约束、嵌套查询作用域、图片可见性与真机 Profile 对照 |
 | [Android 原生与 PiliPlus 导航对照](validation/android-navigation-reference-comparison-2026-10-26.md) | 状态保留与页面结构、悬停/裁剪优化、图片和骨架候选及后续优先级 |

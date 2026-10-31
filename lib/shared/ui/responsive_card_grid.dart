@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderSliverList;
+import 'package:flutter/rendering.dart';
 
 import 'text_measurement_cache.dart';
 
@@ -107,7 +107,24 @@ final class _SliverResponsiveCardGridState
     extends State<SliverResponsiveCardGrid> {
   ({int columns, double width, double spacing, double runSpacing})?
   _previousLayout;
+  Object? _previousEnvironment;
   Widget? _rows;
+
+  @override
+  void initState() {
+    super.initState();
+    PaintingBinding.instance.systemFonts.addListener(_invalidateMeasurements);
+  }
+
+  void _invalidateMeasurements() => setState(() => _rows = null);
+
+  @override
+  void dispose() {
+    PaintingBinding.instance.systemFonts.removeListener(
+      _invalidateMeasurements,
+    );
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(SliverResponsiveCardGrid oldWidget) {
@@ -123,11 +140,26 @@ final class _SliverResponsiveCardGridState
     child: SliverLayoutBuilder(
       builder: (context, constraints) {
         final layout = _layout(context, constraints.crossAxisExtent);
+        // Offscreen rows can depend on typography even when the currently
+        // mounted rows do not. Invalidate their sizes on ambient layout changes.
+        final environment = (
+          Theme.of(context),
+          DefaultTextStyle.of(context),
+          MediaQuery.textScalerOf(context),
+          MediaQuery.boldTextOf(context),
+          Localizations.maybeLocaleOf(context),
+          Directionality.of(context),
+        );
         // Sliver constraints also change on every scroll frame. Reusing the rows
         // keeps a scroll offset change from replacing the delegate and rebuilding
         // all visible cards; cross-axis layout and content changes still update it.
-        if (_rows case final rows? when layout == _previousLayout) return rows;
+        if (_rows case final rows?
+            when layout == _previousLayout &&
+                environment == _previousEnvironment) {
+          return rows;
+        }
         _previousLayout = layout;
+        _previousEnvironment = environment;
         return _rows = _CardRows(
           itemCount: (widget.itemCount / layout.columns).ceil(),
           itemBuilder: (context, row) => Padding(
@@ -168,10 +200,97 @@ class _CardRows extends SliverList {
       );
 
   @override
+  RenderSliverList createRenderObject(BuildContext context) =>
+      _RenderCardRows(childManager: context as SliverMultiBoxAdaptorElement);
+
+  @override
   void updateRenderObject(BuildContext context, RenderSliverList renderObject) {
     super.updateRenderObject(context, renderObject);
     // Appended rows change the scroll range even when reused visible cards do
     // not invalidate layout. Publish the new extent before a jump/scrollbar drag.
     renderObject.markNeedsLayout();
+  }
+}
+
+/// Reuses measured sizes, never card subtrees, across disjoint reverse scrolls.
+class _RenderCardRows extends RenderSliverList {
+  _RenderCardRows({required super.childManager});
+
+  static const _maximumMeasurements = 512;
+  final _extents = <int, double>{};
+  double? _crossAxisExtent;
+  bool _layingOut = false;
+
+  @override
+  void markNeedsLayout() {
+    // A descendant's layout change or a new delegate invalidates old sizes.
+    // Scroll-only constraint changes do not call this; inserting/recycling
+    // children during our own layout must not discard earlier measurements.
+    if (!_layingOut) _extents.clear();
+    super.markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    if (_crossAxisExtent != constraints.crossAxisExtent) _extents.clear();
+    _crossAxisExtent = constraints.crossAxisExtent;
+    _layingOut = true;
+    try {
+      _skipMeasuredRows();
+      super.performLayout();
+    } finally {
+      _layingOut = false;
+    }
+  }
+
+  void _skipMeasuredRows() {
+    final first = firstChild;
+    if (first == null) return;
+    final firstOffset = childScrollOffset(first);
+    if (firstOffset == null) return;
+    var offset = firstOffset;
+    final start = constraints.scrollOffset + constraints.cacheOrigin;
+    // Overlapping ranges keep their existing Elements and layout untouched.
+    if (start + constraints.remainingCacheExtent >= offset) return;
+    final firstIndex = indexOf(first);
+    var index = firstIndex;
+    while (index > 0 && offset > start) {
+      final extent = _extents[index - 1];
+      if (extent == null) break;
+      offset -= extent;
+      index--;
+    }
+    if (index == firstIndex || offset < 0) return;
+    // The normal SliverList algorithm would construct and immediately discard
+    // every skipped row. Seed it at the same offset, then let Flutter measure
+    // the target rows normally, including any unknown part of the gap.
+    collectGarbage(childCount, 0);
+    addInitialChild(index: index, layoutOffset: offset);
+  }
+
+  @override
+  void collectGarbage(int leadingGarbage, int trailingGarbage) {
+    // Capture sizes before Flutter recycles rows, including rows traversed by
+    // a forward jump. The bounded cache owns only indices and pixel extents.
+    var remaining = childCount - trailingGarbage;
+    final boxConstraints = constraints.asBoxConstraints();
+    for (
+      var child = firstChild;
+      child != null && remaining > 0;
+      child = childAfter(child), remaining--
+    ) {
+      // Trailing garbage may still have its old width/dirty layout after a
+      // resize or content change; only cache rows measured for this layout.
+      if (!child.hasSize || child.constraints != boxConstraints) continue;
+      final index = indexOf(child);
+      final extent = paintExtentOf(child);
+      final previous = _extents.remove(index);
+      if (previous != null && previous != extent) _extents.clear();
+      _extents[index] = extent;
+      if (_extents.length > _maximumMeasurements) {
+        _extents.remove(_extents.keys.first);
+      }
+    }
+    super.collectGarbage(leadingGarbage, trailingGarbage);
   }
 }
