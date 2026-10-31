@@ -34,7 +34,8 @@ async function planReleaseBuilds({ github, context, version, targets,
     status: 'completed', per_page: 100,
   });
   for await (const page of pages) {
-    for (const run of page.data.workflow_runs) {
+    // paginate.iterator unwraps the REST workflow_runs envelope into page.data.
+    for (const run of page.data) {
       // A PR can have temporary signing keys even when its source matches.
       if (run.status !== 'completed' ||
           run.head_sha !== context.sha || !['push', 'workflow_dispatch'].includes(run.event) ||

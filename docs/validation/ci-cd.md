@@ -95,6 +95,18 @@ Release 草稿及全部附件上传成功后，使用 GitHub 官方 [actions/git
 
 仅指定 `--target-platform android-arm64` 时，该 SDK 仍会把插件的其他 ABI 库装入非 split APK。本轮检查发现 armeabi-v7a/x86_64 的 mpv/JNI 库，已增加 `--split-per-abi` 并在脚本中校验 APK 内只存在 `arm64-v8a`。
 
+## Release #82：复用产物的分页返回结构（2026-10-31）
+
+[失败任务](https://github.com/CKopoer/BiliSail/actions/runs/41215540020/job/124579168305) 对应提交 `266d33fb7132e00bcd7299df5bdb78c1a1785769`、版本 `1.2.6+0`，开启了 `reuse_ci_build`。版本与平台解析成功，随后 `planReleaseBuilds` 在读取第一页时抛出 `TypeError: page.data.workflow_runs is not iterable`，构建和草稿任务均被跳过。同提交的 [CI #254](https://github.com/CKopoer/BiliSail/actions/runs/41213220364) 已通过共享检查和六个目标构建，查询时六份版本化产物均非空且未过期。
+
+根因是混用了原始 REST 响应与 Octokit 分页器的返回结构。REST 返回 `{ total_count, workflow_runs }`，但 [`paginate.iterator`](https://github.com/octokit/plugin-paginate-rest.js#octokitpaginateiterator) 已将集合解包为 `page.data` 数组；原脚本又读取 `.workflow_runs`，得到 `undefined`。修复直接遍历 `page.data`，同步纠正测试替身的结构，并覆盖空页、跨页查找、全部命中后停止，以及首个／后续分页错误继续阻断发布。原有同提交、同版本、检查与目标任务成功、来源和 SHA-256 校验门槛保持不变。
+
+定向回归 59 项通过；改正替身后、修复生产代码前，可复现与线上相同的异常。另下载工作流固定的 `actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3` 完整运行时，以请求 hook 提供原始 REST 响应，让实际 Octokit 完成解包和翻页：旧脚本复现异常，修复后全部命中、跨页命中、部分命中、空集合、首个请求失败和部分命中后翻页失败六种场景均通过。其中来源运行、任务和产物字段采用上述 CI 查询快照；这是实际客户端配合受控响应的验证，没有下载安装包或创建远端草稿。日志位于 `build/validation/release-reuse-runtime-{original,fixed}.log`。
+
+本机 Windows / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过打包边界、格式、静态分析及 4651 项 Dart／Flutter 测试（根应用 3860、API 536、播放器 105、弹幕 145、封装 5）。13 项 Windows 符号链接用例因权限不足、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不能计作原生覆盖。JavaScript 语法、两份工作流的 actionlint 1.7.12、本文 38 条本地链接及 `git diff --check` 通过，五份锁文件无修改。完整检查日志为 `build/release-reuse-fix-check.log`；没有执行新安装包构建、设备测试或修复后的远端 Release。
+
+重跑旧 Release run 仍使用旧提交，不会取得本次脚本修复。修复进入新提交后，应先取得该提交的同版本 CI 产物，再新建启用复用的 Release；提交不同的旧产物仍不会复用。
+
 ## Android 固定签名与覆盖升级
 
 2026-10-07 起，push、手动 CI 和 Release 共用固定 release keystore。仓库 Actions Secrets 配置：

@@ -53,7 +53,8 @@ function fakeGitHub(pages, artifactsByRun, jobsByRun = {}) {
     assert.equal(parameters.workflow_id, 'ci.yml');
     assert.equal(parameters.head_sha, context.sha);
     assert.equal(parameters.status, 'completed');
-    for (const workflow_runs of pages) yield { data: { workflow_runs } };
+    // Octokit normalizes REST collection envelopes before yielding each page.
+    for (const runs of pages) yield { data: runs };
   };
   return { github: { rest: { actions: { listWorkflowRuns, listWorkflowRunArtifacts, listJobsForWorkflowRun } }, paginate },
     artifactRequests };
@@ -77,6 +78,36 @@ test('continues through paginated runs to find a matching manually versioned CI 
   assert.ok(selected.reused.every(({ runId }) => runId === 10));
   assert.deepEqual(selected.buildTargets, []);
   assert.deepEqual(artifactRequests, [20, 10]);
+});
+
+test('rebuilds selected targets when the normalized workflow runs page is empty', async () => {
+  const { github, artifactRequests } = fakeGitHub([[]], {});
+  assert.deepEqual(await plan({ github }), { reused: [], buildTargets: allTargets });
+  assert.deepEqual(artifactRequests, []);
+});
+
+test('stops requesting workflow pages once all selected targets have reusable builds', async () => {
+  const { github } = fakeGitHub([], { 10: makeArtifacts() });
+  github.paginate.iterator = async function* () {
+    yield { data: [makeRun(10)] };
+    throw new Error('The planner must not request another page after matching all targets.');
+  };
+  const selected = await plan({ github });
+  assert.deepEqual(selected.buildTargets, []);
+  assert.equal(selected.reused.length, allTargets.length);
+});
+
+test('propagates workflow pagination errors even after matching some targets', async (t) => {
+  for (const partialMatch of [false, true]) {
+    await t.test(partialMatch ? 'after partial reuse' : 'before the first page', async () => {
+      const { github } = fakeGitHub([], { 10: makeArtifacts(['android-arm64']) });
+      github.paginate.iterator = async function* () {
+        if (partialMatch) yield { data: [makeRun(10)] };
+        throw new Error('Workflow pagination failed.');
+      };
+      await assert.rejects(plan({ github }), /Workflow pagination failed/);
+    });
+  }
 });
 
 test('does not reuse untrusted or incomplete runs', async (t) => {
@@ -183,7 +214,7 @@ test('never reuses builds when checks failed or the selected job did not succeed
 test('propagates API errors instead of treating permission failures as cache misses', async () => {
   const { github } = fakeGitHub([[makeRun(10)]], {});
   github.paginate = async () => { throw new Error('403 Actions read denied'); };
-  github.paginate.iterator = async function* () { yield { data: { workflow_runs: [makeRun(10)] } }; };
+  github.paginate.iterator = async function* () { yield { data: [makeRun(10)] }; };
   await assert.rejects(plan({ github }), /403/);
 });
 
