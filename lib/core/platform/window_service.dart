@@ -137,11 +137,27 @@ class WindowService {
     _maximized.value = maximized;
   }
 
-  /// Restore this app session's normal rectangle and zoom before its first view.
-  Future<void> restorePlaybackGeometry() async {
-    if (viewId == null || _isViewAvailable?.call() == false) return;
+  /// Restores this app session's normal rectangle and zoom before its first view.
+  ///
+  /// Returns the first scene's client size in physical pixels for a maximized
+  /// first show, or `null` to use the view's prepared client size.
+  Future<Size?> restorePlaybackGeometry() async {
+    if (viewId == null || _isViewAvailable?.call() == false) return null;
     _geometryAttached = true;
-    await _geometryCall('restoreGeometry');
+    final result = await _geometryCall('restoreGeometry');
+    if (result == null) return null;
+    if (result is List<Object?> && result.length == 2) {
+      final width = result[0], height = result[1];
+      if (width is num &&
+          height is num &&
+          width.isFinite &&
+          height.isFinite &&
+          width > 0 &&
+          height > 0) {
+        return Size(width.toDouble(), height.toDouble());
+      }
+    }
+    throw const FormatException('Invalid initial playback window size.');
   }
 
   Future<void> capturePlaybackGeometry() async {
@@ -180,8 +196,8 @@ class WindowService {
     }
   }
 
-  Future<void> _geometryCall(String method) => _desktopChannel
-      .invokeMethod<void>(method, {
+  Future<Object?> _geometryCall(String method) => _desktopChannel
+      .invokeMethod<Object?>(method, {
         'viewId': viewId,
         'windowHandle': ?nativeWindowHandle,
         'owner': _geometryOwner,

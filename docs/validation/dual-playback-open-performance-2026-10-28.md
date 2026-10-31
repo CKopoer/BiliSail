@@ -49,3 +49,14 @@
 - 额外的临时 Profile 合并集成入口也未通过，包含 Debug 按键映射不可用、上述控件查找／多 view 事件异常，以及旧 `detached_playback_window_smoke_test.dart` 沿用系统标题栏高度的断言（实际自绘标题栏外框差 16 px，旧断言要求至少 24 px）。该试验日志 `build/window-open-native-playback.log` 保留，不修改无关旧断言。性能结论仅来自独立 Profile 探针，不使用 Debug 帧率。
 - 最终源码完成 Windows Profile 构建和普通／最大化各 8 次探针复测，随后重新以 `lib/main.dart` 构建成功，日志为副本的 `build/window-open-ordinary-build.log`。可试用产物在 `artifacts/window-open-workspace/build/windows/x64/runner/Profile/bilisail.exe`，需保留整个 Profile 目录；它是普通应用入口，未遗留测试夹具。未构建 Release 安装包。
 - 未验证其他 Windows 机器、Windows 10、跨显示器 DPI、Android/macOS 实机或公网视频加载时间。没有可连接的 Dart 调试应用，无法热重载；原生变更通过重新构建验证。
+
+## 最大化重开时顶部栏闪变（2026-10-31）
+
+用户确认仅在最大化播放窗中出现“先低后高”的顶部栏。标题栏组件一直固定为 44 逻辑像素，没有高度动画；问题在首帧布局与首次可见状态不一致：隐藏 HWND 保留普通尺寸，SDK 先渲染普通尺寸的场景，首帧回调才触发原生最大化，随后 Flutter 再渲染最大化尺寸。旧探针连续 8 次记录到首帧标题栏宽度 1120、客户区 1120×791，而首次可见及稳定客户区已是 1920×1032；首次最大化期间会短暂使用旧尺寸的场景。
+
+- 原生恢复几何时，若存在待执行的首次最大化，则返回所在显示器工作区的物理尺寸。Windows 自绘标题栏下，该尺寸等于最大化后的客户区。普通窗口继续沿用准备好的实际客户区。
+- Dart 窗口适配器将该尺寸换算为逻辑像素，供初始宽松约束下的场景布局使用。原生窗口仍保持隐藏，首帧回调继续负责首次可见即最大化；普通位置记忆、用户还原、首显后的自由缩放与全屏沿用原处理。
+- Profile 探针增加首帧场景、标题栏尺寸和 DPR 记录，并检查首帧场景与稳定客户区一致、标题栏为 44。Windows Profile 最大化重开 8 次，首帧均为 1920×1032、标题栏 1920×44；普通窗口 8 次均为 1120×791、标题栏 1120×44。最终带断言的探针复测两组各 8 次通过，记录在 `build/validation/caption/final-maximized.json` 与 `final-normal.json`，旧实现对照为 `baseline-maximized.json`。这是本机受控窗口加载态验证，不代表公网视频或跨显示器验收。
+- `tool/test-window-geometry.ps1` 通过，覆盖首次可见尺寸与自绘客户区一致、普通窗口不使用最大化尺寸、取消后清理，以及既有最大化／还原／缩放／全屏／旧 owner 隔离。窗口服务、独立窗口生命周期、顶部栏和工作区播放窗口的 54 项定向测试通过，日志为 `build/caption-targeted-tests.log`。
+- `tool/check.ps1 -SkipPub` 通过：根应用 3681、API 497、播放器 101、弹幕 136、封装包 5，共 4420 项通过。根应用 13 项按既有条件跳过，mux 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过；格式、静态分析和打包边界检查通过，日志为 `build/caption-full-check.log`。最终改动文件另行静态分析通过。
+- Windows mux 资产重新构建成功；探针执行后已重新构建普通 `lib/main.dart` 的 Windows Profile 和 Release，未遗留探针入口。日志为 `build/caption-ordinary-profile-build.log` 和 `build/caption-ordinary-release-build.log`；可试用入口为 `build/windows/x64/runner/Release/bilisail.exe`，需保留整个 Release 目录。没有可连接的 DTD／调试应用，本轮通过重新构建验证；未测试跨显示器 DPI、Windows 10、真实账号或公网视频，Android/macOS 未构建或实机验证。

@@ -245,6 +245,34 @@ void main() {
     },
   );
 
+  testWidgets('geometry returns the physical size for the first scene', (
+    tester,
+  ) async {
+    const channel = MethodChannel('bilisail/desktop_window');
+    Object? reply;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async => call.method == 'restoreGeometry' ? reply : null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    final window = WindowService.forView(
+      viewId: 62,
+      setFullScreen: (_) async {},
+      activate: () async {},
+    );
+    expect(await window.restorePlaybackGeometry(), isNull);
+    reply = [1920.0, 1032.0];
+    expect(await window.restorePlaybackGeometry(), const Size(1920, 1032));
+    reply = [1920.0, -1.0];
+    await expectLater(window.restorePlaybackGeometry(), throwsFormatException);
+    await window.retirePlaybackGeometry();
+  });
+
   testWidgets('geometry remembers zoom through minimize and fullscreen', (
     tester,
   ) async {

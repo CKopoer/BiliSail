@@ -6,6 +6,7 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:bilisail/app/workspace_playback_window.dart';
 import 'package:bilisail/core/platform/detached_playback_window.dart';
+import 'package:bilisail/core/platform/window_caption.dart';
 import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/core/presentation/bili_widgets_binding.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
@@ -32,6 +33,8 @@ class _ProbeState extends State<_Probe> {
   final _controller = DesktopPlaybackWindowController();
   final _samples = <Map<String, Object>>[];
   final _frames = <Map<String, int>>[];
+  final _presentations = <Map<String, Object>>[];
+  final _playbackKey = GlobalKey();
   Map<String, Object> _stages = {};
   _MeasuredWindow? _window;
   bool _open = false;
@@ -47,7 +50,38 @@ class _ProbeState extends State<_Probe> {
   void initState() {
     super.initState();
     SchedulerBinding.instance.addTimingsCallback(_timings);
+    WidgetsBinding.instance.addPersistentFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _presentation());
+    });
     unawaited(_run());
+  }
+
+  void _presentation() {
+    final window = _window;
+    final context = _playbackKey.currentContext;
+    if (!mounted || !_open || window == null || context == null) return;
+    void visit(Element element) {
+      if (element.widget.key == const ValueKey('playback-window-caption')) {
+        final box = element.findRenderObject()! as RenderBox;
+        final scene = context.findRenderObject()! as RenderBox;
+        final view = View.of(element);
+        _presentations.add({
+          'us': _clock.elapsedMicroseconds,
+          'visible': window.visible,
+          'viewSize': window.viewSize,
+          'dpr': view.devicePixelRatio,
+          'captionSize': [box.size.width, box.size.height],
+          'sceneSize': [
+            scene.size.width * view.devicePixelRatio,
+            scene.size.height * view.devicePixelRatio,
+          ],
+        });
+        return;
+      }
+      element.visitChildElements(visit);
+    }
+
+    (context as Element).visitChildElements(visit);
   }
 
   void _timings(List<FrameTiming> timings) {
@@ -82,6 +116,7 @@ class _ProbeState extends State<_Probe> {
       for (var sample = _maximized ? -1 : 0; sample < 8; sample++) {
         _stages = {'sample': sample};
         _frames.clear();
+        _presentations.clear();
         _clock
           ..reset()
           ..start();
@@ -96,7 +131,22 @@ class _ProbeState extends State<_Probe> {
           await _window!.windowService.togglePlaybackWindowMaximized();
           await Future<void>.delayed(const Duration(milliseconds: 150));
         } else {
-          _samples.add({..._stages, 'frames': _frames.toList()});
+          final first = _presentations.first;
+          final scene = first['sceneSize']! as List<double>;
+          final caption = first['captionSize']! as List<double>;
+          final settled = _window!.viewSize;
+          if ((scene[0] - settled[0]).abs() > 1 ||
+              (scene[1] - settled[1]).abs() > 1 ||
+              caption[1] != desktopCaptionHeight) {
+            throw StateError(
+              'First scene $scene, caption $caption differs from $settled.',
+            );
+          }
+          _samples.add({
+            ..._stages,
+            'frames': _frames.toList(),
+            'presentations': _presentations.toList(),
+          });
         }
         setState(() => _open = false);
         await _until(() => _window?.disposed == true);
@@ -134,6 +184,7 @@ class _ProbeState extends State<_Probe> {
       playback: !_open
           ? null
           : WorkspacePlaybackWindow(
+              key: _playbackKey,
               theme: ThemeData.dark(),
               shortcuts: ShortcutSettings.defaults(),
               onBack: () {},

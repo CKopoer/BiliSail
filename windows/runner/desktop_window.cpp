@@ -324,7 +324,13 @@ DesktopWindowChannel::DesktopWindowChannel(flutter::BinaryMessenger* messenger,
             result->Error("geometry_restore_failed", "Cannot restore playback bounds.");
             return;
           }
-          result->Success();
+          if (const auto size = geometry_.InitialContentSize(window)) {
+            result->Success(flutter::EncodableValue(flutter::EncodableList{
+                flutter::EncodableValue(static_cast<double>(size->cx)),
+                flutter::EncodableValue(static_cast<double>(size->cy))}));
+          } else {
+            result->Success();
+          }
         } else if (call.method_name() == "captureGeometry" ||
                    call.method_name() == "saveGeometry") {
           std::optional<bool> maximized;

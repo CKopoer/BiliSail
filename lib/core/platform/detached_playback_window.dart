@@ -521,6 +521,7 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
   late final flutter_window.RegularWindowController _controller;
   bool _open = true;
   bool _disposed = false;
+  Size? _initialContentSize;
 
   @override
   late final WindowService windowService;
@@ -539,7 +540,7 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
   @override
   Future<void> prepare() async {
     await windowService.configurePlaybackTitleBar();
-    await windowService.restorePlaybackGeometry();
+    _initialContentSize = await windowService.restorePlaybackGeometry();
     await WindowInputFocus.instance.synchronizeNativeFocusIfSupported();
   }
 
@@ -551,11 +552,14 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
     final view = _controller.rootView;
     return flutter_window.RegularWindow(
       controller: _controller,
-      // Use the prepared native client size for the initially loose Windows
-      // constraints. Later fixed view constraints override this preferred size.
+      // A maximized first show needs a maximized scene already rasterized;
+      // otherwise Windows briefly presents/clips the normal-size caption.
+      // Later fixed view constraints override this initial preferred size.
       child: Platform.isWindows
           ? SizedBox.fromSize(
-              size: view.physicalSize / view.devicePixelRatio,
+              size:
+                  (_initialContentSize ?? view.physicalSize) /
+                  view.devicePixelRatio,
               child: child,
             )
           : child,

@@ -247,6 +247,19 @@ class WindowGeometrySession {
     return geometry_.Owns(view, owner);
   }
 
+  // Render the first scene for the client area it will actually be shown in.
+  // The HWND stays hidden at its normal bounds until the SDK's first frame,
+  // but a remembered maximized window must not present a normal-size buffer.
+  std::optional<SIZE> InitialContentSize(HWND window) const {
+    if (!initial_show_ || !initial_show_->pending()) return std::nullopt;
+    MONITORINFO monitor{};
+    monitor.cbSize = sizeof(monitor);
+    if (!GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST),
+                        &monitor)) return std::nullopt;
+    return SIZE{monitor.rcWork.right - monitor.rcWork.left,
+                monitor.rcWork.bottom - monitor.rcWork.top};
+  }
+
   bool Capture(HWND window, int64_t view, int64_t owner,
                std::optional<bool> last_maximized = std::nullopt) {
     if (!Owns(view, owner)) return true;

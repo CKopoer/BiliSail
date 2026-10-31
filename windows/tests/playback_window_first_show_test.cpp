@@ -306,7 +306,10 @@ void RunTests() {
 
   {
     const TestWindow reopened;
+    const playback_window::PlaybackWindowFrame caption(reopened.get());
     Require(session.Restore(reopened.get(), 2, 2), "Reopen restore failed.");
+    const auto initial_content = session.InitialContentSize(reopened.get());
+    Require(initial_content.has_value(), "Maximized first scene has no target size.");
     Require(!IsWindowVisible(reopened.get()), "Prepare showed a blank window.");
     playback_window::ActivateWindow(reopened.get(), reopened.get());
     Require(!IsWindowVisible(reopened.get()), "Early activation consumed first show.");
@@ -317,6 +320,13 @@ void RunTests() {
     Require(IsZoomed(reopened.get()) != FALSE, "SDK first show undid maximization.");
     Require(!first_show.saw_visible_normal() && first_show.saw_visible_maximized(),
             "Maximized reopen first exposed an ordinary window.");
+    RECT client{};
+    Require(GetClientRect(reopened.get(), &client) != FALSE &&
+                client.right == initial_content->cx &&
+                client.bottom == initial_content->cy,
+            "First scene size differs from the maximized custom client area.");
+    Require(!session.InitialContentSize(reopened.get()),
+            "First scene override survived first show.");
     Require(session.Capture(reopened.get(), 2, 2), "Reopen capture failed.");
     playback_window::ActivateWindow(reopened.get(), reopened.get());
     Require(IsZoomed(reopened.get()) != FALSE, "Activation undid maximization.");
@@ -336,6 +346,8 @@ void RunTests() {
   {
     const TestWindow ordinary;
     Require(session.Restore(ordinary.get(), 3, 3), "Normal reopen failed.");
+    Require(!session.InitialContentSize(ordinary.get()),
+            "Normal reopen requested a maximized first scene.");
     ShowWindow(ordinary.get(), SW_SHOWNORMAL);
     Require(!IsZoomed(ordinary.get()), "Normal reopen ignored user's Restore.");
     RequireBounds(ordinary.get(), normal);
@@ -350,6 +362,8 @@ void RunTests() {
     Require(session.Capture(before_frame.get(), 4, 4, false), "Pending close capture failed.");
     Require(session.saved().maximized(), "Close before first frame erased zoom.");
     session.Retire(4, 4);
+    Require(!session.InitialContentSize(before_frame.get()),
+            "Retired window retained its first scene size.");
     ShowWindow(before_frame.get(), SW_SHOWNORMAL);
     Require(!IsZoomed(before_frame.get()), "Retired owner retained first-show hook.");
   }
