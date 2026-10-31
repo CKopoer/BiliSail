@@ -152,12 +152,12 @@ void main() {
     final harness = _Harness();
     addTearDown(harness.dispose);
     await _pumpComposer(tester, harness);
-    for (final label in ['底部', '蓝色']) {
-      await tester.tap(find.byTooltip('发送弹幕样式'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(label));
-      await tester.pumpAndSettle();
-    }
+    await tester.tap(find.byTooltip('发送弹幕样式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('底部'));
+    await tester.tap(find.byTooltip('蓝色'));
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
     await _pumpComposer(
       tester,
       harness,

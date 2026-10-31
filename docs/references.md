@@ -4,6 +4,8 @@
 
 ## 1. 来源快照
 
+发送色板与自定义颜色另只读参考同一 PiliPlus 提交 `936072449e82e3d90c28c728c0087bf5136fa441` 的 [发送面板](../../PiliPlus/lib/pages/video/send_danmaku/view.dart) 与 [RGB 选择器](../../PiliPlus/lib/pages/setting/slide_color_picker.dart)。仅采用普通 RGB 预设值和交互职责，独立实现，未复制其 GPLv3 应用源码或资源；采用范围、固定依赖与验证见 [发送样式面板](validation/danmaku-send-style-picker.md)。
+
 弹幕区域与发送样式修复只读参考 PiliPlus 提交 `936072449e82e3d90c28c728c0087bf5136fa441` 的 [弹幕适配](../../PiliPlus/lib/plugin/pl_player/utils/danmaku_options.dart)、[发送面板](../../PiliPlus/lib/pages/video/send_danmaku/view.dart)、[视频控制器](../../PiliPlus/lib/pages/video/controller.dart) 与 [发送请求](../../PiliPlus/lib/http/danmaku.dart)。仅参考配置比例、会话保留发送样式和成功回显行为，独立实现，未复制 GPLv3 应用源码、资源或新增依赖；来源锁文件、修复原因和验证边界见 [显示区域与发送样式](validation/danmaku-display-area.md)。
 
 2026-10-28 CDN 扩展只读参考同一 PiliPlus 提交 `936072449e82e3d90c28c728c0087bf5136fa441` 的 [CDN 目录](../../PiliPlus/lib/models/common/video/cdn_type.dart)、[选择与测速](../../PiliPlus/lib/pages/setting/widgets/select_dialog.dart)、[URL 行为](../../PiliPlus/lib/utils/video_utils.dart) 和 [设置入口](../../PiliPlus/lib/pages/setting/models/video_settings.dart)。仅借鉴节点信息、交互与公开视频分段测速的行为，独立实现设置仓储／控制器／UI 和有界传输；未复制 GPLv3 应用源码或引入依赖，具体替换边界、原始备用与在线结果见 [CDN 设置与测速](validation/video-cdn.md)。

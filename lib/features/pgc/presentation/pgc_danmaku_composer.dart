@@ -73,7 +73,7 @@ final class _PgcDanmakuComposerState extends ConsumerState<PgcDanmakuComposer> {
     final session = ref.watch(playbackSessionProvider);
     return Container(
       height: (MediaQuery.textScalerOf(context).scale(12) + 20).clamp(
-        36,
+        44,
         double.infinity,
       ),
       decoration: BoxDecoration(

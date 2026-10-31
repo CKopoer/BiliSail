@@ -18,6 +18,9 @@ void main() {
       (0xff6699, '粉色'),
       (0xffd700, '金色'),
       (0x00a1d6, '蓝色'),
+      (0xfe0302, '红色'),
+      (0x00cd00, '绿色'),
+      (0x222222, '深灰色'),
     ]) {
       testWidgets('$modeLabel $colorLabel reaches API and acknowledged echo', (
         tester,
@@ -51,6 +54,37 @@ void main() {
       });
     }
   }
+
+  testWidgets(
+    'custom RGB preserves the draft and reaches the API without alpha',
+    (tester) async {
+      final transport = _SendTransport();
+      final session = FakeComposerSession();
+      addTearDown(session.dispose);
+      await pumpComposer(tester, _repository(transport), session: session);
+      await tester.enterText(find.byType(TextField), 'custom draft');
+      await tester.tap(find.byTooltip('发送弹幕样式'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('自定义颜色'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('danmaku-send-hex')),
+        '000001',
+      );
+      await tester.ensureVisible(find.text('完成'));
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      expect(transport.posts, isEmpty);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'custom draft',
+      );
+      await tester.tap(find.text('发送'));
+      await tester.pumpAndSettle();
+      expect(transport.posts.single['color'], '1');
+      expect(session.sent.single.color, 1);
+    },
+  );
 
   for (final uncertain in [false, true]) {
     testWidgets(
@@ -107,7 +141,13 @@ ApiVideoActionsRepository _repository(_SendTransport transport) {
 Future<void> _choose(WidgetTester tester, String label) async {
   await tester.tap(find.byTooltip('发送弹幕样式'));
   await tester.pumpAndSettle();
-  await tester.tap(find.textContaining(label));
+  final color = find.byTooltip(label);
+  await tester.tap(
+    color.evaluate().isNotEmpty
+        ? color
+        : find.widgetWithText(ChoiceChip, label),
+  );
+  await tester.tap(find.text('完成'));
   await tester.pumpAndSettle();
 }
 

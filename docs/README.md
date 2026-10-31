@@ -155,6 +155,7 @@
 | [弹幕顶部距离](validation/danmaku-top-margin.md) | 默认 0、两处配置入口、点播／直播区域计算和旧设置兼容 |
 | [弹幕行距](validation/danmaku-line-spacing.md) | 行间空白从 0 起调节、默认 5、点播／直播布局与持久化 |
 | [弹幕样式与过滤配置](validation/danmaku-style-settings.md) | 字体/加粗/效果、时间偏移、重复合并、同屏密度与本地过滤 |
+| [弹幕发送色板与面板](validation/danmaku-send-style-picker.md) | 17 色与 RGB 自定义、预览、确认／取消、窗口／键盘及大字号适配 |
 | [全屏弹幕保留](validation/danmaku-fullscreen.md) | 点播视口变更保留活动弹幕、调度游标和滚动进度，Windows 全屏回归 |
 | [弹幕速度与播放倍速](validation/danmaku-playback-rate.md) | 按播放时间加载／触发，独立动画时间控制滚动和停留，暂停／seek／时间窗回归 |
 | [密集弹幕性能优化](validation/danmaku-performance.md) | Windows Profile 热点、分帧准备、阴影图像缓存、参考实现比较与验证边界 |

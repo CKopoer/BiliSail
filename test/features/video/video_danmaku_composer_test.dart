@@ -24,12 +24,12 @@ void main() {
       final session = FakeComposerSession();
       addTearDown(session.dispose);
       await pumpComposer(tester, repo, session: session);
-      for (final label in ['顶部', '粉色']) {
-        await tester.tap(find.byTooltip('发送弹幕样式'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text(label));
-        await tester.pumpAndSettle();
-      }
+      await tester.tap(find.byTooltip('发送弹幕样式'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('顶部'));
+      await tester.tap(find.byTooltip('粉色'));
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
       await pumpComposer(
         tester,
         repo,
@@ -38,9 +38,14 @@ void main() {
       );
       await tester.tap(find.byTooltip('发送弹幕样式'));
       await tester.pumpAndSettle();
-      expect(find.text('✓ 顶部'), findsOneWidget);
-      expect(find.text('✓ 粉色'), findsOneWidget);
-      await tester.tap(find.text('✓ 顶部'));
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '顶部'))
+            .selected,
+        isTrue,
+      );
+      expect(find.text('预览 · 顶部 · #FF6699'), findsOneWidget);
+      await tester.tap(find.text('完成'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'styled message');
       await tester.tap(find.text('发送'));
