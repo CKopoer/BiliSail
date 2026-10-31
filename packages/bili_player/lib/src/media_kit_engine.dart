@@ -464,6 +464,7 @@ final class MediaKitEngine
 
   Future<void> _configureBufferAhead(
     mk.Player player,
+    ResolvedMediaSource source,
     Duration window,
     int generation,
     Stopwatch watch,
@@ -478,11 +479,32 @@ final class MediaKitEngine
       );
     }
     final seconds = window.inMicroseconds / Duration.microsecondsPerSecond;
+    final live = switch (source) {
+      ManifestSource(:final isLive) ||
+      ProgressiveSource(:final isLive) => isLive,
+      _ => false,
+    };
+    final preview = source is DashVideoSource;
     final properties = {
       // media_kit enables disk caching by default. Keep a transient bounded
       // window in memory instead of accumulating an append-only cache file.
       'cache-on-disk': 'no',
+      'cache': 'yes',
       'cache-pause': 'yes',
+      // The SDK's 5s I/O timeout would end a recoverable connection before
+      // the buffering watchdog allows it to refill. Open still has its own
+      // shorter/shared deadline and can cancel the native loading worker.
+      'network-timeout': NativePlaybackHealth.bufferingTimeout.inSeconds
+          .toString(),
+      // Avoid resuming on the first small burst after an underrun. Live also
+      // builds a short cushion before starting; previews keep quick startup.
+      'cache-pause-wait': live ? '3' : (preview ? '1' : '2'),
+      'cache-pause-initial': live ? 'yes' : 'no',
+      // A live stream cannot seek back. Use the existing 64 MiB total packet
+      // allowance for forward data instead of retaining consumed packets.
+      'demuxer-max-bytes': (live ? 64 * 1024 * 1024 : 32 * 1024 * 1024)
+          .toString(),
+      'demuxer-max-back-bytes': (live ? 0 : 32 * 1024 * 1024).toString(),
       // mpv uses the larger of these two windows when network cache is enabled.
       'cache-secs': seconds.toString(),
       'demuxer-readahead-secs': seconds.toString(),
@@ -499,9 +521,10 @@ final class MediaKitEngine
       final applied = await platform
           .getProperty(entry.key)
           .timeout(_remaining(watch, budget));
-      final matches = entry.key == 'cache-on-disk' || entry.key == 'cache-pause'
+      final expectedNumber = double.tryParse(entry.value);
+      final matches = expectedNumber == null
           ? applied == entry.value
-          : double.tryParse(applied) == seconds;
+          : double.tryParse(applied) == expectedNumber;
       if (!matches) {
         throw PlayerFailure(
           PlayerFailureKind.nativePlayback,
@@ -616,6 +639,7 @@ final class MediaKitEngine
         }
         await _configureBufferAhead(
           player,
+          source,
           options.maxBufferAhead,
           generation,
           watch,
@@ -838,7 +862,12 @@ final class MediaKitEngine
         }
         if (generation != _generation || _disposed) return;
         if (_loadFailure(generation) case final failure?) throw failure;
-        _publish(_snapshot.copyWith(phase: PlaybackPhase.ready));
+        _publish(
+          _snapshot.copyWith(
+            phase: PlaybackPhase.ready,
+            isBuffering: player.state.buffering,
+          ),
+        );
         _diagnose(PlayerDiagnosticKind.openReady);
         if (options.play) {
           await player.play().timeout(_remaining(watch, openBudget));
@@ -850,7 +879,14 @@ final class MediaKitEngine
             );
           }
           if (generation == _generation && !_disposed) {
-            _publish(_snapshot.copyWith(phase: PlaybackPhase.playing));
+            _publish(
+              _snapshot.copyWith(
+                phase: player.state.buffering
+                    ? PlaybackPhase.buffering
+                    : PlaybackPhase.playing,
+                isBuffering: player.state.buffering,
+              ),
+            );
           }
         } else {
           await player.pause().timeout(_remaining(watch, openBudget));
@@ -1073,7 +1109,9 @@ final class MediaKitEngine
         }
         _publish(
           _snapshot.copyWith(
-            phase: value ? PlaybackPhase.playing : PlaybackPhase.paused,
+            phase: _snapshot.isBuffering
+                ? PlaybackPhase.buffering
+                : (value ? PlaybackPhase.playing : PlaybackPhase.paused),
           ),
         );
       }),

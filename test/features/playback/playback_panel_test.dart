@@ -8042,12 +8042,13 @@ void main() {
           }
           final controls = find.byKey(const ValueKey('player-controls'));
           expect(controls, controlsVisible ? findsOneWidget : findsNothing);
-          final message = find.text('正在准备音视频…');
-          void expectLoading() {
-            expect(message, findsOneWidget);
+          final message = find.text('正在恢复播放…');
+          void expectLoading({bool buffering = false}) {
+            final hint = buffering ? find.text('网络缓冲中…') : message;
+            expect(hint, findsOneWidget);
             final centered = find
                 .ancestor(
-                  of: message,
+                  of: hint,
                   matching: find.byWidgetPredicate(
                     (widget) => widget is Center && widget.child is Column,
                   ),
@@ -8086,7 +8087,7 @@ void main() {
             ),
           );
           await tester.pump();
-          expectLoading();
+          expectLoading(buffering: true);
           engine._emit(
             engine.currentSnapshot.copyWith(
               phase: PlaybackPhase.playing,
@@ -8094,6 +8095,7 @@ void main() {
             ),
           );
           await tester.pump();
+          expect(find.text('网络缓冲中…'), findsNothing);
           expect(message, findsNothing);
 
           // The first automatic reload succeeds immediately. The next failure
@@ -8180,7 +8182,7 @@ void main() {
       await tester.pump();
       interrupt();
       await tester.pump();
-      expect(find.text('正在准备音视频…'), findsOneWidget);
+      expect(find.text('正在恢复播放…'), findsOneWidget);
       switch (action) {
         case 'pause':
           await session.pause();
@@ -8192,10 +8194,10 @@ void main() {
           await session.open(_detail, _part, force: true);
       }
       await tester.pump();
-      expect(find.text('正在准备音视频…'), findsNothing);
+      expect(find.text('正在恢复播放…'), findsNothing);
       await tester.pump(const Duration(seconds: 2));
       expect(engine.opens, action == 'replace' ? 3 : 2);
-      expect(find.text('正在准备音视频…'), findsNothing);
+      expect(find.text('正在恢复播放…'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       await _pumpFrames(tester);
@@ -8227,7 +8229,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
-      expect(find.text('正在准备音视频…'), findsOneWidget);
+      expect(find.text('网络缓冲中…'), findsOneWidget);
 
       // Completion takes precedence even if a backend retains its last flag.
       engine._emit(
@@ -8238,14 +8240,14 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
-      expect(find.text('正在准备音视频…'), findsNothing);
+      expect(find.text('网络缓冲中…'), findsNothing);
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.byTooltip('播放（空格）'), findsOneWidget);
 
       // A later position sample must not bring the completion spinner back.
       engine._emit(engine.currentSnapshot);
       await tester.pump(const Duration(seconds: 1));
-      expect(find.text('正在准备音视频…'), findsNothing);
+      expect(find.text('网络缓冲中…'), findsNothing);
 
       engine._emit(
         engine.currentSnapshot.copyWith(
@@ -8255,7 +8257,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
-      expect(find.text('正在准备音视频…'), findsOneWidget);
+      expect(find.text('网络缓冲中…'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

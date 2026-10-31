@@ -32,6 +32,8 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Windows content playback validation failed' }
   & flutter test integration_test/windows_audio_quality_test.dart -d windows
   if ($LASTEXITCODE -ne 0) { throw 'Windows audio quality validation failed' }
+  & flutter test integration_test/native_live_buffer_test.dart -d windows
+  if ($LASTEXITCODE -ne 0) { throw 'Windows live buffering validation failed' }
 } finally {
   Remove-Item Env:BILI_CONTENT_MEDIA_DIR -ErrorAction SilentlyContinue
   Pop-Location

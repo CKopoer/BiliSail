@@ -698,6 +698,45 @@ void main() {
     expect(session.error, isNull);
   });
 
+  for (final kind in [PlaybackMediaKind.liveHls, PlaybackMediaKind.liveFlv]) {
+    test('live buffering identity reaches the backend: $kind', () async {
+      final engine = _FakeEngine();
+      final content = _FakeContentRepository()
+        ..pending = (Completer<PlaybackMedia>()
+          ..complete(
+            PlaybackMedia(
+              video: PlaybackTrack(
+                urls: [Uri.parse('https://example.test/live')],
+                codec: 'avc',
+                bandwidth: 0,
+              ),
+              audio: null,
+              quality: 400,
+              qualities: const [400],
+              duration: Duration.zero,
+              headers: const {},
+              kind: kind,
+            ),
+          ));
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(),
+        contentRepository: content,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(null, null, target: const LivePlaybackTarget('42'));
+      expect(session.error, isNull);
+      final source = engine.sources.single;
+      expect(switch (source) {
+        ManifestSource(:final isLive) ||
+        ProgressiveSource(:final isLive) => isLive,
+        _ => false,
+      }, isTrue);
+    });
+  }
+
   for (final quality in [0, 250, 400, 20000]) {
     test('new live owner uses its own default qn $quality', () async {
       final content = _FakeContentRepository();

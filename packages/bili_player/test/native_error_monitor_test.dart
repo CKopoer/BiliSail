@@ -58,6 +58,35 @@ void main() {
     expect(failures, [1]);
   });
 
+  testWidgets('buffering can recover after the ordinary stall deadline', (
+    tester,
+  ) async {
+    monitor.report(playing);
+    final buffering = playing.copyWith(
+      phase: PlaybackPhase.buffering,
+      isBuffering: true,
+    );
+    monitor.update(buffering);
+    await tester.pump(const Duration(seconds: 10));
+    expect(failures, isEmpty);
+    monitor.update(playing.copyWith(position: const Duration(seconds: 11)));
+    await tester.pump(const Duration(seconds: 30));
+    expect(failures, isEmpty);
+    expect(recoveries, [1]);
+  });
+
+  testWidgets('repeated buffering errors retain a bounded recovery deadline', (
+    tester,
+  ) async {
+    final buffering = playing.copyWith(isBuffering: true);
+    monitor.report(buffering);
+    await tester.pump(const Duration(seconds: 29));
+    monitor.report(buffering);
+    expect(failures, isEmpty);
+    await tester.pump(const Duration(seconds: 1));
+    expect(failures, [1]);
+  });
+
   testWidgets('seek destination alone is not evidence of recovery', (
     tester,
   ) async {

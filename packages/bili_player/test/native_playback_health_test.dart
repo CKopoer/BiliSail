@@ -58,20 +58,60 @@ void main() {
           isBuffering: buffering,
           phase: buffering ? PlaybackPhase.buffering : PlaybackPhase.playing,
         );
+        final deadline = Duration(seconds: buffering ? 30 : 8);
         health.update(snapshot, Duration.zero, paired: false);
         expect(
-          health.update(snapshot, const Duration(seconds: 7), paired: false),
+          health.update(
+            snapshot,
+            deadline - const Duration(milliseconds: 1),
+            paired: false,
+          ),
           isNull,
         );
         expect(
-          health
-              .update(snapshot, const Duration(seconds: 8), paired: false)
-              ?.kind,
+          health.update(snapshot, deadline, paired: false)?.kind,
           PlayerFailureKind.nativePlayback,
         );
       },
     );
   }
+
+  test(
+    'buffer refill has time to recover but events cannot renew its budget',
+    () {
+      final buffering = playing.copyWith(
+        isBuffering: true,
+        phase: PlaybackPhase.buffering,
+      );
+      health.update(buffering, Duration.zero, paired: false);
+      for (var i = 1; i < 30; i++) {
+        expect(
+          health.update(
+            buffering.copyWith(
+              buffered: Duration(milliseconds: 10000 + i * 50),
+            ),
+            Duration(seconds: i),
+            paired: false,
+          ),
+          isNull,
+        );
+      }
+      expect(
+        health
+            .update(buffering, const Duration(seconds: 30), paired: false)
+            ?.kind,
+        PlayerFailureKind.nativePlayback,
+      );
+      expect(
+        health.update(
+          playing.copyWith(position: const Duration(seconds: 11)),
+          const Duration(seconds: 31),
+          paired: false,
+        ),
+        isNull,
+      );
+    },
+  );
 
   test('normal progress and a refilling buffer do not fail', () {
     for (var i = 0; i < 100; i++) {

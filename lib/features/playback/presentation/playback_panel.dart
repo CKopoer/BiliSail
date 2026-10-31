@@ -1603,17 +1603,23 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                     snapshot.phase != PlaybackPhase.ended &&
                                         snapshot.isBuffering ||
                                     snapshot.phase == PlaybackPhase.opening))
-                              const Center(
+                              Center(
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    CircularProgressIndicator(
+                                    const CircularProgressIndicator(
                                       color: Colors.white,
                                     ),
-                                    SizedBox(height: 14),
+                                    const SizedBox(height: 14),
                                     Text(
-                                      '正在准备音视频…',
-                                      style: TextStyle(
+                                      session.isRecovering
+                                          ? '正在恢复播放…'
+                                          : session.isResolving ||
+                                                snapshot.phase ==
+                                                    PlaybackPhase.opening
+                                          ? '正在准备音视频…'
+                                          : '网络缓冲中…',
+                                      style: const TextStyle(
                                         color: Colors.white70,
                                         fontSize: 13,
                                       ),

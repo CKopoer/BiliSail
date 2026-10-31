@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'player_contract.dart';
+import 'native_playback_health.dart';
 
 /// media_kit's error stream includes mpv log lines, not just terminal failures.
 /// Give a running source time to demonstrate recovery through confirmed position.
@@ -8,15 +9,18 @@ final class NativeErrorMonitor {
   NativeErrorMonitor({
     required this.onStalled,
     required this.onRecovered,
-    this.gracePeriod = const Duration(seconds: 8),
+    this.gracePeriod = NativePlaybackHealth.stallTimeout,
+    this.bufferingGracePeriod = NativePlaybackHealth.bufferingTimeout,
   });
 
   final void Function(int generation) onStalled;
   final void Function(int generation) onRecovered;
   final Duration gracePeriod;
+  final Duration bufferingGracePeriod;
   PlaybackSnapshot? _last;
   bool _pending = false;
   Timer? _timer;
+  bool _waitingForBuffer = false;
 
   void report(PlaybackSnapshot snapshot) {
     update(snapshot);
@@ -60,13 +64,19 @@ final class NativeErrorMonitor {
   }.contains(snapshot.phase);
 
   void _arm(PlaybackSnapshot snapshot) {
-    if (_timer != null || !snapshot.desiredPlaying || snapshot.isSeeking) {
+    if (!snapshot.desiredPlaying || snapshot.isSeeking) {
       return;
     }
-    _timer = Timer(gracePeriod, () {
-      reset();
-      onStalled(snapshot.generation);
-    });
+    if (_timer != null && _waitingForBuffer == snapshot.isBuffering) return;
+    _timer?.cancel();
+    _waitingForBuffer = snapshot.isBuffering;
+    _timer = Timer(
+      snapshot.isBuffering ? bufferingGracePeriod : gracePeriod,
+      () {
+        reset();
+        onStalled(snapshot.generation);
+      },
+    );
   }
 
   void reset() {

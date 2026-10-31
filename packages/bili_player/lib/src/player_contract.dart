@@ -27,8 +27,13 @@ sealed class ResolvedMediaSource {
 }
 
 final class ProgressiveSource extends ResolvedMediaSource {
-  const ProgressiveSource(this.media, {this.isAudioOnly = false});
+  const ProgressiveSource(
+    this.media, {
+    this.isAudioOnly = false,
+    this.isLive = false,
+  });
   final MediaTrack media;
+  final bool isLive;
 
   /// The resolver confirmed an independent audio resource. Opening this source
   /// must not attach a video output or depend on Flutter producing a frame.

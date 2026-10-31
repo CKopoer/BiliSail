@@ -5,6 +5,9 @@ import 'player_contract.dart';
 /// cache handles ordinary underruns; this also catches premature per-track EOF
 /// and buffering that never reports an error or another position event.
 final class NativePlaybackHealth {
+  static const stallTimeout = Duration(seconds: 8);
+  static const bufferingTimeout = Duration(seconds: 30);
+
   PlaybackSnapshot? _last;
   Duration? _progressAt;
   Duration? _audioPosition;
@@ -64,7 +67,11 @@ final class NativePlaybackHealth {
       _progressAt = now;
     }
     final progressAt = _progressAt ??= now;
-    if (now - progressAt >= const Duration(seconds: 8)) {
+    // Refilling a network cache is expected to stop the playback clock. Give
+    // it a bounded recovery window, while still detecting a silent decoder
+    // stall quickly. Buffer events alone never extend either deadline.
+    final timeout = snapshot.isBuffering ? bufferingTimeout : stallTimeout;
+    if (now - progressAt >= timeout) {
       return (
         kind: PlayerFailureKind.nativePlayback,
         position: snapshot.position,

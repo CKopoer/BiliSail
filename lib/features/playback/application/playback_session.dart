@@ -1119,6 +1119,7 @@ class PlaybackSession extends ChangeNotifier {
                           resolved.kind == PlaybackMediaKind.progressive
                     ? ProgressiveSource(
                         MediaTrack(uri: videoUri, requestPolicy: policy),
+                        isLive: isLive,
                       )
                     : DashPairSource(
                         video: MediaTrack(
