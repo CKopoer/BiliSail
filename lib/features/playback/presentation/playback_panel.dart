@@ -1125,7 +1125,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
       hasComposer: widget.danmakuComposerBuilder != null,
       hasSubtitles: session.subtitleTracks.isNotEmpty,
       hasVoices: session.voiceTracks.isNotEmpty,
-      hasCast: castRequestFor(session) != null,
       hasNextButton:
           !session.isLive && session.contentTarget is! OfflinePlaybackTarget,
       isLive: session.isLive,
@@ -2295,14 +2294,6 @@ class _ControlBar extends StatelessWidget {
       );
     }
     final secondary = <Widget>[
-      if (castRequestFor(session) != null)
-        slot(
-          IconButton(
-            tooltip: '投屏',
-            icon: const Icon(Icons.cast_rounded, size: 20),
-            onPressed: () => unawaited(showCastingDialog(context, session)),
-          ),
-        ),
       slot(danmakuButton),
       if (media != null && session.isLive)
         slot(
@@ -2514,17 +2505,6 @@ class _ControlBar extends StatelessWidget {
             ],
           ),
         ),
-      if (castRequestFor(session) != null)
-        PopupMenuItem(
-          value: () => unawaited(showCastingDialog(context, session)),
-          child: const Row(
-            children: [
-              Icon(Icons.cast_rounded, size: 20),
-              SizedBox(width: 12),
-              Text('投屏'),
-            ],
-          ),
-        ),
       if ((session.detail?.parts.length ?? 0) > 1)
         if (pageCommands case final commands?)
           PopupMenuItem(
@@ -2713,7 +2693,6 @@ typedef _ControlsLayoutInputs = ({
   bool hasComposer,
   bool hasSubtitles,
   bool hasVoices,
-  bool hasCast,
   bool hasNextButton,
   bool isLive,
   TextStyle textStyle,
@@ -2749,15 +2728,14 @@ class _ControlsLayout {
       null => 0,
     };
     composerMinWidth = 200 * inputs.textScaler.scale(12) / 12;
-    // Settings and listening live in the top bar; count only bottom controls.
+    // Settings, listening and casting live in the top bar.
     compact =
         inputs.width <
         buttonWidth *
                 (4 +
                     (inputs.hasNextButton ? 1 : 0) +
                     (inputs.hasSubtitles ? 1 : 0) +
-                    (inputs.hasVoices ? 1 : 0) +
-                    (inputs.hasCast ? 1 : 0)) +
+                    (inputs.hasVoices ? 1 : 0)) +
             timeWidth +
             rateWidth +
             qualityWidth +
@@ -2972,6 +2950,12 @@ class _PlayerTopBar extends StatelessWidget {
             )
           else
             const Spacer(),
+          if (castRequestFor(session) != null)
+            _action(
+              '投屏',
+              Icons.cast_rounded,
+              () => unawaited(showCastingDialog(context, session)),
+            ),
           if (session.canListen)
             _action(
               '听视频',

@@ -217,6 +217,7 @@ void main() {
               const ValueKey('player-control-title-layer'),
             );
             for (final tooltip in [
+              if (content == 'video' || content == 'pgc') '投屏',
               if (session.canListen) '听视频',
               '弹幕配置',
               if (!session.isLive) '字幕样式',
@@ -4471,8 +4472,8 @@ void main() {
 
   for (final (content, target, width)
       in <(String, ContentPlaybackTarget?, double)>[
-        ('video', null, 780),
-        ('pgc', const PgcPlaybackTarget('12', cid: '123'), 780),
+        ('video', null, 740),
+        ('pgc', const PgcPlaybackTarget('12', cid: '123'), 740),
         ('live', const LivePlaybackTarget('12'), 480),
         ('offline', const OfflinePlaybackTarget('local-task'), 700),
       ]) {
@@ -4514,6 +4515,33 @@ void main() {
         find.byTooltip('投屏'),
         content == 'video' || content == 'pgc' ? findsOneWidget : findsNothing,
       );
+      void expectCastingInTopBar() {
+        final casting = find.byTooltip('投屏').hitTestable();
+        expect(
+          casting,
+          content == 'video' || content == 'pgc'
+              ? findsOneWidget
+              : findsNothing,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('player-control-title-layer')),
+            matching: casting,
+          ),
+          content == 'video' || content == 'pgc'
+              ? findsOneWidget
+              : findsNothing,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('player-controls')),
+            matching: casting,
+          ),
+          findsNothing,
+        );
+      }
+
+      expectCastingInTopBar();
       expect(
         tester.getSize(find.byKey(const Key('threshold-composer'))).width,
         greaterThanOrEqualTo(200),
@@ -4523,6 +4551,12 @@ void main() {
         find.byKey(const ValueKey('small-window-control-row')),
         findsOneWidget,
       );
+      expectCastingInTopBar();
+      await tester.tap(find.byTooltip('更多播放选项'));
+      await _pumpFrames(tester);
+      expect(find.text('投屏'), findsNothing);
+      await tester.tapAt(const Offset(1, 1));
+      await _pumpFrames(tester);
       await tester.tap(find.byTooltip('全屏（F）'));
       await _pumpFrames(tester);
       expect(
@@ -4530,6 +4564,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.byIcon(Icons.airplanemode_active), findsNothing);
+      expectCastingInTopBar();
       expect(engine.opens, 1);
       expect(engine.maxSurfaces, 1);
       expect(engine.currentSnapshot.desiredPlaying, isFalse);
