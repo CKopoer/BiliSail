@@ -1884,6 +1884,96 @@ void main() {
     );
   }
 
+  testWidgets('unsupported phone rotation keeps manual fullscreen', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    _usePhoneDisplay(tester);
+    tester.view.physicalSize = const Size(400, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    final window = _FakeWindowService(desktop: false, phoneRotation: false);
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(session, window, const AppSettings.defaults()),
+    );
+    await _pumpFrames(tester);
+    engine._emit(
+      engine.currentSnapshot.copyWith(
+        videoDimensions: const VideoDimensions(1920, 1080),
+      ),
+    );
+    tester.view.physicalSize = const Size(800, 400);
+    await _pumpFrames(tester);
+    expect(window.fullScreen, isFalse);
+    await _showControls(tester);
+    await tester.tap(find.byTooltip('全屏（F）'));
+    await _pumpFrames(tester);
+    expect(window.fullScreen, isTrue);
+    tester.view.physicalSize = const Size(400, 800);
+    await _pumpFrames(tester);
+    expect(window.fullScreen, isTrue);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
+  testWidgets('rotation policy resets pending entry and exit', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    _usePhoneDisplay(tester);
+    tester.view.physicalSize = const Size(400, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final events = StreamController<FullScreenOrientation?>.broadcast(
+      sync: true,
+    );
+    addTearDown(events.close);
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    final window = _FakeWindowService(
+      desktop: false,
+      orientationEvents: events.stream,
+    );
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(session, window, const AppSettings.defaults()),
+    );
+    await _pumpFrames(tester);
+    engine._emit(
+      engine.currentSnapshot.copyWith(
+        videoDimensions: const VideoDimensions(1920, 1080),
+      ),
+    );
+    events.add(FullScreenOrientation.portrait);
+    events.add(FullScreenOrientation.landscape);
+    events.add(null); // Lock before the scheduled entry executes.
+    await _pumpFrames(tester);
+    expect(window.fullScreen, isFalse);
+
+    // Unlocking establishes the current posture without treating it as a turn.
+    events.add(FullScreenOrientation.landscape);
+    await _pumpFrames(tester);
+    expect(window.fullScreen, isFalse);
+    events.add(FullScreenOrientation.portrait);
+    events.add(FullScreenOrientation.landscape);
+    await _pumpFrames(tester);
+    expect(window.fullScreen, isTrue);
+    events.add(FullScreenOrientation.portrait);
+    events.add(null); // Lock before the scheduled exit executes.
+    await _pumpFrames(tester);
+    expect(window.fullScreen, isTrue);
+    events.add(FullScreenOrientation.portrait);
+    await _pumpFrames(tester);
+    expect(window.fullScreen, isTrue);
+    events.add(FullScreenOrientation.landscape);
+    events.add(FullScreenOrientation.portrait);
+    await _pumpFrames(tester);
+    expect(window.fullScreen, isFalse);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
   testWidgets(
     'phone fullscreen button waits for physical landscape before portrait exit',
     (tester) async {
@@ -7932,10 +8022,12 @@ const _detail = VideoDetail(
 final class _FakeWindowService extends WindowService {
   _FakeWindowService({
     this.desktop = true,
+    this.phoneRotation = true,
     this.orientationEvents = const Stream.empty(),
   });
   final bool desktop;
-  final Stream<FullScreenOrientation> orientationEvents;
+  final bool phoneRotation;
+  final Stream<FullScreenOrientation?> orientationEvents;
   bool fullScreen = false;
   final orientations = <FullScreenOrientation?>[];
 
@@ -7943,7 +8035,10 @@ final class _FakeWindowService extends WindowService {
   bool get hasDesktopWindow => desktop;
 
   @override
-  Stream<FullScreenOrientation> get deviceOrientations => orientationEvents;
+  bool get supportsPhoneRotationActions => phoneRotation;
+
+  @override
+  Stream<FullScreenOrientation?> get deviceOrientations => orientationEvents;
 
   @override
   Future<void> setFullScreen(
@@ -7957,10 +8052,10 @@ final class _FakeWindowService extends WindowService {
 
 final class _MobileWindowService extends WindowService {
   _MobileWindowService({this.orientationEvents = const Stream.empty()});
-  final Stream<FullScreenOrientation> orientationEvents;
+  final Stream<FullScreenOrientation?> orientationEvents;
 
   @override
-  Stream<FullScreenOrientation> get deviceOrientations => orientationEvents;
+  Stream<FullScreenOrientation?> get deviceOrientations => orientationEvents;
 
   @override
   bool get hasDesktopWindow => false;

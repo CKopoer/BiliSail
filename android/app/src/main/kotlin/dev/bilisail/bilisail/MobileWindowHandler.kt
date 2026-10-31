@@ -1,9 +1,11 @@
 package dev.bilisail.bilisail
 
 import android.app.Activity
+import android.database.ContentObserver
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.view.OrientationEventListener
 import android.view.View
 import android.view.WindowInsets
@@ -22,9 +24,30 @@ class MobileWindowHandler(private val activity: Activity, messenger: BinaryMesse
     private var fullScreen = false
     private var candidate: String? = null
     private var delivered: String? = null
+    private var rotationAllowed = false
+    private val rotationObserver = object : ContentObserver(handler) {
+        override fun onChange(selfChange: Boolean) {
+            updateRotationPolicy()
+        }
+    }
+    private fun updateRotationPolicy() {
+        val allowed = Settings.System.getInt(
+            activity.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0
+        ) == 1
+        if (allowed == rotationAllowed) return
+        rotationAllowed = allowed
+        handler.removeCallbacks(publish)
+        candidate = null
+        delivered = null
+        // A policy transition invalidates any queued Flutter rotation action.
+        sink?.success("reset")
+        listener.disable()
+        if (allowed && resumed && sink != null && listener.canDetectOrientation()) listener.enable()
+    }
     private val publish = Runnable {
         val value = candidate
-        if (resumed && value != null && value != delivered) {
+        if (resumed && rotationAllowed && value != null && value != delivered &&
+            Settings.System.getInt(activity.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1) {
             delivered = value
             sink?.success(value)
         }
@@ -63,10 +86,17 @@ class MobileWindowHandler(private val activity: Activity, messenger: BinaryMesse
         sink = eventSink
         delivered = null
         candidate = null
-        if (resumed && listener.canDetectOrientation()) listener.enable()
+        rotationAllowed = false
+        activity.contentResolver.registerContentObserver(
+            Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION), false, rotationObserver
+        )
+        // Report a locked initial state even when no policy transition occurs.
+        sink?.success("reset")
+        updateRotationPolicy()
     }
 
     override fun onCancel(arguments: Any?) {
+        activity.contentResolver.unregisterContentObserver(rotationObserver)
         listener.disable()
         handler.removeCallbacks(publish)
         candidate = null
@@ -79,7 +109,11 @@ class MobileWindowHandler(private val activity: Activity, messenger: BinaryMesse
         if (value) {
             candidate = null
             delivered = null
-            if (sink != null && listener.canDetectOrientation()) listener.enable()
+            if (sink != null) {
+                rotationAllowed = false
+                sink?.success("reset")
+                updateRotationPolicy()
+            }
             if (fullScreen) applySystemBars()
         } else {
             listener.disable()

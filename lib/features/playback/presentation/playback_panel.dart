@@ -83,7 +83,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   NavigatorState? _fullScreenNavigator;
   Object? _fullScreenRequest;
   FullScreenOrientation? _fullScreenOrientation;
-  StreamSubscription<FullScreenOrientation>? _deviceOrientationSubscription;
+  StreamSubscription<FullScreenOrientation?>? _deviceOrientationSubscription;
   bool? _viewLandscape;
   bool _landscapeRotationPending = false;
   bool _rotationCallbackPending = false;
@@ -93,6 +93,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   FullScreenOrientation? _deviceOrientation;
   bool? _rotationCompact, _displayCompact;
   bool _deviceOrientationBaselinePending = false;
+  bool _deviceRotationBlocked = false;
   bool _metricsBaselinePending = false;
   static final _windowStates = Expando<_WindowFullScreenState>();
   _WindowFullScreenState get _windowState =>
@@ -456,6 +457,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
           _active &&
           _appResumed &&
           compact &&
+          (!phone ||
+              (widget.window.supportsPhoneRotationActions &&
+                  !_deviceRotationBlocked)) &&
           !_metricsBaselinePending &&
           !widget.window.keepsBrowsePortrait &&
           landscape;
@@ -463,6 +467,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       if (!landscape &&
           _fullScreen &&
           compact &&
+          (!phone ||
+              (widget.window.supportsPhoneRotationActions &&
+                  !_deviceRotationBlocked)) &&
           !_metricsBaselinePending &&
           !widget.window.keepsBrowsePortrait &&
           _videoOrientation == FullScreenOrientation.landscape) {
@@ -528,6 +535,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         _active &&
         _appResumed &&
         _isPhoneDisplay &&
+        widget.window.supportsPhoneRotationActions &&
         (_fullScreen
             ? _fullScreenRequest != null
             : _session.ownsPlayback(this) &&
@@ -550,6 +558,16 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
           !identical(owner, _deviceOrientationOwner)) {
         return;
       }
+      if (orientation == null) {
+        _deviceRotationBlocked = true;
+        _deviceOrientation = null;
+        _deviceOrientationBaselinePending = true;
+        _physicalLandscapeSeen = false;
+        _landscapeRotationPending = false;
+        _portraitExitRequest = null;
+        return;
+      }
+      _deviceRotationBlocked = false;
       if (_deviceOrientationBaselinePending) {
         _deviceOrientationBaselinePending = false;
         _deviceOrientation = orientation;

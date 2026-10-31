@@ -20,18 +20,24 @@ class WindowService {
   static const _mobileWindowChannel = MethodChannel('bilisail/mobile_window');
   static final _deviceOrientations = _orientationChannel
       .receiveBroadcastStream()
-      .where((event) => event == 'portrait' || event == 'landscape')
+      .where(
+        (event) =>
+            event == 'portrait' || event == 'landscape' || event == 'reset',
+      )
       .map(
-        (event) => event == 'landscape'
+        (event) => event == 'reset'
+            ? null
+            : event == 'landscape'
             ? FullScreenOrientation.landscape
             : FullScreenOrientation.portrait,
       );
 
-  /// Physical rotation remains observable while fullscreen locks the interface.
-  Stream<FullScreenOrientation> get deviceOrientations =>
-      Platform.isAndroid || Platform.isIOS
-      ? _deviceOrientations
-      : const Stream.empty();
+  /// Null invalidates the physical rotation baseline and queued actions.
+  Stream<FullScreenOrientation?> get deviceOrientations =>
+      Platform.isAndroid ? _deviceOrientations : const Stream.empty();
+
+  // iOS has no public API for reading the user's rotation-lock setting.
+  bool get supportsPhoneRotationActions => !Platform.isIOS;
 
   WindowService()
     : viewId = null,
