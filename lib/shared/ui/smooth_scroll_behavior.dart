@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -222,7 +224,7 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
         return;
       }
       if (_enabled) {
-        _scrollBy(position, delta);
+        _scrollBy(position, delta, event.timeStamp);
       } else {
         position.pointerScroll(delta);
       }
@@ -230,12 +232,12 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
     });
   }
 
-  void _scrollBy(ScrollPosition position, double delta) {
+  void _scrollBy(ScrollPosition position, double delta, Duration timeStamp) {
     final motion = _motion;
     if (motion != null &&
         !motion.disposed &&
         identical(position, motion.position)) {
-      motion.addDelta(delta);
+      motion.addDelta(delta, timeStamp);
       return;
     }
     if (position case final ScrollActivityDelegate delegate) {
@@ -244,6 +246,7 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
         delegate,
         widget.scrollable.vsync,
         delta,
+        timeStamp: timeStamp,
         dampingRatio: _dampingRatio,
       );
       _motion = activity;
@@ -280,20 +283,26 @@ final class _WheelScrollActivity extends ScrollActivity {
     TickerProvider vsync,
     double delta, {
     required double dampingRatio,
+    required Duration timeStamp,
   }) : _position = position,
+       _firstInputTimeStamp = timeStamp,
        _header = HeaderScrollController.offsetFor(position),
        _spring = SpringDescription.withDampingRatio(
          mass: 1,
          stiffness: 1600,
          ratio: dampingRatio,
        ) {
-    addDelta(delta);
+    _simulation = _newSimulation(0, 0);
+    addDelta(delta, timeStamp);
     _ticker = vsync.createTicker(_tick)..start();
   }
 
   // The default ratio of 1.3 is overdamped for a softer stop without a rebound.
   final SpringDescription _spring;
+  final Duration _firstInputTimeStamp;
   static const _maxPendingDistance = 1500.0; // Logical pixels.
+  static const _maxQueuedInputs = 64;
+  final _pendingInputs = ListQueue<({Duration elapsed, double delta})>();
   ScrollPosition _position;
   ScrollPosition get position => _position;
   final HeaderScrollOffset? _header;
@@ -304,9 +313,13 @@ final class _WheelScrollActivity extends ScrollActivity {
   late final Ticker _ticker;
   late ScrollSpringSimulation _simulation;
   Duration _lastElapsed = Duration.zero;
+  Duration? _frameTimeOffset;
+  Duration? _lastSystemFrameTimeStamp;
+  bool _hasFrame = false;
   Duration _simulationStartedAt = Duration.zero;
   double _targetDistance = 0;
   double _lastSimulationPosition = 0;
+  double _unappliedDistance = 0;
   double _lastDelta = 0;
   double _velocity = 0;
   bool disposed = false;
@@ -319,39 +332,107 @@ final class _WheelScrollActivity extends ScrollActivity {
     }
   }
 
-  void addDelta(double delta) {
-    final remaining = _targetDistance - _lastSimulationPosition;
+  Duration _scaledTime(Duration time) =>
+      Duration(microseconds: (time.inMicroseconds / timeDilation).round());
+
+  Duration _elapsedAtInput(Duration timeStamp) {
+    // Synthetic/platform events without a timestamp keep the frame-clock path.
+    var elapsed = _lastElapsed;
+    if (_firstInputTimeStamp > Duration.zero && timeStamp > Duration.zero) {
+      final frame = _lastSystemFrameTimeStamp;
+      elapsed = frame == null
+          ? _scaledTime(timeStamp - _firstInputTimeStamp)
+          : _lastElapsed + _scaledTime(timeStamp - frame);
+    }
+    // Queued input may predate the last painted frame. Never rewind that frame
+    // or another input already incorporated into the spring.
+    if (elapsed < _lastElapsed) elapsed = _lastElapsed;
+    if (elapsed < _simulationStartedAt) elapsed = _simulationStartedAt;
+    if (_pendingInputs.isNotEmpty && elapsed < _pendingInputs.last.elapsed) {
+      elapsed = _pendingInputs.last.elapsed;
+    }
+    return elapsed;
+  }
+
+  void addDelta(double delta, Duration timeStamp) {
+    final elapsed = _elapsedAtInput(timeStamp);
+    if (_pendingInputs.isEmpty && elapsed <= _lastElapsed) {
+      _retarget(delta, elapsed);
+      return;
+    }
+    // An event can arrive after vsync but before that frame's ticker callback.
+    // Keep it for its own frame, rather than evaluating a spring at negative
+    // time or applying its unpainted movement ahead of the frame timestamp.
+    if (_pendingInputs.length == _maxQueuedInputs) {
+      final last = _pendingInputs.removeLast();
+      delta = last.delta.sign == delta.sign
+          ? (last.delta + delta)
+                .clamp(-_maxPendingDistance, _maxPendingDistance)
+                .toDouble()
+          : delta;
+    }
+    _pendingInputs.add((elapsed: elapsed, delta: delta));
+    if (_velocity != 0 && delta.sign != _velocity.sign) _velocity = 0;
+  }
+
+  void _retarget(double delta, Duration elapsed) {
+    final seconds = (elapsed - _simulationStartedAt).inMicroseconds / 1000000;
+    final value = _simulation.x(seconds);
+    final remaining = _targetDistance - value;
+    final velocity = _simulation.dx(seconds);
     // Elastic ratios can already be rebounding when a new notch arrives.
     // Fresh input takes priority over motion or an endpoint behind that input.
     final reversing =
         (_lastDelta != 0 && delta.sign != _lastDelta.sign) ||
-        (_velocity != 0 && delta.sign != _velocity.sign) ||
+        (velocity != 0 && delta.sign != velocity.sign) ||
         (remaining != 0 && delta.sign != remaining.sign);
-    if (reversing) _velocity = 0;
-    _targetDistance =
+    _velocity = reversing ? 0 : velocity;
+    // Carry the displacement up to this input into the frame's one pixel
+    // update, including multiple wheel events delivered between two frames.
+    _unappliedDistance = reversing
+        ? 0
+        : _unappliedDistance + value - _lastSimulationPosition;
+    final pendingDistance =
         ((reversing ? 0 : remaining) +
+                _unappliedDistance +
                 delta.clamp(-_maxPendingDistance, _maxPendingDistance))
             .clamp(-_maxPendingDistance, _maxPendingDistance)
             .toDouble();
-    _simulation = ScrollSpringSimulation(
-      _spring,
-      0,
-      _targetDistance,
-      _velocity,
-      // Match the display scale, ending within half a physical pixel instead
-      // of chasing hundredths of a logical pixel. The simulator owns settling.
-      tolerance: Tolerance(
-        distance: .5 / position.devicePixelRatio,
-        velocity: position.physics.toleranceFor(position).velocity,
-      ),
-    );
+    _targetDistance = pendingDistance - _unappliedDistance;
+    _simulation = _newSimulation(_targetDistance, _velocity);
     _lastSimulationPosition = 0;
-    _simulationStartedAt = _lastElapsed;
+    _simulationStartedAt = elapsed;
     _lastDelta = delta;
   }
 
+  ScrollSpringSimulation _newSimulation(
+    double distance,
+    double velocity,
+  ) => ScrollSpringSimulation(
+    _spring,
+    0,
+    distance,
+    velocity,
+    // Match the display scale, ending within half a physical pixel instead
+    // of chasing hundredths of a logical pixel. The simulator owns settling.
+    tolerance: Tolerance(
+      distance: .5 / position.devicePixelRatio,
+      velocity: position.physics.toleranceFor(position).velocity,
+    ),
+  );
+
   void _tick(Duration elapsed) {
-    if (disposed || elapsed <= _lastElapsed) return;
+    if (disposed) return;
+    final frame = SchedulerBinding.instance.currentSystemFrameTimeStamp;
+    // A warm-up frame has no engine timestamp to align with pointer events.
+    if (_firstInputTimeStamp > Duration.zero && frame == Duration.zero) return;
+    _frameTimeOffset ??= _firstInputTimeStamp > Duration.zero
+        ? _scaledTime(frame - _firstInputTimeStamp) - elapsed
+        : Duration.zero;
+    elapsed += _frameTimeOffset!;
+    _lastSystemFrameTimeStamp = frame;
+    if (_hasFrame && elapsed <= _lastElapsed) return;
+    _hasFrame = true;
     _lastElapsed = elapsed;
     if (!position.hasContentDimensions) {
       stop();
@@ -373,10 +454,17 @@ final class _WheelScrollActivity extends ScrollActivity {
       stop();
       return;
     }
+    while (_pendingInputs.isNotEmpty &&
+        _pendingInputs.first.elapsed <= elapsed) {
+      final input = _pendingInputs.removeFirst();
+      _retarget(input.delta, input.elapsed);
+    }
+    if (elapsed < _simulationStartedAt) return;
     final simulation = _simulation;
     final seconds = (elapsed - _simulationStartedAt).inMicroseconds / 1000000;
     final value = simulation.x(seconds);
-    final distance = value - _lastSimulationPosition;
+    final distance = _unappliedDistance + value - _lastSimulationPosition;
+    _unappliedDistance = 0;
     _lastSimulationPosition = value;
     _velocity = simulation.dx(seconds);
     // Apply only the frame's displacement so layout can still correct pixels.
@@ -389,15 +477,31 @@ final class _WheelScrollActivity extends ScrollActivity {
       overscroll = delegate.setPixels(next);
     }
     // A scroll listener can take ownership while setPixels dispatches updates.
-    if (!disposed &&
-        ((identical(simulation, _simulation) && simulation.isDone(seconds)) ||
-            _atBoundary ||
-            overscroll != 0)) {
+    if (disposed) return;
+    if (_atBoundary && _pendingInputs.isNotEmpty) {
+      // Keep later input, but discard the motion that already hit this edge.
+      // Appending content before that input's frame must not revive old travel.
+      _discardMomentum(elapsed);
+      return;
+    }
+    final settled =
+        identical(simulation, _simulation) && simulation.isDone(seconds);
+    if (overscroll != 0 ||
+        (_pendingInputs.isEmpty && (settled || _atBoundary))) {
       stop();
     }
   }
 
   bool get _atBoundary => _lastDelta > 0 ? _pixels >= _max : _pixels <= _min;
+
+  void _discardMomentum(Duration elapsed) {
+    _targetDistance = 0;
+    _lastSimulationPosition = 0;
+    _unappliedDistance = 0;
+    _velocity = 0;
+    _simulationStartedAt = elapsed;
+    _simulation = _newSimulation(0, 0);
+  }
 
   void stop() {
     if (disposed) return;
@@ -415,8 +519,11 @@ final class _WheelScrollActivity extends ScrollActivity {
     if (position.outOfRange) return;
     // Layout owns any offset correction. Keep momentum if there is still room;
     // at an edge discard it even if more content may arrive later.
-    if (_atBoundary || !position.physics.shouldAcceptUserOffset(position)) {
+    if ((_atBoundary && _pendingInputs.isEmpty) ||
+        !position.physics.shouldAcceptUserOffset(position)) {
       stop();
+    } else if (_atBoundary) {
+      _discardMomentum(_lastElapsed);
     }
   }
 
@@ -443,6 +550,7 @@ final class _WheelScrollActivity extends ScrollActivity {
   void dispose() {
     if (disposed) return;
     disposed = true;
+    _pendingInputs.clear();
     _ticker.dispose();
     super.dispose();
   }

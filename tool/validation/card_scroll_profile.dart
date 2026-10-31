@@ -189,7 +189,7 @@ Future<void> main() async {
     );
     _content.value = ProviderScope(
       key: ValueKey(width),
-      overrides: [feedRepositoryProvider.overrideWithValue(_Feed())],
+      overrides: [feedRepositoryProvider.overrideWithValue(CardScrollFeed())],
       child: AppImageCacheScope(
         cache: cache,
         child: ScrollHeaderRegion(
@@ -285,7 +285,7 @@ Future<void> main() async {
   exit(0);
 }
 
-class _Feed implements FeedRepository {
+class CardScrollFeed implements FeedRepository {
   final items = List.generate(
     500,
     (i) => VideoSummary(

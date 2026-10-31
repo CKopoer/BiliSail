@@ -141,6 +141,7 @@
 | [推荐页分页与反馈性能](validation/recommendation-updates-2026-10-27.md) | 单卡订阅、分页组件复用、查询归属与 Android Profile 对照 |
 | [多页面深滚动与共享卡片更新](validation/retained-card-pages-2026-10-27.md) | 隐藏列表惯性、共享卡片内容复用、动态高度缓存与真机对照 |
 | [全局桌面滚轮平滑过渡](validation/smooth-scrolling.md) | 官方模拟器、阻尼比设置、连续/反向输入、嵌套仲裁及验证边界 |
+| [连续滚轮时序优化](validation/wheel-scroll-timing-2026-10-31.md) | 真实输入时间与帧对齐、有界输入缓冲、两列／六列滚轮信号 Profile 对照 |
 | [macOS 触控板滑动返回](validation/macos-trackpad-back.md) | 松手返回、阈值取消、左侧箭头、横向列表与播放器进度条隔离 |
 | [API 端点验证](validation/api-endpoints.md) | 首版端点、协议与在线只读烟测 |
 | [搜索分类与排序](validation/search-categories.md) | 七类搜索、综合页 UP 主、分类排序、筛选与旧响应隔离 |

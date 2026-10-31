@@ -1,0 +1,440 @@
+{
+  "date": "2026-10-31",
+  "baseline": "b1d2171",
+  "mode": "Windows Profile",
+  "fixture": "FeedScreen + ScrollHeaderLayout, 500 videos, warmed 640x360 memory PNG, DPR 1, no account/network/native preview",
+  "input": "PointerScrollEvent(mouse), delta 120, actual monotonic timestamps; 70ms x32 / 16ms x64; original-optimized-optimized-original per width",
+  "reference": "Linear superposition of the same official spring with mass=1, stiffness=1600, damping ratio=1.3, sampled at engine vsync timestamps during input; half-physical-pixel settling error is separate from frame duration",
+  "summary": [
+    {
+      "width": 430,
+      "columns": 2,
+      "intervalMs": 70,
+      "label": "baseline",
+      "samples": 2,
+      "errorP95PxMedian": 42.363406,
+      "errorMaxPx": 45.503132,
+      "uiP95MsMedian": 1.7765,
+      "rasterP95MsMedian": 5.4305,
+      "frames": 358,
+      "over16_67ms": 0
+    },
+    {
+      "width": 430,
+      "columns": 2,
+      "intervalMs": 70,
+      "label": "optimized",
+      "samples": 2,
+      "errorP95PxMedian": 0.0,
+      "errorMaxPx": 0.0,
+      "uiP95MsMedian": 1.649,
+      "rasterP95MsMedian": 5.1575,
+      "frames": 359,
+      "over16_67ms": 0
+    },
+    {
+      "width": 430,
+      "columns": 2,
+      "intervalMs": 16,
+      "label": "baseline",
+      "samples": 2,
+      "errorP95PxMedian": 82.101468,
+      "errorMaxPx": 85.668538,
+      "uiP95MsMedian": 1.921,
+      "rasterP95MsMedian": 4.311,
+      "frames": 302,
+      "over16_67ms": 0
+    },
+    {
+      "width": 430,
+      "columns": 2,
+      "intervalMs": 16,
+      "label": "optimized",
+      "samples": 2,
+      "errorP95PxMedian": 0.0,
+      "errorMaxPx": 0.0,
+      "uiP95MsMedian": 1.893,
+      "rasterP95MsMedian": 4.452,
+      "frames": 307,
+      "over16_67ms": 0
+    },
+    {
+      "width": 1800,
+      "columns": 6,
+      "intervalMs": 70,
+      "label": "baseline",
+      "samples": 2,
+      "errorP95PxMedian": 41.603397,
+      "errorMaxPx": 57.912073,
+      "uiP95MsMedian": 4.4735,
+      "rasterP95MsMedian": 10.549,
+      "frames": 366,
+      "over16_67ms": 2
+    },
+    {
+      "width": 1800,
+      "columns": 6,
+      "intervalMs": 70,
+      "label": "optimized",
+      "samples": 2,
+      "errorP95PxMedian": 0.0,
+      "errorMaxPx": 0.0,
+      "uiP95MsMedian": 4.644,
+      "rasterP95MsMedian": 10.886,
+      "frames": 371,
+      "over16_67ms": 2
+    },
+    {
+      "width": 1800,
+      "columns": 6,
+      "intervalMs": 16,
+      "label": "baseline",
+      "samples": 2,
+      "errorP95PxMedian": 83.664564,
+      "errorMaxPx": 100.804224,
+      "uiP95MsMedian": 7.572,
+      "rasterP95MsMedian": 10.151,
+      "frames": 298,
+      "over16_67ms": 0
+    },
+    {
+      "width": 1800,
+      "columns": 6,
+      "intervalMs": 16,
+      "label": "optimized",
+      "samples": 2,
+      "errorP95PxMedian": 0.72078,
+      "errorMaxPx": 2.973447,
+      "uiP95MsMedian": 7.5885,
+      "rasterP95MsMedian": 11.01,
+      "frames": 305,
+      "over16_67ms": 0
+    }
+  ],
+  "reports": [
+    {
+      "label": "baseline",
+      "width": 430.0,
+      "intervalMs": 70,
+      "notches": 32,
+      "distance": 3840.0,
+      "frames": 181,
+      "motionFrames": 159,
+      "errorP95Px": 42.742089,
+      "errorMaxPx": 44.828508,
+      "uiP95Ms": 1.883,
+      "rasterP95Ms": 5.222,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 76.115,
+        "median": 77.041,
+        "max": 77.894
+      }
+    },
+    {
+      "label": "baseline",
+      "width": 430.0,
+      "intervalMs": 16,
+      "notches": 64,
+      "distance": 7680.0,
+      "frames": 151,
+      "motionFrames": 128,
+      "errorP95Px": 82.751134,
+      "errorMaxPx": 85.668538,
+      "uiP95Ms": 1.692,
+      "rasterP95Ms": 3.768,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 29.833,
+        "median": 30.847,
+        "max": 32.173
+      }
+    },
+    {
+      "label": "optimized",
+      "width": 430.0,
+      "intervalMs": 70,
+      "notches": 32,
+      "distance": 3840.0,
+      "frames": 180,
+      "motionFrames": 157,
+      "errorP95Px": 0.0,
+      "errorMaxPx": 0.0,
+      "uiP95Ms": 1.751,
+      "rasterP95Ms": 5.235,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 76.111,
+        "median": 77.159,
+        "max": 79.177
+      }
+    },
+    {
+      "label": "optimized",
+      "width": 430.0,
+      "intervalMs": 16,
+      "notches": 64,
+      "distance": 7680.0,
+      "frames": 155,
+      "motionFrames": 129,
+      "errorP95Px": 0.0,
+      "errorMaxPx": 0.0,
+      "uiP95Ms": 1.909,
+      "rasterP95Ms": 4.473,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 29.879,
+        "median": 30.728,
+        "max": 31.821
+      }
+    },
+    {
+      "label": "optimized",
+      "width": 430.0,
+      "intervalMs": 70,
+      "notches": 32,
+      "distance": 3840.0,
+      "frames": 179,
+      "motionFrames": 156,
+      "errorP95Px": 0.0,
+      "errorMaxPx": 0.0,
+      "uiP95Ms": 1.547,
+      "rasterP95Ms": 5.08,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 76.145,
+        "median": 76.962,
+        "max": 78.56
+      }
+    },
+    {
+      "label": "optimized",
+      "width": 430.0,
+      "intervalMs": 16,
+      "notches": 64,
+      "distance": 7680.0,
+      "frames": 152,
+      "motionFrames": 127,
+      "errorP95Px": 0.0,
+      "errorMaxPx": 0.0,
+      "uiP95Ms": 1.877,
+      "rasterP95Ms": 4.431,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 20.924,
+        "median": 30.84,
+        "max": 39.9
+      }
+    },
+    {
+      "label": "baseline",
+      "width": 430.0,
+      "intervalMs": 70,
+      "notches": 32,
+      "distance": 3840.0,
+      "frames": 177,
+      "motionFrames": 156,
+      "errorP95Px": 41.984723,
+      "errorMaxPx": 45.503132,
+      "uiP95Ms": 1.67,
+      "rasterP95Ms": 5.639,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 75.688,
+        "median": 77.091,
+        "max": 78.163
+      }
+    },
+    {
+      "label": "baseline",
+      "width": 430.0,
+      "intervalMs": 16,
+      "notches": 64,
+      "distance": 7680.0,
+      "frames": 151,
+      "motionFrames": 128,
+      "errorP95Px": 81.451801,
+      "errorMaxPx": 83.834599,
+      "uiP95Ms": 2.15,
+      "rasterP95Ms": 4.854,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 29.681,
+        "median": 31.113,
+        "max": 32.213
+      }
+    },
+    {
+      "label": "baseline",
+      "width": 1800.0,
+      "intervalMs": 70,
+      "notches": 32,
+      "distance": 3840.0,
+      "frames": 181,
+      "motionFrames": 155,
+      "errorP95Px": 42.839288,
+      "errorMaxPx": 57.912073,
+      "uiP95Ms": 4.479,
+      "rasterP95Ms": 10.95,
+      "over16_67ms": 1,
+      "actualIntervalMs": {
+        "min": 72.94,
+        "median": 77.058,
+        "max": 82.951
+      }
+    },
+    {
+      "label": "baseline",
+      "width": 1800.0,
+      "intervalMs": 16,
+      "notches": 64,
+      "distance": 7680.0,
+      "frames": 152,
+      "motionFrames": 129,
+      "errorP95Px": 79.426856,
+      "errorMaxPx": 85.817645,
+      "uiP95Ms": 5.196,
+      "rasterP95Ms": 10.615,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 24.531,
+        "median": 30.761,
+        "max": 36.979
+      }
+    },
+    {
+      "label": "optimized",
+      "width": 1800.0,
+      "intervalMs": 70,
+      "notches": 32,
+      "distance": 3840.0,
+      "frames": 185,
+      "motionFrames": 159,
+      "errorP95Px": 0.0,
+      "errorMaxPx": 0.0,
+      "uiP95Ms": 4.529,
+      "rasterP95Ms": 10.49,
+      "over16_67ms": 1,
+      "actualIntervalMs": {
+        "min": 76.004,
+        "median": 77.104,
+        "max": 78.171
+      }
+    },
+    {
+      "label": "optimized",
+      "width": 1800.0,
+      "intervalMs": 16,
+      "notches": 64,
+      "distance": 7680.0,
+      "frames": 151,
+      "motionFrames": 128,
+      "errorP95Px": 0.57525,
+      "errorMaxPx": 2.0452,
+      "uiP95Ms": 9.933,
+      "rasterP95Ms": 11.575,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 24.931,
+        "median": 30.821,
+        "max": 36.453
+      }
+    },
+    {
+      "label": "optimized",
+      "width": 1800.0,
+      "intervalMs": 70,
+      "notches": 32,
+      "distance": 3840.0,
+      "frames": 186,
+      "motionFrames": 161,
+      "errorP95Px": 0.0,
+      "errorMaxPx": 0.0,
+      "uiP95Ms": 4.759,
+      "rasterP95Ms": 11.282,
+      "over16_67ms": 1,
+      "actualIntervalMs": {
+        "min": 75.342,
+        "median": 77.237,
+        "max": 81.738
+      }
+    },
+    {
+      "label": "optimized",
+      "width": 1800.0,
+      "intervalMs": 16,
+      "notches": 64,
+      "distance": 7680.0,
+      "frames": 154,
+      "motionFrames": 128,
+      "errorP95Px": 0.86631,
+      "errorMaxPx": 2.973447,
+      "uiP95Ms": 5.244,
+      "rasterP95Ms": 10.445,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 21.858,
+        "median": 30.812,
+        "max": 41.31
+      }
+    },
+    {
+      "label": "baseline",
+      "width": 1800.0,
+      "intervalMs": 70,
+      "notches": 32,
+      "distance": 3840.0,
+      "frames": 185,
+      "motionFrames": 162,
+      "errorP95Px": 40.367506,
+      "errorMaxPx": 46.836329,
+      "uiP95Ms": 4.468,
+      "rasterP95Ms": 10.148,
+      "over16_67ms": 1,
+      "actualIntervalMs": {
+        "min": 75.79,
+        "median": 77.127,
+        "max": 85.38
+      }
+    },
+    {
+      "label": "baseline",
+      "width": 1800.0,
+      "intervalMs": 16,
+      "notches": 64,
+      "distance": 7680.0,
+      "frames": 146,
+      "motionFrames": 122,
+      "errorP95Px": 87.902272,
+      "errorMaxPx": 100.804224,
+      "uiP95Ms": 9.948,
+      "rasterP95Ms": 9.687,
+      "over16_67ms": 0,
+      "actualIntervalMs": {
+        "min": 28.768,
+        "median": 30.828,
+        "max": 34.705
+      }
+    }
+  ],
+  "nativeSmoke": {
+    "down": {
+      "pixels": 1500.0,
+      "distance": 500.0,
+      "scrolling": false,
+      "events": 1,
+      "deltaTotal": 500.0,
+      "positiveTimestamps": true,
+      "frames": 88
+    },
+    "up": {
+      "pixels": 1000.0,
+      "distance": -500.0,
+      "scrolling": false,
+      "events": 1,
+      "deltaTotal": -500.0,
+      "positiveTimestamps": true,
+      "frames": 88
+    }
+  }
+}
