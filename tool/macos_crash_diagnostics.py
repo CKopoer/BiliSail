@@ -253,18 +253,31 @@ def parse_sample(raw: str, pid: int) -> dict | None:
                 threads.append(current)
             continue
         frame = re.match(
-            r"\s*[+!:| ]*\d+\s+(.+?)\s+\(in ([^)]+)\)\s*(?:\+\s*(\d+))?\s*\[0x([\da-fA-F]+)\]",
+            r"\s*([+!:| ]*)(\d+)\s+(.+?)\s+\(in ([^)]+)\)(.*?)\[0x([\da-fA-F]+)\]\s*$",
             line,
         )
         if frame and current is not None and len(current["frames"]) < MAX_FRAMES:
-            current["frames"].append(
-                {
-                    "image": _image(frame[2]),
-                    "symbol": _symbol(frame[1]),
-                    "symbolOffset": int(frame[3]) if frame[3] else None,
-                    "address": int(frame[4], 16),
-                }
+            offset = re.fullmatch(r"\s*\+\s*(\d+)\s*", frame[5])
+            item = {
+                "image": _image(frame[4]),
+                "symbol": _symbol(frame[3]),
+                "symbolOffset": int(offset[1]) if offset else None,
+                "address": int(frame[6], 16),
+                "samples": _number(int(frame[2])),
+                "depth": min(len(re.findall(r"[+!:|]", frame[1])), 256),
+            }
+            # Release frameworks often have no exported symbol. Apple's sample
+            # then uses a load-address suffix instead of a symbol offset.
+            loaded = re.fullmatch(
+                r"\s*load address 0x([\da-fA-F]+)\s*\+\s*(0x[\da-fA-F]+|\d+)\s*",
+                frame[5],
             )
+            if loaded:
+                item["imageBase"] = int(loaded[1], 16)
+                item["imageOffset"] = int(
+                    loaded[2], 16 if loaded[2].startswith("0x") else 10
+                )
+            current["frames"].append(item)
     if not any(thread["frames"] for thread in threads):
         return None
     return {"format": "sample", "threads": threads}

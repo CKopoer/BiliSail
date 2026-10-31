@@ -206,6 +206,24 @@ private https://example.invalid/?token=private
         self.assertIsNone(diagnostics.parse_sample(raw, 43))
         self.assertIsNone(diagnostics.parse_sample("Process: BiliSail [42]\n", 42))
 
+    def test_sample_retains_unsymbolicated_release_frames(self):
+        raw = """Process: BiliSail [42]
+    99 Thread_123
+    + ! 99 ??? (in FlutterMacOS) load address 0x1000 + 0x80 [0x1080]
+    + ! : 99 ??? (in App) load address 0x2000 + 256 [0x2100]
+    + 5 Cookie=private (in App) unrecognized private suffix [0x2200]
+"""
+        frames = diagnostics.parse_sample(raw, 42)["threads"][0]["frames"]
+        self.assertEqual(
+            [frame["image"] for frame in frames], ["FlutterMacOS", "App", "App"]
+        )
+        self.assertEqual(frames[0]["imageBase"], 4096)
+        self.assertEqual(frames[0]["imageOffset"], 128)
+        self.assertEqual(frames[1]["imageOffset"], 256)
+        self.assertEqual(frames[0]["samples"], 99)
+        self.assertEqual(frames[0]["depth"], 2)
+        self.assertNotIn("private", json.dumps(frames))
+
     def test_collector_filters_size_age_pid_and_ignores_malformed_files(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
