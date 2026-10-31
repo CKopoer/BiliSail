@@ -41,6 +41,8 @@ final class _PlatformOutput extends mkv.PlatformVideoController {
 
   @override
   Future<void> setSize({int? width, int? height}) async {}
+
+  void renderFrame() => waitUntilFirstFrameRenderedCompleter.complete();
 }
 
 final class _PlayerFacade extends Fake implements mk.Player {
@@ -63,10 +65,11 @@ final class _PlayerFacade extends Fake implements mk.Player {
 }
 
 final class _Controller extends Fake implements mkv.VideoController {
-  _Controller(_Player backend, int textureId)
+  _Controller(_Player backend, int textureId, {bool rendered = true})
     : player = _PlayerFacade(backend) {
     output = _PlatformOutput(player, textureId);
     notifier = ValueNotifier(output);
+    if (rendered) output.renderFrame();
   }
 
   @override
@@ -74,6 +77,16 @@ final class _Controller extends Fake implements mkv.VideoController {
   late final _PlatformOutput output;
   @override
   late final ValueNotifier<mkv.PlatformVideoController?> notifier;
+
+  @override
+  ValueNotifier<int?> get id => output.id;
+
+  @override
+  ValueNotifier<Rect?> get rect => output.rect;
+
+  @override
+  Future<void> get waitUntilFirstFrameRendered =>
+      output.waitUntilFirstFrameRendered;
 
   void dispose() {
     notifier.dispose();
@@ -95,6 +108,100 @@ final class _Harness {
 }
 
 void main() {
+  for (final delayed in ['dimensions', 'texture', 'frame']) {
+    testWidgets('frame readiness waits for $delayed and a surface frame', (
+      tester,
+    ) async {
+      final player = _Player();
+      final controller = _Controller(player, 44, rendered: false);
+      final harness = _Harness();
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        harness.output.dispose();
+        controller.dispose();
+        await player.dispose();
+      });
+      controller.rect.value = const Rect.fromLTWH(0, 0, 1, 1);
+      harness.controllers.value = controller;
+      await tester.pumpWidget(harness.build());
+      expect(harness.output.frameReady.value, isFalse);
+
+      if (delayed != 'dimensions') player.publishDimensions(1920, 1080);
+      if (delayed != 'texture') {
+        controller.rect.value = const Rect.fromLTWH(0, 0, 1920, 1080);
+      }
+      if (delayed != 'frame') {
+        controller.output.renderFrame();
+      }
+      await tester.pump();
+      await tester.pump();
+      expect(harness.output.frameReady.value, isFalse);
+
+      switch (delayed) {
+        case 'dimensions':
+          player.publishDimensions(1920, 1080);
+        case 'texture':
+          controller.rect.value = const Rect.fromLTWH(0, 0, 1920, 1080);
+        case 'frame':
+          controller.output.renderFrame();
+      }
+      expect(harness.output.frameReady.value, isFalse);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(Texture), findsOneWidget);
+      expect(harness.output.frameReady.value, isTrue);
+
+      controller.id.value = null;
+      expect(harness.output.frameReady.value, isFalse);
+      controller.id.value = 45;
+      expect(harness.output.frameReady.value, isFalse);
+      await tester.pump();
+      expect(harness.output.frameReady.value, isTrue);
+    });
+  }
+
+  testWidgets('frame readiness rejects retired output signals and callbacks', (
+    tester,
+  ) async {
+    final oldPlayer = _Player()..publishDimensions(1920, 1080);
+    final newPlayer = _Player()..publishDimensions(1920, 1080);
+    final oldController = _Controller(oldPlayer, 11, rendered: false);
+    final newController = _Controller(newPlayer, 22);
+    final harness = _Harness();
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      harness.output.dispose();
+      oldController.dispose();
+      newController.dispose();
+      await oldPlayer.dispose();
+      await newPlayer.dispose();
+    });
+    harness.controllers.value = oldController;
+    await tester.pumpWidget(harness.build());
+    expect(harness.output.frameReady.value, isFalse);
+    harness.output.clearPlayer();
+    oldController.output.renderFrame();
+    await tester.pump();
+    expect(harness.output.frameReady.value, isFalse);
+
+    harness.controllers.value = newController;
+    await tester.pump();
+    expect(harness.output.frameReady.value, isTrue);
+    expect(oldPlayer.hasWidthListener, isFalse);
+    oldPlayer.publishDimensions(0, 0);
+    await tester.pump();
+    expect(harness.output.frameReady.value, isTrue);
+
+    // Retire a new output before its queued post-frame publication can run.
+    harness.output.clearPlayer();
+    harness.controllers.value = newController;
+    await tester.idle();
+    harness.output.clearPlayer();
+    await tester.pump();
+    expect(harness.output.frameReady.value, isFalse);
+    expect(newPlayer.hasWidthListener, isFalse);
+  });
+
   for (final playing in [true, false]) {
     testWidgets('surface leaves background playback and foreground intent to '
         'its session (playing=$playing)', (tester) async {

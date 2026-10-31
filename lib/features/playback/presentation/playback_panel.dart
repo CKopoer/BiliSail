@@ -1138,6 +1138,34 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     return _cachedControlsLayout = _ControlsLayout(inputs);
   }
 
+  Widget _buildDanmakuOverlay(bool controls, AppSettings settings) {
+    final session = widget.session;
+    final overlay = Opacity(
+      opacity: settings.danmakuOpacity,
+      child: switch (widget.danmakuOverlayBuilder) {
+        final builder? => Builder(builder: builder),
+        null when session.isLive => const SizedBox.shrink(),
+        null => DanmakuOverlay(
+          controller: session.danmaku,
+          bottomInset: controls ? 100 : 48,
+        ),
+      },
+    );
+    final output = switch (session.engine) {
+      VideoOutputSource source => source.videoOutput,
+      _ => null,
+    };
+    if (output case VideoFrameReadiness readiness) {
+      return ValueListenableBuilder<bool>(
+        valueListenable: readiness.frameReady,
+        child: overlay,
+        builder: (context, ready, child) =>
+            ready ? child ?? const SizedBox.shrink() : const SizedBox.shrink(),
+      );
+    }
+    return overlay;
+  }
+
   Widget _buildPlayer(BuildContext context) {
     final session = widget.session;
     final appTextStyle = Theme.of(context).textTheme.bodyMedium;
@@ -1236,19 +1264,16 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                           layers: [
                             if (widget.active)
                               VideoSurface(engine: session.engine),
-                            if (widget.active && settings.danmakuEnabled)
-                              Opacity(
-                                opacity: settings.danmakuOpacity,
-                                child: switch (widget.danmakuOverlayBuilder) {
-                                  final builder? => Builder(builder: builder),
-                                  null when session.isLive =>
-                                    const SizedBox.shrink(),
-                                  null => DanmakuOverlay(
-                                    controller: session.danmaku,
-                                    bottomInset: controls ? 100 : 48,
-                                  ),
-                                },
-                              ),
+                            if (widget.active &&
+                                settings.danmakuEnabled &&
+                                !session.isResolving &&
+                                session.media != null &&
+                                session.error == null &&
+                                snapshot.phase != PlaybackPhase.idle &&
+                                snapshot.phase != PlaybackPhase.opening &&
+                                snapshot.phase != PlaybackPhase.failed &&
+                                snapshot.phase != PlaybackPhase.disposed)
+                              _buildDanmakuOverlay(controls, settings),
                             Positioned.fill(
                               child: RepaintBoundary(
                                 child: PlayerSeekControls(

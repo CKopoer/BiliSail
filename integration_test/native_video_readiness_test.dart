@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
@@ -8,6 +9,84 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+
+  testWidgets('foreground follows a presentable video frame on each open', (
+    tester,
+  ) async {
+    initializePlayerBackend();
+    final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
+    expect(fixtures, isNotNull);
+    final engine = MediaKitEngine();
+    final readiness = engine.videoOutput as VideoFrameReadiness;
+    final video = MediaTrack(
+      uri: File('$fixtures/video.mp4').uri,
+      requestPolicy: MediaRequestPolicy(),
+    );
+    final audio = MediaTrack(
+      uri: File('$fixtures/audio.m4a').uri,
+      requestPolicy: MediaRequestPolicy(),
+    );
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Stack(
+            fit: StackFit.expand,
+            children: [
+              VideoSurface(engine: engine),
+              ValueListenableBuilder<bool>(
+                valueListenable: readiness.frameReady,
+                builder: (context, ready, _) => ready
+                    ? const Text('first-frame foreground')
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      );
+      for (final source in [
+        DashPairSource(video: video, audio: audio),
+        ProgressiveSource(video),
+      ]) {
+        expect(readiness.frameReady.value, isFalse);
+        expect(find.text('first-frame foreground'), findsNothing);
+        final frame = Completer<void>();
+        int? texturesAtReadiness;
+        void onFrame() {
+          if (readiness.frameReady.value && !frame.isCompleted) {
+            // Readiness follows the frame that mounts the video texture.
+            texturesAtReadiness = find.byType(Texture).evaluate().length;
+            frame.complete();
+          }
+        }
+
+        readiness.frameReady.addListener(onFrame);
+        try {
+          await _withFrames(
+            tester,
+            engine.open(source, const OpenOptions(play: false, volume: 0)),
+          );
+          await _withFrames(
+            tester,
+            frame.future.timeout(const Duration(seconds: 5)),
+          );
+          await tester.pump();
+          expect(texturesAtReadiness, 1);
+          expect(find.text('first-frame foreground'), findsOneWidget);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        } finally {
+          readiness.frameReady.removeListener(onFrame);
+        }
+        await _withFrames(tester, engine.stop());
+        await tester.pump();
+        expect(readiness.frameReady.value, isFalse);
+        expect(find.text('first-frame foreground'), findsNothing);
+      }
+      expect(tester.takeException(), isNull);
+    } finally {
+      await _withFrames(tester, engine.dispose());
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
+  });
 
   for (final play in [false, true]) {
     testWidgets('undecodable DASH video cannot succeed on audio (play=$play)', (

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart' as mk;
@@ -12,8 +13,87 @@ import 'video_composition.dart';
 import 'video_decoder_configuration.dart';
 
 /// Owns the current media-kit output without issuing playback commands.
-final class MediaKitVideoOutput implements FlutterVideoOutput {
+final class MediaKitVideoOutput
+    implements FlutterVideoOutput, VideoFrameReadiness {
+  MediaKitVideoOutput() {
+    _controller.addListener(_observeFrameReadiness);
+  }
+
   final ValueNotifier<mkv.VideoController?> _controller = ValueNotifier(null);
+  final ValueNotifier<bool> _frameReady = ValueNotifier(false);
+  final List<VoidCallback> _readinessCleanup = [];
+  int _readinessRevision = 0;
+
+  @override
+  ValueListenable<bool> get frameReady => _frameReady;
+
+  void _observeFrameReadiness() {
+    final revision = ++_readinessRevision;
+    for (final cleanup in _readinessCleanup) {
+      cleanup();
+    }
+    _readinessCleanup.clear();
+    _frameReady.value = false;
+    final controller = _controller.value;
+    if (controller == null || _disposed) return;
+    var rendered = false;
+    var scheduled = false;
+    bool isCurrent() => !_disposed && revision == _readinessRevision;
+    bool canPresent() {
+      final rect = controller.rect.value;
+      final state = controller.player.state;
+      // Match Video's visibility gate and its mask over the initial 1px texture.
+      return rendered &&
+          controller.id.value != null &&
+          rect != null &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          (rect.width > 1 || rect.height > 1) &&
+          (state.width ?? 0) > 0 &&
+          (state.height ?? 0) > 0;
+    }
+
+    void update() {
+      if (!isCurrent()) return;
+      if (!canPresent()) {
+        _frameReady.value = false;
+        return;
+      }
+      if (_frameReady.value || scheduled) return;
+      scheduled = true;
+      // Video consumes asynchronous size notifications in its own state.
+      // Let that surface paint before admitting foreground content.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        scheduled = false;
+        if (isCurrent() && canPresent()) _frameReady.value = true;
+      });
+      WidgetsBinding.instance.ensureVisualUpdate();
+    }
+
+    controller.id.addListener(update);
+    controller.rect.addListener(update);
+    final width = controller.player.stream.width.listen((_) => update());
+    final height = controller.player.stream.height.listen((_) => update());
+    _readinessCleanup.addAll([
+      () => controller.id.removeListener(update),
+      () => controller.rect.removeListener(update),
+      () => unawaited(width.cancel()),
+      () => unawaited(height.cancel()),
+    ]);
+    unawaited(
+      controller.waitUntilFirstFrameRendered.then(
+        (_) {
+          rendered = true;
+          update();
+        },
+        onError: (Object error, StackTrace stack) {
+          // The engine handles output failure within its bounded open wait.
+          if (isCurrent()) _frameReady.value = false;
+        },
+      ),
+    );
+  }
+
   static const _viewportChannel = MethodChannel(
     'com.alexmercerind/media_kit_video',
   );
@@ -102,6 +182,7 @@ final class MediaKitVideoOutput implements FlutterVideoOutput {
     _disposed = true;
     cancelPendingViewport();
     clearPlayer();
+    _frameReady.dispose();
     _controller.dispose();
   }
 

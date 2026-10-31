@@ -53,6 +53,98 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final (content, target) in <(String, ContentPlaybackTarget?)>[
+    ('video', null),
+    ('pgc', const PgcPlaybackTarget('12', cid: '123')),
+    ('live', const LivePlaybackTarget('12')),
+    ('offline', const OfflinePlaybackTarget('local-task')),
+  ]) {
+    for (final customOverlay in [false, true]) {
+      if (content == 'live' && !customOverlay) continue;
+      testWidgets(
+        'danmaku follows video frame readiness for $content custom=$customOverlay',
+        (tester) async {
+          final engine = _FakeEngine();
+          final opening = Completer<void>();
+          engine.nextOpen = opening;
+          final session = _session(engine);
+          final window = _FakeWindowService();
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(
+              session,
+              window,
+              const AppSettings.defaults(),
+              target: target,
+              overlay: customOverlay ? (_) => const Text('首帧弹幕') : null,
+            ),
+          );
+          await _pumpFrames(tester);
+          final overlay = customOverlay
+              ? find.text('首帧弹幕')
+              : find.byType(DanmakuOverlay);
+          expect(session.isResolving, isTrue);
+          expect(overlay, findsNothing);
+          expect(find.byType(VideoSurface), findsOneWidget);
+
+          // An output from the previous source cannot bypass native opening.
+          engine.frameReady.value = true;
+          await tester.pump();
+          expect(overlay, findsNothing);
+          engine.frameReady.value = false;
+          opening.complete();
+          await _pumpFrames(tester);
+          expect(session.media, isNotNull);
+          expect(session.isResolving, isFalse);
+          expect(overlay, findsNothing);
+
+          engine.frameReady.value = true;
+          await tester.pump();
+          expect(overlay, findsOneWidget);
+          await session.pause();
+          await _pumpFrames(tester);
+          expect(overlay, findsOneWidget);
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              phase: PlaybackPhase.buffering,
+              isBuffering: true,
+            ),
+          );
+          await tester.pump();
+          expect(overlay, findsOneWidget);
+
+          await _showControls(tester);
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+          expect(window.fullScreen, isTrue);
+          expect(overlay, findsOneWidget);
+          expect(engine.opens, 1);
+          expect(engine.maxSurfaces, 1);
+
+          final replacement = Completer<void>();
+          engine.nextOpen = replacement;
+          final retry = session.retry();
+          await _pumpFrames(tester);
+          expect(session.isResolving, isTrue);
+          expect(overlay, findsNothing);
+          engine.frameReady.value = false;
+          replacement.complete();
+          await retry;
+          await _pumpFrames(tester);
+          expect(overlay, findsNothing);
+          engine.frameReady.value = true;
+          await tester.pump();
+          expect(overlay, findsOneWidget);
+          expect(engine.opens, 2);
+          expect(engine.maxSurfaces, 1);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
   for (final mode in PlayerControlsMode.values) {
     for (final (content, target) in <(String, ContentPlaybackTarget?)>[
       ('video', null),
@@ -8138,6 +8230,8 @@ final class _FakeEngine implements PlayerEngine, VideoOutputSource {
   Completer<void>? nextVolume;
   Completer<void>? nextSeek;
   Completer<void>? nextPlay;
+  Completer<void>? nextOpen;
+  final frameReady = ValueNotifier(true);
 
   @override
   Stream<PlaybackSnapshot> get snapshots => _snapshots.stream;
@@ -8157,6 +8251,12 @@ final class _FakeEngine implements PlayerEngine, VideoOutputSource {
   @override
   Future<void> open(ResolvedMediaSource source, OpenOptions options) async {
     opens++;
+    final gate = nextOpen;
+    nextOpen = null;
+    if (gate != null) {
+      _emit(PlaybackSnapshot(phase: PlaybackPhase.opening, generation: opens));
+      await gate.future;
+    }
     _emit(
       PlaybackSnapshot(
         phase: PlaybackPhase.ready,
@@ -8219,11 +8319,13 @@ final class _FakeEngine implements PlayerEngine, VideoOutputSource {
   Future<void> dispose() async {
     await _snapshots.close();
     await _failures.close();
+    frameReady.dispose();
   }
 
   @override
   late final VideoOutput videoOutput = FakeVideoOutput(
     () => _FakeSurface(this),
+    frameReady: frameReady,
   );
 }
 

@@ -38,6 +38,7 @@ media_kit.Player    MediaKitVideoOutput
 - 新增纯 Dart [VideoOutput](../packages/bili_player/lib/src/video_output.dart)：`attach`、`updateViewport`、`detach`，owner 隔离旧 surface 的延迟回调。
 - `VideoOutputSource` 只提供稳定的 `videoOutput` 对象；它不是播放控制接口的父接口，无视频输出的 fake/audio engine 仍可实现 PlayerEngine。
 - `FlutterVideoOutput` 是 Flutter 呈现能力，单独放在合成契约文件，不污染控制接口。
+- 2026-10-31 增加可选 `VideoFrameReadiness.frameReady`，由输出汇合首帧、纹理和视频显示尺寸，并在 Flutter 帧结束后发布。共享播放面板用它约束弹幕显示；清除／重绑输出时立即重置，旧源通知不能重新放行。纯 Dart 控制接口、播放意图与弹幕时钟保持原有职责，见[首帧同步验证](validation/danmaku-first-frame.md)。
 - [MediaKitVideoOutput](../packages/bili_player/lib/src/media_kit_video_output.dart) 持有现有 VideoController、首帧信号、Windows 视口通道、尺寸计算与缩小延迟。它不执行 play/seek/pause，不拥有媒体请求或业务状态。
 - 输出由 engine 创建并最终释放；挂载和卸载视图不会销毁媒体实例。源释放先清除输出绑定，再沿用现有 media-kit 原生释放流程。
 - 保留物理像素上限、源比例、64 像素取整、放大立即生效、缩小 300ms、预览 paintScale 与通道 deadline。源绑定、owner、revision 拦截异步旧写入。

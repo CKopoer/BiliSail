@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'video_output.dart';
@@ -5,6 +6,15 @@ import 'video_output.dart';
 /// A video output whose pixels can be presented as a Flutter widget.
 abstract interface class FlutterVideoOutput implements VideoOutput {
   Widget buildVideoSurface();
+}
+
+/// An optional signal that a video surface can present its current source.
+abstract interface class VideoFrameReadiness {
+  /// Whether a usable first frame and display dimensions are available.
+  ///
+  /// Resets when the output is cleared or rebound. Readiness is published after
+  /// a Flutter frame so foreground layers can follow the video surface.
+  ValueListenable<bool> get frameReady;
 }
 
 /// The presentation strategy for video and its ordered Flutter foreground.
