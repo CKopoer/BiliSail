@@ -1,11 +1,11 @@
 # GitHub Actions CI/CD 与安装包
 
-更新日期：2026-10-29。配置覆盖 Android arm64、Windows x64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
+更新日期：2026-10-31。配置覆盖 Android arm64、Windows x64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
 
 ## 入口与分工
 
 - [CI](../../.github/workflows/ci.yml)：替换原来的 `windows.yml`；分支 push、PR、手动运行时执行检查及构建，也供 Release 复用。
-- [Release preview](../../.github/workflows/release.yml)：在 Actions 页面手动运行；可选择五个平台，全部所选构建通过后创建 **draft + prerelease** 并上传包、签名公钥证书、校验文件与第三方说明。不会自动公开发布。
+- [Release preview](../../.github/workflows/release.yml)：在 Actions 页面手动运行；可选择五个平台，并可按目标复用同提交、同版本且已通过检查与构建的 CI 产物，只补建缺少的目标。全部所选构建通过后创建 **draft + prerelease** 并上传包、签名公钥证书、校验文件与第三方说明。不会自动公开发布。
 - [检查脚本](../../tool/check.ps1)：本地默认检查根应用和四个独立包；CI 在 Ubuntu 使用 PowerShell 7，分别执行 `Lint`、两份 `RootTests` 分片和 `PackageTests`。格式检查覆盖根应用与各包，根分析统一扫描子包，故分析前仍安装所有包的开发依赖。`-EnforceLockfile` 要求 pub 使用提交的锁文件及内容哈希。
 - [构建打包脚本](../../tool/build-release.ps1)：各平台使用对应主机生成预览包，缺文件、原生命令失败、签名失败立即停止。已有同目标输出目录时拒绝覆盖，重新本地构建前先将其移走。
 
@@ -24,7 +24,7 @@ PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Wi
 
 Flutter 固定 **3.47.6 stable / Dart 3.13.5**；升级需同时调整工作流、检查/构建脚本并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Xcode/系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
 
-SDK 缓存沿用 `flutter-action` 的默认键，按系统、SDK 架构、版本和 revision 隔离。Pub 缓存键只配置系统、架构和版本前缀，由当前固定的 Action 追加所有 `pubspec.lock` 的哈希，避免重复追加。Gradle 缓存键覆盖 Android Gradle 脚本、`android/gradle.properties`、Wrapper 配置、所有 Pub 锁文件和 `.flutter-version`，使插件、SDK 或构建配置变化后保存新的依赖缓存。Release 复用 CI 的同一套缓存配置；安装包仍通过本次运行的 artifacts 传递。
+SDK 缓存沿用 `flutter-action` 的默认键，按系统、SDK 架构、版本和 revision 隔离。Pub 缓存键只配置系统、架构和版本前缀，由当前固定的 Action 追加所有 `pubspec.lock` 的哈希，避免重复追加。Gradle 缓存键覆盖 Android Gradle 脚本、`android/gradle.properties`、Wrapper 配置、所有 Pub 锁文件和 `.flutter-version`，使插件、SDK 或构建配置变化后保存新的依赖缓存。Release 新建构建沿用同一套缓存配置；开启产物复用时直接读取匹配 CI 的 artifacts。
 
 Linux 另用固定 SHA 的 `actions/cache/restore`／`save` 缓存 apt 下载的 `.deb`、经 SHA-256 校验的 linuxdeploy／GTK hook，以及用户级 Flatpak Runtime／SDK。键包含 Ubuntu 24.04 x64、相关安装脚本／manifest 哈希和 UTC 周次，允许恢复同配置前一周的缓存；仍执行 apt 索引更新、包验证和 Flatpak `--or-update`，工具每次读取缓存也校验固定哈希，损坏条目重新下载。依赖安装后、应用构建前单独保存，避免后续打包失败丢失缓存，也不把安装后的 BiliSail Flatpak 混进 Runtime 缓存。不缓存整个 `build/`、`.dart_tool/`、apt 索引或签名材料；首次运行仍需完整下载，缓存实际命中及耗时须由新 CI 确认。
 
@@ -59,7 +59,30 @@ GitHub 官方的 [`/releases/latest/download/<附件名>`](https://docs.github.c
 
 2026-10-29 本地验证：`node --test tool/test-readme-downloads.cjs` 的 10 项测试通过，覆盖十种附件、部分平台、旧版本／未完成上传排除、换行和安装说明保留、重复运行、并发编辑冲突及写入权限失败；actionlint 1.7.12 检查新工作流及 Release 工作流通过。使用 GitHub API 实际 `v1.2.3+1` 响应核对 README 的 9 个下载链接，并确认重复生成无差异。本轮 `tool/check.ps1 -SkipPub` 的格式、静态分析、根应用 3352 项及四包 709 项测试通过；13 项 Windows symlink 因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生集成覆盖。远端自动更新尚未触发，未修改任何 Release 附件。
 
-CI 的 artifacts 保留 14 天；Release 从同一运行下载，所选平台失败时不创建新草稿。不使用参考仓库的 WebDAV、NuGet ZIP、UWP manifest、Chocolatey 或 TLS 验证绕过逻辑。
+CI 的 artifacts 保留 14 天；Release 默认从本次运行下载，开启复用时按目标从匹配的已完成 CI 运行下载，并合并本次补建产物。所选平台失败时不创建新草稿。不使用参考仓库的 WebDAV、NuGet ZIP、UWP manifest、Chocolatey 或 TLS 验证绕过逻辑。
+
+### Release 复用已完成 CI（2026-10-31）
+
+Release 通过 `workflow_call` 调用同一份 `ci.yml`，检查、根应用分片测试、包测试、原生 mux 回归和所选平台打包共用实现。手动输入 `reuse_ci_build` 默认关闭；开启后，Release 先用与 CI 共用的[构建计划脚本](../../tool/ci-build-plan.ps1)解析版本、校验平台版本限制并生成目标列表，再通过 GitHub Actions API 分页查找每个目标可复用的构建。
+
+每个所选目标分别满足以下条件即可复用，允许不同目标来自不同的 CI 运行：
+
+- 来源是本仓库 `ci.yml` 的 `push` 或手动运行，且运行已完成。排除 PR、fork 来源和运行中的运行。
+- 来源运行的 `Analyze and test` 汇总任务及该目标的 `Build <target>` 任务均完成且成功；通过分页读取最新任务状态确认，不只检查是否有 artifact。其他平台失败或取消，不影响已通过检查与构建的目标；检查失败、缺失或该目标任务未成功时不得复用。
+- 源码 SHA 与此次 Release 所选 ref 对应提交完全一致，解析后的 `x.y.z+N` 版本完全一致，支持手动版本覆盖。仅版本相同而提交不同不能复用。
+- 对应 artifact 未过期且非空。macOS 选项包含 arm64 和 Intel x64 两个独立目标，可以复用一个、只补建另一个；草稿最终仍须同时包含两者。未选中的平台不下载、不构建。
+
+为在下载大型安装包前匹配版本，CI 的内部 artifact 名称为 `BiliSail-<target>-<version>-packages`；公开安装包和 Release 附件文件名不变。历史无版本 artifact 不参与复用，过期或未命中的目标加入待构建列表。全部命中时跳过整套 CI，直接下载、校验并创建草稿；部分命中时仅构建缺少的目标，共享检查和测试仍执行一次；完全未命中或关闭选项时执行原有完整流程。例如选中 Android、Windows 和 Linux，前两者已有可用构建时，只编译 Linux，然后合并三个平台的产物创建草稿。
+
+CI 仅在 `workflow_call` 开放内部 `build_targets` JSON 数组输入，将构建矩阵限制为启用平台的非空子集，不改变普通 push、PR 和手动 CI 的平台选择方式。Release 仍先验证全部所选平台的版本限制，待补建列表不能加入未选中、重复或非法目标。
+
+草稿任务从本次运行下载补建产物，再按各目标的来源 run ID 和准确 artifact 名称，通过 `gh run download` 合并复用产物，无需重复上传到当前运行。API 权限、网络或下载错误均使任务失败，不将故障当作未命中，也不丢弃缺失平台；使用任务级 `actions: read` 和现有 `GITHUB_TOKEN`，无需新 Secret。每个目标的复用／构建决定及来源运行链接写入 Actions summary。
+
+无论复用还是新构建，创建草稿前都会经[产物校验脚本](../../tool/release-ci-reuse.cjs)核对完整文件集合：所选平台安装包、Windows 公钥证书、build-info、mux 源码归档及各自 SHA-256。build-info 必须匹配源码 SHA、版本、目标、Flutter 版本、根锁文件哈希且 `sourceDirty=false`；锁文件允许同一内容的 LF／CRLF checkout 哈希差异。Android 必须使用配置的固定 keystore，临时 PR 签名不得发布。下载后任何内容不符立即停止，不创建草稿，也不静默改用其他产物。既有 tag 冲突检查、草稿／预发布属性和最新 15 个 Release 保留规则继续沿用。
+
+本地定向验证：`node --test tool/test-release-ci-reuse.cjs` 的 53 项测试通过，覆盖多运行合并、64 种复用／补建组合、共享检查与目标任务状态、准确来源下载及失败传播、过期／缺失／临时签名／篡改拒绝、Windows 换行及草稿任务条件的 128 种状态组合；`tool/test-ci-build-plan.ps1` 的 117 项检查通过，覆盖全部 32 种平台开关组合、63 种非空目标子集及共享版本／输入边界。两个工作流通过 actionlint 1.7.12，修改的 PowerShell／JavaScript 通过语法检查，本文件 38 条本地链接及 `git diff --check` 通过。
+
+本轮 `tool/check.ps1 -SkipPub` 的打包边界、格式、静态分析、根应用 3752 项及四包 754 项离线测试通过；13 项 Windows symlink 用例因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生集成覆盖。按平台复用版本的日志保存在 `build/release-ci-partial-reuse-check.log`。本轮未做安装包构建和设备测试；远端 CI 产物复用和 Release 草稿创建尚未执行，需在本次工作流生效并有对应检查与目标构建通过的 CI 后验证。
 
 Release 草稿及全部附件上传成功后，使用 GitHub 官方 [actions/github-script v8](https://github.com/actions/github-script/tree/ed597411d8f924073f98dfc5c65a23a2325f34cd) 清理旧版本，固定提交 `ed597411d8f924073f98dfc5c65a23a2325f34cd`。分页获取正式发布、预发布和草稿，合计保留按 `created_at` 排序的最新 **15 个 Release**；时间相同时按 Release ID 从新到旧排序。超出部分删除 Release 及其附件，保留 Git 标签与 Actions 运行记录。草稿没有 `published_at`，不能直接使用按发布时间排序或排除草稿的清理包。使用该 job 已有的 `contents: write` 和默认 `github.token`，不需额外 Secret；发布流程继续由 `release-preview` 并发组串行执行。删除请求失败立即停止，清理后再次分页查询并验证总数不超过 15，查询失败或仍超限会使流程失败。本地配置检查不代表已经执行远端删除。
 

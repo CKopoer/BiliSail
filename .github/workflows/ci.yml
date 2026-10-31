@@ -35,6 +35,10 @@ on:
         description: Flutter version (build name plus build number); empty uses pubspec.yaml.
         type: string
         default: ''
+      build_targets:
+        description: 'Optional JSON array limiting builds to a subset of the enabled platform targets.'
+        type: string
+        default: ''
       enable_android:
         type: boolean
         default: true
@@ -95,46 +99,14 @@ jobs:
         shell: pwsh
         env:
           REQUESTED_VERSION: ${{ inputs.version }}
+          BUILD_TARGETS: ${{ inputs.build_targets }}
           # Push/PR has no inputs; a reusable caller can explicitly pass false.
           ENABLE_ANDROID: ${{ !contains(toJSON(inputs), '"enable_android"') || inputs.enable_android }}
           ENABLE_WINDOWS: ${{ !contains(toJSON(inputs), '"enable_windows"') || inputs.enable_windows }}
           ENABLE_MACOS: ${{ !contains(toJSON(inputs), '"enable_macos"') || inputs.enable_macos }}
           ENABLE_IOS: ${{ !contains(toJSON(inputs), '"enable_ios"') || inputs.enable_ios }}
           ENABLE_LINUX: ${{ !contains(toJSON(inputs), '"enable_linux"') || inputs.enable_linux }}
-        run: |
-          $version = $env:REQUESTED_VERSION.Trim()
-          if (!$version) {
-            $match = [regex]::Match((Get-Content pubspec.yaml -Raw), '(?m)^version:\s*(\S+)\s*$')
-            if (!$match.Success) { throw 'pubspec.yaml has no version.' }
-            $version = $match.Groups[1].Value
-          }
-          if ($version -cnotmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\+(0|[1-9]\d*)$') {
-            throw 'Version must be x.y.z+N, for example 0.1.0+1.'
-          }
-          if ($env:ENABLE_ANDROID -eq 'true') {
-            . ./tool/android-version.ps1
-            Get-AndroidVersionCode $version | Out-Null
-          }
-          $platforms = @(
-            if ($env:ENABLE_ANDROID -eq 'true') { @{ target = 'android-arm64'; runner = 'ubuntu-24.04'; arch = 'x64' } }
-            if ($env:ENABLE_WINDOWS -eq 'true') { @{ target = 'windows-x64'; runner = 'windows-2022'; arch = 'x64' } }
-            if ($env:ENABLE_MACOS -eq 'true') {
-              @{ target = 'macos-arm64'; runner = 'macos-15'; arch = 'arm64' }
-              @{ target = 'macos-x64'; runner = 'macos-15-intel'; arch = 'x64' }
-            }
-            if ($env:ENABLE_IOS -eq 'true') { @{ target = 'ios-arm64'; runner = 'macos-15'; arch = 'arm64' } }
-            if ($env:ENABLE_LINUX -eq 'true') { @{ target = 'linux-x64'; runner = 'ubuntu-24.04'; arch = 'x64' } }
-          )
-          if (!$platforms.Count) { throw 'Select at least one platform.' }
-          if ($env:ENABLE_WINDOWS -eq 'true' -and @(($version -split '[.+]') | Where-Object { [long]$_ -gt 65535 }).Count) {
-            throw 'MSIX version components must be at most 65535.'
-          }
-          if ($env:ENABLE_WINDOWS -eq 'true') {
-            . ./tool/windows-installers.ps1
-            Get-WindowsMsiVersion $version | Out-Null
-          }
-          "version=$version" >> $env:GITHUB_OUTPUT
-          "matrix=$(@{ include = @($platforms) } | ConvertTo-Json -Depth 3 -Compress)" >> $env:GITHUB_OUTPUT
+        run: ./tool/ci-build-plan.ps1
 
   lint:
     name: Format and analyze
@@ -378,7 +350,7 @@ jobs:
       - name: Upload packages and checksums
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: BiliSail-${{ matrix.target }}-packages
+          name: BiliSail-${{ matrix.target }}-${{ needs.prepare.outputs.version }}-packages
           path: artifacts/${{ matrix.target }}/release/*
           if-no-files-found: error
           retention-days: 14

@@ -8,6 +8,10 @@ on:
         type: string
         required: false
         default: ''
+      reuse_ci_build:
+        description: '按平台复用同提交、同版本的已完成 CI 构建，仅构建缺少的目标'
+        type: boolean
+        default: false
       enable_android:
         description: Android arm64 APK
         type: boolean
@@ -37,10 +41,67 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prepare:
+    name: Resolve release build source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      reused: ${{ steps.reuse.outputs.reused }}
+      build_targets: ${{ steps.reuse.outputs.build_targets }}
+      build_required: ${{ steps.reuse.outputs.build_required }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve version and platforms
+        id: plan
+        shell: pwsh
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          ENABLE_ANDROID: ${{ inputs.enable_android }}
+          ENABLE_WINDOWS: ${{ inputs.enable_windows }}
+          ENABLE_MACOS: ${{ inputs.enable_macos }}
+          ENABLE_IOS: ${{ inputs.enable_ios }}
+          ENABLE_LINUX: ${{ inputs.enable_linux }}
+        run: ./tool/ci-build-plan.ps1
+      - name: Plan reused packages and missing platform builds
+        id: reuse
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RELEASE_VERSION: ${{ steps.plan.outputs.version }}
+          BUILD_MATRIX: ${{ steps.plan.outputs.matrix }}
+          REUSE_CI_BUILD: ${{ inputs.reuse_ci_build }}
+        with:
+          script: |
+            const { planReleaseBuilds } = require('./tool/release-ci-reuse.cjs');
+            const plan = await planReleaseBuilds({
+              github, context, version: process.env.RELEASE_VERSION,
+              targets: JSON.parse(process.env.BUILD_MATRIX).include.map(({ target }) => target),
+              reuseCiBuild: process.env.REUSE_CI_BUILD === 'true',
+            });
+            core.setOutput('reused', JSON.stringify(plan.reused));
+            core.setOutput('build_targets', JSON.stringify(plan.buildTargets));
+            core.setOutput('build_required', plan.buildTargets.length > 0);
+            const rows = [
+              ...plan.reused.map(({ target, runUrl }) => [target, 'Reuse', runUrl]),
+              ...plan.buildTargets.map((target) => [target, 'Build', 'This release run']),
+            ];
+            for (const row of rows) core.info(row.join(': '));
+            await core.summary.addHeading('Release build sources')
+              .addTable([['Target', 'Action', 'Source'], ...rows]).write();
+
   build:
+    needs: prepare
+    if: needs.prepare.outputs.build_required == 'true'
     uses: ./.github/workflows/ci.yml
     with:
-      version: ${{ inputs.version }}
+      version: ${{ needs.prepare.outputs.version }}
+      build_targets: ${{ needs.prepare.outputs.build_targets }}
       enable_android: ${{ inputs.enable_android }}
       enable_windows: ${{ inputs.enable_windows }}
       enable_macos: ${{ inputs.enable_macos }}
@@ -56,25 +117,65 @@ jobs:
 
   draft:
     name: Create release draft
-    needs: build
+    needs: [prepare, build]
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success' &&
+          ((needs.prepare.outputs.build_required == 'false' && needs.build.result == 'skipped') ||
+           (needs.prepare.outputs.build_required == 'true' && needs.build.result == 'success')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - name: Download packages built in this run
+        if: needs.prepare.outputs.build_required == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: BiliSail-*-packages
+          pattern: BiliSail-*-${{ needs.prepare.outputs.version }}-packages
           path: release-assets
           merge-multiple: true
+      - name: Download reused packages from their source CI runs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REUSED_PACKAGES: ${{ needs.prepare.outputs.reused }}
+        with:
+          script: |
+            const { downloadReusedArtifacts } = require('./tool/release-ci-reuse.cjs');
+            await downloadReusedArtifacts({
+              reused: JSON.parse(process.env.REUSED_PACKAGES),
+              repository: `${context.repo.owner}/${context.repo.repo}`,
+              directory: 'release-assets',
+            });
+      - name: Verify selected packages, source, version and checksums
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          BUILD_MATRIX: ${{ needs.prepare.outputs.matrix }}
+        with:
+          script: |
+            const { readFileSync } = require('node:fs');
+            const { createHash } = require('node:crypto');
+            const { verifyReleaseAssets } = require('./tool/release-ci-reuse.cjs');
+            // Windows checkout can use CRLF; metadata hashes the original file bytes.
+            const lockfile = readFileSync('pubspec.lock', 'utf8').replace(/\r\n/g, '\n');
+            await verifyReleaseAssets({
+              directory: 'release-assets', version: process.env.RELEASE_VERSION,
+              targets: JSON.parse(process.env.BUILD_MATRIX).include.map(({ target }) => target),
+              sourceRevision: context.sha,
+              flutterVersion: readFileSync('.flutter-version', 'utf8').trim(),
+              pubspecLockSha256s: [lockfile, lockfile.replace(/\n/g, '\r\n')]
+                .map((content) => createHash('sha256').update(content).digest('hex')),
+            });
       - name: Create preview draft with all selected packages
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           $ErrorActionPreference = 'Stop'
           $tag = "v$env:RELEASE_VERSION"
