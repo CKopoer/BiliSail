@@ -70,6 +70,7 @@ void main() {
         endpoint: 'app_recommended',
         buvid: _device,
         accessToken: 'fixture-token',
+        appAccountMid: '42',
       );
       final uri = transport.uris.single;
       expect(uri.host, 'app.bilibili.com');
@@ -87,7 +88,28 @@ void main() {
         transport.headers.single.keys.map((key) => key.toLowerCase()),
         isNot(contains('cookie')),
       );
-      expect(transport.headers.single['buvid'], _device);
+      expect(transport.headers.single, {
+        'Accept': 'application/json',
+        'User-Agent':
+            'Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android '
+            'model/android_hd mobi_app/android_hd build/2001100 channel/master '
+            'innerVer/2001100 osVer/15 network/2',
+        'buvid': _device,
+        'app-key': 'android64',
+        'env': 'prod',
+        'fp_local':
+            '1111111111111111111111111111111111111111111111111111111111111111',
+        'fp_remote':
+            '1111111111111111111111111111111111111111111111111111111111111111',
+        'session_id': '11111111',
+        'x-bili-trace-id':
+            '11111111111111111111111111111111:1111111111111111:0:0',
+        'x-bili-mid': '42',
+        'x-bili-aurora-eid': 'VVY',
+        'x-bili-aurora-zone': 'sh001',
+        'bili-http-engine': 'cronet',
+        'referer': 'https://www.bilibili.com',
+      });
       await expectLater(
         api.requestAppJson(
           '/unregistered',
@@ -98,6 +120,33 @@ void main() {
         throwsArgumentError,
       );
       expect(transport.uris.length, 1);
+    },
+  );
+
+  test(
+    'App account headers reject missing tokens and invalid account IDs',
+    () async {
+      final transport = _Transport();
+      final client = AppRecommendationClient(
+        BiliApiClient(transport: transport),
+      );
+      for (final value in [
+        (token: null, mid: '42'),
+        (token: '', mid: '42'),
+        (token: 'fixture-token', mid: '42\r\nInjected: value'),
+        (token: 'fixture-token', mid: '0'),
+      ]) {
+        await expectLater(
+          client.load(
+            page: 1,
+            buvid: _device,
+            accessToken: value.token,
+            appAccountMid: value.mid,
+          ),
+          throwsArgumentError,
+        );
+      }
+      expect(transport.uris, isEmpty);
     },
   );
 
@@ -135,6 +184,15 @@ void main() {
       expect(page.hasMore, isTrue);
       expect(transport.uris.single.queryParameters['idx'], '0');
       expect(transport.uris.single.queryParameters['pull'], 'true');
+      expect(transport.uris.single.queryParameters['splash_id'], '');
+      expect(
+        transport.uris.single.queryParameters.containsKey('access_key'),
+        isFalse,
+      );
+      expect(transport.headers.single['buvid'], _device);
+      expect(transport.headers.single['session_id'], '11111111');
+      expect(transport.headers.single.containsKey('x-bili-mid'), isFalse);
+      expect(transport.headers.single['x-bili-aurora-eid'], '');
       expect(transport.uris.length, 1);
     },
   );
@@ -199,6 +257,7 @@ void main() {
       );
       expect(transport.uris.length, 1);
       expect(transport.uris.single.queryParameters['feedback_id'], '7');
+      expect(transport.headers.single.containsKey('fp_local'), isFalse);
       expect(
         transport.uris.single.queryParameters.containsKey('reason_id'),
         isFalse,
@@ -282,6 +341,7 @@ void main() {
       final code = await client.generate(buvid: _device);
       expect(code.authCode, 'fixture-code');
       expect(transport.posts.single['appkey'], isNotEmpty);
+      expect(transport.headers.single.containsKey('fp_local'), isFalse);
       expect(
         (await client.poll(buvid: _device, authCode: code.authCode)).status,
         ApiQrStatus.waitingScan,

@@ -1,5 +1,7 @@
 # API、鉴权与数据边界
 
+2026-10-31 App 推荐请求与本机 PiliPlus 固定快照对齐完整 Android HD UA、feed 指纹占位请求头和新设备 buvid 格式；保留已有设备标识及账号凭据，指纹头仅用于首页 App feed，不采集硬件标识。来源、协议字段和兼容边界见[App 推荐设计](app-recommendation-design.md)。
+
 2026-10-28 登录由 SessionRepository 统一提交，安全快照 version=2 的 App 凭据可选；HD 扫码同时取得 Cookie/token，内嵌官网密码/短信只保存通过 nav 验证的 Web Cookie。已删除实测失败的 Cookie 换 token 路径，旧 version=1 仍可恢复。App 推荐无 token 时使用游客身份，有效同账号 token 才用于账号推荐；设置仅显示当前身份摘要。两条登录路径、取消/回滚及验证见[统一登录](unified-login-design.md)。
 
 2026-10-27 推荐流过滤解析 Web 推荐、热门/排行/分区、相关视频响应中的可选 `stat.like`、`tname`、`is_followed`，在应用层按偏好筛选。新增可选 App 推荐 profile、独立 buvid 与扫码授权，游客可直接读取，统一登录取得的 token 只用于对应 Web 账号的 App 推荐/反馈；默认仍为 Web。aid 本地转换为 bvid，不增加逐视频请求。App 关注豁免只额外识别精确“已关注/新关注”，不从含糊推荐理由猜测点赞数。端点及离线/在线验证边界见[App 推荐设计](app-recommendation-design.md)。

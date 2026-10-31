@@ -90,6 +90,14 @@ void main() {
       '/x/web-interface/nav',
     ]);
     expect(secure.writes, 1);
+    transport.feedAccessToken = 'fixture-app';
+    transport.feedAccountMid = '42';
+    final page = await ApiFeedRepository(
+      session.api,
+      session.requests,
+      appIdentity: identity,
+    ).loadAppRecommendations(page: 1, cancellation: RequestCancellation());
+    expect(page.items.single.id.value, 'BV17x411w7KC');
     final rows = await database
         .customSelect('SELECT value FROM settings')
         .get();
@@ -257,6 +265,7 @@ final class _Transport implements ApiTransport, ApiFormTransport {
   final paths = <String>[];
   int navMid = 42, tokenMid = 42;
   bool includeCookies = true;
+  String? feedAccessToken, feedAccountMid;
   ApiHttpResponse response(Object data, {int status = 200}) => ApiHttpResponse(
     status,
     Uint8List.fromList(utf8.encode(jsonEncode({'code': 0, 'data': data}))),
@@ -273,7 +282,9 @@ final class _Transport implements ApiTransport, ApiFormTransport {
     if (uri.path == '/x/v2/feed/index') {
       expect(uri.host, 'app.bilibili.com');
       expect(headers.containsKey('Cookie'), isFalse);
-      expect(uri.queryParameters.containsKey('access_key'), isFalse);
+      expect(uri.queryParameters['access_key'], feedAccessToken);
+      expect(headers['x-bili-mid'], feedAccountMid);
+      expect(headers['x-bili-aurora-eid'], feedAccountMid == null ? '' : 'VVY');
       return response({
         'items': [
           {

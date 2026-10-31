@@ -59,6 +59,8 @@ void main() {
       expect(values.toSet(), {'fixture_device_0123456789'});
       expect(secure.reads, 0);
       expect((await store.requestIdentity()).accessToken, 'fixture-unified');
+      expect((await store.requestIdentity()).accountMid, '42');
+      expect(session.invalidated, 0);
       final rows = await database
           .customSelect('SELECT value FROM settings')
           .get();
@@ -70,6 +72,44 @@ void main() {
       );
     },
   );
+  for (final saved in <String?>[null, 'invalid']) {
+    test(
+      'missing or invalid device uses the App format and survives reload: $saved',
+      () async {
+        if (saved == null) {
+          await database.customStatement('DELETE FROM settings WHERE key = ?', [
+            'app-recommendation-device.v1',
+          ]);
+        } else {
+          await database.writeSetting('app-recommendation-device.v1', saved);
+        }
+        final devices = await Future.wait(
+          List.generate(5, (_) => store.deviceId()),
+        );
+        final device = devices.first;
+        expect(devices.toSet(), {device});
+        expect(device, matches(r'^XY[0-9A-F]{35}$'));
+        final body = device.substring(5);
+        expect(device.substring(2, 5), '${body[2]}${body[12]}${body[22]}');
+        expect(
+          await database.readSetting('app-recommendation-device.v1'),
+          device,
+        );
+        expect(secure.reads, 0);
+        await store.close();
+        store = AppRecommendationIdentityStore(
+          database: database,
+          credentials: secure,
+          accountScope: () => scope,
+          accountChanges: changes.stream,
+          sessionCredentials: session,
+          clock: () => now,
+        );
+        expect(await store.deviceId(), device);
+        expect(session.invalidated, 0);
+      },
+    );
+  }
   test(
     'unified session overrides legacy token and invalidity never falls back',
     () async {
@@ -97,6 +137,7 @@ void main() {
           .millisecondsSinceEpoch,
     });
     expect((await store.requestIdentity()).accessToken, isNull);
+    expect((await store.requestIdentity()).accountMid, isNull);
     scope = 'user:42';
     changes.add(const AuthState(status: AuthStatus.signedIn, mid: '42'));
     expect((await store.requestIdentity()).accessToken, 'fixture-legacy');

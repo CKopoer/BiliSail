@@ -4,6 +4,14 @@
 
 2026-10-28 后续调整：App 凭据已并入正常扫码登录，推荐设置不再提供独立扫码或更新登录入口。密码/短信继续保存 Web 会话，已删除 Cookie 换 token 流程；所有登录方式都可选择 App 来源，无 App 凭据时使用游客推荐，有效同账号凭据才使用账号推荐。设置只显示当前推荐身份摘要，并移除设备标识显示、手工编辑和随机生成入口；设备标识继续由内部自动生成并持久化，保留已有值。当前职责与验证见[统一登录设计](unified-login-design.md)。下文初次接入的独立授权方案及验证保留为历史记录。
 
+2026-10-31 请求身份对齐：继续只读参考下述 PiliPlus 精确提交的 `lib/common/constants.dart`、`lib/http/video.dart`、`lib/utils/login_utils.dart`，并核对 `lib/utils/accounts/account.dart`、`lib/utils/accounts/account_manager/account_mgr.dart` 和 `lib/utils/id_utils.dart` 对请求头的最终覆盖，只采用协议字段与设备标识格式，独立实现，不复制 GPLv3 应用代码或资源。App profile 使用相同的完整 Android HD UA；仅首页 App feed 补齐 `fp_local`、`fp_remote`、`session_id`、`x-bili-trace-id`、`x-bili-aurora-eid/zone`、`bili-http-engine`、`referer` 请求头，以及空 `splash_id` 参数。按拦截器处理后的最终值使用 `app-key=android64`、`x-bili-aurora-zone=sh001`；有有效同账号 App token 时，使用该 token 所属 mid 生成 `x-bili-mid` 和相应 aurora eid，游客不附带账号头。固定指纹/trace 占位字段与参考请求一致，不采集设备硬件指纹，也不改变实际 HTTP 传输实现。
+
+新设备 buvid 使用安全随机 16 字节转成 32 位大写十六进制，在 `XY` 后依次放入该字符串零基下标 2、12、22 的字符，再拼接整个字符串，共 37 字符。首次生成后持久化；并发读取和重启复用同一值。已有合法 buvid 原样保留，不因本次对齐触发 token 失效；两应用各自持有设备标识，不读取或共用 PiliPlus 本地数据。Cookie 隔离、同账号 token、取消/epoch、重试和反馈单次写入边界保持原有约束。
+
+本次验证：36 项定向测试通过，覆盖实际请求头/签名、账号 mid 传递、游客隔离、非法账号头拒绝、新设备生成/并发读取/重新加载和旧设备/凭据保留。`tool/check.ps1 -SkipPub` 全部检查通过，日志 `build/app-recommendation-profile-check-2026-10-31.log`：根应用 3749、bili_api 499、bili_player 105、bili_danmaku 145、bili_mux 5，共 4503 项通过；根应用 13 项 Windows 符号链接用例及未设置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生用例跳过，不计为原生验证。文档相对链接与 `git diff --check` 通过。
+
+使用本次 API 实现做显式启用的游客只读在线烟测，返回 12 条可播放 App 推荐；脱敏日志 `build/app-recommendation-profile-smoke-2026-10-31.log` 仅含数量/分页状态，不读取已有账号、设备配置或安全存储。未构建/安装应用，未做真实账号个性化、反馈或三端实机验收；没有运行中的调试应用/DTD，热重载未能执行。游客读取成功不代表真实账号推荐效果一致。
+
 ## 参考核对与采用边界
 
 只读参考本机 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441`：

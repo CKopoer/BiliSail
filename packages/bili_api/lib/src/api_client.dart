@@ -159,6 +159,7 @@ final class BiliApiClient {
     required String endpoint,
     required String buvid,
     String? accessToken,
+    String? appAccountMid,
     ApiRequestContext? context,
   }) async {
     const feedPaths = {
@@ -181,6 +182,12 @@ final class BiliApiClient {
     if (feedback && (accessToken == null || accessToken.isEmpty)) {
       throw ApiFailure(ApiFailureCategory.authentication, endpoint);
     }
+    if (appAccountMid != null &&
+        (accessToken == null ||
+            accessToken.isEmpty ||
+            !RegExp(r'^[1-9][0-9]{0,19}$').hasMatch(appAccountMid))) {
+      throw ArgumentError('Invalid App account identity');
+    }
     final active = boundedReadContext(context);
     final epoch = _sessionProvider?.sessionEpoch;
     void check() => _checkDecodeContext(
@@ -201,6 +208,8 @@ final class BiliApiClient {
       'buvid': buvid,
       'app-key': 'android_hd',
       'env': 'prod',
+      if (path == '/x/v2/feed/index')
+        ...AppProfile.recommendationHeaders(appAccountMid),
     };
     final uri = Uri.https(
       passport ? 'passport.bilibili.com' : 'app.bilibili.com',

@@ -144,7 +144,12 @@ final class AppRecommendationIdentityStore
 
   static String _generate() {
     final random = Random.secure();
-    return 'XY${List.generate(35, (_) => random.nextInt(16).toRadixString(16)).join().toUpperCase()}';
+    final body = List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join().toUpperCase();
+    // Preserve the App device format's three check characters before its body.
+    return 'XY${body[2]}${body[12]}${body[22]}$body';
   }
 
   Future<String> deviceId() async {
@@ -173,7 +178,9 @@ final class AppRecommendationIdentityStore
     );
   }
 
-  Future<({String buvid, String? accessToken, int revision})>
+  Future<
+    ({String buvid, String? accessToken, String? accountMid, int revision})
+  >
   requestIdentity() async {
     await _ensureLoaded();
     final current = _current;
@@ -189,6 +196,7 @@ final class AppRecommendationIdentityStore
     return (
       buvid: _buvid,
       accessToken: current?.accessToken,
+      accountMid: current?.mid,
       revision: _revision,
     );
   }

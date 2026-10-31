@@ -131,6 +131,7 @@ class ApiFeedRepository
         page: page,
         buvid: identity.buvid,
         accessToken: identity.accessToken,
+        appAccountMid: identity.accountMid,
         context: context,
       );
     } on ApiFailure catch (failure) {

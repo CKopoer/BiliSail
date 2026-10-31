@@ -11,6 +11,7 @@ final class AppRecommendationClient {
     required int page,
     required String buvid,
     String? accessToken,
+    String? appAccountMid,
     ApiRequestContext? context,
   }) async {
     if (page < 1) throw ArgumentError.value(page, 'page');
@@ -22,6 +23,7 @@ final class AppRecommendationClient {
         'platform': 'android',
         'c_locale': 'zh_CN',
         's_locale': 'zh_CN',
+        'splash_id': '',
         'channel': 'master',
         'column': '2',
         'device': 'phone',
@@ -47,6 +49,7 @@ final class AppRecommendationClient {
       endpoint: 'app_recommended',
       buvid: buvid,
       accessToken: accessToken,
+      appAccountMid: appAccountMid,
       context: context,
     );
     final entries = data['items'];
