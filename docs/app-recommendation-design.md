@@ -8,6 +8,12 @@
 
 新设备 buvid 使用安全随机 16 字节转成 32 位大写十六进制，在 `XY` 后依次放入该字符串零基下标 2、12、22 的字符，再拼接整个字符串，共 37 字符。首次生成后持久化；并发读取和重启复用同一值。已有合法 buvid 原样保留，不因本次对齐触发 token 失效；两应用各自持有设备标识，不读取或共用 PiliPlus 本地数据。Cookie 隔离、同账号 token、取消/epoch、重试和反馈单次写入边界保持原有约束。
 
+2026-10-31 响应接纳范围对齐：只读核对 GitHub PiliPlus `c741279080fa90571d59ff9558640beb88861492` 的 `lib/http/video.dart`、`lib/models/home/rcmd/result.dart` 与 `lib/common/widgets/video_card/video_card_v.dart`，仅参考协议与行为，独立实现，不复制 GPLv3 应用代码。首页 query 与最终请求头已一致，本次保留现有取值，并增加完整 query、首请求与翻页的回归测试。响应取消仅接纳 `card_goto=av` 的限制；与参考一致排除 `ad_av`、`ad_web_s`、有 `ad_info` 及 `can_play!=1` 的卡片，继续校验字段类型、数字身份、标题及响应容量，应用层仍使用用户已有过滤偏好。
+
+API 卡片保留原始 `card_goto`、`param` 和可解析 URI。普通 av 继续用 player_args.aid／param 转换 BV；非 av 不将 param 冒充 aid 或转换 BV。主应用为非 av 使用 `app:<type>:<param>` 列表标识，不作为有效 VideoId 传入视频操作：番剧按 param 打开既有剧集页面；已识别的原生视频／影视／直播 URI 使用既有路由，动态映射到公开网页，允许的 Bilibili HTTPS 内容链接交由既有外链端口；未知或非法跳转仍保留卡片并提示暂不支持。非 av 不显示普通视频稍后再看菜单、不启动 AV 悬停预览。App 反馈及撤销携带原始 param 与 goto，不再固定为 av；服务端原因、同账号 token、epoch、单次写入与未知结果不重放规则不变。没有接入 Story 推荐或改变封面比例。
+
+本轮验证结果见文末“响应接纳范围对齐验证”；前面的请求身份对齐验证记录为同日较早一轮。
+
 本次验证：36 项定向测试通过，覆盖实际请求头/签名、账号 mid 传递、游客隔离、非法账号头拒绝、新设备生成/并发读取/重新加载和旧设备/凭据保留。`tool/check.ps1 -SkipPub` 全部检查通过，日志 `build/app-recommendation-profile-check-2026-10-31.log`：根应用 3749、bili_api 499、bili_player 105、bili_danmaku 145、bili_mux 5，共 4503 项通过；根应用 13 项 Windows 符号链接用例及未设置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生用例跳过，不计为原生验证。文档相对链接与 `git diff --check` 通过。
 
 使用本次 API 实现做显式启用的游客只读在线烟测，返回 12 条可播放 App 推荐；脱敏日志 `build/app-recommendation-profile-smoke-2026-10-31.log` 仅含数量/分页状态，不读取已有账号、设备配置或安全存储。未构建/安装应用，未做真实账号个性化、反馈或三端实机验收；没有运行中的调试应用/DTD，热重载未能执行。游客读取成功不代表真实账号推荐效果一致。
@@ -28,7 +34,7 @@
 
 ## 模块职责
 
-1. `bili_api` 增加 App 签名/profile、App 推荐客户端及小型 DTO；`BiliApiClient` 增加严格端点白名单的 App 传输入口。App 请求不附带 Web Cookie，不接收重定向，不把 App host 加入通用 Web 白名单。查询只编码一次；读请求共用已有 deadline/最多三次传输预算，反馈即使使用 GET 也只尝试一次。响应 2 MiB、最多 100 张卡片；解析跳过广告、非 av、不可播放或无有效身份的卡片。
+1. `bili_api` 增加 App 签名/profile、App 推荐客户端及小型 DTO；`BiliApiClient` 增加严格端点白名单的 App 传输入口。App 请求不附带 Web Cookie，不接收重定向，不把 App host 加入通用 Web 白名单。查询只编码一次；读请求共用已有 deadline/最多三次传输预算，反馈即使使用 GET 也只尝试一次。响应 2 MiB、最多 100 张卡片；解析跳过广告、不可播放或无有效身份的卡片，接纳非 av 并保留其真实类型与导航身份。
 2. API 内本地转换 aid/bvid，不按卡片查询详情；解析可信字段，缺失点赞保持未知，不从含糊推荐理由提取点赞数。Web 关注状态继续只认明确字段；App 对精确“已关注/新关注”理由提供与 PiliPlus 一致的豁免语义。保留反馈原因的类型和 ID，不臆造 reason_id。
 3. `RecommendationSettings` 增加 `source=web/app`，缺失/非法值及恢复默认统一为 Web，保留现有用户行为。设备 buvid 由独立身份仓储保存为本机设备偏好，不作为 Web Cookie，不跟随过滤恢复默认随机改变。
 4. `AppRecommendationIdentityRepository` 为纯 Dart 端口；data 实现负责设备标识、安全凭据和授权 attempt。buvid 首次使用生成并持久化，支持手工修改和随机；修改成功后清除与旧设备绑定的 App 授权并发出身份版本更新。账号凭据仅在独立 `CredentialStore` 加密槽保存，不进入 AppSettings、普通数据库、日志、fixture 或导出；对外状态只提供 buvid、授权账号/期限和版本。
@@ -64,3 +70,10 @@ API fixture 覆盖签名编码、无 Cookie/重定向、deadline/取消/epoch、
 `tool/check.ps1 -SkipPub` 通过，日志 `build/app-recommendation-check-final.log`：格式、静态分析与打包边界检查通过；根应用 3180、bili_api 487、bili_player 83、bili_danmaku 93、bili_mux 5，共 3848 项测试通过。根应用 13 项 Windows 符号链接用例、mux 10 项缺少 `BILI_MUX_LIBRARY` 的原生用例跳过，不能算作原生通过。
 
 本轮新增 API 8 项、主应用 21 项行为测试；含设置来源即时保存、设备编辑校验/取消/随机、二维码模态取消与前后台暂停恢复。既有推荐追加零重建、同 ID 更新、反馈/撤销、分页触底和保留页面回归通过。7 份相关文档的相对链接及 `git diff --check` 通过。未构建/安装 Flutter 应用；工作区已有及同期修改按任务范围保留。
+
+## 响应接纳范围对齐验证（2026-10-31）
+
+- 33 项定向测试通过：API profile／签名／广告与非 av 接纳／反馈 12 项，仓储内容身份与 URI 映射 2 项，卡片导航 5 项，来源隔离与已有反馈回归 14 项。新增用例验证完整首页 query、同数字身份不同卡片类型不互相覆盖、番剧 param 与 player_args.aid 分离、原始 goto／param 反馈及撤销、未知卡片保留、非法链接不转成 AV 请求。
+- `tool/check.ps1 -SkipPub` 全量通过，日志 `build/app-recommendation-acceptance-check-2026-10-31.log`：格式、静态分析与打包边界脚本通过；根应用 3836、bili_api 536、bili_player 105、bili_danmaku 145、bili_mux 5，共 4627 项 Dart／Flutter 测试通过。根应用 13 项 Windows 符号链接用例及未设置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生用例跳过，不计为原生通过。
+- 未构建／安装应用、未使用真实账号请求推荐或提交反馈，未测竖屏比例、三端运行与性能。DTD 探测未发现调试应用，热重载调用返回无连接，未完成热重载验证。
+- 文档相对链接与 `git diff --check` 通过；依赖、锁文件、设备标识和安全凭据未更改。

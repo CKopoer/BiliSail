@@ -72,6 +72,7 @@ class ApiFeedRepository
           aid: feedback.aid,
           buvid: identity.buvid,
           accessToken: token,
+          goto: feedback.goto,
           undo: undo,
           reason: reason == null
               ? null
@@ -151,7 +152,12 @@ class ApiFeedRepository
         result.items.map((item) {
           final video = item.video;
           return VideoSummary(
-            id: VideoId(video.bvid),
+            id: VideoId(
+              item.cardGoto == 'av'
+                  ? video.bvid
+                  : 'app:${item.cardGoto}:${item.param}',
+            ),
+            recommendationTarget: _appRecommendationTarget(item),
             title: video.title,
             coverUrl: video.coverUrl?.toString() ?? '',
             author: video.ownerName,
@@ -165,7 +171,8 @@ class ApiFeedRepository
             isFollowed: video.isFollowed,
             recommendationReason: video.recommendationReason,
             recommendationFeedback: RecommendationFeedback.app(
-              aid: item.aid,
+              aid: item.param,
+              goto: item.cardGoto,
               ownerMid: video.ownerMid ?? '0',
               identityRevision: identity.revision,
               reasons: item.reasons
@@ -185,6 +192,96 @@ class ApiFeedRepository
       ),
     );
   }, cancellation: cancellation);
+
+  static RecommendationTarget? _appRecommendationTarget(
+    ApiAppRecommendation item,
+  ) {
+    if (item.cardGoto == 'av') return null;
+    if (item.cardGoto == 'bangumi') {
+      return RecommendationTarget(
+        kind: RecommendationTargetKind.episode,
+        id: item.param,
+      );
+    }
+    final uri = item.navigationUri;
+    if (uri != null && uri.userInfo.isEmpty) {
+      final parts = uri.pathSegments.where((part) => part.isNotEmpty).toList();
+      String? positiveId(String? value) =>
+          value != null && RegExp(r'^[1-9][0-9]{0,19}$').hasMatch(value)
+          ? value
+          : null;
+      if (uri.scheme == 'bilibili') {
+        if (uri.host == 'video' && parts.length == 1) {
+          final value = parts.single;
+          final bvid = VideoId(value).isValid
+              ? value
+              : VideoIdentifiers.bvidFromAid(value);
+          if (bvid != null) {
+            return RecommendationTarget(
+              kind: RecommendationTargetKind.video,
+              id: bvid,
+            );
+          }
+        }
+        if (uri.host == 'bangumi' &&
+            parts.length == 2 &&
+            parts.first == 'season') {
+          final id = positiveId(parts.last);
+          if (id != null) {
+            return RecommendationTarget(
+              kind: RecommendationTargetKind.season,
+              id: id,
+            );
+          }
+        }
+        if (uri.host == 'bangumi' &&
+            parts.length == 2 &&
+            parts.first == 'play' &&
+            parts.last.startsWith('ep')) {
+          final id = positiveId(parts.last.substring(2));
+          if (id != null) {
+            return RecommendationTarget(
+              kind: RecommendationTargetKind.episode,
+              id: id,
+            );
+          }
+        }
+        if (parts.length == 1) {
+          final id = positiveId(parts.single);
+          if (id != null && uri.host == 'live') {
+            return RecommendationTarget(
+              kind: RecommendationTargetKind.live,
+              id: id,
+            );
+          }
+          if (id != null &&
+              const {'following', 'opus', 'dynamic'}.contains(uri.host)) {
+            return RecommendationTarget(
+              kind: RecommendationTargetKind.dynamic,
+              id: id,
+              url: Uri.https('t.bilibili.com', '/$id'),
+            );
+          }
+        }
+      }
+      if (uri.scheme == 'https' &&
+          uri.port == 443 &&
+          const {
+            'www.bilibili.com',
+            'live.bilibili.com',
+            't.bilibili.com',
+            'space.bilibili.com',
+          }.contains(uri.host)) {
+        return RecommendationTarget(
+          kind: RecommendationTargetKind.external,
+          url: uri,
+        );
+      }
+    }
+    return const RecommendationTarget(
+      kind: RecommendationTargetKind.unsupported,
+    );
+  }
 
   @override
   Future<List<VideoCategory>> loadCategories({

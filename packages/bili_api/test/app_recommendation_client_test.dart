@@ -159,7 +159,7 @@ void main() {
           _entry(extra: {'card_goto': 'ad_av'}),
           _entry(extra: {'ad_info': {}}),
           _entry(extra: {'can_play': 0}),
-          _entry(extra: {'card_goto': 'bangumi'}),
+          _entry(extra: {'card_goto': 'ad_web_s'}),
           _entry(extra: {'param': 'invalid', 'player_args': {}}),
         ];
       final page = await AppRecommendationClient(
@@ -194,6 +194,146 @@ void main() {
       expect(transport.headers.single.containsKey('x-bili-mid'), isFalse);
       expect(transport.headers.single['x-bili-aurora-eid'], '');
       expect(transport.uris.length, 1);
+    },
+  );
+
+  test(
+    'feed query matches the PiliPlus Android profile for refresh and pagination',
+    () async {
+      final transport = _Transport();
+      final client = AppRecommendationClient(
+        BiliApiClient(
+          transport: transport,
+          clock: () => DateTime.fromMillisecondsSinceEpoch(1234567890000),
+        ),
+      );
+      for (final page in [1, 3]) {
+        await client.load(
+          page: page,
+          buvid: _device,
+          accessToken: 'fixture-token',
+          appAccountMid: '42',
+        );
+        final query = {...transport.uris.last.queryParameters}..remove('sign');
+        expect(query, {
+          'build': '8430300',
+          'c_locale': 'zh_CN',
+          'channel': 'master',
+          'column': '2',
+          'device': 'phone',
+          'device_name': 'android',
+          'device_type': '0',
+          'disable_rcmd': '0',
+          'flush': '8',
+          'fnval': '976',
+          'fnver': '0',
+          'force_host': '2',
+          'fourk': '1',
+          'guidance': '1',
+          'https_url_req': '1',
+          'idx': '${page - 1}',
+          'mobi_app': 'android_i',
+          'network': 'wifi',
+          'platform': 'android',
+          'player_net': '1',
+          'pull': page == 1 ? 'true' : 'false',
+          'qn': '32',
+          'recsys_mode': '0',
+          's_locale': 'zh_CN',
+          'splash_id': '',
+          'statistics':
+              '{"appId":1,"platform":3,"version":"8.43.0","abtest":""}',
+          'voice_balance': '0',
+          'access_key': 'fixture-token',
+          'appkey': 'dfca71928277209b',
+          'ts': '1234567890',
+        });
+      }
+    },
+  );
+
+  test(
+    'playable non-ad cards retain their type and original identity',
+    () async {
+      final transport = _Transport()
+        ..entries = [
+          for (final type in [
+            'av',
+            'vertical_av',
+            'bangumi',
+            'picture',
+            'future_card',
+          ])
+            _entry(
+              extra: {
+                'card_goto': type,
+                'param': '42',
+                'desc_button': {'text': '系列作者'},
+                'uri': 'bilibili://following/42',
+              },
+            ),
+          _entry(extra: {'card_goto': 'ad_av'}),
+          _entry(extra: {'card_goto': 'ad_web_s'}),
+          _entry(extra: {'card_goto': 'future_card', 'ad_info': {}}),
+          _entry(extra: {'card_goto': 'bangumi', 'can_play': 0}),
+          _entry(extra: {'card_goto': 'picture', 'can_play': null}),
+        ];
+      final page = await AppRecommendationClient(
+        BiliApiClient(transport: transport),
+      ).load(page: 1, buvid: _device);
+      expect(page.items.map((item) => item.cardGoto), [
+        'av',
+        'vertical_av',
+        'bangumi',
+        'picture',
+        'future_card',
+      ]);
+      expect(page.items.map((item) => item.param).toSet(), {'42'});
+      expect(page.items.first.aid, '170001');
+      expect(page.items.first.video.bvid, 'BV17x411w7KC');
+      expect(
+        page.items.skip(1).every((item) => item.video.bvid.isEmpty),
+        isTrue,
+      );
+      expect(page.items.last.video.ownerName, '系列作者');
+      expect(
+        page.items.last.navigationUri,
+        Uri.parse('bilibili://following/42'),
+      );
+      transport.entries = [
+        _entry(extra: {'card_goto': 'bangumi', 'player_args': {}}),
+      ];
+      final episode = (await AppRecommendationClient(
+        BiliApiClient(transport: transport),
+      ).load(page: 1, buvid: _device)).items.single;
+      expect(episode.aid, isNull, reason: 'An episode param is not an AV aid');
+      expect(episode.video.bvid, isEmpty);
+    },
+  );
+
+  test(
+    'non-video feedback and undo keep the original goto and param',
+    () async {
+      final transport = _Transport();
+      final client = AppRecommendationClient(
+        BiliApiClient(transport: transport),
+      );
+      for (final undo in [false, true]) {
+        await client.feedback(
+          aid: '42',
+          goto: 'bangumi',
+          buvid: _device,
+          accessToken: 'fixture-token',
+          undo: undo,
+          reason: const ApiAppFeedbackReason(
+            id: '7',
+            name: '内容不适',
+            kind: ApiAppFeedbackKind.feedback,
+          ),
+        );
+        expect(transport.uris.last.queryParameters['goto'], 'bangumi');
+        expect(transport.uris.last.queryParameters['id'], '42');
+      }
     },
   );
 

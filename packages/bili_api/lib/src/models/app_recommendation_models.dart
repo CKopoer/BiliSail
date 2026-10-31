@@ -17,9 +17,14 @@ final class ApiAppRecommendation {
     required this.video,
     required this.aid,
     required this.reasons,
+    required this.cardGoto,
+    required this.param,
+    this.navigationUri,
   });
   final ApiVideoSummary video;
-  final String aid;
+  final String? aid;
+  final String cardGoto, param;
+  final Uri? navigationUri;
   final List<ApiAppFeedbackReason> reasons;
 }
 

@@ -37,6 +37,7 @@ final class VideoSummary {
     this.authorId,
     this.recommendationReason,
     this.recommendationFeedback,
+    this.recommendationTarget,
     this.previewCid,
     this.access = const VideoAccess(),
   });
@@ -56,10 +57,28 @@ final class VideoSummary {
   final UserId? authorId;
   final String? recommendationReason;
   final RecommendationFeedback? recommendationFeedback;
+  final RecommendationTarget? recommendationTarget;
 
   /// Optional page ID already supplied by a list, avoiding a detail read.
   final String? previewCid;
   final VideoAccess access;
+}
+
+enum RecommendationTargetKind {
+  video,
+  episode,
+  season,
+  live,
+  dynamic,
+  external,
+  unsupported,
+}
+
+final class RecommendationTarget {
+  const RecommendationTarget({required this.kind, this.id = '', this.url});
+  final RecommendationTargetKind kind;
+  final String id;
+  final Uri? url;
 }
 
 /// Opaque recommendation context returned by the Web feed, kept in memory.
@@ -79,8 +98,8 @@ final class RecommendationFeedback {
     required List<RecommendationFeedbackReason> reasons,
     required this.identityRevision,
     this.selectedReason,
+    this.goto = 'av',
   }) : source = RecommendationSource.app,
-       goto = 'av',
        trackId = '',
        reasons = List.unmodifiable(reasons);
   final String aid, goto, trackId, ownerMid;
@@ -96,6 +115,7 @@ final class RecommendationFeedback {
     }
     return RecommendationFeedback.app(
       aid: aid,
+      goto: goto,
       ownerMid: ownerMid,
       reasons: reasons,
       identityRevision: identityRevision,

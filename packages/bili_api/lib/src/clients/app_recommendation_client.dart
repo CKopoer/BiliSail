@@ -59,7 +59,8 @@ final class AppRecommendationClient {
     final items = <ApiAppRecommendation>[];
     for (final entry in entries) {
       if (entry is! Map<String, Object?> ||
-          entry['card_goto'] != 'av' ||
+          entry['card_goto'] == 'ad_av' ||
+          entry['card_goto'] == 'ad_web_s' ||
           entry['ad_info'] != null ||
           entry['can_play'] != 1) {
         continue;
@@ -78,18 +79,21 @@ final class AppRecommendationClient {
     required String aid,
     required String buvid,
     required String accessToken,
+    String goto = 'av',
     ApiAppFeedbackReason? reason,
     required bool undo,
     ApiRequestContext? context,
   }) async {
-    if (!RegExp(r'^[1-9][0-9]*$').hasMatch(aid) || (!undo && reason == null)) {
+    if (!RegExp(r'^[1-9][0-9]{0,19}$').hasMatch(aid) ||
+        !RegExp(r'^[a-zA-Z][a-zA-Z0-9_]{0,63}$').hasMatch(goto) ||
+        (!undo && reason == null)) {
       throw ArgumentError('Missing App feedback identity');
     }
     await api.requestAppJson(
       undo ? '/x/feed/dislike/cancel' : '/x/feed/dislike',
       {
         'id': aid,
-        'goto': 'av',
+        'goto': goto,
         'build': '1',
         'mobi_app': 'android',
         if (!undo && reason != null)
@@ -108,13 +112,26 @@ final class AppRecommendationClient {
   static ApiAppRecommendation? _parse(Map<String, Object?> entry) {
     final player = _map(entry['player_args']);
     final args = _map(entry['args']);
-    final aid = _id(player['aid'] ?? entry['param']);
-    if (aid == null) return null;
-    final bvid =
-        entry['bvid'] is String &&
-            RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(entry['bvid'] as String)
-        ? entry['bvid'] as String
-        : VideoIdentifiers.bvidFromAid(aid);
+    final cardGoto = entry['card_goto'];
+    final param = _id(entry['param']);
+    if (cardGoto is! String ||
+        !RegExp(r'^[a-zA-Z][a-zA-Z0-9_]{0,63}$').hasMatch(cardGoto) ||
+        param == null) {
+      return null;
+    }
+    final isVideo = cardGoto == 'av';
+    // Non-video params identify episodes/dynamics, not AV archives.
+    final aid = _id(player['aid']) ?? (isVideo ? param : null);
+    final suppliedBvid = entry['bvid'];
+    final String? bvid;
+    if (!isVideo) {
+      bvid = '';
+    } else if (suppliedBvid is String &&
+        RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(suppliedBvid)) {
+      bvid = suppliedBvid;
+    } else {
+      bvid = aid == null ? null : VideoIdentifiers.bvidFromAid(aid);
+    }
     final title = entry['title'];
     if (bvid == null || title is! String || title.trim().isEmpty) return null;
     final reason = entry['rcmd_reason'] is String
@@ -153,12 +170,21 @@ final class AppRecommendationClient {
     final seconds = _integer(player['duration']);
     return ApiAppRecommendation(
       aid: aid,
+      cardGoto: cardGoto,
+      param: param,
+      navigationUri: entry['uri'] is String
+          ? Uri.tryParse(entry['uri'] as String)
+          : null,
       reasons: List.unmodifiable(reasons),
       video: ApiVideoSummary(
         bvid: bvid,
         title: title,
         coverUrl: _image(entry['cover']),
-        ownerName: args['up_name'] is String ? args['up_name'] as String : '',
+        ownerName: isVideo
+            ? (args['up_name'] is String ? args['up_name'] as String : '')
+            : (_map(entry['desc_button'])['text'] is String
+                  ? _map(entry['desc_button'])['text'] as String
+                  : ''),
         ownerMid: _id(args['up_id']),
         previewCid: _id(player['cid']),
         duration: Duration(

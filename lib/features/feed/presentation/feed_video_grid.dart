@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/services.dart';
 
+import '../../../core/platform/external_links.dart';
+import '../../../shared/ui/app_notice.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/video_card.dart';
@@ -93,6 +96,37 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
   VideoCard? _card;
   _FeedbackState? _feedback;
 
+  Future<void> _open() async {
+    final target = widget.video.recommendationTarget;
+    if (target == null) {
+      context.go('/video/${widget.video.id.value}');
+      return;
+    }
+    final route = switch (target.kind) {
+      RecommendationTargetKind.video => '/video/${target.id}',
+      RecommendationTargetKind.episode => '/pgc/episode/${target.id}',
+      RecommendationTargetKind.season => '/pgc/season/${target.id}',
+      RecommendationTargetKind.live => '/live/${target.id}',
+      _ => null,
+    };
+    if (route != null) {
+      context.go(route);
+      return;
+    }
+    final url = target.url;
+    if (url == null) {
+      showAppNotice(context, '暂不支持打开此推荐类型');
+      return;
+    }
+    var opened = false;
+    try {
+      opened = await ref.read(externalLinkOpenerProvider)(url);
+    } on PlatformException {
+      opened = false;
+    }
+    if (mounted && !opened) showAppNotice(context, '无法打开此推荐，请稍后重试');
+  }
+
   @override
   void didUpdateWidget(_FeedVideoCard oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -131,7 +165,7 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
     return _card ??= VideoCard(
       key: ValueKey(widget.video.id),
       video: widget.video,
-      onTap: () => context.go('/video/${widget.video.id.value}'),
+      onTap: _open,
       onOpenUser: (id) => context.go('/user/${id.value}'),
       showRecommendationReason: widget.recommended,
       feedback: feedback.rejected
@@ -144,9 +178,9 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
           : null,
       menu: widget.recommended
           ? VideoCardMenu(
-              actions: const [
+              actions: [
                 VideoCardMenuAction.notInterested,
-                VideoCardMenuAction.watchLater,
+                if (widget.video.id.isValid) VideoCardMenuAction.watchLater,
               ],
               busy: feedback.busy,
               // Read current callbacks and data, even after a parent update
