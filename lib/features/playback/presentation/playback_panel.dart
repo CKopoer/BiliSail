@@ -2465,24 +2465,17 @@ class _ControlBar extends StatelessWidget {
               slot(fullscreenButton),
             ],
           ),
-          Row(
+          _ScrollablePlayerTools(
             children: [
-              Expanded(
-                child: _ScrollablePlayerTools(
-                  children: [
-                    if (composer != null)
-                      slot(
-                        IconButton(
-                          tooltip: '发送弹幕',
-                          onPressed: () => unawaited(onOpenComposer(context)),
-                          icon: const Icon(Icons.edit_outlined, size: 20),
-                        ),
-                      ),
-                    ...secondary,
-                  ],
+              if (composer != null)
+                slot(
+                  IconButton(
+                    tooltip: '发送弹幕',
+                    onPressed: () => unawaited(onOpenComposer(context)),
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                  ),
                 ),
-              ),
-              slot(_moreOptions(context)),
+              ...secondary,
             ],
           ),
         ],

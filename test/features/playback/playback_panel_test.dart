@@ -60,6 +60,85 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final (content, target) in <(String, ContentPlaybackTarget?)>[
+    ('video', null),
+    ('pgc', const PgcPlaybackTarget('12', cid: '123')),
+    ('live', const LivePlaybackTarget('12')),
+    ('offline', const OfflinePlaybackTarget('local-task')),
+  ]) {
+    for (final textScale in [1.0, 2.0]) {
+      testWidgets(
+        'small window matches complete buttons for $content text=$textScale',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = const Size(1800, 1000);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final engine = _FakeEngine();
+          final session = _session(engine, repository: _MenuRepository());
+          final window = _FakeWindowService();
+          addTearDown(session.close);
+          Future<void> resize(double width) async {
+            await tester.pumpWidget(
+              _app(
+                session,
+                window,
+                const AppSettings.defaults(),
+                width: width,
+                textScale: textScale,
+                target: target,
+                onBack: () {},
+                onHome: () {},
+                showNavigationInPlayer: true,
+                nextPart: () {},
+                composer: (_) => const TextField(),
+              ),
+            );
+            await _pumpFrames(tester);
+            await _showControls(tester);
+          }
+
+          List<String> buttons() =>
+              tester
+                  .widgetList<Tooltip>(
+                    find.descendant(
+                      of: find.byType(PlaybackPanel),
+                      matching: find.byType(Tooltip),
+                    ),
+                  )
+                  .map((tooltip) => tooltip.message)
+                  .whereType<String>()
+                  .where((message) => message != '发送弹幕')
+                  .toList()
+                ..sort();
+
+          await resize(1400);
+          expect(
+            find.byKey(const ValueKey('standard-control-row')),
+            findsOneWidget,
+          );
+          final completeButtons = buttons();
+          expect(completeButtons, containsAll(['音量', '播放配置', '关闭弹幕']));
+          expect(find.byTooltip('发送弹幕'), findsNothing);
+          await resize(320);
+          expect(
+            find.byKey(const ValueKey('small-window-control-row')),
+            findsOneWidget,
+          );
+          expect(buttons(), completeButtons);
+          expect(find.byTooltip('发送弹幕'), findsOneWidget);
+          expect(find.byTooltip('更多播放选项'), findsNothing);
+          expect(find.byIcon(Icons.more_horiz), findsNothing);
+          expect(engine.opens, 1);
+          expect(engine.maxSurfaces, 1);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
   testWidgets(
     'changing the owner source or hiding it dismisses the send dialog',
     (tester) async {
@@ -441,7 +520,7 @@ void main() {
                 matching: find.byType(IconButton),
               ),
               findsNWidgets(
-                !session.isLive && target is! OfflinePlaybackTarget ? 7 : 6,
+                !session.isLive && target is! OfflinePlaybackTarget ? 6 : 5,
               ),
             );
             for (final key in ['compact-playback-actions']) {
@@ -524,7 +603,8 @@ void main() {
             }
             expect(find.byTooltip('发送弹幕').hitTestable(), findsOneWidget);
             expect(find.byTooltip('字幕'), findsNothing);
-            expect(find.byTooltip('更多播放选项').hitTestable(), findsOneWidget);
+            expect(find.byTooltip('更多播放选项'), findsNothing);
+            expect(find.byIcon(Icons.more_horiz), findsNothing);
             expect(
               find.byTooltip('听视频').hitTestable(),
               session.canListen ? findsOneWidget : findsNothing,
@@ -745,16 +825,10 @@ void main() {
         await session.setVolume(31);
         await _pumpFrames(tester);
         final generation = session.sourceGeneration;
-        for (final tooltip in [
-          '字幕',
-          '语音翻译',
-          '听视频',
-          '关闭弹幕',
-          '更多播放选项',
-          '全屏（F）',
-        ]) {
+        for (final tooltip in ['字幕', '语音翻译', '听视频', '关闭弹幕', '全屏（F）']) {
           expect(find.byTooltip(tooltip), findsOneWidget);
         }
+        expect(find.byTooltip('更多播放选项'), findsNothing);
         await tester.ensureVisible(find.byTooltip('字幕'));
         await _pumpFrames(tester);
         await tester.tap(find.byTooltip('字幕'));
@@ -4795,11 +4869,8 @@ void main() {
         findsOneWidget,
       );
       expectCastingInTopBar();
-      await tester.tap(find.byTooltip('更多播放选项'));
-      await _pumpFrames(tester);
-      expect(find.text('投屏'), findsNothing);
-      await tester.tapAt(const Offset(1, 1));
-      await _pumpFrames(tester);
+      expect(find.byTooltip('更多播放选项'), findsNothing);
+      expect(find.byIcon(Icons.more_horiz), findsNothing);
       await tester.tap(find.byTooltip('全屏（F）'));
       await _pumpFrames(tester);
       expect(
@@ -4970,14 +5041,34 @@ void main() {
           await _pumpFrames(tester);
         }
         await session.pause();
-        await tester.tap(find.byTooltip('更多播放选项'));
-        await tester.pumpAndSettle();
-        expect(find.text('清晰度 720P'), findsOneWidget);
-        expect(find.text('清晰度 1080P'), findsOneWidget);
-        final rate = find.widgetWithText(
-          CheckedPopupMenuItem<VoidCallback>,
-          '播放速度 3.0x',
-        );
+        if (fullscreen) {
+          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.pumpAndSettle();
+          expect(find.text('清晰度 720P'), findsOneWidget);
+          expect(find.text('清晰度 1080P'), findsOneWidget);
+        } else {
+          expect(find.byTooltip('更多播放选项'), findsNothing);
+          await tester.tap(find.byTooltip('清晰度'));
+          await tester.pumpAndSettle();
+          expect(
+            find.widgetWithText(PopupMenuItem<int>, '720P'),
+            findsOneWidget,
+          );
+          expect(
+            find.widgetWithText(PopupMenuItem<int>, '1080P'),
+            findsOneWidget,
+          );
+          await tester.tapAt(const Offset(1, 1));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byTooltip('播放速度'));
+          await tester.pumpAndSettle();
+        }
+        final rate = fullscreen
+            ? find.widgetWithText(
+                CheckedPopupMenuItem<VoidCallback>,
+                '播放速度 3.0x',
+              )
+            : find.widgetWithText(PopupMenuItem<double>, '3.0x');
         await tester.ensureVisible(rate);
         await tester.tap(rate);
         await tester.pumpAndSettle();
@@ -5092,13 +5183,16 @@ void main() {
             await tester.tap(find.byTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
+          final useCompactMenu = compact && fullscreen;
           Future<void> openMenu() async {
             final mouse = await tester.createGesture(
               kind: PointerDeviceKind.mouse,
             );
             await mouse.addPointer(location: _surfacePoint(tester));
             await tester.pump();
-            await tester.tap(find.byTooltip(compact ? '更多播放选项' : '直播清晰度与线路'));
+            await tester.tap(
+              find.byTooltip(useCompactMenu ? '更多播放选项' : '直播清晰度与线路'),
+            );
             await tester.pump(const Duration(milliseconds: 300));
             await mouse.moveTo(const Offset(-10, -10));
             await tester.pump(const Duration(seconds: 3));
@@ -5106,7 +5200,7 @@ void main() {
           }
 
           await openMenu();
-          if (!compact) {
+          if (!useCompactMenu) {
             expect(find.text('直播线路 主线'), findsOneWidget);
             expect(find.text('直播线路 备线2'), findsOneWidget);
             final line = find.widgetWithText(ListTile, '直播线路 备线1');
@@ -5128,7 +5222,7 @@ void main() {
           expect(engine.currentSnapshot.desiredPlaying, isFalse);
           expect(engine.currentSnapshot.volume, 32);
           await openMenu();
-          final quality = compact
+          final quality = useCompactMenu
               ? find.widgetWithText(
                   CheckedPopupMenuItem<VoidCallback>,
                   '清晰度 720P 超清',
@@ -5136,12 +5230,12 @@ void main() {
               : find.text('720P 超清');
           await tester.ensureVisible(quality);
           await tester.tap(quality);
-          if (!compact) await tester.tap(find.text('应用'));
+          if (!useCompactMenu) await tester.tap(find.text('应用'));
           await tester.pumpAndSettle();
           expect(session.media?.quality, 250);
           expect(session.liveLine, 1);
           await openMenu();
-          final auto = compact
+          final auto = useCompactMenu
               ? find.widgetWithText(
                   CheckedPopupMenuItem<VoidCallback>,
                   '清晰度 自动',
@@ -5149,7 +5243,7 @@ void main() {
               : find.text('自动');
           await tester.ensureVisible(auto);
           await tester.tap(auto);
-          if (!compact) await tester.tap(find.text('应用'));
+          if (!useCompactMenu) await tester.tap(find.text('应用'));
           await tester.pumpAndSettle();
           expect(session.requestedQuality, 0);
           expect(session.liveLine, 1);
