@@ -107,24 +107,24 @@ void main() {
   test(
     'remaining total deadline caps an attempt and prevents another read',
     () async {
-      final transport = _Transport(
-        (_, _) => Completer<ApiHttpResponse>().future,
-      );
-      final api = BiliApiClient(transport: transport);
+      const budget = Duration(milliseconds: 250);
+      final start = DateTime.utc(2026, 10, 31);
+      final deadline = start.add(budget);
+      var now = start;
+      final transport = _Transport((attempt, _) {
+        // The deadline is reached when this capped attempt times out. Do not
+        // depend on a VM timer and the wall clock advancing in exact lockstep.
+        attempt.cancellation.onCancel(() => now = deadline);
+        return Completer<ApiHttpResponse>().future;
+      });
+      final api = BiliApiClient(transport: transport, clock: () => now);
       addTearDown(api.close);
       await expectLater(
-        api.getPopular(
-          context: ApiRequestContext(
-            deadline: DateTime.now().add(const Duration(milliseconds: 250)),
-          ),
-        ),
+        api.getPopular(context: ApiRequestContext(deadline: deadline)),
         throwsA(_failure(ApiFailureCategory.timeout)),
       );
       expect(transport.attempts, hasLength(1));
-      expect(
-        transport.attempts.single.timeout,
-        lessThanOrEqualTo(const Duration(milliseconds: 250)),
-      );
+      expect(transport.attempts.single.timeout, budget);
       expect(transport.attempts.single.cancellation.isCancelled, isTrue);
     },
   );

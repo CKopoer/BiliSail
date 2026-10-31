@@ -123,6 +123,16 @@ Release 草稿及全部附件上传成功后，使用 GitHub 官方 [actions/git
 
 旧 CI artifact 中的多余文件不会因推送修复而消失。后续先等待修复提交的 CI 构建成功，再以该提交新建 Release；重跑旧 run 仍使用旧脚本及旧产物。本轮不修改既有 artifact 或 Release。
 
+### 推送后 CI 的截止时间测试时序依赖（2026-11-01）
+
+提交 `9afd4e830011ca1de18541f2544481fc8c3226b8` 的 [CI Package tests](https://github.com/CKopoer/BiliSail/actions/runs/41222589420/job/124600097842) 在 `bili_api/test/read_retry_timeout_test.dart` 失败：`remaining total deadline caps an attempt and prevents another read` 预期 1 次请求，实际 3 次；API 其余 535 项通过。该运行的格式／分析、两份根测试分片和原生 mux 回归均通过，平台构建因检查汇总失败而跳过。
+
+原用例直接用 `DateTime.now()` 设置 250 ms 总截止时间，同时等待 VM 计时器产生请求超时，断言隐含了计时器触发时墙钟一定已越过 deadline。两者并非同一计时来源；墙钟仍早于 deadline 时，生产管线会按剩余正预算进行后续尝试，而不保证恰好只有一次。CI 日志未记录各次墙钟读数，不能还原当时的具体偏差。
+
+用例改为通过已有 `BiliApiClient.clock` 注入固定起点，在该受限请求超时取消时明确推进到截止点，随后验证不再请求、底层取消及精确的 250 ms 单次预算。生产重试策略保持原实现，断言没有放宽。受控将用例内的计时器改为立即回调时，旧用例稳定复现同样的 1／3 次断言差异，修改后通过；对应诊断脚本与日志为 `build/validation/deadline-clock-{original,fixed}_test.dart`、`build/validation/deadline-clock-{original,fixed}.log`。正常计时器下，超时／重试专项 8 项与 `dart analyze` 均通过。
+
+本机 Windows / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 全部通过，覆盖打包边界、格式、静态分析及 4651 项 Dart／Flutter 测试（根应用 3860、API 536、播放器 105、弹幕 145、封装 5）。13 项 Windows 符号链接用例因权限不足、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。本文 43 条本地链接与 `git diff --check` 通过，五份锁文件无修改。日志为 `build/api-deadline-clock-fix-check.log`。本次修改仅涉及测试与验证记录，未执行新安装包构建或设备操作；没有运行中的调试应用可执行热重载。
+
 ## Android 固定签名与覆盖升级
 
 2026-10-07 起，push、手动 CI 和 Release 共用固定 release keystore。仓库 Actions Secrets 配置：
