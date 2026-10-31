@@ -35,19 +35,30 @@ jobs:
           hdiutil attach downloaded/*.dmg -readonly -nobrowse -mountpoint "$mount"
           trap 'hdiutil detach "$mount"' EXIT
           ditto "$mount/BiliSail.app" "$RUNNER_TEMP/BiliSail.app"
-      - name: Reproduce startup without rebuilding or retrying failures
+      - name: Collect independent startup attempts and preserve every failure
         shell: pwsh
         timeout-minutes: 20
         run: |
           $ErrorActionPreference = 'Stop'
           . ./tool/macos-release-validation.ps1
           Confirm-MacOSReleaseSignature "$env:RUNNER_TEMP/BiliSail.app" $env:RUNNER_TEMP
+          $failed = $false
           for ($iteration = 1; $iteration -le 10; $iteration++) {
             Write-Host "Startup repetition $iteration of 10"
             $directory = "diagnostics/attempt-$iteration"
             New-Item -ItemType Directory -Path $directory -Force | Out-Null
-            Invoke-MacOSReleaseSmokePhase "$env:RUNNER_TEMP/BiliSail.app/Contents/MacOS/BiliSail" 'startup' ([guid]::NewGuid().ToString('N')) $directory
+            try {
+              Invoke-MacOSReleaseSmokePhase "$env:RUNNER_TEMP/BiliSail.app/Contents/MacOS/BiliSail" 'startup' ([guid]::NewGuid().ToString('N')) $directory
+            } catch {
+              $failed = $true
+              $state = Get-Content "$directory/startup.result.json" -Raw | ConvertFrom-Json
+              # A Dart assertion is retained as a failed attempt. Continue only
+              # this research run to capture the distinct native crash/hang.
+              if ($state.exitCode -ne 1 -or $state.timedOut) { throw }
+              Write-Warning "Dart startup failure retained in attempt $iteration."
+            }
           }
+          if ($failed) { throw 'One or more independent startup attempts failed.' }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         timeout-minutes: 2
