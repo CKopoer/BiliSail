@@ -40,6 +40,25 @@ void main() {
         final field = find.byKey(const ValueKey('history-search'));
         final clear = find.byKey(const ValueKey('history-clear'));
         final available = config.width - (config.width < 600 ? 8 : 40);
+        final toggle = find.byKey(const ValueKey('history-search-toggle'));
+        if (config.width < 840 * config.scale) {
+          expect(field, findsNothing);
+          expect(toggle, findsOneWidget);
+          expect(tester.getSize(toggle).height, greaterThanOrEqualTo(48));
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          expect(tester.widget<TextField>(field).focusNode!.hasFocus, true);
+          await tester.enterText(field, '未提交草稿');
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          expect(field, findsNothing);
+          expect(repository.keywords, ['']);
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          expect(tester.widget<TextField>(field).controller!.text, '未提交草稿');
+        } else {
+          expect(toggle, findsNothing);
+        }
         expect(
           tester.getSize(field).width,
           closeTo(config.width >= 840 * config.scale ? 320 : available, 1),
@@ -63,6 +82,7 @@ void main() {
         expect(repository.keywords, ['', 'Flutter']);
         expect(find.byType(VideoCard), findsOneWidget);
         expect(tester.widget<TextField>(field).controller!.text, 'Flutter');
+        expect(tester.widget<TextField>(field).focusNode!.hasFocus, false);
         final container = ProviderScope.containerOf(tester.element(field));
         await container.read(historyProvider.notifier).refresh();
         await tester.pumpAndSettle();
@@ -91,6 +111,39 @@ void main() {
       },
     );
   }
+  testWidgets(
+    'history search draft survives resizing between compact and desktop layouts',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = _HistoryRepository(_entries());
+      await _pump(tester, repository);
+      final field = find.byKey(const ValueKey('history-search'));
+      final toggle = find.byKey(const ValueKey('history-search-toggle'));
+      expect(field, findsNothing);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      await tester.enterText(field, '未提交草稿');
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(field, findsNothing);
+      tester.view.physicalSize = const Size(1280, 900);
+      await tester.pumpAndSettle();
+      expect(toggle, findsNothing);
+      expect(tester.widget<TextField>(field).controller!.text, '未提交草稿');
+      tester.view.physicalSize = const Size(390, 900);
+      await tester.pumpAndSettle();
+      expect(field, findsNothing);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field).controller!.text, '未提交草稿');
+      expect(repository.keywords, ['']);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   for (final config in [
     (width: 320.0, platform: TargetPlatform.android, scale: 2.0),
     (width: 390.0, platform: TargetPlatform.iOS, scale: 1.0),
@@ -192,15 +245,14 @@ void main() {
               : '当前账号的云端观看记录',
         );
         final clear = find.byKey(const ValueKey('history-clear'));
+        final field = find.byKey(const ValueKey('history-search'));
         expect(
           (tester.getCenter(caption).dy - tester.getCenter(clear).dy).abs(),
           lessThan(1),
         );
         expect(
           tester.getRect(find.byType(VideoCard).first).top -
-              tester
-                  .getRect(find.byKey(const ValueKey('history-search')))
-                  .bottom,
+              tester.getRect(field.evaluate().isEmpty ? clear : field).bottom,
           closeTo(8, 1),
         );
         if (config.scale == 1) expect(find.text('清空历史'), findsOneWidget);
@@ -243,10 +295,20 @@ void main() {
     final repository = _HistoryRepository(_entries())
       ..pending = Completer<void>();
     await _pump(tester, repository);
+    final toggle = find.byKey(const ValueKey('history-search-toggle'));
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('history-clear')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('确认清空'));
     await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<IconButton>(toggle).onPressed, isNull);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('history-search')))
+          .enabled,
+      false,
+    );
     expect(
       tester
           .widget<TextButton>(find.byKey(const ValueKey('history-clear')))

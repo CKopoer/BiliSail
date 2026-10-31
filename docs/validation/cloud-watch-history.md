@@ -66,7 +66,7 @@
 
 普通列表继续使用三字段游标，搜索列表使用独立的页码游标。两条路径复用历史条目解析、视频统计补齐、账号 scope/session epoch 和取消检查，不请求 App token。结果卡片保留观看日期、进度、分 P/剧集跳转和删除菜单；搜索状态下的“清空历史”仍清空当前账号全部云端历史，确认文案明确此范围，不能解释成只清除搜索结果。写入过程中禁用搜索，成功删除/清空后保留关键词。
 
-桌面足够宽时，320px 搜索框与说明、清空操作共用一行；窄屏和大字体下搜索框独占下一行，使用项目既有浅色/深色面板填充、12px 圆角和主题文字样式，搜索与清除图标触控区域至少 48×48。输入框自带透明 Material 容器，支持独立路由和嵌入页；文本控制器随组件销毁释放，输入不触发整个列表逐字重建。
+桌面足够宽时，320px 搜索框与说明、清空操作共用一行；窄屏和大字体下参考 UP 主投稿页，初始仅显示工具行中的搜索按钮，点击后在下一行展开搜索框并获得焦点，再次点击收起。收起保留草稿和当前查询，不发请求；提交、刷新及宽窄布局切换保留展开选择和输入内容。搜索框使用项目既有浅色/深色面板填充、12px 圆角和主题文字样式，搜索、展开与清除图标触控区域至少 48×48。输入框自带透明 Material 容器，支持独立路由和嵌入页；文本和焦点控制器由页面持有并随页面销毁释放，输入不触发整个列表逐字重建。
 
 协议只读参考相邻 PiliPlus 提交 `936072449e82e3d90c28c728c0087bf5136fa441` 的 [UserHttp.searchHistory](../../../PiliPlus/lib/http/user.dart)、[端点常量](../../../PiliPlus/lib/http/api.dart)、[历史搜索控制器](../../../PiliPlus/lib/pages/history_search/controller.dart)、[通用分页](../../../PiliPlus/lib/pages/common/common_list_controller.dart) 和 [历史响应模型](../../../PiliPlus/lib/models_new/history/data.dart)。仅借鉴端点、参数、字段与空页终止规则，Dart/Flutter 代码及脱敏样本独立编写；未复制 GPLv3 应用源码或资源，未新增依赖，未修改参考仓库。
 
@@ -75,3 +75,7 @@
 最终执行 `tool/check.ps1 -SkipPub` 全量通过：根应用 3818、API 525、播放器 105、弹幕 145、mux 5，共 4598 项；格式、静态分析和打包边界脚本通过。根应用 13 项符号链接测试因 Windows 权限不足跳过，mux 10 项原生测试因未设置 `BILI_MUX_LIBRARY` 跳过，不作为原生集成覆盖；日志为 `build/history-search-check.log`。新增页面销毁前的初始化取消用例在控制器单独 25 项及最终全量中通过。前一轮全量曾出现不涉及本次修改的播放恢复时序断言失败，该项单独复验和最终全量均通过，未修改播放会话实现。
 
 Windows Debug 假仓储预览构建、启动和热重载成功，未检出运行时错误；预览入口只放在忽略的 `build/validation/history-search/main.dart`，不进入产品。结束后关闭预览，并通过 `flutter build windows --debug --no-pub` 恢复普通 `lib/main.dart` 入口的 Debug 产物，构建日志为 `build/validation/history-search/windows-debug-build.log`。未使用真实账号验证搜索响应，未执行历史写入、Release 构建或 Android/iOS/macOS/Linux 设备验收。
+
+窄屏入口调整复验（同日）：历史页面 24 项测试通过，覆盖初始折叠、点击展开和聚焦、收起保留草稿、搜索后保持展开、宽窄布局切换、写入中禁用及既有菜单/导航。重新渲染并检查 320/360/402/800/1280px 的初始、展开与搜索结果，含浅深主题和两倍字体，假仓储预览位于 `build/validation/history-search-toggle/`。`tool/check.ps1 -SkipPub` 全量通过，根应用及四包为 3828/525/105/145/5，共 4608 项；仍按环境跳过 13 项符号链接和 10 项 mux 原生测试，日志为 `build/history-search-toggle-check.log`。
+
+本次 Windows Debug 假仓储预览构建、启动和热重载通过，未发现运行时错误；结束预览后已重新构建普通 `lib/main.dart` 入口，日志为 `build/validation/history-search-toggle/windows-debug-build.log`。未执行真实账号操作或移动设备验收。

@@ -15,10 +15,13 @@ import '../../../shared/ui/video_card.dart';
 import '../application/library_controller.dart';
 import '../domain/library_repository.dart';
 
-final class HistoryScreen extends ConsumerWidget {
+final class HistoryScreen extends ConsumerStatefulWidget {
   const HistoryScreen({super.key, this.showHeading = true});
 
   final bool showHeading;
+
+  @override
+  ConsumerState<HistoryScreen> createState() => _HistoryScreenState();
 
   static Future<void> _perform(
     BuildContext context,
@@ -102,9 +105,47 @@ final class HistoryScreen extends ConsumerWidget {
         ? '$month-$day'
         : '${date.year}-$month-$day';
   }
+}
+
+final class _HistoryScreenState extends ConsumerState<HistoryScreen> {
+  late final TextEditingController _searchText;
+  final _searchFocus = FocusNode();
+  bool _searchExpanded = false;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    final keyword = ref.read(historyProvider).keyword;
+    _searchText = TextEditingController(text: keyword);
+    _searchExpanded = keyword.isNotEmpty;
+  }
+
+  @override
+  void dispose() {
+    _searchText.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  void _toggleSearch() {
+    if (!WorkspaceActivity.isActive(context)) return;
+    setState(() => _searchExpanded = !_searchExpanded);
+    if (_searchExpanded) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _searchExpanded && WorkspaceActivity.isActive(context)) {
+          _searchFocus.requestFocus();
+        }
+      });
+    } else {
+      _searchFocus.unfocus();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(historyProvider.select((state) => state.keyword), (_, keyword) {
+      if (_searchText.text != keyword) _searchText.text = keyword;
+    });
     final history = ref.watch(historyProvider);
     final controller = ref.read(historyProvider.notifier);
     return PagedScrollViewport(
@@ -128,7 +169,7 @@ final class HistoryScreen extends ConsumerWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverCardGridPadding(
-              top: showHeading ? 16 : 8,
+              top: widget.showHeading ? 16 : 8,
               bottom: 84,
               sliver: SliverMainAxisGroup(
                 slivers: [
@@ -145,6 +186,8 @@ final class HistoryScreen extends ConsumerWidget {
                           final search = _HistorySearchField(
                             keyword: history.keyword,
                             enabled: !history.writeBusy,
+                            textController: _searchText,
+                            focusNode: _searchFocus,
                           );
                           final showClearLabel =
                               constraints.maxWidth >=
@@ -169,7 +212,7 @@ final class HistoryScreen extends ConsumerWidget {
                                 )
                               : const Icon(Icons.delete_sweep_outlined);
                           final action = enabled
-                              ? () => _confirmClear(context, ref)
+                              ? () => HistoryScreen._confirmClear(context, ref)
                               : null;
                           final toolbar = Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
@@ -179,7 +222,7 @@ final class HistoryScreen extends ConsumerWidget {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    if (showHeading) ...[
+                                    if (widget.showHeading) ...[
                                       Text(
                                         '观看历史',
                                         style: Theme.of(context)
@@ -206,7 +249,25 @@ final class HistoryScreen extends ConsumerWidget {
                               if (inlineSearch) ...[
                                 const SizedBox(width: 16),
                                 SizedBox(width: 320, child: search),
-                              ],
+                              ] else
+                                IconButton(
+                                  key: const ValueKey('history-search-toggle'),
+                                  tooltip: _searchExpanded ? '收起搜索' : '展开搜索',
+                                  isSelected: _searchExpanded,
+                                  onPressed: history.writeBusy
+                                      ? null
+                                      : _toggleSearch,
+                                  icon: Icon(
+                                    _searchExpanded
+                                        ? Icons.close
+                                        : Icons.search,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 48,
+                                    minHeight: 48,
+                                  ),
+                                  visualDensity: VisualDensity.standard,
+                                ),
                               const SizedBox(width: 12),
                               if (showClearLabel)
                                 TextButton.icon(
@@ -244,8 +305,10 @@ final class HistoryScreen extends ConsumerWidget {
                                       CrossAxisAlignment.stretch,
                                   children: [
                                     toolbar,
-                                    const SizedBox(height: 8),
-                                    search,
+                                    if (_searchExpanded) ...[
+                                      const SizedBox(height: 8),
+                                      search,
+                                    ],
                                   ],
                                 );
                         },
@@ -289,44 +352,39 @@ final class HistoryScreen extends ConsumerWidget {
   }
 }
 
-final class _HistorySearchField extends ConsumerStatefulWidget {
-  const _HistorySearchField({required this.keyword, required this.enabled});
+final class _HistorySearchField extends ConsumerWidget {
+  const _HistorySearchField({
+    required this.keyword,
+    required this.enabled,
+    required this.textController,
+    required this.focusNode,
+  });
 
   final String keyword;
   final bool enabled;
+  final TextEditingController textController;
+  final FocusNode focusNode;
 
-  @override
-  ConsumerState<_HistorySearchField> createState() =>
-      _HistorySearchFieldState();
-}
-
-final class _HistorySearchFieldState
-    extends ConsumerState<_HistorySearchField> {
-  late final _text = TextEditingController(text: widget.keyword);
-
-  @override
-  void dispose() {
-    _text.dispose();
-    super.dispose();
-  }
-
-  void _submit(String keyword) {
-    if (!widget.enabled || !WorkspaceActivity.isActive(context)) return;
+  void _submit(BuildContext context, WidgetRef ref, String keyword) {
+    if (!enabled || !WorkspaceActivity.isActive(context)) return;
     FocusScope.of(context).unfocus();
-    ref.read(historyProvider.notifier).search(keyword);
+    final query = keyword.trim();
+    textController.text = query;
+    ref.read(historyProvider.notifier).search(query);
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     return Material(
       type: MaterialType.transparency,
       child: ValueListenableBuilder<TextEditingValue>(
-        valueListenable: _text,
+        valueListenable: textController,
         builder: (context, value, _) => TextField(
           key: const ValueKey('history-search'),
-          controller: _text,
-          enabled: widget.enabled,
+          controller: textController,
+          focusNode: focusNode,
+          enabled: enabled,
           textInputAction: TextInputAction.search,
           style: theme.textTheme.bodyMedium,
           decoration: InputDecoration(
@@ -345,13 +403,13 @@ final class _HistorySearchFieldState
             suffixIcon: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (value.text.isNotEmpty || widget.keyword.isNotEmpty)
+                if (value.text.isNotEmpty || keyword.isNotEmpty)
                   IconButton(
                     tooltip: '清除搜索',
-                    onPressed: widget.enabled
+                    onPressed: enabled
                         ? () {
-                            _text.clear();
-                            _submit('');
+                            textController.clear();
+                            _submit(context, ref, '');
                           }
                         : null,
                     icon: const Icon(Icons.close, size: 20),
@@ -363,7 +421,9 @@ final class _HistorySearchFieldState
                   ),
                 IconButton(
                   tooltip: '搜索观看历史',
-                  onPressed: widget.enabled ? () => _submit(_text.text) : null,
+                  onPressed: enabled
+                      ? () => _submit(context, ref, textController.text)
+                      : null,
                   icon: const Icon(Icons.search, size: 20),
                   constraints: const BoxConstraints(
                     minWidth: 48,
@@ -374,7 +434,7 @@ final class _HistorySearchFieldState
               ],
             ),
           ),
-          onSubmitted: _submit,
+          onSubmitted: (value) => _submit(context, ref, value),
         ),
       ),
     );
