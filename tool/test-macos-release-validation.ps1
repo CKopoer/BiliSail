@@ -20,7 +20,7 @@ function Assert-Rejected([scriptblock]$Action) {
   if (!$rejected) { throw 'Unsafe macOS release validation input was accepted.' }
 }
 
-$valid = '<plist version="1.0"><dict><key>com.apple.security.app-sandbox</key><true/><key>com.apple.security.network.client</key><true/><key>com.apple.security.assets.pictures.read-write</key><true/><key>com.apple.security.files.user-selected.read-only</key><true/></dict></plist>'
+$valid = '<plist version="1.0"><dict><key>com.apple.security.app-sandbox</key><true/><key>com.apple.security.network.client</key><true/><key>com.apple.security.network.server</key><true/><key>com.apple.security.assets.pictures.read-write</key><true/><key>com.apple.security.files.user-selected.read-only</key><true/></dict></plist>'
 Confirm-MacOSReleaseEntitlements $valid
 Confirm-MacOSReleaseEntitlements (Get-Content (Join-Path $repoRoot 'macos/Runner/Release.entitlements') -Raw)
 foreach ($invalid in @(
@@ -35,6 +35,7 @@ foreach ($invalid in @(
   $valid.Replace('</dict>', '<key>com.apple.security.app-sandbox</key><true/></dict>'),
   $valid.Replace('</dict>', '<key>com.apple.security.network.server</key></dict>')
   $valid.Replace('<key>com.apple.security.assets.pictures.read-write</key><true/>', '')
+  $valid.Replace('<key>com.apple.security.network.server</key><true/>', '')
   $valid.Replace('<key>com.apple.security.files.user-selected.read-only</key><true/>', '')
   $valid.Replace('</dict>', '<key>com.apple.security.assets.pictures.read-write</key><true/></dict>')
 )) { Assert-Rejected { Confirm-MacOSReleaseEntitlements $invalid } }

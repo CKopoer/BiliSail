@@ -106,6 +106,9 @@ import '../features/settings/application/system_fonts_controller.dart';
 import '../features/settings/data/sqlite_settings_repository.dart';
 import 'platform_defaults.dart';
 import '../features/playback/application/playback_viewers_controller.dart';
+import '../features/playback/application/casting_controller.dart';
+import '../features/playback/data/api_cast_media_repository.dart';
+import '../features/playback/data/dlna_cast_repository.dart';
 
 class AppDependencies {
   AppDependencies._(
@@ -367,6 +370,17 @@ class AppDependencies {
         ),
         downloadSourceRepositoryProvider.overrideWithValue(downloadSources),
         sessionEpochProvider.overrideWithValue(() => requests.sessionEpoch),
+        castMediaRepositoryProvider.overrideWithValue(
+          ApiCastMediaRepository(
+            api,
+            requests,
+            credentials: () => session.appCredentials,
+          ),
+        ),
+        castDeviceRepositoryFactoryProvider.overrideWithValue(
+          DlnaCastRepository.new,
+        ),
+        castLifetimeTrackerProvider.overrideWithValue(requests.trackLifetime),
         playbackViewerRepositoryProvider.overrideWithValue(
           ApiPlaybackRepository(api, requests),
         ),

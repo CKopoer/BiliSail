@@ -4471,8 +4471,8 @@ void main() {
 
   for (final (content, target, width)
       in <(String, ContentPlaybackTarget?, double)>[
-        ('video', null, 740),
-        ('pgc', const PgcPlaybackTarget('12', cid: '123'), 740),
+        ('video', null, 780),
+        ('pgc', const PgcPlaybackTarget('12', cid: '123'), 780),
         ('live', const LivePlaybackTarget('12'), 480),
         ('offline', const OfflinePlaybackTarget('local-task'), 700),
       ]) {
@@ -4510,6 +4510,10 @@ void main() {
         findsOneWidget,
       );
       expect(find.byIcon(Icons.airplanemode_active), findsNothing);
+      expect(
+        find.byTooltip('投屏'),
+        content == 'video' || content == 'pgc' ? findsOneWidget : findsNothing,
+      );
       expect(
         tester.getSize(find.byKey(const Key('threshold-composer'))).width,
         greaterThanOrEqualTo(200),

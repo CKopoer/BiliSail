@@ -26,6 +26,8 @@
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于发现同一局域网中的电视并控制投屏播放。</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

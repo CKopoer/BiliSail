@@ -277,6 +277,52 @@ final class BiliApiClient {
     return value == null ? const {} : _map(value, endpoint);
   }
 
+  /// Fixed TV projection endpoint. App credentials never share Web cookies.
+  Future<Map<String, Object?>> requestCastJson(
+    Map<String, String> parameters, {
+    ApiRequestContext? context,
+  }) async {
+    const endpoint = 'cast_playurl';
+    final active = boundedReadContext(context);
+    final epoch = _sessionProvider?.sessionEpoch;
+    void check() => _checkDecodeContext(
+      active,
+      epoch,
+      active.deadline!,
+      endpoint: endpoint,
+    );
+    check();
+    final response = await _sendWithRetry(
+      Uri.https(
+        'api.bilibili.com',
+        '/x/tv/playurl',
+        AppProfile.sign(parameters, _clock()),
+      ),
+      endpoint,
+      const {'Accept': 'application/json', 'User-Agent': AppProfile.userAgent},
+      active,
+      epoch,
+      maxAttempts: 2,
+      maxBytes: 512 * 1024,
+    );
+    check();
+    if (response.body.length > 512 * 1024) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiFailure(
+        response.statusCode == 429
+            ? ApiFailureCategory.rateLimited
+            : response.statusCode == 401 || response.statusCode == 403
+            ? ApiFailureCategory.authentication
+            : ApiFailureCategory.http,
+        endpoint,
+        httpStatus: response.statusCode,
+      );
+    }
+    return _map(_decodeJson(response, endpoint), endpoint);
+  }
+
   /// PGC metadata shares the HTTP/session budget and the process decode gate.
   /// Large bodies move UTF-8, JSON and all DTO parsing together off the caller.
   Future<ApiPgcSeason> requestPgcSeason(
