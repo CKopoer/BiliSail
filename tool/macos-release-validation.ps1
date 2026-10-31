@@ -74,12 +74,23 @@ function Wait-MacOSSmokeSupervisor([System.Diagnostics.Process]$Process, [int]$T
   return $timedOut
 }
 
+function ConvertTo-MacOSStackTimestamp([object]$StartedUtc) {
+  # ConvertFrom-Json automatically materializes ISO dates as DateTime. A
+  # [string] parameter then formats them using the current culture and loses
+  # both the timezone and fractional seconds before Python can match a report.
+  if ($StartedUtc -is [DateTimeOffset]) { return $StartedUtc.ToUniversalTime().ToString('o') }
+  if ($StartedUtc -is [DateTime]) { return $StartedUtc.ToUniversalTime().ToString('o') }
+  if ($StartedUtc -is [string]) { return $StartedUtc }
+  return $null
+}
+
 function Save-MacOSNativeStack {
   param(
     [ValidateSet('crash', 'sample')][string]$Mode,
-    [int]$ProcessId, [string]$StartedUtc, [string]$Phase, [string]$WorkingDirectory,
+    [int]$ProcessId, [object]$StartedUtc, [string]$Phase, [string]$WorkingDirectory,
     [ValidateSet('BiliSail', 'pwsh')][string]$ProcessName = 'BiliSail'
   )
+  $StartedUtc = ConvertTo-MacOSStackTimestamp $StartedUtc
   if (!$IsMacOS -or $ProcessId -le 0 -or !$StartedUtc) { return }
   $start = [System.Diagnostics.ProcessStartInfo]::new()
   $start.FileName = 'python3'
