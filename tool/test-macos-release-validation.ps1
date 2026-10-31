@@ -98,9 +98,10 @@ try {
     $json = Get-Content -LiteralPath (Join-Path $smokeTestDirectory 'verify-deleted.result.json') -Raw
     $status = $json | ConvertFrom-Json
     if ($json -match 'private|https:|example.invalid') { throw "Raw child output leaked in scenario '$scenario'." }
-    if ($status.supervisorTimedOut -or $status.supervisorTimeoutSeconds -ne $launchLimit + $probeLimit + 20) {
+    if ($status.supervisorTimedOut -or $status.supervisorTimeoutSeconds -ne $launchLimit + $probeLimit + 30) {
       throw "The independent supervisor did not preserve the phase budgets in '$scenario'."
     }
+    if ($status.processId -le 0 -or ![DateTimeOffset]::Parse($status.processStartedUtc)) { throw 'Owned native process identity was not recorded.' }
     switch ($scenario) {
       { $_ -in @('slow-launch', 'flood', 'long-line-recovery') } {
         if ($failure -or $status.timedOut -or !$status.acknowledged -or !$status.outputDrained -or $status.exitCode -ne 0) {

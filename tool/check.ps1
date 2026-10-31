@@ -43,6 +43,7 @@ try {
     & (Join-Path $PSScriptRoot 'test-windows-installers.ps1')
     & (Join-Path $PSScriptRoot 'test-windows-msix-identity.ps1')
     & (Join-Path $PSScriptRoot 'test-macos-release-validation.ps1')
+    Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_macos_*.py')
     & (Join-Path $PSScriptRoot 'test-ios-package-validation.ps1')
   }
   # A cold Windows SDK can emit pub bootstrap output before the machine JSON.

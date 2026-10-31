@@ -29,7 +29,7 @@ macOS 使用传统系统 Keychain，不降级为明文文件或数据库。Andro
 
 每个子进程分别限制原生启动与 Dart 探测执行：从创建进程到收到第一条 `dart-entry` 最多 180 秒；收到该标记后最多再运行 60 秒，后续重复标记不能重置时限。必须退出码为 0、确认到达 Dart 入口，且返回匹配阶段和 UUID 的完整 stdout 确认行；只看到进程启动、退出码 0 或磁盘文件存在均不算通过。每个凭据步骤另有 10 秒上限，原生调用挂起时退出失败，不重放结果不明的写入。失败时终止本次创建的子进程，并用相同 bundle 的 `cleanup` 阶段删除本次前缀（含 bootstrap／recommendation 辅助前缀）；清理失败仍保持构建失败并明确警告，不自动重试真实账号写操作。进程终止和输出排空各有独立的 5 秒上限，不能在超时后的清理中无限等待。
 
-2026-10-31 起，上述阶段在独立 [worker](../../tool/macos-smoke-worker.ps1) 中执行，父进程不读取输出管道，只等待 worker 退出；硬限额为启动预算加执行预算再加 20 秒（默认 260 秒），到期终止本次 worker 及其子进程，终止等待另限 5 秒。签名校验、各阶段确认和失败阻断仍全部保留。Actions 的 macOS 构建／打包步骤另限 30 分钟，整个 macOS job 限 40 分钟；其他目标沿用 90 分钟 job 上限。
+2026-10-31 起，上述阶段在独立 [worker](../../tool/macos-smoke-worker.ps1) 中执行，父进程不读取输出管道，只等待 worker 退出；硬限额为启动预算加执行预算再加 30 秒（默认 270 秒，包含线程采样及终止／排空余量），到期终止本次 worker 及其子进程，终止等待另限 5 秒。签名校验、各阶段确认和失败阻断仍全部保留。Actions 的 macOS 构建／打包步骤另限 30 分钟，整个 macOS job 限 40 分钟；其他目标沿用 90 分钟 job 上限。
 
 [Dart 探测逻辑](../../lib/app/release_smoke.dart) 只接受显式 `--bilisail-release-smoke <phase> <32位UUID>`，由 [正常入口](../../lib/main.dart) 在 macOS 路由。Flutter macOS 默认将原生进程参数传给 Dart 入口，见 [FlutterDartProject](https://api.flutter.dev/macos-embedder/_flutter_dart_project_8h_source.html)。普通启动不启用探测。`startup` 注入内存 SQLite、独立的空 bootstrap 会话凭据和 recommendation 旧 App 凭据前缀，不恢复真实账号、不修改用户数据库；网络页面仍可请求公开内容，网络成功不是该探测的验收条件。
 
@@ -84,6 +84,18 @@ x64 日志中，`startup`／`write`／`read-delete`／`verify-deleted` 从创建
 本机 Windows 的定向回归覆盖原 10 个真实子进程场景，以及未换行输出超时、超长行后的恢复／伪确认拒绝、EOF 伪确认拒绝、运行中焦点快照、外层限时回收 worker 和其子进程；另用同步完成的读取器直接检查单轮工作量和保留内存的上限。本轮未修改原生键盘事件或播放器行为；当次空格事件路径的具体阻塞点仍需 macOS 进程栈或可重复现场确认。
 
 Windows x64 / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过格式、静态分析、打包边界及 4506 项 Dart／Flutter 测试（根 3752、API 499、播放器 105、弹幕 145、封装 5）。13 项 Windows 符号链接用例因权限不足、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。14 个真实子进程监督场景通过；四份 PowerShell 脚本语法、两份工作流的 actionlint 1.7.12、13 个本地文档链接和 `git diff --check` 通过。五份锁文件未变化。本轮没有 macOS 构建、实机或新脚本的远端 CI 验证，独立 worker、收紧的 Actions 上限及取消诊断上传仍需在 macOS runner 实际执行确认。
+
+## CI 原生崩溃与线程栈采集（2026-10-31）
+
+提交 `bf70982` 的 [x64 任务](https://github.com/CKopoer/BiliSail/actions/runs/41177953226/job/124471015892) 完成编译和签名后，`startup.result.json` 记录进程在 7277 毫秒退出，`exitCode=139`，`timedOut=false`、`supervisorTimedOut=false`，最后阶段为 `first-frame`。同轮其他五端和离线检查通过，独立 `cleanup` 也通过。139 符合原生 SIGSEGV 的退出码表现，但仅凭 JSON 无法确认崩溃模块。
+
+后续提交 `d0e0f9b` 的 [x64 任务](https://github.com/CKopoer/BiliSail/actions/runs/41179130810/job/124474660744) 通过两轮播放窗空格检查，但第一轮检查通过到窗口回收后的下一次激活耗时约 43 秒，随后在第二轮 `passed` 后触发探测超时。cleanup 到原生 `application` 和 Dart 入口分别约 99 秒、151 秒。这次是执行超时，不能与前一次原生崩溃合并为已确认的同一原因。
+
+[采集器](../../tool/macos_crash_diagnostics.py) 在 macOS 原生信号异常退出后，最多等待 20 秒，从当前用户和系统的 `DiagnosticReports` 目录查找匹配 BiliSail 名称、本次进程 PID 和启动时间的 `.ips`／`.crash`。超时终止前另对仍存活的本次进程调用系统 `sample`，采样 1 秒，工具最多执行 8 秒；外部采集进程总等待限 25 秒。采集失败或无报告均有明确状态，仍保留原探测失败，不重试、跳过或放宽验收。
+
+原始报告由系统持有，不复制、不上传；线程采样的原文仅在采集器内存中解析。输出仅保留异常类型／信号、受限数量的线程／栈帧、模块文件名、代码偏移与经过字符检查的符号名。进程参数、账号／网络输出、应用自定义日志、设备／用户标识和完整路径不进入产物。报告最大 8 MiB，每个目录最多扫描 256 个候选、检查最新 64 个，每份输出最多 32 线程、每线程 96 帧。Actions 仅增加上传脱敏 `*.crash.json`／`*.sample.json`，不上传原始 `.ips`、`.crash` 或 sample 文本。
+
+标准库单元测试使用合成双 JSON IPS、旧文本报告和 sample 栈，覆盖错误 PID／名称／时间拒绝、损坏数据、容量上限、敏感字段剔除、受限等待及原子发布；已接入根检查。真实 runner 栈和修复结论待本次诊断构建补充。
 
 ## 旧数据与升级单独验收
 
