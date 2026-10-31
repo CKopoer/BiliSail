@@ -361,7 +361,10 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: BiliSail-${{ matrix.target }}-smoke-diagnostics
-          path: artifacts/${{ matrix.target }}/validation/*.result.json
+          path: |
+            artifacts/${{ matrix.target }}/validation/*.result.json
+            artifacts/${{ matrix.target }}/validation/*.crash.json
+            artifacts/${{ matrix.target }}/validation/*.sample.json
           if-no-files-found: warn
           retention-days: 14
 
