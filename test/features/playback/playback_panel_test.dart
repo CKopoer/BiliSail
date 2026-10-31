@@ -120,6 +120,26 @@ void main() {
           final completeButtons = buttons();
           expect(completeButtons, containsAll(['音量', '播放配置', '关闭弹幕']));
           expect(find.byTooltip('发送弹幕'), findsNothing);
+          void expectRateAtTop() {
+            final rate = find.byTooltip('播放速度');
+            expect(rate, session.isLive ? findsNothing : findsOneWidget);
+            expect(
+              find.descendant(
+                of: find.byKey(const ValueKey('player-control-title-layer')),
+                matching: rate,
+              ),
+              session.isLive ? findsNothing : findsOneWidget,
+            );
+            expect(
+              find.descendant(
+                of: find.byKey(const ValueKey('player-controls')),
+                matching: rate,
+              ),
+              findsNothing,
+            );
+          }
+
+          expectRateAtTop();
           await resize(320);
           expect(
             find.byKey(const ValueKey('small-window-control-row')),
@@ -129,6 +149,29 @@ void main() {
           expect(find.byTooltip('发送弹幕'), findsOneWidget);
           expect(find.byTooltip('更多播放选项'), findsNothing);
           expect(find.byIcon(Icons.more_horiz), findsNothing);
+          expectRateAtTop();
+          final fullscreenY = tester.getCenter(find.byTooltip('全屏（F）')).dy;
+          final controls = find.descendant(
+            of: find.byKey(const ValueKey('player-controls')),
+            matching: find.byType(Tooltip),
+          );
+          for (var i = 0; i < controls.evaluate().length; i++) {
+            expect(
+              tester.getCenter(controls.at(i)).dy,
+              closeTo(fullscreenY, .1),
+            );
+          }
+          if (!session.isLive) {
+            await tester.tap(find.byTooltip('播放速度'));
+            await tester.pumpAndSettle();
+            await tester.pump(const Duration(seconds: 6));
+            await tester.tap(
+              find.widgetWithText(PopupMenuItem<double>, '3.0x'),
+            );
+            await tester.pumpAndSettle();
+            expect(session.snapshots.value.rate, 3);
+            expect(find.text('3.0x'), findsOneWidget);
+          }
           expect(engine.opens, 1);
           expect(engine.maxSurfaces, 1);
           expect(tester.takeException(), isNull);
@@ -4715,12 +4758,13 @@ void main() {
       expect(tester.getSize(field).width, lessThan(largeWidth));
       expect(tester.getSize(field).width, greaterThanOrEqualTo(200));
       final baseline = tester.getCenter(find.byTooltip('全屏（F）')).dy;
-      for (final tooltip in ['播放（空格）', '关闭弹幕', '清晰度', '播放速度', '音量']) {
+      for (final tooltip in ['播放（空格）', '关闭弹幕', '清晰度', '音量']) {
         expect(
           tester.getCenter(find.byTooltip(tooltip)).dy,
           closeTo(baseline, .1),
         );
       }
+      expect(tester.getCenter(find.byTooltip('播放速度')).dy, lessThan(baseline));
       expect(tester.getCenter(field).dy, closeTo(baseline, .1));
       for (final label in ['1080P', '1.0x', '00:45 / 03:00']) {
         expect(
@@ -5046,6 +5090,7 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.text('清晰度 720P'), findsOneWidget);
           expect(find.text('清晰度 1080P'), findsOneWidget);
+          expect(find.text('播放速度 3.0x'), findsNothing);
         } else {
           expect(find.byTooltip('更多播放选项'), findsNothing);
           await tester.tap(find.byTooltip('清晰度'));
@@ -5058,17 +5103,12 @@ void main() {
             find.widgetWithText(PopupMenuItem<int>, '1080P'),
             findsOneWidget,
           );
-          await tester.tapAt(const Offset(1, 1));
-          await tester.pumpAndSettle();
-          await tester.tap(find.byTooltip('播放速度'));
-          await tester.pumpAndSettle();
         }
-        final rate = fullscreen
-            ? find.widgetWithText(
-                CheckedPopupMenuItem<VoidCallback>,
-                '播放速度 3.0x',
-              )
-            : find.widgetWithText(PopupMenuItem<double>, '3.0x');
+        await tester.tapAt(const Offset(1, 1));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('播放速度'));
+        await tester.pumpAndSettle();
+        final rate = find.widgetWithText(PopupMenuItem<double>, '3.0x');
         await tester.ensureVisible(rate);
         await tester.tap(rate);
         await tester.pumpAndSettle();
@@ -5416,7 +5456,7 @@ void main() {
             );
             await mouse.addPointer(location: _surfacePoint(tester));
             await tester.pump();
-            final tooltip = compact
+            final tooltip = compact && menu != 'rate'
                 ? '更多播放选项'
                 : switch (menu) {
                     'quality' => '清晰度',
@@ -5431,7 +5471,7 @@ void main() {
             await tester.pump(const Duration(milliseconds: 300));
             final label = switch (menu) {
               'quality' => compact ? '清晰度 720P' : '720P',
-              'rate' => compact ? '播放速度 3.0x' : '3.0x',
+              'rate' => '3.0x',
               'subtitle' => '中文 · AI',
               _ => compact ? '语音 English · AI 翻译' : 'English · AI 翻译',
             };

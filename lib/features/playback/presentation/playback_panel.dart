@@ -1187,7 +1187,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
       timeLabel: session.isLive
           ? '直播中'
           : '${_time(snapshot.duration)} / ${_time(snapshot.duration)}',
-      rateLabel: session.isLive ? null : '${snapshot.rate}x',
       qualityLabel:
           media != null && (session.isLive || media.qualities.length > 1)
           ? session.isLive
@@ -1241,7 +1240,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
 
   Widget _buildPlayer(BuildContext context) {
     final session = widget.session;
-    final appTextStyle = Theme.of(context).textTheme.bodyMedium;
     return InputProtection(
       playerSurface: true,
       activationFocus: _focusNode,
@@ -1565,6 +1563,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                     viewers: viewers,
                                     session: session,
                                     onSettings: _openSettings,
+                                    onMenuChanged: _onControlsMenuChanged,
                                   ),
                                 ),
                               ),
@@ -1857,24 +1856,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                         hoverRegion: 'bar',
                                         retainDynamicPress: true,
                                         child: Theme(
-                                          data:
-                                              ThemeData(
-                                                brightness: Brightness.dark,
-                                                useMaterial3: true,
-                                                fontFamily:
-                                                    appTextStyle?.fontFamily,
-                                                fontFamilyFallback: appTextStyle
-                                                    ?.fontFamilyFallback,
-                                              ).copyWith(
-                                                colorScheme:
-                                                    ColorScheme.fromSeed(
-                                                      seedColor: const Color(
-                                                        0xffdf6589,
-                                                      ),
-                                                      brightness:
-                                                          Brightness.dark,
-                                                    ),
-                                              ),
+                                          data: _playerControlsTheme(context),
                                           child: Container(
                                             key: const ValueKey(
                                               'player-controls',
@@ -2385,35 +2367,6 @@ class _ControlBar extends StatelessWidget {
           ),
           layout.qualityWidth,
         ),
-      if (!session.isLive)
-        slot(
-          PopupMenuButton<double>(
-            tooltip: '播放速度',
-            initialValue: snapshot.rate,
-            onOpened: () => onMenuChanged(true),
-            onCanceled: () => onMenuChanged(false),
-            onSelected: (rate) {
-              onMenuChanged(false);
-              unawaited(session.setRate(rate));
-            },
-            itemBuilder: (_) => [
-              for (final rate in PlaybackRates.values)
-                PopupMenuItem(value: rate, child: Text('${rate}x')),
-            ],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Center(
-                child: Text(
-                  '${snapshot.rate}x',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: Colors.white),
-                ),
-              ),
-            ),
-          ),
-          layout.rateWidth,
-        ),
       if (session.subtitleTracks.isNotEmpty) slot(subtitleButton),
       if (session.voiceTracks.isNotEmpty)
         slot(
@@ -2451,31 +2404,29 @@ class _ControlBar extends StatelessWidget {
           // The inline instance retains local widget state while the dialog
           // shares the player's draft and existing feature send controller.
           if (composer != null) ExcludeFocus(child: Offstage(child: composer)),
+          Align(alignment: Alignment.centerLeft, child: time),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               slot(play),
               if (showNext)
                 slot(_NextButton(session: session, commands: pageCommands)),
               Expanded(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: FittedBox(fit: BoxFit.scaleDown, child: time),
+                child: _ScrollablePlayerTools(
+                  children: [
+                    if (composer != null)
+                      slot(
+                        IconButton(
+                          tooltip: '发送弹幕',
+                          onPressed: () => unawaited(onOpenComposer(context)),
+                          icon: const Icon(Icons.edit_outlined, size: 20),
+                        ),
+                      ),
+                    ...secondary,
+                  ],
                 ),
               ),
               slot(fullscreenButton),
-            ],
-          ),
-          _ScrollablePlayerTools(
-            children: [
-              if (composer != null)
-                slot(
-                  IconButton(
-                    tooltip: '发送弹幕',
-                    onPressed: () => unawaited(onOpenComposer(context)),
-                    icon: const Icon(Icons.edit_outlined, size: 20),
-                  ),
-                ),
-              ...secondary,
             ],
           ),
         ],
@@ -2660,13 +2611,6 @@ class _ControlBar extends StatelessWidget {
             ),
         ],
       ],
-      if (!session.isLive) const PopupMenuDivider(),
-      for (final rate in session.isLive ? <double>[] : PlaybackRates.values)
-        CheckedPopupMenuItem(
-          checked: rate == snapshot.rate,
-          value: () => unawaited(session.setRate(rate)),
-          child: Text('播放速度 ${rate}x'),
-        ),
       if (session.subtitleTracks.isNotEmpty) ...[
         const PopupMenuDivider(),
         CheckedPopupMenuItem(
@@ -2816,7 +2760,6 @@ class _VolumeSliderEntryState extends State<_VolumeSliderEntry> {
 typedef _ControlsLayoutInputs = ({
   double width,
   String timeLabel,
-  String? rateLabel,
   String? qualityLabel,
   bool hasComposer,
   bool hasSubtitles,
@@ -2847,16 +2790,12 @@ class _ControlsLayout {
     }
 
     timeWidth = textWidth(inputs.timeLabel, 11);
-    rateWidth = switch (inputs.rateLabel) {
-      final label? => textWidth(label, 12) + 16,
-      null => 0,
-    };
     qualityWidth = switch (inputs.qualityLabel) {
       final label? => textWidth(label, 12) + 16,
       null => 0,
     };
     composerMinWidth = 200 * inputs.textScaler.scale(12) / 12;
-    // Settings, listening and casting live in the top bar.
+    // Settings, listening, casting and playback rate live in the top bar.
     compact =
         inputs.width <
         buttonWidth *
@@ -2865,14 +2804,13 @@ class _ControlsLayout {
                     (inputs.hasSubtitles ? 1 : 0) +
                     (inputs.hasVoices ? 1 : 0)) +
             timeWidth +
-            rateWidth +
             qualityWidth +
             12 +
             (inputs.hasComposer ? composerMinWidth : 0);
   }
   final _ControlsLayoutInputs inputs;
   static const buttonWidth = 40.0;
-  late final double timeWidth, rateWidth, qualityWidth, composerMinWidth;
+  late final double timeWidth, qualityWidth, composerMinWidth;
   late final bool compact;
 }
 
@@ -2993,6 +2931,62 @@ PlaybackViewerRequest? _viewerRequest(PlaybackSession session) {
   );
 }
 
+ThemeData _playerControlsTheme(BuildContext context) {
+  final text = Theme.of(context).textTheme.bodyMedium;
+  return ThemeData(
+    brightness: Brightness.dark,
+    useMaterial3: true,
+    fontFamily: text?.fontFamily,
+    fontFamilyFallback: text?.fontFamilyFallback,
+  ).copyWith(
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: const Color(0xffdf6589),
+      brightness: Brightness.dark,
+    ),
+  );
+}
+
+class _PlayerRateButton extends StatelessWidget {
+  const _PlayerRateButton({required this.session, required this.onMenuChanged});
+  final PlaybackSession session;
+  final ValueChanged<bool> onMenuChanged;
+
+  @override
+  Widget build(BuildContext context) => Theme(
+    data: _playerControlsTheme(context),
+    child: PlaybackSnapshotBuilder(
+      snapshots: session.snapshots,
+      select: (snapshot) => snapshot.rate,
+      builder: (context, snapshot) => PopupMenuButton<double>(
+        tooltip: '播放速度',
+        initialValue: snapshot.rate,
+        onOpened: () => onMenuChanged(true),
+        onCanceled: () => onMenuChanged(false),
+        onSelected: (rate) {
+          onMenuChanged(false);
+          unawaited(session.setRate(rate));
+        },
+        itemBuilder: (_) => [
+          for (final rate in PlaybackRates.values)
+            PopupMenuItem(value: rate, child: Text('${rate}x')),
+        ],
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '${snapshot.rate}x',
+                style: const TextStyle(fontSize: 12, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 class _PlayerTopBar extends StatelessWidget {
   const _PlayerTopBar({
     required this.navigation,
@@ -3003,6 +2997,7 @@ class _PlayerTopBar extends StatelessWidget {
     required this.viewers,
     required this.session,
     required this.onSettings,
+    required this.onMenuChanged,
   });
   final ValueListenable<PlaybackNavigation?> navigation;
   final bool showNavigation;
@@ -3012,18 +3007,24 @@ class _PlayerTopBar extends StatelessWidget {
   final String? viewers;
   final PlaybackSession session;
   final Future<void> Function(int) onSettings;
+  final ValueChanged<bool> onMenuChanged;
 
-  Widget _action(String tooltip, IconData icon, VoidCallback onPressed) =>
-      SizedBox(
-        width: _ControlsLayout.buttonWidth,
-        height: 40,
-        child: IconButton(
-          tooltip: tooltip,
-          color: Colors.white,
-          onPressed: onPressed,
-          icon: Icon(icon, size: 20),
-        ),
-      );
+  Widget _action(
+    String tooltip,
+    IconData icon,
+    VoidCallback onPressed, {
+    Key? key,
+  }) => SizedBox(
+    width: _ControlsLayout.buttonWidth,
+    height: 40,
+    child: IconButton(
+      key: key,
+      tooltip: tooltip,
+      color: Colors.white,
+      onPressed: onPressed,
+      icon: Icon(icon, size: 20),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => Container(
@@ -3038,46 +3039,10 @@ class _PlayerTopBar extends StatelessWidget {
     constraints: const BoxConstraints(minHeight: 52),
     child: ValueListenableBuilder<PlaybackNavigation?>(
       valueListenable: navigation,
-      builder: (context, actions, _) => Row(
-        children: [
-          if (showNavigation && (actions?.showInPlayer ?? false)) ...[
-            IconButton(
-              key: const ValueKey('player-back'),
-              tooltip: '返回',
-              color: Colors.white,
-              onPressed: fullScreen
-                  ? onExitFullScreen
-                  : actions == null
-                  ? null
-                  : () => onNavigate(actions.onBack),
-              icon: const Icon(Icons.arrow_back_rounded),
-            ),
-            IconButton(
-              key: const ValueKey('player-home'),
-              tooltip: '回到主页',
-              color: Colors.white,
-              onPressed: actions == null
-                  ? null
-                  : () => onNavigate(actions.onHome),
-              icon: const Icon(Icons.home_outlined),
-            ),
-          ],
-          if (viewers != null)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text(
-                  '$viewers 人正在看',
-                  key: const ValueKey('player-online-viewers'),
-                  textAlign: TextAlign.end,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ),
-            )
-          else
-            const Spacer(),
+      builder: (context, actions, _) {
+        final showNavigationButtons =
+            showNavigation && (actions?.showInPlayer ?? false);
+        final buttons = <Widget>[
           if (castRequestFor(session) != null)
             _action(
               '投屏',
@@ -3090,12 +3055,74 @@ class _PlayerTopBar extends StatelessWidget {
               Icons.headphones_rounded,
               () => unawaited(session.setAudioOnly(true)),
             ),
+          if (!session.isLive)
+            SizedBox(
+              width: _ControlsLayout.buttonWidth,
+              height: 40,
+              child: _PlayerRateButton(
+                session: session,
+                onMenuChanged: onMenuChanged,
+              ),
+            ),
           _action('弹幕配置', Icons.tune, () => unawaited(onSettings(1))),
           if (!session.isLive)
             _action('字幕样式', Icons.text_fields, () => unawaited(onSettings(2))),
           _action('播放配置', BiliIcons.settings, () => unawaited(onSettings(0))),
-        ],
-      ),
+        ];
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final navigationWidth = showNavigationButtons
+                ? 2 * _ControlsLayout.buttonWidth
+                : 0;
+            final toolsWidth = (constraints.maxWidth - navigationWidth).clamp(
+              0.0,
+              buttons.length * _ControlsLayout.buttonWidth,
+            );
+            return Row(
+              children: [
+                if (showNavigationButtons) ...[
+                  _action(
+                    '返回',
+                    Icons.arrow_back_rounded,
+                    fullScreen
+                        ? onExitFullScreen
+                        : () {
+                            if (actions != null) onNavigate(actions.onBack);
+                          },
+                    key: const ValueKey('player-back'),
+                  ),
+                  _action('回到主页', Icons.home_outlined, () {
+                    if (actions != null) onNavigate(actions.onHome);
+                  }, key: const ValueKey('player-home')),
+                ],
+                if (viewers != null)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        '$viewers 人正在看',
+                        key: const ValueKey('player-online-viewers'),
+                        textAlign: TextAlign.end,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  const Spacer(),
+                SizedBox(
+                  width: toolsWidth,
+                  child: _ScrollablePlayerTools(children: buttons),
+                ),
+              ],
+            );
+          },
+        );
+      },
     ),
   );
 }
