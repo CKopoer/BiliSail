@@ -2397,6 +2397,16 @@ class _ControlBar extends StatelessWidget {
     ];
     if (layout.compact && !fullScreen) {
       final showNext = layout.inputs.hasNextButton;
+      // Keep sending and toggling danmaku visible beside the complete time
+      // label, even with long durations or enlarged text.
+      final visibleToolCount = composer != null ? 2 : 1;
+      final timeWidth = layout.timeWidth.clamp(
+        0.0,
+        (layout.inputs.width -
+                _ControlsLayout.buttonWidth *
+                    (2 + (showNext ? 1 : 0) + visibleToolCount))
+            .clamp(0.0, double.infinity),
+      );
       return Column(
         key: const ValueKey('small-window-control-row'),
         mainAxisSize: MainAxisSize.min,
@@ -2404,13 +2414,21 @@ class _ControlBar extends StatelessWidget {
           // The inline instance retains local widget state while the dialog
           // shares the player's draft and existing feature send controller.
           if (composer != null) ExcludeFocus(child: Offstage(child: composer)),
-          Align(alignment: Alignment.centerLeft, child: time),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               slot(play),
               if (showNext)
                 slot(_NextButton(session: session, commands: pageCommands)),
+              SizedBox(
+                width: timeWidth,
+                height: 40,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: time,
+                ),
+              ),
               Expanded(
                 child: _ScrollablePlayerTools(
                   children: [
