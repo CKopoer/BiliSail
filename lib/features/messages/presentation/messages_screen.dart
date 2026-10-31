@@ -6,6 +6,7 @@ import '../../../core/platform/external_links.dart';
 import '../../../core/presentation/page_back_scope.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/user.dart';
+import '../../../shared/ui/image_viewer.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/page_tab_style.dart';
 import '../../../shared/ui/page_toolbar.dart';
@@ -809,12 +810,19 @@ class _PrivateImageState extends State<_PrivateImage> {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 8),
-    child: Image(
-      image: _image,
-      width: 220,
-      height: 180,
-      fit: BoxFit.contain,
-      errorBuilder: (_, _, _) => const Text('图片暂时无法加载'),
+    child: Semantics(
+      label: '查看私信图片',
+      button: true,
+      child: InkWell(
+        onTap: () => showImageViewer(context, [widget.url], 0),
+        child: Image(
+          image: _image,
+          width: 220,
+          height: 180,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => const Text('图片暂时无法加载'),
+        ),
+      ),
     ),
   );
 }
