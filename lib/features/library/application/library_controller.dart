@@ -17,6 +17,7 @@ final historyProvider =
 
 final class HistoryState {
   const HistoryState({
+    this.keyword = '',
     this.items = const AsyncLoading(),
     this.hasMore = false,
     this.loadingMore = false,
@@ -26,11 +27,13 @@ final class HistoryState {
     this.writeUncertain = false,
   });
   final AsyncValue<List<WatchHistoryEntry>> items;
+  final String keyword;
   final bool hasMore, loadingMore, limitReached;
   final Object? pageError;
   final bool writeBusy, writeUncertain;
 
   HistoryState withWrite({required bool busy, bool? uncertain}) => HistoryState(
+    keyword: keyword,
     items: items,
     hasMore: hasMore,
     pageError: pageError,
@@ -100,6 +103,7 @@ final class HistoryController extends Notifier<HistoryState> {
     _emptyPages = items.length == beforeCount ? _emptyPages + 1 : 0;
     final limit = items.length >= maxEntries;
     state = HistoryState(
+      keyword: state.keyword,
       items: AsyncData(items),
       hasMore: page.hasMore && !limit,
       limitReached: limit,
@@ -109,7 +113,14 @@ final class HistoryController extends Notifier<HistoryState> {
     );
   }
 
+  Future<void> search(String keyword) => _reload(keyword.trim());
+
   Future<void> refresh() async {
+    if (!ref.mounted) return;
+    await _reload(state.keyword);
+  }
+
+  Future<void> _reload(String keyword) async {
     if (!ref.mounted || state.writeBusy) return;
     final uncertain = state.writeUncertain;
     final generation = ++_generation;
@@ -121,11 +132,11 @@ final class HistoryController extends Notifier<HistoryState> {
     _emptyPages = 0;
     _scope = ref.read(libraryRepositoryProvider).accountScope;
     _epoch = ref.read(sessionEpochProvider)();
-    state = HistoryState(writeUncertain: uncertain);
+    state = HistoryState(keyword: keyword, writeUncertain: uncertain);
     try {
       final page = await ref
           .read(libraryRepositoryProvider)
-          .loadHistory(cancellation: cancellation);
+          .loadHistory(keyword: keyword, cancellation: cancellation);
       if (!_current(generation, cancellation)) return;
       _validateCursor(page);
       _accept(page, _merge(const [], page.items), 0);
@@ -135,6 +146,7 @@ final class HistoryController extends Notifier<HistoryState> {
         return;
       }
       state = HistoryState(
+        keyword: keyword,
         items: AsyncError(error, stack),
         writeUncertain: uncertain,
       );
@@ -155,6 +167,7 @@ final class HistoryController extends Notifier<HistoryState> {
     if (!_current(generation, cancellation)) return;
     _emptyPages = state.pageError == null ? _emptyPages : 0;
     state = HistoryState(
+      keyword: state.keyword,
       items: AsyncData(items),
       hasMore: true,
       loadingMore: true,
@@ -162,7 +175,11 @@ final class HistoryController extends Notifier<HistoryState> {
     try {
       final page = await ref
           .read(libraryRepositoryProvider)
-          .loadHistory(cursor: _cursor, cancellation: cancellation);
+          .loadHistory(
+            keyword: state.keyword,
+            cursor: _cursor,
+            cancellation: cancellation,
+          );
       if (!_current(generation, cancellation)) return;
       _validateCursor(page);
       _accept(page, _merge(items, page.items), items.length);
@@ -172,6 +189,7 @@ final class HistoryController extends Notifier<HistoryState> {
         return;
       }
       state = HistoryState(
+        keyword: state.keyword,
         items: AsyncData(items),
         hasMore: true,
         pageError: error,
@@ -219,10 +237,14 @@ final class HistoryController extends Notifier<HistoryState> {
         _cursor = null;
         _seenCursors.clear();
         _emptyPages = 0;
-        state = const HistoryState(items: AsyncData([]));
+        state = HistoryState(
+          keyword: state.keyword,
+          items: const AsyncData([]),
+        );
       } else {
         final items = state.items.requireValue;
         state = HistoryState(
+          keyword: state.keyword,
           items: AsyncData(
             List.unmodifiable(
               items.where((entry) => entry.deletionKey != deletionKey),

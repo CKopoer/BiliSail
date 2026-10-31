@@ -89,6 +89,50 @@ final class _Transport implements ApiTransport, ApiFormTransport {
 }
 
 void main() {
+  test(
+    'search forwards keyword and page while keeping enriched history metadata',
+    () async {
+      final transport = _Transport(
+        (uri) => {
+          'code': 0,
+          'data': uri.path.endsWith('/search')
+              ? {
+                  'list': [history('BV1234567890')],
+                }
+              : detail('BV1234567890'),
+        },
+      );
+      final requests = ApiRequests();
+      final api = BiliApiClient(
+        transport: transport,
+        sessionProvider: requests,
+      );
+      addTearDown(api.close);
+      final repository = ApiLibraryRepository(
+        WatchHistoryClient(api),
+        requests,
+        accountScope: () => 'user:1',
+      );
+      final page = await repository.loadHistory(
+        keyword: '关键词',
+        cursor: '2',
+        cancellation: RequestCancellation(),
+      );
+      expect(transport.requests.first.path, '/x/web-interface/history/search');
+      expect(transport.requests.first.queryParameters, {
+        'keyword': '关键词',
+        'pn': '2',
+        'business': 'all',
+      });
+      expect(page.nextCursor, '3');
+      expect(page.items.single.video.playCount, 12345);
+      expect(
+        page.items.single.location.toString(),
+        '/video/BV1234567890?cid=1',
+      );
+      expect(page.items.single.deletionKey, 'archive_9007199254740997');
+    },
+  );
   for (final clear in [false, true]) {
     for (final change in [
       'none',

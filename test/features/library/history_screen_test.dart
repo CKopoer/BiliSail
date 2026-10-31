@@ -18,6 +18,80 @@ import 'package:go_router/go_router.dart';
 
 void main() {
   for (final config in [
+    (width: 320.0, scale: 2.0, platform: TargetPlatform.android),
+    (width: 390.0, scale: 1.0, platform: TargetPlatform.iOS),
+    (width: 1280.0, scale: 1.0, platform: TargetPlatform.windows),
+  ]) {
+    testWidgets(
+      'history search submits, clears and fits ${config.platform} / ${config.width}',
+      (tester) async {
+        tester.view.physicalSize = Size(config.width, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = _HistoryRepository(_entries());
+        await _pump(
+          tester,
+          repository,
+          platform: config.platform,
+          scale: config.scale,
+          showHeading: false,
+        );
+        final field = find.byKey(const ValueKey('history-search'));
+        final clear = find.byKey(const ValueKey('history-clear'));
+        final available = config.width - (config.width < 600 ? 8 : 40);
+        expect(
+          tester.getSize(field).width,
+          closeTo(config.width >= 840 * config.scale ? 320 : available, 1),
+        );
+        if (config.width < 840 * config.scale) {
+          expect(
+            tester.getRect(field).top,
+            greaterThanOrEqualTo(tester.getRect(clear).bottom),
+          );
+        } else {
+          expect(
+            (tester.getCenter(field).dy - tester.getCenter(clear).dy).abs(),
+            lessThan(1),
+          );
+        }
+        await tester.enterText(field, '  Flutter  ');
+        await tester.pump();
+        expect(repository.keywords, ['']);
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await tester.pumpAndSettle();
+        expect(repository.keywords, ['', 'Flutter']);
+        expect(find.byType(VideoCard), findsOneWidget);
+        expect(tester.widget<TextField>(field).controller!.text, 'Flutter');
+        final container = ProviderScope.containerOf(tester.element(field));
+        await container.read(historyProvider.notifier).refresh();
+        await tester.pumpAndSettle();
+        expect(repository.keywords.last, 'Flutter');
+        expect(tester.widget<TextField>(field).controller!.text, 'Flutter');
+        await tester.tap(find.byTooltip('清除搜索'));
+        await tester.pumpAndSettle();
+        expect(repository.keywords.last, '');
+        expect(find.byType(VideoCard), findsNWidgets(2));
+        expect(tester.widget<TextField>(field).controller!.text, '');
+        await tester.enterText(field, '不存在');
+        await tester.pump();
+        await tester.tap(find.byTooltip('搜索观看历史'));
+        await tester.pumpAndSettle();
+        expect(repository.keywords.last, '不存在');
+        expect(find.text('未找到相关观看记录，试试其他关键词'), findsOneWidget);
+        expect(find.byType(VideoCard), findsNothing);
+        await tester.tap(clear);
+        await tester.pumpAndSettle();
+        expect(find.textContaining('全部云端观看历史'), findsOneWidget);
+        await tester.tap(find.text('取消'));
+        await tester.pumpAndSettle();
+        expect(repository.clears, 0);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+  for (final config in [
     (width: 320.0, platform: TargetPlatform.android, scale: 2.0),
     (width: 390.0, platform: TargetPlatform.iOS, scale: 1.0),
     (width: 360.0, platform: TargetPlatform.windows, scale: 2.0),
@@ -124,7 +198,9 @@ void main() {
         );
         expect(
           tester.getRect(find.byType(VideoCard).first).top -
-              tester.getRect(clear).bottom,
+              tester
+                  .getRect(find.byKey(const ValueKey('history-search')))
+                  .bottom,
           closeTo(8, 1),
         );
         if (config.scale == 1) expect(find.text('清空历史'), findsOneWidget);
@@ -357,6 +433,7 @@ final class _HistoryRepository
   @override
   String accountScope = 'user:1';
   final deleted = <String>[];
+  final keywords = <String>[];
   int clears = 0;
   AppFailure? failure;
   Completer<void>? pending;
@@ -382,7 +459,18 @@ final class _HistoryRepository
 
   @override
   Future<WatchHistoryPage> loadHistory({
+    String keyword = '',
     String? cursor,
     required RequestCancellation cancellation,
-  }) async => WatchHistoryPage(entries, hasMore: false);
+  }) async {
+    keywords.add(keyword);
+    return WatchHistoryPage(
+      keyword.isEmpty
+          ? entries
+          : keyword == 'Flutter'
+          ? entries.take(1).toList()
+          : const [],
+      hasMore: false,
+    );
+  }
 }

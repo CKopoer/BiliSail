@@ -39,6 +39,7 @@ final class _Repository implements LibraryRepository, WatchHistoryMutations {
   String accountScope = 'user:1';
   final List<
     ({
+      String keyword,
       String? cursor,
       RequestCancellation cancellation,
       Completer<WatchHistoryPage> result,
@@ -63,11 +64,17 @@ final class _Repository implements LibraryRepository, WatchHistoryMutations {
 
   @override
   Future<WatchHistoryPage> loadHistory({
+    String keyword = '',
     String? cursor,
     required RequestCancellation cancellation,
   }) {
     final result = Completer<WatchHistoryPage>();
-    calls.add((cursor: cursor, cancellation: cancellation, result: result));
+    calls.add((
+      keyword: keyword,
+      cursor: cursor,
+      cancellation: cancellation,
+      result: result,
+    ));
     return result.future;
   }
 }
@@ -91,6 +98,19 @@ void main() {
   });
   tearDown(() => container.dispose());
 
+  test('disposing before the initial refresh prevents reads', () async {
+    final isolatedRepository = _Repository();
+    final isolated = ProviderContainer(
+      overrides: [
+        libraryRepositoryProvider.overrideWithValue(isolatedRepository),
+      ],
+    );
+    isolated.listen(historyProvider, (_, _) {});
+    isolated.dispose();
+    await settle();
+    expect(isolatedRepository.calls, isEmpty);
+  });
+
   Future<void> loaded() async {
     await settle();
     repository.calls[0].result.complete(
@@ -101,6 +121,116 @@ void main() {
       ),
     );
     await settle();
+  }
+
+  test(
+    'search cancels old paging, resets the cursor and discards late responses',
+    () async {
+      await loaded();
+      final controller = container.read(historyProvider.notifier);
+      final oldPage = controller.loadMore();
+      final first = controller.search('  Flutter  ');
+      expect(repository.calls[1].cancellation.isCancelled, true);
+      expect(repository.calls[2].keyword, 'Flutter');
+      expect(repository.calls[2].cursor, isNull);
+      final second = controller.search('Dart');
+      expect(repository.calls[2].cancellation.isCancelled, true);
+      repository.calls[3].result.complete(
+        WatchHistoryPage([entry('4')], hasMore: true, nextCursor: '2'),
+      );
+      await second;
+      repository.calls[1].result.complete(
+        WatchHistoryPage([entry('old-page')], hasMore: false),
+      );
+      repository.calls[2].result.completeError(
+        const AppFailure(AppFailureKind.network, '旧错误'),
+      );
+      await Future.wait([oldPage, first]);
+      expect(container.read(historyProvider).keyword, 'Dart');
+      expect(
+        container.read(historyProvider).items.requireValue.single.part.cid,
+        '4',
+      );
+      final more = controller.loadMore();
+      expect(repository.calls.last.keyword, 'Dart');
+      expect(repository.calls.last.cursor, '2');
+      repository.calls.last.result.complete(
+        WatchHistoryPage([entry('5')], hasMore: false),
+      );
+      await more;
+      expect(container.read(historyProvider).keyword, 'Dart');
+      final refresh = controller.refresh();
+      expect(repository.calls.last.keyword, 'Dart');
+      expect(repository.calls.last.cursor, isNull);
+      repository.calls.last.result.complete(
+        const WatchHistoryPage([], hasMore: false),
+      );
+      await refresh;
+      final clearSearch = controller.search('  ');
+      expect(repository.calls.last.keyword, '');
+      expect(repository.calls.last.cursor, isNull);
+      repository.calls.last.result.complete(
+        WatchHistoryPage([entry('1')], hasMore: false),
+      );
+      await clearSearch;
+      expect(container.read(historyProvider).keyword, '');
+    },
+  );
+
+  test('failed search and paging retry keep the submitted keyword', () async {
+    await loaded();
+    final controller = container.read(historyProvider.notifier);
+    final search = controller.search('Flutter');
+    repository.calls.last.result.completeError(
+      const AppFailure(AppFailureKind.network, '网络错误'),
+    );
+    await search;
+    expect(container.read(historyProvider).keyword, 'Flutter');
+    final retry = controller.refresh();
+    expect(repository.calls.last.keyword, 'Flutter');
+    repository.calls.last.result.complete(
+      WatchHistoryPage([entry('1')], hasMore: true, nextCursor: '2'),
+    );
+    await retry;
+    final more = controller.loadMore();
+    repository.calls.last.result.completeError(
+      const AppFailure(AppFailureKind.network, '分页错误'),
+    );
+    await more;
+    expect(container.read(historyProvider).keyword, 'Flutter');
+    final next = controller.loadMore();
+    expect(repository.calls.last.keyword, 'Flutter');
+    expect(repository.calls.last.cursor, '2');
+    repository.calls.last.result.complete(
+      const WatchHistoryPage([], hasMore: false),
+    );
+    await next;
+  });
+
+  for (final clear in [false, true]) {
+    test(
+      'search keyword survives ${clear ? 'clearing' : 'deleting'} history and cannot change during a write',
+      () async {
+        await loaded();
+        final controller = container.read(historyProvider.notifier);
+        final search = controller.search('Flutter');
+        repository.calls.last.result.complete(
+          WatchHistoryPage([entry('1')], hasMore: false),
+        );
+        await search;
+        final pending = clear
+            ? controller.clear()
+            : controller.delete(
+                container.read(historyProvider).items.requireValue.single,
+              );
+        await controller.search('ignored');
+        expect(repository.calls, hasLength(2));
+        repository.writes.single.result.complete();
+        await pending;
+        expect(container.read(historyProvider).keyword, 'Flutter');
+        expect(container.read(historyProvider).items.requireValue, isEmpty);
+      },
+    );
   }
 
   for (final clear in [false, true]) {

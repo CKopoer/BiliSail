@@ -34,9 +34,14 @@ final class WatchHistoryClient {
   static const _endpoint = 'watch_history';
 
   Future<ApiPage<ApiWatchHistoryEntry>> load({
+    String keyword = '',
     String? cursor,
     ApiRequestContext? context,
   }) async {
+    final query = keyword.trim();
+    if (query.isNotEmpty) {
+      return _search(query, cursor: cursor, context: context);
+    }
     final parts = cursor?.split(':');
     if (parts != null &&
         (parts.length != 3 ||
@@ -57,6 +62,62 @@ final class WatchHistoryClient {
     );
     final list = data['list'];
     if (list is! List<Object?> || list.length > 20) _protocol();
+    final items = _parseItems(list);
+    if (list.isEmpty) return const ApiPage([], hasMore: false);
+    final next = _map(data['cursor']);
+    final max = _decimalId(next['max']);
+    final viewAt = _decimalId(next['view_at']);
+    final business = next['business'];
+    if (max == null ||
+        viewAt == null ||
+        business is! String ||
+        !RegExp(r'^[a-z_]*$').hasMatch(business)) {
+      _protocol();
+    }
+    final nextCursor = '$max:$viewAt:$business';
+    final hasMore = max != '0';
+    if (hasMore && nextCursor == cursor) _protocol();
+    return ApiPage(
+      items,
+      hasMore: hasMore,
+      nextCursor: hasMore ? nextCursor : null,
+    );
+  }
+
+  Future<ApiPage<ApiWatchHistoryEntry>> _search(
+    String keyword, {
+    String? cursor,
+    ApiRequestContext? context,
+  }) async {
+    final page = cursor == null ? 1 : int.tryParse(cursor);
+    if (page == null || page < 1 || cursor != null && '$page' != cursor) {
+      throw ArgumentError.value(cursor, 'cursor');
+    }
+    final data = await api.requestJson(
+      Uri.https('api.bilibili.com', '/x/web-interface/history/search', {
+        'keyword': keyword,
+        'pn': '$page',
+        'business': 'all',
+      }),
+      'watch_history_search',
+      context: context,
+    );
+    final raw = data['list'];
+    // The search endpoint can return null for an empty result. Bound each
+    // response before mapping; pagination ends on the raw mixed-business list.
+    if (!data.containsKey('list') ||
+        raw != null && (raw is! List<Object?> || raw.length > 100)) {
+      _protocol();
+    }
+    final list = raw as List<Object?>? ?? const [];
+    return ApiPage(
+      _parseItems(list),
+      hasMore: list.isNotEmpty,
+      nextCursor: list.isEmpty ? null : '${page + 1}',
+    );
+  }
+
+  static List<ApiWatchHistoryEntry> _parseItems(List<Object?> list) {
     final items = <ApiWatchHistoryEntry>[];
     for (final raw in list) {
       final item = _map(raw);
@@ -115,25 +176,7 @@ final class WatchHistoryClient {
         ),
       );
     }
-    if (list.isEmpty) return const ApiPage([], hasMore: false);
-    final next = _map(data['cursor']);
-    final max = _decimalId(next['max']);
-    final viewAt = _decimalId(next['view_at']);
-    final business = next['business'];
-    if (max == null ||
-        viewAt == null ||
-        business is! String ||
-        !RegExp(r'^[a-z_]*$').hasMatch(business)) {
-      _protocol();
-    }
-    final nextCursor = '$max:$viewAt:$business';
-    final hasMore = max != '0';
-    if (hasMore && nextCursor == cursor) _protocol();
-    return ApiPage(
-      List.unmodifiable(items),
-      hasMore: hasMore,
-      nextCursor: hasMore ? nextCursor : null,
-    );
+    return List.unmodifiable(items);
   }
 
   Future<void> delete(String deletionKey, {ApiRequestContext? context}) async {

@@ -55,3 +55,23 @@
 本轮 `tool/check.ps1 -SkipPub` 全量通过：根应用 2945、API 478、播放器 83、弹幕 93、mux 5，共 3604 项；格式、静态分析和打包边界脚本通过。根应用 13 项符号链接测试因 Windows 权限不足跳过，mux 10 项原生测试因未设置 `BILI_MUX_LIBRARY` 跳过，不作为原生集成覆盖。日志为 `build/history-actions-check.log`。另用假仓储渲染并检查 360/1280 浅色与 800/320 深色页面及确认框（320 为两倍字体），Windows Debug 预览构建、启动、热重载成功，未检出运行时错误。首次调试构建与全量测试并行时遇到原生资产占用，结束测试后重试成功。关闭预览后，`flutter build windows --debug --no-pub` 普通 `lib/main.dart` 入口构建成功，恢复常规 Debug 产物；日志为 `build/validation/history-actions/windows-debug-build.log`。未读取或删除真实账号历史，未做 Windows Release、Android/iOS/macOS/Linux 设备构建或实机验收；预览入口仅位于忽略的 build 目录，不进入正式产品。
 
 窄屏样式修正复验（同日）：新增 320/402/600/960 宽度与两倍字体的内嵌工具栏几何回归，确认说明与操作垂直居中、首排卡片间距为 8px、普通窄屏保留按钮文字；页面及虚拟化定向 21 项通过。重新渲染并检查 402px 内嵌页、360px 独立页和 320px 两倍字体预览。当前工作区重新执行 tool/check.ps1 -SkipPub 通过，根应用 2951、四包 478/83/93/5，共 3610 项；仍因符号链接权限和 BILI_MUX_LIBRARY 缺失跳过 13+10 项。日志为 build/history-toolbar-check.log。本次没有运行中的调试连接，未完成热重载或设备实测；未重新构建平台产物。
+
+## 关键词搜索（2026-10-31）
+
+独立历史页与“我的”内嵌历史共用搜索入口。输入后按回车、移动键盘搜索键或搜索按钮提交；不在每次输入时发请求。清除按钮恢复全部云端历史；空白关键词按未搜索处理。搜索请求由服务端执行，不受当前页面已经加载的记录范围限制；每次查询仍最多保留 500 条结果，连续三页没有新增视频时暂停自动扫描。刷新和错误重试保留已提交关键词，换词重新从第一页加载、取消旧请求并重置列表位置，迟到的旧查询/分页响应不能覆盖新查询。
+
+| 用途 | Host / method / path | Profile / 鉴权 / 签名 / 格式 | 参数、分页与重试 |
+| --- | --- | --- | --- |
+| 搜索云端历史 | `api.bilibili.com` GET `/x/web-interface/history/search` | Web Cookie，JSON，无 WBI/CSRF | `keyword` 去首尾空白、仅编码一次，`pn` 从 1 递增，`business=all`；按原始 `list` 空数组/显式 null 终止，不能因过滤掉直播/专栏而提前结束。单页最多接收 100 条；沿用最多额外两次网络/5xx 重试及总 deadline |
+
+普通列表继续使用三字段游标，搜索列表使用独立的页码游标。两条路径复用历史条目解析、视频统计补齐、账号 scope/session epoch 和取消检查，不请求 App token。结果卡片保留观看日期、进度、分 P/剧集跳转和删除菜单；搜索状态下的“清空历史”仍清空当前账号全部云端历史，确认文案明确此范围，不能解释成只清除搜索结果。写入过程中禁用搜索，成功删除/清空后保留关键词。
+
+桌面足够宽时，320px 搜索框与说明、清空操作共用一行；窄屏和大字体下搜索框独占下一行，使用项目既有浅色/深色面板填充、12px 圆角和主题文字样式，搜索与清除图标触控区域至少 48×48。输入框自带透明 Material 容器，支持独立路由和嵌入页；文本控制器随组件销毁释放，输入不触发整个列表逐字重建。
+
+协议只读参考相邻 PiliPlus 提交 `936072449e82e3d90c28c728c0087bf5136fa441` 的 [UserHttp.searchHistory](../../../PiliPlus/lib/http/user.dart)、[端点常量](../../../PiliPlus/lib/http/api.dart)、[历史搜索控制器](../../../PiliPlus/lib/pages/history_search/controller.dart)、[通用分页](../../../PiliPlus/lib/pages/common/common_list_controller.dart) 和 [历史响应模型](../../../PiliPlus/lib/models_new/history/data.dart)。仅借鉴端点、参数、字段与空页终止规则，Dart/Flutter 代码及脱敏样本独立编写；未复制 GPLv3 应用源码或资源，未新增依赖，未修改参考仓库。
+
+离线回归覆盖中文/特殊字符单次编码、页码与空页、混合业务过滤、PGC/分 P/长 ID、非法响应、快速换词与旧分页、搜索失败及重试、写入互斥和关键词保留，以及移动/桌面提交、清除、空结果和清空确认。定向应用测试 87 项、API 历史协议测试 44 项通过；另外渲染并检查 320/360/402/800/1280px、浅深主题和两倍字体的假仓储预览，文件位于 `build/validation/history-search/`。这些预览不使用真实账号或读取凭据，不代表移动设备或在线接口验收。
+
+最终执行 `tool/check.ps1 -SkipPub` 全量通过：根应用 3818、API 525、播放器 105、弹幕 145、mux 5，共 4598 项；格式、静态分析和打包边界脚本通过。根应用 13 项符号链接测试因 Windows 权限不足跳过，mux 10 项原生测试因未设置 `BILI_MUX_LIBRARY` 跳过，不作为原生集成覆盖；日志为 `build/history-search-check.log`。新增页面销毁前的初始化取消用例在控制器单独 25 项及最终全量中通过。前一轮全量曾出现不涉及本次修改的播放恢复时序断言失败，该项单独复验和最终全量均通过，未修改播放会话实现。
+
+Windows Debug 假仓储预览构建、启动和热重载成功，未检出运行时错误；预览入口只放在忽略的 `build/validation/history-search/main.dart`，不进入产品。结束后关闭预览，并通过 `flutter build windows --debug --no-pub` 恢复普通 `lib/main.dart` 入口的 Debug 产物，构建日志为 `build/validation/history-search/windows-debug-build.log`。未使用真实账号验证搜索响应，未执行历史写入、Release 构建或 Android/iOS/macOS/Linux 设备验收。

@@ -94,6 +94,7 @@ final class _Repository implements LibraryRepository {
   String get accountScope => 'user:1';
   @override
   Future<WatchHistoryPage> loadHistory({
+    String keyword = '',
     String? cursor,
     required RequestCancellation cancellation,
   }) async => WatchHistoryPage(entries, hasMore: false);

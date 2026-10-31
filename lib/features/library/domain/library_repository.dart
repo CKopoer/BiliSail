@@ -41,6 +41,7 @@ final class HistoryWriteUncertain implements Exception {
 abstract interface class LibraryRepository {
   String get accountScope;
   Future<WatchHistoryPage> loadHistory({
+    String keyword = '',
     String? cursor,
     required RequestCancellation cancellation,
   });

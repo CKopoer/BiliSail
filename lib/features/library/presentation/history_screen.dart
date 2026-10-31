@@ -108,6 +108,8 @@ final class HistoryScreen extends ConsumerWidget {
     final history = ref.watch(historyProvider);
     final controller = ref.read(historyProvider.notifier);
     return PagedScrollViewport(
+      key: ValueKey(history.keyword),
+      keepScrollOffset: false,
       active: true,
       canLoadMore:
           history.hasMore &&
@@ -135,6 +137,15 @@ final class HistoryScreen extends ConsumerWidget {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
+                          final inlineSearch =
+                              constraints.maxWidth >=
+                              840 *
+                                  MediaQuery.textScalerOf(context).scale(14) /
+                                  14;
+                          final search = _HistorySearchField(
+                            keyword: history.keyword,
+                            enabled: !history.writeBusy,
+                          );
                           final showClearLabel =
                               constraints.maxWidth >=
                               280 *
@@ -160,7 +171,7 @@ final class HistoryScreen extends ConsumerWidget {
                           final action = enabled
                               ? () => _confirmClear(context, ref)
                               : null;
-                          return Row(
+                          final toolbar = Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Expanded(
@@ -192,6 +203,10 @@ final class HistoryScreen extends ConsumerWidget {
                                   ],
                                 ),
                               ),
+                              if (inlineSearch) ...[
+                                const SizedBox(width: 16),
+                                SizedBox(width: 320, child: search),
+                              ],
                               const SizedBox(width: 12),
                               if (showClearLabel)
                                 TextButton.icon(
@@ -222,6 +237,17 @@ final class HistoryScreen extends ConsumerWidget {
                                 ),
                             ],
                           );
+                          return inlineSearch
+                              ? toolbar
+                              : Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    toolbar,
+                                    const SizedBox(height: 8),
+                                    search,
+                                  ],
+                                );
                         },
                       ),
                     ),
@@ -248,7 +274,7 @@ final class HistoryScreen extends ConsumerWidget {
                         if (history.limitReached)
                           const Padding(
                             padding: EdgeInsets.all(16),
-                            child: Text('已显示最近 500 条云端记录'),
+                            child: Text('已显示 500 条记录，可更换关键词继续查找'),
                           ),
                       ],
                     ),
@@ -263,6 +289,98 @@ final class HistoryScreen extends ConsumerWidget {
   }
 }
 
+final class _HistorySearchField extends ConsumerStatefulWidget {
+  const _HistorySearchField({required this.keyword, required this.enabled});
+
+  final String keyword;
+  final bool enabled;
+
+  @override
+  ConsumerState<_HistorySearchField> createState() =>
+      _HistorySearchFieldState();
+}
+
+final class _HistorySearchFieldState
+    extends ConsumerState<_HistorySearchField> {
+  late final _text = TextEditingController(text: widget.keyword);
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  void _submit(String keyword) {
+    if (!widget.enabled || !WorkspaceActivity.isActive(context)) return;
+    FocusScope.of(context).unfocus();
+    ref.read(historyProvider.notifier).search(keyword);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      type: MaterialType.transparency,
+      child: ValueListenableBuilder<TextEditingValue>(
+        valueListenable: _text,
+        builder: (context, value, _) => TextField(
+          key: const ValueKey('history-search'),
+          controller: _text,
+          enabled: widget.enabled,
+          textInputAction: TextInputAction.search,
+          style: theme.textTheme.bodyMedium,
+          decoration: InputDecoration(
+            hintText: '搜索观看历史',
+            filled: true,
+            fillColor: theme.colorScheme.surfaceContainerLow,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (value.text.isNotEmpty || widget.keyword.isNotEmpty)
+                  IconButton(
+                    tooltip: '清除搜索',
+                    onPressed: widget.enabled
+                        ? () {
+                            _text.clear();
+                            _submit('');
+                          }
+                        : null,
+                    icon: const Icon(Icons.close, size: 20),
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    visualDensity: VisualDensity.standard,
+                  ),
+                IconButton(
+                  tooltip: '搜索观看历史',
+                  onPressed: widget.enabled ? () => _submit(_text.text) : null,
+                  icon: const Icon(Icons.search, size: 20),
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  visualDensity: VisualDensity.standard,
+                ),
+              ],
+            ),
+          ),
+          onSubmitted: _submit,
+        ),
+      ),
+    );
+  }
+}
+
 // Paging status changes affect the footer without rebuilding unchanged cards.
 final class _HistoryEntriesSliver extends ConsumerWidget {
   const _HistoryEntriesSliver();
@@ -270,6 +388,9 @@ final class _HistoryEntriesSliver extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(historyProvider.select((state) => state.items));
+    final searching = ref.watch(
+      historyProvider.select((state) => state.keyword.isNotEmpty),
+    );
     final controller = ref.read(historyProvider.notifier);
     final writeBlocked = ref.watch(
       historyProvider.select(
@@ -290,10 +411,12 @@ final class _HistoryEntriesSliver extends ConsumerWidget {
         ),
       ),
       data: (entries) => entries.isEmpty
-          ? const SliverToBoxAdapter(
+          ? SliverToBoxAdapter(
               child: SizedBox(
                 height: 280,
-                child: StateView.empty(message: '还没有云端观看记录'),
+                child: StateView.empty(
+                  message: searching ? '未找到相关观看记录，试试其他关键词' : '还没有云端观看记录',
+                ),
               ),
             )
           : SliverVideoGrid.indexed(

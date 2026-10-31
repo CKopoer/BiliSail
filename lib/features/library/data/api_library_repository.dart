@@ -26,6 +26,7 @@ final class ApiLibraryRepository
 
   @override
   Future<WatchHistoryPage> loadHistory({
+    String keyword = '',
     String? cursor,
     required RequestCancellation cancellation,
   }) {
@@ -43,7 +44,11 @@ final class ApiLibraryRepository
       }
 
       checkCurrent();
-      final page = await client.load(cursor: cursor, context: context);
+      final page = await client.load(
+        keyword: keyword,
+        cursor: cursor,
+        context: context,
+      );
       checkCurrent();
       // At most three reads in flight and one read per BVID in this page.
       // Detail failures affect optional metadata only, never the history list.

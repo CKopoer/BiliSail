@@ -86,6 +86,7 @@ class _Library implements LibraryRepository {
   String get accountScope => 'user:7';
   @override
   Future<WatchHistoryPage> loadHistory({
+    String keyword = '',
     String? cursor,
     required RequestCancellation cancellation,
   }) async => const WatchHistoryPage([], hasMore: false);
