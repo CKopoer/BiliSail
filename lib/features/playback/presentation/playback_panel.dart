@@ -1123,7 +1123,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
       hasComposer: widget.danmakuComposerBuilder != null,
       hasSubtitles: session.subtitleTracks.isNotEmpty,
       hasVoices: session.voiceTracks.isNotEmpty,
-      hasListen: session.canListen,
       hasNextButton:
           !session.isLive && session.contentTarget is! OfflinePlaybackTarget,
       isLive: session.isLive,
@@ -1470,31 +1469,32 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
-                            if (!smallWindow)
-                              Positioned(
-                                key: const ValueKey(
-                                  'player-control-title-layer',
-                                ),
-                                left: 0,
-                                right: 0,
-                                top: 0,
-                                child: _PlaybackViewers(
-                                  request: _appVisible
-                                      ? _viewerRequest(session)
-                                      : null,
-                                  builder: (viewers) => _controlsVisibility(
-                                    visible: controls,
-                                    hoverRegion: 'title',
-                                    child: _PlayerTopBar(
-                                      navigation: widget.navigation,
-                                      fullScreen: widget.fullScreen,
-                                      onExitFullScreen: _toggleFullScreen,
-                                      onNavigate: widget.onNavigate,
-                                      viewers: viewers,
-                                    ),
+                            Positioned(
+                              key: const ValueKey('player-control-title-layer'),
+                              left: 0,
+                              right: 0,
+                              top: 0,
+                              child: _PlaybackViewers(
+                                request: _appVisible && !smallWindow
+                                    ? _viewerRequest(session)
+                                    : null,
+                                builder: (viewers) => _controlsVisibility(
+                                  visible: controls,
+                                  hoverRegion: 'title',
+                                  retainDynamicPress: true,
+                                  child: _PlayerTopBar(
+                                    navigation: widget.navigation,
+                                    showNavigation: !smallWindow,
+                                    fullScreen: widget.fullScreen,
+                                    onExitFullScreen: _toggleFullScreen,
+                                    onNavigate: widget.onNavigate,
+                                    viewers: viewers,
+                                    session: session,
+                                    onSettings: _openSettings,
                                   ),
                                 ),
                               ),
+                            ),
                             PlaybackSnapshotBuilder(
                               snapshots: session.snapshots,
                               select: (_) => session.currentSponsor,
@@ -2216,11 +2216,6 @@ class _ControlBar extends StatelessWidget {
             : Colors.white54,
       ),
     );
-    final listenButton = IconButton(
-      tooltip: '听视频',
-      onPressed: () => unawaited(session.setAudioOnly(true)),
-      icon: const Icon(Icons.headphones_rounded, size: 20),
-    );
     final subtitleButton = PopupMenuButton<int>(
       tooltip: '字幕',
       initialValue: session.selectedSubtitle,
@@ -2268,18 +2263,26 @@ class _ControlBar extends StatelessWidget {
             child: Builder(builder: composerBuilder),
           );
     if (layout.compact && !fullScreen) {
+      final showNext = layout.inputs.hasNextButton;
+      final buttonCount =
+          4 + (showNext ? 1 : 0) + (session.subtitleTracks.isNotEmpty ? 1 : 0);
+      final timeAboveRow =
+          layout.inputs.width <
+          buttonCount * _ControlsLayout.buttonWidth + layout.timeWidth;
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Keep an existing draft across width changes without editor focus.
           if (composer != null) ExcludeFocus(child: Offstage(child: composer)),
+          if (timeAboveRow) Align(alignment: Alignment.centerLeft, child: time),
           Row(
             key: const ValueKey('small-window-control-row'),
             children: [
               slot(play),
-              const Spacer(),
+              if (showNext)
+                slot(_NextButton(session: session, commands: pageCommands)),
+              if (timeAboveRow) const Spacer() else Expanded(child: time),
               if (session.subtitleTracks.isNotEmpty) slot(subtitleButton),
-              if (session.canListen) slot(listenButton),
               slot(danmakuButton),
               slot(_moreOptions(context)),
               slot(fullscreenButton),
@@ -2289,29 +2292,6 @@ class _ControlBar extends StatelessWidget {
       );
     }
     final secondary = <Widget>[
-      if (session.canListen) slot(listenButton),
-      slot(
-        IconButton(
-          tooltip: '弹幕配置',
-          icon: const Icon(Icons.tune, size: 20),
-          onPressed: () => onSettings(1),
-        ),
-      ),
-      slot(
-        IconButton(
-          tooltip: '播放配置',
-          icon: const Icon(BiliIcons.settings, size: 20),
-          onPressed: () => onSettings(0),
-        ),
-      ),
-      if (!session.isLive)
-        slot(
-          IconButton(
-            tooltip: '字幕样式',
-            icon: const Icon(Icons.text_fields, size: 20),
-            onPressed: () => onSettings(2),
-          ),
-        ),
       slot(danmakuButton),
       if (media != null && session.isLive)
         slot(
@@ -2711,7 +2691,6 @@ typedef _ControlsLayoutInputs = ({
   bool hasComposer,
   bool hasSubtitles,
   bool hasVoices,
-  bool hasListen,
   bool hasNextButton,
   bool isLive,
   TextStyle textStyle,
@@ -2747,16 +2726,14 @@ class _ControlsLayout {
       null => 0,
     };
     composerMinWidth = 200 * inputs.textScaler.scale(12) / 12;
-    // Count only rendered buttons; subtitle style is absent from live playback.
+    // Settings and listening live in the top bar; count only bottom controls.
     compact =
         inputs.width <
         buttonWidth *
-                (6 +
-                    (inputs.isLive ? 0 : 1) +
+                (4 +
                     (inputs.hasNextButton ? 1 : 0) +
                     (inputs.hasSubtitles ? 1 : 0) +
-                    (inputs.hasVoices ? 1 : 0) +
-                    (inputs.hasListen ? 1 : 0)) +
+                    (inputs.hasVoices ? 1 : 0)) +
             timeWidth +
             rateWidth +
             qualityWidth +
@@ -2889,16 +2866,34 @@ PlaybackViewerRequest? _viewerRequest(PlaybackSession session) {
 class _PlayerTopBar extends StatelessWidget {
   const _PlayerTopBar({
     required this.navigation,
+    required this.showNavigation,
     required this.fullScreen,
     required this.onExitFullScreen,
     required this.onNavigate,
     required this.viewers,
+    required this.session,
+    required this.onSettings,
   });
   final ValueListenable<PlaybackNavigation?> navigation;
+  final bool showNavigation;
   final bool fullScreen;
   final VoidCallback onExitFullScreen;
   final ValueChanged<VoidCallback> onNavigate;
   final String? viewers;
+  final PlaybackSession session;
+  final Future<void> Function(int) onSettings;
+
+  Widget _action(String tooltip, IconData icon, VoidCallback onPressed) =>
+      SizedBox(
+        width: _ControlsLayout.buttonWidth,
+        height: 40,
+        child: IconButton(
+          tooltip: tooltip,
+          color: Colors.white,
+          onPressed: onPressed,
+          icon: Icon(icon, size: 20),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) => Container(
@@ -2915,7 +2910,7 @@ class _PlayerTopBar extends StatelessWidget {
       valueListenable: navigation,
       builder: (context, actions, _) => Row(
         children: [
-          if (actions?.showInPlayer ?? false) ...[
+          if (showNavigation && (actions?.showInPlayer ?? false)) ...[
             IconButton(
               key: const ValueKey('player-back'),
               tooltip: '返回',
@@ -2953,6 +2948,16 @@ class _PlayerTopBar extends StatelessWidget {
             )
           else
             const Spacer(),
+          if (session.canListen)
+            _action(
+              '听视频',
+              Icons.headphones_rounded,
+              () => unawaited(session.setAudioOnly(true)),
+            ),
+          _action('弹幕配置', Icons.tune, () => unawaited(onSettings(1))),
+          if (!session.isLive)
+            _action('字幕样式', Icons.text_fields, () => unawaited(onSettings(2))),
+          _action('播放配置', BiliIcons.settings, () => unawaited(onSettings(0))),
         ],
       ),
     ),

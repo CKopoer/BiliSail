@@ -881,7 +881,7 @@ void main() {
           tester.getTopLeft(surfaceTarget) + const Offset(130, 70),
         );
         await tester.pump(const Duration(milliseconds: 400));
-        for (final width in [940.0, 600.0, 420.0, 940.0, 640.0]) {
+        for (final width in [940.0, 420.0, 320.0, 940.0, 400.0]) {
           panelWidth.value = width;
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 100));

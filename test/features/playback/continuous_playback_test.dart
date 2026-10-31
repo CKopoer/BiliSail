@@ -22,7 +22,6 @@ import 'package:bilisail/features/video/application/video_extras_controller.dart
 import 'package:bilisail/features/video/domain/video_playback_sequence.dart';
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
-import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -221,19 +220,9 @@ void main() {
           expect(session.part?.cid, '101');
           expect(engine.opens, 1);
           final next = find.byKey(const ValueKey('player-next-episode'));
-          final smallWindow = width == 390 && !fullscreen;
-          PlaybackPageCommands? commands() => PlaybackPageCommands.maybeOf(
-            tester.element(find.byType(PlaybackPanel)),
-          );
-          if (smallWindow) {
-            expect(next, findsNothing);
-            expect(commands()?.hasNext, isTrue);
-            commands()?.nextPart();
-          } else {
-            expect(next, findsOneWidget);
-            expect(tester.widget<IconButton>(next).onPressed, isNotNull);
-            await tester.tap(next);
-          }
+          expect(next, findsOneWidget);
+          expect(tester.widget<IconButton>(next).onPressed, isNotNull);
+          await tester.tap(next);
           await _frames(tester);
           expect(session.part?.cid, '102');
           expect(session.snapshots.value.desiredPlaying, isTrue);
@@ -248,12 +237,7 @@ void main() {
           expect(engine.options?.startPosition, Duration.zero);
           expect(session.snapshots.value.desiredPlaying, isTrue);
           expect(window.fullscreen, fullscreen);
-          if (smallWindow) {
-            expect(next, findsNothing);
-            expect(commands()?.hasNext, isFalse);
-          } else {
-            expect(tester.widget<IconButton>(next).onPressed, isNull);
-          }
+          expect(tester.widget<IconButton>(next).onPressed, isNull);
           engine.end();
           await _frames(tester);
           expect(engine.opens, 3);
