@@ -1,0 +1,719 @@
+{
+  "date": "2026-10-31",
+  "sourceBaseline": "d0e0f9b0a3c4361b3799e21b858bd83bb62938ec",
+  "fixture": "FeedScreen + ScrollHeaderLayout, 500 fixed videos, memory PNG 640x360, no account/network/disk image cache/native preview",
+  "order": "ABBA per width; two 12000px down/up traversals per variant mount, 4 seconds per direction",
+  "mode": "Windows Profile, Flutter 3.47.6 / Dart 3.13.5, DPR 1",
+  "summary": [
+    {
+      "width": 430,
+      "label": "baseline",
+      "samples": 4,
+      "frames": 5018,
+      "over16_67ms": 0,
+      "uiP95MsMedian": 1.679,
+      "uiP99MsMedian": 2.0465,
+      "uiTotalMsMedian": 469.1535,
+      "rasterP95MsMedian": 3.967,
+      "rasterP99MsMedian": 4.7415,
+      "rasterTotalMsMedian": 2961.441
+    },
+    {
+      "width": 430,
+      "label": "candidate",
+      "samples": 4,
+      "frames": 5052,
+      "over16_67ms": 0,
+      "uiP95MsMedian": 1.597,
+      "uiP99MsMedian": 1.919,
+      "uiTotalMsMedian": 457.192,
+      "rasterP95MsMedian": 3.958,
+      "rasterP99MsMedian": 4.7195,
+      "rasterTotalMsMedian": 2955.631
+    },
+    {
+      "width": 1800,
+      "label": "baseline",
+      "samples": 4,
+      "frames": 4154,
+      "over16_67ms": 43,
+      "uiP95MsMedian": 4.3735,
+      "uiP99MsMedian": 5.3375,
+      "uiTotalMsMedian": 751.191,
+      "rasterP95MsMedian": 11.7565,
+      "rasterP99MsMedian": 16.836,
+      "rasterTotalMsMedian": 6341.373
+    },
+    {
+      "width": 1800,
+      "label": "candidate",
+      "samples": 4,
+      "frames": 4109,
+      "over16_67ms": 43,
+      "uiP95MsMedian": 4.24,
+      "uiP99MsMedian": 5.0705,
+      "uiTotalMsMedian": 736.65,
+      "rasterP95MsMedian": 11.9905,
+      "rasterP99MsMedian": 16.606,
+      "rasterTotalMsMedian": 6268.6185
+    }
+  ],
+  "reports": [
+    {
+      "label": "baseline",
+      "round": 0,
+      "width": 430.0,
+      "viewportWidth": 414.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2750
+      },
+      "deepMounted": {
+        "cards": 16,
+        "columns": 2,
+        "images": 16,
+        "elements": 3623
+      },
+      "endMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2750
+      },
+      "decodedCount": 126,
+      "decodedBytes": 16329600,
+      "frames": 1245,
+      "uiP50Ms": 0.217,
+      "uiP95Ms": 1.701,
+      "uiP99Ms": 2.11,
+      "uiMaxMs": 2.691,
+      "uiTotalMs": 468.815,
+      "rasterP50Ms": 2.183,
+      "rasterP95Ms": 3.943,
+      "rasterP99Ms": 4.74,
+      "rasterMaxMs": 6.299,
+      "rasterTotalMs": 2964.744,
+      "over8_33ms": 0,
+      "over16_67ms": 0
+    },
+    {
+      "label": "baseline",
+      "round": 1,
+      "width": 430.0,
+      "viewportWidth": 414.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2750
+      },
+      "deepMounted": {
+        "cards": 16,
+        "columns": 2,
+        "images": 16,
+        "elements": 3623
+      },
+      "endMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2750
+      },
+      "decodedCount": 126,
+      "decodedBytes": 16329600,
+      "frames": 1224,
+      "uiP50Ms": 0.227,
+      "uiP95Ms": 1.746,
+      "uiP99Ms": 2.09,
+      "uiMaxMs": 3.56,
+      "uiTotalMs": 480.009,
+      "rasterP50Ms": 2.169,
+      "rasterP95Ms": 4.037,
+      "rasterP99Ms": 4.942,
+      "rasterMaxMs": 6.542,
+      "rasterTotalMs": 2941.343,
+      "over8_33ms": 0,
+      "over16_67ms": 0
+    },
+    {
+      "label": "candidate",
+      "round": 0,
+      "width": 430.0,
+      "viewportWidth": 414.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2752
+      },
+      "deepMounted": {
+        "cards": 16,
+        "columns": 2,
+        "images": 16,
+        "elements": 3625
+      },
+      "endMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2752
+      },
+      "decodedCount": 126,
+      "decodedBytes": 16329600,
+      "frames": 1256,
+      "uiP50Ms": 0.219,
+      "uiP95Ms": 1.591,
+      "uiP99Ms": 1.925,
+      "uiMaxMs": 2.623,
+      "uiTotalMs": 456.536,
+      "rasterP50Ms": 2.102,
+      "rasterP95Ms": 3.842,
+      "rasterP99Ms": 4.589,
+      "rasterMaxMs": 6.136,
+      "rasterTotalMs": 2918.53,
+      "over8_33ms": 0,
+      "over16_67ms": 0
+    },
+    {
+      "label": "candidate",
+      "round": 1,
+      "width": 430.0,
+      "viewportWidth": 414.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2752
+      },
+      "deepMounted": {
+        "cards": 16,
+        "columns": 2,
+        "images": 16,
+        "elements": 3625
+      },
+      "endMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2752
+      },
+      "decodedCount": 126,
+      "decodedBytes": 16329600,
+      "frames": 1276,
+      "uiP50Ms": 0.218,
+      "uiP95Ms": 1.552,
+      "uiP99Ms": 1.919,
+      "uiMaxMs": 2.192,
+      "uiTotalMs": 461.833,
+      "rasterP50Ms": 2.114,
+      "rasterP95Ms": 4.002,
+      "rasterP99Ms": 4.837,
+      "rasterMaxMs": 6.709,
+      "rasterTotalMs": 3010.622,
+      "over8_33ms": 0,
+      "over16_67ms": 0
+    },
+    {
+      "label": "candidate",
+      "round": 0,
+      "width": 430.0,
+      "viewportWidth": 414.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2752
+      },
+      "deepMounted": {
+        "cards": 16,
+        "columns": 2,
+        "images": 16,
+        "elements": 3625
+      },
+      "endMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2752
+      },
+      "decodedCount": 126,
+      "decodedBytes": 16329600,
+      "frames": 1269,
+      "uiP50Ms": 0.213,
+      "uiP95Ms": 1.603,
+      "uiP99Ms": 1.919,
+      "uiMaxMs": 2.868,
+      "uiTotalMs": 456.316,
+      "rasterP50Ms": 2.105,
+      "rasterP95Ms": 3.914,
+      "rasterP99Ms": 4.801,
+      "rasterMaxMs": 5.789,
+      "rasterTotalMs": 2958.941,
+      "over8_33ms": 0,
+      "over16_67ms": 0
+    },
+    {
+      "label": "candidate",
+      "round": 1,
+      "width": 430.0,
+      "viewportWidth": 414.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2752
+      },
+      "deepMounted": {
+        "cards": 16,
+        "columns": 2,
+        "images": 16,
+        "elements": 3625
+      },
+      "endMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2752
+      },
+      "decodedCount": 126,
+      "decodedBytes": 16329600,
+      "frames": 1251,
+      "uiP50Ms": 0.217,
+      "uiP95Ms": 1.636,
+      "uiP99Ms": 1.917,
+      "uiMaxMs": 2.701,
+      "uiTotalMs": 457.848,
+      "rasterP50Ms": 2.119,
+      "rasterP95Ms": 4.036,
+      "rasterP99Ms": 4.638,
+      "rasterMaxMs": 6.034,
+      "rasterTotalMs": 2952.321,
+      "over8_33ms": 0,
+      "over16_67ms": 0
+    },
+    {
+      "label": "baseline",
+      "round": 0,
+      "width": 430.0,
+      "viewportWidth": 414.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2750
+      },
+      "deepMounted": {
+        "cards": 16,
+        "columns": 2,
+        "images": 16,
+        "elements": 3623
+      },
+      "endMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2750
+      },
+      "decodedCount": 126,
+      "decodedBytes": 16329600,
+      "frames": 1277,
+      "uiP50Ms": 0.213,
+      "uiP95Ms": 1.626,
+      "uiP99Ms": 1.993,
+      "uiMaxMs": 2.506,
+      "uiTotalMs": 463.277,
+      "rasterP50Ms": 2.107,
+      "rasterP95Ms": 3.991,
+      "rasterP99Ms": 4.743,
+      "rasterMaxMs": 5.324,
+      "rasterTotalMs": 2975.87,
+      "over8_33ms": 0,
+      "over16_67ms": 0
+    },
+    {
+      "label": "baseline",
+      "round": 1,
+      "width": 430.0,
+      "viewportWidth": 414.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2750
+      },
+      "deepMounted": {
+        "cards": 16,
+        "columns": 2,
+        "images": 16,
+        "elements": 3623
+      },
+      "endMounted": {
+        "cards": 12,
+        "columns": 2,
+        "images": 12,
+        "elements": 2750
+      },
+      "decodedCount": 126,
+      "decodedBytes": 16329600,
+      "frames": 1272,
+      "uiP50Ms": 0.211,
+      "uiP95Ms": 1.657,
+      "uiP99Ms": 2.003,
+      "uiMaxMs": 2.547,
+      "uiTotalMs": 469.492,
+      "rasterP50Ms": 2.103,
+      "rasterP95Ms": 3.846,
+      "rasterP99Ms": 4.546,
+      "rasterMaxMs": 5.488,
+      "rasterTotalMs": 2958.138,
+      "over8_33ms": 0,
+      "over16_67ms": 0
+    },
+    {
+      "label": "baseline",
+      "round": 0,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6067
+      },
+      "deepMounted": {
+        "cards": 42,
+        "columns": 6,
+        "images": 42,
+        "elements": 8584
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6067
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 1037,
+      "uiP50Ms": 0.262,
+      "uiP95Ms": 4.342,
+      "uiP99Ms": 5.401,
+      "uiMaxMs": 7.233,
+      "uiTotalMs": 741.01,
+      "rasterP50Ms": 5.019,
+      "rasterP95Ms": 11.709,
+      "rasterP99Ms": 17.238,
+      "rasterMaxMs": 29.299,
+      "rasterTotalMs": 6360.589,
+      "over8_33ms": 189,
+      "over16_67ms": 14
+    },
+    {
+      "label": "baseline",
+      "round": 1,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6067
+      },
+      "deepMounted": {
+        "cards": 36,
+        "columns": 6,
+        "images": 36,
+        "elements": 7411
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6067
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 1054,
+      "uiP50Ms": 0.272,
+      "uiP95Ms": 4.232,
+      "uiP99Ms": 5.419,
+      "uiMaxMs": 9.631,
+      "uiTotalMs": 754.477,
+      "rasterP50Ms": 4.729,
+      "rasterP95Ms": 11.377,
+      "rasterP99Ms": 16.306,
+      "rasterMaxMs": 30.483,
+      "rasterTotalMs": 6322.157,
+      "over8_33ms": 183,
+      "over16_67ms": 10
+    },
+    {
+      "label": "candidate",
+      "round": 0,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "deepMounted": {
+        "cards": 42,
+        "columns": 6,
+        "images": 42,
+        "elements": 8586
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 973,
+      "uiP50Ms": 0.282,
+      "uiP95Ms": 4.245,
+      "uiP99Ms": 4.853,
+      "uiMaxMs": 7.127,
+      "uiTotalMs": 730.527,
+      "rasterP50Ms": 4.855,
+      "rasterP95Ms": 12.035,
+      "rasterP99Ms": 16.775,
+      "rasterMaxMs": 28.189,
+      "rasterTotalMs": 6000.213,
+      "over8_33ms": 191,
+      "over16_67ms": 11
+    },
+    {
+      "label": "candidate",
+      "round": 1,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "deepMounted": {
+        "cards": 42,
+        "columns": 6,
+        "images": 42,
+        "elements": 8586
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 1022,
+      "uiP50Ms": 0.27,
+      "uiP95Ms": 4.287,
+      "uiP99Ms": 5.514,
+      "uiMaxMs": 8.229,
+      "uiTotalMs": 742.773,
+      "rasterP50Ms": 5.033,
+      "rasterP95Ms": 11.969,
+      "rasterP99Ms": 16.864,
+      "rasterMaxMs": 31.595,
+      "rasterTotalMs": 6341.768,
+      "over8_33ms": 194,
+      "over16_67ms": 11
+    },
+    {
+      "label": "candidate",
+      "round": 0,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "deepMounted": {
+        "cards": 42,
+        "columns": 6,
+        "images": 42,
+        "elements": 8586
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 1081,
+      "uiP50Ms": 0.264,
+      "uiP95Ms": 4.202,
+      "uiP99Ms": 5.154,
+      "uiMaxMs": 7.939,
+      "uiTotalMs": 748.526,
+      "rasterP50Ms": 4.781,
+      "rasterP95Ms": 11.485,
+      "rasterP99Ms": 16.395,
+      "rasterMaxMs": 28.514,
+      "rasterTotalMs": 6469.165,
+      "over8_33ms": 181,
+      "over16_67ms": 11
+    },
+    {
+      "label": "candidate",
+      "round": 1,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "deepMounted": {
+        "cards": 36,
+        "columns": 6,
+        "images": 36,
+        "elements": 7413
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 1033,
+      "uiP50Ms": 0.249,
+      "uiP95Ms": 4.235,
+      "uiP99Ms": 4.987,
+      "uiMaxMs": 8.995,
+      "uiTotalMs": 720.7,
+      "rasterP50Ms": 4.754,
+      "rasterP95Ms": 12.012,
+      "rasterP99Ms": 16.437,
+      "rasterMaxMs": 34.009,
+      "rasterTotalMs": 6195.469,
+      "over8_33ms": 175,
+      "over16_67ms": 10
+    },
+    {
+      "label": "baseline",
+      "round": 0,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6067
+      },
+      "deepMounted": {
+        "cards": 36,
+        "columns": 6,
+        "images": 36,
+        "elements": 7411
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6067
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 1025,
+      "uiP50Ms": 0.263,
+      "uiP95Ms": 4.491,
+      "uiP99Ms": 5.274,
+      "uiMaxMs": 9.478,
+      "uiTotalMs": 772.221,
+      "rasterP50Ms": 4.856,
+      "rasterP95Ms": 11.804,
+      "rasterP99Ms": 17.879,
+      "rasterMaxMs": 29.937,
+      "rasterTotalMs": 6317.283,
+      "over8_33ms": 185,
+      "over16_67ms": 12
+    },
+    {
+      "label": "baseline",
+      "round": 1,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6067
+      },
+      "deepMounted": {
+        "cards": 36,
+        "columns": 6,
+        "images": 36,
+        "elements": 7411
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6067
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 1038,
+      "uiP50Ms": 0.257,
+      "uiP95Ms": 4.405,
+      "uiP99Ms": 5.162,
+      "uiMaxMs": 9.467,
+      "uiTotalMs": 747.905,
+      "rasterP50Ms": 5.036,
+      "rasterP95Ms": 11.906,
+      "rasterP99Ms": 16.434,
+      "rasterMaxMs": 26.437,
+      "rasterTotalMs": 6363.002,
+      "over8_33ms": 195,
+      "over16_67ms": 7
+    }
+  ]
+}

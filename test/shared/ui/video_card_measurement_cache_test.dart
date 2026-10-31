@@ -191,10 +191,7 @@ final class _CoverMeasurements {
     if (span is TextSpan &&
         object.maxLines == 1 &&
         span.style?.color == Colors.white &&
-        span.style?.shadows?.contains(
-              const Shadow(blurRadius: 2, color: Colors.black),
-            ) ==
-            true) {
+        span.style?.shadows?.isEmpty == true) {
       labels.add(span.toPlainText());
     }
   }

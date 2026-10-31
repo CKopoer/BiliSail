@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'text_measurement_cache.dart';
+
 final class HighlightedText extends StatelessWidget {
   const HighlightedText(
     this.text, {
@@ -112,6 +114,7 @@ final class _OverflowTooltipState extends State<_OverflowTooltip> {
   @override
   Widget build(BuildContext context) {
     final child = widget.child;
+    final measurements = TextMeasurementCacheScope.maybeOf(context);
     final defaults = DefaultTextStyle.of(context);
     final childStyle = child.style;
     var effectiveStyle = childStyle == null || childStyle.inherit
@@ -143,25 +146,30 @@ final class _OverflowTooltipState extends State<_OverflowTooltip> {
         // paint-only hover/highlight colors from changes that affect layout.
         if (_inputs != inputs ||
             _measuredText?.compareTo(span) == RenderComparison.layout) {
-          final painter = TextPainter(
-            text: span,
-            textAlign: inputs.align,
-            textDirection: inputs.direction,
-            textScaler: inputs.scaler,
-            locale: inputs.locale,
-            maxLines: inputs.maxLines,
-            ellipsis: '\u2026',
-            textWidthBasis: inputs.widthBasis,
-            textHeightBehavior: inputs.heightBehavior,
-          );
-          try {
-            painter.layout(maxWidth: inputs.maxWidth);
-            _overflowing = painter.didExceedMaxLines;
-            _inputs = inputs;
-            _measuredText = span;
-          } finally {
-            painter.dispose();
+          bool measure() {
+            final painter = TextPainter(
+              text: span,
+              textAlign: inputs.align,
+              textDirection: inputs.direction,
+              textScaler: inputs.scaler,
+              locale: inputs.locale,
+              maxLines: inputs.maxLines,
+              ellipsis: '\u2026',
+              textWidthBasis: inputs.widthBasis,
+              textHeightBehavior: inputs.heightBehavior,
+            );
+            try {
+              painter.layout(maxWidth: inputs.maxWidth);
+              return painter.didExceedMaxLines;
+            } finally {
+              painter.dispose();
+            }
           }
+
+          _overflowing =
+              measurements?.overflows((inputs, span), measure) ?? measure();
+          _inputs = inputs;
+          _measuredText = span;
         }
         return Tooltip(
           message: _overflowing ? widget.text : '',

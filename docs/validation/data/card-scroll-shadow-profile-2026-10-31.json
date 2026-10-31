@@ -1,0 +1,196 @@
+{
+  "date": "2026-10-31",
+  "mode": "Windows Profile",
+  "fixture": "Same FeedScreen + ScrollHeaderLayout and warmed covers as card-scroll-profile-2026-10-31.json, 6 columns, only metadata shadows differ",
+  "order": "current-shadowless-shadowless-current, one measured traversal per mount",
+  "summary": [
+    {
+      "label": "current",
+      "samples": 2,
+      "frames": 2098,
+      "rasterP95MsMedian": 11.845,
+      "rasterP99MsMedian": 16.372,
+      "rasterTotalMsMedian": 6357.1525,
+      "maxRasterMs": 30.191,
+      "over8_33ms": 380,
+      "over16_67ms": 19
+    },
+    {
+      "label": "shadowless",
+      "samples": 2,
+      "frames": 2229,
+      "rasterP95MsMedian": 8.869,
+      "rasterP99MsMedian": 10.9275,
+      "rasterTotalMsMedian": 5703.415,
+      "maxRasterMs": 20.766,
+      "over8_33ms": 176,
+      "over16_67ms": 2
+    }
+  ],
+  "reports": [
+    {
+      "label": "current",
+      "round": 0,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "deepMounted": {
+        "cards": 42,
+        "columns": 6,
+        "images": 42,
+        "elements": 8586
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 1027,
+      "uiP50Ms": 0.261,
+      "uiP95Ms": 4.314,
+      "uiP99Ms": 5.691,
+      "uiMaxMs": 7.199,
+      "uiTotalMs": 737.076,
+      "rasterP50Ms": 4.744,
+      "rasterP95Ms": 11.874,
+      "rasterP99Ms": 16.646,
+      "rasterMaxMs": 29.02,
+      "rasterTotalMs": 6229.787,
+      "over8_33ms": 192,
+      "over16_67ms": 10
+    },
+    {
+      "label": "shadowless",
+      "round": 0,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "deepMounted": {
+        "cards": 42,
+        "columns": 6,
+        "images": 42,
+        "elements": 8586
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 1092,
+      "uiP50Ms": 0.26,
+      "uiP95Ms": 4.152,
+      "uiP99Ms": 5.079,
+      "uiMaxMs": 7.843,
+      "uiTotalMs": 752.897,
+      "rasterP50Ms": 4.253,
+      "rasterP95Ms": 8.861,
+      "rasterP99Ms": 11.05,
+      "rasterMaxMs": 19.609,
+      "rasterTotalMs": 5653.27,
+      "over8_33ms": 89,
+      "over16_67ms": 1
+    },
+    {
+      "label": "shadowless",
+      "round": 0,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "deepMounted": {
+        "cards": 42,
+        "columns": 6,
+        "images": 42,
+        "elements": 8586
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 1137,
+      "uiP50Ms": 0.254,
+      "uiP95Ms": 4.076,
+      "uiP99Ms": 4.798,
+      "uiMaxMs": 7.277,
+      "uiTotalMs": 747.177,
+      "rasterP50Ms": 4.198,
+      "rasterP95Ms": 8.877,
+      "rasterP99Ms": 10.805,
+      "rasterMaxMs": 20.766,
+      "rasterTotalMs": 5753.56,
+      "over8_33ms": 87,
+      "over16_67ms": 1
+    },
+    {
+      "label": "current",
+      "round": 0,
+      "width": 1800.0,
+      "viewportWidth": 1784.0,
+      "viewportHeight": 861.0,
+      "dpr": 1.0,
+      "startMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "deepMounted": {
+        "cards": 42,
+        "columns": 6,
+        "images": 42,
+        "elements": 8586
+      },
+      "endMounted": {
+        "cards": 30,
+        "columns": 6,
+        "images": 30,
+        "elements": 6069
+      },
+      "decodedCount": 256,
+      "decodedBytes": 58982400,
+      "frames": 1071,
+      "uiP50Ms": 0.251,
+      "uiP95Ms": 4.261,
+      "uiP99Ms": 4.995,
+      "uiMaxMs": 7.973,
+      "uiTotalMs": 733.744,
+      "rasterP50Ms": 4.86,
+      "rasterP95Ms": 11.816,
+      "rasterP99Ms": 16.098,
+      "rasterMaxMs": 30.191,
+      "rasterTotalMs": 6484.518,
+      "over8_33ms": 188,
+      "over16_67ms": 9
+    }
+  ]
+}

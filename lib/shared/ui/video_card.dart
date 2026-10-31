@@ -7,6 +7,7 @@ import 'video_card_cover.dart';
 import 'video_card_interaction_scope.dart';
 import 'scroll_aware_hover_region.dart';
 import 'video_card_feedback.dart';
+import 'text_measurement_cache.dart';
 export 'video_card_feedback.dart' show VideoCardFeedback;
 import '../../features/video/domain/video_card_interactions.dart';
 import '../../core/presentation/workspace_activity.dart';
@@ -571,6 +572,13 @@ final class _CoverMetadataState extends State<_CoverMetadata> {
   // Three labels across three width tiers; changing data cannot grow the cache.
   static const _maximumCachedWidths = 9;
   final _textWidths = <_CoverTextMetricsKey, double>{};
+  TextMeasurementCache? _measurements;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _measurements = TextMeasurementCacheScope.maybeOf(context);
+  }
 
   @override
   void initState() {
@@ -594,24 +602,28 @@ final class _CoverMetadataState extends State<_CoverMetadata> {
       _textWidths[key] = cached;
       return cached;
     }
-    final painter = TextPainter(
-      text: TextSpan(text: key.label, style: key.style),
-      textDirection: key.direction,
-      textScaler: key.textScaler,
-      locale: key.locale,
-      maxLines: 1,
-    );
-    try {
-      painter.layout();
-      final width = painter.width;
-      if (_textWidths.length == _maximumCachedWidths) {
-        _textWidths.remove(_textWidths.keys.first);
+    double measure() {
+      final painter = TextPainter(
+        text: TextSpan(text: key.label, style: key.style),
+        textDirection: key.direction,
+        textScaler: key.textScaler,
+        locale: key.locale,
+        maxLines: 1,
+      );
+      try {
+        painter.layout();
+        return painter.width;
+      } finally {
+        painter.dispose();
       }
-      _textWidths[key] = width;
-      return width;
-    } finally {
-      painter.dispose();
     }
+
+    final width = _measurements?.width(key, measure) ?? measure();
+    if (_textWidths.length == _maximumCachedWidths) {
+      _textWidths.remove(_textWidths.keys.first);
+    }
+    _textWidths[key] = width;
+    return width;
   }
 
   static const _regularFontSize = 12.0;
@@ -619,7 +631,9 @@ final class _CoverMetadataState extends State<_CoverMetadata> {
     color: Colors.white,
     fontSize: _regularFontSize,
     fontWeight: FontWeight.w400,
-    shadows: [Shadow(blurRadius: 2, color: Colors.black)],
+    // The cover gradient supplies contrast. Blurred glyph shadows add raster
+    // work for every label in dense rows even when the cards are unchanged.
+    shadows: [],
   );
   static const _iconSize = 13.0;
   static const _iconGap = 3.0;

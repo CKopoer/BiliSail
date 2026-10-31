@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderSliverList;
 
+import 'text_measurement_cache.dart';
+
 const _desktopSpacing = 20.0;
 
 ({int columns, double width, double spacing, double runSpacing}) _layout(
@@ -66,21 +68,23 @@ final class ResponsiveCardGrid extends StatelessWidget {
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final layout = _layout(context, constraints.maxWidth);
-      return Wrap(
-        spacing: layout.spacing,
-        runSpacing: layout.runSpacing,
-        children: [
-          for (final child in children)
-            SizedBox(
-              width: layout.width,
-              child: RepaintBoundary(child: child),
-            ),
-        ],
-      );
-    },
+  Widget build(BuildContext context) => TextMeasurementCacheScope(
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final layout = _layout(context, constraints.maxWidth);
+        return Wrap(
+          spacing: layout.spacing,
+          runSpacing: layout.runSpacing,
+          children: [
+            for (final child in children)
+              SizedBox(
+                width: layout.width,
+                child: RepaintBoundary(child: child),
+              ),
+          ],
+        );
+      },
+    ),
   );
 }
 
@@ -115,40 +119,42 @@ final class _SliverResponsiveCardGridState
   }
 
   @override
-  Widget build(BuildContext context) => SliverLayoutBuilder(
-    builder: (context, constraints) {
-      final layout = _layout(context, constraints.crossAxisExtent);
-      // Sliver constraints also change on every scroll frame. Reusing the rows
-      // keeps a scroll offset change from replacing the delegate and rebuilding
-      // all visible cards; cross-axis layout and content changes still update it.
-      if (_rows case final rows? when layout == _previousLayout) return rows;
-      _previousLayout = layout;
-      return _rows = _CardRows(
-        itemCount: (widget.itemCount / layout.columns).ceil(),
-        itemBuilder: (context, row) => Padding(
-          padding: EdgeInsets.only(bottom: layout.runSpacing),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: layout.spacing,
-            children: [
-              for (var column = 0; column < layout.columns; column++)
-                if (row * layout.columns + column < widget.itemCount)
-                  SizedBox(
-                    width: layout.width,
-                    // Hover/preview changes on one card must not repaint the
-                    // other cards in this row's sliver repaint boundary.
-                    child: RepaintBoundary(
-                      child: widget.itemBuilder(
-                        context,
-                        row * layout.columns + column,
+  Widget build(BuildContext context) => TextMeasurementCacheScope(
+    child: SliverLayoutBuilder(
+      builder: (context, constraints) {
+        final layout = _layout(context, constraints.crossAxisExtent);
+        // Sliver constraints also change on every scroll frame. Reusing the rows
+        // keeps a scroll offset change from replacing the delegate and rebuilding
+        // all visible cards; cross-axis layout and content changes still update it.
+        if (_rows case final rows? when layout == _previousLayout) return rows;
+        _previousLayout = layout;
+        return _rows = _CardRows(
+          itemCount: (widget.itemCount / layout.columns).ceil(),
+          itemBuilder: (context, row) => Padding(
+            padding: EdgeInsets.only(bottom: layout.runSpacing),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: layout.spacing,
+              children: [
+                for (var column = 0; column < layout.columns; column++)
+                  if (row * layout.columns + column < widget.itemCount)
+                    SizedBox(
+                      width: layout.width,
+                      // Hover/preview changes on one card must not repaint the
+                      // other cards in this row's sliver repaint boundary.
+                      child: RepaintBoundary(
+                        child: widget.itemBuilder(
+                          context,
+                          row * layout.columns + column,
+                        ),
                       ),
                     ),
-                  ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
-    },
+        );
+      },
+    ),
   );
 }
 
