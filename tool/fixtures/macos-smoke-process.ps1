@@ -33,6 +33,18 @@ switch ($scenario) {
   'failure' { [Console]::Error.WriteLine('native private https://example.invalid/?token=private'); exit 7 }
   'missing-ack' { exit 0 }
   'stderr-ack' { [Console]::Error.WriteLine($marker); exit 0 }
+  'unterminated-ack' { [Console]::Out.Write($marker); exit 0 }
+  'unterminated-output' {
+    if ($env:BILISAIL_SMOKE_FIXTURE_PID_PATH) { [System.IO.File]::WriteAllText($env:BILISAIL_SMOKE_FIXTURE_PID_PATH, "$PID") }
+    [Console]::Error.WriteLine('BILISAIL_FOCUS_STAGE:space')
+    [Console]::Error.Write('native private https://example.invalid/?token=private ' + ('x' * 262144))
+    Start-Sleep -Seconds 60
+  }
+  'long-line-recovery' {
+    # A tail that looks valid must not be accepted after discarding a prefix.
+    [Console]::Error.WriteLine(('x' * 2048) + 'BILISAIL_RELEASE_STAGE:window-ready')
+    [Console]::Out.WriteLine(('x' * 2048) + $marker)
+  }
   'flood' {
     $nativeLine = 'native private https://example.invalid/?token=private ' + ('x' * 128)
     for ($index = 0; $index -lt 1024; $index++) {

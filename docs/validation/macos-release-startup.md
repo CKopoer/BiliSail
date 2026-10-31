@@ -1,6 +1,6 @@
 # macOS 发布启动与安全存储
 
-日期：2026-10-08；验证更新：2026-10-29。当前配置提供 arm64／Intel x64、ad-hoc 签名、未公证的预览 DMG，两种架构沿用相同发布门槛。[CI #221](https://github.com/CKopoer/BiliSail/actions/runs/40804720827)（代码提交 `64acaa709315b9c91e15c67ae173f56b05689570`）的两种架构均通过构建、签名校验、待打包应用首帧和跨进程合成 Keychain 读写／删除验证，并完成 DMG 打包。设备安装升级、Gatekeeper、真实账号与音画播放仍未验收。
+日期：2026-10-08；验证更新：2026-10-31。当前配置提供 arm64／Intel x64、ad-hoc 签名、未公证的预览 DMG，两种架构沿用相同发布门槛。[CI #221](https://github.com/CKopoer/BiliSail/actions/runs/40804720827)（代码提交 `64acaa709315b9c91e15c67ae173f56b05689570`）的两种架构均通过构建、签名校验、待打包应用首帧和跨进程合成 Keychain 读写／删除验证，并完成 DMG 打包。设备安装升级、Gatekeeper、真实账号与音画播放仍未验收。
 
 ## 根因与配置
 
@@ -28,6 +28,8 @@ macOS 使用传统系统 Keychain，不降级为明文文件或数据库。Andro
 6. 再次校验 bundle 签名与最终权限，通过后才创建并校验 DMG，最后生成 metadata 和 SHA-256。`macosValidation` 只记录成功状态。
 
 每个子进程分别限制原生启动与 Dart 探测执行：从创建进程到收到第一条 `dart-entry` 最多 180 秒；收到该标记后最多再运行 60 秒，后续重复标记不能重置时限。必须退出码为 0、确认到达 Dart 入口，且返回匹配阶段和 UUID 的完整 stdout 确认行；只看到进程启动、退出码 0 或磁盘文件存在均不算通过。每个凭据步骤另有 10 秒上限，原生调用挂起时退出失败，不重放结果不明的写入。失败时终止本次创建的子进程，并用相同 bundle 的 `cleanup` 阶段删除本次前缀（含 bootstrap／recommendation 辅助前缀）；清理失败仍保持构建失败并明确警告，不自动重试真实账号写操作。进程终止和输出排空各有独立的 5 秒上限，不能在超时后的清理中无限等待。
+
+2026-10-31 起，上述阶段在独立 [worker](../../tool/macos-smoke-worker.ps1) 中执行，父进程不读取输出管道，只等待 worker 退出；硬限额为启动预算加执行预算再加 20 秒（默认 260 秒），到期终止本次 worker 及其子进程，终止等待另限 5 秒。签名校验、各阶段确认和失败阻断仍全部保留。Actions 的 macOS 构建／打包步骤另限 30 分钟，整个 macOS job 限 40 分钟；其他目标沿用 90 分钟 job 上限。
 
 [Dart 探测逻辑](../../lib/app/release_smoke.dart) 只接受显式 `--bilisail-release-smoke <phase> <32位UUID>`，由 [正常入口](../../lib/main.dart) 在 macOS 路由。Flutter macOS 默认将原生进程参数传给 Dart 入口，见 [FlutterDartProject](https://api.flutter.dev/macos-embedder/_flutter_dart_project_8h_source.html)。普通启动不启用探测。`startup` 注入内存 SQLite、独立的空 bootstrap 会话凭据和 recommendation 旧 App 凭据前缀，不恢复真实账号、不修改用户数据库；网络页面仍可请求公开内容，网络成功不是该探测的验收条件。
 
@@ -62,6 +64,26 @@ Intel CI 首次执行启动探测时曾达到原有 60 秒上限。固定 SDK �
 [CI #224](https://github.com/CKopoer/BiliSail/actions/runs/40851739162) 对应修复提交 `98040b8aa2c46acc2067d965716af93ea64f03c0`，工作流已结束且结论为 `success`，全部检查、独立原生 mux 回归及六个构建目标均通过。macOS [x64](https://github.com/CKopoer/BiliSail/actions/runs/40851739162/job/123376492094) 和 [arm64](https://github.com/CKopoer/BiliSail/actions/runs/40851739162/job/123376491977) 均通过 Release 编译、最终签名与权限校验、四个真实启动／跨进程凭据阶段及 DMG 创建、校验和上传。Swift 标记与实时输出监督已在两种 Mac runner 执行通过。
 
 x64 日志中，`startup`／`write`／`read-delete`／`verify-deleted` 从创建进程到 Dart 入口分别为 3872／463／470／428 毫秒，`verify-deleted` 随即完成 Keychain 空值核对并成功退出。本次未复现 CI #223 的无输出原生等待，也未用到扩大的启动预算；该次通过不能反推上一轮具体是哪一个系统调用阻塞。新增回归已独立证明启动预算与执行预算分开、重复入口不续期、步骤超时和失败阻断，后续若再出现等待，可通过原生阶段、`timeoutKind` 与单调时间定位。实际设备安装升级、Gatekeeper、真实账号和音画播放仍不包含在本轮 CI 验收内。
+
+## Release preview #81：监督循环与输出边界（2026-10-31）
+
+[挂起的 x64 任务](https://github.com/CKopoer/BiliSail/actions/runs/41171104657/job/124450999476) 对应 `a88f72ab0dd477e3715e49743850725a453e587e`。实时日志显示 Release 编译、签名、主窗首帧和第一轮播放窗焦点验证已完成；第二轮到 `startup +6873ms BILISAIL_FOCUS_STAGE:space` 后没有继续，也没有观察到原有 60 秒探测超时生效。普通和强制取消请求后，GitHub 仍持续显示运行中，数分钟后才结束；GitHub 的取消协议本身也有 [5 分钟服务端强制终止上限](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation)，不能仅凭取消耗时推断应用内的具体死锁。
+
+同提交的 [CI x64 任务](https://github.com/CKopoer/BiliSail/actions/runs/41171077936/job/124450943494) 通过了两轮焦点验证、全部凭据阶段和 DMG 打包。按用户要求单独重跑的 [Release 第 2 次 x64 任务](https://github.com/CKopoer/BiliSail/actions/runs/41171104657/job/124462425578) 也已成功，随后创建发布草稿。这些是原代码的通过记录，不能作为下面新保护逻辑的 macOS 验证。
+
+源码复核发现以下流程缺口，但旧日志不足以确认当次是否由其中某项触发：
+
+- `ReadLineAsync` 和超时检查位于同一个 PowerShell 监督进程。原每轮 128 行限制没有约束单行长度；连续可读且不换行的输出可能让读行操作持续工作并累积内存。监督器自身阻塞时，其内部计时也无法提供独立保护。
+- `*.result.json` 只在探测结束后写入，强制终止前没有可靠的磁盘现场；`lastStage` 还忽略了 `FOCUS_STAGE`，只能保留更早的 `first-frame`。
+- macOS 沿用全平台 90 分钟 job 上限；诊断上传仅匹配 `failure()`，取消时不能尝试保存脱敏结果。
+
+修复在 worker 内改为每次 1024 字符、每轮每路最多 16 块的异步读取；每行最多保留 512 字符，超限后丢弃到下一换行，不能把超长行尾部伪装成确认或阶段标记。未换行的 EOF 片段不作为完整确认行。父进程提供上文的独立硬限额；原生启动、Dart 执行、凭据步骤及最终签名／权限门槛均不放宽，也不自动重试探测。
+
+每个白名单阶段（包含焦点阶段）到达时原子替换脱敏 JSON，轨迹与控制台诊断各限制 128 条。超时终止前先记录超时类别；外层回收 worker 时保留最近一份完整快照，并标记 `timeoutKind=supervisor`。失败或取消的 macOS 任务可尝试上传这些 JSON，上传另限 2 分钟，仍不上传原生／网络原始输出或凭据。runner 本身失去响应时，现场上传不能保证执行。
+
+本机 Windows 的定向回归覆盖原 10 个真实子进程场景，以及未换行输出超时、超长行后的恢复／伪确认拒绝、EOF 伪确认拒绝、运行中焦点快照、外层限时回收 worker 和其子进程；另用同步完成的读取器直接检查单轮工作量和保留内存的上限。本轮未修改原生键盘事件或播放器行为；当次空格事件路径的具体阻塞点仍需 macOS 进程栈或可重复现场确认。
+
+Windows x64 / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过格式、静态分析、打包边界及 4506 项 Dart／Flutter 测试（根 3752、API 499、播放器 105、弹幕 145、封装 5）。13 项 Windows 符号链接用例因权限不足、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。14 个真实子进程监督场景通过；四份 PowerShell 脚本语法、两份工作流的 actionlint 1.7.12、13 个本地文档链接和 `git diff --check` 通过。五份锁文件未变化。本轮没有 macOS 构建、实机或新脚本的远端 CI 验证，独立 worker、收紧的 Actions 上限及取消诊断上传仍需在 macOS runner 实际执行确认。
 
 ## 旧数据与升级单独验收
 

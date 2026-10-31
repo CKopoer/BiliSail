@@ -55,7 +55,116 @@ function Get-MacOSSmokeDiagnosticLines([string]$Text) {
   }
 }
 
+function Write-MacOSSmokeStatus([string]$Path, [System.Collections.IDictionary]$Status) {
+  # A killed worker must leave either the previous complete snapshot or the new
+  # one, never a partially written JSON document for the parent/artifact upload.
+  $temporary = "$Path.new"
+  [System.IO.File]::WriteAllText($temporary, ($Status | ConvertTo-Json -Depth 5))
+  [System.IO.File]::Move($temporary, $Path, $true)
+}
+
+function Wait-MacOSSmokeSupervisor([System.Diagnostics.Process]$Process, [int]$TimeoutMilliseconds) {
+  # This parent never reads redirected pipes or runs the probe loop. A wedged
+  # reader, native child or worker teardown cannot prevent this deadline.
+  $timedOut = !$Process.WaitForExit($TimeoutMilliseconds)
+  if ($timedOut) {
+    $Process.Kill($true)
+    if (!$Process.WaitForExit(5000)) { throw 'macOS smoke supervisor did not stop after termination.' }
+  }
+  return $timedOut
+}
+
 function Invoke-MacOSReleaseSmokePhase {
+  param(
+    [string]$Executable, [string]$Phase, [string]$RunId, [string]$WorkingDirectory,
+    [ValidateRange(1, 60)][int]$TimeoutSeconds = 60,
+    [ValidateRange(1, 300)][int]$LaunchTimeoutSeconds = 180,
+    [string[]]$LauncherArguments = @()
+  )
+  $resultPath = Join-Path $WorkingDirectory "$Phase.result.json"
+  $status = [ordered]@{ phase = $Phase; timedOut = $false; timeoutKind = $null; acknowledged = $false; lastStage = $null }
+  Write-MacOSSmokeStatus $resultPath $status
+  $start = [System.Diagnostics.ProcessStartInfo]::new()
+  $start.FileName = (Get-Process -Id $PID).Path
+  $start.UseShellExecute = $false
+  $start.CreateNoWindow = $true
+  # Inherit only the worker's sanitized console output. No parent pipe reader
+  # shares the worker's timer or can wait for a native child's newline/EOF.
+  foreach ($argument in @(
+    '-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'macos-smoke-worker.ps1'),
+    '-Executable', $Executable, '-Phase', $Phase, '-RunId', $RunId,
+    '-WorkingDirectory', $WorkingDirectory, '-TimeoutSeconds', "$TimeoutSeconds",
+    '-LaunchTimeoutSeconds', "$LaunchTimeoutSeconds", '-LauncherArgumentsJson', (ConvertTo-Json -InputObject @($LauncherArguments) -Compress)
+  )) { $start.ArgumentList.Add($argument) }
+  $worker = [System.Diagnostics.Process]::new()
+  $worker.StartInfo = $start
+  # Include PowerShell startup and the worker's two 5-second stop/drain budgets.
+  $supervisorTimeoutSeconds = $LaunchTimeoutSeconds + $TimeoutSeconds + 20
+  $clock = [System.Diagnostics.Stopwatch]::StartNew()
+  $started = $false
+  try {
+    $started = $worker.Start()
+    if (!$started) { throw 'Could not launch the macOS smoke supervisor.' }
+    $timedOut = Wait-MacOSSmokeSupervisor $worker ($supervisorTimeoutSeconds * 1000)
+    $status = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json -AsHashtable
+    $status.supervisorTimeoutSeconds = $supervisorTimeoutSeconds
+    $status.supervisorElapsedMilliseconds = $clock.ElapsedMilliseconds
+    $status.supervisorTimedOut = $timedOut
+    if ($timedOut) {
+      $status.timedOut = $true
+      $status.timeoutKind = 'supervisor'
+      $status.acknowledged = $false
+    }
+    Write-MacOSSmokeStatus $resultPath $status
+    if ($timedOut) { throw "macOS Release smoke phase '$Phase' supervisor timed out (last stage: $($status.lastStage))." }
+    if ($worker.ExitCode -ne 0) {
+      if (!$status.timedOut -and $status.Contains('launchMilliseconds') -and $null -eq $status.launchMilliseconds) {
+        throw "macOS Release smoke phase '$Phase' exited before Dart entry."
+      }
+      throw "macOS Release smoke phase '$Phase' failed (last stage: $($status.lastStage), timeout: $($status.timeoutKind))."
+    }
+    if ($status.timedOut -or !$status.outputDrained -or $null -eq $status.launchMilliseconds) {
+      throw "macOS Release smoke phase '$Phase' has an incomplete supervisor result."
+    }
+    $marker = if ($status.acknowledged) { "BILISAIL_RELEASE_SMOKE_OK:${Phase}:$RunId" } else { '' }
+    Confirm-MacOSSmokeResult $status.exitCode $marker $Phase $RunId
+  } finally {
+    if ($started -and !$worker.HasExited) { $worker.Kill($true); [void]$worker.WaitForExit(5000) }
+    $worker.Dispose()
+  }
+}
+
+function Read-MacOSSmokePipe([hashtable]$Pipe) {
+  # ReadLineAsync has no line-size bound and can keep consuming a continuously
+  # available unterminated line before returning control to its caller. Fixed
+  # chunks bound both synchronous work and retained text in every pass.
+  for ($index = 0; $index -lt 16 -and !$Pipe.closed -and $Pipe.task.IsCompleted; $index++) {
+    $count = $Pipe.task.GetAwaiter().GetResult()
+    if ($count -eq 0) { $Pipe.closed = $true; break }
+    $text = [string]::new($Pipe.buffer, 0, $count)
+    if (![string]::IsNullOrWhiteSpace($text)) { $Pipe.present = $true }
+    $parts = $text -split '\r\n|\r|\n'
+    for ($partIndex = 0; $partIndex -lt $parts.Count; $partIndex++) {
+      if (!$Pipe.discarding) {
+        if ($Pipe.pending.Length + $parts[$partIndex].Length -le 512) {
+          $Pipe.pending += $parts[$partIndex]
+        } else {
+          $Pipe.pending = ''
+          $Pipe.discarding = $true
+          $Pipe.oversizedLines++
+        }
+      }
+      if ($partIndex -lt $parts.Count - 1) {
+        if (!$Pipe.discarding -and $Pipe.pending.Length) { $Pipe.pending }
+        $Pipe.pending = ''
+        $Pipe.discarding = $false
+      }
+    }
+    $Pipe.task = $Pipe.reader.ReadAsync($Pipe.buffer, 0, $Pipe.buffer.Length)
+  }
+}
+
+function Invoke-MacOSReleaseSmokePhaseCore {
   param(
     [string]$Executable, [string]$Phase, [string]$RunId, [string]$WorkingDirectory,
     [ValidateRange(1, 60)][int]$TimeoutSeconds = 60,
@@ -66,6 +175,7 @@ function Invoke-MacOSReleaseSmokePhase {
   $start = [System.Diagnostics.ProcessStartInfo]::new()
   $start.FileName = $Executable
   $start.UseShellExecute = $false
+  $start.CreateNoWindow = $true
   $start.RedirectStandardOutput = $true
   $start.RedirectStandardError = $true
   foreach ($argument in @($LauncherArguments) + @('--bilisail-release-smoke', $Phase, $RunId)) { $start.ArgumentList.Add($argument) }
@@ -78,43 +188,50 @@ function Invoke-MacOSReleaseSmokePhase {
     if (!$started) { throw 'Could not launch the macOS Release application.' }
     $processStartedMilliseconds = $clock.ElapsedMilliseconds
     Write-Host "macOS Release smoke phase '$Phase' launched."
-    # Read both pipes continuously. Discard raw lines immediately, retaining
-    # only exact acknowledgements and fixed diagnostic stages with timings.
+    $resultPath = Join-Path $WorkingDirectory "$Phase.result.json"
+    $progress = [ordered]@{ phase = $Phase; timedOut = $false; timeoutKind = $null; acknowledged = $false; lastStage = $null; stages = @() }
+    Write-MacOSSmokeStatus $resultPath $progress
+    # Raw output stays in bounded memory; only complete, whitelisted lines can
+    # update a diagnostic snapshot or acknowledge the probe.
     $pipes = @(
-      @{ reader = $process.StandardOutput; task = $process.StandardOutput.ReadLineAsync(); closed = $false; stderr = $false }
-      @{ reader = $process.StandardError; task = $process.StandardError.ReadLineAsync(); closed = $false; stderr = $true }
+      @{ reader = $process.StandardOutput; buffer = [char[]]::new(1024); closed = $false; stderr = $false; present = $false; pending = ''; discarding = $false; oversizedLines = 0 }
+      @{ reader = $process.StandardError; buffer = [char[]]::new(1024); closed = $false; stderr = $true; present = $false; pending = ''; discarding = $false; oversizedLines = 0 }
     )
+    foreach ($pipe in $pipes) { $pipe.task = $pipe.reader.ReadAsync($pipe.buffer, 0, $pipe.buffer.Length) }
     $marker = "BILISAIL_RELEASE_SMOKE_OK:${Phase}:$RunId"
     $acknowledged = $false
     $stderrPresent = $false
     $dartEntryMilliseconds = $null
     $lastStage = $null
     $stages = [System.Collections.Generic.List[object]]::new()
+    $diagnosticCount = 0
     $timedOut = $false
     $timeoutKind = $null
     $exitedAt = $null
     while ($true) {
       foreach ($pipe in $pipes) {
-        # Bound each pass so a busy pipe cannot starve the other or the timer.
-        for ($lineIndex = 0; $lineIndex -lt 128 -and !$pipe.closed -and $pipe.task.IsCompleted; $lineIndex++) {
-          $line = $pipe.task.GetAwaiter().GetResult()
-          if ($null -eq $line) { $pipe.closed = $true; break }
-          if ($pipe.stderr -and ![string]::IsNullOrWhiteSpace($line)) { $stderrPresent = $true }
+        foreach ($line in @(Read-MacOSSmokePipe $pipe)) {
           if (!$pipe.stderr -and $line -ceq $marker) { $acknowledged = $true }
           foreach ($diagnostic in @(Get-MacOSSmokeDiagnosticLines $line)) {
             if ($diagnostic -ceq 'BILISAIL_RELEASE_STAGE:dart-entry' -and $null -eq $dartEntryMilliseconds) {
               $dartEntryMilliseconds = $clock.ElapsedMilliseconds
             }
-            Write-Host "macOS smoke '$Phase' +$($clock.ElapsedMilliseconds)ms $diagnostic"
-            if ($diagnostic -cmatch '^BILISAIL_(NATIVE|RELEASE|CREDENTIAL)_STAGE:') {
+            if ($diagnosticCount -lt 128) {
+              Write-Host "macOS smoke '$Phase' +$($clock.ElapsedMilliseconds)ms $diagnostic"
+              $diagnosticCount++
+            }
+            if ($diagnostic -cmatch '^BILISAIL_(NATIVE|RELEASE|CREDENTIAL|FOCUS)_STAGE:') {
               $lastStage = $diagnostic
               if ($stages.Count -lt 128) {
                 $stages.Add([ordered]@{ stage = $diagnostic; elapsedMilliseconds = $clock.ElapsedMilliseconds })
+                $progress.lastStage = $lastStage
+                $progress.stages = $stages.ToArray()
+                Write-MacOSSmokeStatus $resultPath $progress
               }
             }
           }
-          $pipe.task = $pipe.reader.ReadLineAsync()
         }
+        if ($pipe.stderr -and $pipe.present) { $stderrPresent = $true }
       }
       if ($process.HasExited) {
         if ($null -eq $exitedAt) { $exitedAt = $clock.ElapsedMilliseconds }
@@ -129,7 +246,11 @@ function Invoke-MacOSReleaseSmokePhase {
         }
         if ($null -ne $timeoutKind) {
           $timedOut = $true
-          $process.Kill()
+          Write-Host "macOS smoke '$Phase' timed out during $timeoutKind (last stage: $lastStage)."
+          $progress.timedOut = $true
+          $progress.timeoutKind = $timeoutKind
+          Write-MacOSSmokeStatus $resultPath $progress
+          $process.Kill($true)
           if (!$process.WaitForExit(5000)) { throw 'macOS smoke child did not stop after termination.' }
         }
       }
@@ -144,6 +265,7 @@ function Invoke-MacOSReleaseSmokePhase {
       acknowledged = $acknowledged
       stderrPresent = $stderrPresent
       outputDrained = $outputDrained
+      oversizedLines = $pipes[0].oversizedLines + $pipes[1].oversizedLines
       lastStage = $lastStage
       processStartMilliseconds = $processStartedMilliseconds
       launchMilliseconds = $dartEntryMilliseconds
@@ -153,7 +275,7 @@ function Invoke-MacOSReleaseSmokePhase {
       elapsedMilliseconds = $clock.ElapsedMilliseconds
       stages = $stages.ToArray()
     }
-    $status | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkingDirectory "$Phase.result.json") -Encoding utf8
+    Write-MacOSSmokeStatus $resultPath $status
     if ($timedOut) { throw "macOS Release smoke phase '$Phase' timed out during $timeoutKind (last stage: $lastStage)." }
     if (!$outputDrained) { throw "macOS Release smoke phase '$Phase' did not close its output pipes." }
     if ($null -eq $dartEntryMilliseconds) { throw "macOS Release smoke phase '$Phase' exited before Dart entry." }
@@ -162,7 +284,7 @@ function Invoke-MacOSReleaseSmokePhase {
     Write-Host "macOS Release smoke phase '$Phase' passed."
   } finally {
     # Only stop the exact child process created above, never an existing app.
-    if ($started -and !$process.HasExited) { $process.Kill(); [void]$process.WaitForExit(5000) }
+    if ($started -and !$process.HasExited) { $process.Kill($true); [void]$process.WaitForExit(5000) }
     $process.Dispose()
   }
 }

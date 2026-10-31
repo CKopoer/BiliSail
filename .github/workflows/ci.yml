@@ -243,7 +243,7 @@ jobs:
     name: Build ${{ matrix.target }}
     needs: [prepare, check, native-mux]
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: ${{ startsWith(matrix.target, 'macos-') && 40 || 90 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
@@ -345,6 +345,7 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-version
           pod --version
       - name: Build and package preview
+        timeout-minutes: ${{ startsWith(matrix.target, 'macos-') && 30 || 90 }}
         shell: pwsh
         env:
           BUILD_TARGET: ${{ matrix.target }}
@@ -383,7 +384,8 @@ jobs:
           retention-days: 14
           compression-level: 0
       - name: Upload macOS smoke results
-        if: failure() && startsWith(matrix.target, 'macos-')
+        if: (failure() || cancelled()) && startsWith(matrix.target, 'macos-')
+        timeout-minutes: 2
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: BiliSail-${{ matrix.target }}-smoke-diagnostics
