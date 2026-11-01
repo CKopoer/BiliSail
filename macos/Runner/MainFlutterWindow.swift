@@ -334,7 +334,10 @@ private final class DesktopWindowController {
         result(nil)
       case "activate":
         if window.isMiniaturized { window.deminiaturize(nil) }
-        NSApp.activate(ignoringOtherApps: true)
+        // Switching windows inside the foreground app does not require another
+        // process activation. Intel CI has stalled in AppKit/WindowServer's
+        // activation path after the target's initial focus was already valid.
+        if !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
         window.makeKeyAndOrderFront(nil)
         result(nil)
       case "setBackButton":

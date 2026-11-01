@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD 与安装包
 
-更新日期：2026-11-01。配置覆盖 Android arm64、Windows x64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
+更新日期：2026-11-02。配置覆盖 Android arm64、Windows x64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
 
 ## 入口与分工
 
@@ -136,6 +136,10 @@ Release 草稿及全部附件上传成功后，使用 GitHub 官方 [actions/git
 用例改为通过已有 `BiliApiClient.clock` 注入固定起点，在该受限请求超时取消时明确推进到截止点，随后验证不再请求、底层取消及精确的 250 ms 单次预算。生产重试策略保持原实现，断言没有放宽。受控将用例内的计时器改为立即回调时，旧用例稳定复现同样的 1／3 次断言差异，修改后通过；对应诊断脚本与日志为 `build/validation/deadline-clock-{original,fixed}_test.dart`、`build/validation/deadline-clock-{original,fixed}.log`。正常计时器下，超时／重试专项 8 项与 `dart analyze` 均通过。
 
 本机 Windows / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 全部通过，覆盖打包边界、格式、静态分析及 4651 项 Dart／Flutter 测试（根应用 3860、API 536、播放器 105、弹幕 145、封装 5）。13 项 Windows 符号链接用例因权限不足、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。本文 43 条本地链接与 `git diff --check` 通过，五份锁文件无修改。日志为 `build/api-deadline-clock-fix-check.log`。本次修改仅涉及测试与验证记录，未执行新安装包构建或设备操作；没有运行中的调试应用可执行热重载。
+
+### Intel macOS 打包前 GUI 验收超时（2026-11-02）
+
+[CI 41323620524](https://github.com/CKopoer/BiliSail/actions/runs/41323620524/job/124901479137) 只有 Intel macOS job 失败：Release 编译及签名已完成，两轮播放窗 Space 检查通过后，启动探测超时；其他五个平台与所有检查通过。线程采样定位到 AppKit 应用激活／WindowServer 与虚拟 GPU 等待。共享窗口激活现在仅在应用未激活时请求 `NSApp.activate`，并补充窗口再激活和回收阶段记录；完整证据、修复范围及本机验证边界见[启动专项](macos-release-startup.md#2026-11-02intel-重复应用激活与图形等待)。原有发布验收与超时门槛继续保留，新的 Intel 原生运行结果仍待对应 CI 复验。
 
 ## Android 固定签名与覆盖升级
 

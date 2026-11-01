@@ -161,24 +161,32 @@ Future<void> verifyMacOSPlaybackWindows(
         throw StateError('Playback Space sequence was not handled');
       }
       stderr.writeln('BILISAIL_FOCUS_STAGE:passed');
+      stderr.writeln('BILISAIL_FOCUS_STAGE:bind');
       await playback.windowService.bindTitleBarBack(
         owner: owner,
         onBack: () {},
       );
+      stderr.writeln('BILISAIL_FOCUS_STAGE:reactivate');
       await playback.windowService.activate();
+      stderr.writeln('BILISAIL_FOCUS_STAGE:reactivated');
     } finally {
       try {
+        stderr.writeln('BILISAIL_FOCUS_STAGE:unbind');
         await playback.windowService.unbindTitleBarBack(owner);
+        stderr.writeln('BILISAIL_FOCUS_STAGE:geometry');
         await playback.saveGeometry();
       } finally {
+        stderr.writeln('BILISAIL_FOCUS_STAGE:detach');
         mainWindow.present(app);
         try {
           await binding.endOfFrame.timeout(const Duration(seconds: 5));
         } finally {
           // Native removal can pump frames. Leave the frame stack first.
           await Future<void>.delayed(Duration.zero);
+          stderr.writeln('BILISAIL_FOCUS_STAGE:retire');
           playback.dispose();
           input.dispose();
+          stderr.writeln('BILISAIL_FOCUS_STAGE:retired');
         }
       }
     }

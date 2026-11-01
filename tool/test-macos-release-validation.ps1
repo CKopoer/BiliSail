@@ -79,6 +79,14 @@ if ($safe.Count -ne 14 -or ($safe -join "`n") -match 'private|FlutterView|https:
   throw 'macOS smoke diagnostics leaked non-whitelisted output.'
 }
 
+foreach ($stage in @('bind', 'reactivate', 'reactivated', 'unbind', 'geometry', 'detach', 'retire', 'retired')) {
+  $line = "BILISAIL_FOCUS_STAGE:$stage"
+  $diagnostics = @(Get-MacOSSmokeDiagnosticLines "$line`n$line private`n${line}:https://example.invalid/?token=private")
+  if ($diagnostics.Count -ne 1 -or $diagnostics[0] -cne $line) {
+    throw 'macOS playback activation/retirement diagnostics lost a stage or accepted private output.'
+  }
+}
+
 # A synchronously completing reader must yield after bounded chunks even when
 # there is no newline, then discard the entire oversized line before recovery.
 $pipe = @{
