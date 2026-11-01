@@ -9,6 +9,40 @@ final class SearchClient {
   final BiliApiClient api;
   static const _endpoint = 'search';
 
+  Future<List<String>> suggestions(
+    String query, {
+    ApiRequestContext? context,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty || term.length > 200) return const [];
+    final data = await api.requestWbiJson(
+      '/x/web-interface/suggest',
+      {
+        'term': term,
+        'highlight': '0',
+        'spmid': '333.1365',
+        'web_location': '333.1365',
+      },
+      'search_suggestions',
+      context: context,
+    );
+    final result = data['result'];
+    if (result is! Map<String, Object?>) return _fail();
+    final tags = result['tag'];
+    if (tags == null) return const [];
+    if (tags is! List<Object?>) return _fail();
+    final terms = <String>{};
+    for (final tag in tags.take(30)) {
+      if (tag is! Map<String, Object?>) continue;
+      final value = tag['term'];
+      if (value is! String) continue;
+      final text = value.trim();
+      if (text.isNotEmpty && text.length <= 200) terms.add(text);
+      if (terms.length == 10) break;
+    }
+    return List.unmodifiable(terms);
+  }
+
   Future<List<ApiSearchTrend>> trending({ApiRequestContext? context}) async {
     final data = await api.requestJson(
       Uri.https('api.bilibili.com', '/x/v2/search/trending/ranking', {

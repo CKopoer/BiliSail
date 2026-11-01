@@ -22,6 +22,43 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  for (final mode in WorkspaceNavigationMode.values) {
+    _workspaceTestWidgets(
+      'submitted search clears across navigation in $mode',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1200, 800);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final router = _router(
+          (_, tab) => Text('page ${tab.location.path}'),
+          navigationMode: mode,
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(InputTestApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
+        router.go('/search?q=existing');
+        await tester.pumpAndSettle();
+        final search = find.byKey(const ValueKey('workspace-search'));
+        expect(tester.widget<TextField>(search).controller!.text, isEmpty);
+        await tester.enterText(search, ' 新关键词 ');
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters['q'],
+          '新关键词',
+        );
+        expect(tester.widget<TextField>(search).controller!.text, isEmpty);
+        router.go('/dynamic');
+        await tester.pumpAndSettle();
+        router.go('/search?q=新关键词');
+        await tester.pumpAndSettle();
+        expect(tester.widget<TextField>(search).controller!.text, isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   final returnToPlayback = find.byKey(
     const ValueKey('workspace-return-to-playback'),
   );

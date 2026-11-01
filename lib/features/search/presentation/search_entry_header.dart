@@ -30,8 +30,6 @@ final class SearchEntryHeader extends StatefulWidget {
 
 final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
   final _overlay = OverlayPortalController();
-  final _link = LayerLink();
-  final _anchor = GlobalKey();
   final _focus = FocusNode();
   final _tapGroup = Object();
   bool _open = false;
@@ -65,7 +63,7 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
     final query = value.trim();
     if (query.isEmpty) return;
     _close();
-    widget.controller.text = query;
+    widget.controller.clear();
     unawaited(
       ProviderScope.containerOf(
         context,
@@ -130,13 +128,13 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
       final tools = Row(
         children: [
           Expanded(
-            child: CompositedTransformTarget(
-              link: _link,
+            child: OverlayPortal.overlayChildLayoutBuilder(
+              controller: _overlay,
+              overlayChildBuilder: _buildOverlay,
               child: TapRegion(
                 groupId: _tapGroup,
                 onTapOutside: (_) => _close(),
                 child: SizedBox(
-                  key: _anchor,
                   height: 36,
                   child: CallbackShortcuts(
                     bindings: {
@@ -177,148 +175,134 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
             _collapsingTool(trailing, inline: inline, duration: duration),
         ],
       );
-      return OverlayPortal(
-        controller: _overlay,
-        overlayChildBuilder: (context) {
-          final box = _anchor.currentContext?.findRenderObject() as RenderBox?;
-          final width = inline && _open
-              ? expandedWidth - 20
-              : box?.size.width ?? expandedWidth;
-          final bottom = box == null
-              ? 90.0
-              : box.localToGlobal(Offset(0, box.size.height)).dy;
-          final height = math.max(
-            0.0,
-            math.min(
-              520.0,
-              MediaQuery.sizeOf(context).height -
-                  MediaQuery.viewInsetsOf(context).bottom -
-                  bottom -
-                  16,
-            ),
-          );
-          return Positioned.fill(
-            child: Stack(
-              children: [
-                CompositedTransformFollower(
-                  link: _link,
-                  showWhenUnlinked: false,
-                  targetAnchor: Alignment.bottomLeft,
-                  offset: const Offset(0, 6),
-                  child: TapRegion(
-                    groupId: _tapGroup,
-                    child: SizedBox(
-                      width: width,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxHeight: height),
-                        child: CallbackShortcuts(
-                          bindings: {
-                            const SingleActivator(LogicalKeyboardKey.escape):
-                                _close,
-                          },
-                          child: Material(
-                            elevation: 8,
-                            shadowColor: Colors.black26,
-                            color: Theme.of(context).colorScheme.surface,
-                            borderRadius: BorderRadius.circular(12),
-                            clipBehavior: Clip.antiAlias,
-                            child: SearchDiscoveryPanel(onSearch: _submit),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-        child: SizedBox(
-          height: inline ? 58 : 52,
-          child: Stack(
-            children: [
-              if (inline && widget.navigation != null)
-                Positioned.fill(
-                  left: toolWidth,
-                  child: IgnorePointer(
-                    ignoring: _open,
-                    child: ExcludeFocus(
-                      excluding: _open,
-                      child: ExcludeSemantics(
-                        excluding: _open,
-                        child: TweenAnimationBuilder<double>(
-                          duration: duration,
-                          tween: Tween(end: _open ? 1 : 0),
-                          builder: (context, value, child) => Opacity(
-                            opacity: 1 - value,
-                            child: ImageFiltered(
-                              imageFilter: ImageFilter.blur(
-                                sigmaX: value * 5,
-                                sigmaY: value * 5,
-                              ),
-                              child: child,
-                            ),
-                          ),
-                          child: widget.navigation,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+      return SizedBox(
+        height: inline ? 58 : 52,
+        child: Stack(
+          children: [
+            if (inline && widget.navigation != null)
               Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Row(
-                    children: [
-                      ?widget.leading,
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, searchConstraints) {
-                            final leadingWidth =
-                                constraints.maxWidth -
-                                searchConstraints.maxWidth -
-                                20;
-                            // Keep the search centered in the whole header while
-                            // the account and back controls retain their space.
-                            return Stack(
-                              children: [
-                                AnimatedPositioned(
-                                  duration: duration,
-                                  curve: Curves.easeInOutCubic,
-                                  left: inline && _open
-                                      ? math.max(
-                                          0,
-                                          (constraints.maxWidth -
-                                                      expandedWidth) /
-                                                  2 -
-                                              leadingWidth,
-                                        )
-                                      : 0,
-                                  width: inline && _open
-                                      ? math.min(
-                                          expandedWidth - 20,
-                                          searchConstraints.maxWidth,
-                                        )
-                                      : toolWidth - 20 - leadingWidth,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: tools,
-                                ),
-                              ],
-                            );
-                          },
+                left: toolWidth,
+                child: IgnorePointer(
+                  ignoring: _open,
+                  child: ExcludeFocus(
+                    excluding: _open,
+                    child: ExcludeSemantics(
+                      excluding: _open,
+                      child: TweenAnimationBuilder<double>(
+                        duration: duration,
+                        tween: Tween(end: _open ? 1 : 0),
+                        builder: (context, value, child) => Opacity(
+                          opacity: 1 - value,
+                          child: ImageFiltered(
+                            imageFilter: ImageFilter.blur(
+                              sigmaX: value * 5,
+                              sigmaY: value * 5,
+                            ),
+                            child: child,
+                          ),
                         ),
+                        child: widget.navigation,
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ],
-          ),
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: [
+                    ?widget.leading,
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, searchConstraints) {
+                          final leadingWidth =
+                              constraints.maxWidth -
+                              searchConstraints.maxWidth -
+                              20;
+                          // Keep the search centered in the whole header while
+                          // the account and back controls retain their space.
+                          return Stack(
+                            children: [
+                              AnimatedPositioned(
+                                duration: duration,
+                                curve: Curves.easeInOutCubic,
+                                left: inline && _open
+                                    ? math.max(
+                                        0,
+                                        (constraints.maxWidth - expandedWidth) /
+                                                2 -
+                                            leadingWidth,
+                                      )
+                                    : 0,
+                                width: inline && _open
+                                    ? math.min(
+                                        expandedWidth - 20,
+                                        searchConstraints.maxWidth,
+                                      )
+                                    : toolWidth - 20 - leadingWidth,
+                                top: 0,
+                                bottom: 0,
+                                child: tools,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       );
     },
   );
+
+  Widget _buildOverlay(BuildContext context, OverlayChildLayoutInfo info) {
+    final rect = MatrixUtils.transformRect(
+      info.childPaintTransform,
+      Offset.zero & info.childSize,
+    );
+    final height = math.max(
+      0.0,
+      math.min(
+        520.0,
+        info.overlaySize.height -
+            MediaQuery.viewInsetsOf(context).bottom -
+            rect.bottom -
+            16,
+      ),
+    );
+    return Positioned(
+      left: rect.left,
+      top: rect.bottom + 6,
+      width: rect.width,
+      child: TapRegion(
+        groupId: _tapGroup,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: height),
+          child: CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.escape): _close,
+            },
+            child: Material(
+              elevation: 8,
+              shadowColor: Colors.black26,
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              clipBehavior: Clip.antiAlias,
+              child: SearchDiscoveryPanel(
+                controller: widget.controller,
+                onSearch: _submit,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _collapsingTool(
     Widget child, {
@@ -397,6 +381,9 @@ final class _SearchPageState extends State<_SearchPage> {
         ),
       ],
     ),
-    body: SafeArea(top: false, child: SearchDiscoveryPanel(onSearch: _submit)),
+    body: SafeArea(
+      top: false,
+      child: SearchDiscoveryPanel(controller: _text, onSearch: _submit),
+    ),
   );
 }

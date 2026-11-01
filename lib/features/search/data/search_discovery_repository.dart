@@ -45,6 +45,15 @@ final class SqliteSearchDiscoveryRepository
   }
 
   @override
+  Future<List<String>> loadSuggestions(
+    String query,
+    RequestCancellation cancellation,
+  ) => requests.run(
+    (context) => client.suggestions(query, context: context),
+    cancellation: cancellation,
+  );
+
+  @override
   Future<List<SearchTrend>> loadTrending(RequestCancellation cancellation) =>
       requests.run(
         (context) async => [
@@ -66,6 +75,12 @@ final class MemorySearchDiscoveryRepository
   Future<void> saveHistory(String scope, List<String> history) async {
     _history[scope] = normalizeSearchHistory(history);
   }
+
+  @override
+  Future<List<String>> loadSuggestions(
+    String query,
+    RequestCancellation cancellation,
+  ) async => const [];
 
   @override
   Future<List<SearchTrend>> loadTrending(

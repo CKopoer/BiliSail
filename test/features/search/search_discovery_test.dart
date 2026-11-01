@@ -13,6 +13,67 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('individual deletion serializes with remember, persists and retains history on failure', () async {
+    final repository = _Repository();
+    final container = ProviderContainer(
+      overrides: [
+        searchDiscoveryRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(
+      searchDiscoveryControllerProvider.notifier,
+    );
+    await Future.wait([
+      controller.remember('一'),
+      controller.remember('二'),
+      controller.removeHistory('一'),
+    ]);
+    expect(container.read(searchDiscoveryControllerProvider).history, ['二']);
+    expect(await repository.loadHistory('guest'), ['二']);
+    repository.failSave = true;
+    await controller.removeHistory('二');
+    expect(container.read(searchDiscoveryControllerProvider).history, ['二']);
+    expect(
+      container.read(searchDiscoveryControllerProvider).historyError,
+      isTrue,
+    );
+  });
+
+  test('recording off skips submissions and queued saves but permits delete and clear', () async {
+    final recording = StateProvider<bool>((ref) => true);
+    final repository = _Repository()..delayed = true;
+    final container = ProviderContainer(
+      overrides: [
+        searchHistoryRecordingProvider.overrideWith(
+          (ref) => ref.watch(recording),
+        ),
+        searchDiscoveryRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(
+      searchDiscoveryControllerProvider.notifier,
+    );
+    final pending = controller.remember('排队中');
+    container.read(recording.notifier).state = false;
+    repository.oldHistory.complete(['旧历史', '保留']);
+    await pending;
+    repository.delayed = false;
+    await controller.remember('关闭后');
+    expect(container.read(searchDiscoveryControllerProvider).history, [
+      '旧历史',
+      '保留',
+    ]);
+    await controller.removeHistory('旧历史');
+    expect(container.read(searchDiscoveryControllerProvider).history, ['保留']);
+    await controller.clearHistory();
+    expect(await repository.loadHistory('guest'), isEmpty);
+    container.read(recording.notifier).state = true;
+    await controller.remember('重新开启');
+    expect(await repository.loadHistory('guest'), ['重新开启']);
+  });
+
   test('history persists, normalizes, bounds and isolates accounts; logout clears private history', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
@@ -210,6 +271,12 @@ final class _Repository implements SearchDiscoveryRepository {
     if (failSave) throw StateError('disk');
     return memory.saveHistory(scope, history);
   }
+
+  @override
+  Future<List<String>> loadSuggestions(
+    String query,
+    RequestCancellation cancellation,
+  ) async => [];
 
   @override
   Future<List<SearchTrend>> loadTrending(

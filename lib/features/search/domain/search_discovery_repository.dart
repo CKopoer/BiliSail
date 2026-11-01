@@ -10,6 +10,10 @@ abstract interface class SearchDiscoveryRepository {
   Future<List<String>> loadHistory(String scope);
   Future<void> saveHistory(String scope, List<String> history);
   Future<List<SearchTrend>> loadTrending(RequestCancellation cancellation);
+  Future<List<String>> loadSuggestions(
+    String query,
+    RequestCancellation cancellation,
+  );
 }
 
 List<String> normalizeSearchHistory(Iterable<String> values) {

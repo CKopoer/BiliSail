@@ -81,6 +81,7 @@ final class BiliApiClient {
       '/x/space/wbi/arc/search',
       '/x/web-interface/wbi/search/type',
       '/x/web-interface/wbi/search/all/v2',
+      '/x/web-interface/suggest',
       '/x/player/wbi/v2',
     }.contains(path)) {
       throw ArgumentError('Unsupported WBI endpoint');

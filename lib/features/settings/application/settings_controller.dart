@@ -105,6 +105,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
   );
   Future<void> setCacheImages(bool value) =>
       update((current) => current.copyWith(cacheImages: value));
+  Future<void> setRecordSearchHistory(bool value) =>
+      update((current) => current.copyWith(recordSearchHistory: value));
   Future<void> setCheckPrereleaseUpdates(bool value) =>
       update((current) => current.copyWith(checkPrereleaseUpdates: value));
   Future<void> setWheelDampingRatio(double value) =>

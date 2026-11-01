@@ -24,10 +24,23 @@
 ## 验证边界
 
 - 已增加协议、SQLite 持久化/账号清理、串行保存/失败回退、账号迟到响应与取消、热搜单飞缓存/重试，以及同排动画、分行定位、历史展开/清空、热搜词映射、手机页面/键盘/返回、短窗口和大字体组件测试。
-- `tool/check.ps1 -SkipPub` 的 Lint、RootTests、PackageTests 三阶段在最终源码上分别通过：格式、根应用/四包分析与打包边界检查无问题；根应用 3922 项通过、13 项既有条件用例跳过；bili_api 540、bili_player 121、bili_danmaku 153、bili_mux 5 项通过。mux 另有 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生通过。修改文档的相对链接与 `git diff --check` 通过。
+- 首轮搜索发现实现的 `tool/check.ps1 -SkipPub` 三阶段通过：格式、根应用/四包分析与打包边界检查无问题；根应用 3922 项通过、13 项既有条件用例跳过；bili_api 540、bili_player 121、bili_danmaku 153、bili_mux 5 项通过。mux 另有 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生通过。修改文档的相对链接与 `git diff --check` 通过。
 - 按用户要求没有构建或安装；当前没有可热重载的调试进程。未验证 Android/iOS 实机输入法、macOS 桌面交互、真实在线热搜响应及设备动效手感，由用户后续构建实测。
 
 ### 宽屏头像固定补充
 
 - 搜索入口组件测试 7 项通过，覆盖展开／收起动画中途、760／1200／1600 宽度下的头像位置与点击、搜索居中及面板跟随，同时回归分行与手机独立搜索页。新增断言在修复前能复现头像移动。
 - 不构建或安装；设备交互由用户后续自行验证。
+
+## Issue #50 搜索体验补充
+
+- 根据 [#50](https://github.com/CKopoer/BiliSail/issues/50) 补齐提交后自动清空、单条历史删除、历史记录隐私开关、输入联想和点击候选词搜索。输入框清空与结果页查询身份分离；返回结果页时不会再从路由关键词回填已提交的输入。
+- 实际查看本机官方“哔哩哔哩”应用的历史词条悬停态：浅灰标签右上角浮出小圆叉。自行实现同类交互：悬停、长按或键盘聚焦时显示，预留角标空间以避免词条移动，点击叉号只删除对应历史、不提交搜索；点击词条仍直接搜索。删除与清空沿用账号隔离、串行写入与失败保留旧历史。
+- 搜索面板提供“记录搜索历史”开关，存入 `AppSettings`／`preferences.v1.recordSearchHistory`，沿用设置控制器的即时应用、串行保存、失败回退与恢复默认。缺失或非法值默认开启，已保存的 `false` 保留；无需改变数据库表或 schema。关闭后不记录新搜索，原历史仍可重搜、删除或清空；排队中的记录写入在落盘前再次检查开关。
+- 只读参考本机 PiliPlus `265f879fa85973b4bf885bde2562f1007f1013b8` 的 `lib/http/search.dart`、`lib/http/api.dart`、`lib/models/search/suggest.dart` 和 `lib/pages/search/{controller,view}.dart`，采用联想协议、关键词字段与隐私开关职责；未复制 GPLv3 应用源码或资源，未修改相邻仓库，没有新增依赖。
+- 联想 profile：公开只读 Web JSON，`GET https://api.bilibili.com/x/web-interface/suggest`，Cookie 可选，WBI 签名；参数为 `term`、`highlight=0`、`spmid=333.1365`、`web_location=333.1365`，无 App token／CSRF／分页。沿用 `ApiRequests` 的取消、账号 epoch、25 秒 deadline 与协议层有界重试，Provider 不额外自动重试；失败显示独立重试入口，不影响直接提交关键词。
+- 只读 `data.result.tag[].term`，不把富文本 `name` 当作搜索词。最多检查 30 项，去空白、去重并接纳至多 10 个不超过 200 字符的候选词。输入 300 ms 防抖；新词、清空、关闭面板和账号切换取消旧计时／请求，迟到结果不能覆盖新词。中文输入法组合期间不请求未确认文本；空白和超长输入不请求，候选与关键词不落日志。
+- 面板使用 `OverlayPortal.overlayChildLayoutBuilder` 按输入框实际位置、尺寸与剩余高度布局，继续跟随居中动画，并支持 Flutter 3.47.6 的词条／删除按钮提示框，避免 `CompositedTransformFollower` 内嵌 Tooltip 的布局断言。
+- 定向验证：搜索目录 64 项、API 搜索协议 16 项及三种工作区导航模式的提交清空回归 3 项通过；覆盖单条删除失败、记录开关保存／回退／恢复默认、防抖／取消／迟到响应／账号切换与候选重试。
+- 当前工作区 `tool/check.ps1 -SkipPub` 全部通过：格式、静态分析与打包边界检查无问题；根应用 4001 项通过、13 项既有条件用例跳过；bili_api 544、bili_player 131、bili_danmaku 153、bili_mux 5 项通过。mux 另有 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生通过。文档相对路径及 `git diff --check` 通过。
+- 按用户要求不构建、不安装；无可热重载的调试进程。真实在线联想响应、各平台设备输入法与鼠标／触摸手感留待用户构建后实测。

@@ -2,9 +2,12 @@ import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/search/application/search_discovery_controller.dart';
 import 'package:bilisail/features/search/domain/search_discovery_repository.dart';
 import 'package:bilisail/features/search/presentation/search_entry_header.dart';
+import 'package:bilisail/features/search/presentation/search_history_chip.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -114,7 +117,10 @@ void main() {
       expect(find.text('搜索历史'), findsNothing);
       await tester.tap(field);
       await tester.pumpAndSettle();
-      expect(find.widgetWithText(ActionChip, '查询热搜'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey(('search-history', '查询热搜'))),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('outside')));
       await tester.pumpAndSettle();
       expect(find.text('搜索历史'), findsNothing);
@@ -143,7 +149,10 @@ void main() {
       expect(find.byKey(const ValueKey('search-discovery-page')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('workspace-search')));
       await tester.pumpAndSettle();
-      expect(find.widgetWithText(ActionChip, '手机搜索'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey(('search-history', '手机搜索'))),
+        findsOneWidget,
+      );
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(calls, ['手机搜索']);
@@ -195,8 +204,109 @@ void main() {
             ?.text,
         '未提交的草稿',
       );
-      expect(find.widgetWithText(ActionChip, '未提交的草稿'), findsNothing);
+      expect(
+        find.byKey(const ValueKey(('search-history', '未提交的草稿'))),
+        findsNothing,
+      );
       expect(calls, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'hover and long press reveal a corner delete button without searching',
+    (tester) async {
+      final calls = <String>[];
+      await _mount(tester, width: 1200, inline: true, calls: calls);
+      await tester.tap(find.byKey(const ValueKey('workspace-search')));
+      await tester.pumpAndSettle();
+      final first = find.byKey(const ValueKey(('search-history', '历史0')));
+      final remove = find.byTooltip('删除历史记录：历史0');
+      expect(remove, findsNothing);
+      final rect = tester.getRect(first);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(1100, 700));
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(rect.center);
+      await tester.pumpAndSettle();
+      expect(remove, findsOneWidget);
+      expect(tester.getRect(first), rect);
+      expect(tester.getCenter(remove).dx, greaterThan(rect.center.dx));
+      expect(tester.getCenter(remove).dy, lessThan(rect.center.dy));
+      await mouse.moveTo(const Offset(1100, 700));
+      await tester.pumpAndSettle();
+      expect(remove, findsNothing);
+      await tester.longPress(first);
+      await tester.pumpAndSettle();
+      expect(remove, findsOneWidget);
+      await tester.tap(remove);
+      await tester.pumpAndSettle();
+      expect(first, findsNothing);
+      expect(calls, isEmpty);
+      expect(find.text('搜索历史'), findsOneWidget);
+      expect(find.byType(SearchHistoryChip), findsNWidgets(10));
+    },
+  );
+
+  testWidgets(
+    'privacy toggle skips new history; candidate and history clicks submit and clear',
+    (tester) async {
+      final calls = <String>[];
+      await _mount(tester, width: 1200, inline: true, calls: calls);
+      final field = find.byKey(const ValueKey('workspace-search'));
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('search-history-recording')));
+      await tester.pumpAndSettle();
+      expect(find.text('已关闭历史记录，新搜索不会保存'), findsOneWidget);
+      await tester.enterText(field, '新搜索');
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey(('search-suggestion', '新搜索建议'))),
+      );
+      await tester.pumpAndSettle();
+      expect(calls, ['新搜索建议']);
+      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey(('search-history', '新搜索建议'))),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('search-history-recording')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey(('search-history', '历史2'))));
+      await tester.pumpAndSettle();
+      expect(calls, ['新搜索建议', '历史2']);
+      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widgetList<SearchHistoryChip>(find.byType(SearchHistoryChip))
+            .first
+            .query,
+        '历史2',
+      );
+    },
+  );
+
+  testWidgets(
+    'keyboard submit clears field; blank submit retains open search',
+    (tester) async {
+      final calls = <String>[];
+      await _mount(tester, width: 1200, inline: true, calls: calls);
+      final field = find.byKey(const ValueKey('workspace-search'));
+      await tester.enterText(field, ' 键盘搜索 ');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(calls, ['键盘搜索']);
+      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(calls, ['键盘搜索']);
+      expect(find.text('搜索历史'), findsOneWidget);
     },
   );
 }
@@ -220,11 +330,19 @@ Future<void> _mount(
   });
 
   final text = TextEditingController();
+  final recording = StateProvider<bool>((ref) => true);
   addTearDown(text.dispose);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         searchDiscoveryRepositoryProvider.overrideWithValue(_Repository()),
+        searchHistoryRecordingProvider.overrideWith(
+          (ref) => ref.watch(recording),
+        ),
+        searchHistoryRecordingWriterProvider.overrideWith(
+          (ref) =>
+              (value) async => ref.read(recording.notifier).state = value,
+        ),
       ],
       child: MaterialApp(
         builder: (context, child) => MediaQuery(
@@ -273,6 +391,12 @@ final class _Repository implements SearchDiscoveryRepository {
   Future<void> saveHistory(String scope, List<String> history) async {
     this.history = history;
   }
+
+  @override
+  Future<List<String>> loadSuggestions(
+    String query,
+    RequestCancellation cancellation,
+  ) async => ['$query建议'];
 
   @override
   Future<List<SearchTrend>> loadTrending(

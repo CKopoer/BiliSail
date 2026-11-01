@@ -390,17 +390,13 @@ final class _BiliAppShellState extends State<BiliAppShell>
   TextEditingController _searchFor(WorkspaceTab tab) =>
       _searchControllers.putIfAbsent(tab.id, () {
         final controller = TextEditingController(
-          text:
-              _searchDrafts[tab.id] ?? tab.location.queryParameters['q'] ?? '',
+          text: _searchDrafts[tab.id] ?? '',
         );
         controller.addListener(() => _searchDrafts[tab.id] = controller.text);
         return controller;
       });
   void _restoreSearch() {
-    _searchFor(_displayTab).text =
-        _searchDrafts[_displayTab.id] ??
-        _displayTab.location.queryParameters['q'] ??
-        '';
+    _searchFor(_displayTab).text = _searchDrafts[_displayTab.id] ?? '';
   }
 
   @override

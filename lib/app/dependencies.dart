@@ -468,6 +468,19 @@ class AppDependencies {
           ref.watch(authControllerProvider.select((state) => state.mid));
           return session.accountScope;
         }),
+        searchHistoryRecordingProvider.overrideWith(
+          (ref) => ref.watch(
+            settingsControllerProvider.select(
+              (state) => state.asData?.value.recordSearchHistory ?? false,
+            ),
+          ),
+        ),
+        searchHistoryRecordingWriterProvider.overrideWith(
+          (ref) =>
+              (enabled) => ref
+                  .read(settingsControllerProvider.notifier)
+                  .setRecordSearchHistory(enabled),
+        ),
         searchDiscoveryRepositoryProvider.overrideWithValue(
           SqliteSearchDiscoveryRepository(
             database,

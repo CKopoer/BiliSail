@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/request_cancellation.dart';
+import '../../../domain/app_failure.dart';
 import '../data/search_discovery_repository.dart';
 import '../domain/search_discovery_repository.dart';
 
@@ -10,6 +11,33 @@ final searchDiscoveryRepositoryProvider = Provider<SearchDiscoveryRepository>(
   (ref) => MemorySearchDiscoveryRepository(),
 );
 final searchHistoryScopeProvider = Provider<String>((ref) => 'guest');
+final searchHistoryRecordingProvider = Provider<bool>((ref) => true);
+final searchHistoryRecordingWriterProvider =
+    Provider<Future<void> Function(bool)?>((ref) => null);
+final searchSuggestionsProvider = FutureProvider.autoDispose
+    .family<List<String>, String>((ref, query) async {
+      ref.watch(searchHistoryScopeProvider);
+      final repository = ref.watch(searchDiscoveryRepositoryProvider);
+      final term = query.trim();
+      if (term.isEmpty || term.length > 200) return const [];
+      final cancellation = RequestCancellation();
+      final ready = Completer<void>();
+      final timer = Timer(const Duration(milliseconds: 300), ready.complete);
+      ref.onDispose(() {
+        timer.cancel();
+        cancellation.cancel();
+        if (!ready.isCompleted) ready.complete();
+      });
+      await ready.future;
+      if (cancellation.isCancelled) return const [];
+      try {
+        final result = await repository.loadSuggestions(term, cancellation);
+        return normalizeSearchHistory(result).take(10).toList(growable: false);
+      } on AppFailure catch (error) {
+        if (error.kind == AppFailureKind.cancelled) return const [];
+        rethrow;
+      }
+    }, retry: (_, _) => null);
 final searchDiscoveryControllerProvider =
     NotifierProvider<SearchDiscoveryController, SearchDiscoveryState>(
       SearchDiscoveryController.new,
@@ -69,24 +97,32 @@ final class SearchDiscoveryController extends Notifier<SearchDiscoveryState> {
   bool _current(Object generation) =>
       ref.mounted && identical(_generation, generation);
 
-  Future<void> remember(String query) =>
-      _update((history) => [query, ...history]);
+  Future<void> remember(String query) {
+    if (!ref.read(searchHistoryRecordingProvider)) return Future.value();
+    return _update((history) => [query, ...history], recording: true);
+  }
+
+  Future<void> removeHistory(String query) =>
+      _update((history) => history.where((item) => item != query).toList());
   Future<void> clearHistory() => _update((_) => const [], clear: true);
 
   Future<void> _update(
     List<String> Function(List<String>) update, {
     bool clear = false,
+    bool recording = false,
   }) {
     final generation = _generation;
     final scope = ref.read(searchHistoryScopeProvider);
     final repository = ref.read(searchDiscoveryRepositoryProvider);
     return _pending = _pending.then((_) async {
       if (!_current(generation)) return;
+      if (recording && !ref.read(searchHistoryRecordingProvider)) return;
       try {
         final history = _historyLoaded || clear
             ? state.history
             : await repository.loadHistory(scope);
         if (!_current(generation)) return;
+        if (recording && !ref.read(searchHistoryRecordingProvider)) return;
         final next = normalizeSearchHistory(update(history));
         await repository.saveHistory(scope, next);
         if (!_current(generation)) return;

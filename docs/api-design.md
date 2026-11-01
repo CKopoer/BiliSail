@@ -43,6 +43,8 @@ lib/src/
 
 2026-11-01 搜索发现新增公开只读 Web JSON：`GET https://api.bilibili.com/x/v2/search/trending/ranking?limit=10`，Cookie 可选、无签名/CSRF/App token、无分页；沿用有界读取重试、25 秒总 deadline、取消与账号 epoch。解析 `data.list` 的展示名与真实关键词，进程内缓存成功结果 5 分钟；历史按账号保存在本机，未做在线端点烟测。参考、容量、布局和测试见[搜索历史与热搜](validation/search-discovery-2026-11-01.md)。
 
+同日补充搜索联想：`GET https://api.bilibili.com/x/web-interface/suggest`，Cookie 可选、WBI 签名，无 CSRF／App token／分页；`term` 配合 `highlight=0`、`spmid=333.1365`、`web_location=333.1365`。解析 `data.result.tag[].term`，有界去重至多 10 条；输入 300 ms 防抖，清空、关闭和账号变化取消旧请求，复用 25 秒 deadline 与协议层有界只读重试，Provider 不叠加自动重试。协议来源与离线验证见[专项补充](validation/search-discovery-2026-11-01.md#issue-50-搜索体验补充)，未做在线响应验收。
+
 2026-10-31 新增 TV 投屏只读端点：`GET https://api.bilibili.com/x/tv/playurl`，App profile MD5 签名，游客可请求，已有且未过期的 App token 同时用于 `access_key`／`mobile_access_key`，不携带 Web Cookie。`object_id` 为 UGC aid 或 PGC episode ID，`cid` 保留真实内容身份，`playurl_type` 分别为 1／2；`is_proj=1`、`protocol=0`、`fourk=1`，清晰度沿用本地已选值。无分页；单次总预算 25 秒内最多两次只读尝试，取消／账号 epoch 隔离沿用 `ApiRequests`。JSON 仅接受一个完整 `durl` 段，不将 DASH 单轨或试看作为完整投屏成功。设备发现和 SOAP 操作独立于账号 HTTP 通道，写命令不自动重放；详情见 [DLNA 投屏](validation/dlna-casting.md)。
 
 MVP 优先 **Web REST + Web Cookie + 按端点配置 WBI/CSRF**，视频弹幕使用 HTTP 返回的 Protobuf，直播消息使用 WebSocket。收到 Protobuf 字节并不意味着必须使用 gRPC。
