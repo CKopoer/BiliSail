@@ -20,17 +20,21 @@ final class SearchDiscoveryPanel extends StatelessWidget {
       ValueListenableBuilder<TextEditingValue>(
         valueListenable: controller,
         builder: (context, value, _) => _SearchDiscoveryContent(
-          query: value.composing.isValid && !value.composing.isCollapsed
-              ? ''
-              : value.text.trim(),
+          query: value.text.trim(),
+          isComposing: value.composing.isValid && !value.composing.isCollapsed,
           onSearch: onSearch,
         ),
       );
 }
 
 final class _SearchDiscoveryContent extends ConsumerStatefulWidget {
-  const _SearchDiscoveryContent({required this.query, required this.onSearch});
+  const _SearchDiscoveryContent({
+    required this.query,
+    required this.isComposing,
+    required this.onSearch,
+  });
   final String query;
+  final bool isComposing;
   final ValueChanged<String> onSearch;
   @override
   ConsumerState<_SearchDiscoveryContent> createState() =>
@@ -83,7 +87,11 @@ final class _SearchDiscoveryPanelState
       });
     });
     if (widget.query.isNotEmpty) {
-      return _SearchSuggestions(query: widget.query, onSearch: widget.onSearch);
+      // Pause draft queries without unmounting the retained suggestion list.
+      return _SearchSuggestions(
+        query: widget.isComposing ? '' : widget.query,
+        onSearch: widget.onSearch,
+      );
     }
     final state = ref.watch(searchDiscoveryControllerProvider);
     final controller = ref.read(searchDiscoveryControllerProvider.notifier);
@@ -316,7 +324,10 @@ final class _SearchSuggestionsState extends ConsumerState<_SearchSuggestions> {
                 ),
               ],
             ),
-          if (_items.isEmpty && !result.isLoading && !result.hasError)
+          if (widget.query.isNotEmpty &&
+              _items.isEmpty &&
+              !result.isLoading &&
+              !result.hasError)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Text('暂无联想词，可直接提交搜索'),

@@ -11,6 +11,95 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
+    'IME composition retains suggestions and requests only confirmed text',
+    (tester) async {
+      final repository = _Repository();
+      final (text, _) = await _mountPanel(tester, repository);
+      await tester.pump(const Duration(milliseconds: 300));
+      repository.results[0].complete(['旧候选']);
+      await tester.pumpAndSettle();
+      text.value = const TextEditingValue(
+        text: '旧词zhong',
+        selection: TextSelection.collapsed(offset: 7),
+        composing: TextRange(start: 2, end: 7),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('旧候选'), findsOneWidget);
+      expect(find.text('搜索历史'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pump(const Duration(seconds: 1));
+      text.value = const TextEditingValue(
+        text: '旧词zhongw',
+        selection: TextSelection.collapsed(offset: 8),
+        composing: TextRange(start: 2, end: 8),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('旧候选'), findsOneWidget);
+      expect(repository.calls, ['旧词']);
+      text.value = const TextEditingValue(
+        text: '旧词中文',
+        selection: TextSelection.collapsed(offset: 4),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 299));
+      expect(repository.calls, ['旧词']);
+      expect(find.text('旧候选'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(repository.calls, ['旧词', '旧词中文']);
+      repository.results[1].complete(['中文候选']);
+      await tester.pumpAndSettle();
+      expect(find.text('中文候选'), findsOneWidget);
+      expect(find.text('旧候选'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'IME composition cancels pending debounce and reads without losing suggestions',
+    (tester) async {
+      final repository = _Repository();
+      final (text, _) = await _mountPanel(tester, repository);
+      await tester.pump(const Duration(milliseconds: 300));
+      repository.results[0].complete(['旧候选']);
+      await tester.pumpAndSettle();
+      text.text = '排队词';
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      text.value = const TextEditingValue(
+        text: '排队词a',
+        selection: TextSelection.collapsed(offset: 4),
+        composing: TextRange(start: 3, end: 4),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+      expect(repository.calls, ['旧词']);
+      expect(find.text('旧候选'), findsOneWidget);
+
+      text.value = const TextEditingValue(
+        text: '新词',
+        selection: TextSelection.collapsed(offset: 2),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(repository.calls, ['旧词', '新词']);
+      text.value = const TextEditingValue(
+        text: '新词a',
+        selection: TextSelection.collapsed(offset: 3),
+        composing: TextRange(start: 2, end: 3),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.cancellations[1].isCancelled, isTrue);
+      repository.results[1].complete(['过期候选']);
+      await tester.pumpAndSettle();
+      expect(find.text('旧候选'), findsOneWidget);
+      expect(find.text('过期候选'), findsNothing);
+      text.clear();
+      await tester.pumpAndSettle();
+      expect(find.text('旧候选'), findsNothing);
+      expect(find.text('搜索历史'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'panel retains suggestions through debounce, empty and failed reads until replacement',
     (tester) async {
       final repository = _Repository();
