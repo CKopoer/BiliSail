@@ -21,7 +21,7 @@
 | 能力 / 公开方法 | Host / 方法 / Path | Profile、鉴权与签名 | 响应、分页与重试 | 游客烟测 |
 | --- | --- | --- | --- | --- |
 | 热门 `getPopular` | `api.bilibili.com` GET `/x/web-interface/popular` | Web，Cookie 可选，无签名 | JSON；`pn`、`ps=20`；只读网络/超时/指定 5xx 最多 2 次额外尝试 | 成功，列表可解析 |
-| 推荐 `getRecommended` | `api.bilibili.com` GET `/x/web-interface/index/top/feed/rcmd` | Web，Cookie 可选，WBI | JSON `data.item[]`；`ps=20`、`fresh_idx`/`fresh_idx_1h`、`fresh_type=4`、`feed_version=V8`、`y_num=5`；索引递增，非空视频页可继续读取；同上 | 本轮成功解析 20 条视频；未测登录推荐与连续分页 |
+| 推荐 `getRecommended` | `api.bilibili.com` GET `/x/web-interface/index/top/feed/rcmd` | Web，Cookie 可选，WBI | JSON `data.item[]`；`ps=20`、`fresh_idx`/`fresh_idx_1h`、`fresh_type=4`、`feed_version=V8`、`y_num=5`；索引是递增的拉取序号（刷新也继续递增：序号回到已用过的值会让服务端重复同一批样本；本轮没有取到内容的页沿用同一序号，便于原地重试），非空视频页可继续读取；同上 | 本轮成功解析 20 条视频；未测登录推荐与连续分页 |
 | 分区投稿 `getRegionalVideos` | `api.bilibili.com` GET `/x/web-interface/newlist` | Web，Cookie 可选，无签名 | JSON `data.archives[]`；`rid`、`pn`、`ps=20`；以 `data.page.count` 判断结束，缺省时按页大小判断；同上 | 本轮动画分区返回 20 条；未测所有分区与真实跨页读取 |
 | 排行目录 `RankingClient.getRegions` | `api.bilibili.com` GET `/x/kv-frontend/namespace/data` | Web，Cookie 可选，无签名 | `appKey=333.1339`、`nscode=10`；JSON `data.data`；按 `channel_list.popular_page_sort` 引用各项的 name/tid，跳过 PGC；无分页；同上；[动态目录](ranking-regions.md) | 官网配置游客读取成功，当前 14 个 UGC 排行分区 |
 | 排行榜 `getRanking` | `api.bilibili.com` GET `/x/web-interface/ranking/v2` | Web，Cookie 可选，WBI | JSON `data.list[]`；`rid`（0=全站，UGC 使用上述配置返回的 ID）、`type=all`；单份榜单无分页；同上；[目录修正](ranking-regions.md) | 完整应用烟测全站与动画 `1005` 各成功解析 100 条；其他时段游客遭遇 `-352`，按限流停止重试；未验证所有榜单日期；界面显示错误，不替换成热门 |
