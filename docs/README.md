@@ -56,6 +56,7 @@
 | [播放器音量均衡](validation/audio-normalization.md) | 标准／高动态／关闭、UGC／PGC 元数据、原生增益与验证边界 |
 | [与 PiliPlus 的播放音量对照](validation/player-volume-piliplus-comparison-2026-11-01.md) | 默认原生音量、移动端系统／播放器控件差异、放大与音轨偏好、同源 A/B 条件及离线验证边界 |
 | [播放 GPU 与 PiliPlus 对照](validation/playback-gpu-piliplus-2026-11-01.md) | 固定依赖、透明合成、控件重复绘制修复与 Windows Profile 验证边界 |
+| [固定与滚动弹幕分层对照](validation/danmaku-layers-performance-2026-11-01.md) | 单一时钟、固定层保留、覆盖顺序及三类场景的 Profile 前后对照 |
 | [听视频与音频控件](validation/listen-video.md) | 独立音轨、常驻响应式控件、切换／检查点及原生验证 |
 | [充电专属与付费视频](validation/video-access.md) | 权益分类、播放限制提示、官网入口与共享视频卡角标 |
 | [实施与验收](implementation-plan.md) | 技术验证、开发里程碑、测试、构建与发布要求 |

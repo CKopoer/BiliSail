@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart';
 
 import 'danmaku_controller.dart' show DanmakuMode;
 import 'danmaku_text_style.dart';
+import 'danmaku_layers.dart';
 
 @immutable
 final class LiveDanmakuEvent {
@@ -45,7 +46,8 @@ final class _Visible {
 
 /// Live time advances from message receipt using a monotonic wall clock.
 /// It has no player position, seek, buffering or playback rate dependency.
-final class LiveDanmakuController extends ChangeNotifier {
+final class LiveDanmakuController extends ChangeNotifier
+    implements LayeredDanmakuController {
   LiveDanmakuController({
     required Duration Function() monotonicNow,
     this.maxPending = 500,
@@ -70,6 +72,7 @@ final class LiveDanmakuController extends ChangeNotifier {
   int _visualRevision = 0;
 
   /// Changes to visible content or layout, separate from message notifications.
+  @override
   int get visualRevision => _visualRevision;
   late final _layouts = DanmakuTextLayouts(maxTextLayouts);
   final Map<String, Duration> _recentIds = {};
@@ -107,6 +110,7 @@ final class LiveDanmakuController extends ChangeNotifier {
       _enabled && (_pending.isNotEmpty || _visible.isNotEmpty);
 
   /// Only moving, due or expired items require a frame immediately.
+  @override
   bool get needsFrame => _needsFrameAt(_now());
 
   bool _needsFrameAt(Duration now) {
@@ -120,6 +124,7 @@ final class LiveDanmakuController extends ChangeNotifier {
   }
 
   /// A delayed arrival or stationary expiry needs one wake, not a running ticker.
+  @override
   Duration? get nextFrameDelay {
     final now = _now();
     if (!_enabled || _width <= 0 || _height <= 0 || _needsFrameAt(now)) {
@@ -239,6 +244,7 @@ final class LiveDanmakuController extends ChangeNotifier {
     notifyListeners();
   }
 
+  @override
   void setViewport({
     required double width,
     required double height,
@@ -281,6 +287,29 @@ final class LiveDanmakuController extends ChangeNotifier {
     offset,
     pixelRatio: pixelRatio,
   );
+
+  @override
+  late final paintLayers = DanmakuPaintLayers(_layouts);
+
+  /// Prepares both paint layers in one bounded admission pass.
+  @override
+  void preparePaintLayers() {
+    paintLayers.beginFrame();
+    try {
+      _visitFrame((event, x, y) {
+        paintLayers.add(
+          scrolling: event.mode == DanmakuMode.scroll,
+          text: event.text,
+          color: event.color,
+          fontSize: event.fontSize,
+          x: x,
+          y: y,
+        );
+      });
+    } finally {
+      paintLayers.endFrame();
+    }
+  }
 
   void _clearLayouts() => _layouts.clear();
 
@@ -459,6 +488,7 @@ final class LiveDanmakuController extends ChangeNotifier {
 
   @override
   void dispose() {
+    paintLayers.clear();
     _clearLayouts();
     super.dispose();
   }

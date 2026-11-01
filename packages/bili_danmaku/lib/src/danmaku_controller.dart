@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 import 'danmaku_text_style.dart';
+import 'danmaku_layers.dart';
 
 enum DanmakuMode { scroll, top, bottom }
 
@@ -47,7 +48,8 @@ final class _Active {
 
 /// Schedules by confirmed media time and animates by unscaled elapsed time.
 /// [monotonicNow] must not move backwards (e.g. Stopwatch.elapsed).
-final class DanmakuController extends ChangeNotifier {
+final class DanmakuController extends ChangeNotifier
+    implements LayeredDanmakuController {
   DanmakuController({
     required Duration Function() monotonicNow,
     this.maxPending = 500,
@@ -139,6 +141,7 @@ final class DanmakuController extends ChangeNotifier {
   int _visualRevision = 0;
 
   /// Changes to visible content or layout, separate from clock confirmations.
+  @override
   int get visualRevision => _visualRevision;
   List<DanmakuEvent> _events = const [];
   int _next = 0;
@@ -195,6 +198,7 @@ final class DanmakuController extends ChangeNotifier {
       now - _anchorTime < maxInterpolation;
 
   /// Finish bounded admission after a paused seek without advancing either clock.
+  @override
   bool get needsFrame => _needsFrameAt(_now());
 
   bool _needsFrameAt(Duration now) {
@@ -217,6 +221,7 @@ final class DanmakuController extends ChangeNotifier {
 
   /// Wake at the next arrival or fixed-text expiry between confirmed samples.
   /// Never extrapolate beyond the existing bounded interpolation window.
+  @override
   Duration? get nextFrameDelay {
     final now = _now();
     if (!_isAnimatingAt(now) ||
@@ -262,6 +267,7 @@ final class DanmakuController extends ChangeNotifier {
 
   Duration _animationAt(Duration now) => _anchorAnimation + _elapsed(now);
 
+  @override
   void setViewport({
     required double width,
     required double height,
@@ -453,6 +459,29 @@ final class DanmakuController extends ChangeNotifier {
     offset,
     pixelRatio: pixelRatio,
   );
+
+  @override
+  late final paintLayers = DanmakuPaintLayers(_layouts);
+
+  /// Prepares both paint layers in one bounded admission pass.
+  @override
+  void preparePaintLayers() {
+    paintLayers.beginFrame();
+    try {
+      _visitFrame((event, x, y) {
+        paintLayers.add(
+          scrolling: event.mode == DanmakuMode.scroll,
+          text: event.text,
+          color: event.color,
+          fontSize: event.fontSize,
+          x: x,
+          y: y,
+        );
+      });
+    } finally {
+      paintLayers.endFrame();
+    }
+  }
 
   void _clearLayouts() => _layouts.clear();
 
@@ -647,6 +676,7 @@ final class DanmakuController extends ChangeNotifier {
 
   @override
   void dispose() {
+    paintLayers.clear();
     _clearLayouts();
     super.dispose();
   }

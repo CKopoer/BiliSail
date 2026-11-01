@@ -22,7 +22,8 @@ import 'package:window_manager/window_manager.dart';
 
 /// Local-only production panel: same video, comments, controls and time range.
 /// BILI_GPU_PANEL=surface/panel; BILI_GPU_ARRIVALS=2/20;
-/// BILI_GPU_OPACITY=0.8/1; BILI_GPU_SIZE=960/1600.
+/// BILI_GPU_OPACITY=0.8/1; BILI_GPU_SIZE=960/1600;
+/// BILI_GPU_MODE=scroll/fixed/mixed (80% scrolling, 20% fixed).
 Future<void> main() async {
   BiliWidgetsBinding.ensureInitialized();
   await windowManager.ensureInitialized();
@@ -34,9 +35,11 @@ Future<void> main() async {
   }
   final seconds = int.parse(env['BILI_GPU_SECONDS'] ?? '20');
   final arrivals = int.parse(env['BILI_GPU_ARRIVALS'] ?? '20');
+  final mode = env['BILI_GPU_MODE'] ?? 'scroll';
   final opacity = double.parse(env['BILI_GPU_OPACITY'] ?? '0.8');
   final width = double.parse(env['BILI_GPU_SIZE'] ?? '960');
-  if (seconds < 10 ||
+  if (!['scroll', 'fixed', 'mixed'].contains(mode) ||
+      seconds < 10 ||
       seconds > 20 ||
       arrivals < 1 ||
       arrivals > 20 ||
@@ -57,7 +60,7 @@ Future<void> main() async {
   final engine = MediaKitEngine();
   final session = PlaybackSession(
     engine: engine,
-    repository: _LocalRepository(File(media).absolute.uri, arrivals),
+    repository: _LocalRepository(File(media).absolute.uri, arrivals, mode),
     progress: _NoProgress(),
     accountScope: () => 'guest',
   );
@@ -124,7 +127,7 @@ Future<void> main() async {
       final diagnostic = engine.inspectDiagnostics();
       final native = await engine.inspectNativePlaybackTiming();
       await file.writeAsString(
-        '${jsonEncode({'stage': name, 'pid': pid, 'timeUtc': DateTime.now().toUtc().toIso8601String(), 'panel': !surfaceOnly, 'arrivals': arrivals, 'opacity': opacity, 'positionMs': snapshot.position.inMilliseconds, 'phase': snapshot.phase.name, 'decodedWidth': diagnostic.videoWidth, 'decodedHeight': diagnostic.videoHeight, 'outputWidth': diagnostic.outputWidth, 'outputHeight': diagnostic.outputHeight, 'hwdec': await engine.inspectHardwareDecoder(), 'avsyncSeconds': native.avsyncSeconds, 'frameDrops': native.frameDrops, 'decoderDrops': native.decoderDrops, 'dartFrames': timings.length, 'uiUs': timings.map((f) => f.buildDuration.inMicroseconds).toList(), 'rasterUs': timings.map((f) => f.rasterDuration.inMicroseconds).toList(), 'visible': session.danmaku.visibleCount, 'rasterBuilds': session.danmaku.rasterStatistics.rasterBuilds, 'imagePaints': session.danmaku.rasterStatistics.imagePaints, 'directPaints': session.danmaku.rasterStatistics.directPaints})}\n',
+        '${jsonEncode({'stage': name, 'pid': pid, 'timeUtc': DateTime.now().toUtc().toIso8601String(), 'panel': !surfaceOnly, 'arrivals': arrivals, 'mode': mode, 'opacity': opacity, 'positionMs': snapshot.position.inMilliseconds, 'phase': snapshot.phase.name, 'decodedWidth': diagnostic.videoWidth, 'decodedHeight': diagnostic.videoHeight, 'outputWidth': diagnostic.outputWidth, 'outputHeight': diagnostic.outputHeight, 'hwdec': await engine.inspectHardwareDecoder(), 'avsyncSeconds': native.avsyncSeconds, 'frameDrops': native.frameDrops, 'decoderDrops': native.decoderDrops, 'dartFrames': timings.length, 'uiUs': timings.map((f) => f.buildDuration.inMicroseconds).toList(), 'rasterUs': timings.map((f) => f.rasterDuration.inMicroseconds).toList(), 'visible': session.danmaku.visibleCount, 'rasterBuilds': session.danmaku.rasterStatistics.rasterBuilds, 'imagePaints': session.danmaku.rasterStatistics.imagePaints, 'directPaints': session.danmaku.rasterStatistics.directPaints})}\n',
         mode: FileMode.append,
       );
       timings.clear();
@@ -216,9 +219,10 @@ const _detail = VideoDetail(
 );
 
 final class _LocalRepository implements PlaybackRepository {
-  _LocalRepository(this.uri, this.arrivals);
+  _LocalRepository(this.uri, this.arrivals, this.mode);
   final Uri uri;
   final int arrivals;
+  final String mode;
   @override
   Future<PlaybackMedia> resolve(
     VideoId video,
@@ -246,7 +250,9 @@ final class _LocalRepository implements PlaybackRepository {
         id: '$i',
         position: Duration(microseconds: i * 1000000 ~/ arrivals),
         text: '相同素材播放与弹幕 GPU 对照 $i',
-        mode: 1,
+        mode: mode == 'scroll' || (mode == 'mixed' && i % 10 < 8)
+            ? 1
+            : (i.isEven ? 5 : 4),
         color: 0xffffff,
         fontSize: 25,
       ),
