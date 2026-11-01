@@ -184,6 +184,10 @@ final class _PagedScrollViewportState extends State<PagedScrollViewport> {
   @override
   Widget build(BuildContext context) {
     _syncActivity();
+    // The dock is an overlay, not a reserved slot: Scaffold's extendBody
+    // reports its band as the body's bottom padding, so the floating column
+    // has to lift by that much or the "top" button lands on the glass bar.
+    final actionsBottom = 20 + MediaQuery.paddingOf(context).bottom;
     return Stack(
       children: [
         TickerMode(
@@ -199,7 +203,7 @@ final class _PagedScrollViewportState extends State<PagedScrollViewport> {
         if (widget.onRefresh != null)
           Positioned(
             right: 20,
-            bottom: 20,
+            bottom: actionsBottom,
             child: ValueListenableBuilder(
               valueListenable: _showTop,
               builder: (context, showTop, _) => ScrollFloatingActions(
