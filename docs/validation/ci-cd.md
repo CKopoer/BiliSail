@@ -5,7 +5,7 @@
 ## 入口与分工
 
 - [CI](../../.github/workflows/ci.yml)：替换原来的 `windows.yml`；分支 push、PR、手动运行时执行检查及构建，也供 Release 复用。
-- [Release preview](../../.github/workflows/release.yml)：在 Actions 页面手动运行；可选择五个平台，并可按目标复用同提交、同版本且已通过检查与构建的 CI 产物，只补建缺少的目标。全部所选构建通过后创建 **draft + prerelease** 并上传包、签名公钥证书、校验文件与第三方说明。不会自动公开发布。
+- [Release preview](../../.github/workflows/release.yml)：在 Actions 页面手动运行；可选择五个平台，并可按目标复用同提交、同版本且已通过检查与构建的 CI 产物，只补建缺少的目标。全部所选构建通过后，将完整产物汇总上传为单个 Actions ZIP artifact，再创建 **draft + prerelease** 并上传包、签名公钥证书、校验文件与第三方说明。不会自动公开发布。
 - [检查脚本](../../tool/check.ps1)：本地默认检查根应用和四个独立包；CI 在 Ubuntu 使用 PowerShell 7，分别执行 `Lint`、两份 `RootTests` 分片和 `PackageTests`。格式检查覆盖根应用与各包，根分析统一扫描子包，故分析前仍安装所有包的开发依赖。`-EnforceLockfile` 要求 pub 使用提交的锁文件及内容哈希。
 - [构建打包脚本](../../tool/build-release.ps1)：各平台使用对应主机生成预览包，缺文件、原生命令失败、签名失败立即停止。已有同目标输出目录时拒绝覆盖，重新本地构建前先将其移走。
 
@@ -18,7 +18,7 @@
 | macOS Intel | `macos-15-intel`，Intel x64 / Xcode | x64 DMG；复用相同的签名、首帧、Keychain 和镜像校验门槛 |
 | iOS | `macos-15`，Apple Silicon / Xcode / CocoaPods | arm64 未签名 IPA；核对应用版本、bundle ID、arm64 framework 及 Payload 布局；安装前需自行 Apple 签名 |
 | Linux | `ubuntu-24.04`，GTK / libsecret / libmpv / Flatpak SDK | x64 AppImage 与 Flatpak；携带媒体依赖，核对版本及主机／实际 Flatpak Runtime 内动态依赖；X11／XWayland |
-| Release 上传 | `ubuntu-24.04` | 合并本次所选平台的 Actions artifacts 后创建草稿 |
+| Release 上传 | `ubuntu-24.04` | 合并并校验本次所选平台的 Actions artifacts，上传汇总 ZIP artifact 后创建草稿 |
 
 PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要 Windows 主机与 Visual Studio 工具链，macOS 原生构建需要对应架构的 macOS/Xcode 主机。现有 `enable_macos` 开关同时控制 arm64 和 x64 两项矩阵；两项分别安装对应架构的 Flutter SDK，产物与缓存按架构隔离。arm64 启用 `--enable-macos-arm64-only`，x64 显式关闭该选项；两者均通过固定 SDK 支持的 `FLUTTER_XCODE_ARCHS` 指定单一架构（`arm64`／`x86_64`），与对应的 mux framework 一致。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 
@@ -52,6 +52,10 @@ Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d1
 
 Release 草稿只附安装包、Windows 公钥证书及它们的 `.sha256`，另附 `THIRD_PARTY_NOTICES.md`。`.build-info.json`、`.mux-source.zip` 和这两类文件的 `.sha256` 继续保存在 Actions artifacts 中并参与上传前校验，不加入 Release 附件；草稿说明链接到本次 Actions 记录，可从构建来源汇总定位对应产物。
 
+2026-11-01 起，Release 在完整性、来源、版本和 SHA-256 校验通过后，使用与 CI 相同的固定版本 [`actions/upload-artifact`](https://github.com/actions/upload-artifact#upload-using-multiple-paths-and-exclusions)，将本次所选平台的新建及复用产物汇总为 `BiliSail-<version>-release-bundle`，保留 14 天。可在本次 Release 运行的 Artifacts 区域一次下载同名 `.zip`；其中 `release-assets/` 包含安装包、Windows 公钥证书、构建信息、mux 源码归档及各自校验文件，根目录另含 `THIRD_PARTY_NOTICES.md`。由 artifact 上传直接生成 ZIP，压缩级别沿用 CI 的 `0`，避免重复压缩已有安装包。汇总上传在草稿创建前完成，上传失败则停止创建草稿；之后草稿或清理步骤失败时，已上传的汇总包仍保留。重跑本次运行的草稿任务时覆盖同名汇总包，草稿任务超时从 10 分钟增至 20 分钟，为额外上传留出时间。
+
+本轮本地验证：Release／CI 工作流通过 actionlint 1.7.12，60 项 Release 定向回归、本文件 43 条本地链接和 `git diff --check` 通过。`tool/check.ps1 -SkipPub` 的打包边界、格式、静态分析、根应用 3912 项及四包 817 项离线测试通过；13 项 Windows symlink 用例因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。日志保存在 `build/release-bundle-check.log`；本轮未手动运行远端 Release，汇总 artifact 的实际上传和下载仍待新流程运行确认。
+
 2026-10-31 附件筛选验证：`node --test tool/test-release-ci-reuse.cjs` 的 54 项测试通过，新增回归直接执行工作流的 PowerShell 草稿步骤并模拟 `gh`，核对六个目标的完整附件集合及原始 Actions 文件保留。Release／CI 工作流通过 actionlint，本文件 38 条本地链接和 `git diff --check` 通过。`tool/check.ps1 -SkipPub` 的打包边界、格式、静态分析及 4645 项离线测试通过；13 项 Windows symlink 用例因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。日志保存在 `build/release-asset-selection-check.log`；本轮未运行远端 Release 或创建实际草稿。
 
 ### README 下载链接自动更新
@@ -81,7 +85,7 @@ Release 通过 `workflow_call` 调用同一份 `ci.yml`，检查、根应用分�
 
 CI 仅在 `workflow_call` 开放内部 `build_targets` JSON 数组输入，将构建矩阵限制为启用平台的非空子集，不改变普通 push、PR 和手动 CI 的平台选择方式。Release 仍先验证全部所选平台的版本限制，待补建列表不能加入未选中、重复或非法目标。
 
-草稿任务从本次运行下载补建产物，再按各目标的来源 run ID 和准确 artifact 名称，通过 `gh run download` 合并复用产物，无需重复上传到当前运行。API 权限、网络或下载错误均使任务失败，不将故障当作未命中，也不丢弃缺失平台；使用任务级 `actions: read` 和现有 `GITHUB_TOKEN`，无需新 Secret。每个目标的复用／构建决定及来源运行链接写入 Actions summary。
+草稿任务从本次运行下载补建产物，再按各目标的来源 run ID 和准确 artifact 名称，通过 `gh run download` 合并复用产物；复用来源无需按平台重复上传，但会随全部所选产物进入本次运行的汇总包。API 权限、网络或下载错误均使任务失败，不将故障当作未命中，也不丢弃缺失平台；使用任务级 `actions: read` 和现有 `GITHUB_TOKEN`，无需新 Secret。每个目标的复用／构建决定及来源运行链接写入 Actions summary。
 
 无论复用还是新构建，创建草稿前都会经[产物校验脚本](../../tool/release-ci-reuse.cjs)核对完整文件集合：所选平台安装包、Windows 公钥证书、build-info、mux 源码归档及各自 SHA-256。build-info 必须匹配源码 SHA、版本、目标、Flutter 版本、根锁文件哈希且 `sourceDirty=false`；锁文件允许同一内容的 LF／CRLF checkout 哈希差异。Android 必须使用配置的固定 keystore，临时 PR 签名不得发布。下载后任何内容不符立即停止，不创建草稿，也不静默改用其他产物。既有 tag 冲突检查、草稿／预发布属性和最新 15 个 Release 保留规则继续沿用。
 
