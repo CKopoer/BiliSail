@@ -1,5 +1,6 @@
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/shared/ui/playback_layout_builder.dart';
+import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,49 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/playback_layout_session_fake.dart';
 
 void main() {
+  testWidgets('decoded dimensions are discovered lazily and ignore position', (
+    tester,
+  ) async {
+    final session = PlaybackLayoutSessionFake();
+    addTearDown(session.dispose);
+    var builds = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [playbackSessionProvider.overrideWithValue(session)],
+        child: MaterialApp(
+          home: PlaybackVideoDimensions(
+            builder: (context, dimensions) {
+              builds++;
+              return Consumer(
+                builder: (context, ref, _) {
+                  ref.read(playbackSessionProvider);
+                  return Text('${dimensions?.width}×${dimensions?.height}');
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final initial = builds;
+    for (var i = 1; i <= 100; i++) {
+      session.snapshots.value = session.snapshots.value.copyWith(
+        position: Duration(milliseconds: i * 100),
+      );
+      await tester.pump();
+    }
+    expect(builds, initial);
+    session.snapshots.value = session.snapshots.value.copyWith(
+      videoDimensions: const VideoDimensions(1080, 1920),
+    );
+    await tester.pump();
+    expect(builds, initial + 1);
+    expect(find.text('1080×1920'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(session.hasSnapshotListeners, isFalse);
+  });
+
   testWidgets('placeholder layout never creates a playback session', (
     tester,
   ) async {

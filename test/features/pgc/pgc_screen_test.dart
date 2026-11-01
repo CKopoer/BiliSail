@@ -7,6 +7,7 @@ import '../../support/text_selection.dart';
 
 import 'dart:async';
 
+import 'package:bili_player/bili_player.dart';
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
@@ -61,6 +62,60 @@ final _season = PgcSeason(
 );
 
 void main() {
+  testWidgets('portrait PGC shares expansion and scroll collapse with video', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final auth = _Auth();
+    final session = PlaybackLayoutSessionFake();
+    addTearDown(auth.dispose);
+    addTearDown(session.dispose);
+    session.snapshots.value = session.snapshots.value.copyWith(
+      videoDimensions: const VideoDimensions(1080, 1920),
+    );
+    var creates = 0;
+    var disposes = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          playbackSessionProvider.overrideWithValue(session),
+          pgcRepositoryProvider.overrideWithValue(_Repo()),
+          authRepositoryProvider.overrideWithValue(auth),
+        ],
+        child: InputTestApp(
+          home: Scaffold(
+            body: PgcScreen(
+              seasonId: 's1',
+              episodeId: 'e1',
+              playerBuilder: (context, _, episode) {
+                ProviderScope.containerOf(context)
+                    .read(playbackSessionProvider);
+                return _TrackedPlayer(
+                  title: episode.title,
+                  onCreate: () => creates++,
+                  onDispose: () => disposes++,
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final player = tester.state(find.byType(_TrackedPlayer));
+    expect(tester.getSize(find.byType(_TrackedPlayer)).height, 520);
+    await tester.dragFrom(const Offset(150, 720), const Offset(0, -380));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(_TrackedPlayer)).height, 390 * 9 / 16);
+    expect(tester.state(find.byType(_TrackedPlayer)), same(player));
+    expect(creates, 1);
+    expect(disposes, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'listening uses half the PGC page without recreating its player',
     (tester) async {

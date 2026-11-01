@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'scroll_collapsing_header.dart';
+
 /// Lets a bounded vertical list finish a touch gesture in its enclosing scroll
 /// view. The list remains lazy and keeps its own controller and scroll position.
 final class ScrollBoundaryHandoff extends StatefulWidget {
@@ -14,14 +16,17 @@ final class ScrollBoundaryHandoff extends StatefulWidget {
 final class _ScrollBoundaryHandoffState extends State<ScrollBoundaryHandoff> {
   bool _forwardedDrag = false;
 
-  ScrollPositionWithSingleContext? get _outer {
-    final position = Scrollable.maybeOf(context, axis: Axis.vertical)?.position;
-    return position is ScrollPositionWithSingleContext ? position : null;
-  }
+  ScrollPosition? get _outer =>
+      Scrollable.maybeOf(context, axis: Axis.vertical)?.position;
 
-  bool _canMove(ScrollPosition position, double delta) => delta < 0
-      ? position.pixels > position.minScrollExtent
-      : delta > 0 && position.pixels < position.maxScrollExtent;
+  bool _canMove(ScrollPosition position, double delta) {
+    final header = HeaderScrollController.offsetFor(position);
+    final pixels = header?.pixels ?? position.pixels;
+    return delta < 0
+        ? pixels > (header?.minScrollExtent ?? position.minScrollExtent)
+        : delta > 0 &&
+              pixels < (header?.maxScrollExtent ?? position.maxScrollExtent);
+  }
 
   bool _onScroll(ScrollNotification notification) {
     // Horizontal section strips and any deeper scrollables retain their own
@@ -41,7 +46,9 @@ final class _ScrollBoundaryHandoffState extends State<ScrollBoundaryHandoff> {
       } else {
         // The inner ballistic activity stops at its clamped edge. Continue
         // with its remaining velocity rather than losing the fling there.
-        outer.goBallistic(notification.velocity);
+        if (outer case final ScrollActivityDelegate delegate) {
+          delegate.goBallistic(notification.velocity);
+        }
       }
     } else if (notification is ScrollEndNotification) {
       final details = notification.dragDetails;
@@ -51,7 +58,11 @@ final class _ScrollBoundaryHandoffState extends State<ScrollBoundaryHandoff> {
         final atEdge = velocity < 0
             ? metrics.pixels <= metrics.minScrollExtent
             : metrics.pixels >= metrics.maxScrollExtent;
-        if (atEdge && _canMove(outer, velocity)) outer.goBallistic(velocity);
+        if (atEdge &&
+            _canMove(outer, velocity) &&
+            outer is ScrollActivityDelegate) {
+          (outer as ScrollActivityDelegate).goBallistic(velocity);
+        }
       }
       _forwardedDrag = false;
     }
@@ -64,7 +75,11 @@ final class _ScrollBoundaryHandoffState extends State<ScrollBoundaryHandoff> {
   ) => NotificationListener<ScrollNotification>(
     onNotification: _onScroll,
     child: Listener(
-      onPointerDown: (_) => _outer?.goIdle(),
+      onPointerDown: (_) {
+        if (_outer case final ScrollActivityDelegate delegate) {
+          delegate.goIdle();
+        }
+      },
       child: ScrollConfiguration(
         // Bouncing physics consumes the delta beyond an edge itself. Clamp only
         // the nested viewport so its remainder can reach the outer page, even

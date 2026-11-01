@@ -18,7 +18,8 @@ import '../../../domain/video.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/highlighted_text.dart';
-import '../../../shared/ui/playback_sidebar_toggle.dart';
+import '../../../shared/ui/playback_page_layout.dart';
+import '../../../shared/ui/scroll_collapsing_header.dart';
 import '../../../shared/ui/playback_info_tabs.dart';
 import '../../../shared/ui/comment_detail_builder.dart';
 import '../../../domain/comment_target.dart';
@@ -110,7 +111,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
   final WatchLaterQueuePlayback _queuePlayback = WatchLaterQueuePlayback();
   ({VideoId id, int generation})? _completionWaiting;
   bool _loadingNextQueue = false;
-  final ScrollController _introScroll = ScrollController();
+  final _introScroll = HeaderScrollController();
   final GlobalKey _infoKey = GlobalKey();
   final GlobalKey _playerKey = GlobalKey();
   @override
@@ -456,35 +457,46 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                             video,
                             selected,
                           ),
-                          pageBuilder: (context, tab, active) => TickerMode(
-                            enabled: detailsVisible && active,
-                            child: tab == 0
-                                ? CustomScrollView(
-                                    key: const ValueKey('video-intro-scroll'),
-                                    controller: _introScroll,
-                                    slivers: [
-                                      SliverToBoxAdapter(child: content),
-                                      SliverPadding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          12,
-                                          0,
-                                          12,
-                                          12,
+                          pageBuilder: (context, tab, active) {
+                            if (tab == 0) {
+                              _introScroll.configure(
+                                context,
+                                active:
+                                    detailsVisible &&
+                                    active &&
+                                    WorkspaceActivity.isActive(context),
+                              );
+                            }
+                            return TickerMode(
+                              enabled: detailsVisible && active,
+                              child: tab == 0
+                                  ? CustomScrollView(
+                                      key: const ValueKey('video-intro-scroll'),
+                                      controller: _introScroll,
+                                      slivers: [
+                                        SliverToBoxAdapter(child: content),
+                                        SliverPadding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            12,
+                                            0,
+                                            12,
+                                            12,
+                                          ),
+                                          sliver: _RelatedVideosSliver(
+                                            id: widget.id,
+                                            onOpenVideo: widget.onOpenVideo,
+                                            onOpenUser: widget.onOpenUser,
+                                          ),
                                         ),
-                                        sliver: _RelatedVideosSliver(
-                                          id: widget.id,
-                                          onOpenVideo: widget.onOpenVideo,
-                                          onOpenUser: widget.onOpenUser,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : VideoCommentsPanel(
-                                    detail: video,
-                                    onLogin: widget.onLogin,
-                                    onOpenUser: widget.onOpenUser,
-                                  ),
-                          ),
+                                      ],
+                                    )
+                                  : VideoCommentsPanel(
+                                      detail: video,
+                                      onLogin: widget.onLogin,
+                                      onOpenUser: widget.onOpenUser,
+                                    ),
+                            );
+                          },
                         ),
                       ),
                     );
@@ -526,86 +538,32 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                             ),
                     );
                     return PlaybackLayoutBuilder(
-                      builder: (context, constraints, listening) {
-                        final playerHeight = wide || !showInfo
-                            ? constraints.maxHeight
-                            : listening && constraints.maxHeight.isFinite
-                            ? PlaybackLayoutBuilder.listeningHeight(
-                                constraints.maxHeight,
-                              )
-                            : constraints.maxWidth * 9 / 16;
-                        final player = Column(
-                          key: _playerKey,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              height: playerHeight,
-                              width: double.infinity,
-                              child: playerContent,
-                            ),
-                          ],
-                        );
-                        final playerWithToggle = Stack(
-                          children: [
-                            player,
-                            if (wide)
-                              Positioned(
-                                right: 0,
-                                top:
-                                    constraints.maxHeight / 2 -
-                                    PlaybackSidebarToggle.size.height / 2,
-                                child: PlaybackSidebarToggle(
-                                  tooltip: showInfo ? '收起视频信息' : '展开视频信息',
-                                  icon: showInfo
-                                      ? Icons.chevron_right
-                                      : Icons.chevron_left,
-                                  onPressed: toggleInfo,
-                                ),
-                              ),
-                          ],
-                        );
-                        if (wide) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: playerWithToggle),
-                              ExcludeFocus(
-                                excluding: !showInfo,
-                                child: Offstage(
-                                  offstage: !showInfo,
-                                  child: SizedBox(
-                                    width: 380,
-                                    height: constraints.maxHeight,
-                                    child: info,
+                      builder: (context, constraints, listening) =>
+                          PlaybackVideoDimensions(
+                            builder: (context, dimensions) =>
+                                PlaybackPageLayout(
+                                  minimumInfoHeight: 480,
+                                  wide: wide,
+                                  showInfo: showInfo,
+                                  listening: listening,
+                                  dimensions: dimensions,
+                                  collapsedHeight:
+                                      listening &&
+                                          constraints.maxHeight.isFinite
+                                      ? PlaybackLayoutBuilder.listeningHeight(
+                                          constraints.maxHeight,
+                                        )
+                                      : constraints.maxWidth * 9 / 16,
+                                  contentKey: video.summary.id,
+                                  player: KeyedSubtree(
+                                    key: _playerKey,
+                                    child: playerContent,
                                   ),
+                                  info: info,
+                                  toggleInfo: toggleInfo,
+                                  toggleTooltip: showInfo ? '收起视频信息' : '展开视频信息',
                                 ),
-                              ),
-                            ],
-                          );
-                        }
-                        return SingleChildScrollView(
-                          padding: EdgeInsets.zero,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              playerWithToggle,
-                              ExcludeFocus(
-                                excluding: !showInfo,
-                                child: Offstage(
-                                  offstage: !showInfo,
-                                  child: SizedBox(
-                                    height: constraints.maxHeight.isFinite
-                                        ? (constraints.maxHeight - playerHeight)
-                                              .clamp(480.0, double.infinity)
-                                        : 600,
-                                    child: info,
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
-                        );
-                      },
                     );
                   },
                 ),

@@ -18,7 +18,8 @@ import '../../../core/presentation/workspace_activity.dart';
 import '../../settings/domain/shortcut_settings.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/app_notice.dart';
-import '../../../shared/ui/playback_sidebar_toggle.dart';
+import '../../../shared/ui/playback_page_layout.dart';
+import '../../../shared/ui/scroll_collapsing_header.dart';
 import '../../../shared/ui/playback_info_tabs.dart';
 import '../../../shared/ui/comment_detail_builder.dart';
 import '../../../domain/comment_target.dart';
@@ -69,7 +70,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
   late PgcLocator _locator;
   int? _tab;
   bool _infoVisible = true;
-  final ScrollController _introScroll = ScrollController();
+  final _introScroll = HeaderScrollController();
   PgcSeason? _playerSeason;
   PgcEpisode? _playerEpisode;
   PgcPlayerBuilder? _playerBuilder;
@@ -264,44 +265,59 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                         itemKey: (tab) =>
                             ValueKey('pgc-tab-${tab == 0 ? '简介' : '评论'}'),
                         trailing: _menu(context, season, selected, toggleInfo),
-                        pageBuilder: (context, tab, active) => TickerMode(
-                          enabled: showInfo && active,
-                          child: switch ((
-                            tab,
-                            widget.commentsBuilder,
-                            selected,
-                          )) {
-                            (1, final builder?, final episode?) => builder(
+                        pageBuilder: (context, tab, active) {
+                          if (tab == 0) {
+                            _introScroll.configure(
                               context,
-                              season,
-                              episode,
-                            ),
-                            _ => CustomScrollView(
-                              key: const ValueKey('pgc-intro'),
-                              controller: _introScroll,
-                              slivers: [
-                                SliverPadding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    16,
-                                    16,
-                                    0,
+                              active:
+                                  showInfo &&
+                                  active &&
+                                  WorkspaceActivity.isActive(context),
+                            );
+                          }
+                          return TickerMode(
+                            enabled: showInfo && active,
+                            child: switch ((
+                              tab,
+                              widget.commentsBuilder,
+                              selected,
+                            )) {
+                              (1, final builder?, final episode?) => builder(
+                                context,
+                                season,
+                                episode,
+                              ),
+                              _ => CustomScrollView(
+                                key: const ValueKey('pgc-intro'),
+                                controller: _introScroll,
+                                slivers: [
+                                  SliverPadding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      16,
+                                      16,
+                                      0,
+                                    ),
+                                    sliver: SliverToBoxAdapter(
+                                      child: _details(
+                                        context,
+                                        season,
+                                        selected,
+                                      ),
+                                    ),
                                   ),
-                                  sliver: SliverToBoxAdapter(
-                                    child: _details(context, season, selected),
+                                  _PgcRelatedSeasons(
+                                    season: season,
+                                    onOpen: widget.onOpenSeason,
                                   ),
-                                ),
-                                _PgcRelatedSeasons(
-                                  season: season,
-                                  onOpen: widget.onOpenSeason,
-                                ),
-                                const SliverToBoxAdapter(
-                                  child: SizedBox(height: 24),
-                                ),
-                              ],
-                            ),
-                          },
-                        ),
+                                  const SliverToBoxAdapter(
+                                    child: SizedBox(height: 24),
+                                  ),
+                                ],
+                              ),
+                            },
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -310,66 +326,30 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
             ),
           );
           return PlaybackLayoutBuilder(
-            builder: (context, constraints, listening) {
-              final playerHeight =
-                  listening && !wide && constraints.maxHeight.isFinite
-                  ? PlaybackLayoutBuilder.listeningHeight(constraints.maxHeight)
-                  : math.min(
-                      constraints.maxWidth * 9 / 16,
-                      constraints.maxHeight.isFinite
-                          ? constraints.maxHeight * 0.55
-                          : constraints.maxWidth * 9 / 16,
-                    );
-              final infoWidth = wide ? 380.0 : constraints.maxWidth;
-              final visiblePlayerWidth = wide
-                  ? math.max(
-                      0.0,
-                      constraints.maxWidth - (showInfo ? infoWidth : 0),
-                    )
-                  : constraints.maxWidth;
-              final visiblePlayerHeight = wide || !showInfo
-                  ? constraints.maxHeight
-                  : playerHeight;
-              return Stack(
-                children: [
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    width: visiblePlayerWidth,
-                    height: visiblePlayerHeight,
-                    child: player,
+            builder: (context, constraints, listening) =>
+                PlaybackVideoDimensions(
+                  builder: (context, dimensions) => PlaybackPageLayout(
+                    wide: wide,
+                    showInfo: showInfo,
+                    listening: listening,
+                    dimensions: dimensions,
+                    collapsedHeight: listening && constraints.maxHeight.isFinite
+                        ? PlaybackLayoutBuilder.listeningHeight(
+                            constraints.maxHeight,
+                          )
+                        : math.min(
+                            constraints.maxWidth * 9 / 16,
+                            constraints.maxHeight.isFinite
+                                ? constraints.maxHeight * 0.55
+                                : constraints.maxWidth * 9 / 16,
+                          ),
+                    contentKey: season.id,
+                    player: player,
+                    info: info,
+                    toggleInfo: toggleInfo,
+                    toggleTooltip: showInfo ? '收起影视信息' : '展开影视信息',
                   ),
-                  Positioned(
-                    left: wide ? constraints.maxWidth - infoWidth : 0,
-                    top: wide ? 0 : playerHeight,
-                    width: infoWidth,
-                    height: wide
-                        ? constraints.maxHeight
-                        : math.max(1.0, constraints.maxHeight - playerHeight),
-                    child: ExcludeFocus(
-                      excluding: !showInfo,
-                      child: Offstage(offstage: !showInfo, child: info),
-                    ),
-                  ),
-                  if (wide)
-                    Positioned(
-                      right: showInfo ? infoWidth : 8,
-                      top: math.max(
-                        0,
-                        visiblePlayerHeight / 2 -
-                            PlaybackSidebarToggle.size.height / 2,
-                      ),
-                      child: PlaybackSidebarToggle(
-                        tooltip: showInfo ? '收起影视信息' : '展开影视信息',
-                        onPressed: toggleInfo,
-                        icon: showInfo
-                            ? Icons.chevron_right
-                            : Icons.chevron_left,
-                      ),
-                    ),
-                ],
-              );
-            },
+                ),
           );
         },
       ),

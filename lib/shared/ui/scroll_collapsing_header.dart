@@ -137,6 +137,19 @@ class _ScrollHeaderBody extends InheritedWidget {
       nested != oldWidget.nested;
 }
 
+/// Connects retained list controllers to an enclosing nested scroll view.
+class HeaderScrollBody extends StatelessWidget {
+  const HeaderScrollBody({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => _ScrollHeaderBody(
+    nested: context.findAncestorStateOfType<NestedScrollViewState>()!,
+    child: PrimaryScrollController.none(child: child),
+  );
+}
+
 /// Gives each retained list its own controller while attaching only the active
 /// list to NestedScrollView. Sharing the primary controller directly would
 /// otherwise scroll every visited tab at once.

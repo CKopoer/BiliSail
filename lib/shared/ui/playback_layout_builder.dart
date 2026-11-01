@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -23,6 +24,55 @@ class PlaybackLayoutBuilder extends ConsumerStatefulWidget {
 
   static double listeningHeight(double availableHeight) =>
       math.min(availableHeight, math.max(180, availableHeight * .5));
+}
+
+/// Selects decoded display dimensions without rebuilding on position updates.
+class PlaybackVideoDimensions extends ConsumerStatefulWidget {
+  const PlaybackVideoDimensions({super.key, required this.builder});
+
+  final Widget Function(BuildContext context, VideoDimensions? dimensions)
+  builder;
+
+  @override
+  ConsumerState<PlaybackVideoDimensions> createState() =>
+      _PlaybackVideoDimensionsState();
+}
+
+class _PlaybackVideoDimensionsState
+    extends ConsumerState<PlaybackVideoDimensions> {
+  PlaybackSession? _session;
+  VideoDimensions? _dimensions;
+
+  void _onSnapshot() {
+    final dimensions = _session?.snapshots.value.videoDimensions;
+    if (dimensions == _dimensions) return;
+    setState(() => _dimensions = dimensions);
+  }
+
+  @override
+  void dispose() {
+    _session?.snapshots.removeListener(_onSnapshot);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final session = ref.exists(playbackSessionProvider)
+        ? ref.watch(playbackSessionProvider)
+        : null;
+    if (!identical(session, _session)) {
+      _session?.snapshots.removeListener(_onSnapshot);
+      _session = session;
+      _dimensions = session?.snapshots.value.videoDimensions;
+      session?.snapshots.addListener(_onSnapshot);
+    }
+    if (session == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && ref.exists(playbackSessionProvider)) setState(() {});
+      });
+    }
+    return widget.builder(context, _dimensions);
+  }
 }
 
 class _PlaybackLayoutBuilderState extends ConsumerState<PlaybackLayoutBuilder> {
