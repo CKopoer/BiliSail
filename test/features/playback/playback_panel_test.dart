@@ -218,6 +218,9 @@ void main() {
             '投屏',
             '全屏',
             '退出全屏',
+            '返回',
+            '回到主页',
+            '显示／隐藏信息区',
           ]) {
             expect(
               find.descendant(
@@ -231,8 +234,6 @@ void main() {
             '播放配置',
             '弹幕配置',
             '音量 ${session.snapshots.value.volume.round()}%',
-            '返回',
-            '回到主页',
           ]) {
             expect(find.text(title), findsOneWidget);
           }

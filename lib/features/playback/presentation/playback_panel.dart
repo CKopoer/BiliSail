@@ -1155,9 +1155,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                       ? box.localToGlobal(Offset.zero) & box.size
                       : null;
                 },
-                commands: widget.pageCommands,
-                navigation: widget.navigation,
-                onNavigate: widget.onNavigate,
                 onSettings: _openSettings,
               ),
             ),

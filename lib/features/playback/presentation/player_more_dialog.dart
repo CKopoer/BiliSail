@@ -1,12 +1,9 @@
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../domain/playback_rates.dart';
-import '../../../shared/ui/playback_page_commands.dart';
-import '../../../shared/ui/playback_navigation.dart';
 import '../application/playback_session.dart';
 import '../domain/playback_repository.dart';
 import 'live_stream_picker.dart';
@@ -18,22 +15,16 @@ class PlayerMoreDialog extends StatelessWidget {
     super.key,
     required this.session,
     required this.playerBounds,
-    required this.commands,
-    required this.navigation,
-    required this.onNavigate,
     required this.onSettings,
   });
 
   final PlaybackSession session;
   final ValueGetter<Rect?> playerBounds;
-  final ValueListenable<PlaybackPageCommands?> commands;
-  final ValueListenable<PlaybackNavigation?> navigation;
-  final ValueChanged<VoidCallback> onNavigate;
   final Future<void> Function(int) onSettings;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: Listenable.merge([session, commands, navigation]),
+    animation: session,
     builder: (context, _) => _buildDialog(context),
   );
 
@@ -119,7 +110,6 @@ class PlayerMoreDialog extends StatelessWidget {
 
   List<Widget> _tools(BuildContext context, PlaybackSnapshot snapshot) {
     final media = session.media;
-    final page = commands.value;
     void leave(VoidCallback action) {
       Navigator.of(context).pop();
       action();
@@ -247,24 +237,6 @@ class PlayerMoreDialog extends StatelessWidget {
           ],
         ),
       ),
-      if (page != null)
-        action(
-          '显示／隐藏信息区',
-          Icons.view_sidebar_outlined,
-          () => leave(page.toggleInfo),
-        ),
-      if (navigation.value case final actions? when actions.showInPlayer) ...[
-        action(
-          '返回',
-          Icons.arrow_back_rounded,
-          () => leave(() => onNavigate(actions.onBack)),
-        ),
-        action(
-          '回到主页',
-          Icons.home_outlined,
-          () => leave(() => onNavigate(actions.onHome)),
-        ),
-      ],
       const Divider(),
       action('播放配置', Icons.settings_outlined, () => unawaited(onSettings(0))),
       action('弹幕配置', Icons.tune, () => unawaited(onSettings(1))),
