@@ -54,13 +54,22 @@ class PlaybackWindowFrame {
   static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam,
                                      LPARAM lparam, UINT_PTR subclass_id,
                                      DWORD_PTR) {
-    if (message == WM_NCCALCSIZE &&
-        (GetWindowLongPtr(window, GWL_STYLE) & WS_CAPTION) == WS_CAPTION) {
+    if (message == WM_NCCALCSIZE) {
       auto* const rect = wparam
           ? &reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam)->rgrc[0]
           : reinterpret_cast<RECT*>(lparam);
       const LONG top = rect->top;
-      const LRESULT result = DefSubclassProc(window, message, wparam, lparam);
+      // The SDK host forwards messages to shared plugin delegates. In
+      // window_manager, hidden-caption insets use the main window's zoom state,
+      // which can expand an ordinary playback client beyond its own frame.
+      // This subclass owns the playback frame: obtain system insets directly
+      // instead of applying another window's custom-caption policy first.
+      const LRESULT result = DefWindowProcW(window, message, wparam, lparam);
+      // Fullscreen removes the caption and resize frame; its system client
+      // already fills the window and must also bypass the main-window policy.
+      if ((GetWindowLongPtr(window, GWL_STYLE) & WS_CAPTION) != WS_CAPTION) {
+        return result;
+      }
       // A maximized HWND extends its resize border beyond the work area. Keep
       // that inset only when zoomed so the Flutter caption is not clipped.
       const UINT dpi = GetDpiForWindow(window);
