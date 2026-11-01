@@ -216,7 +216,41 @@ void main() {
           final bottom = find.byKey(
             const ValueKey('workspace-bottom-navigation'),
           );
-          (Rect, Rect, TextStyle?) metrics(String section) {
+          const dockLabels = {
+            'home': '首页',
+            'dynamic': '动态',
+            'mine': '我的',
+            'settings': '设置',
+          };
+          // The glass dock exposes no per-destination keys; each tab's
+          // Semantics carries the destination label, so measure that subtree.
+          Finder dockTab(String label) => find.descendant(
+            of: bottom,
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Semantics && widget.properties.label == label,
+            ),
+          );
+          (Rect, Rect, TextStyle?) dockMetrics(String section) {
+            final tab = dockTab(dockLabels[section]!);
+            final icon = find.descendant(of: tab, matching: find.byType(Icon));
+            // The icon glyph is itself a RichText, so scope to the label Text
+            // first and measure its paragraph like the strip helper does.
+            final richText = find.descendant(
+              of: find.descendant(of: tab, matching: find.byType(Text)),
+              matching: find.byType(RichText),
+            );
+            final origin = tester.getTopLeft(bottom);
+            return (
+              tester.getRect(icon).shift(-origin),
+              tester.getRect(richText).shift(-origin),
+              tester.renderObject<RenderParagraph>(richText).text.style,
+            );
+          }
+
+          // The messages page has no dock destination and keeps the unselected
+          // Material strip, which still exposes its own keys.
+          (Rect, Rect, TextStyle?) stripMetrics(String section) {
             final destination = find.byKey(
               ValueKey('workspace-bottom-$section'),
             );
@@ -237,26 +271,57 @@ void main() {
           }
 
           await show('/');
-          final normalSize = tester.getSize(bottom);
+          expect(find.byType(LiquidDockNavi), findsOneWidget);
+          final dockSize = tester.getSize(bottom);
           final normal = {
             for (final section in ['dynamic', 'mine', 'settings'])
-              section: metrics(section),
+              section: dockMetrics(section),
           };
           await show('/settings');
-          normal['home'] = metrics('home');
-          for (final location in ['/messages', '/downloads']) {
-            await show(location);
-            expect(tester.getSize(bottom), normalSize);
-            for (final entry in normal.entries) {
-              final actual = metrics(entry.key);
-              final expected = entry.value;
-              final reason = '$location ${entry.key} width=$width scale=$scale';
-              expect(actual.$1, expected.$1, reason: reason);
-              expect(actual.$2, expected.$2, reason: reason);
-              expect(actual.$3, expected.$3, reason: reason);
-            }
-            expect(tester.takeException(), isNull);
+          // 首页 is selected on '/', so read its unselected geometry here.
+          normal['home'] = dockMetrics('home');
+
+          await show('/downloads');
+          expect(find.byType(LiquidDockNavi), findsOneWidget);
+          expect(
+            tester.getSize(bottom),
+            dockSize,
+            reason: 'downloads width=$width scale=$scale',
+          );
+          for (final entry in normal.entries) {
+            final actual = dockMetrics(entry.key);
+            final expected = entry.value;
+            final reason = '/downloads ${entry.key} width=$width scale=$scale';
+            expect(actual.$1, expected.$1, reason: reason);
+            expect(actual.$2, expected.$2, reason: reason);
+            expect(actual.$3, expected.$3, reason: reason);
           }
+
+          await show('/messages');
+          expect(find.byType(LiquidDockNavi), findsNothing);
+          expect(
+            tester.getSize(bottom).height,
+            utilityStripHeight + bottomPadding,
+            reason: 'messages width=$width scale=$scale inset=$bottomPadding',
+          );
+          Rect? firstIcon;
+          for (final section in ['home', 'dynamic', 'mine', 'settings']) {
+            final actual = stripMetrics(section);
+            final reason = 'messages $section width=$width scale=$scale';
+            firstIcon ??= actual.$1;
+            expect(actual.$1.width, greaterThan(0), reason: reason);
+            expect(
+              actual.$1.height,
+              firstIcon.height,
+              reason: '$reason icon height differs',
+            );
+            expect(
+              actual.$3?.fontSize,
+              utilityStripLabelSize,
+              reason: '$reason label size',
+            );
+          }
+          expect(tester.takeException(), isNull);
         }
       },
       variant: TargetPlatformVariant({
