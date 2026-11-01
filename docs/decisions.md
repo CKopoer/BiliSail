@@ -485,3 +485,26 @@ Android 复用既有媒体服务，暂停／换源期间不撤下前台服务，
 **决定（2026-10-31）**：按用户要求，主窗口和播放窗口分别持久保存普通矩形及最大化状态，跨账号共用；替代此前播放窗仅在应用会话内记忆的范围。最小化／全屏不作为下一次打开状态，最大化仍保留主动还原需要的普通矩形，旧播放 owner 不得覆盖新窗口。
 
 此状态由原生窗口层在首次显示和业务数据库打开前恢复，使用本机原生配置存储，独立于 `AppSettings`、SQLite schema、账号和设置导入／重置。沿用可见工作区限制和缺失／损坏记录回退。平台存储、Wayland 位置限制与验证边界见[桌面窗口状态持久化](validation/window-geometry-persistence.md)。
+
+## D64：移动底栏改用本地 liquid_dock_navi 液态玻璃 Dock
+
+**决定（2026-11-01）**：按用户要求，一级底栏的选中态分支以 Git 依赖 `https://github.com/MagicFollower/liquid_dock_navi.git`（MIT，纯 Flutter，无平台通道，钉完整提交 `28e9b7a4991ac31d92003475dfbbac614d4fa383`）的 `LiquidDockNavi` 替换 Material `NavigationBar`，保留 `workspace-bottom-navigation` 键、52 高度、四节标签、即时 `_selectSection` 切换、`withClampedTextScaling(1.3)` 及禁用动画下弹簧直落的行为；消息／下载页的无选中扁条与侧边栏、导航模式设置不变。悬浮玻璃 Dock 替代原 surface 底条成为新增外观；组件标签颜色跟随选中态，与原 `labelTextStyle` 语义一致。
+
+依赖固定到完整提交而非分支，组件的 `shaders/liquid_lens.frag` 随 Git 检出进入包；本地并行开发需提交并推送后改 `ref` 再 `pub get`，构建不再读取相邻工作树副本。测试矩阵的键定位改文本定位，高度断言区分 52 扁条与 60 悬浮 Dock。组件折射着色器需 Impeller（Android 实机），Skia 与测试环境自动降级；Android 实机外观、拖拽刮擦手感与性能未验收，按专项记录保留。
+
+**打包脚本（2026-11-01）**：新增 `android/bin/build-apk.cmd` 双击入口。自动定位 Flutter／Android SDK／JDK 17+，非 ASCII 工程路径自动经 `C:\bilisail-build` 目录联接构建；优先复用 `packages/bili_mux/native/prebuilt/android-arm64` 资产，缺失时经 MSYS2 登录 shell 预构建，再以 `-SkipMuxBuild` 委托 `tool/build-android-development.ps1`（Release、`dev.bilisail.bilisail.test`、本机开发签名、包名/名称/不可调试校验与元信息落盘均沿用既有入口）。本机离线环境下 sqlite3 与 media-kit 的 GitHub 原生资产下载被网络拦截，经镜像下载并按包内固定 SHA-256 校验后放入 hooks 缓存；此为本机状态，不入库。脚本已在本机构建出 67.9 MB 的 `BiliSail-test-arm64-release.apk` 并通过身份校验；设备安装与实机运行未验收。
+
+**aapt 输出编码修复（2026-11-01，同日）**：按用户反馈修复双击构建在身份校验处的失败。aapt 恒以 UTF-8 输出，而 PowerShell 以 `[Console]::OutputEncoding`（中文宿主为 OEM 936）解码原生命令输出，非 ASCII 的应用名“BiliSail 测试版”在校验前即被错读。`tool/android-development.ps1`、`android-version.ps1`、`android-media-notification.ps1` 的 aapt 调用统一改为 .NET 进程读取并显式按 UTF-8 解码，三个 PS1 补加 UTF-8 BOM 保证 Windows PowerShell 5.1 与 pwsh 解析一致；`build-apk.cmd` 开头将控制台代码页固定为 65001。修复后在强制 GBK 控制台编码的环境下复验身份校验通过，并完整跑通双击构建。
+
+**打包脚本输出英文化（2026-11-01，同日）**：按用户反馈，`build-apk.cmd` 的脚本正文与全部运行输出改为详细英文，并整体重写为纯 ASCII 字节（无 BOM、CRLF 行尾），使 cmd 在任意控制台代码页下的渲染一致，彻底规避乱码；工具链定位、联接回退、mux 复用／预构建与委托入口的行为不变。重写时修复两处脚本缺陷：`MUX_PAYLOAD` 在预构建分支未被赋值即被引用，以及 `echo` 文本中的半角括号在括号块内被 cmd 当作语法解析导致 "... was unexpected"。修复后完整跑通双击构建（mux 资产复用、Release 构建、身份校验、adb 安装提示）。
+
+**Dock edge-to-edge（2026-11-01，同日）**：按用户反馈， dock 下方的内容区此前被 surface 色条遮挡。`AndroidSystemUi` 的系统导航栏颜色改为透明（显式 `backgroundColor` 的特殊页面仍可覆盖），`shell.dart` 在显示 dock 的页面把 dock 移入 `Scaffold.bottomNavigationBar` 并开启 `extendBody`：body 延伸到 dock 与透明手势条后方，dock 高度经 `MediaQuery.padding.bottom` 注入给页面滚动列表消费；`SafeArea` 在 dock 页面不再吃底部 inset。键盘弹出时 dock 隐藏、`extendBody` 关闭（键盘 inset 直接缩小 body），且 dock 保持挂载以免打断 reveal 动画。不透明的消息/下载无选中条与播放/个人页保持原有的"预留空间"行为。`android_system_ui_test` 的像素与布局断言按透明导航栏语义更新。窗口化与桌面布局不受影响；Android 实机上的透明手势条与玻璃折射效果待验收。
+
+**圆角外模糊溢出修复（2026-11-01，同日）**：实机反馈 dock 胶囊圆角外侧出现矩形模糊痕迹。原因是 Impeller 按 layer 计算 backdrop 模糊，模糊样本越过胶囊圆角边缘后没有被 hard clip 收住。`liquid_dock_navi` 的 `_buildBar` 改为把玻璃、折射带、标签与高光整体包进 `ClipRRect(h/2)`，投影作为兄弟层留在裁剪外以保留柔和衰减；胶囊圆角外的模糊因此被裁进玻璃内。组件 18 项测试（含圆角越界与 edge-to-edge 断言）与主应用全量测试通过。
+
+**Dock 入口扩展（2026-11-01，同日）**：按用户反馈，窄屏布局没有顶部工具栏，观看历史与下载入口随工具栏一起消失。dock 在主要分区之后追加"历史"与"下载"两个目的地（设置保持在最右），`/history`、`/downloads` 路由直接高亮对应项；无选中条与侧栏语义不变。dock 六项在 390 宽下每项约 65 逻辑像素，图标与 12 号标签仍可容纳；更窄宽度与超大字体的边界由既有 `withClampedTextScaling` 与组件测试覆盖。
+**Dock 重选与浮层避让修复（2026-11-01，同日）**：按用户反馈修复两处。其一，`/history` 经 `sectionForLocation` 归入"我的"段，底栏节项的重选守卫写作 `item != selected`，导致选中态停在"历史"时点击"我的"被当作重复选择吞掉，导航不发生；守卫改为比较该目的地自身是否被渲染为选中。其二，`PagedScrollViewport` 的刷新／返回顶部浮层写作固定 `bottom: 20`，未让出玻璃 Dock 覆盖带；`extendBody` 已把 Dock 高度注入 body 的 `MediaQuery.padding.bottom`，浮层改为在其上叠加该值，键盘弹出或 Dock 隐藏时该值为 0，回落到原 20。390×844 且底部 inset 24 时，浮层底边由 824（Dock 顶边 760，重合 64）升到 740。
+
+**历史归入固定根标签（2026-11-01，同日）**：按用户反馈，底栏"历史"首次点击可切换，但与其它一级入口反复往返后标签跳转混乱。根因是 `/history` 是当时唯一不共用固定根标签的一级入口：`acceptRoute` 为它新建并长期保留 `tab-N`，其余一级入口改写 `_tabs[0]`，于是同一个底部入口会把选中身份跳到另一个标签，Back／鼠标侧键只关闭该临时标签，关闭后再次进入递增 `tab-2`／`tab-3` 并丢失历史页状态；"我的"页内的"历史记录"内容标签又是同一份数据的第二种表达。修法把 `/history` 并入 `WorkspaceTab.isRoot`、`WorkspaceRootSection.history` 与 `WorkspaceRootPage` 的保留分支，使其与"我的／消息／下载／设置"同构，dock 选中态仍按路径把高亮留给"历史"项。行为边界变化：历史页不再有页内返回头，也不由关闭快捷键销毁（与其他一级入口一致），`_backHistory` 不随往返增长。
+
+既有以"历史=独立可关闭标签"为前提的测试改为用搜索页／用户主页承担临时标签角色，断言本身不放宽；`workspace_root_page_test` 的分支数断言改取 `WorkspaceRootSection.values.length`；新增标签层与壳层各一条回归，断言反复往返后标签仍为 `home` 且不新增。根应用全量测试 3909 通过、13 跳过、6 失败，6 项均为 `shell_layout_test` 中"messages and downloads match normal bottom navigation"（该用例仍以 `workspace-bottom-*` 键定位 Material 扁条，与玻璃 Dock 改造后的呈现不符，属既有失败，本次未改动其语义）。真机上"历史"与其他一级入口的往返手感与 Android 实机行为未验收。
