@@ -8,6 +8,37 @@ final class SearchClient {
   const SearchClient(this.api);
   final BiliApiClient api;
   static const _endpoint = 'search';
+
+  Future<List<ApiSearchTrend>> trending({ApiRequestContext? context}) async {
+    final data = await api.requestJson(
+      Uri.https('api.bilibili.com', '/x/v2/search/trending/ranking', {
+        'limit': '10',
+      }),
+      'search_trending',
+      context: context,
+    );
+    final list = data['list'];
+    if (list is! List<Object?>) return _fail();
+    final keywords = <String>{};
+    final result = <ApiSearchTrend>[];
+    for (final item in list.take(30)) {
+      if (item is! Map<String, Object?>) continue;
+      final keyword = _clean(item['keyword']);
+      if (keyword.isEmpty || keyword.length > 200 || !keywords.add(keyword)) {
+        continue;
+      }
+      final label = _clean(item['show_name']);
+      result.add(
+        ApiSearchTrend(
+          keyword: keyword,
+          label: label.isEmpty ? keyword : label,
+        ),
+      );
+      if (result.length == 10) break;
+    }
+    return List.unmodifiable(result);
+  }
+
   static const _types = {
     ApiSearchType.video: 'video',
     ApiSearchType.bangumi: 'media_bangumi',

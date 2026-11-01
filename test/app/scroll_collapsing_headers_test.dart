@@ -62,10 +62,12 @@ void main() {
       final channel = find.byKey(const ValueKey('home-channel-strip'));
       final originalTop = tester.getTopLeft(channel).dy;
       final content = tester.element(find.byKey(const ValueKey('list-home')));
-      await tester.enterText(
-        find.byKey(const ValueKey('workspace-search')),
-        '保留搜索草稿',
-      );
+      // Seed the retained draft without opening the compact search route.
+      tester
+              .widget<TextField>(find.byKey(const ValueKey('workspace-search')))
+              .controller!
+              .text =
+          '保留搜索草稿';
       await tester.pumpAndSettle();
       await tester.drag(
         find.byKey(const ValueKey('list-home')),

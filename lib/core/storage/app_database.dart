@@ -94,6 +94,12 @@ class AppDatabase extends GeneratedDatabase {
     [key, value],
   );
 
-  Future<void> clearPrivateHistory(String scope) =>
-      customStatement('DELETE FROM playback_progress WHERE scope = ?', [scope]);
+  Future<void> clearPrivateHistory(String scope) async {
+    await customStatement('DELETE FROM playback_progress WHERE scope = ?', [
+      scope,
+    ]);
+    await customStatement('DELETE FROM settings WHERE key = ?', [
+      'search_history.v1.$scope',
+    ]);
+  }
 }

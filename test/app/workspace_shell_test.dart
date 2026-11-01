@@ -977,7 +977,7 @@ void main() {
       expect(find.byKey(const ValueKey('workspace-tab-strip')), findsOneWidget);
       expect(
         tester.getTopLeft(find.byKey(const ValueKey('workspace-search'))).dy,
-        65,
+        64,
       );
       expect(find.byKey(const ValueKey('new-workspace-tab')), findsOneWidget);
       await tester.tap(find.text('count 0'));
@@ -1890,40 +1890,44 @@ GoRouter _router(
   routes: [
     ShellRoute(
       observers: [],
-      builder: (context, state, child) => BiliAppShell(
-        shortcuts: shortcuts,
-        navigationMode: navigationMode,
-        location: state.uri.toString(),
-        accountBuilder: accountBuilder,
-        pageBuilder: (context, tab) => tab.location.path == '/search'
-            ? ProviderScope(
-                overrides: [
-                  searchRepositoryProvider.overrideWithValue(
-                    _ShellSearchRepository(),
+      builder: (context, state, child) => ProviderScope(
+        child: BiliAppShell(
+          shortcuts: shortcuts,
+          navigationMode: navigationMode,
+          location: state.uri.toString(),
+          accountBuilder: accountBuilder,
+          pageBuilder: (context, tab) => tab.location.path == '/search'
+              ? ProviderScope(
+                  overrides: [
+                    searchRepositoryProvider.overrideWithValue(
+                      _ShellSearchRepository(),
+                    ),
+                  ],
+                  child: Builder(
+                    builder: (context) => WorkspacePageHeader.wrap(
+                      context,
+                      builder(context, tab),
+                    ),
                   ),
-                ],
-                child: Builder(
-                  builder: (context) =>
-                      WorkspacePageHeader.wrap(context, builder(context, tab)),
-                ),
-              )
-            : builder(context, tab),
-        windowControlsBuilder: customCaption && workspaceHeaderVisible
-            ? (_) => const SizedBox(
-                key: ValueKey('caption-controls'),
-                width: 138,
-                height: 42,
-              )
-            : null,
-        dragRegionBuilder: customCaption && workspaceHeaderVisible
-            ? (_, child) => GestureDetector(
-                key: const ValueKey('caption-drag-region'),
-                behavior: HitTestBehavior.translucent,
-                onPanStart: (_) => onWindowDrag?.call(),
-                child: child,
-              )
-            : null,
-        child: child,
+                )
+              : builder(context, tab),
+          windowControlsBuilder: customCaption && workspaceHeaderVisible
+              ? (_) => const SizedBox(
+                  key: ValueKey('caption-controls'),
+                  width: 138,
+                  height: 42,
+                )
+              : null,
+          dragRegionBuilder: customCaption && workspaceHeaderVisible
+              ? (_, child) => GestureDetector(
+                  key: const ValueKey('caption-drag-region'),
+                  behavior: HitTestBehavior.translucent,
+                  onPanStart: (_) => onWindowDrag?.call(),
+                  child: child,
+                )
+              : null,
+          child: child,
+        ),
       ),
       routes: [
         for (final path in [

@@ -786,7 +786,9 @@ void main() {
             final navigationHeight = compact
                 ? tester.getSize(navigation).height
                 : 0.0;
-            await tester.enterText(search, '测试草稿');
+            // Exercise keyboard geometry independently of the compact search route.
+            tester.widget<TextField>(search).controller!.text = '测试草稿';
+            await tester.showKeyboard(search);
             await tester.pumpAndSettle();
             builds = 0;
             for (final inset in [1.0, 100.0, 240.0, 320.0, 160.0, 0.0]) {
@@ -858,7 +860,8 @@ void main() {
           final search = find.byKey(const ValueKey('workspace-search'));
           final before = tester.getSize(content).height;
           final navigationHeight = tester.getSize(navigation).height;
-          await tester.enterText(search, '保留草稿');
+          tester.widget<TextField>(search).controller!.text = '保留草稿';
+          await tester.showKeyboard(search);
           tester.view.viewInsets = const FakeViewPadding(bottom: 320);
           await tester.pumpAndSettle();
           expect(navigation, findsNothing);

@@ -2,6 +2,12 @@ import '../models.dart';
 
 enum ApiSearchType { all, video, bangumi, film, live, article, user }
 
+final class ApiSearchTrend {
+  const ApiSearchTrend({required this.keyword, required this.label});
+  final String keyword;
+  final String label;
+}
+
 final class ApiSearchPage {
   ApiSearchPage({
     required List<ApiSearchItem> items,

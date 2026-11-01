@@ -106,6 +106,39 @@ const _article = {
 
 void main() {
   test(
+    'trending uses bounded public ranking and separates label from query',
+    () async {
+      final transport = _Transport((uri) {
+        expect(uri.path, '/x/v2/search/trending/ranking');
+        expect(uri.queryParameters, {'limit': '10'});
+        return {
+          'list': [
+            {'keyword': '真实词', 'show_name': '展示词'},
+            {'keyword': '真实词'},
+            {'keyword': ''},
+            {'keyword': '后备'},
+            ...List.generate(30, (i) => {'keyword': '词$i'}),
+          ],
+        };
+      });
+      final result = await SearchClient(
+        BiliApiClient(transport: transport),
+      ).trending();
+      expect(result.length, 10);
+      expect(result.first.keyword, '真实词');
+      expect(result.first.label, '展示词');
+      expect(result[1].label, '后备');
+      expect(transport.calls.length, 1);
+    },
+  );
+
+  test('malformed trending is a protocol failure', () async {
+    await expectLater(
+      _client((_) => {'list': 'bad'}).trending(),
+      throwsA(isA<ApiFailure>()),
+    );
+  });
+  test(
     'all search decodes six content types, previews and server counts',
     () async {
       final result = await _client((uri) {

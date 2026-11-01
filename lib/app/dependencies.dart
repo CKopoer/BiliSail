@@ -54,6 +54,8 @@ import '../features/feed/data/api_home_repository.dart';
 import '../features/feed/application/favorite_folder_controller.dart';
 import '../features/feed/data/api_favorite_folder_repository.dart';
 import '../features/search/application/search_controller.dart';
+import '../features/search/application/search_discovery_controller.dart';
+import '../features/search/data/search_discovery_repository.dart';
 import '../features/search/data/api_search_repository.dart';
 import '../features/video/application/video_controller.dart';
 import '../features/video/application/video_card_controller.dart';
@@ -461,6 +463,18 @@ class AppDependencies {
         ),
         searchRepositoryProvider.overrideWithValue(
           ApiSearchRepository(api, requests),
+        ),
+        searchHistoryScopeProvider.overrideWith((ref) {
+          ref.watch(authControllerProvider.select((state) => state.mid));
+          return session.accountScope;
+        }),
+        searchDiscoveryRepositoryProvider.overrideWithValue(
+          SqliteSearchDiscoveryRepository(
+            database,
+            SearchClient(api),
+            requests,
+            accountScope: () => session.accountScope,
+          ),
         ),
         profileRepositoryProvider.overrideWithValue(
           ApiProfileRepository(

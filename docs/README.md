@@ -33,6 +33,7 @@
 | [macOS 发布启动与安全存储](validation/macos-release-startup.md) | ad-hoc 权限约束、传统 Keychain、同产物启动／跨进程凭据验证与升级验收 |
 | [macOS 双标签播放崩溃](validation/macos-dual-playback-crash.md) | 原生 multiview 断言、窗口能力检查、应用内双标签与验证边界 |
 | [API 与会话](api-design.md) | 协议边界、接口映射、鉴权、错误、缓存和降级 |
+| [搜索历史与热搜](validation/search-discovery-2026-11-01.md) | 居中搜索动效、宽窄屏入口、账号历史存储、热搜协议与自动验证边界 |
 | [密码、短信与移动登录窗口](validation/password-sms-login.md) | 三种 Web 登录、交互验证码、安全会话与小屏/键盘布局 |
 | [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |
 | [DLNA 投屏](validation/dlna-casting.md) | 视频／影视 TV 地址、设备发现与控制、生命周期及平台验收边界 |
