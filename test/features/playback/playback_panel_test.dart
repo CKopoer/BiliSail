@@ -68,7 +68,7 @@ void main() {
   ]) {
     for (final textScale in [1.0, 2.0]) {
       testWidgets(
-        'small window matches complete buttons for $content text=$textScale',
+        'small window groups tools and full layout places rate after quality for $content text=$textScale',
         (tester) async {
           tester.view.devicePixelRatio = 1;
           tester.view.physicalSize = const Size(1800, 1000);
@@ -120,7 +120,7 @@ void main() {
           final completeButtons = buttons();
           expect(completeButtons, containsAll(['音量', '播放配置', '关闭弹幕']));
           expect(find.byTooltip('发送弹幕'), findsNothing);
-          void expectRateAtTop() {
+          void expectRateAtBottom() {
             final rate = find.byTooltip('播放速度');
             expect(rate, session.isLive ? findsNothing : findsOneWidget);
             expect(
@@ -128,28 +128,70 @@ void main() {
                 of: find.byKey(const ValueKey('player-control-title-layer')),
                 matching: rate,
               ),
-              session.isLive ? findsNothing : findsOneWidget,
+              findsNothing,
             );
             expect(
               find.descendant(
                 of: find.byKey(const ValueKey('player-controls')),
                 matching: rate,
               ),
-              findsNothing,
+              session.isLive ? findsNothing : findsOneWidget,
             );
+            if (!session.isLive &&
+                find.byTooltip('清晰度').evaluate().isNotEmpty) {
+              expect(
+                tester.getTopLeft(rate).dx,
+                tester.getTopRight(find.byTooltip('清晰度')).dx,
+              );
+            }
           }
 
-          expectRateAtTop();
+          expectRateAtBottom();
           await resize(320);
           expect(
             find.byKey(const ValueKey('small-window-control-row')),
             findsOneWidget,
           );
-          expect(buttons(), completeButtons);
+          expect(buttons(), containsAll(['播放配置', '关闭弹幕', '更多播放选项']));
           expect(find.byTooltip('发送弹幕'), findsOneWidget);
-          expect(find.byTooltip('更多播放选项'), findsNothing);
-          expect(find.byIcon(Icons.more_horiz), findsNothing);
-          expectRateAtTop();
+          expect(find.byTooltip('更多播放选项'), findsOneWidget);
+          expect(find.byIcon(Icons.more_horiz), findsOneWidget);
+          for (final tooltip in [
+            '播放速度',
+            '清晰度',
+            '音量',
+            '字幕',
+            '语音翻译',
+            '弹幕配置',
+            '字幕样式',
+          ]) {
+            expect(find.byTooltip(tooltip), findsNothing);
+          }
+          final topButtons =
+              tester
+                  .widgetList<Tooltip>(
+                    find.descendant(
+                      of: find.byKey(
+                        const ValueKey('player-control-title-layer'),
+                      ),
+                      matching: find.byType(Tooltip),
+                    ),
+                  )
+                  .map((tooltip) => tooltip.message)
+                  .whereType<String>()
+                  .toList()
+                ..sort();
+          final expectedTopButtons = [
+            if (content == 'video' || content == 'pgc') '投屏',
+            if (session.canListen) '听视频',
+            '播放配置',
+            '更多播放选项',
+          ]..sort();
+          expect(topButtons, expectedTopButtons);
+          expect(
+            tester.getTopLeft(find.byTooltip('更多播放选项')).dx,
+            greaterThan(tester.getTopLeft(find.byTooltip('播放配置')).dx),
+          );
           final fullscreenY = tester.getCenter(find.byTooltip('全屏（F）')).dy;
           final controls = find.descendant(
             of: find.byKey(const ValueKey('player-controls')),
@@ -161,17 +203,50 @@ void main() {
               closeTo(fullscreenY, .1),
             );
           }
+          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.pumpAndSettle();
+          for (final title in [
+            '播放配置',
+            '弹幕配置',
+            '音量 ${session.snapshots.value.volume.round()}%',
+            '返回',
+            '回到主页',
+          ]) {
+            expect(find.text(title), findsOneWidget);
+          }
+          expect(
+            find.widgetWithText(ExpansionTile, '字幕'),
+            session.subtitleTracks.isEmpty ? findsNothing : findsOneWidget,
+          );
+          expect(
+            find.widgetWithText(ExpansionTile, '语音翻译'),
+            session.voiceTracks.isEmpty ? findsNothing : findsOneWidget,
+          );
+          expect(
+            find.widgetWithText(ExpansionTile, '播放速度'),
+            session.isLive ? findsNothing : findsOneWidget,
+          );
+          expect(
+            find.text('直播流与线路'),
+            session.isLive ? findsOneWidget : findsNothing,
+          );
           if (!session.isLive) {
-            await tester.tap(find.byTooltip('播放速度'));
+            await tester.tap(find.widgetWithText(ExpansionTile, '播放速度'));
             await tester.pumpAndSettle();
             await tester.pump(const Duration(seconds: 6));
-            await tester.tap(
-              find.widgetWithText(PopupMenuItem<double>, '3.0x'),
-            );
+            final rate = find.widgetWithText(ListTile, '3.0x');
+            await tester.ensureVisible(rate);
+            await tester.pumpAndSettle();
+            await tester.tap(rate);
             await tester.pumpAndSettle();
             expect(session.snapshots.value.rate, 3);
-            expect(find.text('3.0x'), findsOneWidget);
+            expect(
+              find.byKey(const ValueKey('player-more-dialog')),
+              findsOneWidget,
+            );
           }
+          await tester.tap(find.byTooltip('关闭更多播放选项'));
+          await tester.pumpAndSettle();
           expect(engine.opens, 1);
           expect(engine.maxSurfaces, 1);
           expect(tester.takeException(), isNull);
@@ -181,6 +256,200 @@ void main() {
       );
     }
   }
+
+  for (final size in [
+    const Size(320, 800),
+    const Size(844, 390),
+    const Size(1400, 900),
+  ]) {
+    for (final textScale in [1.0, 2.0]) {
+      testWidgets(
+        'more drawer fits $size text=$textScale and keeps session actions',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = size;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final engine = _FakeEngine();
+          final session = _session(engine, repository: _MenuRepository());
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(
+              session,
+              _FakeWindowService(),
+              const AppSettings.defaults(),
+              width: 320,
+              textScale: textScale,
+              theme: BiliTheme.light().copyWith(
+                platform: size.width < 600
+                    ? TargetPlatform.android
+                    : TargetPlatform.windows,
+              ),
+            ),
+          );
+          await _pumpFrames(tester);
+          await _showControls(tester);
+          await session.pause();
+          await session.seek(const Duration(seconds: 35));
+          final generation = session.sourceGeneration;
+          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.pumpAndSettle();
+          final drawer = find.byKey(const ValueKey('player-more-dialog'));
+          expect(
+            tester.widget<Dialog>(drawer).alignment,
+            size.width < 600 ? Alignment.bottomCenter : Alignment.centerRight,
+          );
+          final surface = find
+              .descendant(of: drawer, matching: find.byType(Material))
+              .first;
+          final bounds = tester.getRect(surface);
+          expect(bounds.left, greaterThanOrEqualTo(12));
+          expect(bounds.right, lessThanOrEqualTo(size.width - 12));
+          expect(bounds.top, greaterThanOrEqualTo(12));
+          expect(bounds.bottom, lessThanOrEqualTo(size.height - 12));
+          if (size.width >= 600) expect(bounds.width, lessThanOrEqualTo(400));
+          await tester.sendKeyEvent(LogicalKeyboardKey.space);
+          await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+          await tester.pumpAndSettle();
+          expect(session.snapshots.value.desiredPlaying, isFalse);
+          expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
+          await tester.ensureVisible(
+            find.byKey(const ValueKey('player-more-volume')),
+          );
+          await tester.pumpAndSettle();
+          await tester.drag(
+            find.byKey(const ValueKey('player-more-volume')),
+            const Offset(-30, 0),
+          );
+          await tester.pumpAndSettle();
+          expect(session.snapshots.value.volume, lessThan(80));
+          final settings = find.widgetWithText(ListTile, '字幕样式');
+          await tester.ensureVisible(settings);
+          await tester.pumpAndSettle();
+          await tester.tap(settings);
+          await tester.pumpAndSettle();
+          expect(find.text('播放器设置'), findsOneWidget);
+          expect(
+            DefaultTabController.of(tester.element(find.byType(TabBar))).index,
+            2,
+          );
+          await tester.tap(find.byTooltip('关闭'));
+          await tester.pumpAndSettle();
+          expect(drawer, findsOneWidget);
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pumpAndSettle();
+          expect(drawer, findsNothing);
+          expect(session.sourceGeneration, generation);
+          expect(session.snapshots.value.position, const Duration(seconds: 35));
+          expect(session.snapshots.value.desiredPlaying, isFalse);
+          expect(engine.opens, 1);
+          expect(engine.maxSurfaces, 1);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
+  testWidgets('more drawer quality and voice reuse paused playback', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine, repository: _MenuRepository());
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(
+        session,
+        _FakeWindowService(),
+        const AppSettings.defaults(),
+        width: 320,
+      ),
+    );
+    await _pumpFrames(tester);
+    await _showControls(tester);
+    await session.pause();
+    await session.seek(const Duration(seconds: 35));
+    for (final (title, label) in [
+      ('清晰度', '清晰度 720P'),
+      ('语音翻译', '语音 English · AI 翻译'),
+    ]) {
+      await tester.tap(find.byTooltip('更多播放选项'));
+      await tester.pumpAndSettle();
+      final section = find.widgetWithText(ExpansionTile, title);
+      await tester.ensureVisible(section);
+      await tester.pumpAndSettle();
+      await tester.tap(section);
+      await tester.pumpAndSettle();
+      final choice = find.widgetWithText(ListTile, label);
+      await tester.ensureVisible(choice);
+      await tester.pumpAndSettle();
+      await tester.tap(choice);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('player-more-dialog')), findsNothing);
+      expect(session.snapshots.value.position, const Duration(seconds: 35));
+      expect(session.snapshots.value.desiredPlaying, isFalse);
+      expect(session.media?.quality, 64);
+      expect(find.byType(VideoSurface), findsOneWidget);
+    }
+    expect(session.selectedVoice.languageCode, 'en');
+    expect(session.media?.audio?.urls.single.path, '/audio/en');
+    expect(engine.opens, 3);
+    expect(engine.maxSurfaces, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
+  testWidgets('more drawer dismisses on source change and hidden owner', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    final window = _FakeWindowService();
+    addTearDown(session.close);
+    ContentPlaybackTarget? target;
+    var active = true;
+    late StateSetter rebuild;
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          rebuild = setState;
+          return _app(
+            session,
+            window,
+            const AppSettings.defaults(),
+            width: 320,
+            target: target,
+            active: active,
+          );
+        },
+      ),
+    );
+    await _pumpFrames(tester);
+    await _showControls(tester);
+    await tester.tap(find.byTooltip('更多播放选项'));
+    await tester.pumpAndSettle();
+    rebuild(() => target = const PgcPlaybackTarget('12', cid: '123'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('player-more-dialog')), findsNothing);
+    await _showControls(tester);
+    await tester.tap(find.byTooltip('更多播放选项'));
+    await tester.pumpAndSettle();
+    rebuild(() => active = false);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('player-more-dialog')), findsNothing);
+    expect(tester.takeException(), isNull);
+    expect(engine.maxSurfaces, 1);
+    rebuild(() => active = true);
+    await tester.pumpAndSettle();
+    await _showControls(tester);
+    await tester.tap(find.byTooltip('更多播放选项'));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'changing the owner source or hiding it dismisses the send dialog',
@@ -513,7 +782,7 @@ void main() {
       ('offline', const OfflinePlaybackTarget('local-task')),
     ]) {
       testWidgets(
-        'small window retains all available controls for $content ${mode.name}',
+        'small window retains transport and groups tools for $content ${mode.name}',
         (tester) async {
           tester.view.devicePixelRatio = 1;
           tester.view.physicalSize = const Size(1400, 1000);
@@ -563,14 +832,14 @@ void main() {
                 matching: find.byType(IconButton),
               ),
               findsNWidgets(
-                !session.isLive && target is! OfflinePlaybackTarget ? 6 : 5,
+                !session.isLive && target is! OfflinePlaybackTarget ? 5 : 4,
               ),
             );
             for (final key in ['compact-playback-actions']) {
               expect(find.byKey(ValueKey(key)), findsNothing);
             }
             for (final key in ['player-back', 'player-home']) {
-              expect(find.byKey(ValueKey(key)).hitTestable(), findsOneWidget);
+              expect(find.byKey(ValueKey(key)), findsNothing);
             }
             final top = find.byKey(
               const ValueKey('player-control-title-layer'),
@@ -578,9 +847,8 @@ void main() {
             for (final tooltip in [
               if (content == 'video' || content == 'pgc') '投屏',
               if (session.canListen) '听视频',
-              '弹幕配置',
-              if (!session.isLive) '字幕样式',
               '播放配置',
+              '更多播放选项',
             ]) {
               final button = find.byTooltip(tooltip).hitTestable();
               expect(
@@ -636,18 +904,11 @@ void main() {
                   .canRequestFocus,
               isFalse,
             );
-            for (final tooltip in [
-              '发送弹幕',
-              '音量',
-              if (session.isLive) '直播清晰度与线路' else '清晰度',
-              if (!session.isLive) '播放速度',
-            ]) {
-              expect(find.byTooltip(tooltip), findsOneWidget);
-            }
+            expect(find.byTooltip('发送弹幕'), findsOneWidget);
             expect(find.byTooltip('发送弹幕').hitTestable(), findsOneWidget);
             expect(find.byTooltip('字幕'), findsNothing);
-            expect(find.byTooltip('更多播放选项'), findsNothing);
-            expect(find.byIcon(Icons.more_horiz), findsNothing);
+            expect(find.byTooltip('更多播放选项'), findsOneWidget);
+            expect(find.byIcon(Icons.more_horiz), findsOneWidget);
             expect(
               find.byTooltip('听视频').hitTestable(),
               session.canListen ? findsOneWidget : findsNothing,
@@ -775,17 +1036,30 @@ void main() {
                 await tester.pumpAndSettle();
                 await tester.tap(tab);
               } else {
-                final button = find.byTooltip(title).hitTestable();
-                expect(
-                  find.descendant(
-                    of: find.byKey(
-                      const ValueKey('player-control-title-layer'),
+                final smallWindow = find
+                    .byKey(const ValueKey('small-window-control-row'))
+                    .evaluate()
+                    .isNotEmpty;
+                if (smallWindow && index != 0) {
+                  await tester.tap(find.byTooltip('更多播放选项'));
+                  await tester.pumpAndSettle();
+                  final option = find.widgetWithText(ListTile, title);
+                  await tester.ensureVisible(option);
+                  await tester.pumpAndSettle();
+                  await tester.tap(option);
+                } else {
+                  final button = find.byTooltip(title).hitTestable();
+                  expect(
+                    find.descendant(
+                      of: find.byKey(
+                        const ValueKey('player-control-title-layer'),
+                      ),
+                      matching: button,
                     ),
-                    matching: button,
-                  ),
-                  findsOneWidget,
-                );
-                await tester.tap(button);
+                    findsOneWidget,
+                  );
+                  await tester.tap(button);
+                }
               }
               await tester.pumpAndSettle();
               await tester.pump(const Duration(seconds: 6));
@@ -821,6 +1095,10 @@ void main() {
               }
               await tester.tap(find.byTooltip('关闭'));
               await tester.pumpAndSettle();
+              if (find.byTooltip('关闭更多播放选项').evaluate().isNotEmpty) {
+                await tester.tap(find.byTooltip('关闭更多播放选项'));
+                await tester.pumpAndSettle();
+              }
               expect(find.byTooltip('播放配置').hitTestable(), findsOneWidget);
               expect(tester.takeException(), isNull);
             }
@@ -842,7 +1120,7 @@ void main() {
 
   for (final mode in PlayerControlsMode.values) {
     testWidgets(
-      'small window subtitle and listening buttons work in ${mode.name} mode',
+      'small window drawer subtitle and listening work in ${mode.name} mode',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = const Size(1400, 1000);
@@ -868,48 +1146,37 @@ void main() {
         await session.setVolume(31);
         await _pumpFrames(tester);
         final generation = session.sourceGeneration;
-        for (final tooltip in ['字幕', '语音翻译', '听视频', '关闭弹幕', '全屏（F）']) {
+        for (final tooltip in ['听视频', '关闭弹幕', '全屏（F）']) {
           expect(find.byTooltip(tooltip), findsOneWidget);
         }
-        expect(find.byTooltip('更多播放选项'), findsNothing);
-        await tester.ensureVisible(find.byTooltip('字幕'));
-        await _pumpFrames(tester);
-        await tester.tap(find.byTooltip('字幕'));
+        expect(find.byTooltip('更多播放选项'), findsOneWidget);
+        await tester.tap(find.byTooltip('更多播放选项'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(ExpansionTile, '字幕'));
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pump(const Duration(seconds: 6));
-        await tester.tap(
-          find.widgetWithText(CheckedPopupMenuItem<int>, '中文 · AI'),
-        );
+        await tester.tap(find.widgetWithText(ListTile, '中文 · AI'));
         await _pumpFrames(tester);
         expect(session.selectedSubtitle, 0);
         expect(find.text('字幕回归'), findsOneWidget);
-        await _showControls(tester);
-        await tester.tap(find.byTooltip('字幕'));
-        await tester.pumpAndSettle();
         expect(
           tester
-              .widget<CheckedPopupMenuItem<int>>(
-                find.widgetWithText(CheckedPopupMenuItem<int>, '中文 · AI'),
-              )
-              .checked,
+              .widget<ListTile>(find.widgetWithText(ListTile, '中文 · AI'))
+              .selected,
           isTrue,
         );
-        await tester.tap(
-          find.widgetWithText(CheckedPopupMenuItem<int>, 'English · AI 翻译'),
-        );
+        await tester.tap(find.widgetWithText(ListTile, 'English · AI 翻译'));
         await _pumpFrames(tester);
         expect(session.selectedSubtitle, 1);
-        await tester.tap(find.byTooltip('字幕'));
-        await tester.pumpAndSettle();
-        await tester.tap(
-          find.widgetWithText(CheckedPopupMenuItem<int>, '关闭字幕'),
-        );
+        await tester.tap(find.widgetWithText(ListTile, '关闭字幕'));
         await _pumpFrames(tester);
         expect(session.selectedSubtitle, -1);
         expect(find.text('字幕回归'), findsNothing);
         expect(session.sourceGeneration, generation);
         expect(engine.opens, 1);
 
+        await tester.tap(find.byTooltip('关闭更多播放选项'));
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('听视频'));
         await _pumpFrames(tester);
         expect(session.audioOnly, isTrue);
@@ -4764,7 +5031,10 @@ void main() {
           closeTo(baseline, .1),
         );
       }
-      expect(tester.getCenter(find.byTooltip('播放速度')).dy, lessThan(baseline));
+      expect(
+        tester.getCenter(find.byTooltip('播放速度')).dy,
+        closeTo(baseline, .1),
+      );
       expect(tester.getCenter(field).dy, closeTo(baseline, .1));
       for (final label in ['1080P', '1.0x', '00:45 / 03:00']) {
         expect(
@@ -4833,103 +5103,106 @@ void main() {
 
   for (final (content, target, width)
       in <(String, ContentPlaybackTarget?, double)>[
-        ('video', null, 740),
-        ('pgc', const PgcPlaybackTarget('12', cid: '123'), 740),
+        ('video', null, 780),
+        ('pgc', const PgcPlaybackTarget('12', cid: '123'), 780),
         ('live', const LivePlaybackTarget('12'), 480),
-        ('offline', const OfflinePlaybackTarget('local-task'), 700),
+        ('offline', const OfflinePlaybackTarget('local-task'), 740),
       ]) {
-    testWidgets('toolbar uses a smaller compact threshold for $content', (
-      tester,
-    ) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1400, 1000);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final engine = _FakeEngine();
-      final session = _session(engine);
-      final window = _FakeWindowService();
-      addTearDown(session.close);
-      Future<void> resize(double width) async {
-        await tester.pumpWidget(
-          _app(
-            session,
-            window,
-            const AppSettings.defaults(),
-            width: width,
-            target: target,
-            composer: (_) => const TextField(key: Key('threshold-composer')),
-          ),
+    testWidgets(
+      'toolbar measures quality and rate before switching for $content',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1400, 1000);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final window = _FakeWindowService();
+        addTearDown(session.close);
+        Future<void> resize(double width) async {
+          await tester.pumpWidget(
+            _app(
+              session,
+              window,
+              const AppSettings.defaults(),
+              width: width,
+              target: target,
+              composer: (_) => const TextField(key: Key('threshold-composer')),
+            ),
+          );
+          await _pumpFrames(tester);
+          await _showControls(tester);
+          expect(tester.takeException(), isNull);
+        }
+
+        await resize(width);
+        await session.pause();
+        expect(
+          find.byKey(const ValueKey('standard-control-row')),
+          findsOneWidget,
         );
+        expect(find.byIcon(Icons.airplanemode_active), findsNothing);
+        expect(
+          find.byTooltip('投屏'),
+          content == 'video' || content == 'pgc'
+              ? findsOneWidget
+              : findsNothing,
+        );
+        void expectCastingInTopBar() {
+          final casting = find.byTooltip('投屏').hitTestable();
+          expect(
+            casting,
+            content == 'video' || content == 'pgc'
+                ? findsOneWidget
+                : findsNothing,
+          );
+          expect(
+            find.descendant(
+              of: find.byKey(const ValueKey('player-control-title-layer')),
+              matching: casting,
+            ),
+            content == 'video' || content == 'pgc'
+                ? findsOneWidget
+                : findsNothing,
+          );
+          expect(
+            find.descendant(
+              of: find.byKey(const ValueKey('player-controls')),
+              matching: casting,
+            ),
+            findsNothing,
+          );
+        }
+
+        expectCastingInTopBar();
+        expect(
+          tester.getSize(find.byKey(const Key('threshold-composer'))).width,
+          greaterThanOrEqualTo(200),
+        );
+        await resize(width - 80);
+        expect(
+          find.byKey(const ValueKey('small-window-control-row')),
+          findsOneWidget,
+        );
+        expectCastingInTopBar();
+        expect(find.byTooltip('更多播放选项'), findsOneWidget);
+        expect(find.byIcon(Icons.more_horiz), findsOneWidget);
+        await tester.tap(find.byTooltip('全屏（F）'));
         await _pumpFrames(tester);
-        await _showControls(tester);
+        expect(
+          find.byKey(const ValueKey('standard-control-row')),
+          findsOneWidget,
+        );
+        expect(find.byIcon(Icons.airplanemode_active), findsNothing);
+        expectCastingInTopBar();
+        expect(engine.opens, 1);
+        expect(engine.maxSurfaces, 1);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
         expect(tester.takeException(), isNull);
-      }
-
-      await resize(width);
-      await session.pause();
-      expect(
-        find.byKey(const ValueKey('standard-control-row')),
-        findsOneWidget,
-      );
-      expect(find.byIcon(Icons.airplanemode_active), findsNothing);
-      expect(
-        find.byTooltip('投屏'),
-        content == 'video' || content == 'pgc' ? findsOneWidget : findsNothing,
-      );
-      void expectCastingInTopBar() {
-        final casting = find.byTooltip('投屏').hitTestable();
-        expect(
-          casting,
-          content == 'video' || content == 'pgc'
-              ? findsOneWidget
-              : findsNothing,
-        );
-        expect(
-          find.descendant(
-            of: find.byKey(const ValueKey('player-control-title-layer')),
-            matching: casting,
-          ),
-          content == 'video' || content == 'pgc'
-              ? findsOneWidget
-              : findsNothing,
-        );
-        expect(
-          find.descendant(
-            of: find.byKey(const ValueKey('player-controls')),
-            matching: casting,
-          ),
-          findsNothing,
-        );
-      }
-
-      expectCastingInTopBar();
-      expect(
-        tester.getSize(find.byKey(const Key('threshold-composer'))).width,
-        greaterThanOrEqualTo(200),
-      );
-      await resize(width - 80);
-      expect(
-        find.byKey(const ValueKey('small-window-control-row')),
-        findsOneWidget,
-      );
-      expectCastingInTopBar();
-      expect(find.byTooltip('更多播放选项'), findsNothing);
-      expect(find.byIcon(Icons.more_horiz), findsNothing);
-      await tester.tap(find.byTooltip('全屏（F）'));
-      await _pumpFrames(tester);
-      expect(
-        find.byKey(const ValueKey('standard-control-row')),
-        findsOneWidget,
-      );
-      expect(find.byIcon(Icons.airplanemode_active), findsNothing);
-      expectCastingInTopBar();
-      expect(engine.opens, 1);
-      expect(engine.maxSurfaces, 1);
-      expect(engine.currentSnapshot.desiredPlaying, isFalse);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-      await _pumpFrames(tester);
-    });
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
   }
 
   for (final pgc in [false, true]) {
@@ -5092,23 +5365,29 @@ void main() {
           expect(find.text('清晰度 1080P'), findsOneWidget);
           expect(find.text('播放速度 3.0x'), findsNothing);
         } else {
-          expect(find.byTooltip('更多播放选项'), findsNothing);
-          await tester.tap(find.byTooltip('清晰度'));
+          expect(find.byTooltip('更多播放选项'), findsOneWidget);
+          await tester.tap(find.byTooltip('更多播放选项'));
           await tester.pumpAndSettle();
-          expect(
-            find.widgetWithText(PopupMenuItem<int>, '720P'),
-            findsOneWidget,
-          );
-          expect(
-            find.widgetWithText(PopupMenuItem<int>, '1080P'),
-            findsOneWidget,
-          );
+          await tester.tap(find.widgetWithText(ExpansionTile, '清晰度'));
+          await tester.pumpAndSettle();
+          expect(find.widgetWithText(ListTile, '清晰度 720P'), findsOneWidget);
+          expect(find.widgetWithText(ListTile, '清晰度 1080P'), findsOneWidget);
         }
         await tester.tapAt(const Offset(1, 1));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('播放速度'));
+        if (fullscreen) {
+          await tester.ensureVisible(find.byTooltip('播放速度'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byTooltip('播放速度'));
+        } else {
+          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.widgetWithText(ExpansionTile, '播放速度'));
+        }
         await tester.pumpAndSettle();
-        final rate = find.widgetWithText(PopupMenuItem<double>, '3.0x');
+        final rate = fullscreen
+            ? find.widgetWithText(PopupMenuItem<double>, '3.0x')
+            : find.widgetWithText(ListTile, '3.0x');
         await tester.ensureVisible(rate);
         await tester.tap(rate);
         await tester.pumpAndSettle();
@@ -5230,9 +5509,14 @@ void main() {
             );
             await mouse.addPointer(location: _surfacePoint(tester));
             await tester.pump();
-            await tester.tap(
-              find.byTooltip(useCompactMenu ? '更多播放选项' : '直播清晰度与线路'),
-            );
+            await tester.tap(find.byTooltip(compact ? '更多播放选项' : '直播清晰度与线路'));
+            if (compact && !fullscreen) {
+              await tester.pumpAndSettle();
+              final stream = find.widgetWithText(ListTile, '直播流与线路');
+              await tester.ensureVisible(stream);
+              await tester.pumpAndSettle();
+              await tester.tap(stream);
+            }
             await tester.pump(const Duration(milliseconds: 300));
             await mouse.moveTo(const Offset(-10, -10));
             await tester.pump(const Duration(seconds: 3));
@@ -5464,6 +5748,8 @@ void main() {
                     'subtitle' => '字幕',
                     _ => '语音翻译',
                   };
+            await tester.ensureVisible(find.byTooltip(tooltip));
+            await tester.pumpAndSettle();
             await tester.tap(find.byTooltip(tooltip));
             await tester.pump(const Duration(milliseconds: 300));
             await mouse.moveTo(const Offset(-10, -10));
