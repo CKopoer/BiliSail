@@ -51,17 +51,17 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    void expectStyle(ThemeData theme, Brightness icons, {Color? background}) {
+    void expectStyle(Brightness icons, {Color? background}) {
       expect(
         styles.last['systemNavigationBarColor'],
-        (background ?? theme.colorScheme.surface).toARGB32(),
+        (background ?? Colors.transparent).toARGB32(),
       );
       expect(styles.last['systemNavigationBarIconBrightness'], '$icons');
       expect(styles.last['systemNavigationBarContrastEnforced'], false);
       expect(styles.last['systemNavigationBarDividerColor'], 0);
     }
 
-    expectStyle(BiliTheme.light(), Brightness.dark);
+    expectStyle(Brightness.dark);
     navigator.currentState!.push<void>(
       MaterialPageRoute(
         builder: (_) => Scaffold(
@@ -71,16 +71,16 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expectStyle(BiliTheme.light(), Brightness.dark);
+    expectStyle(Brightness.dark);
     mode.value = ThemeMode.dark;
     await tester.pumpAndSettle();
-    expectStyle(BiliTheme.dark(), Brightness.light);
+    expectStyle(Brightness.light);
     navigator.currentState!.pop();
     await tester.pumpAndSettle();
-    expectStyle(BiliTheme.dark(), Brightness.light);
+    expectStyle(Brightness.light);
     mode.value = ThemeMode.light;
     await tester.pumpAndSettle();
-    expectStyle(BiliTheme.light(), Brightness.dark);
+    expectStyle(Brightness.dark);
     navigator.currentState!.push<void>(
       MaterialPageRoute(
         builder: (_) => const AndroidSystemUi(
@@ -94,10 +94,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expectStyle(BiliTheme.light(), Brightness.light, background: Colors.black);
+    expectStyle(Brightness.light, background: Colors.black);
     navigator.currentState!.pop();
     await tester.pumpAndSettle();
-    expectStyle(BiliTheme.light(), Brightness.dark);
+    expectStyle(Brightness.dark);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
   for (final (size, dark) in [
