@@ -2,6 +2,10 @@ import 'dart:async';
 
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/settings/application/settings_controller.dart';
+
+import '../../support/memory_settings_repository.dart';
+
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/video/application/video_actions_controller.dart';
 import 'package:bilisail/features/video/domain/video_actions_repository.dart';
@@ -17,6 +21,74 @@ import 'video_actions_bar_test.dart'
     show FakeActions, FakeAuth, testDetail, testPart;
 
 void main() {
+  testWidgets(
+    'a slower style save keeps a newer global choice from another page',
+    (tester) async {
+      final settings = MemorySettingsRepository()
+        ..pendingWrite = Completer<void>();
+      final session = FakeComposerSession();
+      addTearDown(session.dispose);
+      await pumpComposer(
+        tester,
+        FakeActions(),
+        session: session,
+        settings: settings,
+      );
+      await tester.tap(find.byTooltip('发送弹幕样式'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('顶部'));
+      await tester.tap(find.byTooltip('粉色'));
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(VideoDanmakuComposer)),
+      );
+      const newer = (mode: 4, color: 0x123456);
+      final newerSave = container
+          .read(settingsControllerProvider.notifier)
+          .setDanmakuSendStyle(newer);
+      settings.pendingWrite!.complete();
+      await newerSave;
+      await tester.pumpAndSettle();
+      expect(settings.value.danmakuSendStyle, newer);
+      expect(session.danmakuSendStyle.value, newer);
+    },
+  );
+
+  testWidgets(
+    'failed global style save keeps the previous selection and can retry',
+    (tester) async {
+      final settings = MemorySettingsRepository()..failWrites = true;
+      final session = FakeComposerSession();
+      addTearDown(session.dispose);
+      await pumpComposer(
+        tester,
+        FakeActions(),
+        session: session,
+        settings: settings,
+      );
+      await tester.enterText(find.byType(TextField), '保留草稿');
+      Future<void> choose() async {
+        await tester.tap(find.byTooltip('发送弹幕样式'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('顶部'));
+        await tester.tap(find.byTooltip('粉色'));
+        await tester.tap(find.text('完成'));
+        await tester.pumpAndSettle();
+      }
+
+      await choose();
+      expect(session.danmakuSendStyle.value, (mode: 1, color: 0xffffff));
+      expect(settings.value.danmakuSendStyle, (mode: 1, color: 0xffffff));
+      expect(find.text('弹幕样式保存失败，请重试'), findsOneWidget);
+      expect(find.text('保留草稿'), findsOneWidget);
+      settings.failWrites = false;
+      await choose();
+      expect(session.danmakuSendStyle.value, (mode: 5, color: 0xff6699));
+      expect(settings.value.danmakuSendStyle, (mode: 5, color: 0xff6699));
+    },
+  );
+
   testWidgets(
     'send style survives composer replacement and reaches local echo',
     (tester) async {
@@ -137,6 +209,7 @@ Future<void> pumpComposer(
   VoidCallback? onLogin,
   double textScale = 1,
   FakeComposerSession? session,
+  MemorySettingsRepository? settings,
   Key? composerKey,
 }) async {
   final playback = session ?? FakeComposerSession();
@@ -147,6 +220,9 @@ Future<void> pumpComposer(
         authRepositoryProvider.overrideWithValue(FakeAuth(signedIn)),
         videoActionsRepositoryProvider.overrideWithValue(repo),
         playbackSessionProvider.overrideWithValue(playback),
+        settingsRepositoryProvider.overrideWithValue(
+          settings ?? MemorySettingsRepository(),
+        ),
       ],
       child: MaterialApp(
         builder: AppNoticeHost.builder,

@@ -12,6 +12,10 @@ import 'package:bilisail/features/pgc/presentation/pgc_danmaku_composer.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/settings/application/settings_controller.dart';
+
+import '../../support/memory_settings_repository.dart';
+
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
@@ -158,6 +162,7 @@ void main() {
     await tester.tap(find.byTooltip('蓝色'));
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
+    expect(harness.settings.value.danmakuSendStyle, (mode: 4, color: 0x00a1d6));
     await _pumpComposer(
       tester,
       harness,
@@ -266,11 +271,13 @@ final class _Harness {
         authRepositoryProvider.overrideWithValue(auth),
         pgcDanmakuRepositoryProvider.overrideWithValue(repository),
         playbackSessionProvider.overrideWithValue(session),
+        settingsRepositoryProvider.overrideWithValue(settings),
       ],
     );
     container.listen(pgcDanmakuControllerProvider(_target), (_, _) {});
   }
   final repository = _Repository();
+  final settings = MemorySettingsRepository();
   final session = _Session();
   late final _Auth auth;
   late final ProviderContainer container;

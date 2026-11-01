@@ -1567,6 +1567,9 @@ class PlaybackSession extends ChangeNotifier {
   void configureSettings(AppSettings settings) {
     final previous = _settings;
     _settings = settings.normalized();
+    if (previous.danmakuSendStyle != _settings.danmakuSendStyle) {
+      setDanmakuSendStyle(_settings.danmakuSendStyle);
+    }
     _volumeMemory.configure(
       enabled: _settings.rememberVolumeGlobally,
       defaultVolume: _settings.defaultVolume,

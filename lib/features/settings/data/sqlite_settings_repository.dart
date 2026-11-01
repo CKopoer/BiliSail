@@ -116,6 +116,16 @@ class SqliteSettingsRepository implements SettingsRepository {
           AppIconPreference.bilisail,
       danmakuEnabled: boolean('danmakuEnabled', true),
       danmakuOpacity: number('danmakuOpacity', 0.8),
+      danmakuSendStyle: (
+        mode: switch (decoded['danmakuSendMode']) {
+          final int mode => mode,
+          _ => 1,
+        },
+        color: switch (decoded['danmakuSendColor']) {
+          final int color => color,
+          _ => 0xffffff,
+        },
+      ),
       danmakuFontScale: danmakuFontScale.isFinite
           ? danmakuFontScale
           : defaultDanmakuFontScale,
@@ -235,7 +245,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 34,
+        'schemaVersion': 35,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -255,6 +265,8 @@ class SqliteSettingsRepository implements SettingsRepository {
         'danmakuSystemFontFamily': value.danmakuSystemFontFamily,
         'danmakuEnabled': value.danmakuEnabled,
         'danmakuOpacity': value.danmakuOpacity,
+        'danmakuSendMode': value.danmakuSendStyle.mode,
+        'danmakuSendColor': value.danmakuSendStyle.color,
         'danmakuFontScale': value.danmakuFontScale,
         'autoPlay': value.autoPlay,
         'defaultShowComments': value.defaultShowComments,

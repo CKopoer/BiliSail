@@ -6,6 +6,7 @@ import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/danmaku_composer_draft.dart';
 import '../../../shared/ui/danmaku_send_style_button.dart';
 import '../../playback/application/playback_session.dart';
+import '../../settings/application/settings_controller.dart';
 import '../application/video_actions_controller.dart';
 
 class VideoDanmakuComposer extends ConsumerStatefulWidget {
@@ -125,7 +126,19 @@ class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
         children: [
           DanmakuSendStyleButton(
             style: session.danmakuSendStyle,
-            onChanged: session.setDanmakuSendStyle,
+            onChanged: (style) async {
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setDanmakuSendStyle(style);
+              if (mounted) {
+                session.setDanmakuSendStyle(
+                  ref
+                      .read(settingsControllerProvider)
+                      .requireValue
+                      .danmakuSendStyle,
+                );
+              }
+            },
             enabled: !state.busy,
           ),
           Expanded(

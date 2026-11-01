@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'app_dialog.dart';
+import 'app_notice.dart';
 import 'danmaku_send_style_panel.dart';
 import 'player_controls_menu_scope.dart';
 
@@ -14,7 +17,7 @@ final class DanmakuSendStyleButton extends StatefulWidget {
   });
 
   final ValueListenable<({int mode, int color})> style;
-  final ValueChanged<({int mode, int color})> onChanged;
+  final FutureOr<void> Function(({int mode, int color})) onChanged;
   final bool enabled;
 
   @override
@@ -47,7 +50,13 @@ final class _DanmakuSendStyleButtonState extends State<DanmakuSendStyleButton> {
           );
         },
       );
-      if (mounted && widget.enabled && result != null) widget.onChanged(result);
+      if (mounted && widget.enabled && result != null) {
+        try {
+          await widget.onChanged(result);
+        } catch (_) {
+          if (mounted) showAppNotice(context, '弹幕样式保存失败，请重试');
+        }
+      }
     } finally {
       onMenuChanged?.call(false);
       if (mounted) setState(() => _open = false);

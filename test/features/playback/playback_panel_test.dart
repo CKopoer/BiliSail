@@ -5596,17 +5596,20 @@ void main() {
           final engine = _FakeEngine();
           final session = _session(engine);
           final actions = FakeActions();
+          final settings = _Settings();
           addTearDown(session.close);
           await tester.pumpWidget(
             ProviderScope(
               overrides: [
                 authRepositoryProvider.overrideWithValue(FakeAuth(true)),
                 videoActionsRepositoryProvider.overrideWithValue(actions),
+                settingsRepositoryProvider.overrideWithValue(settings),
               ],
               child: _app(
                 session,
                 _FakeWindowService(),
                 AppSettings(playerControlsMode: mode),
+                settingsRepository: settings,
                 width: 1200,
                 composer: (_) => VideoDanmakuComposer(
                   detail: VideoDetail(

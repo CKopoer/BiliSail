@@ -74,6 +74,7 @@ final class AppSettings {
     this.danmakuEnabled = true,
     this.danmakuOpacity = 0.8,
     this.danmakuFontScale = 1.0,
+    this.danmakuSendStyle = (mode: 1, color: 0xffffff),
     this.autoPlay = true,
     this.defaultShowComments = false,
     this.videoCardHoverPlayback = true,
@@ -147,6 +148,7 @@ final class AppSettings {
        wheelDampingRatio = 1.3,
        danmakuEnabled = true,
        danmakuOpacity = 0.8,
+       danmakuSendStyle = (mode: 1, color: 0xffffff),
        autoPlay = true,
        defaultShowComments = false,
        continuousPlayback = false,
@@ -212,6 +214,7 @@ final class AppSettings {
   final bool danmakuEnabled;
   final double danmakuOpacity;
   final double danmakuFontScale;
+  final ({int mode, int color}) danmakuSendStyle;
   final bool autoPlay;
   final bool defaultShowComments;
   final bool videoCardHoverPlayback;
@@ -291,6 +294,7 @@ final class AppSettings {
     bool? danmakuEnabled,
     double? danmakuOpacity,
     double? danmakuFontScale,
+    ({int mode, int color})? danmakuSendStyle,
     bool? autoPlay,
     bool? defaultShowComments,
     bool? videoCardHoverPlayback,
@@ -357,6 +361,7 @@ final class AppSettings {
     danmakuEnabled: danmakuEnabled ?? this.danmakuEnabled,
     danmakuOpacity: danmakuOpacity ?? this.danmakuOpacity,
     danmakuFontScale: danmakuFontScale ?? this.danmakuFontScale,
+    danmakuSendStyle: danmakuSendStyle ?? this.danmakuSendStyle,
     autoPlay: autoPlay ?? this.autoPlay,
     defaultShowComments: defaultShowComments ?? this.defaultShowComments,
     videoCardHoverPlayback:
@@ -467,6 +472,14 @@ final class AppSettings {
       defaultVolume: bounded(defaultVolume, 0, 100, 100),
       danmakuOpacity: bounded(danmakuOpacity, .2, 1, .8),
       danmakuFontScale: bounded(danmakuFontScale, .2, 1.5, 1),
+      danmakuSendStyle: (
+        mode: const [1, 4, 5].contains(danmakuSendStyle.mode)
+            ? danmakuSendStyle.mode
+            : 1,
+        color: danmakuSendStyle.color >= 0 && danmakuSendStyle.color <= 0xffffff
+            ? danmakuSendStyle.color
+            : 0xffffff,
+      ),
       danmakuArea: bounded(danmakuArea, .25, 1, .75),
       danmakuTopMargin: bounded(danmakuTopMargin, 0, 200, 0),
       danmakuLineSpacing: bounded(danmakuLineSpacing, 0, 100, 5),

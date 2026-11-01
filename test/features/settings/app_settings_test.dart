@@ -2,6 +2,42 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'send style defaults, copies and validates each field independently',
+    () {
+      expect(AppSettings().danmakuSendStyle, (mode: 1, color: 0xffffff));
+      expect(const AppSettings.defaults().danmakuSendStyle, (
+        mode: 1,
+        color: 0xffffff,
+      ));
+      for (final mode in [1, 4, 5]) {
+        for (final color in [0, 1, 0x123456, 0xffffff]) {
+          expect(
+            AppSettings(danmakuSendStyle: (mode: mode, color: color))
+                .normalized()
+                .copyWith(autoPlay: false)
+                .danmakuSendStyle,
+            (mode: mode, color: color),
+          );
+        }
+      }
+      expect(
+        AppSettings(danmakuSendStyle: (mode: 2, color: 0x123456))
+            .normalized()
+            .danmakuSendStyle,
+        (mode: 1, color: 0x123456),
+      );
+      for (final color in [-1, 0x1000000]) {
+        expect(
+          AppSettings(danmakuSendStyle: (mode: 4, color: color))
+              .normalized()
+              .danmakuSendStyle,
+          (mode: 4, color: 0xffffff),
+        );
+      }
+    },
+  );
+
   test('all video quality IDs survive normalization and copying', () {
     const qualities = [16, 32, 64, 74, 80, 112, 116, 120, 125, 126, 127];
     expect(AppSettings.supportedQualities, qualities);

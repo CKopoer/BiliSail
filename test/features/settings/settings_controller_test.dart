@@ -9,6 +9,41 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('global send style queues with other settings, rolls back failures and resets', () async {
+    final repository = _DeferredSettingsRepository();
+    final container = ProviderContainer(
+      overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    await container.read(settingsControllerProvider.future);
+    final controller = container.read(settingsControllerProvider.notifier);
+    const chosen = (mode: 5, color: 0x123456);
+    final style = controller.setDanmakuSendStyle(chosen);
+    final theme = controller.setTheme(AppThemePreference.dark);
+    await Future<void>.delayed(Duration.zero);
+    repository.completeNext();
+    await style;
+    await Future<void>.delayed(Duration.zero);
+    repository.completeNext();
+    await theme;
+    expect(repository.stored.danmakuSendStyle, chosen);
+    expect(repository.stored.theme, AppThemePreference.dark);
+    final failed = controller.setDanmakuSendStyle((mode: 4, color: 1));
+    final assertion = expectLater(failed, throwsStateError);
+    await Future<void>.delayed(Duration.zero);
+    repository.failNext();
+    await assertion;
+    expect(
+      container.read(settingsControllerProvider).requireValue.danmakuSendStyle,
+      chosen,
+    );
+    final reset = controller.resetToDefaults();
+    await Future<void>.delayed(Duration.zero);
+    repository.completeNext();
+    await reset;
+    expect(repository.stored.danmakuSendStyle, (mode: 1, color: 0xffffff));
+  });
+
   test('failed reset restores saved settings and never activates default shortcuts', () async {
     final custom = const AppSettings.defaults().copyWith(
       theme: AppThemePreference.dark,

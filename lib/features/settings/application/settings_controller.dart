@@ -125,6 +125,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(danmakuOpacity: value));
   Future<void> setDanmakuFontScale(double value) =>
       update((current) => current.copyWith(danmakuFontScale: value));
+  Future<void> setDanmakuSendStyle(({int mode, int color}) value) =>
+      update((current) => current.copyWith(danmakuSendStyle: value));
   Future<void> setAutoPlay(bool value) =>
       update((current) => current.copyWith(autoPlay: value));
   Future<void> setDefaultShowComments(bool value) =>
