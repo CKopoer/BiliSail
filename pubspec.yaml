@@ -37,6 +37,13 @@ dependencies:
   bili_mux:
     path: packages/bili_mux
   flutter_inappwebview: 6.2.0-beta.3
+  # Pinned to a full commit like media_kit: the dock is still being reworked
+  # upstream, and a branch ref would swap the navigation UI under an unchanged
+  # lockfile. Bump this ref after each published dock commit.
+  liquid_dock_navi:
+    git:
+      url: https://github.com/MagicFollower/liquid_dock_navi.git
+      ref: 28e9b7a4991ac31d92003475dfbbac614d4fa383
 
 # Keep transitive media_kit resolution on the same immutable Native Assets fork.
 dependency_overrides:

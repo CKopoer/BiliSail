@@ -624,6 +624,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
+  liquid_dock_navi:
+    dependency: "direct main"
+    description:
+      path: "."
+      ref: "28e9b7a4991ac31d92003475dfbbac614d4fa383"
+      resolved-ref: "28e9b7a4991ac31d92003475dfbbac614d4fa383"
+      url: "https://github.com/MagicFollower/liquid_dock_navi.git"
+    source: git
+    version: "0.1.0"
   listen:
     dependency: transitive
     description:
