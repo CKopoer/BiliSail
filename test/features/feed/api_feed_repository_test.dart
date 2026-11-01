@@ -72,10 +72,56 @@ void main() {
       );
     },
   );
+
+  test('recommendation refresh advances fresh_idx and only a stalled page repeats it', () async {
+    final transport = _Transport();
+    final requests = ApiRequests();
+    final api = BiliApiClient(transport: transport, sessionProvider: requests);
+    addTearDown(api.close);
+    final repository = ApiFeedRepository(api, requests);
+    String? pullIndex() => transport.requests.last.queryParameters['fresh_idx'];
+    Future<void> pull(int page) => repository.loadFeed(
+      page: page,
+      categoryId: null,
+      cancellation: RequestCancellation(),
+    );
+
+    await pull(1);
+    expect(pullIndex(), '1');
+    await pull(2);
+    expect(pullIndex(), '2');
+    // 刷新：页码回到 1，但拉取序号必须继续前进，否则服务端重复同一批样本。
+    await pull(1);
+    expect(pullIndex(), '3');
+    expect(transport.requests.last.queryParameters['fresh_idx_1h'], '3');
+    await pull(1);
+    expect(pullIndex(), '4');
+
+    // 空批次不推进：显式重试沿用同一序号，不跳过没拿到的那一页。
+    transport.emptyForFreshIndex = '5';
+    await pull(2);
+    expect(pullIndex(), '5');
+    await pull(2);
+    expect(pullIndex(), '5');
+
+    // 对照：分区列表是真分页，pn 直接跟随页码。
+    await repository.loadFeed(
+      page: 2,
+      categoryId: '1',
+      cancellation: RequestCancellation(),
+    );
+    final region = transport.requests.last;
+    expect(region.path, '/x/web-interface/newlist');
+    expect(region.queryParameters['pn'], '2');
+    expect(region.queryParameters.containsKey('fresh_idx'), isFalse);
+  });
 }
 
 final class _Transport implements ApiTransport {
   final List<Uri> requests = [];
+
+  /// When set, the rcmd sample answers that fresh_idx with an empty batch.
+  String? emptyForFreshIndex;
 
   @override
   Future<ApiHttpResponse> get(
@@ -120,6 +166,13 @@ final class _Transport implements ApiTransport {
         'stat': {'view': 42, 'danmaku': 2},
       };
       data = switch (uri.path) {
+        '/x/web-interface/index/top/feed/rcmd' => {
+          'item': uri.queryParameters['fresh_idx'] == emptyForFreshIndex
+              ? const []
+              : [
+                  {...entry, 'title': '推荐${uri.queryParameters['fresh_idx']}'},
+                ],
+        },
         '/x/web-interface/ranking/v2' => {
           'list': [entry],
         },

@@ -27,6 +27,26 @@ class ApiFeedRepository
   final BiliApiClient api;
   final ApiRequests requests;
 
+  // The rcmd sampler has no page number: fresh_idx is a pull index that must
+  // keep rising, otherwise every refresh re-asks the same batch (visible signed
+  // out, where nothing else varies the request). A page whose last attempt
+  // yielded nothing keeps its index so an explicit retry does not skip a batch.
+  int _recommendationIndex = 0;
+  int _recommendationPage = 0;
+  bool _recommendationFilled = false;
+
+  int _recommendationPullIndex(int page) {
+    if (page == _recommendationPage && !_recommendationFilled) {
+      return _recommendationIndex;
+    }
+    _recommendationIndex = page > _recommendationPage
+        ? _recommendationIndex + (page - _recommendationPage)
+        : _recommendationIndex + 1;
+    _recommendationPage = page;
+    _recommendationFilled = false;
+    return _recommendationIndex;
+  }
+
   @override
   String get feedbackScope => 'session:${requests.sessionEpoch}';
 
@@ -317,18 +337,26 @@ class ApiFeedRepository
     required int page,
     required String? categoryId,
     required RequestCancellation cancellation,
-  }) => requests.run(
-    (context) async => _mapPage(
-      categoryId == null
-          ? await api.getRecommended(page: page, context: context)
-          : await api.getRegionalVideos(
-              categoryId: categoryId,
-              page: page,
-              context: context,
-            ),
-    ),
-    cancellation: cancellation,
-  );
+  }) {
+    final pullIndex = categoryId == null
+        ? _recommendationPullIndex(page)
+        : page;
+    return requests.run((context) async {
+      final result = _mapPage(
+        categoryId == null
+            ? await api.getRecommended(page: pullIndex, context: context)
+            : await api.getRegionalVideos(
+                categoryId: categoryId,
+                page: page,
+                context: context,
+              ),
+      );
+      if (categoryId == null) {
+        _recommendationFilled = result.items.isNotEmpty;
+      }
+      return result;
+    }, cancellation: cancellation);
+  }
 
   @override
   Future<PageResult<VideoSummary>> loadRanking({

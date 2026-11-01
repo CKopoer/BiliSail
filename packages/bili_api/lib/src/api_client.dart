@@ -1292,6 +1292,9 @@ final class BiliApiClient {
     );
   }
 
+  /// `page` is this endpoint's pull index (`fresh_idx`), not a server page: the
+  /// sampler repeats a batch unless the index advances, so callers must keep it
+  /// strictly rising across refreshes and pagination.
   Future<ApiPage<ApiVideoSummary>> getRecommended({
     int page = 1,
     ApiRequestContext? context,
