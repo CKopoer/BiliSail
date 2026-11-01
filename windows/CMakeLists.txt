@@ -56,10 +56,11 @@ add_subdirectory("runner")
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
-include(native/piliplus.cmake)
+include(native/media-assets.cmake)
+bilisail_use_media_assets()
 
-# PiliPlus's library plugin supplies the matching libmpv and ANGLE binaries.
-# Do not apply the historical app-specific libmpv override in native/mpv.cmake.
+# Keep the pinned library/event plugins and ANGLE. The selected Windows SDK
+# includes mpv's EGL device-query fix; headers, import lib and DLL match.
 
 include(patches/media_kit_video/apply.cmake)
 bilisail_patch_video_target()
@@ -96,6 +97,12 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/patches/media_kit_video/LICENSE"
   COMPONENT Runtime)
 
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/PILIPLUS_SOURCE.md"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/mpv"
+  COMPONENT Runtime)
+
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/mpv/SOURCE.md"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/mpv/COPYING.LGPLv2.1"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/media-assets.cmake"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/mpv"
   COMPONENT Runtime)
 

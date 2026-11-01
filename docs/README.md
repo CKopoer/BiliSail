@@ -61,6 +61,7 @@
 | [固定与滚动弹幕分层对照](validation/danmaku-layers-performance-2026-11-01.md) | 单一时钟、固定层保留、覆盖顺序及三类场景的 Profile 前后对照 |
 | [Windows 全屏弹幕与 Skia 对照](validation/windows-skia-playback-2026-11-01.md) | 实际硬解、PiliPlus 渲染后端差异、真实视频交叉对照及验证边界 |
 | [直通硬解调研与方案](hardware-decoding-plan-2026-11-01.md) | #44 发布追溯、Bili.Libre.Speed／Predidit 路径、各平台硬解设置与自有 fork 分阶段维护 |
+| [Windows ANGLE 直通硬解](validation/windows-angle-direct-hwdec-2026-11-01.md) | copy 回退修复、PiliPlus 实际链路差异、三组 Profile 交叉对照及原生验收边界 |
 | [听视频与音频控件](validation/listen-video.md) | 独立音轨、常驻响应式控件、切换／检查点及原生验证 |
 | [充电专属与付费视频](validation/video-access.md) | 权益分类、播放限制提示、官网入口与共享视频卡角标 |
 | [实施与验收](implementation-plan.md) | 技术验证、开发里程碑、测试、构建与发布要求 |

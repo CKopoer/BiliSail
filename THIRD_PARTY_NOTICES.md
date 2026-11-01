@@ -2,6 +2,10 @@
 
 记录日期：2026-10-05。本文件用于本地 0.1.0 预览的来源追踪，不表示已经完成对外发行所需的全部原生许可证归档。项目尚未确定自己的开源许可证。
 
+## 2026-11-01 Windows ANGLE 硬解回退修复
+
+Windows 保留以下 PiliPlus 核心／视频／库插件和 ANGLE 来源，完整 libmpv SDK 改用固定的 [zhongfly LGPL x86_64 构建 88eb9f2e73](https://github.com/zhongfly/mpv-winbuild/releases/tag/2026-10-12-88eb9f2e73)，包含 mpv 的 EGL device-query 修复。当前清单为 [media-assets.cmake](windows/native/media-assets.cmake)，归档、SDK 逐文件摘要、源码、构建记录及许可边界见 [SOURCE.md](windows/native/mpv/SOURCE.md)。许可、来源与清单随 Windows bundle 一并保留，动态链接方式不变。没有采用 DXGI 扩展、修改 Pub 缓存或切换其他平台。LGPL 标签不代替静态子依赖各自的许可与对应源码分发要求。
+
 ## 2026-11-01 与 PiliPlus 锁文件对齐
 
 按用户要求，采用与 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 锁文件相同的 MIT 依赖：
@@ -13,7 +17,7 @@
 | media_kit_video 1.2.5 | [bggRGjQaUbCoE/media-kit](https://github.com/bggRGjQaUbCoE/media-kit/tree/fd8421d21eade4d6d12de137fa7df902fec20292)，`fd8421d21eade4d6d12de137fa7df902fec20292` |
 | macOS／Linux 库插件 | PiliPlus 锁文件的 hosted `media_kit_libs_macos_video 1.1.4`／`media_kit_libs_linux 1.2.1` |
 
-Windows 使用库插件指定的 libmpv／ANGLE，归档与 DLL 摘要见[当前来源](windows/native/PILIPLUS_SOURCE.md)。Android 使用该提交指定、逐 ABI SHA-256 校验的 20260906 jar；Apple 使用匹配库插件的 framework 和 CocoaPods，Linux 使用发行版 libmpv 并保留 distro notices。移除当前构建对 Predidit Native Assets 的依赖；本文件以下相关描述是历史。
+该次对齐的 Windows 基线使用库插件指定的 libmpv／ANGLE，归档与 DLL 摘要见[基线来源](windows/native/PILIPLUS_SOURCE.md)；Windows 后续差异见上节。Android 使用该提交指定、逐 ABI SHA-256 校验的 20260906 jar；Apple 使用匹配库插件的 framework 和 CocoaPods，Linux 使用发行版 libmpv 并保留 distro notices。移除当前构建对 Predidit Native Assets 的依赖；本文件以下相关描述是历史。
 
 弹幕保留有界媒体／到达时钟、布局、字体效果、分层与缓存，实际图片采样调用所锁定库的公开 painter。Windows 构建副本补丁继续保留上游版权和 MIT 许可。未复制 GPLv3 的 PiliPlus 应用源码或修改相邻仓库。MIT 不替代原生二进制及子依赖的许可；本轮二进制不沿用历史 LGPL-only 声明。适配、验证及未测项见[依赖切换](docs/validation/piliplus-dependencies-2026-11-01.md)。
 

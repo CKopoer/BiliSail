@@ -507,3 +507,9 @@ Android 复用既有媒体服务，暂停／换源期间不撤下前台服务，
 **决定（2026-11-01）**：参考官方桌面应用和 PiliPlus 的交互职责，工作区同排搜索聚焦时居中并将分类模糊淡出，分行搜索直接展开历史与热搜；内容宽度小于 600 时进入独立窗口内搜索页。复用既有搜索结果导航、工作区状态和播放会话，不创建另一套结果页面。
 
 搜索历史以版本化、账号隔离的有界快照保存到现有 settings 表，串行写入且失败保留已保存数据；热搜由独立公开只读端点加载、短期缓存，真实关键词与展示名分开。只参考 GPLv3 应用的协议字段和交互，自行实现组件。详细布局、容量、来源与验证边界见[搜索历史与热搜](validation/search-discovery-2026-11-01.md)。
+
+## D68：Windows ANGLE 使用修正 EGL device 查询的完整 libmpv SDK
+
+**决定（2026-11-01）**：按用户要求，先修复 `d3d11va-copy` 回退并测量性能。保留 D65 的 Dart 核心／视频／库插件／事件桥、ANGLE 和 D66 的 Skia，Windows libmpv SDK 单独固定为包含 mpv `1d156861…` 修复的基础 x86_64 标准 OpenGL 构建。唯一现行资产清单为 `windows/native/media-assets.cmake`；预取、编译、最终打包使用同一清单，整体校验和选择 headers、import library、DLL，不修改 Pub 缓存或启用历史 `mpv.cmake`。
+
+本机 H.264／HEVC／AV1 自动模式实读为 `d3d11va`；三组 Profile 交叉对照同时记录 CPU、GPU、频率、功耗、内存和掉帧。该选择不等于 DXGI／原生视频平面，不更改弹幕或自动解码偏好，也不保证未测 GPU 的直通。完整证据、版本升级的归因限制与未测项见[实施记录](validation/windows-angle-direct-hwdec-2026-11-01.md)。

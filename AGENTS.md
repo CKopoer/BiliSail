@@ -103,7 +103,7 @@
 - 下载文件、manifest 与 SQLite 按可恢复的提交顺序处理；分轨/MP4/MKV 均需兼容已有任务及离线打开。封装在 worker isolate 执行，取消、临时文件清理、校验和原子发布由下载仓储负责，离线媒体不受普通缓存清理影响。
 - 工程固定 Flutter **3.47.6 stable / Dart 3.13.5**，以 `.flutter-version`、检查脚本和 CI 配置共同约束；升级须同步这些入口及验证记录。直接依赖使用精确版本，提交根应用和四个包的五份 `pubspec.lock`。
 - media-kit fork 的 Git ref 必须固定完整提交；更新时同步根应用与 `bili_player` 的核心／视频／库插件及 overrides，以及两处锁文件。当前使用 PiliPlus 的 `media_kit_libs_*` 和原生事件桥，核心与视频插件分别固定来源。保留根应用的 overrides，Pub 不会采纳传递依赖包的 overrides；弹幕依赖更新同步根应用与 `bili_danmaku` 锁文件。
-- 原生 libmpv 由固定 `media_kit_libs_*` 校验／打包。Windows 使用与 PiliPlus 相同的 libmpv／ANGLE 归档，额外执行 SHA-256 检查并拒绝旧 DLL；不启用历史 `windows/native/mpv.cmake` 的 LGPL 库覆盖。渲染／释放／平台线程补丁由 `windows/patches/media_kit_video/apply.cmake` 校验源码并应用到构建副本。Apple 走匹配库插件的 CocoaPods，Linux 打包发行版 libmpv；不再调用 Predidit Native Assets 修补入口。不得修改 Pub 缓存或绕过来源／哈希校验；依赖升级需重新审查补丁兼容性。
+- 原生 libmpv 沿用固定 `media_kit_libs_*` 与原生事件桥。Windows 保留 PiliPlus 的 ANGLE，按 `windows/native/media-assets.cmake` 统一预取、校验并整体选择包含 EGL device-query 修复的标准 libmpv SDK；归档、DLL、import library 和 headers 均校验 SHA-256，最终 bundle 不混入旧 DLL。来源与验证见 [Windows ANGLE 直通硬解](docs/validation/windows-angle-direct-hwdec-2026-11-01.md)。不启用历史 `windows/native/mpv.cmake`，不混用 DXGI 扩展。渲染／释放／平台线程补丁由 `windows/patches/media_kit_video/apply.cmake` 校验源码并应用到构建副本。Apple 走匹配库插件的 CocoaPods，Linux 打包发行版 libmpv；不再调用 Predidit Native Assets 修补入口。不得修改 Pub 缓存或绕过来源／哈希校验；依赖升级需重新审查补丁兼容性。
 - `bili_mux` 原生资产按其 README 从固定源码构建，不能借用系统 FFmpeg 或播放器私有库；预构建资产不提交 Git，分发保留许可、来源和可重建材料。
 - 新依赖先确认目标平台、维护接口、二进制依赖和许可；选择能满足具体需求的最小组合。
 - 生成器/schema 记录版本、命令和来源；提交项目需要的生成物，改源后重生成，不手修输出。

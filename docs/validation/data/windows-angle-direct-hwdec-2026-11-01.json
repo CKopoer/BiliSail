@@ -1,0 +1,2449 @@
+{
+  "date": "2026-11-01",
+  "clockTimeZone": "China Standard Time",
+  "method": "Windows Profile / Skia / ANGLE, three AB/BA/AB pairs; stage clocks are whole-board values, GPU is process-specific; no fixed GPU clocks.",
+  "runs": [
+    {
+      "label": "hwdec_base_a_20261101",
+      "variant": "before",
+      "secondsPerStage": 10,
+      "mediaSha256": "9308fedd5bbf195619c43719ea39a2313d48c8444e60b63f1087016405a3b584",
+      "mediaBytes": 228284046,
+      "hashes": {
+        "bilisail.exe": "7d6216f72cb61aa2a5a51b432446c9767a304ca5b2ad555ba4a435298ce9aeae",
+        "data/app.so": "c71cb1ad172ae4ee172141696b119f878db9787de4b28a57988fd93ae88f9708",
+        "flutter_windows.dll": "6ef56159a88686a05f0a70497c79607882644fcdb477ed9591a3acb8cb1a5e83",
+        "media_kit_video_plugin.dll": "1f961c25730db27384d49dc4267acdd0567ee22bbc277b8f9cff99ba9e4aaeb3",
+        "libmpv-2.dll": "4b517ce76493c7d6b6568dde6e2839e3bb6a41c4b46b0e972492f354ad444ba4",
+        "libEGL.dll": "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac",
+        "libGLESv2.dll": "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39"
+      },
+      "stages": {
+        "video": {
+          "startUtc": "2026-11-01T12:58:44.0937920+00:00",
+          "endUtc": "2026-11-01T12:58:54.1153730+00:00",
+          "decoder": "d3d11va-copy",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 0.0,
+            "p95": 0,
+            "max": 0
+          },
+          "fps": 61.7,
+          "uiUs": {
+            "count": 617,
+            "mean": 161.5672609400324,
+            "p95": 246,
+            "max": 431
+          },
+          "rasterUs": {
+            "count": 617,
+            "mean": 335.4683954619125,
+            "p95": 506,
+            "max": 782
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 11.717693313298323,
+              "p95": 13.251464624369966,
+              "max": 13.251464624369966
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.023414042697872894,
+              "p95": 0.0549587568405903,
+              "max": 0.0549587568405903
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 14.960488401400951,
+              "p95": 16.83798957563145,
+              "max": 16.83798957563145
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 578.8665276732346,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 337752649.14285713,
+            "p95": 343011328,
+            "max": 343011328
+          },
+          "coreMHz": {
+            "count": 9,
+            "mean": 291.6666666666667,
+            "p95": 510.0,
+            "max": 510.0
+          },
+          "memoryMHz": {
+            "count": 9,
+            "mean": 450.0,
+            "p95": 810.0,
+            "max": 810.0
+          },
+          "boardWatts": {
+            "count": 9,
+            "mean": 16.284444444444446,
+            "p95": 20.2,
+            "max": 20.2
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.165
+        },
+        "danmaku": {
+          "startUtc": "2026-11-01T12:58:59.1591660+00:00",
+          "endUtc": "2026-11-01T12:59:09.1877550+00:00",
+          "decoder": "d3d11va-copy",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 63.5,
+            "p95": 70,
+            "max": 70
+          },
+          "fps": 169.3,
+          "uiUs": {
+            "count": 1693,
+            "mean": 232.3987005316007,
+            "p95": 501,
+            "max": 921
+          },
+          "rasterUs": {
+            "count": 1693,
+            "mean": 574.6727702303604,
+            "p95": 929,
+            "max": 3830
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 12.693415358935102,
+              "p95": 15.355533764795624,
+              "max": 15.355533764795624
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.0928004576616872,
+              "p95": 0.28536897023523505,
+              "max": 0.28536897023523505
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 16.02536886981348,
+              "p95": 19.171121156459172,
+              "max": 19.171121156459172
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 758.15218137755,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 367913252.5714286,
+            "p95": 374198272,
+            "max": 374198272
+          },
+          "coreMHz": {
+            "count": 9,
+            "mean": 353.3333333333333,
+            "p95": 510.0,
+            "max": 510.0
+          },
+          "memoryMHz": {
+            "count": 9,
+            "mean": 540.0,
+            "p95": 810.0,
+            "max": 810.0
+          },
+          "boardWatts": {
+            "count": 9,
+            "mean": 17.57888888888889,
+            "p95": 20.02,
+            "max": 20.02
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.26899999999999996
+        },
+        "controls": {
+          "startUtc": "2026-11-01T12:59:10.1918890+00:00",
+          "endUtc": "2026-11-01T12:59:20.2092420+00:00",
+          "decoder": "d3d11va-copy",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 60.3,
+            "p95": 63,
+            "max": 63
+          },
+          "fps": 166.7,
+          "uiUs": {
+            "count": 1667,
+            "mean": 230.99700059988,
+            "p95": 489,
+            "max": 2128
+          },
+          "rasterUs": {
+            "count": 1667,
+            "mean": 593.9052189562087,
+            "p95": 974,
+            "max": 14042
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 8.720424574016269,
+              "p95": 14.92702893826843,
+              "max": 14.92702893826843
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.035043494184475825,
+              "p95": 0.07994613948528953,
+              "max": 0.07994613948528953
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 11.238327829815566,
+              "p95": 17.77261528114255,
+              "max": 17.77261528114255
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 527.1316067251,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 383562898.28571427,
+            "p95": 389029888,
+            "max": 389029888
+          },
+          "coreMHz": {
+            "count": 10,
+            "mean": 889.5,
+            "p95": 2655.0,
+            "max": 2655.0
+          },
+          "memoryMHz": {
+            "count": 10,
+            "mean": 2545.7,
+            "p95": 10501.0,
+            "max": 10501.0
+          },
+          "boardWatts": {
+            "count": 10,
+            "mean": 26.282999999999998,
+            "p95": 47.67,
+            "max": 47.67
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.031
+        }
+      },
+      "nativeRenderCalls": 2379,
+      "nativeUpdateCallbacks": 2377
+    },
+    {
+      "label": "hwdec_base_b_20261101",
+      "variant": "before",
+      "secondsPerStage": 10,
+      "mediaSha256": "9308fedd5bbf195619c43719ea39a2313d48c8444e60b63f1087016405a3b584",
+      "mediaBytes": 228284046,
+      "hashes": {
+        "bilisail.exe": "7d6216f72cb61aa2a5a51b432446c9767a304ca5b2ad555ba4a435298ce9aeae",
+        "data/app.so": "c71cb1ad172ae4ee172141696b119f878db9787de4b28a57988fd93ae88f9708",
+        "flutter_windows.dll": "6ef56159a88686a05f0a70497c79607882644fcdb477ed9591a3acb8cb1a5e83",
+        "media_kit_video_plugin.dll": "1f961c25730db27384d49dc4267acdd0567ee22bbc277b8f9cff99ba9e4aaeb3",
+        "libmpv-2.dll": "4b517ce76493c7d6b6568dde6e2839e3bb6a41c4b46b0e972492f354ad444ba4",
+        "libEGL.dll": "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac",
+        "libGLESv2.dll": "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39"
+      },
+      "stages": {
+        "video": {
+          "startUtc": "2026-11-01T13:03:22.0333120+00:00",
+          "endUtc": "2026-11-01T13:03:32.0723250+00:00",
+          "decoder": "d3d11va-copy",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 0.0,
+            "p95": 0,
+            "max": 0
+          },
+          "fps": 61.0,
+          "uiUs": {
+            "count": 610,
+            "mean": 155.5639344262295,
+            "p95": 238,
+            "max": 334
+          },
+          "rasterUs": {
+            "count": 610,
+            "mean": 322.7049180327869,
+            "p95": 490,
+            "max": 669
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 6,
+              "mean": 12.66504847962291,
+              "p95": 14.512177373000391,
+              "max": 14.512177373000391
+            },
+            "copy": {
+              "count": 6,
+              "mean": 0.03589215674213434,
+              "p95": 0.10084475035644841,
+              "max": 0.10084475035644841
+            },
+            "legacyoverlay": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 6,
+              "mean": 16.16440792013188,
+              "p95": 17.805756579901,
+              "max": 17.805756579901
+            },
+            "videoencode": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 493.8020448815445,
+          "workingSetBytes": {
+            "count": 6,
+            "mean": 341870592.0,
+            "p95": 348909568,
+            "max": 348909568
+          },
+          "coreMHz": {
+            "count": 10,
+            "mean": 297.0,
+            "p95": 600.0,
+            "max": 600.0
+          },
+          "memoryMHz": {
+            "count": 10,
+            "mean": 486.0,
+            "p95": 810.0,
+            "max": 810.0
+          },
+          "boardWatts": {
+            "count": 10,
+            "mean": 16.214,
+            "p95": 20.17,
+            "max": 20.17
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.914
+        },
+        "danmaku": {
+          "startUtc": "2026-11-01T13:03:37.1087430+00:00",
+          "endUtc": "2026-11-01T13:03:47.1301870+00:00",
+          "decoder": "d3d11va-copy",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 63.3,
+            "p95": 70,
+            "max": 70
+          },
+          "fps": 174.8,
+          "uiUs": {
+            "count": 1748,
+            "mean": 214.44736842105263,
+            "p95": 457,
+            "max": 889
+          },
+          "rasterUs": {
+            "count": 1748,
+            "mean": 531.1882151029748,
+            "p95": 911,
+            "max": 1332
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 11.781332053729907,
+              "p95": 16.259856779396074,
+              "max": 16.259856779396074
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.09444057495867332,
+              "p95": 0.18673865611478865,
+              "max": 0.18673865611478865
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 15.058142568174373,
+              "p95": 19.12065967586792,
+              "max": 19.12065967586792
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 533.4967868773274,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 370862372.5714286,
+            "p95": 375914496,
+            "max": 375914496
+          },
+          "coreMHz": {
+            "count": 9,
+            "mean": 400.0,
+            "p95": 435.0,
+            "max": 435.0
+          },
+          "memoryMHz": {
+            "count": 9,
+            "mean": 630.0,
+            "p95": 810.0,
+            "max": 810.0
+          },
+          "boardWatts": {
+            "count": 9,
+            "mean": 18.932222222222222,
+            "p95": 20.75,
+            "max": 20.75
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.041
+        },
+        "controls": {
+          "startUtc": "2026-11-01T13:03:48.1519250+00:00",
+          "endUtc": "2026-11-01T13:03:58.1759630+00:00",
+          "decoder": "d3d11va-copy",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 60.4,
+            "p95": 63,
+            "max": 63
+          },
+          "fps": 177.0,
+          "uiUs": {
+            "count": 1770,
+            "mean": 217.47118644067797,
+            "p95": 490,
+            "max": 1850
+          },
+          "rasterUs": {
+            "count": 1770,
+            "mean": 578.2627118644068,
+            "p95": 954,
+            "max": 19508
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 12.451994136860591,
+              "p95": 15.593377135121534,
+              "max": 15.593377135121534
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.03696484329427231,
+              "p95": 0.07048904509566603,
+              "max": 0.07048904509566603
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 15.345953671948555,
+              "p95": 18.761789840016274,
+              "max": 18.761789840016274
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 592.9834070582691,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 383032173.71428573,
+            "p95": 391303168,
+            "max": 391303168
+          },
+          "coreMHz": {
+            "count": 10,
+            "mean": 400.5,
+            "p95": 435.0,
+            "max": 435.0
+          },
+          "memoryMHz": {
+            "count": 10,
+            "mean": 607.5,
+            "p95": 810.0,
+            "max": 810.0
+          },
+          "boardWatts": {
+            "count": 10,
+            "mean": 18.512,
+            "p95": 20.36,
+            "max": 20.36
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.037
+        }
+      },
+      "nativeRenderCalls": 2382,
+      "nativeUpdateCallbacks": 2380
+    },
+    {
+      "label": "hwdec_base_c_20261101",
+      "variant": "before",
+      "secondsPerStage": 10,
+      "mediaSha256": "9308fedd5bbf195619c43719ea39a2313d48c8444e60b63f1087016405a3b584",
+      "mediaBytes": 228284046,
+      "hashes": {
+        "bilisail.exe": "7d6216f72cb61aa2a5a51b432446c9767a304ca5b2ad555ba4a435298ce9aeae",
+        "data/app.so": "c71cb1ad172ae4ee172141696b119f878db9787de4b28a57988fd93ae88f9708",
+        "flutter_windows.dll": "6ef56159a88686a05f0a70497c79607882644fcdb477ed9591a3acb8cb1a5e83",
+        "media_kit_video_plugin.dll": "1f961c25730db27384d49dc4267acdd0567ee22bbc277b8f9cff99ba9e4aaeb3",
+        "libmpv-2.dll": "4b517ce76493c7d6b6568dde6e2839e3bb6a41c4b46b0e972492f354ad444ba4",
+        "libEGL.dll": "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac",
+        "libGLESv2.dll": "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39"
+      },
+      "stages": {
+        "video": {
+          "startUtc": "2026-11-01T13:04:06.4769210+00:00",
+          "endUtc": "2026-11-01T13:04:16.5037040+00:00",
+          "decoder": "d3d11va-copy",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 0.0,
+            "p95": 0,
+            "max": 0
+          },
+          "fps": 61.4,
+          "uiUs": {
+            "count": 614,
+            "mean": 165.32410423452768,
+            "p95": 257,
+            "max": 519
+          },
+          "rasterUs": {
+            "count": 614,
+            "mean": 339.6026058631922,
+            "p95": 515,
+            "max": 628
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 12.091572105345962,
+              "p95": 14.094113233005354,
+              "max": 14.094113233005354
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.02354789985764749,
+              "p95": 0.053182217135789266,
+              "max": 0.053182217135789266
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 15.949632440429074,
+              "p95": 17.971415369774686,
+              "max": 17.971415369774686
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 581.3540676336912,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 340737462.85714287,
+            "p95": 346173440,
+            "max": 346173440
+          },
+          "coreMHz": {
+            "count": 10,
+            "mean": 334.5,
+            "p95": 750.0,
+            "max": 750.0
+          },
+          "memoryMHz": {
+            "count": 10,
+            "mean": 486.0,
+            "p95": 810.0,
+            "max": 810.0
+          },
+          "boardWatts": {
+            "count": 10,
+            "mean": 16.576,
+            "p95": 21.38,
+            "max": 21.38
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.31
+        },
+        "danmaku": {
+          "startUtc": "2026-11-01T13:04:21.5278860+00:00",
+          "endUtc": "2026-11-01T13:04:31.5515890+00:00",
+          "decoder": "d3d11va-copy",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 63.4,
+            "p95": 71,
+            "max": 71
+          },
+          "fps": 175.7,
+          "uiUs": {
+            "count": 1757,
+            "mean": 224.1923733636881,
+            "p95": 496,
+            "max": 844
+          },
+          "rasterUs": {
+            "count": 1757,
+            "mean": 551.9356858281161,
+            "p95": 903,
+            "max": 1631
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 11.654928907928978,
+              "p95": 15.549538381491521,
+              "max": 15.549538381491521
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.0770481593357865,
+              "p95": 0.14486234242791174,
+              "max": 0.14486234242791174
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 14.700545404277147,
+              "p95": 18.360398616673447,
+              "max": 18.360398616673447
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 538.9381275900249,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 368101083.4285714,
+            "p95": 373092352,
+            "max": 373092352
+          },
+          "coreMHz": {
+            "count": 9,
+            "mean": 400.0,
+            "p95": 435.0,
+            "max": 435.0
+          },
+          "memoryMHz": {
+            "count": 9,
+            "mean": 585.0,
+            "p95": 810.0,
+            "max": 810.0
+          },
+          "boardWatts": {
+            "count": 9,
+            "mean": 19.166666666666668,
+            "p95": 20.68,
+            "max": 20.68
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.256
+        },
+        "controls": {
+          "startUtc": "2026-11-01T13:04:32.5663690+00:00",
+          "endUtc": "2026-11-01T13:04:42.5914690+00:00",
+          "decoder": "d3d11va-copy",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 60.3,
+            "p95": 63,
+            "max": 63
+          },
+          "fps": 181.3,
+          "uiUs": {
+            "count": 1813,
+            "mean": 220.5603971318257,
+            "p95": 500,
+            "max": 1899
+          },
+          "rasterUs": {
+            "count": 1813,
+            "mean": 582.796469939327,
+            "p95": 965,
+            "max": 16980
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 11.250181046254713,
+              "p95": 15.847148402663153,
+              "max": 15.847148402663153
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.07615232844729844,
+              "p95": 0.22919083535227386,
+              "max": 0.22919083535227386
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 14.007445807625507,
+              "p95": 17.977606414469996,
+              "max": 17.977606414469996
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 633.6793517463573,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 380370358.85714287,
+            "p95": 388116480,
+            "max": 388116480
+          },
+          "coreMHz": {
+            "count": 10,
+            "mean": 400.5,
+            "p95": 420.0,
+            "max": 420.0
+          },
+          "memoryMHz": {
+            "count": 10,
+            "mean": 648.0,
+            "p95": 810.0,
+            "max": 810.0
+          },
+          "boardWatts": {
+            "count": 10,
+            "mean": 19.009,
+            "p95": 20.62,
+            "max": 20.62
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.055
+        }
+      },
+      "nativeRenderCalls": 2376,
+      "nativeUpdateCallbacks": 2374
+    },
+    {
+      "label": "hwdec_direct_a_20261101",
+      "variant": "after",
+      "secondsPerStage": 10,
+      "mediaSha256": "9308fedd5bbf195619c43719ea39a2313d48c8444e60b63f1087016405a3b584",
+      "mediaBytes": 228284046,
+      "hashes": {
+        "bilisail.exe": "7d6216f72cb61aa2a5a51b432446c9767a304ca5b2ad555ba4a435298ce9aeae",
+        "data/app.so": "c71cb1ad172ae4ee172141696b119f878db9787de4b28a57988fd93ae88f9708",
+        "flutter_windows.dll": "6ef56159a88686a05f0a70497c79607882644fcdb477ed9591a3acb8cb1a5e83",
+        "media_kit_video_plugin.dll": "ee0f1109a6942ad5ab52f3f474014fc4687d0b674e5e7705a039fa7d0d47e753",
+        "libmpv-2.dll": "222da57d12a47680df84a8d0ad06f713fbbce4da923784ddeebe9d666135e943",
+        "libEGL.dll": "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac",
+        "libGLESv2.dll": "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39"
+      },
+      "stages": {
+        "video": {
+          "startUtc": "2026-11-01T13:01:17.0152770+00:00",
+          "endUtc": "2026-11-01T13:01:27.0348580+00:00",
+          "decoder": "d3d11va",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 0.0,
+            "p95": 0,
+            "max": 0
+          },
+          "fps": 60.3,
+          "uiUs": {
+            "count": 603,
+            "mean": 163.575456053068,
+            "p95": 246,
+            "max": 435
+          },
+          "rasterUs": {
+            "count": 603,
+            "mean": 347.77280265339965,
+            "p95": 542,
+            "max": 2126
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 1.0802110761080215,
+              "p95": 1.4464196988436495,
+              "max": 1.4464196988436495
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.00862435482171437,
+              "p95": 0.010755904489556286,
+              "max": 0.010755904489556286
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 12.25689411849597,
+              "p95": 13.64007178502368,
+              "max": 13.64007178502368
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 130.0192806557142,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 386769481.14285713,
+            "p95": 391995392,
+            "max": 391995392
+          },
+          "coreMHz": {
+            "count": 10,
+            "mean": 256.5,
+            "p95": 510.0,
+            "max": 510.0
+          },
+          "memoryMHz": {
+            "count": 10,
+            "mean": 445.5,
+            "p95": 810.0,
+            "max": 810.0
+          },
+          "boardWatts": {
+            "count": 10,
+            "mean": 15.575000000000003,
+            "p95": 19.65,
+            "max": 19.65
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.045000000000000005
+        },
+        "danmaku": {
+          "startUtc": "2026-11-01T13:01:32.0641310+00:00",
+          "endUtc": "2026-11-01T13:01:42.0857990+00:00",
+          "decoder": "d3d11va",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 63.3,
+            "p95": 64,
+            "max": 64
+          },
+          "fps": 165.1,
+          "uiUs": {
+            "count": 1651,
+            "mean": 218.40823743185948,
+            "p95": 450,
+            "max": 900
+          },
+          "rasterUs": {
+            "count": 1651,
+            "mean": 544.557238037553,
+            "p95": 917,
+            "max": 6459
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 4.764146504274565,
+              "p95": 6.274258782006525,
+              "max": 6.274258782006525
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.07629018676881197,
+              "p95": 0.23668161231839455,
+              "max": 0.23668161231839455
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 14.572508439758625,
+              "p95": 15.394842313600002,
+              "max": 15.394842313600002
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 323.3190276580564,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 404171629.71428573,
+            "p95": 407830528,
+            "max": 407830528
+          },
+          "coreMHz": {
+            "count": 9,
+            "mean": 225.0,
+            "p95": 255.0,
+            "max": 255.0
+          },
+          "memoryMHz": {
+            "count": 9,
+            "mean": 405.0,
+            "p95": 405.0,
+            "max": 405.0
+          },
+          "boardWatts": {
+            "count": 9,
+            "mean": 16.317777777777778,
+            "p95": 16.82,
+            "max": 16.82
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.33599999999999997
+        },
+        "controls": {
+          "startUtc": "2026-11-01T13:01:43.0996990+00:00",
+          "endUtc": "2026-11-01T13:01:53.1602440+00:00",
+          "decoder": "d3d11va",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 61.1,
+            "p95": 63,
+            "max": 63
+          },
+          "fps": 166.3,
+          "uiUs": {
+            "count": 1663,
+            "mean": 232.414912808178,
+            "p95": 504,
+            "max": 2982
+          },
+          "rasterUs": {
+            "count": 1663,
+            "mean": 607.8051713770294,
+            "p95": 1010,
+            "max": 17440
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 4.3096613633270815,
+              "p95": 5.89766958201323,
+              "max": 5.89766958201323
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.02975275177221609,
+              "p95": 0.058119495784874395,
+              "max": 0.058119495784874395
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 15.004002399321276,
+              "p95": 16.137221856686416,
+              "max": 16.137221856686416
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 337.9886114076184,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 413861595.4285714,
+            "p95": 418492416,
+            "max": 418492416
+          },
+          "coreMHz": {
+            "count": 10,
+            "mean": 222.0,
+            "p95": 240.0,
+            "max": 240.0
+          },
+          "memoryMHz": {
+            "count": 10,
+            "mean": 405.0,
+            "p95": 405.0,
+            "max": 405.0
+          },
+          "boardWatts": {
+            "count": 10,
+            "mean": 16.279000000000003,
+            "p95": 16.41,
+            "max": 16.41
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.609
+        }
+      },
+      "nativeRenderCalls": 2401,
+      "nativeUpdateCallbacks": 2400
+    },
+    {
+      "label": "hwdec_direct_b_20261101",
+      "variant": "after",
+      "secondsPerStage": 10,
+      "mediaSha256": "9308fedd5bbf195619c43719ea39a2313d48c8444e60b63f1087016405a3b584",
+      "mediaBytes": 228284046,
+      "hashes": {
+        "bilisail.exe": "7d6216f72cb61aa2a5a51b432446c9767a304ca5b2ad555ba4a435298ce9aeae",
+        "data/app.so": "c71cb1ad172ae4ee172141696b119f878db9787de4b28a57988fd93ae88f9708",
+        "flutter_windows.dll": "6ef56159a88686a05f0a70497c79607882644fcdb477ed9591a3acb8cb1a5e83",
+        "media_kit_video_plugin.dll": "ee0f1109a6942ad5ab52f3f474014fc4687d0b674e5e7705a039fa7d0d47e753",
+        "libmpv-2.dll": "222da57d12a47680df84a8d0ad06f713fbbce4da923784ddeebe9d666135e943",
+        "libEGL.dll": "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac",
+        "libGLESv2.dll": "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39"
+      },
+      "stages": {
+        "video": {
+          "startUtc": "2026-11-01T13:02:37.2034010+00:00",
+          "endUtc": "2026-11-01T13:02:47.2196220+00:00",
+          "decoder": "d3d11va",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 0.0,
+            "p95": 0,
+            "max": 0
+          },
+          "fps": 60.2,
+          "uiUs": {
+            "count": 602,
+            "mean": 158.82392026578074,
+            "p95": 247,
+            "max": 522
+          },
+          "rasterUs": {
+            "count": 602,
+            "mean": 339.3405315614618,
+            "p95": 515,
+            "max": 622
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 1.0686945991991916,
+              "p95": 1.1439329870514225,
+              "max": 1.1439329870514225
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.008594949200847692,
+              "p95": 0.009767720437934656,
+              "max": 0.009767720437934656
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 14.341979538396235,
+              "p95": 15.66738825441862,
+              "max": 15.66738825441862
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 114.6224935112493,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 383759506.28571427,
+            "p95": 390086656,
+            "max": 390086656
+          },
+          "coreMHz": {
+            "count": 10,
+            "mean": 250.5,
+            "p95": 465.0,
+            "max": 465.0
+          },
+          "memoryMHz": {
+            "count": 10,
+            "mean": 445.5,
+            "p95": 810.0,
+            "max": 810.0
+          },
+          "boardWatts": {
+            "count": 10,
+            "mean": 15.615999999999996,
+            "p95": 19.43,
+            "max": 19.43
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.04
+        },
+        "danmaku": {
+          "startUtc": "2026-11-01T13:02:52.2323950+00:00",
+          "endUtc": "2026-11-01T13:03:02.2521790+00:00",
+          "decoder": "d3d11va",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 63.6,
+            "p95": 64,
+            "max": 64
+          },
+          "fps": 164.6,
+          "uiUs": {
+            "count": 1646,
+            "mean": 220.01215066828675,
+            "p95": 475,
+            "max": 1094
+          },
+          "rasterUs": {
+            "count": 1646,
+            "mean": 545.0777642770353,
+            "p95": 881,
+            "max": 1844
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 6,
+              "mean": 3.568888519166574,
+              "p95": 3.731248898498181,
+              "max": 3.731248898498181
+            },
+            "copy": {
+              "count": 6,
+              "mean": 0.09176247417265754,
+              "p95": 0.22996063970313366,
+              "max": 0.22996063970313366
+            },
+            "legacyoverlay": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 6,
+              "mean": 17.091683107481472,
+              "p95": 17.340252170028858,
+              "max": 17.340252170028858
+            },
+            "videoencode": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 294.20722956000725,
+          "workingSetBytes": {
+            "count": 6,
+            "mean": 402966528.0,
+            "p95": 406253568,
+            "max": 406253568
+          },
+          "coreMHz": {
+            "count": 9,
+            "mean": 220.0,
+            "p95": 240.0,
+            "max": 240.0
+          },
+          "memoryMHz": {
+            "count": 9,
+            "mean": 405.0,
+            "p95": 405.0,
+            "max": 405.0
+          },
+          "boardWatts": {
+            "count": 9,
+            "mean": 16.941111111111113,
+            "p95": 17.21,
+            "max": 17.21
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.337
+        },
+        "controls": {
+          "startUtc": "2026-11-01T13:03:03.2817730+00:00",
+          "endUtc": "2026-11-01T13:03:13.3019480+00:00",
+          "decoder": "d3d11va",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 60.9,
+            "p95": 63,
+            "max": 63
+          },
+          "fps": 164.6,
+          "uiUs": {
+            "count": 1646,
+            "mean": 225.67314702308627,
+            "p95": 494,
+            "max": 1702
+          },
+          "rasterUs": {
+            "count": 1646,
+            "mean": 590.9896719319563,
+            "p95": 960,
+            "max": 14050
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 6,
+              "mean": 3.3387974614632974,
+              "p95": 3.455663149919009,
+              "max": 3.455663149919009
+            },
+            "copy": {
+              "count": 6,
+              "mean": 0.03987202449780866,
+              "p95": 0.10974039418467124,
+              "max": 0.10974039418467124
+            },
+            "legacyoverlay": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 6,
+              "mean": 16.957288867923342,
+              "p95": 17.138863464729763,
+              "max": 17.138863464729763
+            },
+            "videoencode": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 6,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 379.6217655794185,
+          "workingSetBytes": {
+            "count": 6,
+            "mean": 416884736.0,
+            "p95": 421445632,
+            "max": 421445632
+          },
+          "coreMHz": {
+            "count": 10,
+            "mean": 217.5,
+            "p95": 225.0,
+            "max": 225.0
+          },
+          "memoryMHz": {
+            "count": 10,
+            "mean": 405.0,
+            "p95": 405.0,
+            "max": 405.0
+          },
+          "boardWatts": {
+            "count": 10,
+            "mean": 16.82,
+            "p95": 16.91,
+            "max": 16.91
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.187
+        }
+      },
+      "nativeRenderCalls": 2399,
+      "nativeUpdateCallbacks": 2398
+    },
+    {
+      "label": "hwdec_direct_c_20261101",
+      "variant": "after",
+      "secondsPerStage": 10,
+      "mediaSha256": "9308fedd5bbf195619c43719ea39a2313d48c8444e60b63f1087016405a3b584",
+      "mediaBytes": 228284046,
+      "hashes": {
+        "bilisail.exe": "7d6216f72cb61aa2a5a51b432446c9767a304ca5b2ad555ba4a435298ce9aeae",
+        "data/app.so": "c71cb1ad172ae4ee172141696b119f878db9787de4b28a57988fd93ae88f9708",
+        "flutter_windows.dll": "6ef56159a88686a05f0a70497c79607882644fcdb477ed9591a3acb8cb1a5e83",
+        "media_kit_video_plugin.dll": "ee0f1109a6942ad5ab52f3f474014fc4687d0b674e5e7705a039fa7d0d47e753",
+        "libmpv-2.dll": "222da57d12a47680df84a8d0ad06f713fbbce4da923784ddeebe9d666135e943",
+        "libEGL.dll": "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac",
+        "libGLESv2.dll": "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39"
+      },
+      "stages": {
+        "video": {
+          "startUtc": "2026-11-01T13:04:50.9827220+00:00",
+          "endUtc": "2026-11-01T13:05:00.9990610+00:00",
+          "decoder": "d3d11va",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 0.0,
+            "p95": 0,
+            "max": 0
+          },
+          "fps": 60.1,
+          "uiUs": {
+            "count": 601,
+            "mean": 158.01663893510815,
+            "p95": 240,
+            "max": 374
+          },
+          "rasterUs": {
+            "count": 601,
+            "mean": 329.52579034941766,
+            "p95": 513,
+            "max": 720
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 1.1452386056115986,
+              "p95": 1.3024768162169607,
+              "max": 1.3024768162169607
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.007998754303916802,
+              "p95": 0.009095428883158615,
+              "max": 0.009095428883158615
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 13.845770764729158,
+              "p95": 14.751282515907786,
+              "max": 14.751282515907786
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 143.27792638373262,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 384123465.14285713,
+            "p95": 391708672,
+            "max": 391708672
+          },
+          "coreMHz": {
+            "count": 10,
+            "mean": 249.0,
+            "p95": 465.0,
+            "max": 465.0
+          },
+          "memoryMHz": {
+            "count": 10,
+            "mean": 445.5,
+            "p95": 810.0,
+            "max": 810.0
+          },
+          "boardWatts": {
+            "count": 10,
+            "mean": 15.424000000000001,
+            "p95": 19.49,
+            "max": 19.49
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.023
+        },
+        "danmaku": {
+          "startUtc": "2026-11-01T13:05:06.0123100+00:00",
+          "endUtc": "2026-11-01T13:05:16.0302260+00:00",
+          "decoder": "d3d11va",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 63.7,
+            "p95": 64,
+            "max": 64
+          },
+          "fps": 165.2,
+          "uiUs": {
+            "count": 1652,
+            "mean": 220.70036319612592,
+            "p95": 466,
+            "max": 923
+          },
+          "rasterUs": {
+            "count": 1652,
+            "mean": 550.0841404358354,
+            "p95": 901,
+            "max": 3160
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 3.274219684327472,
+              "p95": 3.484188626989776,
+              "max": 3.484188626989776
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.08518450382465138,
+              "p95": 0.18265067524566286,
+              "max": 0.18265067524566286
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 17.127837539349027,
+              "p95": 18.07408622833567,
+              "max": 18.07408622833567
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 307.57217572853295,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 403136512.0,
+            "p95": 409231360,
+            "max": 409231360
+          },
+          "coreMHz": {
+            "count": 9,
+            "mean": 253.33333333333334,
+            "p95": 315.0,
+            "max": 315.0
+          },
+          "memoryMHz": {
+            "count": 9,
+            "mean": 405.0,
+            "p95": 405.0,
+            "max": 405.0
+          },
+          "boardWatts": {
+            "count": 9,
+            "mean": 17.240000000000002,
+            "p95": 18.14,
+            "max": 18.14
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.089
+        },
+        "controls": {
+          "startUtc": "2026-11-01T13:05:17.0335960+00:00",
+          "endUtc": "2026-11-01T13:05:27.0542100+00:00",
+          "decoder": "d3d11va",
+          "outputSizes": [
+            "1216x684"
+          ],
+          "decodedSizes": [
+            "1920x1080"
+          ],
+          "mode": [
+            "mixed"
+          ],
+          "opacity": [
+            0.8
+          ],
+          "arrivals": [
+            20
+          ],
+          "visible": {
+            "count": 10,
+            "mean": 60.4,
+            "p95": 63,
+            "max": 63
+          },
+          "fps": 164.5,
+          "uiUs": {
+            "count": 1645,
+            "mean": 219.76717325227963,
+            "p95": 489,
+            "max": 1801
+          },
+          "rasterUs": {
+            "count": 1645,
+            "mean": 573.4747720364742,
+            "p95": 949,
+            "max": 15030
+          },
+          "gpuEngines": {
+            "3d": {
+              "count": 7,
+              "mean": 3.4574241336994804,
+              "p95": 3.657371353438292,
+              "max": 3.657371353438292
+            },
+            "copy": {
+              "count": 7,
+              "mean": 0.042351135849305215,
+              "p95": 0.15088252284200615,
+              "max": 0.15088252284200615
+            },
+            "legacyoverlay": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "ofa_0": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "security_1": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "videodecode": {
+              "count": 7,
+              "mean": 16.8667169569923,
+              "p95": 17.12318377845276,
+              "max": 17.12318377845276
+            },
+            "videoencode": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "vr": {
+              "count": 7,
+              "mean": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            }
+          },
+          "cpuMsPerSecond": 313.6664896212821,
+          "workingSetBytes": {
+            "count": 7,
+            "mean": 413347840.0,
+            "p95": 417886208,
+            "max": 417886208
+          },
+          "coreMHz": {
+            "count": 10,
+            "mean": 214.5,
+            "p95": 225.0,
+            "max": 225.0
+          },
+          "memoryMHz": {
+            "count": 10,
+            "mean": 405.0,
+            "p95": 405.0,
+            "max": 405.0
+          },
+          "boardWatts": {
+            "count": 10,
+            "mean": 16.854,
+            "p95": 17.1,
+            "max": 17.1
+          },
+          "frameDropRange": [
+            0.0,
+            0.0
+          ],
+          "decoderDropRange": [
+            0.0,
+            0.0
+          ],
+          "maxAbsAvsyncMs": 0.804
+        }
+      },
+      "nativeRenderCalls": 2399,
+      "nativeUpdateCallbacks": 2398
+    }
+  ]
+}
