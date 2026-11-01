@@ -23,6 +23,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liquid_dock_navi/liquid_dock_navi.dart';
 
 import 'input_test_app.dart';
 
@@ -178,15 +179,17 @@ void expectDpiDetail(WidgetTester tester) {
 
 void expectDpiBottomNavigation(WidgetTester tester) {
   final finder = find.byKey(const ValueKey('workspace-bottom-navigation'));
-  final navigation = tester.widget<NavigationBar>(finder);
-  expect(
-    navigation.destinations.whereType<NavigationDestination>().map(
-      (d) => d.label,
-    ),
-    ['首页', '动态', '我的', '设置'],
-  );
+  final navigation = tester.widget<LiquidDockNavi>(finder);
+  expect(navigation.items.map((item) => item.label), [
+    '首页',
+    '动态',
+    '我的',
+    '历史',
+    '下载',
+    '设置',
+  ]);
   final bounds = tester.getRect(finder);
-  for (final label in ['首页', '动态', '我的', '设置']) {
+  for (final label in ['首页', '动态', '我的', '历史', '下载', '设置']) {
     final text = find.descendant(of: finder, matching: find.text(label));
     final rect = tester.getRect(text);
     expect(rect.left, greaterThanOrEqualTo(bounds.left));

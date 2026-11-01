@@ -20,6 +20,7 @@ import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:liquid_dock_navi/liquid_dock_navi.dart';
 
 void main() {
   final returnToPlayback = find.byKey(
@@ -462,7 +463,7 @@ void main() {
             }
             final hasBack =
                 (dual || single) &&
-                !const ['/', '/settings'].contains(location) &&
+                !const ['/', '/history', '/settings'].contains(location) &&
                 (!mobile ||
                     !playback ||
                     (single && platform == TargetPlatform.iOS));
@@ -566,9 +567,26 @@ void main() {
           addTearDown(tester.view.resetDevicePixelRatio);
           addTearDown(tester.view.resetPhysicalSize);
           final disposed = <String>[];
-          final navigationPrefix = entryWidth < 600
-              ? 'workspace-bottom'
-              : 'workspace-nav';
+          // The liquid dock exposes no per-destination keys; narrow layouts
+          // locate tabs by label inside the dock instead. The viewport can
+          // change inside the test, so resolve per call against its width.
+          Finder navigationTarget(String section, double viewportWidth) =>
+              viewportWidth < 600
+              ? find
+                    .descendant(
+                      of: find.byKey(
+                        const ValueKey('workspace-bottom-navigation'),
+                      ),
+                      matching: find.text(switch (section) {
+                        'home' => '首页',
+                        'dynamic' => '动态',
+                        'live' => '直播',
+                        'mine' => '我的',
+                        _ => section,
+                      }),
+                    )
+                    .first
+              : find.byKey(ValueKey('workspace-nav-$section'));
           final initialChannel =
               Uri.parse(initial).queryParameters['channel'] ?? 'dynamic';
           final chosenChannel = initialChannel == 'dynamic'
@@ -596,10 +614,10 @@ void main() {
                   .queryParameters['channel'],
               initialChannel,
             );
-            await tester.tap(find.byKey(ValueKey('$navigationPrefix-home')));
+            await tester.tap(navigationTarget('home', entryWidth));
             await tester.pumpAndSettle();
           }
-          await tester.tap(find.byKey(ValueKey('$navigationPrefix-dynamic')));
+          await tester.tap(navigationTarget('dynamic', entryWidth));
           await tester.pumpAndSettle();
           expect(
             router
@@ -619,13 +637,11 @@ void main() {
                 .queryParameters['channel'],
             chosenChannel,
           );
-          await tester.tap(find.byKey(ValueKey('$navigationPrefix-home')));
+          await tester.tap(navigationTarget('home', entryWidth));
           await tester.pumpAndSettle();
           tester.view.physicalSize = const Size(390, 844);
           await tester.pumpAndSettle();
-          await tester.tap(
-            find.byKey(const ValueKey('workspace-bottom-dynamic')),
-          );
+          await tester.tap(navigationTarget('dynamic', 390));
           await tester.pumpAndSettle();
           expect(
             router
@@ -1117,8 +1133,12 @@ void main() {
         await tester.pumpAndSettle();
         tester.view.physicalSize = const Size(390, 844);
         await tester.pumpAndSettle();
+        // The liquid dock has no live destination on narrow layouts.
         expect(
-          find.byKey(const ValueKey('workspace-bottom-live')),
+          find.descendant(
+            of: find.byKey(const ValueKey('workspace-bottom-navigation')),
+            matching: find.text('直播'),
+          ),
           findsNothing,
         );
         await tester.tap(find.byKey(const ValueKey('channel-live')));
@@ -1429,7 +1449,9 @@ void main() {
           find.byKey(const ValueKey('composer-tab-1')),
           'retained draft',
         );
-        router.go('/history');
+        // A profile is a transient tab with its own page identity; /history now
+        // shares the fixed root tab and would not create the second composer.
+        router.go('/user/9');
         await tester.pumpAndSettle();
         final composer = find.byKey(const ValueKey('composer-tab-2'));
         await tester.enterText(composer, 'current draft');
@@ -1693,9 +1715,14 @@ void main() {
           final bottom = find.byKey(
             const ValueKey('workspace-bottom-navigation'),
           );
-          expect(tester.getSize(bottom).height, 52);
-          if (selected == 'messages' || selected == 'downloads') {
-            expect(find.byType(NavigationBar), findsNothing);
+          if (selected == 'messages') {
+            // The unselected utility strip keeps the Material bar height; the
+            // floating liquid dock appears on primary pages instead.
+            final dock = tester.widgetList<LiquidDockNavi>(
+              find.byType(LiquidDockNavi),
+            );
+            expect(dock, isEmpty);
+            expect(tester.getSize(bottom).height, 52);
             final flags = tester
                 .widgetList<Semantics>(
                   find.descendant(of: bottom, matching: find.byType(Semantics)),
@@ -1703,19 +1730,33 @@ void main() {
                 .map((widget) => widget.properties.selected)
                 .whereType<bool>();
             expect(flags, [false, false, false, false]);
+            for (final entry in ['首页', '动态', '我的', '设置']) {
+              expect(
+                find
+                    .descendant(of: bottom, matching: find.text(entry))
+                    .hitTestable(),
+                findsOneWidget,
+              );
+            }
           } else {
-            expect(find.byType(NavigationBar), findsOneWidget);
+            expect(find.byType(LiquidDockNavi), findsOneWidget);
+            // 52 dock height + 8 bottom gap of the floating glass dock.
+            expect(tester.getSize(bottom).height, 60);
+            for (final entry in ['首页', '动态', '我的', '历史', '下载', '设置']) {
+              expect(
+                find
+                    .descendant(of: bottom, matching: find.text(entry))
+                    .hitTestable(),
+                findsOneWidget,
+              );
+            }
           }
+          // The narrow navigation never offers a live destination; primary
+          // pages show the liquid dock, utility pages the unselected strip.
           expect(
-            find.byKey(const ValueKey('workspace-bottom-live')),
+            find.descendant(of: bottom, matching: find.text('直播')),
             findsNothing,
           );
-          for (final entry in ['home', 'dynamic', 'mine', 'settings']) {
-            expect(
-              find.byKey(ValueKey('workspace-bottom-$entry')).hitTestable(),
-              findsOneWidget,
-            );
-          }
           expect(find.text('count 1'), findsOneWidget);
           expect(tester.takeException(), isNull, reason: path);
         }

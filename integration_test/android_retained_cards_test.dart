@@ -47,8 +47,17 @@ void main() {
                   true),
         );
     Finder listFinder() => find.byWidget(visibleList().widget);
+    // The liquid dock exposes no per-destination keys; locate tabs by label.
+    const dockLabels = {'home': '首页', 'dynamic': '动态', 'mine': '我的'};
     Future<void> select(String page) async {
-      await tester.tap(find.byKey(ValueKey('workspace-bottom-$page')));
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('workspace-bottom-navigation')),
+              matching: find.text(dockLabels[page]!),
+            )
+            .first,
+      );
       await tester.pump();
     }
 

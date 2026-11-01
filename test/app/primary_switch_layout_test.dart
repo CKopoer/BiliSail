@@ -23,10 +23,25 @@ void main() {
       );
       await tester.pumpWidget(fixture.app);
       await tester.pumpAndSettle();
+      // The liquid dock exposes no per-destination keys; locate tabs by
+      // label inside the dock instead.
+      const dockLabels = {
+        'dynamic': '动态',
+        'mine': '我的',
+        'settings': '设置',
+        'home': '首页',
+      };
       Future<void> bottom(String name) async {
         final content = find.byKey(const ValueKey('workspace-primary-content'));
         final bounds = tester.getRect(content);
-        await tester.tap(find.byKey(ValueKey('workspace-bottom-$name')));
+        await tester.tap(
+          find
+              .descendant(
+                of: find.byKey(const ValueKey('workspace-bottom-navigation')),
+                matching: find.text(dockLabels[name]!),
+              )
+              .first,
+        );
         await tester.pump();
         expect(tester.getRect(content), bounds);
         await tester.pump(const Duration(milliseconds: 50));
@@ -98,7 +113,14 @@ void main() {
       expect(fixture.feed.reads, 1);
       // Taps can retarget before the bottom indicator finishes animating.
       for (final name in ['dynamic', 'mine', 'settings', 'home']) {
-        await tester.tap(find.byKey(ValueKey('workspace-bottom-$name')));
+        await tester.tap(
+          find
+              .descendant(
+                of: find.byKey(const ValueKey('workspace-bottom-navigation')),
+                matching: find.text(dockLabels[name]!),
+              )
+              .first,
+        );
         await tester.pump(const Duration(milliseconds: 16));
       }
       await tester.pumpAndSettle();

@@ -41,8 +41,18 @@ void main() {
                           ?.active ??
                       true),
             );
+        // The liquid dock exposes no per-destination keys; locate tabs by
+        // label inside the dock instead.
+        const dockLabels = {'home': '首页', 'dynamic': '动态', 'mine': '我的'};
         Future<void> select(String page) async {
-          await tester.tap(find.byKey(ValueKey('workspace-bottom-$page')));
+          await tester.tap(
+            find
+                .descendant(
+                  of: find.byKey(const ValueKey('workspace-bottom-navigation')),
+                  matching: find.text(dockLabels[page]!),
+                )
+                .first,
+          );
           await tester.pumpAndSettle(
             const Duration(milliseconds: 16),
             EnginePhase.sendSemanticsUpdate,
@@ -93,7 +103,16 @@ void main() {
             );
             await tester.pump(const Duration(milliseconds: 32));
             final next = page == 'home' ? 'dynamic' : 'home';
-            await tester.tap(find.byKey(ValueKey('workspace-bottom-$next')));
+            await tester.tap(
+              find
+                  .descendant(
+                    of: find.byKey(
+                      const ValueKey('workspace-bottom-navigation'),
+                    ),
+                    matching: find.text(dockLabels[next]!),
+                  )
+                  .first,
+            );
             await tester.pump();
             final saved = positions[page]!.pixels;
             await tester.pumpAndSettle(

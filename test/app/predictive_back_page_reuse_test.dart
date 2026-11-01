@@ -59,7 +59,9 @@ void main() {
     final header = tester.element(
       find.byKey(const ValueKey('workspace-search')),
     );
-    final navigation = tester.element(find.byType(NavigationBar));
+    final navigation = tester.element(
+      find.byKey(const ValueKey('workspace-bottom-navigation')),
+    );
     final headerRect = tester.getRect(
       find.byKey(const ValueKey('workspace-search')),
     );
@@ -143,7 +145,10 @@ void main() {
       tester.element(find.byKey(const ValueKey('workspace-search'))),
       same(header),
     );
-    expect(tester.element(find.byType(NavigationBar)), same(navigation));
+    expect(
+      tester.element(find.byKey(const ValueKey('workspace-bottom-navigation'))),
+      same(navigation),
+    );
     await systemBackGesture(tester, 'commitBackGesture');
     await tester.pumpAndSettle();
     expect(router.routeInformationProvider.value.uri.path, '/');
@@ -151,7 +156,10 @@ void main() {
       tester.element(find.byKey(const ValueKey('workspace-search'))),
       same(header),
     );
-    expect(tester.element(find.byType(NavigationBar)), same(navigation));
+    expect(
+      tester.element(find.byKey(const ValueKey('workspace-bottom-navigation'))),
+      same(navigation),
+    );
     expect(
       tester.getRect(find.byKey(const ValueKey('workspace-search'))),
       headerRect,

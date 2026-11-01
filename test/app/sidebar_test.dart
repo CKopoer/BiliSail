@@ -174,7 +174,10 @@ void main() {
       tester.view.physicalSize = const Size(390, 900);
       await tester.pumpAndSettle();
       expect(_toggle, findsNothing);
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('workspace-bottom-navigation')),
+        findsOneWidget,
+      );
       tester.view.physicalSize = const Size(1600, 900);
       await tester.pumpAndSettle();
       expect(tester.getSize(_region).width, 0);

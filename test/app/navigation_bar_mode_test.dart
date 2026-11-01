@@ -37,7 +37,7 @@ void main() {
               ),
             ),
             routes: [
-              for (final path in ['/', '/history', '/video/:bvid'])
+              for (final path in ['/', '/search', '/video/:bvid'])
                 GoRoute(path: path, builder: (_, _) => const SizedBox()),
             ],
           ),
@@ -59,7 +59,7 @@ void main() {
       await tester.pumpAndSettle();
       router.go('/video/test');
       await tester.pumpAndSettle();
-      router.go('/history');
+      router.go('/search');
       await tester.pumpAndSettle();
       for (final (width, inset) in [
         (390.0, 0.0),
@@ -146,7 +146,7 @@ void main() {
                 : 76.0;
             expect(tester.getSize(_sidebar).width, expectedWidth);
             expect(
-              find.byType(NavigationBar),
+              find.byKey(const ValueKey('workspace-bottom-navigation')),
               bottom ? findsOneWidget : findsNothing,
             );
             expect(
@@ -239,7 +239,7 @@ void main() {
             final expected = failSave ? NavigationBarMode.automatic : mode;
             expect(repository.settings.navigationBarMode, expected);
             expect(
-              find.byType(NavigationBar),
+              find.byKey(const ValueKey('workspace-bottom-navigation')),
               expected == NavigationBarMode.bottom
                   ? findsOneWidget
                   : findsNothing,

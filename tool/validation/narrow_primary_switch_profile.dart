@@ -14,6 +14,7 @@ import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:liquid_dock_navi/liquid_dock_navi.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../test/support/primary_switch_app.dart';
@@ -31,7 +32,7 @@ void walk(Element element, void Function(Element) visit) {
 Element? navigationElement() {
   Element? found;
   walk(WidgetsBinding.instance.rootElement!, (e) {
-    if (e.widget is NavigationBar) found = e;
+    if (e.widget is LiquidDockNavi || e.widget is NavigationBar) found = e;
   });
   return found;
 }
@@ -199,9 +200,15 @@ Future<void> main(List<String> arguments) async {
       if (e == null) throw StateError('Bottom navigation required');
       final start = Timeline.now;
       final before = snapshot();
-      (e.widget as NavigationBar).onDestinationSelected!(
-        int.parse(params['index']!),
-      );
+      final index = int.parse(params['index']!);
+      final widget = e.widget;
+      if (widget is LiquidDockNavi) {
+        widget.onTap(index);
+      } else if (widget is NavigationBar) {
+        widget.onDestinationSelected!(index);
+      } else {
+        throw StateError('Bottom navigation required');
+      }
       events.add({'index': params['index'], 'start': start});
       await Future<void>.delayed(const Duration(milliseconds: 900));
       result = {

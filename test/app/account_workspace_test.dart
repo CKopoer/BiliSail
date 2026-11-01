@@ -115,10 +115,20 @@ void main() {
     AccountContentTab tab,
   ) async {
     if (find.byTooltip('我的账号').evaluate().isEmpty) {
+      final sidebarHome = find.byKey(const ValueKey('workspace-nav-home'));
       await tester.tap(
-        find.byKey(const ValueKey('workspace-nav-home')).evaluate().isNotEmpty
-            ? find.byKey(const ValueKey('workspace-nav-home'))
-            : find.byKey(const ValueKey('workspace-bottom-home')),
+        sidebarHome.evaluate().isNotEmpty
+            ? sidebarHome
+            // The liquid dock exposes no per-destination keys on narrow
+            // layouts; locate the home tab by its label inside the dock.
+            : find
+                  .descendant(
+                    of: find.byKey(
+                      const ValueKey('workspace-bottom-navigation'),
+                    ),
+                    matching: find.text('首页'),
+                  )
+                  .first,
       );
       await tester.pumpAndSettle();
     }

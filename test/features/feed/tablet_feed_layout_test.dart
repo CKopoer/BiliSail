@@ -62,9 +62,15 @@ void main() {
           await tester.pumpAndSettle();
           _expectGrid(tester, columns, size.width);
           if (rail == 0) {
-            expect(find.byType(NavigationBar), findsOneWidget);
+            expect(
+              find.byKey(const ValueKey('workspace-bottom-navigation')),
+              findsOneWidget,
+            );
           } else {
-            expect(find.byType(NavigationBar), findsNothing);
+            expect(
+              find.byKey(const ValueKey('workspace-bottom-navigation')),
+              findsNothing,
+            );
             expect(
               tester
                   .getSize(

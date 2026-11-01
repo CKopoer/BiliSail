@@ -30,8 +30,22 @@ void main() {
     picture.dispose();
     await tester.pumpWidget(fixture.app);
     await tester.pumpAndSettle(const Duration(milliseconds: 16));
+    // The liquid dock exposes no per-destination keys; locate tabs by label.
+    const dockLabels = {
+      'dynamic': '动态',
+      'mine': '我的',
+      'settings': '设置',
+      'home': '首页',
+    };
     Future<void> bottom(String name) async {
-      await tester.tap(find.byKey(ValueKey('workspace-bottom-$name')));
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('workspace-bottom-navigation')),
+              matching: find.text(dockLabels[name]!),
+            )
+            .first,
+      );
       await tester.pumpAndSettle(const Duration(milliseconds: 16));
     }
 

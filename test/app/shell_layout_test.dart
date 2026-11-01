@@ -6,8 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liquid_dock_navi/liquid_dock_navi.dart';
 
 void main() {
+  // Geometry of the unselected utility strip kept from the Material bar.
+  // It lives in the bottomNavigationBar slot and keeps its own SafeArea,
+  // so its widget height is 52 plus the bottom system inset.
+  const utilityStripHeight = 52.0;
+  const utilityStripLabelSize = 11.0;
   testWidgets(
     'cold tablet keeps sidebar choices before the first display update',
     (tester) async {
@@ -282,16 +288,21 @@ void main() {
       final content = tester.element(
         find.byKey(const ValueKey('retained-content')),
       );
-      final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
-      expect(
-        bar.destinations.whereType<NavigationDestination>().map(
-          (item) => item.label,
-        ),
-        ['首页', '动态', '我的', '设置'],
+      final bar = tester.widget<LiquidDockNavi>(
+        find.byKey(const ValueKey('workspace-bottom-navigation')),
       );
+      expect(bar.items.map((item) => item.label), [
+        '首页',
+        '动态',
+        '我的',
+        '历史',
+        '下载',
+        '设置',
+      ]);
+      expect(bar.currentIndex, 0);
       expect(find.byKey(const ValueKey('channel-live')), findsOneWidget);
       // Reselecting the current destination is a no-op, even without a router.
-      await tester.tap(find.byKey(const ValueKey('workspace-bottom-home')));
+      await tester.tap(find.text('首页'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       for (final width in [599.0, 600.0, 960.0, 1440.0, 599.0]) {
@@ -302,16 +313,23 @@ void main() {
           same(content),
         );
         if (width < 600) {
-          final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
-          expect(
-            bar.destinations.whereType<NavigationDestination>().map(
-              (item) => item.label,
-            ),
-            ['首页', '动态', '我的', '设置'],
+          final bar = tester.widget<LiquidDockNavi>(
+            find.byKey(const ValueKey('workspace-bottom-navigation')),
           );
+          expect(bar.items.map((item) => item.label), [
+            '首页',
+            '动态',
+            '我的',
+            '历史',
+            '下载',
+            '设置',
+          ]);
           expect(find.byKey(const ValueKey('channel-live')), findsOneWidget);
         } else {
-          expect(find.byType(NavigationBar), findsNothing);
+          expect(
+            find.byKey(const ValueKey('workspace-bottom-navigation')),
+            findsNothing,
+          );
           expect(
             find.byKey(const ValueKey('workspace-nav-live')),
             findsOneWidget,
@@ -447,10 +465,12 @@ void main() {
             find.byKey(const ValueKey('workspace-bottom-navigation')),
             width < 600 ? findsOneWidget : findsNothing,
           );
-          final hasBack = location == '/history';
+          // Primary destinations share the fixed root tab, so none of them
+          // carries a page-local back header — 历史 included.
           expect(
             find.byKey(const ValueKey('workspace-page-back-header')),
-            hasBack ? findsOneWidget : findsNothing,
+            findsNothing,
+            reason: '$location width=$width',
           );
           expect(
             tester.takeException(),
@@ -524,17 +544,14 @@ void main() {
             );
             expect(icon.icon, Icons.rss_feed_rounded);
           } else {
-            final bar = tester.widget<NavigationBar>(
-              find.byType(NavigationBar),
+            final bar = tester.widget<LiquidDockNavi>(
+              find.byKey(const ValueKey('workspace-bottom-navigation')),
             );
-            final destination = bar.destinations
-                .whereType<NavigationDestination>()
-                .singleWhere((item) => item.label == '动态');
-            expect((destination.icon as Icon).icon, Icons.rss_feed_rounded);
-            expect(
-              (destination.selectedIcon as Icon).icon,
-              Icons.rss_feed_rounded,
+            final destination = bar.items.singleWhere(
+              (item) => item.label == '动态',
             );
+            expect(destination.icon, Icons.rss_feed_rounded);
+            expect(destination.selectedIcon, Icons.rss_feed_rounded);
           }
           expect(
             tester.takeException(),
@@ -724,14 +741,18 @@ void main() {
         );
       }
       if (width < 600) {
-        final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
-        expect(
-          bar.destinations.whereType<NavigationDestination>().map(
-            (item) => item.label,
-          ),
-          ['首页', '动态', '我的', '设置'],
+        final bar = tester.widget<LiquidDockNavi>(
+          find.byKey(const ValueKey('workspace-bottom-navigation')),
         );
-        expect(bar.selectedIndex, 0);
+        expect(bar.items.map((item) => item.label), [
+          '首页',
+          '动态',
+          '我的',
+          '历史',
+          '下载',
+          '设置',
+        ]);
+        expect(bar.currentIndex, 0);
       }
       expect(tester.takeException(), isNull, reason: '$width');
     }
@@ -783,9 +804,6 @@ void main() {
             );
             final element = tester.element(content);
             final before = tester.getSize(content);
-            final navigationHeight = compact
-                ? tester.getSize(navigation).height
-                : 0.0;
             await tester.enterText(search, '测试草稿');
             await tester.pumpAndSettle();
             builds = 0;
@@ -804,10 +822,11 @@ void main() {
               }
               expect(builds, 0);
               expect(tester.element(content), same(element));
-              expect(
-                tester.getSize(content).height,
-                before.height - inset + (inset > 0 ? navigationHeight : 0),
-              );
+              // Edge-to-edge: the dock overlays the body via
+              // bottomNavigationBar + extendBody, so the page keeps
+              // before.height minus the keyboard inset at every step; the
+              // dock no longer occupies body layout space when it hides.
+              expect(tester.getSize(content).height, before.height - inset);
               final field = tester.widget<TextField>(search);
               expect(field.controller?.text, '测试草稿');
               expect(
@@ -857,7 +876,6 @@ void main() {
           final content = find.byKey(const ValueKey('retained-content'));
           final search = find.byKey(const ValueKey('workspace-search'));
           final before = tester.getSize(content).height;
-          final navigationHeight = tester.getSize(navigation).height;
           await tester.enterText(search, '保留草稿');
           tester.view.viewInsets = const FakeViewPadding(bottom: 320);
           await tester.pumpAndSettle();
@@ -869,12 +887,11 @@ void main() {
             expect(tester.getSize(content).height, before);
             expect(navigation.hitTestable(), findsOneWidget);
           } else {
-            expect(tester.getSize(content).height, before + navigationHeight);
+            // Edge-to-edge: the dock overlays the body, so the reveal
+            // animates only the bar's own opacity/height, never the page.
+            expect(tester.getSize(content).height, before);
             await tester.pump(const Duration(milliseconds: 60));
-            expect(
-              tester.getSize(content).height,
-              inExclusiveRange(before, before + navigationHeight),
-            );
+            expect(tester.getSize(content).height, before);
             expect(
               tester
                   .widget<Opacity>(
@@ -895,10 +912,7 @@ void main() {
           tester.view.viewInsets = const FakeViewPadding(bottom: 160);
           await tester.pump();
           expect(navigation, findsNothing);
-          expect(
-            tester.getSize(content).height,
-            before + navigationHeight - 160,
-          );
+          expect(tester.getSize(content).height, before - 160);
           tester.view.viewInsets = const FakeViewPadding();
           await tester.pumpAndSettle();
           expect(tester.getSize(content).height, before);
