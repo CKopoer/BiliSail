@@ -1561,6 +1561,10 @@ void main() {
           () => find.byTooltip('全屏（F）').evaluate().isNotEmpty,
         );
         final nativeWindow = NativePlaybackWindow(playbackView.viewId);
+        // Saved geometry can reopen this fixture maximized. Establish the
+        // normal-window case explicitly before testing fullscreen restoration.
+        nativeWindow.restore();
+        await _until(tester, () => !nativeWindow.isMaximized);
         nativeWindow.resize(1000, 700);
         await tester.pump(const Duration(milliseconds: 150));
         final userSize = nativeWindow.outerSize;

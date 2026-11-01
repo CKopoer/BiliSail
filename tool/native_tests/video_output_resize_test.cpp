@@ -1,4 +1,4 @@
-// Exercise the production resize and descriptor callbacks with real D3D11
+// Exercise the production resize and descriptor callbacks with real ANGLE/D3D11
 // resources and a controlled Flutter registrar. No Flutter process is needed.
 #include <flutter/texture_registrar.h>
 
@@ -10,15 +10,18 @@
 #include <stdexcept>
 #include <unordered_map>
 
-#include "d3d11_renderer.h"
+#include "angle_surface_manager.h"
+#include <GLES2/gl2.h>
+#include <client.h>
+#include <render.h>
+#include <render_gl.h>
 
 void Require(bool condition, const char* message) {
   if (!condition) throw std::runtime_error(message);
 }
 
 // Resize's render-context branch is covered by the Flutter integration test.
-void mpv_render_context_render(void*, void*) {}
-void mpv_render_context_report_swap(void*) {}
+int mpv_render_context_render(mpv_render_context*, mpv_render_param*) { return 0; }
 
 struct Registrar {
   Registrar* texture_registrar() { return this; }
@@ -34,7 +37,7 @@ class VideoOutput {
  public:
   VideoOutput(Registrar& registrar, bool hardware) : registrar_(&registrar) {
     if (hardware) {
-      d3d11_renderer_ = std::make_unique<D3D11Renderer>(320, 180);
+      surface_manager_ = std::make_unique<ANGLESurfaceManager>(320, 180);
     } else {
       pixel_buffer_ = std::make_unique<uint8_t[]>(640 * 360 * 4);
     }
@@ -42,7 +45,7 @@ class VideoOutput {
   void Resize(int64_t width, int64_t height);
 
   std::mutex textures_mutex_;
-  std::unique_ptr<D3D11Renderer> d3d11_renderer_;
+  std::unique_ptr<ANGLESurfaceManager> surface_manager_;
   Microsoft::WRL::ComPtr<ID3D11Texture2D> last_video_texture_;
   HANDLE last_video_handle_ = nullptr;
   FlutterDesktopPixelBuffer last_pixel_buffer_{};
@@ -54,7 +57,7 @@ class VideoOutput {
       textures_;
   std::unordered_map<int64_t, std::unique_ptr<flutter::TextureVariant>>
       texture_variants_;
-  void* render_context_ = nullptr;
+  mpv_render_context* render_context_ = nullptr;
   int64_t texture_id_ = 0;
   Registrar* registrar_;
   std::atomic<bool> destroyed_{false};
@@ -64,19 +67,11 @@ class VideoOutput {
 
 #include "video_output_resize.inc"
 
-void SubmitFrame(D3D11Renderer& renderer) {
-  Microsoft::WRL::ComPtr<ID3D11Texture2D> target;
-  Require(SUCCEEDED(renderer.swap_chain()->GetBuffer(0, IID_PPV_ARGS(&target))),
-          "render target unavailable");
-  Microsoft::WRL::ComPtr<ID3D11RenderTargetView> view;
-  Require(SUCCEEDED(renderer.device()->CreateRenderTargetView(target.Get(),
-                                                              nullptr, &view)),
-          "render target view unavailable");
-  Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
-  renderer.device()->GetImmediateContext(&context);
-  constexpr float green[]{0, 1, 0, 1};
-  context->ClearRenderTargetView(view.Get(), green);
-  renderer.ProducerCommit();
+void SubmitFrame(ANGLESurfaceManager& renderer) {
+  renderer.Draw([] {
+    glClearColor(0, 1, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+  });
 }
 
 void HardwareDescriptorsSurviveReleaseAndResize() {
@@ -85,7 +80,7 @@ void HardwareDescriptorsSurviveReleaseAndResize() {
   output.Resize(320, 180);
   const auto& callback =
       std::get<flutter::GpuSurfaceTexture>(*registrar.variant);
-  SubmitFrame(*output.d3d11_renderer_);
+  SubmitFrame(*output.surface_manager_);
   const auto* descriptor = callback.ObtainDescriptor(320, 180);
   Require(descriptor && descriptor->handle, "no completed GPU descriptor");
   for (const auto width : {640, 256, 960, 320}) {
@@ -103,7 +98,7 @@ void HardwareDescriptorsSurviveReleaseAndResize() {
         fallback && fallback->visible_width == old_width,
         "resize exposed an unpainted mailbox instead of the previous frame");
     fallback->release_callback(fallback->release_context);
-    SubmitFrame(*output.d3d11_renderer_);
+    SubmitFrame(*output.surface_manager_);
     descriptor = callback.ObtainDescriptor(width, width * 9 / 16);
     Require(
         descriptor && descriptor->visible_width == static_cast<size_t>(width),

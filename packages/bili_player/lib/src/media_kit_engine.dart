@@ -8,6 +8,7 @@ import 'android_media_leases.dart';
 import 'player_diagnostics.dart';
 import 'native_readiness.dart';
 import 'native_media_options.dart';
+import 'native_player_properties.dart';
 import 'native_error_monitor.dart';
 import 'native_playback_health.dart';
 import 'native_load_observer.dart';
@@ -176,12 +177,12 @@ final class MediaKitEngine
   /// Null means unavailable or superseded; no raw native strings are exposed.
   Future<String?> inspectHardwareDecoder() async {
     final player = _player;
-    final platform = player?.platform;
+    final platform = player;
     final generation = _generation;
-    if (platform is! mk.NativePlayer || _disposed) return null;
+    if (platform == null || _disposed) return null;
     try {
       final value = await platform
-          .getProperty('hwdec-current')
+          .getPropertyAsync('hwdec-current')
           .timeout(const Duration(seconds: 2));
       if (_disposed ||
           generation != _generation ||
@@ -199,15 +200,15 @@ final class MediaKitEngine
   Future<({double? avsyncSeconds, int? frameDrops, int? decoderDrops})>
   inspectNativePlaybackTiming() async {
     final player = _player;
-    final platform = player?.platform;
+    final platform = player;
     final generation = _generation;
-    if (platform is! mk.NativePlayer || _disposed) {
+    if (platform == null || _disposed) {
       return (avsyncSeconds: null, frameDrops: null, decoderDrops: null);
     }
     Future<String?> read(String property) async {
       try {
         return await platform
-            .getProperty(property)
+            .getPropertyAsync(property)
             .timeout(const Duration(seconds: 2));
       } on Object {
         return null;
@@ -266,12 +267,12 @@ final class MediaKitEngine
     final before = _snapshot;
     Duration? audioPosition;
     try {
-      final platform = player?.platform;
-      if (_watchDashContinuity && platform is mk.NativePlayer) {
+      final platform = player;
+      if (_watchDashContinuity && platform != null) {
         try {
           final value = double.tryParse(
             await platform
-                .getProperty('audio-pts')
+                .getPropertyAsync('audio-pts')
                 .timeout(const Duration(seconds: 1)),
           );
           if (value != null && value.isFinite) {
@@ -345,7 +346,9 @@ final class MediaKitEngine
           );
           try {
             // A failed phase alone does not stop mpv's external audio clock.
-            await player.pause().timeout(const Duration(seconds: 2));
+            await player.pauseWithStringFlag().timeout(
+              const Duration(seconds: 2),
+            );
           } on Object {
             if (generation != _generation || _disposed) return;
             await _releasePlayer();
@@ -417,9 +420,6 @@ final class MediaKitEngine
   bool _hasRealTrack(List<mk.VideoTrack> tracks) =>
       tracks.any((track) => track.id != 'auto' && track.id != 'no');
 
-  static const _externalAudioProperty =
-      'current-tracks/audio/external-filename';
-
   Future<Completer<void>> _configureExternalAudio(
     mk.Player player,
     MediaTrack audio,
@@ -427,23 +427,12 @@ final class MediaKitEngine
     Stopwatch watch,
     Duration budget,
   ) async {
-    final platform = player.platform;
-    if (platform is! mk.NativePlayer) {
-      throw PlayerFailure(
-        PlayerFailureKind.nativePlayback,
-        'The playback backend cannot prepare external audio.',
-        generation,
-      );
-    }
+    final platform = player;
+
     final ready = Completer<void>();
     final uri = audio.uri.toString();
     await platform
-        .observeProperty(_externalAudioProperty, (value) async {
-          if (value == uri && !ready.isCompleted) ready.complete();
-        })
-        .timeout(_remaining(watch, budget));
-    await platform
-        .setProperty(
+        .setPropertyAsync(
           'audio-files',
           mpvPathListEntry(audio.uri, windows: Platform.isWindows),
         )
@@ -451,7 +440,7 @@ final class MediaKitEngine
     // The locked SDK does not propagate property errors. Read back before
     // opening, without emitting the signed URL into diagnostics.
     final applied = await platform
-        .getProperty('audio-files')
+        .getPropertyAsync('audio-files')
         .timeout(_remaining(watch, budget));
     if (applied != uri) {
       throw PlayerFailure(
@@ -471,14 +460,8 @@ final class MediaKitEngine
     Stopwatch watch,
     Duration budget,
   ) async {
-    final platform = player.platform;
-    if (platform is! mk.NativePlayer) {
-      throw PlayerFailure(
-        PlayerFailureKind.nativePlayback,
-        'The playback backend cannot limit forward buffering.',
-        generation,
-      );
-    }
+    final platform = player;
+
     final seconds = window.inMicroseconds / Duration.microsecondsPerSecond;
     final live = switch (source) {
       ManifestSource(:final isLive) ||
@@ -515,12 +498,12 @@ final class MediaKitEngine
         throw const SourceSuperseded();
       }
       await platform
-          .setProperty(entry.key, entry.value)
+          .setPropertyAsync(entry.key, entry.value)
           .timeout(_remaining(watch, budget));
       // The locked SDK does not propagate mpv_set_property_string errors.
       // Verify the requested limit before any media URL can start loading.
       final applied = await platform
-          .getProperty(entry.key)
+          .getPropertyAsync(entry.key)
           .timeout(_remaining(watch, budget));
       final expectedNumber = double.tryParse(entry.value);
       final matches = expectedNumber == null
@@ -612,30 +595,45 @@ final class MediaKitEngine
         final watch = Stopwatch()..start();
         final openBudget = options.openTimeout;
         initializePlayerBackend();
-        final player = mk.Player(
-          configuration: const mk.PlayerConfiguration(
-            logLevel: mk.MPVLogLevel.warn,
+        final player = await waitForNativeResource(
+          creating: mk.Player.create(
+            configuration: const mk.PlayerConfiguration(
+              logLevel: mk.MPVLogLevel.warn,
+            ),
           ),
+          dispose: (player) => player.dispose(),
+          superseded: () => generation != _generation || _disposed,
+          changes: [_generationChanges.stream],
+          timeout: _remaining(watch, openBudget),
         );
-        _player = player;
-        final platform = player.platform;
-        if (platform is mk.NativePlayer) {
-          _audioGain = NativeAudioGain(
-            write: platform.setProperty,
-            read: platform.getProperty,
-            isCurrent: () =>
-                generation == _generation &&
-                !_disposed &&
-                identical(_player, player),
-          );
+        if (generation != _generation || _disposed) {
+          await player.dispose();
+          return;
         }
+        _player = player;
+        final platform = player;
+
+        _audioGain = NativeAudioGain(
+          write: platform.setPropertyAsync,
+          read: platform.getPropertyAsync,
+          isCurrent: () =>
+              generation == _generation &&
+              !_disposed &&
+              identical(_player, player),
+        );
+
         _subscribe(player, generation);
         final audioOnly = source is ProgressiveSource && source.isAudioOnly;
         if (!audioOnly) {
-          _videoOutput.bindPlayer(
-            player,
-            generation: generation,
-            decoding: options.videoDecoding,
+          await waitForNativeSignal(
+            signal: _videoOutput.bindPlayer(
+              player,
+              generation: generation,
+              decoding: options.videoDecoding,
+            ),
+            superseded: () => generation != _generation || _disposed,
+            changes: [_generationChanges.stream],
+            timeout: _remaining(watch, openBudget),
           );
         }
         await _configureBufferAhead(
@@ -653,12 +651,9 @@ final class MediaKitEngine
           DashVideoSource() => false,
         };
         if (rateAdjustable) {
-          if (platform is! mk.NativePlayer) {
-            throw StateError('Native audio tempo control is unavailable.');
-          }
           await configureNativeTempoFilter(
-            write: platform.setProperty,
-            read: platform.getProperty,
+            write: platform.setPropertyAsync,
+            read: platform.getPropertyAsync,
             isCurrent: () =>
                 generation == _generation &&
                 !_disposed &&
@@ -667,16 +662,9 @@ final class MediaKitEngine
           );
         }
         if (experimentalVideoFrameQueue && source is DashPairSource) {
-          if (platform is! mk.NativePlayer) {
-            throw PlayerFailure(
-              PlayerFailureKind.nativePlayback,
-              'The playback backend cannot configure video frame buffering.',
-              generation,
-            );
-          }
           await configureNativeVideoFrameQueue(
-            write: platform.setProperty,
-            read: platform.getProperty,
+            write: platform.setPropertyAsync,
+            read: platform.getPropertyAsync,
             isCurrent: () =>
                 generation == _generation &&
                 !_disposed &&
@@ -688,8 +676,8 @@ final class MediaKitEngine
         if (generation != _generation || _disposed) return;
         // Register the track before loadfile. mpv loads it in its cancellable
         // file-loading worker, instead of holding media_kit's command lock in
-        // audio-add while network I/O stalls. Both tracks use the on_load
-        // header hook; _validate requires identical, credential-free headers.
+        // audio-add while network I/O stalls. Both tracks share the player's
+        // explicit headers; _validate requires identical credential-free values.
         final audioReady = audioTrack == null
             ? null
             : await _configureExternalAudio(
@@ -700,26 +688,39 @@ final class MediaKitEngine
                 openBudget,
               );
         if (generation != _generation || _disposed) return;
-        if (platform is mk.NativePlayer) {
-          final load = await NativeLoadObserver.attach(
-            platform,
-            isCurrent: () =>
-                generation == _generation &&
-                !_disposed &&
-                identical(_player, player),
-            onFailure: (code) => _diagnose(
-              PlayerDiagnosticKind.openTerminated,
-              nativeErrorCode: code,
-            ),
-          ).timeout(_remaining(watch, openBudget));
-          _nativeLoad = load;
-        }
+
+        final load = await NativeLoadObserver.attach(
+          platform,
+          isCurrent: () =>
+              generation == _generation &&
+              !_disposed &&
+              identical(_player, player),
+          onExternalAudio: audioReady == null
+              ? null
+              : (uri) {
+                  if (uri == audioTrack?.uri.toString() &&
+                      !audioReady.isCompleted) {
+                    audioReady.complete();
+                  }
+                },
+          onFailure: (code) => _diagnose(
+            PlayerDiagnosticKind.openTerminated,
+            nativeErrorCode: code,
+          ),
+        ).timeout(_remaining(watch, openBudget));
+        _nativeLoad = load;
+
         if (generation != _generation || _disposed) return;
+        final headers = nativeMediaHeaders(mediaTrack.requestPolicy.headers);
+        player.setMediaHeader(
+          userAgent: headers.userAgent,
+          referer: headers.referer,
+          headers: headers.fields,
+        );
         await player
-            .open(
+            .openPausedMedia(
               mk.Media(
                 mediaTrack.uri.toString(),
-                httpHeaders: mediaTrack.requestPolicy.headers,
                 // Resume as part of loading, before decoding the first frame.
                 // Opening at zero and seeking afterward buffers twice when
                 // returning from audio-only playback.
@@ -727,14 +728,13 @@ final class MediaKitEngine
                     ? options.startPosition
                     : null,
               ),
-              play: false,
             )
             .timeout(_remaining(watch, openBudget));
         if (generation != _generation || _disposed) return;
         _readinessStage = NativeReadinessStage.tracks;
         if (source is DashPairSource || source is DashVideoSource) {
-          // Player.open only acknowledges loadlist. Wait for actual demuxed
-          // tracks after the on_load header hook has run.
+          // Player.open acknowledges playlist setup. Wait for the actual
+          // demuxed tracks after headers have been applied.
           await _waitReady(
             player,
             generation,
@@ -807,9 +807,6 @@ final class MediaKitEngine
             timeout: _remaining(watch, openBudget),
             failure: () => _loadFailure(generation),
           );
-          await (player.platform as mk.NativePlayer)
-              .unobserveProperty(_externalAudioProperty)
-              .timeout(_remaining(watch, openBudget));
           _requiresDecodedAudio = true;
         } else if (source is DashPairSource || source is DashVideoSource) {
           await player
@@ -855,7 +852,7 @@ final class MediaKitEngine
               .timeout(_remaining(watch, openBudget));
         }
         if (options.startPosition > Duration.zero) {
-          // Media.start is applied by the backend's on_load hook. Confirm its
+          // Media.start is applied by the backend's loadfile options. Confirm its
           // position event without issuing a second seek after video is ready.
           final duration = player.state.duration;
           final target =
@@ -891,7 +888,9 @@ final class MediaKitEngine
         );
         _diagnose(PlayerDiagnosticKind.openReady);
         if (options.play) {
-          await player.play().timeout(_remaining(watch, openBudget));
+          await player.playWithStringFlag().timeout(
+            _remaining(watch, openBudget),
+          );
           if (_requiresDecodedAudio) {
             await _waitForDecodedAudio(
               player,
@@ -910,7 +909,9 @@ final class MediaKitEngine
             );
           }
         } else {
-          await player.pause().timeout(_remaining(watch, openBudget));
+          await player.pauseWithStringFlag().timeout(
+            _remaining(watch, openBudget),
+          );
           if (generation == _generation && !_disposed) {
             _publish(_snapshot.copyWith(phase: PlaybackPhase.paused));
           }
@@ -1238,7 +1239,9 @@ final class MediaKitEngine
           generation,
         );
         try {
-          await player.pause().timeout(const Duration(seconds: 2));
+          await player.pauseWithStringFlag().timeout(
+            const Duration(seconds: 2),
+          );
         } on Object {
           if (generation == _generation && !_disposed) await _releasePlayer();
         }
@@ -1255,7 +1258,7 @@ final class MediaKitEngine
     final generation = _generation;
     return _command(
       (player) async {
-        await player.play();
+        await player.playWithStringFlag();
         if (_requiresDecodedAudio) {
           try {
             await _waitForDecodedAudio(
@@ -1265,7 +1268,7 @@ final class MediaKitEngine
             );
           } on PlayerFailure {
             // A video-only result is not a successful DASH playback session.
-            await player.pause();
+            await player.pauseWithStringFlag();
             rethrow;
           }
         }
@@ -1279,7 +1282,7 @@ final class MediaKitEngine
 
   @override
   Future<void> pause() => _command(
-    (player) => player.pause(),
+    (player) => player.pauseWithStringFlag(),
     optimistic: (s) => s.copyWith(desiredPlaying: false),
   );
   @override

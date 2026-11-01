@@ -1,5 +1,7 @@
 # canvas_danmaku 与 Predidit media-kit 切换方案
 
+> 2026-11-01 后续：按用户要求已改为 PiliPlus 锁定的依赖，当前实现见[依赖切换](validation/piliplus-dependencies-2026-11-01.md)。本文保留 Predidit 迁移及其历史验证，不能作为当前分支／原生库说明。
+
 日期：2026-10-29。用户要求将弹幕绘制与播放器依赖切换到 Predidit 的实现。本文同时记录实施范围和实际验证；构建、设备验收、性能结果分别列出。
 
 ## 固定来源

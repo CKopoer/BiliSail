@@ -1,23 +1,24 @@
-# Predidit media-kit Windows 渲染与释放补丁
+# PiliPlus media-kit Windows 构建副本适配
 
-来源：[Predidit/media-kit](https://github.com/Predidit/media-kit/tree/83b7ca63772856e1ea0158916177e136f7b7b0be)，当前固定提交 `83b7ca63772856e1ea0158916177e136f7b7b0be`。仅在构建目录复制其 Windows 源文件并修正 D3D11 mailbox、纹理交付和释放生命周期；不修改 Pub 缓存或 Android/macOS 实现。上游代码为 MIT，许可保存在 [LICENSE](LICENSE)，源文件版权头保留。libmpv 来自固定依赖的 Native Assets 钩子，见[原生资产来源](../../native/PREDIDIT_SOURCE.md)。
+当前来源为 MIT 的 [bggRGjQaUbCoE/media-kit](https://github.com/bggRGjQaUbCoE/media-kit/tree/fd8421d21eade4d6d12de137fa7df902fec20292)，固定完整提交 `fd8421d21eade4d6d12de137fa7df902fec20292`，与 PiliPlus 的锁文件一致。版权与许可保留在 [LICENSE](LICENSE)。只校验和修改构建副本，不修改 Pub 缓存、相邻仓库或其他平台实现；依赖变化时必须重新审查八个源文件 SHA-256 及补丁锚点。
 
-`apply.cmake` 在 Windows 插件目标创建后校验九个上游源文件的 SHA-256，将副本作为该目标的编译输入。依赖升级或源文件变化时配置失败，必须重新审查补丁，不能静默跳过。普通 `flutter build windows` 与 MSIX 打包共用此入口。
+`plugin_main_thread.inc` 通过每个插件实例自己的 message-only HWND，将 Resize 通知和 Dispose 回复送回平台线程，兼容隐式 view 和独立播放窗。没有全局插件 owner，也不替换其他组件的 WndProc。
 
-修正包括：方法通道等待原生 Dispose 完成；停止渲染通知并排空在途任务；等待纹理的注销回调；在渲染线程释放 mpv 渲染上下文，然后销毁 D3D11 输出。没有纹理时不等待不存在的回调。重复到达、尚未执行的渲染通知只排一个任务；执行期间的新通知会在队列尾部再排一次，避免长时间占住共用渲染线程。暂停、SetSize 与视口变化仍强制重绘。
+`video_output_dispose.inc` 停止通知、排空渲染队列、等待 Flutter 纹理注销回调，在原渲染线程及当前 GL 上下文释放 mpv，然后释放 ANGLE surface。方法通道仅在这些步骤完成后回复 Dispose。重复渲染通知合并，执行期间的新通知放回队尾，避免阻塞共用渲染线程。
 
-尺寸方法改用 Dart 原生适配器通过 SetSize 发送的显示尺寸，避免在共用渲染线程同步调用 mpv 核心 API。另由当前挂载的 VideoSurface 按布局与设备像素比发送视口上限，原生端按源显示比例限制中间输出纹理，不改变源分辨率或解码设置。新视口所有者立即解除旧上限；放大立即更新，缩小延迟 300 ms，原生单调 revision 防止异步通道请求逆序覆盖。首帧／暂停时的尺寸更新立即触发检查和绘制，主视频与预览继续使用 GPU 渲染。纹理交付和同步采用下述 GPU 队列补丁。
+尺寸通过 Dart 的解码显示尺寸／SetSize 和当前 VideoSurface 的独立视口上限传入，避免共用渲染线程同步查询 mpv。保留放大即时、缩小延迟 300ms、单调 revision 和新视口所有者解除旧上限的规则。
 
-`video_output_resize.inc` 在信息区切换和窗口缩放时保留 Flutter 纹理 ID，以同一把互斥锁串行化 mailbox 重分配、绘制和帧快照获取。每个交付给 Flutter 的 GPU descriptor 持有对应纹理的 COM 引用，由 Flutter 的 release callback 释放，避免缩放销毁尚在使用的共享句柄。descriptor 自身保留至纹理注销，兼容 Flutter 在资源 release 后继续读取可见尺寸；软件输出也保留纹理注册及独立 descriptor。
+`angle_gpu_queue.inc` 在可用时借用 ANGLE 的 D3D11 immediate context；Flutter 位于同一设备时直接交付，其他设备保留复制回退。相同帧不重复复制；旧设备保留原同步路径。
 
-`mailbox_first_frame.inc` 只在新分配的首帧等待 fence（最多 100 ms）并直接发布已完成槽，确保暂停时的一次重绘可见；超时继续提供上一张已完成纹理。后续播放帧沿用上游非阻塞 fence 检查。
+`video_output_resize.inc` 保留 Flutter 纹理 ID，并以相同互斥锁串行化缩放、渲染和 descriptor 获取。每次交付通过 COM 引用保留对应 GPU 纹理；Flutter release 之后仍可读取 descriptor 的可见尺寸。新分配尚无帧时继续提供上一个已绘制纹理；实际暂停帧在缩放时主动重绘。软件输出继续保留独立 descriptor。
 
-`.inc` 是编译到上游类中的替换方法，不是构建产物。生命周期/队列测试不依赖播放器、显卡或 Flutter 进程：`pwsh -File tool/test-windows-video-dispose.ps1`。真实 D3D11 纹理像素、单帧 resize 与旧帧资源保留由 `pwsh -File tool/test-windows-gpu-queue.ps1` 验证；此测试需要 Windows GPU，CPU 回读仅在测试 staging texture 中使用。Flutter 原生布局、纹理 ID 和播放意图由 `integration_test/windows_video_resize_test.dart` 验证。原因和当前验证边界见[缩放闪黑记录](../../../docs/validation/windows-video-resize-2026-10-30.md)。`angle_gpu_queue.inc` 及下列 ANGLE 性能文档属于迁移前历史，不是当前输出路径。
+libmpv 与 ANGLE 来自固定库插件，不启用 `native/mpv.cmake` 的历史覆盖；当前摘要及分发范围见[原生来源](../../native/PILIPLUS_SOURCE.md)。`mailbox_first_frame.inc` 仅保留为旧 D3D11 记录，当前不编译。
 
-故障证据、设计及验收范围见 [验证记录](../../../docs/validation/windows-preview-dispose.md)。
+验证入口：
 
-悬停卡顿原因、保留 GPU 的方案与 Profile 对照见 [预览出帧争用](../../../docs/validation/video-preview-contention.md)。`BILISAIL_VIDEO_RENDER_TRACE=1` 仅供该探针构建记录耗时；常规构建不加入逐帧诊断代码。
+- `tool/test-windows-video-dispose.ps1`：9 项受控生命周期／队列／尺寸回归。
+- `tool/test-windows-gpu-queue.ps1`：真实 ANGLE/D3D11 的 100 帧共享、复制回退、缩放与共享 display 生命周期，以及生产 resize／descriptor 回调的资源保留。
+- `integration_test/windows_video_resize_test.dart`：实际 Flutter 播放、暂停与信息区／窗口尺寸切换时保持同一 texture 并检查像素。
+- `tool/test-windows-media.ps1`／`tool/test-windows-content.ps1`：本地音视频分轨、headers、续播、PGC／直播等回归。
 
-本次视口尺寸和 Windows GPU Engine 的受控 Profile 对照见 [渲染性能验证](../../../docs/validation/windows-video-render-performance-2026-10-11.md)。性能结论以实际设备和素材为限，不能把输出像素面积下降直接等同于 GPU 忙碌率下降。
-
-`pwsh -NoProfile -File tool/test-windows-video-render.ps1 -Label run-720 -Height 720 -GenerateFixture` 可在仓库根目录生成或复用同参数的 50 秒测试片并执行 Profile 探针；结果写入 `build/validation/windows-video-render-run-720.json`、同名日志、`.fixture.json` 素材 SHA-256 元数据与 `windows-gpu-engine-run-720.jsonl`。传入 `-MediaDir` 可复用指定素材，`-ExePath` 可运行已保存的旧版 Profile 可执行目录做交替对照。脚本在 Flutter 构建后还原普通 CMake 配置。独立分轨检查使用 `tool/validation/windows_dash_render_probe.dart`，不会混入单文件 A/B 指标。
+本轮结果及未测项见[依赖切换](../../../docs/validation/piliplus-dependencies-2026-11-01.md)。历史 ANGLE／D3D11 性能记录只描述当时的完整配置，不能直接作为本次切换的性能结论。

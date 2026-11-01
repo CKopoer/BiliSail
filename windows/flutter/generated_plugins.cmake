@@ -6,6 +6,8 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   flutter_inappwebview_windows
   flutter_secure_storage_windows
+  flutter_volume_controller
+  media_kit_libs_windows_video
   media_kit_video
   screen_retriever_windows
   url_launcher_windows
@@ -15,6 +17,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
   bili_mux
   jni
+  media_kit_native_event_loop
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

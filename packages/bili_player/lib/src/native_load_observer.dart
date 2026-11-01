@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ffi';
 
 import 'package:media_kit/media_kit.dart' as mk;
+import 'package:ffi/ffi.dart';
 
 import 'native_readiness.dart';
 
@@ -52,10 +53,11 @@ final class NativeLoadObserver {
     mk.NativePlayer platform, {
     required bool Function() isCurrent,
     required void Function(int errorCode) onFailure,
+    void Function(String filename)? onExternalAudio,
   }) async {
-    final handle = await platform.handle;
+    final handle = platform.handle;
     if (!isCurrent()) throw const SourceSuperseded();
-    final mpv = platform.mpv;
+    final mpv = mk.NativePlayer.mpv;
     final client = mpv.mpv_create_weak_client(
       Pointer.fromAddress(handle),
       nullptr,
@@ -73,7 +75,13 @@ final class NativeLoadObserver {
         final event = mpv.mpv_wait_event(client, 0).ref;
         if (event.event_id == 0) break;
         if (!isCurrent() || event.data == nullptr) continue;
-        if (event.event_id == 6) {
+        if (event.event_id == 22 && onExternalAudio != null) {
+          final property = event.data.cast<_MpvEventProperty>().ref;
+          if (property.format == 1 && property.data != nullptr) {
+            final value = property.data.cast<Pointer<Utf8>>().value;
+            if (value != nullptr) onExternalAudio(value.toDartString());
+          }
+        } else if (event.event_id == 6) {
           state.started(event.data.cast<Int64>().value);
         } else if (event.event_id == 7) {
           final end = event.data.cast<_MpvEndFile>().ref;
@@ -91,6 +99,23 @@ final class NativeLoadObserver {
 
     final wakeup = NativeCallable<Void Function(Pointer<Void>)>.listener(drain);
     try {
+      if (onExternalAudio != null) {
+        final property = 'current-tracks/audio/external-filename'
+            .toNativeUtf8();
+        try {
+          final result = mpv.mpv_observe_property(
+            client,
+            1,
+            property.cast(),
+            1,
+          );
+          if (result < 0) {
+            throw StateError('External audio observation unavailable.');
+          }
+        } finally {
+          calloc.free(property);
+        }
+      }
       mpv.mpv_set_wakeup_callback(client, wakeup.nativeFunction, nullptr);
     } on Object {
       mpv.mpv_destroy(client);
@@ -126,4 +151,12 @@ final class _MpvEndFile extends Struct {
   external int error;
   @Int64()
   external int entryId;
+}
+
+// mpv_event_property layout from the same public client ABI as END_FILE.
+final class _MpvEventProperty extends Struct {
+  external Pointer<Utf8> name;
+  @Int32()
+  external int format;
+  external Pointer<Void> data;
 }

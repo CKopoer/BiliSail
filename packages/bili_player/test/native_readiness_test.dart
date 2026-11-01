@@ -4,6 +4,52 @@ import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final cancel in [true, false]) {
+    test(
+      'late native creation is released after ${cancel ? 'cancel' : 'timeout'}',
+      () async {
+        final creating = Completer<int>();
+        final changes = StreamController<Object?>.broadcast(sync: true);
+        var superseded = false;
+        final released = <int>[];
+        final waiting = waitForNativeResource(
+          creating: creating.future,
+          dispose: (value) async => released.add(value),
+          superseded: () => superseded,
+          changes: [changes.stream],
+          timeout: const Duration(milliseconds: 10),
+        );
+        final assertion = expectLater(
+          waiting,
+          throwsA(cancel ? isA<SourceSuperseded>() : isA<TimeoutException>()),
+        );
+        if (cancel) {
+          superseded = true;
+          changes.add(null);
+        }
+        await assertion;
+        expect(changes.hasListener, false);
+        creating.complete(42);
+        await Future<void>.delayed(Duration.zero);
+        expect(released, [42]);
+        await changes.close();
+      },
+    );
+  }
+
+  test('created native resource transfers to the current owner once', () async {
+    final released = <int>[];
+    final value = await waitForNativeResource(
+      creating: Future.value(42),
+      dispose: (value) async => released.add(value),
+      superseded: () => false,
+      changes: const [],
+      timeout: const Duration(seconds: 1),
+    );
+    expect(value, 42);
+    expect(released, isEmpty);
+  });
+
   test(
     'first output signal is required even after decoder metadata is ready',
     () async {

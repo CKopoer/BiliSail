@@ -56,9 +56,10 @@ add_subdirectory("runner")
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+include(native/piliplus.cmake)
 
-# Predidit media-kit bundles its matching DXGI libmpv with Native Assets.
-# Do not override it with the former ANGLE-only library.
+# PiliPlus's library plugin supplies the matching libmpv and ANGLE binaries.
+# Do not apply the historical app-specific libmpv override in native/mpv.cmake.
 
 include(patches/media_kit_video/apply.cmake)
 bilisail_patch_video_target()
@@ -80,12 +81,12 @@ endif()
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 
-# An incremental build can still contain the former library plugin and ANGLE.
-# They must not be shipped alongside the new Native Assets/D3D11 renderer.
+# Remove obsolete Native Assets provenance before installing the library plugin.
 install(CODE "file(REMOVE
-  \"${INSTALL_BUNDLE_LIB_DIR}/libEGL.dll\"
-  \"${INSTALL_BUNDLE_LIB_DIR}/libGLESv2.dll\"
-  \"${INSTALL_BUNDLE_LIB_DIR}/media_kit_libs_windows_video_plugin.dll\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/native_assets.json\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/media_kit_event_loop.dll\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/media_kit_native_event_loop.dll\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/PREDIDIT_SOURCE.md\"
   \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/SOURCE.md\"
   \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/COPYING.LGPLv2.1\")"
   COMPONENT Runtime)
@@ -94,7 +95,7 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/patches/media_kit_video/LICENSE"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/media_kit_video"
   COMPONENT Runtime)
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/PREDIDIT_SOURCE.md"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/PILIPLUS_SOURCE.md"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/mpv"
   COMPONENT Runtime)
 
@@ -141,7 +142,9 @@ endif()
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"
    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-   COMPONENT Runtime)
+   COMPONENT Runtime
+   PATTERN "libmpv*" EXCLUDE
+   PATTERN "media_kit*" EXCLUDE)
 
 # Fully re-copy the assets directory on each build to avoid having stale files
 # from a previous install.

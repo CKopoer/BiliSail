@@ -1,4 +1,4 @@
-// BiliSail Windows viewport cap for Predidit media-kit 83b7ca6 (MIT; see LICENSE).
+// BiliSail Windows viewport cap for PiliPlus media_kit_video fd8421d (MIT; see LICENSE).
 
 void VideoOutput::SetViewportSize(std::optional<int64_t> width,
                                   std::optional<int64_t> height,

@@ -1,21 +1,21 @@
-// BiliSail stable texture registration for Predidit media-kit 83b7ca6 (MIT).
+// BiliSail stable texture registration for PiliPlus media_kit_video fd8421d (MIT).
 void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
   std::lock_guard<std::mutex> lock(textures_mutex_);
-  if (d3d11_renderer_ != nullptr) {
-    // Retain the last completed allocation before the mailbox releases its
-    // slots. A first-frame GPU timeout can continue displaying this frame.
-    if (auto* texture = d3d11_renderer_->ReadTextureSnapshot()) {
-      last_video_texture_ = texture;
-      last_video_handle_ = d3d11_renderer_->ConsumerAcquire();
-    }
-    d3d11_renderer_->SetSize(static_cast<int32_t>(required_width),
-                             static_cast<int32_t>(required_height));
-    // Finish the new allocation's first redraw before the consumer can acquire
-    // it. This is also needed for paused video, which has no next video frame.
+  if (surface_manager_ != nullptr) {
+    surface_manager_->SetSize(static_cast<int32_t>(required_width),
+                              static_cast<int32_t>(required_height));
+    // Complete the paused/current frame's redraw before a consumer can acquire
+    // the new allocation. Later GPU work remains on the same ordered context.
     if (render_context_ != nullptr) {
-      mpv_render_context_render(render_context_, nullptr);
-      mpv_render_context_report_swap(render_context_);
-      d3d11_renderer_->ProducerCommit();
+      surface_manager_->Draw([&] {
+        mpv_opengl_fbo fbo{0, static_cast<int>(required_width),
+                          static_cast<int>(required_height), 0};
+        mpv_render_param params[]{
+            {MPV_RENDER_PARAM_OPENGL_FBO, &fbo},
+            {MPV_RENDER_PARAM_INVALID, nullptr},
+        };
+        mpv_render_context_render(render_context_, params);
+      });
     }
     if (texture_id_ == 0) {
       auto descriptor = std::make_unique<FlutterDesktopGpuSurfaceDescriptor>();
@@ -25,9 +25,10 @@ void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
               [this](auto, auto) -> const FlutterDesktopGpuSurfaceDescriptor* {
                 std::lock_guard<std::mutex> frame_lock(textures_mutex_);
                 if (destroyed_) return nullptr;
-                if (auto* texture = d3d11_renderer_->ReadTextureSnapshot()) {
-                  last_video_texture_ = texture;
-                  last_video_handle_ = d3d11_renderer_->ConsumerAcquire();
+                if (surface_manager_->HasFrame()) {
+                  last_video_handle_ = surface_manager_->Read();
+                  last_video_texture_ =
+                      surface_manager_->TextureForHandle(last_video_handle_);
                 }
                 if (!last_video_texture_) return nullptr;
                 using TextureReference =
