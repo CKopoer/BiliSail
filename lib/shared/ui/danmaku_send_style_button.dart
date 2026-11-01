@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'app_dialog.dart';
 import 'danmaku_send_style_panel.dart';
+import 'player_controls_menu_scope.dart';
 
 final class DanmakuSendStyleButton extends StatefulWidget {
   const DanmakuSendStyleButton({
@@ -26,6 +27,8 @@ final class _DanmakuSendStyleButtonState extends State<DanmakuSendStyleButton> {
   Future<void> _show() async {
     if (_open || !widget.enabled) return;
     setState(() => _open = true);
+    final onMenuChanged = PlayerControlsMenuScope.maybeOf(context);
+    onMenuChanged?.call(true);
     try {
       final result = await showAppDialog<({int mode, int color})>(
         context: context,
@@ -46,6 +49,7 @@ final class _DanmakuSendStyleButtonState extends State<DanmakuSendStyleButton> {
       );
       if (mounted && widget.enabled && result != null) widget.onChanged(result);
     } finally {
+      onMenuChanged?.call(false);
       if (mounted) setState(() => _open = false);
     }
   }

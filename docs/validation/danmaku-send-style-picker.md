@@ -28,3 +28,16 @@
 - Windows Debug 原生合成预览、热重载通过，工具报告无运行时错误，实际检查普通／自定义／大字号画面，截图为 `artifacts/danmaku-style-picker-windows.png`。预览结束后，普通入口 `lib/main.dart` 的 Windows Debug 构建通过，日志为 `artifacts/danmaku-style-normal-build.log`。
 
 本轮没有发布真实测试弹幕。Android／Apple／Linux 原生输入法、触摸手感与读屏设备验收仍待执行。
+
+## Windows 格式确认丢失修复（2026-11-01，#52）
+
+[问题 #52](https://github.com/CKopoer/BiliSail/issues/52) 报告确认发送格式后再次打开恢复默认，发送仍使用默认值。根因是样式面板没有参与播放器现有的菜单显隐保护：面板打开后，点击模式等待 5 秒，或动态模式移出播放器／等待 2.5 秒，控件淡出并销毁发送栏。面板本身仍在 Navigator 上显示，但确认回调发现原样式按钮已经卸载，丢弃了选择。
+
+共享控件新增 [PlayerControlsMenuScope](../../lib/shared/ui/player_controls_menu_scope.dart)，将发送栏内的样式面板接入播放器同一菜单计数。打开面板前暂停控件自动隐藏，确认、取消、关闭按钮、遮罩及 Escape 返回后释放保护，恢复原来的隐藏规则。视频与影视、普通与全屏沿用同一入口；发送样式仍由当前 `PlaybackSession` 持有，点击“完成”提交，其他关闭方式丢弃未确认编辑。
+
+验证：
+
+- [播放器组件回归](../../test/features/playback/playback_panel_test.dart) 新增点击／动态 × 普通／全屏四项测试，修复前四项均复现默认白色滚动样式未改变，修复后全部通过。测试包含面板打开后鼠标移出并等待 6 秒、确认顶部粉色、重新打开、取消新颜色、真实发送控制器参数，以及面板关闭后控件再次自动隐藏。
+- [样式面板回归](../../test/shared/ui/danmaku_send_style_button_test.dart) 验证确认及四种取消方式的菜单计数配对；连同视频发送／输入框和影视发送回归，共 63 项通过。
+- `tool/check.ps1 -SkipPub` 通过格式、静态分析、打包边界及 4810 项测试（根应用 3980、API 541、播放器 131、弹幕 153、mux 5）。根应用按既有条件跳过 13 项；未配置 `BILI_MUX_LIBRARY`，10 项 mux 原生用例跳过，不属于原生验证通过。日志：`artifacts/issue-52/check.log`。本文相对链接和 `git diff --check` 通过。
+- 按用户要求未构建、未实机测试、未发送真实弹幕；没有活动调试应用可热重载。设备交互与真实账号发送效果由后续构建验收。

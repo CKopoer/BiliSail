@@ -5584,6 +5584,102 @@ void main() {
     }
   }
 
+  for (final mode in PlayerControlsMode.values) {
+    for (final fullscreen in [false, true]) {
+      testWidgets(
+        'danmaku style applies after idle and pointer exit mode=$mode fullscreen=$fullscreen',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = const Size(1400, 900);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final engine = _FakeEngine();
+          final session = _session(engine);
+          final actions = FakeActions();
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                authRepositoryProvider.overrideWithValue(FakeAuth(true)),
+                videoActionsRepositoryProvider.overrideWithValue(actions),
+              ],
+              child: _app(
+                session,
+                _FakeWindowService(),
+                AppSettings(playerControlsMode: mode),
+                width: 1200,
+                composer: (_) => VideoDanmakuComposer(
+                  detail: VideoDetail(
+                    summary: _detail.summary,
+                    description: '',
+                    parts: [_part],
+                    aid: '1',
+                  ),
+                  part: _part,
+                  onLogin: () {},
+                ),
+              ),
+            ),
+          );
+          await _pumpFrames(tester);
+          await session.pause();
+          await _showControls(tester);
+          if (fullscreen) {
+            await tester.tap(find.byTooltip('全屏（F）'));
+            await _pumpFrames(tester);
+          }
+          final mouse = await tester.createGesture(
+            kind: PointerDeviceKind.mouse,
+          );
+          await mouse.addPointer(location: _surfacePoint(tester));
+          await tester.pump();
+          await tester.tap(find.byTooltip('发送弹幕样式'));
+          await tester.pumpAndSettle();
+          await mouse.moveTo(const Offset(-10, -10));
+          await tester.pump(const Duration(seconds: 6));
+          await tester.pumpAndSettle();
+          await tester.tap(find.widgetWithText(ChoiceChip, '顶部'));
+          await tester.tap(find.byTooltip('粉色'));
+          await tester.tap(find.text('完成'));
+          await tester.pumpAndSettle();
+          expect(session.danmakuSendStyle.value, (mode: 5, color: 0xff6699));
+          expect(
+            actions.calls.where((call) => call.startsWith('send:')),
+            isEmpty,
+          );
+          await _showControls(tester);
+          await tester.tap(find.byTooltip('发送弹幕样式'));
+          await tester.pumpAndSettle();
+          expect(find.text('预览 · 顶部 · #FF6699'), findsOneWidget);
+          await tester.tap(find.byTooltip('蓝色'));
+          await tester.tap(find.text('取消'));
+          await tester.pumpAndSettle();
+          final editor = find.descendant(
+            of: find.byType(VideoDanmakuComposer),
+            matching: find.byType(TextField),
+          );
+          await tester.enterText(editor, '保留发送格式');
+          await tester.tap(find.widgetWithText(TextButton, '发送'));
+          await tester.pumpAndSettle();
+          expect(actions.calls.where((call) => call.startsWith('send:')), [
+            'send:${_part.cid}:5:${0xff6699}',
+          ]);
+          FocusManager.instance.primaryFocus?.unfocus();
+          await tester.pump();
+          await tester.pump(const Duration(seconds: 6));
+          await tester.pumpAndSettle();
+          expect(find.byType(VideoDanmakuComposer), findsNothing);
+          expect(engine.opens, 1);
+          expect(engine.maxSurfaces, 1);
+          expect(tester.takeException(), isNull);
+          await mouse.removePointer();
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
   testWidgets('dynamic menu selection survives idle and pointer exit', (
     tester,
   ) async {

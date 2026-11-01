@@ -1,5 +1,6 @@
 import 'package:bilisail/shared/ui/danmaku_send_style_button.dart';
 import 'package:bilisail/shared/ui/danmaku_send_style_panel.dart';
+import 'package:bilisail/shared/ui/player_controls_menu_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,13 +36,15 @@ void main() {
     await tester.tap(find.text('底部'));
     await tester.tap(find.byTooltip('红色'));
     expect(state.style.value, (mode: 1, color: 0xffffff));
+    expect(state.menuChanges, [true]);
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     expect(state.style.value, (mode: 4, color: 0xfe0302));
     expect(state.changes, 1);
+    expect(state.menuChanges, [true, false]);
   });
 
-  for (final dismiss in ['取消', 'Escape', '遮罩']) {
+  for (final dismiss in ['取消', '关闭', 'Escape', '遮罩']) {
     testWidgets('$dismiss discards edits and reopening keeps the saved color', (
       tester,
     ) async {
@@ -50,6 +53,8 @@ void main() {
       await tester.tap(find.byTooltip('绿色'));
       if (dismiss == '取消') {
         await tester.tap(find.text('取消'));
+      } else if (dismiss == '关闭') {
+        await tester.tap(find.byTooltip('关闭样式面板'));
       } else if (dismiss == 'Escape') {
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       } else {
@@ -57,6 +62,7 @@ void main() {
       }
       await tester.pumpAndSettle();
       expect(state.changes, 0);
+      expect(state.menuChanges, [true, false]);
       await _open(tester);
       expect(find.text('预览 · 滚动 · #FFFFFF'), findsOneWidget);
     });
@@ -177,6 +183,7 @@ final class _State {
     color: 0xffffff,
   ));
   int changes = 0;
+  final menuChanges = <bool>[];
 }
 
 Future<_State> _pump(
@@ -197,13 +204,16 @@ Future<_State> _pump(
       ),
       home: Scaffold(
         body: Center(
-          child: DanmakuSendStyleButton(
-            style: state.style,
-            enabled: enabled,
-            onChanged: (value) {
-              state.changes++;
-              state.style.value = value;
-            },
+          child: PlayerControlsMenuScope(
+            onChanged: state.menuChanges.add,
+            child: DanmakuSendStyleButton(
+              style: state.style,
+              enabled: enabled,
+              onChanged: (value) {
+                state.changes++;
+                state.style.value = value;
+              },
+            ),
           ),
         ),
       ),
