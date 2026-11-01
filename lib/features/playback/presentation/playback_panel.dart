@@ -1138,6 +1138,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     try {
       await showAppDialog<void>(
         context: context,
+        barrierColor: Colors.transparent,
+        useSafeArea: false,
         builder: (context) {
           _moreDialogRoute = ModalRoute.of<void>(context);
           return UncontrolledProviderScope(
@@ -1146,17 +1148,17 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
               data: _playerControlsTheme(context),
               child: PlayerMoreDialog(
                 session: widget.session,
-                settings: widget.settings,
+                playerBounds: () {
+                  final box = _playerBoundsKey.currentContext
+                      ?.findRenderObject();
+                  return box is RenderBox && box.hasSize
+                      ? box.localToGlobal(Offset.zero) & box.size
+                      : null;
+                },
                 commands: widget.pageCommands,
                 navigation: widget.navigation,
                 onNavigate: widget.onNavigate,
                 onSettings: _openSettings,
-                onToggleComments: widget.onToggleComments,
-                fullScreen: widget.fullScreen,
-                onFullScreen: _toggleFullScreen,
-                onCompose: widget.danmakuComposerBuilder == null
-                    ? null
-                    : () => unawaited(_openComposerDialog(this.context)),
               ),
             ),
           );

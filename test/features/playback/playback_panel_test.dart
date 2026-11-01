@@ -205,6 +205,28 @@ void main() {
           }
           await tester.tap(find.byTooltip('更多播放选项'));
           await tester.pumpAndSettle();
+          final drawer = find.byKey(const ValueKey('player-more-dialog'));
+          for (final label in [
+            '播放',
+            '暂停',
+            '上一分 P',
+            '下一集',
+            '发送弹幕',
+            '关闭弹幕',
+            '开启弹幕',
+            '听视频',
+            '投屏',
+            '全屏',
+            '退出全屏',
+          ]) {
+            expect(
+              find.descendant(
+                of: drawer,
+                matching: find.widgetWithText(ListTile, label),
+              ),
+              findsNothing,
+            );
+          }
           for (final title in [
             '播放配置',
             '弹幕配置',
@@ -307,6 +329,24 @@ void main() {
           expect(bounds.right, lessThanOrEqualTo(size.width - 12));
           expect(bounds.top, greaterThanOrEqualTo(12));
           expect(bounds.bottom, lessThanOrEqualTo(size.height - 12));
+          if (size.width < 600) {
+            expect(
+              bounds.top,
+              greaterThanOrEqualTo(
+                tester.getBottomLeft(find.byType(VideoSurface)).dy,
+              ),
+            );
+            expect(
+              find.byKey(const ValueKey('player-more-wide-backdrop')),
+              findsNothing,
+            );
+            expect(
+              tester
+                  .widgetList<ModalBarrier>(find.byType(ModalBarrier))
+                  .map((barrier) => barrier.color?.a ?? 0.0),
+              everyElement(0.0),
+            );
+          }
           if (size.width >= 600) expect(bounds.width, lessThanOrEqualTo(400));
           await tester.sendKeyEvent(LogicalKeyboardKey.space);
           await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
@@ -350,6 +390,106 @@ void main() {
         },
       );
     }
+  }
+
+  for (final playerHeight in <double?>[null, 650, 720]) {
+    testWidgets(
+      'more drawer stays below video through resize height=$playerHeight',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(320, 900);
+        tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
+        tester.view.viewPadding = const FakeViewPadding(top: 24, bottom: 24);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPadding);
+        addTearDown(tester.view.resetViewPadding);
+        addTearDown(tester.view.resetViewInsets);
+        final engine = _FakeEngine();
+        final session = _session(engine, repository: _MenuRepository());
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(
+            session,
+            _FakeWindowService(),
+            const AppSettings.defaults(),
+            playerHeight: playerHeight,
+            textScale: 2,
+          ),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        await session.pause();
+        final generation = session.sourceGeneration;
+        final videoBefore = tester.getRect(find.byType(VideoSurface));
+        await tester.tap(find.byTooltip('更多播放选项'));
+        await tester.pumpAndSettle();
+        final drawer = find.byKey(const ValueKey('player-more-dialog'));
+        void expectBelowVideo() {
+          final surface = find
+              .descendant(of: drawer, matching: find.byType(Material))
+              .first;
+          final bounds = tester.getRect(surface);
+          final video = tester.getRect(find.byType(VideoSurface));
+          final insets = tester.view.viewInsets.bottom;
+          final safeBottom = insets > 24 ? insets : 24;
+          expect(bounds.height, greaterThan(0));
+          expect(bounds.top, greaterThanOrEqualTo(video.bottom));
+          expect(
+            bounds.bottom,
+            lessThanOrEqualTo(tester.view.physicalSize.height - safeBottom),
+          );
+          expect(
+            find.byKey(const ValueKey('player-more-wide-backdrop')),
+            findsNothing,
+          );
+          expect(
+            tester
+                .widgetList<ModalBarrier>(find.byType(ModalBarrier))
+                .map((barrier) => barrier.color?.a ?? 0.0),
+            everyElement(0.0),
+          );
+          expect(tester.takeException(), isNull);
+        }
+
+        expectBelowVideo();
+        expect(tester.getRect(find.byType(VideoSurface)), videoBefore);
+        tester.view.physicalSize = const Size(390, 844);
+        await tester.pumpAndSettle();
+        expectBelowVideo();
+        tester.view.physicalSize = const Size(320, 900);
+        await tester.pumpAndSettle();
+        expectBelowVideo();
+        if (playerHeight == null) {
+          tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+          await tester.pumpAndSettle();
+          expectBelowVideo();
+          tester.view.resetViewInsets();
+          await tester.pumpAndSettle();
+          expectBelowVideo();
+        }
+        tester.view.physicalSize = const Size(900, 900);
+        await tester.pumpAndSettle();
+        expect(tester.widget<Dialog>(drawer).alignment, Alignment.centerRight);
+        expect(
+          find.byKey(const ValueKey('player-more-wide-backdrop')),
+          findsOneWidget,
+        );
+        tester.view.physicalSize = const Size(320, 900);
+        await tester.pumpAndSettle();
+        expectBelowVideo();
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(drawer, findsNothing);
+        expect(session.sourceGeneration, generation);
+        expect(session.snapshots.value.desiredPlaying, isFalse);
+        expect(engine.opens, 1);
+        expect(engine.maxSurfaces, 1);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
   }
 
   testWidgets('more drawer quality and voice reuse paused playback', (
@@ -8725,6 +8865,7 @@ Widget _app(
   AppSettings settings, {
   double textScale = 1,
   double width = 800,
+  double? playerHeight,
   ThemeData? theme,
   WidgetBuilder? composer,
   WidgetBuilder? overlay,
@@ -8779,6 +8920,7 @@ Widget _app(
               Flexible(
                 child: SizedBox(
                   width: width,
+                  height: playerHeight,
                   child: AspectRatio(
                     aspectRatio: 16 / 9,
                     child: PlaybackPanel(

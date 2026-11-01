@@ -7,12 +7,8 @@ import 'package:flutter/material.dart';
 import '../../../domain/playback_rates.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_navigation.dart';
-import '../../settings/domain/app_settings.dart';
 import '../application/playback_session.dart';
-import '../domain/content_playback.dart';
 import '../domain/playback_repository.dart';
-import '../application/casting_controller.dart';
-import 'casting_dialog.dart';
 import 'live_stream_picker.dart';
 import 'playback_snapshot_builder.dart';
 import 'player_control_labels.dart';
@@ -21,32 +17,29 @@ class PlayerMoreDialog extends StatelessWidget {
   const PlayerMoreDialog({
     super.key,
     required this.session,
-    required this.settings,
+    required this.playerBounds,
     required this.commands,
     required this.navigation,
     required this.onNavigate,
     required this.onSettings,
-    required this.onToggleComments,
-    required this.onFullScreen,
-    required this.fullScreen,
-    this.onCompose,
   });
 
   final PlaybackSession session;
-  final ValueListenable<AppSettings> settings;
+  final ValueGetter<Rect?> playerBounds;
   final ValueListenable<PlaybackPageCommands?> commands;
   final ValueListenable<PlaybackNavigation?> navigation;
   final ValueChanged<VoidCallback> onNavigate;
   final Future<void> Function(int) onSettings;
-  final VoidCallback onToggleComments;
-  final VoidCallback onFullScreen;
-  final bool fullScreen;
-  final VoidCallback? onCompose;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: Listenable.merge([session, commands, navigation]),
+    builder: (context, _) => _buildDialog(context),
+  );
+
+  Widget _buildDialog(BuildContext context) {
     final narrow = MediaQuery.sizeOf(context).width < 600;
-    return Dialog(
+    final dialog = Dialog(
       key: const ValueKey('player-more-dialog'),
       alignment: narrow ? Alignment.bottomCenter : Alignment.centerRight,
       insetPadding: EdgeInsets.all(narrow ? 12 : 24),
@@ -55,45 +48,73 @@ class PlayerMoreDialog extends StatelessWidget {
         maxHeight: MediaQuery.sizeOf(context).height * .85,
       ),
       clipBehavior: Clip.antiAlias,
-      child: AnimatedBuilder(
-        animation: Listenable.merge([session, settings, commands, navigation]),
-        builder: (context, _) => PlaybackSnapshotBuilder(
-          snapshots: session.snapshots,
-          select: (snapshot) =>
-              (snapshot.rate, snapshot.volume, snapshot.desiredPlaying),
-          builder: (context, snapshot) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '更多播放选项',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+      child: PlaybackSnapshotBuilder(
+        snapshots: session.snapshots,
+        select: (snapshot) => (snapshot.rate, snapshot.volume),
+        builder: (context, snapshot) => LayoutBuilder(
+          builder: (context, constraints) {
+            final header = Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '更多播放选项',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    IconButton(
-                      tooltip: '关闭更多播放选项',
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
+                  ),
+                  IconButton(
+                    tooltip: '关闭更多播放选项',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
               ),
-              Flexible(
-                child: SingleChildScrollView(
-                  key: const ValueKey('player-more-scroll'),
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Column(children: _tools(context, snapshot)),
+            );
+            final tools = _tools(context, snapshot);
+            // A short area below a tall video must remain scrollable even
+            // when it cannot fit the header at its natural height.
+            if (constraints.maxHeight < 100) {
+              return SingleChildScrollView(
+                key: const ValueKey('player-more-scroll'),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [header, ...tools],
                 ),
-              ),
-            ],
-          ),
+              );
+            }
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                header,
+                Flexible(
+                  child: SingleChildScrollView(
+                    key: const ValueKey('player-more-scroll'),
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(children: tools),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
+    if (!narrow) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          const IgnorePointer(
+            child: ColoredBox(
+              key: ValueKey('player-more-wide-backdrop'),
+              color: Colors.black54,
+            ),
+          ),
+          SafeArea(child: dialog),
+        ],
+      );
+    }
+    return _BelowVideoArea(playerBounds: playerBounds, child: dialog);
   }
 
   List<Widget> _tools(BuildContext context, PlaybackSnapshot snapshot) {
@@ -120,30 +141,6 @@ class PlayerMoreDialog extends StatelessWidget {
           Icons.refresh,
           () => leave(() => unawaited(session.retry())),
         ),
-      action(
-        snapshot.desiredPlaying ? '暂停' : '播放',
-        snapshot.desiredPlaying ? Icons.pause : Icons.play_arrow,
-        () => unawaited(session.togglePlaying()),
-      ),
-      if (!session.isLive &&
-          session.contentTarget is! OfflinePlaybackTarget &&
-          page != null) ...[
-        if ((session.detail?.parts.length ?? 0) > 1)
-          action('上一分 P', Icons.skip_previous, () => leave(page.previousPart)),
-        ListTile(
-          leading: const Icon(Icons.skip_next),
-          title: const Text('下一集'),
-          enabled: page.hasNext && !session.isResolving,
-          onTap: () => leave(page.nextPart),
-        ),
-      ],
-      if (onCompose case final compose?)
-        action('发送弹幕', Icons.edit_outlined, () => leave(compose)),
-      action(
-        settings.value.danmakuEnabled ? '关闭弹幕' : '开启弹幕',
-        Icons.subtitles_outlined,
-        onToggleComments,
-      ),
       if (media != null && (session.isLive || media.qualities.length > 1))
         ExpansionTile(
           title: const Text('清晰度'),
@@ -250,23 +247,6 @@ class PlayerMoreDialog extends StatelessWidget {
           ],
         ),
       ),
-      if (session.canListen)
-        action(
-          '听视频',
-          Icons.headphones_rounded,
-          () => leave(() => unawaited(session.setAudioOnly(true))),
-        ),
-      if (castRequestFor(session) != null)
-        action(
-          '投屏',
-          Icons.cast_rounded,
-          () => unawaited(showCastingDialog(context, session)),
-        ),
-      action(
-        fullScreen ? '退出全屏' : '全屏',
-        Icons.fullscreen,
-        () => leave(onFullScreen),
-      ),
       if (page != null)
         action(
           '显示／隐藏信息区',
@@ -294,4 +274,107 @@ class PlayerMoreDialog extends StatelessWidget {
         action('空降助手', Icons.fast_forward, () => unawaited(onSettings(3))),
     ];
   }
+}
+
+class _BelowVideoArea extends StatefulWidget {
+  const _BelowVideoArea({required this.playerBounds, required this.child});
+
+  final ValueGetter<Rect?> playerBounds;
+  final Widget child;
+
+  @override
+  State<_BelowVideoArea> createState() => _BelowVideoAreaState();
+}
+
+class _BelowVideoAreaState extends State<_BelowVideoArea> {
+  Rect? _playerBounds;
+  (Size, EdgeInsets, EdgeInsets)? _measuredMetrics;
+  bool _measurementPending = false;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final media = MediaQuery.of(context);
+      final metrics = (
+        constraints.biggest,
+        media.viewPadding,
+        media.viewInsets,
+      );
+      if (!_measurementPending) {
+        _measurementPending = true;
+        // Global transforms can read ancestor sizes; measure after layout,
+        // outside another render object's layout pass.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _measurementPending = false;
+          if (!mounted) return;
+          final bounds = widget.playerBounds();
+          if (_playerBounds != bounds || _measuredMetrics != metrics) {
+            setState(() {
+              _playerBounds = bounds;
+              _measuredMetrics = metrics;
+            });
+          }
+        });
+      }
+      return CustomSingleChildLayout(
+        delegate: _BelowVideoLayout(
+          // Hide the sheet for the measurement frame after a resize instead
+          // of briefly covering video with the previous window's geometry.
+          playerBounds: _measuredMetrics == metrics ? _playerBounds : null,
+          padding: media.viewPadding,
+          keyboardBottom: media.viewInsets.bottom,
+        ),
+        child: MediaQuery.removeViewInsets(
+          context: context,
+          removeBottom: true,
+          child: widget.child,
+        ),
+      );
+    },
+  );
+}
+
+class _BelowVideoLayout extends SingleChildLayoutDelegate {
+  _BelowVideoLayout({
+    required this.playerBounds,
+    required this.padding,
+    required this.keyboardBottom,
+  });
+
+  final Rect? playerBounds;
+  final EdgeInsets padding;
+  final double keyboardBottom;
+
+  double _bottom(double height) =>
+      (height -
+              (keyboardBottom > padding.bottom
+                  ? keyboardBottom
+                  : padding.bottom))
+          .clamp(0.0, height);
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    final bottom = _bottom(constraints.maxHeight);
+    final top = (playerBounds?.bottom ?? bottom).clamp(
+      padding.top.clamp(0.0, bottom),
+      bottom,
+    );
+    return BoxConstraints(
+      maxWidth: (constraints.maxWidth - padding.horizontal).clamp(
+        0.0,
+        constraints.maxWidth,
+      ),
+      maxHeight: bottom - top,
+    );
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) =>
+      Offset(padding.left, _bottom(size.height) - childSize.height);
+
+  @override
+  bool shouldRelayout(_BelowVideoLayout oldDelegate) =>
+      playerBounds != oldDelegate.playerBounds ||
+      padding != oldDelegate.padding ||
+      keyboardBottom != oldDelegate.keyboardBottom;
 }
