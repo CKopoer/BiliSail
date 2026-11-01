@@ -1,5 +1,7 @@
 # Web API 端点与首轮验证
 
+2026-11-01 Web 推荐的 `fresh_idx`／`fresh_idx_1h` 改为由应用仓储分配的采样序号；新刷新继续递增，同一查询失败页的重试复用原序号，成功空批次不阻塞下一次刷新。分区 `pn` 与 App 推荐 `idx`／`pull` 沿用各自语义，实施和验证见[推荐刷新记录](../recommendation-settings-design.md#web-推荐刷新采样序号2026-11-01)。
+
 密码／短信由内嵌官网登录页处理，应用只接入 Cookie 和账号 nav 校验；协议边界、平台依赖与验证见 [登录验证](password-sms-login.md)。
 
 七类搜索的 Web 综合/分类端点、排序与游客查询“小约翰”结果见 [搜索分类与排序](search-categories.md)。下表 `searchVideos` 保留首轮仅视频搜索时的记录；当前搜索页面使用模块化 `SearchClient`。

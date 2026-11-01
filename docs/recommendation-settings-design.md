@@ -76,3 +76,23 @@ dart compile exe tool/benchmark_recommendation_filter.dart -o build/recommendati
 - 原有分页虚拟化与反馈回归通过，包含追加后既有卡片零重建、同 ID 内容更新及相邻卡片保留。新增分类继续覆盖全部分类滑动和独立滚动位置；连续滑动断言按分类序号处理新增 tab。
 - 本轮相关 5 份文档的相对链接和 `git diff --check` 通过；未改依赖/锁文件。保留开始时和同期修改，未提交或推送 Git。
 - 没有本轮 Flutter 应用构建、真实设备滚动/帧率测试或登录 App 推荐验收。纯 Dart AOT 探针与自动化测试不代表三端性能实测通过。
+
+## Web 推荐刷新采样序号（2026-11-01）
+
+问题由 [PR #53](https://github.com/CKopoer/BiliSail/pull/53) 报告。本次在游客态以现有 API 实现进行少量只读对照：`fresh_idx=1` 连续两次取得相同顺序的 20 条视频；改为 2、3 时分别取得另外 20 条，与首批无重合；回到 1 又得到首批。请求间 `wts` 已变化，因此签名时间戳相同不是复现的必要条件。该观测只对应本次网络及游客样本，不推导为登录账号或服务端长期保证。
+
+此前 `FeedController.refresh()` 从第 1 页开始，仓储直接将页码作为 `fresh_idx`，导致每次刷新回到已使用的采样序号。本次独立修改 [ApiFeedRepository](../lib/features/feed/data/api_feed_repository.dart)，不从页码大小推断刷新轮次：
+
+- 每个新的 Web 推荐逻辑请求分配递增序号；同一次 API 调用内部的有界网络重试继续使用相同参数。
+- 控制器每次刷新创建新的 `RequestCancellation`。仓储只为当前查询作用域保留失败页的序号，显式重试该页时复用；新刷新即使页码同为 1，也取得新序号。
+- 成功响应即消费该序号，包括原始空批次及过滤非视频卡片后为空。空页仍按现有契约停止自动分页，用户下一次刷新可以取得下一批，不自动无限补页。
+- 失败页记录同时匹配账号 epoch；旧响应不能清除其他页或新会话的记录。查询以弱引用关联取消作用域，关闭查询后不由仓储永久保留。
+- 分区列表继续使用真实 `pn`，App 推荐保留 `idx=page-1` 和首请求 `pull=true`，不修改来源默认值、设置、UI 或仓储公共契约。
+
+[回归测试](../test/features/feed/web_recommendation_refresh_test.dart)通过真实控制器与 fake transport 覆盖连续刷新/翻页、首批及中途成功空批次、仅含非视频卡片、分页失败重试、新刷新重试、取消后迟到响应、账号 epoch、交错查询作用域、分区分页及非法/已取消请求。修复前新增 11 项中 8 项失败；修复后 11 项及原仓储用例全部通过。
+
+五份锁文件已按 `-EnforceLockfile` 解析；应用相同修复代码的隔离检出最终执行 `tool/check.ps1 -SkipPub` 通过，包括打包边界、格式、静态分析及所有包的离线测试：根应用 3975、`bili_api` 541、`bili_player` 131、`bili_danmaku` 153、`bili_mux` 5，共 4805 项通过。根应用 13 项 Windows 符号链接用例及未设置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生用例跳过，不计作原生验证。日志保存在忽略目录 `build/web-recommendation-refresh-check-isolated-retry-2026-11-01.log`。
+
+主工作区首轮全量检查在根测试阶段停滞后停止；隔离检出首轮因 SQLite 3.7.0 的 GitHub 预编译库下载连接中断而失败。核对该依赖声明的 SHA-256 后复用本机相同版本缓存，保留官方 hook 的完整哈希校验，重新运行后取得上述通过结果；没有修改 Pub 缓存、依赖来源或锁文件。文档相对链接及 `git diff --check` 通过。
+
+未构建或安装应用，未进行本轮登录账号个性化、Windows/Android/macOS 界面或性能验收。没有运行中的 DTD／调试应用，热重载未能执行。

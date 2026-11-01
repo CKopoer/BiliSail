@@ -27,6 +27,11 @@ class ApiFeedRepository
   final BiliApiClient api;
   final ApiRequests requests;
 
+  int _recommendationIndex = 0;
+  // A refresh owns a new cancellation scope. Weak keys retain failed-page
+  // indices for explicit retries without retaining closed query lifetimes.
+  final _recommendationPulls = Expando<_RecommendationPull>();
+
   @override
   String get feedbackScope => 'session:${requests.sessionEpoch}';
 
@@ -317,18 +322,36 @@ class ApiFeedRepository
     required int page,
     required String? categoryId,
     required RequestCancellation cancellation,
-  }) => requests.run(
-    (context) async => _mapPage(
-      categoryId == null
-          ? await api.getRecommended(page: page, context: context)
-          : await api.getRegionalVideos(
-              categoryId: categoryId,
-              page: page,
-              context: context,
-            ),
-    ),
-    cancellation: cancellation,
-  );
+  }) => requests.run((context) async {
+    if (categoryId != null) {
+      return _mapPage(
+        await api.getRegionalVideos(
+          categoryId: categoryId,
+          page: page,
+          context: context,
+        ),
+      );
+    }
+    if (page < 1) throw ArgumentError.value(page, 'page');
+    final epoch = requests.sessionEpoch;
+    final pending = _recommendationPulls[cancellation];
+    final pull =
+        pending != null && pending.page == page && pending.epoch == epoch
+        ? pending
+        : _RecommendationPull(page, ++_recommendationIndex, epoch);
+    _recommendationPulls[cancellation] = pull;
+    final result = _mapPage(
+      await api.getRecommended(page: pull.index, context: context),
+    );
+    // An empty success also consumes its sample. A late old response must not
+    // clear the retry index of a newer page or account session.
+    if (!cancellation.isCancelled &&
+        epoch == requests.sessionEpoch &&
+        identical(_recommendationPulls[cancellation], pull)) {
+      _recommendationPulls[cancellation] = null;
+    }
+    return result;
+  }, cancellation: cancellation);
 
   @override
   Future<PageResult<VideoSummary>> loadRanking({
@@ -418,4 +441,12 @@ class ApiFeedRepository
             .toList(growable: false),
         hasMore: result.hasMore,
       );
+}
+
+final class _RecommendationPull {
+  const _RecommendationPull(this.page, this.index, this.epoch);
+
+  final int page;
+  final int index;
+  final int epoch;
 }
