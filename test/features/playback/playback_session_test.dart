@@ -737,6 +737,40 @@ void main() {
     });
   }
 
+  for (final quality in AppSettings.supportedQualities) {
+    test(
+      'new video and PGC owners use configured default qn $quality',
+      () async {
+        final repository = _FakeRepository(autoResolve: true);
+        final content = _FakeContentRepository();
+        final session = PlaybackSession(
+          engine: _FakeEngine(),
+          repository: repository,
+          contentRepository: content,
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+        );
+        addTearDown(session.close);
+        session.configureSettings(
+          AppSettings(preferredQuality: quality, resumePlayback: false),
+        );
+        final video = Object(), pgc = Object();
+        session.attach(video);
+        session.attach(pgc);
+        await session.activate(video, _detail('video'), _part('video'));
+        expect(repository.qualities.single, quality);
+        await session.activate(
+          pgc,
+          null,
+          null,
+          target: const PgcPlaybackTarget('7'),
+        );
+        expect(content.qualities.single, quality);
+        expect(session.requestedQuality, quality);
+      },
+    );
+  }
+
   for (final quality in [0, 250, 400, 20000]) {
     test('new live owner uses its own default qn $quality', () async {
       final content = _FakeContentRepository();

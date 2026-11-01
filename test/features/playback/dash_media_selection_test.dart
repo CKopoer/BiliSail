@@ -217,6 +217,36 @@ void main() {
     headers: const {'Referer': 'https://www.bilibili.com/'},
   );
 
+  test(
+    'every default quality selects its real track including HDR and Dolby',
+    () {
+      final tracks = [
+        for (final quality in [
+          16,
+          32,
+          64,
+          74,
+          80,
+          112,
+          116,
+          120,
+          125,
+          126,
+          127,
+        ])
+          _track(quality, quality == 126 ? 'dvh1.05.06' : 'hvc1.1.6.L150.90'),
+      ];
+      for (final track in tracks) {
+        final media = select(tracks, quality: track.id);
+        expect(media.quality, track.id);
+        expect(media.audio, isNotNull);
+      }
+      expect(select([_track(80, 'avc1')], quality: 127).quality, 80);
+      expect(select([_track(64, 'avc1')], quality: 74).quality, 64);
+      expect(select([_track(112, 'hvc1')], quality: 116).quality, 112);
+    },
+  );
+
   for (final (preference, codec) in const [
     (VideoCodecPreference.h264, 'avc1.640028'),
     (VideoCodecPreference.hevc, 'hev1.1.6.L120'),

@@ -5,6 +5,7 @@ import '../../../domain/audio_normalization.dart';
 export '../../../domain/audio_normalization.dart'
     show AudioNormalizationMode, AudioNormalizationLabel;
 import '../../../domain/video_codec.dart';
+import '../../../domain/video_quality.dart';
 import '../../../domain/audio_quality.dart';
 import '../../../domain/live_stream_preference.dart';
 import '../../../domain/media_cdn.dart';
@@ -12,6 +13,7 @@ import 'shortcut_settings.dart';
 import '../../../domain/recommendation_settings.dart';
 
 export '../../../domain/video_codec.dart';
+export '../../../domain/video_quality.dart';
 export '../../../domain/audio_quality.dart';
 export '../../../domain/live_stream_preference.dart';
 export '../../../domain/media_cdn.dart' show MediaCdnPreference;
@@ -409,18 +411,9 @@ final class AppSettings {
     ),
   );
 
-  static const supportedQualities = [
-    16,
-    32,
-    64,
-    80,
-    112,
-    116,
-    120,
-    125,
-    126,
-    127,
-  ];
+  static final supportedQualities = List<int>.unmodifiable(
+    videoQualityOptions.keys,
+  );
   // Live qn values are independent of VOD; zero asks the server to choose.
   static const liveQualityOptions = {
     0: '自动',

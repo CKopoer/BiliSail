@@ -137,9 +137,10 @@ class SqliteSettingsRepository implements SettingsRepository {
               .where((item) => item.name == decoded['playerControlsMode'])
               .firstOrNull ??
           defaultPlayerControlsMode,
-      preferredQuality: number('preferredQuality', 80.0).isFinite
-          ? number('preferredQuality', 80.0).toInt()
-          : 80,
+      preferredQuality: switch (decoded['preferredQuality']) {
+        final int quality => quality,
+        _ => 80,
+      },
       preferredLiveQuality: switch (decoded['preferredLiveQuality']) {
         final int quality => quality,
         _ => 10000,

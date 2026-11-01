@@ -179,7 +179,7 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                               for (final q in AppSettings.supportedQualities)
                                 DropdownMenuItem(
                                   value: q,
-                                  child: Text(qualityLabel(q)),
+                                  child: Text(videoQualityLabel(q)),
                                 ),
                             ],
                             onChanged: (q) {
@@ -462,17 +462,4 @@ String sponsorLabel(String category) => switch (category) {
   'interaction' => '互动提醒',
   'preview' => '预告',
   _ => category,
-};
-String qualityLabel(int q) => switch (q) {
-  16 => '360P',
-  32 => '480P',
-  64 => '720P',
-  80 => '1080P',
-  112 => '1080P+',
-  116 => '1080P60',
-  120 => '4K',
-  125 => 'HDR',
-  126 => '杜比视界',
-  127 => '8K',
-  _ => '$q',
 };

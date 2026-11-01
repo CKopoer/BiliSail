@@ -1,17 +1,8 @@
+import '../../../domain/video_quality.dart';
 import '../domain/playback_repository.dart';
 
-String playbackQualityLabel(int? quality) => switch (quality) {
-  120 => '4K',
-  116 => '1080P60',
-  112 => '1080P+',
-  80 => '1080P',
-  74 => '720P60',
-  64 => '720P',
-  32 => '480P',
-  16 => '360P',
-  null => '画质',
-  _ => '$quality',
-};
+String playbackQualityLabel(int? quality) =>
+    quality == null ? '画质' : videoQualityLabel(quality);
 
 String playbackSubtitleLabel(SubtitleTrack track) {
   final label = track.label.isNotEmpty ? track.label : track.languageCode;

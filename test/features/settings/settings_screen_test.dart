@@ -601,15 +601,15 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(videoDropdown);
         await tester.pumpAndSettle();
-        await tester.tap(find.text('720P').last);
+        await tester.tap(find.text('720P60').last);
       } else {
-        final videoChoice = find.widgetWithText(ChoiceChip, '720P');
+        final videoChoice = find.widgetWithText(ChoiceChip, '720P60');
         await tester.ensureVisible(videoChoice);
         await tester.pumpAndSettle();
         await tester.tap(videoChoice);
       }
       await tester.pumpAndSettle();
-      expect(repository.settings.preferredQuality, 64);
+      expect(repository.settings.preferredQuality, 74);
       expect(repository.settings.preferredLiveQuality, 250);
       expect(tester.takeException(), isNull);
     });

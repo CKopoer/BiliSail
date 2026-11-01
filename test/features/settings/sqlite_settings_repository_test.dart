@@ -18,6 +18,43 @@ void main() {
   });
   tearDown(() => database.close());
   test(
+    'every video quality persists and invalid IDs use the default',
+    () async {
+      for (final quality in AppSettings.supportedQualities) {
+        await repository.save(AppSettings(preferredQuality: quality));
+        final loaded = await repository.load();
+        expect(loaded.preferredQuality, quality);
+        final snapshot = jsonDecode(
+          (await database.readSetting('preferences.v1'))!,
+        ) as Map<String, Object?>;
+        expect(snapshot['preferredQuality'], quality);
+      }
+      for (final invalid in <Object?>[
+        null,
+        '116',
+        116.5,
+        74.5,
+        true,
+        0,
+        -1,
+        999,
+      ]) {
+        await database.writeSetting(
+          'preferences.v1',
+          jsonEncode({
+            'schemaVersion': 32,
+            'preferredQuality': invalid,
+            'preferredLiveQuality': 250,
+          }),
+        );
+        final loaded = await repository.load();
+        expect(loaded.preferredQuality, 80);
+        expect(loaded.preferredLiveQuality, 250);
+      }
+    },
+  );
+
+  test(
     'related autoplay defaults, invalid snapshots, save and reset',
     () async {
       expect(AppSettings().continuousRelatedPlayback, isFalse);

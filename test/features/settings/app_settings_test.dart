@@ -2,6 +2,23 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('all video quality IDs survive normalization and copying', () {
+    const qualities = [16, 32, 64, 74, 80, 112, 116, 120, 125, 126, 127];
+    expect(AppSettings.supportedQualities, qualities);
+    for (final quality in qualities) {
+      final settings = AppSettings(preferredQuality: quality)
+          .normalized()
+          .copyWith(autoPlay: false);
+      expect(settings.preferredQuality, quality);
+    }
+    for (final invalid in [0, -1, 400, 999]) {
+      expect(
+        AppSettings(preferredQuality: invalid).normalized().preferredQuality,
+        80,
+      );
+    }
+  });
+
   test('hover playback defaults on and preserves explicit choices', () {
     expect(const AppSettings.defaults().videoCardHoverPlayback, isTrue);
     expect(AppSettings().videoCardHoverPlayback, isTrue);
