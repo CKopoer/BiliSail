@@ -1,0 +1,234 @@
+[
+  {
+    "requestedBufferSeconds": 0.2,
+    "appliedBufferSeconds": "0.200000",
+    "tempoFilter": "scaletempo2",
+    "mpvVersion": "mpv v0.41.0-725-g43b14a4c9",
+    "hardwareDecoder": "d3d11va-copy",
+    "videoSync": "audio",
+    "transitions": [
+      {
+        "rate": 2.0,
+        "commandUs": 72,
+        "maxPositionGapUs": 125610,
+        "maxAbsAvsyncSeconds": 0.005044,
+        "frameDrops": "0",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 87,
+        "maxPositionGapUs": 46996,
+        "maxAbsAvsyncSeconds": 0.166489,
+        "frameDrops": "5",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 2.0,
+        "commandUs": 61,
+        "maxPositionGapUs": 142793,
+        "maxAbsAvsyncSeconds": 0.00254,
+        "frameDrops": "5",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 58,
+        "maxPositionGapUs": 46352,
+        "maxAbsAvsyncSeconds": 0.205994,
+        "frameDrops": "9",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 2.0,
+        "commandUs": 69,
+        "maxPositionGapUs": 128290,
+        "maxAbsAvsyncSeconds": 0.001532,
+        "frameDrops": "9",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 83,
+        "maxPositionGapUs": 44823,
+        "maxAbsAvsyncSeconds": 0.218303,
+        "frameDrops": "14",
+        "decoderDrops": "0"
+      }
+    ]
+  },
+  {
+    "requestedBufferSeconds": 0.05,
+    "appliedBufferSeconds": "0.050000",
+    "tempoFilter": "scaletempo2",
+    "mpvVersion": "mpv v0.41.0-725-g43b14a4c9",
+    "hardwareDecoder": "d3d11va-copy",
+    "videoSync": "audio",
+    "transitions": [
+      {
+        "rate": 2.0,
+        "commandUs": 76,
+        "maxPositionGapUs": 49508,
+        "maxAbsAvsyncSeconds": 0.005052,
+        "frameDrops": "0",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 71,
+        "maxPositionGapUs": 50158,
+        "maxAbsAvsyncSeconds": 0.092301,
+        "frameDrops": "2",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 2.0,
+        "commandUs": 103,
+        "maxPositionGapUs": 50018,
+        "maxAbsAvsyncSeconds": 0.003485,
+        "frameDrops": "2",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 83,
+        "maxPositionGapUs": 49092,
+        "maxAbsAvsyncSeconds": 0.085877,
+        "frameDrops": "4",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 2.0,
+        "commandUs": 47,
+        "maxPositionGapUs": 76160,
+        "maxAbsAvsyncSeconds": 0.000994,
+        "frameDrops": "4",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 81,
+        "maxPositionGapUs": 46533,
+        "maxAbsAvsyncSeconds": 0.085756,
+        "frameDrops": "6",
+        "decoderDrops": "0"
+      }
+    ]
+  },
+  {
+    "requestedBufferSeconds": 0.05,
+    "appliedBufferSeconds": "0.050000",
+    "tempoFilter": "scaletempo2",
+    "mpvVersion": "mpv v0.41.0-725-g43b14a4c9",
+    "hardwareDecoder": "d3d11va-copy",
+    "videoSync": "audio",
+    "transitions": [
+      {
+        "rate": 2.0,
+        "commandUs": 81,
+        "maxPositionGapUs": 50546,
+        "maxAbsAvsyncSeconds": 0.00505,
+        "frameDrops": "0",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 61,
+        "maxPositionGapUs": 45589,
+        "maxAbsAvsyncSeconds": 0.087958,
+        "frameDrops": "2",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 2.0,
+        "commandUs": 83,
+        "maxPositionGapUs": 55437,
+        "maxAbsAvsyncSeconds": 0.003484,
+        "frameDrops": "2",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 65,
+        "maxPositionGapUs": 45299,
+        "maxAbsAvsyncSeconds": 0.076127,
+        "frameDrops": "3",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 2.0,
+        "commandUs": 63,
+        "maxPositionGapUs": 51906,
+        "maxAbsAvsyncSeconds": 0.001839,
+        "frameDrops": "3",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 72,
+        "maxPositionGapUs": 46226,
+        "maxAbsAvsyncSeconds": 0.047107,
+        "frameDrops": "4",
+        "decoderDrops": "0"
+      }
+    ]
+  },
+  {
+    "requestedBufferSeconds": 0.2,
+    "appliedBufferSeconds": "0.200000",
+    "tempoFilter": "scaletempo2",
+    "mpvVersion": "mpv v0.41.0-725-g43b14a4c9",
+    "hardwareDecoder": "d3d11va-copy",
+    "videoSync": "audio",
+    "transitions": [
+      {
+        "rate": 2.0,
+        "commandUs": 61,
+        "maxPositionGapUs": 135365,
+        "maxAbsAvsyncSeconds": 0.013825,
+        "frameDrops": "0",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 61,
+        "maxPositionGapUs": 44832,
+        "maxAbsAvsyncSeconds": 0.212195,
+        "frameDrops": "5",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 2.0,
+        "commandUs": 96,
+        "maxPositionGapUs": 154558,
+        "maxAbsAvsyncSeconds": 0.016051,
+        "frameDrops": "5",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 87,
+        "maxPositionGapUs": 45901,
+        "maxAbsAvsyncSeconds": 0.177266,
+        "frameDrops": "10",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 2.0,
+        "commandUs": 88,
+        "maxPositionGapUs": 139400,
+        "maxAbsAvsyncSeconds": 0.001129,
+        "frameDrops": "10",
+        "decoderDrops": "0"
+      },
+      {
+        "rate": 1.0,
+        "commandUs": 65,
+        "maxPositionGapUs": 45175,
+        "maxAbsAvsyncSeconds": 0.226954,
+        "frameDrops": "15",
+        "decoderDrops": "0"
+      }
+    ]
+  }
+]

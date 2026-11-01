@@ -13,7 +13,7 @@ import 'native_error_monitor.dart';
 import 'native_playback_health.dart';
 import 'native_load_observer.dart';
 import 'native_audio_gain.dart';
-import 'native_tempo_filter.dart';
+import 'native_rate_audio.dart';
 import 'native_video_frame_queue.dart';
 import 'video_dimensions.dart';
 import 'media_kit_video_output.dart';
@@ -651,7 +651,7 @@ final class MediaKitEngine
           DashVideoSource() => false,
         };
         if (rateAdjustable) {
-          await configureNativeTempoFilter(
+          await configureNativeRateAudio(
             write: platform.setPropertyAsync,
             read: platform.getPropertyAsync,
             isCurrent: () =>

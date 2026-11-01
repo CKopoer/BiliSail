@@ -45,6 +45,8 @@ Windows 触摸事件由测试框架注入；Android／iOS／macOS 实机触摸�
 
 ## 长按触发后的额外停顿（2026-11-01）
 
+后续在已切换至 PiliPlus 锁定核心的工作区继续复现到音频输出队列造成的停顿；前一轮常驻滤镜／去重并未覆盖这条路径。实际 Windows Profile 对照及修复见[音频输出缓冲记录](hold-rate-output-buffer-2026-11-01.md)。以下保留前一轮的依赖快照与验证边界。
+
 ### 调用链与原因边界
 
 - 键盘右方向键 Down 由 `PlaybackShortcutController` 启动设置中的定时器，Repeat 不重置定时器；到期进入 `beginTemporaryRate`。触摸识别器已等待相同设置中的延迟，`beginTouchHold` 直接进入该方法，没有第二轮延迟。默认 400 ms 用于区分短按 seek／单击与长按，本次保持原值及所有有效用户设置。

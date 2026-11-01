@@ -754,6 +754,40 @@ void main() {
             lessThan(const Duration(milliseconds: 250)),
           );
           expect(tester.takeException(), isNull);
+          // Paused rate state alone cannot catch the reported playback stall.
+          // Exercise both hold inputs with real decoded audio/video advancing.
+          await session.seek(const Duration(seconds: 1));
+          await session.play();
+          Future<void> advancingAt(double rate) async {
+            await _until(tester, () => engine.currentSnapshot.rate == rate);
+            final start = engine.currentSnapshot.position;
+            await _until(
+              tester,
+              () =>
+                  engine.currentSnapshot.position >
+                  start + const Duration(milliseconds: 100),
+            );
+            expect(engine.currentSnapshot.desiredPlaying, isTrue);
+            expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
+            expect(engine.currentSnapshot.generation, generation);
+          }
+
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+          await advancingAt(2);
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+          await advancingAt(1);
+          final target = find.byKey(
+            const ValueKey('player-surface-tap-target'),
+          );
+          final touch = await tester.startGesture(
+            tester.getTopLeft(target) + const Offset(150, 100),
+            kind: PointerDeviceKind.touch,
+          );
+          await advancingAt(2);
+          await touch.up();
+          await advancingAt(1);
+          await session.pause();
+          await session.seek(position);
         }
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
