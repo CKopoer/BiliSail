@@ -233,14 +233,58 @@ class ApiPlaybackRepository
     required VideoCodecPreference preferredCodec,
     required RequestCancellation cancellation,
   }) => requests.run((context) async {
-    final info = await api.getPlayInfo(
+    // Discover the full entitled DASH ladder before applying the preference.
+    // Some responses omit a lower representation until it is requested alone.
+    var info = await api.getPlayInfo(
       video.value,
       cid,
-      qn: quality,
+      qn: 129,
       language: voice.languageCode,
       productionType: voice.productionType,
       context: context,
     );
+    if (info.dashVideo.any((track) => track.id > quality) &&
+        info.acceptQuality.contains(quality) &&
+        !info.dashVideo.any((track) => track.id == quality)) {
+      try {
+        final supplement = await api.getPlayInfo(
+          video.value,
+          cid,
+          qn: quality,
+          language: voice.languageCode,
+          productionType: voice.productionType,
+          context: context,
+        );
+        if (supplement.currentLanguage == info.currentLanguage &&
+            supplement.productionType == info.productionType) {
+          final identities = {
+            for (final track in info.dashVideo) (track.id, track.codecs),
+          };
+          info = ApiPlayInfo(
+            duration: info.duration,
+            dashVideo: List.unmodifiable([
+              ...info.dashVideo,
+              for (final track in supplement.dashVideo)
+                if (identities.add((track.id, track.codecs))) track,
+            ]),
+            dashAudio: info.dashAudio,
+            acceptQuality: info.acceptQuality,
+            loudness: info.loudness,
+            voices: info.voices,
+            currentLanguage: info.currentLanguage,
+            productionType: info.productionType,
+            isPreview: info.isPreview,
+          );
+        }
+      } on ApiFailure catch (failure) {
+        // The discovery response already contains complete playable media.
+        // An optional lower-quality read must not discard that valid source.
+        if (failure.category == ApiFailureCategory.cancelled ||
+            failure.category == ApiFailureCategory.authentication) {
+          rethrow;
+        }
+      }
+    }
     if (!voice.isOriginal &&
         (info.currentLanguage != voice.languageCode ||
             info.productionType != voice.productionType ||

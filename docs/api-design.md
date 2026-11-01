@@ -1,5 +1,7 @@
 # API、鉴权与数据边界
 
+2026-11-01 UGC 主播放参考 PiliPlus 补齐 WBI 签名前的 `fnver=0` 和 Web 播放上下文，仓储先请求 `qn=129` 再按实际 DASH 应用画质／编码偏好，必要时有界补取缺失的较低档位。保留语音参数、账号／取消隔离和完整音视频分轨要求；协议对照、在线证据及大会员 1080P60 未验收边界见[专项记录](validation/playurl-quality-2026-11-01.md)。
+
 2026-10-31 App 推荐响应接纳规则与 PiliPlus `c741279080fa90571d59ff9558640beb88861492` 对齐：保留已一致的完整请求参数，排除指定广告类型、有广告信息及不可播放卡片，不再仅接纳 av。原始 card_goto／param 分别用于导航与反馈，非 av 不将 param 当作 AV aid；番剧沿用现有影视路由，动态及允许的内容链接沿用外链端口，未知类型保留卡片并提示。字段有效性、容量限制、用户过滤、账号隔离与单次写入不变，详见[App 推荐设计](app-recommendation-design.md)。
 
 2026-10-31 App 推荐请求与本机 PiliPlus 固定快照对齐完整 Android HD UA、feed 指纹占位请求头和新设备 buvid 格式；保留已有设备标识及账号凭据，指纹头仅用于首页 App feed，不采集硬件标识。来源、协议字段和兼容边界见[App 推荐设计](app-recommendation-design.md)。

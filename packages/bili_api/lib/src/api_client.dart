@@ -1616,19 +1616,17 @@ final class BiliApiClient {
           'bvid': bvid,
           'cid': cid,
           'qn': '$qn',
+          'fnver': '0',
           'fnval': preview ? '2000' : '4048',
           'fourk': '1',
           if (!preview) ...{
+            ..._playurlWebContext(),
             'voice_balance': '1',
             'cur_language': language,
             'cur_production_type': '$productionType',
             'client_attr': '1',
           },
-          if (preview) ...{
-            'fnver': '0',
-            'from_client': 'BROWSER',
-            'need_fragment': 'false',
-          },
+          if (preview) ...{'from_client': 'BROWSER', 'need_fragment': 'false'},
         },
         'playurl',
         context,
@@ -1683,6 +1681,23 @@ final class BiliApiClient {
       productionType: _int(data['cur_production_type']) ?? 0,
       isPreview: data['is_preview'] == true || data['is_preview'] == 1,
     );
+  }
+
+  static Map<String, String> _playurlWebContext() {
+    final random = Random.secure();
+    String placeholder(int bytes) => base64Encode(
+      List<int>.generate(bytes, (_) => random.nextInt(256)),
+    ).replaceAll('=', '');
+    // Web player context uses fresh noise, never real device fingerprints.
+    return {
+      'gaia_source': 'pre-load',
+      'isGaiaAvoided': 'true',
+      'web_location': '1315873',
+      'dm_img_list': '[]',
+      'dm_img_str': placeholder(24),
+      'dm_cover_img_str': placeholder(48),
+      'dm_img_inter': '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
+    };
   }
 
   Future<ApiFailure> _videoPlaybackFailure(

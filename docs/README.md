@@ -36,6 +36,7 @@
 | [搜索历史与热搜](validation/search-discovery-2026-11-01.md) | 居中搜索动效、宽窄屏入口、账号历史存储、热搜协议与自动验证边界 |
 | [密码、短信与移动登录窗口](validation/password-sms-login.md) | 三种 Web 登录、交互验证码、安全会话与小屏/键盘布局 |
 | [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |
+| [1080P60 播放请求对照](validation/playurl-quality-2026-11-01.md) | PiliPlus 请求上下文、最高档发现／缺档补取、普通账号在线证据与大会员验收边界 |
 | [DLNA 投屏](validation/dlna-casting.md) | 视频／影视 TV 地址、设备发现与控制、生命周期及平台验收边界 |
 | [系统媒体通知与控制](validation/system-media-controls.md) | Android 通知、Apple 正在播放、Windows SMTC、Linux MPRIS、会话目标与验证边界 |
 | [PiliPlus 播放器与弹幕依赖切换](validation/piliplus-dependencies-2026-11-01.md) | 精确提交、库插件打包、异步 API、headers、首帧与原生回归 |
