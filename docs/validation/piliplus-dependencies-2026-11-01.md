@@ -46,3 +46,15 @@ Android 构建曾停在自动准备缺失的 SDK Platform 31，随后按用户�
 本机 Debug 夹具实际输出为 960×540，`hwdec-current=d3d11va-copy`，GPU 纹理交付为 `copied`，与此前 Predidit 的 D3D11／`d3d11va` 路径不同。PiliPlus [桌面默认设置](../../../PiliPlus/lib/plugin/pl_player/models/hwdec_type.dart)也使用 `auto`，但本轮没有采集它在本机的实际解码器选择。上述运行不能证明已经解决最初的 GPU 负载差距，仍需新的同条件 Profile／Release 性能对照。
 
 本地日志与产物位于忽略目录 `build/piliplus-*`。没有执行真实账号／CDN、跨 GPU、长期播放或新的 GPU 性能对照；macOS／iOS／Linux 的本平台构建和设备播放仍待验证。
+
+## CI #266：Android 插件编译 SDK
+
+[CI #266 的 Android 任务](https://github.com/CKopoer/BiliSail/actions/runs/41300058977/job/124830948861) 对应 `900a0f65a1807fa26f71a85e0fef2dc1ebc642ab`，失败于 `:media_kit_video:checkReleaseAarMetadata`。固定视频插件的 `android/build.gradle` 仍声明 `compileSdkVersion 31`；当前 Flutter embedding 引入的插件依赖包含要求 SDK 36 的 `wakelock_plus`、`screen_brightness_android` 等，AAR 元数据检查共报告 25 项不兼容。根应用自身使用 SDK 36，单独修改应用配置不能修复库模块。
+
+本地完整构建同时发现 `media_kit_libs_android_video` 也固定 SDK 31，其 Release AAR 检查报告另外 20 项依赖不兼容。新增[应用侧 Gradle 适配](../../android/patches/media_kit/apply.gradle)，在两个插件的 `com.android.library` 应用时注册 `androidComponents.finalizeDsl`，将它们的 `compileSdk` 提高到 Flutter SDK 的默认编译版本（当前 36），并保留上游可能更高的值。[根构建入口](../../android/build.gradle.kts)在子项目求值前加载适配；回调在上游 DSL 求值后、创建 variant／任务前执行，时机依据 [AGP API](https://developer.android.com/reference/tools/gradle-api/9.1/com/android/build/api/variant/AndroidComponentsExtension)。仅适配这两个媒体插件，不修改 Pub 缓存、固定提交、锁文件、`minSdk`、`targetSdk` 或签名配置。
+
+Windows 本地修复前运行同一 Release AAR 检查，复现 SDK 31 和 25 项错误；完整构建另复现库插件的 20 项错误。修复后使用 `--rerun-tasks` 强制执行两个插件在 Debug、Profile、Release 下的六项 AAR 检查，全部通过。日志位于忽略目录 `build/ci-266-android-baseline.log`、`build/ci-266-android-libs-baseline.log` 和 `build/ci-266-android-aar.log`。
+
+按开发测试入口构建 Android arm64 mux 后，`tool/build-android-development.ps1 -Mode Release -SkipMuxBuild` 生成普通 `lib/main.dart` 的 Release/AOT 测试包，日志为 `build/ci-266-android-development-release.log`。脚本校验测试包名、名称、版本、不可调试标志、仅 arm64 ABI、AOT 资产、通知资源及既有开发签名；本轮没有安装、升级、实机播放或账号验收。远端修复后的正式签名打包结果仍需新 CI 验证。
+
+最终 `tool/check.ps1 -SkipPub` 全量通过：格式、静态分析、打包边界及 **4729 项测试**（根应用 3912、API 538、播放器 121、弹幕 153、封装 5）。根应用 13 项 Windows symlink 用例因权限跳过，mux 原生 10 项因未设置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。五份锁文件没有差异；本节本地链接及 `git diff --check` 通过。完整日志为 `build/ci-266-check.log`。

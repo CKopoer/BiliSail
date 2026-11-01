@@ -1,0 +1,14 @@
+// The pinned media-kit Android plugins use SDK 31, but the Flutter embedding exposes
+// plugin dependencies whose AAR metadata requires the current Flutter SDK.
+// Configure only these libraries; keep the upstream checkouts and runtime API
+// requirements intact. finalizeDsl runs after the plugin's android block.
+[':media_kit_video', ':media_kit_libs_android_video'].each { pluginPath ->
+    project(pluginPath) {
+        plugins.withId('com.android.library') {
+            androidComponents.finalizeDsl { library ->
+                def flutter = rootProject.project(':app').extensions.getByName('flutter')
+                library.compileSdk = Math.max(library.compileSdk ?: 0, flutter.compileSdkVersion)
+            }
+        }
+    }
+}

@@ -15,6 +15,9 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+
+apply(from = "patches/media_kit/apply.gradle")
+
 subprojects {
     project.evaluationDependsOn(":app")
 }
