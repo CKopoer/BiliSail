@@ -52,9 +52,11 @@ void main() {
     );
     await tester.pumpAndSettle();
     void expectStyle(ThemeData theme, Brightness icons, {Color? background}) {
+      // Edge-to-edge: the navigation bar is transparent by default; an
+      // explicit backgroundColor still overrides it for special pages.
       expect(
         styles.last['systemNavigationBarColor'],
-        (background ?? theme.colorScheme.surface).toARGB32(),
+        (background ?? Colors.transparent).toARGB32(),
       );
       expect(styles.last['systemNavigationBarIconBrightness'], '$icons');
       expect(styles.last['systemNavigationBarContrastEnforced'], false);
@@ -98,6 +100,26 @@ void main() {
     navigator.currentState!.pop();
     await tester.pumpAndSettle();
     expectStyle(BiliTheme.light(), Brightness.dark);
+    mode.value = ThemeMode.light;
+    await tester.pumpAndSettle();
+    expectStyle(BiliTheme.light(), Brightness.dark);
+    navigator.currentState!.push<void>(
+      MaterialPageRoute(
+        builder: (_) => const AndroidSystemUi(
+          backgroundColor: Colors.black,
+          brightness: Brightness.dark,
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            body: SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expectStyle(BiliTheme.light(), Brightness.light, background: Colors.black);
+    navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expectStyle(BiliTheme.light(), Brightness.dark);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
   for (final (size, dark) in [
@@ -107,7 +129,7 @@ void main() {
     (const Size(900, 600), true),
   ]) {
     testWidgets(
-      'Android gesture inset matches the surface at $size, dark=$dark',
+      'Android gesture bar is transparent over content at $size, dark=$dark',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = size;
@@ -136,13 +158,22 @@ void main() {
           const ValueKey('workspace-bottom-navigation'),
         );
         if (size.width < 600) {
-          expect(tester.getRect(navigation).bottom, size.height - 24);
+          // Edge-to-edge: the dock widget spans to the screen bottom (its
+          // padding keeps the capsule above the gesture inset).
+          expect(tester.getRect(navigation).bottom, size.height);
+          expect(
+            tester.getRect(navigation).top,
+            lessThanOrEqualTo(size.height - 24),
+          );
         } else {
           expect(navigation, findsNothing);
         }
+        // Edge-to-edge: with the dock the content reaches the screen bottom
+        // behind the transparent bar; wide layouts keep their bottom inset
+        // (and the desktop content padding) instead.
         expect(
           tester.getRect(find.byKey(const ValueKey('content'))).bottom,
-          lessThan(size.height - 24),
+          size.width < 600 ? size.height : lessThanOrEqualTo(size.height - 24),
         );
         final render =
             boundary.currentContext!.findRenderObject()!
