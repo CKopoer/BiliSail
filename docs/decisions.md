@@ -492,12 +492,6 @@ Android 复用既有媒体服务，暂停／换源期间不撤下前台服务，
 
 依赖固定到完整提交而非分支，组件的 `shaders/liquid_lens.frag` 随 Git 检出进入包；本地并行开发需提交并推送后改 `ref` 再 `pub get`，构建不再读取相邻工作树副本。测试矩阵的键定位改文本定位，高度断言区分 52 扁条与 60 悬浮 Dock。组件折射着色器需 Impeller（Android 实机），Skia 与测试环境自动降级；Android 实机外观、拖拽刮擦手感与性能未验收，按专项记录保留。
 
-**打包脚本（2026-11-01）**：新增 `android/bin/build-apk.cmd` 双击入口。自动定位 Flutter／Android SDK／JDK 17+，非 ASCII 工程路径自动经 `C:\bilisail-build` 目录联接构建；优先复用 `packages/bili_mux/native/prebuilt/android-arm64` 资产，缺失时经 MSYS2 登录 shell 预构建，再以 `-SkipMuxBuild` 委托 `tool/build-android-development.ps1`（Release、`dev.bilisail.bilisail.test`、本机开发签名、包名/名称/不可调试校验与元信息落盘均沿用既有入口）。本机离线环境下 sqlite3 与 media-kit 的 GitHub 原生资产下载被网络拦截，经镜像下载并按包内固定 SHA-256 校验后放入 hooks 缓存；此为本机状态，不入库。脚本已在本机构建出 67.9 MB 的 `BiliSail-test-arm64-release.apk` 并通过身份校验；设备安装与实机运行未验收。
-
-**aapt 输出编码修复（2026-11-01，同日）**：按用户反馈修复双击构建在身份校验处的失败。aapt 恒以 UTF-8 输出，而 PowerShell 以 `[Console]::OutputEncoding`（中文宿主为 OEM 936）解码原生命令输出，非 ASCII 的应用名“BiliSail 测试版”在校验前即被错读。`tool/android-development.ps1`、`android-version.ps1`、`android-media-notification.ps1` 的 aapt 调用统一改为 .NET 进程读取并显式按 UTF-8 解码，三个 PS1 补加 UTF-8 BOM 保证 Windows PowerShell 5.1 与 pwsh 解析一致；`build-apk.cmd` 开头将控制台代码页固定为 65001。修复后在强制 GBK 控制台编码的环境下复验身份校验通过，并完整跑通双击构建。
-
-**打包脚本输出英文化（2026-11-01，同日）**：按用户反馈，`build-apk.cmd` 的脚本正文与全部运行输出改为详细英文，并整体重写为纯 ASCII 字节（无 BOM、CRLF 行尾），使 cmd 在任意控制台代码页下的渲染一致，彻底规避乱码；工具链定位、联接回退、mux 复用／预构建与委托入口的行为不变。重写时修复两处脚本缺陷：`MUX_PAYLOAD` 在预构建分支未被赋值即被引用，以及 `echo` 文本中的半角括号在括号块内被 cmd 当作语法解析导致 "... was unexpected"。修复后完整跑通双击构建（mux 资产复用、Release 构建、身份校验、adb 安装提示）。
-
 **Dock edge-to-edge（2026-11-01，同日）**：按用户反馈， dock 下方的内容区此前被 surface 色条遮挡。`AndroidSystemUi` 的系统导航栏颜色改为透明（显式 `backgroundColor` 的特殊页面仍可覆盖），`shell.dart` 在显示 dock 的页面把 dock 移入 `Scaffold.bottomNavigationBar` 并开启 `extendBody`：body 延伸到 dock 与透明手势条后方，dock 高度经 `MediaQuery.padding.bottom` 注入给页面滚动列表消费；`SafeArea` 在 dock 页面不再吃底部 inset。键盘弹出时 dock 隐藏、`extendBody` 关闭（键盘 inset 直接缩小 body），且 dock 保持挂载以免打断 reveal 动画。不透明的消息/下载无选中条与播放/个人页保持原有的"预留空间"行为。`android_system_ui_test` 的像素与布局断言按透明导航栏语义更新。窗口化与桌面布局不受影响；Android 实机上的透明手势条与玻璃折射效果待验收。
 
 **圆角外模糊溢出修复（2026-11-01，同日）**：实机反馈 dock 胶囊圆角外侧出现矩形模糊痕迹。原因是 Impeller 按 layer 计算 backdrop 模糊，模糊样本越过胶囊圆角边缘后没有被 hard clip 收住。`liquid_dock_navi` 的 `_buildBar` 改为把玻璃、折射带、标签与高光整体包进 `ClipRRect(h/2)`，投影作为兄弟层留在裁剪外以保留柔和衰减；胶囊圆角外的模糊因此被裁进玻璃内。组件 18 项测试（含圆角越界与 edge-to-edge 断言）与主应用全量测试通过。
