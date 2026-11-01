@@ -139,8 +139,8 @@ class WindowService {
 
   /// Restores this app session's normal rectangle and zoom before its first view.
   ///
-  /// Returns the first scene's client size in physical pixels for a maximized
-  /// first show, or `null` to use the view's prepared client size.
+  /// Returns the first scene's client size in physical pixels when provided by
+  /// the platform, or `null` to use the view's prepared client size.
   Future<Size?> restorePlaybackGeometry() async {
     if (viewId == null || _isViewAvailable?.call() == false) return null;
     _geometryAttached = true;

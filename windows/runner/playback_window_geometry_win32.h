@@ -100,6 +100,12 @@ class InitialWindowSize {
     return SetWindowSubclass(window_, WindowProc, SubclassId(), size) != FALSE;
   }
 
+  bool pending() const {
+    DWORD_PTR size = 0;
+    return IsWindow(window_) &&
+        GetWindowSubclass(window_, WindowProc, SubclassId(), &size) && size != 0;
+  }
+
  private:
   static UINT_PTR SubclassId() {
     return reinterpret_cast<UINT_PTR>(&WindowProc);
@@ -270,16 +276,23 @@ class WindowGeometrySession {
   }
 
   // Render the first scene for the client area it will actually be shown in.
-  // The HWND stays hidden at its normal bounds until the SDK's first frame,
-  // but a remembered maximized window must not present a normal-size buffer.
+  // Restoring normal bounds can precede Flutter's asynchronous view metrics.
+  // Return the native client size instead of letting Dart use that stale size.
+  // A pending maximized first show still needs the monitor's future client area.
   std::optional<SIZE> InitialContentSize(HWND window) const {
-    if (!initial_show_ || !initial_show_->pending()) return std::nullopt;
-    MONITORINFO monitor{};
-    monitor.cbSize = sizeof(monitor);
-    if (!GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST),
-                        &monitor)) return std::nullopt;
-    return SIZE{monitor.rcWork.right - monitor.rcWork.left,
-                monitor.rcWork.bottom - monitor.rcWork.top};
+    if (!initial_size_ || !initial_size_->pending()) return std::nullopt;
+    if (initial_show_ && initial_show_->pending()) {
+      MONITORINFO monitor{};
+      monitor.cbSize = sizeof(monitor);
+      if (!GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST),
+                          &monitor)) return std::nullopt;
+      return SIZE{monitor.rcWork.right - monitor.rcWork.left,
+                  monitor.rcWork.bottom - monitor.rcWork.top};
+    }
+    RECT client{};
+    if (!GetClientRect(window, &client) || client.right <= client.left ||
+        client.bottom <= client.top) return std::nullopt;
+    return SIZE{client.right - client.left, client.bottom - client.top};
   }
 
   bool Capture(HWND window, int64_t view, int64_t owner,

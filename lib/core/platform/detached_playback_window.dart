@@ -552,8 +552,8 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
     final view = _controller.rootView;
     return flutter_window.RegularWindow(
       controller: _controller,
-      // A maximized first show needs a maximized scene already rasterized;
-      // otherwise Windows briefly presents/clips the normal-size caption.
+      // Native preparation supplies the restored client size before Flutter's
+      // asynchronous view metrics catch up, including a maximized first show.
       // Later fixed view constraints override this initial preferred size.
       child: Platform.isWindows
           ? SizedBox.fromSize(

@@ -298,6 +298,64 @@ void RunInitialSizeTests() {
           "Retired owner retained its initial size constraint.");
 }
 
+void RunRestoredNormalSizeTests() {
+  for (const int width : {460, 1100}) {
+    playback_window::WindowGeometrySession session;
+    playback_window::Bounds saved{};
+    {
+      const TestWindow original;
+      const playback_window::PlaybackWindowFrame caption(original.get());
+      Require(session.Restore(original.get(), 100, 100),
+              "Cannot prepare original normal window.");
+      ShowWindow(original.get(), SW_SHOWNORMAL);
+      Require(SetWindowPos(original.get(), nullptr, 120, 140, width, 740,
+                           SWP_NOZORDER | SWP_NOACTIVATE) != FALSE,
+              "Cannot resize original normal window.");
+      Require(session.SaveAndHide(original.get(), 100, 100),
+              "Cannot save original normal window.");
+      saved = *session.saved().normal();
+    }
+    for (int64_t owner = 101; owner <= 102; ++owner) {
+      const TestWindow reopened;
+      const HWND window = reopened.get();
+      const playback_window::PlaybackWindowFrame caption(window);
+      RECT default_client{};
+      Require(GetClientRect(window, &default_client) != FALSE,
+              "Cannot read default client size.");
+      Require(session.Restore(window, owner, owner),
+              "Cannot restore normal window.");
+      RequireBounds(window, saved);
+      Require(!IsWindowVisible(window), "Normal preparation showed the window.");
+      RECT restored_client{};
+      Require(GetClientRect(window, &restored_client) != FALSE,
+              "Cannot read restored client size.");
+      Require(restored_client.right != default_client.right,
+              "Test did not change the default client width.");
+      const auto initial_content = session.InitialContentSize(window);
+      Require(initial_content.has_value(),
+              "Restored normal window has no initial client size.");
+      Require(initial_content->cx == restored_client.right &&
+                  initial_content->cy == restored_client.bottom,
+              "Normal first scene uses stale metrics or outer bounds.");
+      // The SDK sizes to the first Flutter scene before showing the window.
+      // Its standard caption insets must not change our saved outer bounds.
+      SetWindowPos(window, nullptr, 0, 0,
+                   static_cast<int>(saved.width),
+                   static_cast<int>(saved.height) + 31,
+                   SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOZORDER);
+      ShowWindow(window, SW_SHOWNORMAL);
+      RequireBounds(window, saved);
+      Require(!IsZoomed(window), "Normal reopen became maximized.");
+      Require(!session.InitialContentSize(window),
+              "Normal first-scene size survived first show.");
+      Require(session.SaveAndHide(window, owner, owner),
+              "Cannot save reopened normal window.");
+      Require(!session.InitialContentSize(window),
+              "Retired normal window retained its first-scene size.");
+    }
+  }
+}
+
 void RunTests() {
   {
     playback_window::WindowGeometrySession closing;
@@ -387,8 +445,12 @@ void RunTests() {
   {
     const TestWindow ordinary;
     Require(session.Restore(ordinary.get(), 3, 3), "Normal reopen failed.");
-    Require(!session.InitialContentSize(ordinary.get()),
-            "Normal reopen requested a maximized first scene.");
+    const auto initial_content = session.InitialContentSize(ordinary.get());
+    RECT client{};
+    Require(initial_content && GetClientRect(ordinary.get(), &client) &&
+                initial_content->cx == client.right &&
+                initial_content->cy == client.bottom,
+            "Normal reopen did not request its actual client size.");
     ShowWindow(ordinary.get(), SW_SHOWNORMAL);
     Require(!IsZoomed(ordinary.get()), "Normal reopen ignored user's Restore.");
     RequireBounds(ordinary.get(), normal);
@@ -588,10 +650,11 @@ int wmain(int argc, wchar_t* argv[]) {
     RunTests();
     RunTransitionTests();
     RunFrameTests();
+    RunRestoredNormalSizeTests();
     RunInitialSizeTests();
     RunPersistenceTests();
     UnregisterClassW(window_class.lpszClassName, window_class.hInstance);
-    std::cout << "PASS native first show, caption and persistence: SDK restore reproduction, directly visible maximized reopen, user Restore, normal bounds, minimize, pending close, reentrant cancellation, stale owner, fullscreen, custom client frame, app brightness, detach, independent roles, cross-process restore and corrupt records\n";
+    std::cout << "PASS native first show, caption and persistence: SDK restore reproduction, directly visible maximized reopen, user Restore, normal bounds, narrow/wide first scene on repeated reopen, minimize, pending close, reentrant cancellation, stale owner, fullscreen, custom client frame, app brightness, detach, independent roles, cross-process restore and corrupt records\n";
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "FAIL native first show: " << error.what() << '\n';
