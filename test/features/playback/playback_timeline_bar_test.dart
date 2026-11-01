@@ -31,6 +31,44 @@ const _chapters = [
 ];
 
 void main() {
+  for (final width in [560.0, 800.0]) {
+    testWidgets('reserved height follows chapters, curve and width $width', (
+      tester,
+    ) async {
+      final harness = _Harness()
+        ..width = width
+        ..chapters = const [];
+      addTearDown(harness.trend.dispose);
+      Future<void> expectHeight() async {
+        await tester.pumpWidget(harness.build());
+        final size = tester.getSize(find.byType(PlaybackTimelineBar));
+        expect(
+          size.height,
+          PlaybackTimelineBar.heightFor(
+            width: size.width,
+            duration: harness.duration,
+            chapters: harness.chapters,
+            trend: harness.trend.value,
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      }
+
+      await expectHeight();
+      harness.trend.value = HighEnergyTrend(
+        step: const Duration(seconds: 1),
+        span: harness.duration,
+        points: const [HighEnergyPoint(0, 0), HighEnergyPoint(1, 1)],
+      );
+      await expectHeight();
+      harness.chapters = _chapters;
+      await expectHeight();
+      harness.chapters = const [];
+      harness.duration = const Duration(minutes: 30);
+      await expectHeight();
+    });
+  }
+
   testWidgets('new seek and drag survive older seek completion', (
     tester,
   ) async {

@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-01",
+  "probe": "Read-only EGL client/display extensions; no decoder or video rendering tested",
+  "eglVersion": "1.5",
+  "client": {
+    "EGL_EXT_device_query": true,
+    "EGL_ANGLE_d3d_share_handle_client_buffer": false,
+    "EGL_ANGLE_stream_producer_d3d_texture": false
+  },
+  "display": {
+    "EGL_EXT_device_query": false,
+    "EGL_ANGLE_d3d_share_handle_client_buffer": true,
+    "EGL_ANGLE_stream_producer_d3d_texture": true
+  },
+  "sha256": {
+    "libEGL.dll": "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac",
+    "libGLESv2.dll": "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39",
+    "libmpv-2.dll": "4b517ce76493c7d6b6568dde6e2839e3bb6a41c4b46b0e972492f354ad444ba4"
+  }
+}

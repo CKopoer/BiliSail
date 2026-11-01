@@ -486,7 +486,23 @@ Android 复用既有媒体服务，暂停／换源期间不撤下前台服务，
 
 此状态由原生窗口层在首次显示和业务数据库打开前恢复，使用本机原生配置存储，独立于 `AppSettings`、SQLite schema、账号和设置导入／重置。沿用可见工作区限制和缺失／损坏记录回退。平台存储、Wayland 位置限制与验证边界见[桌面窗口状态持久化](validation/window-geometry-persistence.md)。
 
-## D64：移动底栏改用本地 liquid_dock_navi 液态玻璃 Dock
+## D64：滚动与固定弹幕共用调度、分层绘制
+
+**决定（2026-11-01）**：按用户后续要求参考 PiliPlus，将滚动内容放在独立底层、顶部／底部固定内容放在上层；各层内部按到达顺序绘制，替代此前跨类型按到达顺序交错的覆盖方式。外部组透明度和用户设置保持，不另起 Ticker、时钟、调度器或位图缓存。
+
+点播与直播共用分层宿主，每帧仅准备一次入场、过期与位置；两个 painter 只消费该帧。固定层仅在显示内容、布局、样式或 DPR 变化时失效，滚动不反复录制固定文字。保留原媒体／到达时钟、暂停／seek、容量上限与释放边界。回归、对照方法和性能证据见[分层记录](validation/danmaku-layers-performance-2026-11-01.md)，不将分层本身当作已证明的 GPU 收益。
+
+## D65：播放器与弹幕依赖直接对齐 PiliPlus
+
+**决定（2026-11-01）**：按用户后续要求，替换此前 Predidit 依赖，固定为相邻 PiliPlus 锁文件的核心、视频、原生库插件和 canvas_danmaku 来源。保留应用会话、请求策略、弹幕调度与分层契约，不导入 GPLv3 应用实现。Windows 使用匹配 ANGLE／libmpv，并在构建副本继续提供平台线程、视口和释放保护；Apple／Linux 切换匹配的库插件打包边界。来源、API 差异、回归与验收限制见[依赖切换](validation/piliplus-dependencies-2026-11-01.md)。不以依赖名称或历史数据宣称 GPU 改善。
+
+## D66：Windows 视频与弹幕合成使用 Skia
+
+**决定（2026-11-01）**：继续对比 PiliPlus 后，在 Windows runner 显式关闭 Impeller，与参考应用的渲染后端选择一致。固定引擎此前默认启用 Impeller OpenGLESSDF，真实全屏播放的单独开关对照显示，该路径叠加透明弹幕时成本明显增加。只通过 Flutter 提供的 `DartProject` API 选择后端，不另起原生窗口、修改 Pub 缓存或改变硬解配置／用户透明度／显示刷新率驱动的 Ticker。
+
+同一视频的 `hwdec-current` 在两种后端下均为 `d3d11va-copy`；不能把 `hwdec=auto`、视频纹理 GPU 复制和实际解码模式混为一谈。精确来源、交叉复测、回归及适用范围见[Windows Skia 播放记录](validation/windows-skia-playback-2026-11-01.md)。升级 Flutter 后须重新复核纹理、透明合成和窗口生命周期，再决定是否恢复 Impeller。
+
+## D67：移动底栏改用 liquid_dock_navi 液态玻璃 Dock
 
 **决定（2026-11-01）**：按用户要求，一级底栏的选中态分支以 Git 依赖 `https://github.com/MagicFollower/liquid_dock_navi.git`（MIT，纯 Flutter，无平台通道，钉完整提交 `28e9b7a4991ac31d92003475dfbbac614d4fa383`）的 `LiquidDockNavi` 替换 Material `NavigationBar`，保留 `workspace-bottom-navigation` 键、52 高度、四节标签、即时 `_selectSection` 切换、`withClampedTextScaling(1.3)` 及禁用动画下弹簧直落的行为；消息／下载页的无选中扁条与侧边栏、导航模式设置不变。悬浮玻璃 Dock 替代原 surface 底条成为新增外观；组件标签颜色跟随选中态，与原 `labelTextStyle` 语义一致。
 

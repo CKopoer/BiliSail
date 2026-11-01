@@ -2,6 +2,21 @@
 
 记录日期：2026-10-05。本文件用于本地 0.1.0 预览的来源追踪，不表示已经完成对外发行所需的全部原生许可证归档。项目尚未确定自己的开源许可证。
 
+## 2026-11-01 与 PiliPlus 锁文件对齐
+
+按用户要求，采用与 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 锁文件相同的 MIT 依赖：
+
+| 组件 | 固定来源 |
+| --- | --- |
+| canvas_danmaku 0.2.6 | [bggRGjQaUbCoE/canvas_danmaku](https://github.com/bggRGjQaUbCoE/canvas_danmaku/tree/275046d8647a6a26cba1d0dadb9e28688cb3dbf1)，`275046d8647a6a26cba1d0dadb9e28688cb3dbf1` |
+| media_kit 1.1.11、原生库插件与事件桥 | [My-Responsitories/media-kit](https://github.com/My-Responsitories/media-kit/tree/73771ec38176be2d984a3049c28177bce23b54a0)，`73771ec38176be2d984a3049c28177bce23b54a0` |
+| media_kit_video 1.2.5 | [bggRGjQaUbCoE/media-kit](https://github.com/bggRGjQaUbCoE/media-kit/tree/fd8421d21eade4d6d12de137fa7df902fec20292)，`fd8421d21eade4d6d12de137fa7df902fec20292` |
+| macOS／Linux 库插件 | PiliPlus 锁文件的 hosted `media_kit_libs_macos_video 1.1.4`／`media_kit_libs_linux 1.2.1` |
+
+Windows 使用库插件指定的 libmpv／ANGLE，归档与 DLL 摘要见[当前来源](windows/native/PILIPLUS_SOURCE.md)。Android 使用该提交指定、逐 ABI SHA-256 校验的 20260906 jar；Apple 使用匹配库插件的 framework 和 CocoaPods，Linux 使用发行版 libmpv 并保留 distro notices。移除当前构建对 Predidit Native Assets 的依赖；本文件以下相关描述是历史。
+
+弹幕保留有界媒体／到达时钟、布局、字体效果、分层与缓存，实际图片采样调用所锁定库的公开 painter。Windows 构建副本补丁继续保留上游版权和 MIT 许可。未复制 GPLv3 的 PiliPlus 应用源码或修改相邻仓库。MIT 不替代原生二进制及子依赖的许可；本轮二进制不沿用历史 LGPL-only 声明。适配、验证及未测项见[依赖切换](docs/validation/piliplus-dependencies-2026-11-01.md)。
+
 ## 2026-10-29 弹幕与播放器切换
 
 `bili_danmaku` 依赖 MIT 的 [Predidit/canvas_danmaku](https://github.com/Predidit/canvas_danmaku/tree/401915a11ae113cddb5409632cd99729f4b0a301)，固定完整提交 `401915a11ae113cddb5409632cd99729f4b0a301`（0.3.3），使用其公开 Canvas 批量绘制和图像合成管线；包内保留媒体／到达时钟、布局、字体效果与缓存预算适配，没有复制 PiliPlus 应用代码。
@@ -39,7 +54,7 @@ Windows 安装器的现代文件夹选择器另使用同版本的 `WixToolset.Bo
 
 应用默认内置 HarmonyOS Sans（简体中文 Regular/Medium/Bold），来源为用户提供的本机字体目录，文件未修改。随字体提供的 HarmonyOS Sans Fonts License Agreement、版权通知与 SHA-256 见 [资源来源](assets/README.md#harmonyos-sans)。完整许可证打包到应用，并通过“关于”中的许可证页展示；设置中可切换为系统默认字体。
 
-固定组合：Flutter 3.47.6、Riverpod 3.4.3、go_router 18.0.2、Dio 5.11.1、crypto 3.0.7、Drift 2.35.1、path 1.9.1、path_provider 2.1.6、flutter_secure_storage 11.2.0、qr_flutter 4.1.0、window_manager 0.5.2、canvas_danmaku 0.3.3、media_kit 1.1.11、media_kit_video 1.2.5（上述固定 Predidit Git 提交）。各包的许可证以锁定版本包内 `LICENSE` 和生成的 notices 为准。
+固定组合：Flutter 3.47.6、Riverpod 3.4.3、go_router 18.0.2、Dio 5.11.1、crypto 3.0.7、Drift 2.35.1、path 1.9.1、path_provider 2.1.6、flutter_secure_storage 11.2.0、qr_flutter 4.1.0、window_manager 0.5.2、canvas_danmaku 0.2.6、media_kit 1.1.11、media_kit_video 1.2.5（上述固定 PiliPlus Git 来源）。各包的许可证以锁定版本包内 `LICENSE` 和生成的 notices 为准。
 
 依赖维护方入口：[Flutter](https://github.com/flutter/flutter)、[Riverpod](https://github.com/rrousselGit/riverpod)、[go_router](https://pub.dev/packages/go_router/versions/18.0.2)、[Dio](https://github.com/cfug/dio)、[Drift](https://github.com/simolus3/drift)、[flutter_secure_storage](https://github.com/juliansteenbakker/flutter_secure_storage)、[media_kit](https://github.com/media-kit/media-kit)。
 

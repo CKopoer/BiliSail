@@ -37,6 +37,7 @@
 | [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |
 | [DLNA 投屏](validation/dlna-casting.md) | 视频／影视 TV 地址、设备发现与控制、生命周期及平台验收边界 |
 | [系统媒体通知与控制](validation/system-media-controls.md) | Android 通知、Apple 正在播放、Windows SMTC、Linux MPRIS、会话目标与验证边界 |
+| [PiliPlus 播放器与弹幕依赖切换](validation/piliplus-dependencies-2026-11-01.md) | 精确提交、库插件打包、异步 API、headers、首帧与原生回归 |
 | [Predidit 弹幕与播放器切换](predidit-media-migration.md) | 固定源码、Canvas 绘制适配、D3D11／Native Assets、打包及逐平台验证 |
 | [播放控制、视频输出与平台合成拆分](player-output-composition-design.md) | 三层接口、当前 Flutter 基线、输出所有权与后续平台迁移边界 |
 | [播放合成重绘与卡顿分析](validation/playback-composition-performance-2026-10-24.md) | 进度／字幕绘制传播、合成边界、Windows Profile 对照与偶发慢放的证据边界 |
@@ -55,6 +56,10 @@
 | [连续播放与下一集](validation/continuous-playback.md) | 分 P／合集／影视顺序、完播推进、设置持久化与全屏控件 |
 | [播放器音量均衡](validation/audio-normalization.md) | 标准／高动态／关闭、UGC／PGC 元数据、原生增益与验证边界 |
 | [与 PiliPlus 的播放音量对照](validation/player-volume-piliplus-comparison-2026-11-01.md) | 默认原生音量、移动端系统／播放器控件差异、放大与音轨偏好、同源 A/B 条件及离线验证边界 |
+| [播放 GPU 与 PiliPlus 对照](validation/playback-gpu-piliplus-2026-11-01.md) | 固定依赖、透明合成、控件重复绘制修复与 Windows Profile 验证边界 |
+| [固定与滚动弹幕分层对照](validation/danmaku-layers-performance-2026-11-01.md) | 单一时钟、固定层保留、覆盖顺序及三类场景的 Profile 前后对照 |
+| [Windows 全屏弹幕与 Skia 对照](validation/windows-skia-playback-2026-11-01.md) | 实际硬解、PiliPlus 渲染后端差异、真实视频交叉对照及验证边界 |
+| [直通硬解调研与方案](hardware-decoding-plan-2026-11-01.md) | #44 发布追溯、Bili.Libre.Speed／Predidit 路径、各平台硬解设置与自有 fork 分阶段维护 |
 | [听视频与音频控件](validation/listen-video.md) | 独立音轨、常驻响应式控件、切换／检查点及原生验证 |
 | [充电专属与付费视频](validation/video-access.md) | 权益分类、播放限制提示、官网入口与共享视频卡角标 |
 | [实施与验收](implementation-plan.md) | 技术验证、开发里程碑、测试、构建与发布要求 |

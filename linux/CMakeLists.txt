@@ -108,6 +108,14 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# Discard stale Native Assets from a previous dependency graph before bundling.
+install(CODE "file(REMOVE
+  \"${INSTALL_BUNDLE_LIB_DIR}/libmpv.so.2\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/media_kit_event_loop.so\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/libmedia_kit_event_loop.so\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/libmedia_kit_native_event_loop.so\")"
+  COMPONENT Runtime)
+
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
@@ -118,7 +126,10 @@ endforeach(bundled_library)
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/linux/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"
    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-   COMPONENT Runtime)
+   COMPONENT Runtime
+   PATTERN "libmpv*" EXCLUDE
+   PATTERN "libmedia_kit*" EXCLUDE
+   PATTERN "media_kit*" EXCLUDE)
 
 # Fully re-copy the assets directory on each build to avoid having stale files
 # from a previous install.

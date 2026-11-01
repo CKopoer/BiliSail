@@ -183,8 +183,8 @@ try {
   $sourceDirty = [bool]$sourceChanges
   $lockHash = (Get-FileHash -LiteralPath 'pubspec.lock' -Algorithm SHA256).Hash
   Invoke-BuildCommand flutter @('pub', 'get', '--enforce-lockfile')
-  if ($Target -eq 'windows-x64' -and $env:BILISAIL_NATIVE_TAR) {
-    & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1') -Tar $env:BILISAIL_NATIVE_TAR
+  if ($Target -eq 'windows-x64') {
+    & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1')
   }
   & (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Target $Target
   # Release builds must regenerate native registrants without dev-only plugins.

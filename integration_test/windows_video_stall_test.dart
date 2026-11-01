@@ -110,7 +110,9 @@ Future<void> _runBuffering(WidgetTester tester) async {
     );
     resume.complete();
     watch.reset();
-    while (engine.currentSnapshot.position < const Duration(seconds: 6) &&
+    // A backend's position sample can land exactly on six seconds. Keep
+    // waiting until it satisfies the strict progress assertion below.
+    while (engine.currentSnapshot.position <= const Duration(seconds: 6) &&
         watch.elapsed < const Duration(seconds: 10)) {
       await tester.pump(const Duration(milliseconds: 100));
     }

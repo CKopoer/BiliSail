@@ -1,4 +1,4 @@
-// BiliSail GPU delivery for media_kit_video 2.0.1. See LICENSE and README.md.
+// BiliSail GPU delivery for PiliPlus media_kit_video fd8421d. See LICENSE and README.md.
 // Draw and copy share ANGLE's D3D11 immediate context whenever available.
 namespace {
 ID3D11Device *BiliSailAngleDevice(EGLDisplay display) {
@@ -72,6 +72,7 @@ void ANGLESurfaceManager::Draw(std::function<void()> callback) {
   callback();
   SwapBuffers();
   ++draw_revision_;
+  has_frame_ = true;
 }
 
 HANDLE ANGLESurfaceManager::Read() {

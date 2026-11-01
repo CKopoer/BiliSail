@@ -123,7 +123,7 @@ jobs:
           ((needs.prepare.outputs.build_required == 'false' && needs.build.result == 'skipped') ||
            (needs.prepare.outputs.build_required == 'true' && needs.build.result == 'success')) }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: write
       actions: read
@@ -171,6 +171,18 @@ jobs:
               pubspecLockSha256s: [lockfile, lockfile.replace(/\n/g, '\r\n')]
                 .map((content) => createHash('sha256').update(content).digest('hex')),
             });
+      - name: Upload all selected packages as one archive
+        # Artifact downloads are ZIP archives; include fresh and reused packages.
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: BiliSail-${{ needs.prepare.outputs.version }}-release-bundle
+          path: |
+            release-assets/*
+            THIRD_PARTY_NOTICES.md
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          overwrite: true
       - name: Create preview draft with all selected packages
         shell: pwsh
         env:

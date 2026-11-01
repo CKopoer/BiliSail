@@ -1,5 +1,4 @@
 platform :osx, '13.0'
-require_relative '../tool/media-kit-apple-pods'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -31,10 +30,6 @@ target 'Runner' do
   use_frameworks!
 
   flutter_install_all_macos_pods File.dirname(File.realpath(__FILE__))
-  # Keep the pinned Pub checkout immutable; repair only a build-local pod copy.
-  unless system('python3', File.expand_path('../tool/prepare-media-kit-apple.py', __dir__), 'macos')
-    raise 'Could not prepare media-kit CocoaPods C bindings'
-  end
   target 'RunnerTests' do
     inherit! :search_paths
   end
@@ -43,6 +38,5 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
-    bilisail_verify_media_kit_headers(target)
   end
 end

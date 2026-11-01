@@ -29,6 +29,9 @@ Future<void> showImageViewer(
     DialogRoute<void>(
       context: context,
       builder: (_) => ImageViewer(request: request),
+      // The viewer paints its background edge to edge and protects controls
+      // with its own safe area. A route-level inset would expose the barrier.
+      useSafeArea: false,
       themes: InheritedTheme.capture(from: context, to: navigator.context),
       barrierColor:
           DialogTheme.of(context).barrierColor ??
@@ -207,6 +210,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   Widget build(BuildContext context) {
     final state = ref.watch(imageViewerControllerProvider(widget.request));
     final canExport = ref.watch(imageExportServiceProvider).supported;
+    final safePadding = MediaQuery.paddingOf(context);
     final image = state.image;
     if (!identical(image, _shown) || state.index != _shownIndex) {
       _evict(_shown);
@@ -487,8 +491,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                   ),
                 ),
                 Positioned(
-                  top: 8,
-                  right: 8,
+                  top: safePadding.top + 8,
+                  right: safePadding.right + 8,
                   child: IconButton(
                     tooltip: '关闭图片',
                     onPressed: () => Navigator.pop(context),
@@ -497,9 +501,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                 ),
                 if (state.exportMessage != null || image?.scaledPreview == true)
                   Positioned(
-                    top: 12,
-                    left: 16,
-                    right: 64,
+                    top: safePadding.top + 12,
+                    left: safePadding.left + 16,
+                    right: safePadding.right + 64,
                     child: Text(
                       state.exportMessage ?? '大图采用缩小预览，保存和复制使用原图',
                       maxLines: 3,

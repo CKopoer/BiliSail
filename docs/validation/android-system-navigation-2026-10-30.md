@@ -23,3 +23,18 @@
 - 隔离检出首次下载 SQLite／media-kit 原生资产时发生 TLS 握手失败；复用本机缓存后，原构建钩子继续检查归档及库的哈希，未改动 Pub 缓存、TLS 验证或依赖来源。
 - 完整日志、最终 APK 及校验元信息保留在 `build/validation/android-system-navigation-2026-10-30/`；文档本地链接和 `git diff --check` 通过。
 - 本轮 `adb devices -l` 没有连接设备，未做真实系统手势条、三键导航、输入法收起及全屏往返验收。DTD 未发现调试应用，热重载调用未能执行。组件/构建验证不能代替这些设备检查；未构建或操作 Windows/macOS，也未作性能测量。
+
+## 2026-11-01 图片预览系统栏灰条（issue #46）
+
+[Issue #46](https://github.com/CKopoer/BiliSail/issues/46) 报告 Android／Samsung Tab S9 在图片预览时，系统手势条周围出现灰色长条；截图中的顶部状态区也被压暗。
+
+原因是[共享图片查看器](../../lib/shared/ui/image_viewer.dart)虽然使用 `Dialog.fullscreen`，承载它的 `DialogRoute` 仍默认 `useSafeArea: true`。路由在构建查看器之前就消耗系统栏安全区，查看器的底色和模糊图片背景只能绘制到安全区内，系统栏区域露出下方页面与 `black54` 模态遮罩的混合色。查看器内部已有 `SafeArea`，因此应由内部保护交互内容，而不应裁掉外部背景。此外，原系统栏样式仍为 Android 14 及以下指定不透明主题底色，无法随模态遮罩或模糊背景自然合成。
+
+修复将图片预览路由设为 `useSafeArea: false`，让背景延伸到系统栏后方；图片操作栏继续使用内部安全区，关闭按钮和顶部提示补上对应安全区偏移。`AndroidSystemUi` 的默认导航栏底色改为透明，保留图标亮度、关闭对比度遮罩和透明分隔线，普通页面仍由既有 Scaffold 绘制底色，播放全屏的显式黑底保持原策略。没有新增原生适配或依赖。
+
+依据：[Flutter DialogRoute 的安全区默认值及实现](https://api.flutter.dev/flutter/material/DialogRoute/DialogRoute.html)、[Android edge-to-edge 与交互控件安全区](https://developer.android.com/develop/ui/views/layout/edge-to-edge)。固定 Flutter 3.47.6 的本地实现也已核对。
+
+- [新增组件回归](../../test/features/image_viewer/image_viewer_system_ui_test.dart)覆盖 390×844、900×600 两种布局和浅／深色主题，走实际 `showImageViewer` 路由，检查全屏范围、关闭按钮与工具栏安全区、加载／失败重试／图片完成后的四边实际像素，以及透明系统栏平台通道参数和关闭返回。
+- 修复前，新增四项布局回归全部失败：例如 900×600 窗口的查看器实际范围为 `(16, 24)–(884, 576)`；更新后的系统栏透明色断言同样失败。修复后，连同原有系统栏回归共 10 项全部通过。
+- `tool/check.ps1 -SkipPub` 完整通过：格式、全工程静态分析与打包边界检查通过；根应用 3,912、`bili_api` 538、`bili_player` 121、`bili_danmaku` 153、`bili_mux` 5 项，共 4,729 项测试通过。根应用 13 项因 Windows 符号链接权限不足跳过，mux 10 项因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生回归通过。定向修复前／后和完整检查日志分别保留在本机忽略目录 `build/issue-46-regression-before.log`、`build/issue-46-regression-after.log`、`build/issue-46-check.log`；文档相对链接和 `git diff --check` 通过。
+- 按用户要求不构建、不安装、不进行实机操作或性能采样。未发现运行中的 DTD／调试应用，热重载无法执行；Samsung One UI 的实际系统合成、手势／三键导航和横竖屏往返仍由后续实机验收确认。

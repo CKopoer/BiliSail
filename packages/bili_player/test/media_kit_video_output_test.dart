@@ -7,28 +7,29 @@ import 'package:media_kit_video/media_kit_video.dart' as mkv;
 final class _Player extends mk.PlatformPlayer {
   _Player() : super(configuration: const mk.PlayerConfiguration());
 
-  bool get hasWidthListener => widthController.hasListener;
-  bool get hasHeightListener => heightController.hasListener;
+  bool get hasWidthListener => sizeController.hasListener;
+  bool get hasHeightListener => sizeController.hasListener;
   int pauses = 0, plays = 0;
 
   @override
   Future<void> pause() async {
     pauses++;
-    state = state.copyWith(playing: false);
+    state.playing = false;
     playingController.add(false);
   }
 
   @override
   Future<void> play() async {
     plays++;
-    state = state.copyWith(playing: true);
+    state.playing = true;
     playingController.add(true);
   }
 
   void publishDimensions(int width, int height) {
-    state = state.copyWith(width: width, height: height);
-    widthController.add(width);
-    heightController.add(height);
+    state
+      ..width = width
+      ..height = height;
+    sizeController.add((width, height));
   }
 }
 
@@ -48,7 +49,6 @@ final class _PlatformOutput extends mkv.PlatformVideoController {
 final class _PlayerFacade extends Fake implements mk.Player {
   _PlayerFacade(this.platform);
 
-  @override
   final mk.PlatformPlayer platform;
 
   @override
@@ -58,39 +58,21 @@ final class _PlayerFacade extends Fake implements mk.Player {
   mk.PlayerStream get stream => platform.stream;
 
   @override
-  Future<void> pause() => platform.pause();
+  Future<void> pause({bool synchronized = true}) => platform.pause();
 
   @override
-  Future<void> play() => platform.play();
+  Future<void> play({bool synchronized = true}) => platform.play();
 }
 
-final class _Controller extends Fake implements mkv.VideoController {
+final class _Controller extends _PlatformOutput {
   _Controller(_Player backend, int textureId, {bool rendered = true})
-    : player = _PlayerFacade(backend) {
-    output = _PlatformOutput(player, textureId);
-    notifier = ValueNotifier(output);
-    if (rendered) output.renderFrame();
+    : super(_PlayerFacade(backend), textureId) {
+    if (rendered) renderFrame();
   }
-
-  @override
-  final mk.Player player;
-  late final _PlatformOutput output;
-  @override
-  late final ValueNotifier<mkv.PlatformVideoController?> notifier;
-
-  @override
-  ValueNotifier<int?> get id => output.id;
-
-  @override
-  ValueNotifier<Rect?> get rect => output.rect;
-
-  @override
-  Future<void> get waitUntilFirstFrameRendered =>
-      output.waitUntilFirstFrameRendered;
-
+  _PlatformOutput get output => this;
   void dispose() {
-    notifier.dispose();
-    output.dispose();
+    id.dispose();
+    rect.dispose();
   }
 }
 
@@ -223,7 +205,7 @@ void main() {
       });
       harness.controllers.value = controller;
       await tester.pumpWidget(harness.build());
-      player.state = player.state.copyWith(playing: playing);
+      player.state.playing = playing;
       // No pump between hidden/paused: Android can suspend Flutter frames while
       // the outgoing video surface is still observing the old native player.
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);

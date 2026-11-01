@@ -38,6 +38,7 @@ final class NativePlaybackWindow {
   );
 
   void maximize() => _showWindow(handle, 3);
+  void restore() => _showWindow(handle, 9);
   void minimize() => _showWindow(handle, 6);
   void back() => _postMessage(handle, 0x00A2, 3, 0); // NC left-up, HTSYSMENU
   void doubleBack() {

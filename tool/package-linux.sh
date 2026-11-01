@@ -31,10 +31,10 @@ cp "$work/tools/gtk-LICENSE.txt" "$work/tools/linuxdeploy-plugin-gtk.sh" "$gtk_n
 
 export APPIMAGE_EXTRACT_AND_RUN=1 NO_STRIP=1 DEPLOY_GTK_VERSION=3
 export LD_LIBRARY_PATH="$bundle/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-# libmpv is dlopen'ed. Discover dependencies of the exact Native Assets library;
-# adding the distro mpv here would silently replace the pinned implementation.
-mpv="$work/AppDir/usr/bin/lib/libmpv.so.2"
-[[ -f "$mpv" ]] || { echo 'Missing media-kit Native Assets libmpv.so.2' >&2; exit 1; }
+# PiliPlus's media_kit_libs_linux uses the distribution libmpv via dlopen.
+# Resolve it explicitly so linuxdeploy includes it and records distro notices.
+mpv="$(ldconfig -p | awk '$1 == "libmpv.so.2" && /x86-64/ && !found {print $NF; found=1}')"
+[[ -f "$mpv" ]] || { echo 'Install libmpv-dev before packaging' >&2; exit 1; }
 # Print the complete missing dependency set before linuxdeploy stops at the first.
 mpv_dependencies="$(ldd "$mpv")"
 printf '%s\n' "$mpv_dependencies"

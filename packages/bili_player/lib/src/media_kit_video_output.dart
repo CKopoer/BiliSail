@@ -49,8 +49,8 @@ final class MediaKitVideoOutput
           rect.width > 0 &&
           rect.height > 0 &&
           (rect.width > 1 || rect.height > 1) &&
-          (state.width ?? 0) > 0 &&
-          (state.height ?? 0) > 0;
+          state.width > 0 &&
+          state.height > 0;
     }
 
     void update() {
@@ -72,13 +72,11 @@ final class MediaKitVideoOutput
 
     controller.id.addListener(update);
     controller.rect.addListener(update);
-    final width = controller.player.stream.width.listen((_) => update());
-    final height = controller.player.stream.height.listen((_) => update());
+    final size = controller.player.stream.size.listen((_) => update());
     _readinessCleanup.addAll([
       () => controller.id.removeListener(update),
       () => controller.rect.removeListener(update),
-      () => unawaited(width.cancel()),
-      () => unawaited(height.cancel()),
+      () => unawaited(size.cancel()),
     ]);
     unawaited(
       controller.waitUntilFirstFrameRendered.then(
@@ -132,35 +130,60 @@ final class MediaKitVideoOutput
     return controller.waitUntilFirstFrameRendered;
   }
 
-  void bindPlayer(
+  int _bindingRevision = 0;
+
+  Future<void> bindPlayer(
     mk.Player player, {
     required int generation,
     required VideoDecodingMode decoding,
-  }) {
+  }) async {
     if (_disposed) throw StateError('Video output is disposed.');
     _player = player;
     _sourceGeneration = generation;
-    final controller = mkv.VideoController(
+    final revision = ++_bindingRevision;
+    final controller = await mkv.VideoController.create(
       player,
       configuration: videoDecoderConfiguration(
         isAndroid: Platform.isAndroid,
         decoding: decoding,
       ),
     );
-    // Retain early initialization errors for the engine's bounded output wait.
-    controller.platform.future.ignore();
+    if (_disposed ||
+        revision != _bindingRevision ||
+        !identical(_player, player)) {
+      return;
+    }
     _controller.value = controller;
+    _updateDecodedSize();
     final cap = _requestedViewport;
     if (Platform.isWindows && cap != null) _commitViewport(cap);
-    // A preview waits for output before mounting a surface. Initialization is
-    // post-frame, so an otherwise idle Flutter window must request that frame.
+    // A preview can initialize before mounting a surface. Ensure an otherwise
+    // idle window presents the newly bound texture and readiness callbacks.
     WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   void updateVideoDimensions(VideoDimensions? dimensions) {
     if (_videoDimensions == dimensions) return;
     _videoDimensions = dimensions;
+    _updateDecodedSize();
     _updateViewportCap();
+  }
+
+  void _updateDecodedSize() {
+    final controller = _controller.value;
+    final dimensions = _videoDimensions;
+    if (!Platform.isWindows || controller == null || dimensions == null) return;
+    // PiliPlus's controller does not forward player size events. Our native
+    // viewport patch deliberately avoids synchronous mpv reads on this thread.
+    final result = controller.setSize(
+      width: dimensions.width,
+      height: dimensions.height,
+    );
+    unawaited(
+      result?.catchError((Object error) {
+        debugPrint('Windows decoded video size failed: ${error.runtimeType}');
+      }),
+    );
   }
 
   void advanceGeneration(int generation) {
@@ -169,10 +192,12 @@ final class MediaKitVideoOutput
   }
 
   void clearPlayer() {
+    _bindingRevision++;
     _sourceGeneration++;
     _viewportRevision++;
     _controller.value = null;
     _player = null;
+    _videoDimensions = null;
   }
 
   void cancelPendingViewport() => _viewportShrinkTimer?.cancel();
@@ -318,8 +343,7 @@ final class MediaKitVideoOutput
   ) async {
     try {
       const deadline = Duration(seconds: 5);
-      await controller.platform.future.timeout(deadline);
-      final handle = await player.handle.timeout(deadline);
+      final handle = player.handle;
       if (_disposed ||
           generation != _sourceGeneration ||
           revision != _viewportRevision ||

@@ -21,11 +21,12 @@ class AndroidSystemUi extends StatelessWidget {
     final dark = backgroundBrightness == Brightness.dark;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       // MaterialApp's default styles both request a black navigation bar.
-      // Keep the annotation through route/theme changes. Edge-to-edge: draw
-      // content behind the gesture/navigation bar. Android 15+ enforces this
-      // for gesture navigation anyway; a transparent bar covers older
-      // versions too, so the liquid dock blurs real content instead of a
-      // painted surface strip.
+      // Keep the annotation through route/theme changes and let edge-to-edge
+      // content paint behind the gesture/navigation bar on older Android
+      // versions too — including route barriers and image-preview backgrounds.
+      // Android 15+ enforces this for gesture navigation anyway; a transparent
+      // bar also lets the liquid dock blur real content instead of a painted
+      // surface strip.
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,

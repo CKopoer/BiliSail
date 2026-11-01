@@ -4,6 +4,43 @@ final class SourceSuperseded implements Exception {
   const SourceSuperseded();
 }
 
+/// Releases asynchronously created native resources if their owner has left.
+Future<T> waitForNativeResource<T>({
+  required Future<T> creating,
+  required Future<void> Function(T) dispose,
+  required bool Function() superseded,
+  required List<Stream<Object?>> changes,
+  required Duration timeout,
+}) async {
+  ({T value})? created;
+  var abandoned = false, claimed = false;
+  final completion = creating.then<void>((value) async {
+    if (abandoned) {
+      await dispose(value);
+    } else {
+      created = (value: value);
+    }
+  });
+  try {
+    await waitForNativeSignal(
+      signal: completion,
+      superseded: superseded,
+      changes: changes,
+      timeout: timeout,
+    );
+    if (created case final resource?) {
+      claimed = true;
+      return resource.value;
+    }
+    throw StateError('Native resource creation completed without a resource.');
+  } finally {
+    if (!claimed) {
+      abandoned = true;
+      if (created case final resource?) await dispose(resource.value);
+    }
+  }
+}
+
 /// An output signal is independent of decoder metadata. Keep it inside the
 /// source deadline and interrupt it on cancellation without retaining listeners.
 Future<void> waitForNativeSignal({
