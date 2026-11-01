@@ -26,9 +26,9 @@ void main() {
       addTearDown(fixture.dispose);
       await tester.pumpWidget(fixture.app);
       await tester.pumpAndSettle();
-      fixture.router.go('/history');
+      fixture.router.go('/search');
       await tester.pumpAndSettle();
-      final history = tester.element(_page('tab-1'));
+      final browsing = tester.element(_page('tab-1'));
       fixture.router.go('/user/42');
       await tester.pumpAndSettle();
       final profile = tester.element(_page('tab-2'));
@@ -52,16 +52,13 @@ void main() {
 
       // The active route is playback, but this gesture belongs to the browser.
       await back('tab-2');
-      expect(
-        fixture.router.routeInformationProvider.value.uri.path,
-        '/history',
-      );
+      expect(fixture.router.routeInformationProvider.value.uri.path, '/search');
       expect(profile.mounted, isFalse);
-      expect(tester.element(_page('tab-1')), same(history));
+      expect(tester.element(_page('tab-1')), same(browsing));
       expect(tester.element(_page('tab-3')), same(player));
       await back('tab-1');
       expect(fixture.router.routeInformationProvider.value.uri.path, '/');
-      expect(history.mounted, isFalse);
+      expect(browsing.mounted, isFalse);
       await back('home');
       expect(fixture.router.routeInformationProvider.value.uri.path, '/');
       expect(tester.element(_page('tab-3')), same(player));
@@ -388,9 +385,9 @@ void main() {
       expect(fixture.windows.creationCount, 1);
       expect(tester.element(_page('tab-1')), same(playback));
 
-      fixture.router.go('/history');
+      fixture.router.go('/search');
       await tester.pumpAndSettle();
-      expect(fixture.tab(tester, 'tab-2').location.path, '/history');
+      expect(fixture.tab(tester, 'tab-2').location.path, '/search');
       expect(
         View.of(tester.element(_page('tab-2'))).viewId,
         tester.view.viewId,
@@ -697,7 +694,7 @@ class _WindowedWorkspace {
         routes: [
           for (final path in [
             '/',
-            '/history',
+            '/search',
             '/user/:id',
             '/video/:id',
             '/pgc/:id',

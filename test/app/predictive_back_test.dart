@@ -148,7 +148,7 @@ void main() {
             await tester.pumpWidget(InputTestApp.router(routerConfig: router));
             await tester.pumpAndSettle();
             expect(
-              find.byType(NavigationBar),
+              find.byKey(const ValueKey('workspace-bottom-navigation')),
               enabled ? findsOneWidget : findsNothing,
             );
             router.go('/video/A');
@@ -394,10 +394,10 @@ void main() {
           addTearDown(router.dispose);
           await tester.pumpWidget(InputTestApp.router(routerConfig: router));
           await tester.pumpAndSettle();
-          router.go('/history');
+          router.go('/search');
           await tester.pumpAndSettle();
-          final current = tester.element(find.text('page /history'));
-          final origin = tester.getTopLeft(find.text('page /history'));
+          final current = tester.element(find.text('page /search'));
+          final origin = tester.getTopLeft(find.text('page /search'));
 
           expect(
             await systemBackGesture(tester, 'startBackGesture', edge: edge),
@@ -420,14 +420,14 @@ void main() {
             await tester.pump();
           }
           expect(builds, beforeTicks);
-          final moved = tester.getTopLeft(find.text('page /history'));
+          final moved = tester.getTopLeft(find.text('page /search'));
           expect(moved, isNot(origin));
-          expect(router.routeInformationProvider.value.uri.path, '/history');
+          expect(router.routeInformationProvider.value.uri.path, '/search');
           expect(disposed, isEmpty);
           await systemBackGesture(tester, 'cancelBackGesture');
           await tester.pumpAndSettle();
-          expect(tester.element(find.text('page /history')), same(current));
-          expect(tester.getTopLeft(find.text('page /history')), origin);
+          expect(tester.element(find.text('page /search')), same(current));
+          expect(tester.getTopLeft(find.text('page /search')), origin);
           expect(find.text('page /'), findsNothing);
           expect(disposed, isEmpty);
 
@@ -526,15 +526,15 @@ void main() {
     expect(find.text('退出哔帆？'), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    router.go('/history');
+    router.go('/search');
     await tester.pumpAndSettle();
     expect(await systemBackGesture(tester, 'startBackGesture'), isFalse);
     await systemBackGesture(tester, 'commitBackGesture');
     await tester.pumpAndSettle();
     expect(localBack.value, isFalse);
-    expect(router.routeInformationProvider.value.uri.path, '/history');
+    expect(router.routeInformationProvider.value.uri.path, '/search');
     final dialog = showAppDialog<void>(
-      context: tester.element(find.text('page /history')),
+      context: tester.element(find.text('page /search')),
       builder: (_) => const AlertDialog(content: Text('modal')),
     );
     await tester.pumpAndSettle();
@@ -543,8 +543,8 @@ void main() {
     await tester.pumpAndSettle();
     await dialog;
     expect(find.text('modal'), findsNothing);
-    expect(router.routeInformationProvider.value.uri.path, '/history');
-    final fullscreen = Navigator.of(tester.element(find.text('page /history')))
+    expect(router.routeInformationProvider.value.uri.path, '/search');
+    final fullscreen = Navigator.of(tester.element(find.text('page /search')))
         .push<void>(
           RawDialogRoute<void>(
             barrierDismissible: false,
@@ -559,7 +559,7 @@ void main() {
     await tester.pumpAndSettle();
     await fullscreen;
     expect(find.text('fullscreen'), findsNothing);
-    expect(router.routeInformationProvider.value.uri.path, '/history');
+    expect(router.routeInformationProvider.value.uri.path, '/search');
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
@@ -571,7 +571,7 @@ void main() {
       addTearDown(router.dispose);
       await tester.pumpWidget(InputTestApp.router(routerConfig: router));
       await tester.pumpAndSettle();
-      router.go('/history');
+      router.go('/search');
       await tester.pumpAndSettle();
       await systemBackGesture(tester, 'startBackGesture');
       await tester.pump();
@@ -585,7 +585,7 @@ void main() {
         router.go('/user/42');
       } else if (interrupt == 'modal') {
         showAppDialog<void>(
-          context: tester.element(find.text('page /history')),
+          context: tester.element(find.text('page /search')),
           builder: (_) => const AlertDialog(content: Text('new modal')),
         );
       } else {
@@ -597,7 +597,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         router.routeInformationProvider.value.uri.path,
-        interrupt == 'route' ? '/user/42' : '/history',
+        interrupt == 'route' ? '/user/42' : '/search',
       );
       if (interrupt == 'modal') expect(find.text('new modal'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -614,13 +614,13 @@ void main() {
     addTearDown(router.dispose);
     await tester.pumpWidget(InputTestApp.router(routerConfig: router));
     await tester.pumpAndSettle();
-    router.go('/history');
+    router.go('/search');
     await tester.pumpAndSettle();
-    final rect = tester.getRect(find.text('page /history'));
+    final rect = tester.getRect(find.text('page /search'));
     await systemBackGesture(tester, 'startBackGesture');
     await systemBackGesture(tester, 'updateBackGestureProgress', progress: 0.7);
     await tester.pump();
-    expect(tester.getRect(find.text('page /history')), rect);
+    expect(tester.getRect(find.text('page /search')), rect);
     await systemBackGesture(tester, 'commitBackGesture');
     await tester.pumpAndSettle();
     expect(router.routeInformationProvider.value.uri.path, '/');
@@ -634,7 +634,7 @@ void main() {
     addTearDown(router.dispose);
     await tester.pumpWidget(InputTestApp.router(routerConfig: router));
     await tester.pumpAndSettle();
-    router.go('/history');
+    router.go('/search');
     await tester.pumpAndSettle();
     await systemBackGesture(tester, 'startBackGesture');
     await tester.pump();
@@ -670,7 +670,7 @@ GoRouter _router({
         for (final path in [
           '/',
           '/me',
-          '/history',
+          '/search',
           '/user/:mid',
           '/video/:bvid',
         ])

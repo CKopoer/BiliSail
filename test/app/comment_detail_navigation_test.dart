@@ -272,9 +272,9 @@ void main() {
       await dialog;
       expect(find.text('评论详情'), findsOneWidget);
 
-      harness.router.go('/history');
+      harness.router.go('/search?q=detail');
       await tester.pumpAndSettle();
-      expect(find.text('历史内容'), findsOneWidget);
+      expect(find.text('搜索内容'), findsOneWidget);
       await _closeShortcut(tester);
       await tester.pumpAndSettle();
       expect(find.text('评论详情'), findsOneWidget);
@@ -412,13 +412,13 @@ _mount(
               commentsBuilder: (_, _, _) =>
                   const CommentsPanel(target: _target),
             ),
-            '/history' => const Text('历史内容'),
+            '/search' => const Text('搜索内容'),
             _ => const Text('首页内容'),
           },
           child: child,
         ),
         routes: [
-          for (final path in ['/', '/video/BV1ab411c7mD', '/pgc/1', '/history'])
+          for (final path in ['/', '/video/BV1ab411c7mD', '/pgc/1', '/search'])
             GoRoute(path: path, builder: (_, _) => const SizedBox.shrink()),
         ],
       ),

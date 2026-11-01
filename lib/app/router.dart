@@ -322,6 +322,7 @@ final class _WorkspacePage extends ConsumerWidget {
         commands: {
           if ((section == WorkspaceRootSection.feed &&
                   _channelFor(location).hasVideoFeed) ||
+              section == WorkspaceRootSection.history ||
               section == WorkspaceRootSection.messages ||
               section == WorkspaceRootSection.downloads)
             ShortcutAction.refresh: (stroke) => _refresh(context, stroke),
@@ -399,6 +400,12 @@ final class _WorkspacePage extends ConsumerWidget {
               _accountContent(context, section, signedIn, login),
         );
       },
+    ),
+    historyBuilder: (context, location) => _rootBranch(
+      section: WorkspaceRootSection.history,
+      location: location,
+      builder: (context) =>
+          HistoryScreen(key: PageStorageKey('history-${tab.id}')),
     ),
     messagesBuilder: (context, location) => _rootBranch(
       section: WorkspaceRootSection.messages,
@@ -622,7 +629,7 @@ final class _WorkspacePage extends ConsumerWidget {
                   tab.isLive ||
                   tab.isProfile ||
                   tab.isOffline ||
-                  const ['/search', '/history'].contains(tab.location.path)))
+                  tab.location.path == '/search'))
             ShortcutAction.refresh: (stroke) => _refresh(context, stroke),
         },
         child: Builder(
@@ -638,8 +645,6 @@ final class _WorkspacePage extends ConsumerWidget {
                     query: uri.queryParameters['q'] ?? '',
                   ),
                 );
-              case '/history':
-                return HistoryScreen(key: PageStorageKey('history-${tab.id}'));
               default:
                 if (tab.isOffline) {
                   return OfflineScreen(

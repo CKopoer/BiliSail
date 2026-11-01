@@ -20,11 +20,17 @@ final class WorkspaceTab {
       location.pathSegments.first == 'user';
   bool get isBrowse => location.path == '/';
   bool get isAccount => location.path == '/me';
+  bool get isHistory => location.path == '/history';
   bool get isMessages => location.path == '/messages';
   bool get isDownloads => location.path == '/downloads';
   bool get isSettings => location.path == '/settings';
   bool get isRoot =>
-      isBrowse || isAccount || isMessages || isDownloads || isSettings;
+      isBrowse ||
+      isAccount ||
+      isHistory ||
+      isMessages ||
+      isDownloads ||
+      isSettings;
 
   String get title {
     if (isBrowse) return pinned ? '首页' : '浏览';

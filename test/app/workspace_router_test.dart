@@ -75,6 +75,25 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// Finds a primary navigation entry at the given viewport width. Narrow
+/// layouts use the liquid dock, which exposes no per-destination keys, so
+/// tabs are located by their label inside the dock.
+Finder primaryNavigationTarget(String section, double width) => width < 600
+    ? find
+          .descendant(
+            of: find.byKey(const ValueKey('workspace-bottom-navigation')),
+            matching: find.text(switch (section) {
+              'home' => '首页',
+              'dynamic' => '动态',
+              'live' => '直播',
+              'mine' => '我的',
+              'settings' => '设置',
+              _ => section,
+            }),
+          )
+          .first
+    : find.byKey(ValueKey('workspace-nav-$section'));
+
 void main() {
   for (final width in [800.0, 1680.0]) {
     _workspaceTestWidgets(
@@ -905,12 +924,11 @@ void main() {
           }
           await boundary(home.first, 1);
 
-          final prefix = width < 600 ? 'workspace-bottom' : 'workspace-nav';
           final primary = find.byKey(
             const ValueKey('workspace-primary-content'),
           );
           final contentBounds = tester.getRect(primary);
-          await tester.tap(find.byKey(ValueKey('$prefix-dynamic')));
+          await tester.tap(primaryNavigationTarget('dynamic', width));
           await tester.pump();
           expect(tester.getRect(primary), contentBounds);
           await tester.pump(const Duration(milliseconds: 50));
@@ -940,7 +958,7 @@ void main() {
           expectChannel(HomeChannel.dynamic);
 
           if (!compact) {
-            await tester.tap(find.byKey(ValueKey('$prefix-live')));
+            await tester.tap(primaryNavigationTarget('live', width));
             await tester.pumpAndSettle();
             expectChannel(HomeChannel.live);
             expect(find.byKey(const ValueKey('channel-live')), findsNothing);
@@ -966,7 +984,7 @@ void main() {
             }
           }
 
-          await tester.tap(find.byKey(ValueKey('$prefix-mine')));
+          await tester.tap(primaryNavigationTarget('mine', width));
           await tester.pumpAndSettle();
           final mine = find.byKey(const ValueKey('account-content-pages'));
           void expectAccount(AccountContentTab tab) => expect(
@@ -990,7 +1008,7 @@ void main() {
           await tester.fling(mine, Offset(-dx, 0), 2000);
           await tester.pumpAndSettle();
           expectAccount(AccountContentTab.downloads);
-          await tester.tap(find.byKey(ValueKey('$prefix-home')));
+          await tester.tap(primaryNavigationTarget('home', width));
           await tester.pumpAndSettle();
           expectChannel(HomeChannel.recommended);
           expect(tester.state(find.byType(FeedScreen)), same(originalState));
@@ -1500,10 +1518,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      // Only pages that own a tab are closable here. /history now shares the
+      // fixed root tab with 我的/下载/设置, which no tab-close applies to.
       for (final path in [
         '/',
         '/search?q=test',
-        '/history',
         '/user/42',
         '/video/BV1234567890',
         '/pgc/season/28747',
@@ -1727,7 +1746,6 @@ void main() {
                     .first,
               )
               .position;
-          final prefix = width < 600 ? 'workspace-bottom' : 'workspace-nav';
           for (final (section, channel) in [
             ('dynamic', HomeChannel.dynamic),
             ('home', HomeChannel.recommended),
@@ -1738,7 +1756,7 @@ void main() {
             ('dynamic', HomeChannel.dynamic),
             ('home', HomeChannel.recommended),
           ]) {
-            await tester.tap(find.byKey(ValueKey('$prefix-$section')));
+            await tester.tap(primaryNavigationTarget(section, width));
             await tester.pump();
             await tester.pump();
             if (channel != null) {
@@ -1768,7 +1786,7 @@ void main() {
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 50));
           expect(position().isScrollingNotifier.value, isTrue);
-          await tester.tap(find.byKey(ValueKey('$prefix-dynamic')));
+          await tester.tap(primaryNavigationTarget('dynamic', width));
           await tester.pump();
           await tester.pump();
           expect(
@@ -1845,8 +1863,7 @@ void main() {
           }
 
           expectHighlight(HomeChannel.recommended);
-          final prefix = width < 600 ? 'workspace-bottom' : 'workspace-nav';
-          await tester.tap(find.byKey(ValueKey('$prefix-settings')));
+          await tester.tap(primaryNavigationTarget('settings', width));
           await tester.pumpAndSettle();
           final settingsPager = tester.element(
             find.byKey(const ValueKey('settings-category-swipe')),
@@ -1855,7 +1872,7 @@ void main() {
             find.byKey(const ValueKey('settings-category-cache')),
           );
           await tester.pumpAndSettle();
-          await tester.tap(find.byKey(ValueKey('$prefix-home')));
+          await tester.tap(primaryNavigationTarget('home', width));
           await tester.pumpAndSettle();
           for (final channel in [
             HomeChannel.popular,
@@ -1869,7 +1886,7 @@ void main() {
             expectHighlight(channel);
             expect(tester.state(find.byType(FeedScreen)), same(feed));
           }
-          await tester.tap(find.byKey(ValueKey('$prefix-settings')));
+          await tester.tap(primaryNavigationTarget('settings', width));
           await tester.pumpAndSettle();
           expect(
             tester.element(

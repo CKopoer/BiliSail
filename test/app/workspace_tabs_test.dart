@@ -218,6 +218,30 @@ void main() {
     expect(workspace.tabs, hasLength(1));
   });
 
+  test('history selects the fixed root tab instead of opening a page tab', () {
+    final workspace = WorkspaceTabs();
+    for (var trip = 0; trip < 3; trip++) {
+      workspace.acceptRoute(Uri.parse('/history'));
+      expect(workspace.activeId, 'home', reason: 'trip $trip history');
+      expect(workspace.active.location.path, '/history');
+      expect(workspace.tabs, hasLength(1), reason: 'trip $trip history');
+      for (final location in [
+        '/?channel=recommended&tab=home',
+        '/me',
+        '/downloads',
+      ]) {
+        workspace.acceptRoute(Uri.parse(location));
+        expect(workspace.tabs, hasLength(1), reason: location);
+      }
+    }
+    // Primary selections share one identity, so none of the trips above pushed
+    // a visit and Back cannot bounce between 首页 and 历史.
+    expect(workspace.canGoBack, isFalse);
+    // Detail pages keep owning a closable tab.
+    workspace.acceptRoute(Uri.parse('/user/42'));
+    expect(workspace.tabs, hasLength(2));
+  });
+
   test('switching from dual to single keeps media history before consuming the page', () {
     final workspace = WorkspaceTabs()..setDualMode(true);
     workspace.acceptRoute(Uri.parse('/video/A?cid=2'));
@@ -397,12 +421,14 @@ void main() {
     final search = workspace.activeId;
     workspace.acceptRoute(Uri.parse('/video/A'));
     final playback = workspace.activeId;
-    workspace.acceptRoute(Uri.parse('/history'));
-    final history = workspace.activeId;
+    // A profile is a transient browsing visit; /history now shares the fixed
+    // root tab and would not exercise the skip-and-close path.
+    workspace.acceptRoute(Uri.parse('/user/7'));
+    final profile = workspace.activeId;
     expect(workspace.canGoBackBrowsing, isTrue);
     expect(workspace.goBackBrowsing(), isTrue);
     expect(workspace.activeId, search);
-    expect(workspace.tabs.map((tab) => tab.id), isNot(contains(history)));
+    expect(workspace.tabs.map((tab) => tab.id), isNot(contains(profile)));
     expect(workspace.playbackId, playback);
     expect(
       workspace.tabs.where((tab) => tab.id == playback).single.location.path,

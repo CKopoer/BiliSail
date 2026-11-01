@@ -17,12 +17,13 @@ void main() {
   final locations = {
     WorkspaceRootSection.feed: Uri.parse('/?channel=popular&section=每周必看'),
     WorkspaceRootSection.account: Uri.parse('/me?section=favorites'),
+    WorkspaceRootSection.history: Uri.parse('/history'),
     WorkspaceRootSection.messages: Uri.parse('/messages?talker=2'),
     WorkspaceRootSection.downloads: Uri.parse('/downloads'),
     WorkspaceRootSection.settings: Uri.parse('/settings?section=playback'),
   };
   for (final initial in WorkspaceRootSection.values) {
-    testWidgets('root lazily retains five branches when starting at $initial', (
+    testWidgets('root lazily retains six branches when starting at $initial', (
       tester,
     ) async {
       final selection = ValueNotifier(locations[initial]!);
@@ -49,6 +50,8 @@ void main() {
                       probe(WorkspaceRootSection.feed, uri),
                   accountBuilder: (_, uri) =>
                       probe(WorkspaceRootSection.account, uri),
+                  historyBuilder: (_, uri) =>
+                      probe(WorkspaceRootSection.history, uri),
                   messagesBuilder: (_, uri) =>
                       probe(WorkspaceRootSection.messages, uri),
                   downloadsBuilder: (_, uri) =>
@@ -96,8 +99,14 @@ void main() {
           expect(entry.value.widget.uri, locations[entry.key]);
         }
       }
-      expect(find.byType(_Probe, skipOffstage: false), findsNWidgets(5));
-      expect(buckets.values.toSet(), hasLength(5));
+      expect(
+        find.byType(_Probe, skipOffstage: false),
+        findsNWidgets(WorkspaceRootSection.values.length),
+      );
+      expect(
+        buckets.values.toSet(),
+        hasLength(WorkspaceRootSection.values.length),
+      );
       visible.value = false;
       await tester.pump();
       for (final state in states.values) {
@@ -122,6 +131,7 @@ void main() {
                     Text('account epoch ${ref.watch(_revision)}'),
               ),
               accountBuilder: (_, _) => const Text('account'),
+              historyBuilder: (_, _) => const SizedBox(),
               messagesBuilder: (_, _) => const SizedBox(),
               downloadsBuilder: (_, _) => const SizedBox(),
               settingsBuilder: (_, _) => const SizedBox(),

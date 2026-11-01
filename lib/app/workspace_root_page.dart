@@ -6,6 +6,7 @@ import '../shared/ui/retained_page_layout.dart';
 enum WorkspaceRootSection {
   feed('/'),
   account('/me'),
+  history('/history'),
   messages('/messages'),
   downloads('/downloads'),
   settings('/settings');
@@ -31,6 +32,7 @@ class WorkspaceRootPage extends StatefulWidget {
     required this.location,
     required this.feedBuilder,
     required this.accountBuilder,
+    required this.historyBuilder,
     required this.messagesBuilder,
     required this.downloadsBuilder,
     required this.settingsBuilder,
@@ -39,6 +41,7 @@ class WorkspaceRootPage extends StatefulWidget {
   final Uri location;
   final WorkspaceRootBuilder feedBuilder;
   final WorkspaceRootBuilder accountBuilder;
+  final WorkspaceRootBuilder historyBuilder;
   final WorkspaceRootBuilder messagesBuilder;
   final WorkspaceRootBuilder downloadsBuilder;
   final WorkspaceRootBuilder settingsBuilder;
@@ -61,6 +64,7 @@ class _WorkspaceRootPageState extends State<WorkspaceRootPage> {
   ) => switch (section) {
     WorkspaceRootSection.feed => widget.feedBuilder(context, location),
     WorkspaceRootSection.account => widget.accountBuilder(context, location),
+    WorkspaceRootSection.history => widget.historyBuilder(context, location),
     WorkspaceRootSection.messages => widget.messagesBuilder(context, location),
     WorkspaceRootSection.downloads => widget.downloadsBuilder(
       context,
