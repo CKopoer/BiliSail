@@ -259,6 +259,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('已关闭历史记录，新搜索不会保存'), findsOneWidget);
       await tester.enterText(field, '新搜索');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const ValueKey(('search-suggestion', '新搜索建议'))),

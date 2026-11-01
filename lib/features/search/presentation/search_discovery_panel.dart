@@ -266,25 +266,48 @@ final class _SearchDiscoveryPanelState
   }
 }
 
-final class _SearchSuggestions extends ConsumerWidget {
+final class _SearchSuggestions extends ConsumerStatefulWidget {
   const _SearchSuggestions({required this.query, required this.onSearch});
   final String query;
   final ValueChanged<String> onSearch;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final provider = searchSuggestionsProvider(query);
+  ConsumerState<_SearchSuggestions> createState() => _SearchSuggestionsState();
+}
+
+final class _SearchSuggestionsState extends ConsumerState<_SearchSuggestions> {
+  String? _scope;
+  List<String> _items = const [];
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = ref.watch(searchHistoryScopeProvider);
+    if (_scope != scope) {
+      _scope = scope;
+      _items = const [];
+    }
+    final provider = searchSuggestionsProvider(widget.query);
+    final result = ref.watch(provider);
+    final items = result.asData?.value;
+    // Retain only this panel's last nonempty result while the next query loads.
+    if (items != null && items.isNotEmpty) _items = items;
     return SingleChildScrollView(
       key: const ValueKey('search-discovery-panel'),
       padding: const EdgeInsets.all(12),
-      child: ref
-          .watch(provider)
-          .when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('搜索联想', style: Theme.of(context).textTheme.titleSmall),
+          for (final term in _items)
+            ListTile(
+              key: ValueKey(('search-suggestion', term)),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.search, size: 18),
+              title: Text(term, maxLines: 2, overflow: TextOverflow.ellipsis),
+              onTap: () => widget.onSearch(term),
             ),
-            error: (_, _) => Row(
+          if (result.hasError)
+            Row(
               children: [
                 const Expanded(child: Text('搜索联想暂时无法加载')),
                 TextButton(
@@ -293,30 +316,13 @@ final class _SearchSuggestions extends ConsumerWidget {
                 ),
               ],
             ),
-            data: (items) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('搜索联想', style: Theme.of(context).textTheme.titleSmall),
-                if (items.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Text('暂无联想词，可直接提交搜索'),
-                  ),
-                for (final term in items)
-                  ListTile(
-                    key: ValueKey(('search-suggestion', term)),
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.search, size: 18),
-                    title: Text(
-                      term,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () => onSearch(term),
-                  ),
-              ],
+          if (_items.isEmpty && !result.isLoading && !result.hasError)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Text('暂无联想词，可直接提交搜索'),
             ),
-          ),
+        ],
+      ),
     );
   }
 }

@@ -3,11 +3,127 @@ import 'dart:async';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/search/application/search_discovery_controller.dart';
 import 'package:bilisail/features/search/domain/search_discovery_repository.dart';
+import 'package:bilisail/features/search/presentation/search_discovery_panel.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'panel retains suggestions through debounce, empty and failed reads until replacement',
+    (tester) async {
+      final repository = _Repository();
+      final searches = <String>[];
+      final (text, _) = await _mountPanel(
+        tester,
+        repository,
+        searches: searches,
+      );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('暂无联想词，可直接提交搜索'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 300));
+      repository.results[0].complete(['旧候选']);
+      await tester.pumpAndSettle();
+      expect(find.text('旧候选'), findsOneWidget);
+
+      text.text = '空词';
+      await tester.pump();
+      expect(find.text('旧候选'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.tap(find.text('旧候选'));
+      expect(searches, ['旧候选']);
+      await tester.pump(const Duration(milliseconds: 299));
+      expect(repository.calls, ['旧词']);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(find.text('旧候选'), findsOneWidget);
+      repository.results[1].complete([]);
+      await tester.pumpAndSettle();
+      expect(find.text('旧候选'), findsOneWidget);
+      expect(find.text('暂无联想词，可直接提交搜索'), findsNothing);
+
+      text.text = '失败词';
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      repository.results[2].completeError(StateError('offline'));
+      await tester.pumpAndSettle();
+      expect(find.text('旧候选'), findsOneWidget);
+      expect(find.text('搜索联想暂时无法加载'), findsOneWidget);
+      await tester.tap(find.text('重试'));
+      await tester.pump();
+      expect(find.text('旧候选'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 300));
+      repository.results[3].complete(['新候选']);
+      await tester.pumpAndSettle();
+      expect(find.text('新候选'), findsOneWidget);
+      expect(find.text('旧候选'), findsNothing);
+      expect(find.text('搜索联想暂时无法加载'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'clearing input drops retained suggestions and cancels pending reads',
+    (tester) async {
+      final repository = _Repository();
+      final (text, _) = await _mountPanel(tester, repository);
+      await tester.pump(const Duration(milliseconds: 300));
+      repository.results[0].complete(['旧候选']);
+      await tester.pumpAndSettle();
+      text.text = '未完成';
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      text.clear();
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('旧候选'), findsNothing);
+      expect(find.text('搜索历史'), findsOneWidget);
+      expect(repository.cancellations[1].isCancelled, isTrue);
+      repository.results[1].complete(['迟到候选']);
+      await tester.pumpAndSettle();
+      text.text = '重新输入';
+      await tester.pump();
+      expect(find.text('旧候选'), findsNothing);
+      expect(find.text('迟到候选'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 300));
+      repository.results[2].complete([]);
+      await tester.pumpAndSettle();
+      expect(find.text('暂无联想词，可直接提交搜索'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'account switch clears retained suggestions and rejects late old-account results',
+    (tester) async {
+      final repository = _Repository();
+      final scope = StateProvider<String>((ref) => 'guest');
+      final (text, container) = await _mountPanel(
+        tester,
+        repository,
+        scope: scope,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      repository.results[0].complete(['旧账号候选']);
+      await tester.pumpAndSettle();
+      text.text = '另一词';
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      container.read(scope.notifier).state = 'user:2';
+      await tester.pump();
+      expect(find.text('旧账号候选'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(repository.cancellations[1].isCancelled, isTrue);
+      await tester.pump(const Duration(milliseconds: 300));
+      repository.results[1].complete(['旧账号迟到候选']);
+      await tester.pumpAndSettle();
+      expect(find.text('旧账号迟到候选'), findsNothing);
+      repository.results[2].complete(['新账号候选']);
+      await tester.pumpAndSettle();
+      expect(find.text('新账号候选'), findsOneWidget);
+    },
+  );
+
   testWidgets(
     'suggestions debounce, cancel obsolete input and ignore late responses',
     (tester) async {
@@ -35,11 +151,11 @@ void main() {
         '新候选',
         ...List.generate(20, (i) => '$i'),
       ]);
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(next.read().requireValue.length, 10);
       expect(next.read().requireValue.first, '新候选');
       repository.results[0].complete(['旧候选']);
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(next.read().requireValue.first, '新候选');
       next.close();
       container.dispose();
@@ -92,17 +208,49 @@ void main() {
       expect(repository.cancellations.first.isCancelled, isTrue);
       repository.results.first.complete(['旧账号']);
       repository.results[1].completeError(StateError('offline'));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(subscription.read().hasError, isTrue);
       container.invalidate(provider);
       await tester.pump(const Duration(milliseconds: 300));
       repository.results[2].complete(['新账号']);
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(subscription.read().requireValue, ['新账号']);
       subscription.close();
       container.dispose();
     },
   );
+}
+
+Future<(TextEditingController, ProviderContainer)> _mountPanel(
+  WidgetTester tester,
+  _Repository repository, {
+  List<String>? searches,
+  StateProvider<String>? scope,
+}) async {
+  final text = TextEditingController(text: '旧词');
+  final container = ProviderContainer(
+    overrides: [
+      searchDiscoveryRepositoryProvider.overrideWithValue(repository),
+      if (scope != null)
+        searchHistoryScopeProvider.overrideWith((ref) => ref.watch(scope)),
+    ],
+  );
+  addTearDown(text.dispose);
+  addTearDown(container.dispose);
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Scaffold(
+          body: SearchDiscoveryPanel(
+            controller: text,
+            onSearch: (query) => searches?.add(query),
+          ),
+        ),
+      ),
+    ),
+  );
+  return (text, container);
 }
 
 final class _Repository implements SearchDiscoveryRepository {
