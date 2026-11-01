@@ -1655,13 +1655,21 @@ final class _BiliAppShellState extends State<BiliAppShell>
       WorkspaceSection.mine,
       WorkspaceSection.settings,
     ];
+    final tab = _frameTab(context);
     final selected = sectionForLocation(
-      _frameTab(context).location,
+      tab.location,
       compact: _compactChannels,
     );
     if (!sections.contains(selected)) {
       return _unselectedBottomNavigation(context, sections);
     }
+    // A highlighted group can include other pages, such as history under
+    // Mine. Suppress re-selection only on the destination's own page.
+    final atSelectedDestination = switch (selected) {
+      WorkspaceSection.mine => tab.isAccount,
+      WorkspaceSection.settings => tab.isSettings,
+      _ => tab.isBrowse,
+    };
     return NavigationBar(
       key: const ValueKey('workspace-bottom-navigation'),
       animationDuration: MediaQuery.disableAnimationsOf(context)
@@ -1679,7 +1687,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
       }),
       selectedIndex: sections.indexOf(selected),
       onDestinationSelected: (index) {
-        if (sections[index] != selected) {
+        if (sections[index] != selected || !atSelectedDestination) {
           _selectSection(sections[index], compact: true);
         }
       },
