@@ -116,6 +116,8 @@ final class _LiveDanmakuOverlayState extends State<LiveDanmakuOverlay>
       return IgnorePointer(
         child: RepaintBoundary(
           child: CustomPaint(
+            // Cache text bitmaps, rather than the continuously moving picture.
+            willChange: true,
             painter: _LivePainter(
               widget.controller,
               _repaint,

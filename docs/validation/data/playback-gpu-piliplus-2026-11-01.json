@@ -1,0 +1,3474 @@
+{
+  "baselineCommit": "7c6755e",
+  "date": "2026-11-01",
+  "gpu": "RTX 4070 Ti SUPER",
+  "flutter": "3.47.6",
+  "dart": "3.13.5",
+  "runs": [
+    {
+      "label": "panel-before-a-20261101",
+      "mpvSha256": "361E3A306707454A24E7D3558B2EB7A9CCC23A4F5ED396FE7E77F0A44908EDA5",
+      "mediaSha256": "9308FEDD5BBF195619C43719EA39A2313D48C8444E60B63F1087016405A3B584",
+      "stages": {
+        "video": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 60.2667,
+            "median": 60,
+            "p95": 63,
+            "min": 60,
+            "max": 63,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 167.375,
+            "median": 158.0,
+            "p95": 251,
+            "min": 95,
+            "max": 476,
+            "count": 904
+          },
+          "rasterUs": {
+            "mean": 505.3142,
+            "median": 471.5,
+            "p95": 754,
+            "min": 260,
+            "max": 961,
+            "count": 904
+          },
+          "process3dPercent": {
+            "mean": 2.0804,
+            "median": 2.1255,
+            "p95": 2.4663,
+            "min": 1.0696,
+            "max": 2.4663,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 13.1694,
+            "median": 13.7357,
+            "p95": 14.6621,
+            "min": 9.2121,
+            "max": 14.6621,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 234.6429,
+            "median": 210.0,
+            "p95": 435.0,
+            "min": 210.0,
+            "max": 435.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 15.7707,
+            "median": 15.6,
+            "p95": 19.18,
+            "min": 14.94,
+            "max": 19.18,
+            "count": 14
+          },
+          "visible": {
+            "mean": 0,
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000344,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "danmaku": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 163.3333,
+            "median": 170,
+            "p95": 171,
+            "min": 153,
+            "max": 171,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 171.791,
+            "median": 141.0,
+            "p95": 401,
+            "min": 62,
+            "max": 706,
+            "count": 2450
+          },
+          "rasterUs": {
+            "mean": 558.918,
+            "median": 528.0,
+            "p95": 930,
+            "min": 301,
+            "max": 3691,
+            "count": 2450
+          },
+          "process3dPercent": {
+            "mean": 6.6859,
+            "median": 6.809,
+            "p95": 7.1227,
+            "min": 5.8294,
+            "max": 7.1227,
+            "count": 9
+          },
+          "processDecodePercent": {
+            "mean": 15.1606,
+            "median": 15.1921,
+            "p95": 16.2966,
+            "min": 14.0694,
+            "max": 16.2966,
+            "count": 9
+          },
+          "wholeGpuClockMHz": {
+            "mean": 225.0,
+            "median": 217.5,
+            "p95": 270.0,
+            "min": 210.0,
+            "max": 270.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.3386,
+            "median": 17.38,
+            "p95": 17.5,
+            "min": 17.12,
+            "max": 17.5,
+            "count": 14
+          },
+          "visible": {
+            "mean": 18.2,
+            "median": 18,
+            "p95": 20,
+            "min": 18,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000653,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "controls": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 164.9333,
+            "median": 169,
+            "p95": 170,
+            "min": 153,
+            "max": 170,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 189.6099,
+            "median": 145.0,
+            "p95": 458,
+            "min": 63,
+            "max": 2848,
+            "count": 2474
+          },
+          "rasterUs": {
+            "mean": 632.0077,
+            "median": 579.5,
+            "p95": 1096,
+            "min": 296,
+            "max": 3632,
+            "count": 2474
+          },
+          "process3dPercent": {
+            "mean": 7.2572,
+            "median": 6.8948,
+            "p95": 9.7969,
+            "min": 5.656,
+            "max": 9.7969,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 15.5578,
+            "median": 15.5238,
+            "p95": 17.4661,
+            "min": 14.0377,
+            "max": 17.4661,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 256.1538,
+            "median": 240.0,
+            "p95": 315.0,
+            "min": 210.0,
+            "max": 315.0,
+            "count": 13
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.2723,
+            "median": 17.28,
+            "p95": 17.74,
+            "min": 16.75,
+            "max": 17.74,
+            "count": 13
+          },
+          "visible": {
+            "mean": 17.7333,
+            "median": 18,
+            "p95": 20,
+            "min": 16,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.001462,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "paused": {
+          "seconds": 3,
+          "dartFramesPerSecond": {
+            "mean": 1,
+            "median": 0,
+            "p95": 3,
+            "min": 0,
+            "max": 3,
+            "count": 3
+          },
+          "uiUs": {
+            "mean": 498,
+            "median": 510,
+            "p95": 872,
+            "min": 112,
+            "max": 872,
+            "count": 3
+          },
+          "rasterUs": {
+            "mean": 640,
+            "median": 641,
+            "p95": 735,
+            "min": 544,
+            "max": 735,
+            "count": 3
+          },
+          "process3dPercent": {
+            "mean": 0.0152,
+            "median": 0.0152,
+            "p95": 0.0304,
+            "min": 0.0,
+            "max": 0.0304,
+            "count": 2
+          },
+          "processDecodePercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 2
+          },
+          "wholeGpuClockMHz": {
+            "mean": 210.0,
+            "median": 210.0,
+            "p95": 210.0,
+            "min": 210.0,
+            "max": 210.0,
+            "count": 2
+          },
+          "wholeGpuPowerW": {
+            "mean": 11.015,
+            "median": 11.015,
+            "p95": 11.12,
+            "min": 10.91,
+            "max": 11.12,
+            "count": 2
+          },
+          "visible": {
+            "mean": 20,
+            "median": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "count": 3
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 3.5e-05,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        }
+      }
+    },
+    {
+      "label": "panel-before-b-20261101",
+      "mpvSha256": "361E3A306707454A24E7D3558B2EB7A9CCC23A4F5ED396FE7E77F0A44908EDA5",
+      "mediaSha256": "9308FEDD5BBF195619C43719EA39A2313D48C8444E60B63F1087016405A3B584",
+      "stages": {
+        "video": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 60.2,
+            "median": 60,
+            "p95": 62,
+            "min": 59,
+            "max": 62,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 157.3887,
+            "median": 144,
+            "p95": 246,
+            "min": 86,
+            "max": 388,
+            "count": 903
+          },
+          "rasterUs": {
+            "mean": 486.6379,
+            "median": 434,
+            "p95": 779,
+            "min": 220,
+            "max": 951,
+            "count": 903
+          },
+          "process3dPercent": {
+            "mean": 2.1333,
+            "median": 2.1708,
+            "p95": 2.5467,
+            "min": 1.4387,
+            "max": 2.5467,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 13.5403,
+            "median": 13.4584,
+            "p95": 14.7084,
+            "min": 12.7328,
+            "max": 14.7084,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 227.1429,
+            "median": 210.0,
+            "p95": 390.0,
+            "min": 210.0,
+            "max": 390.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 15.8371,
+            "median": 15.57,
+            "p95": 19.07,
+            "min": 15.26,
+            "max": 19.07,
+            "count": 14
+          },
+          "visible": {
+            "mean": 0,
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000274,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "danmaku": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 165.4667,
+            "median": 170,
+            "p95": 171,
+            "min": 151,
+            "max": 171,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 173.4517,
+            "median": 145.0,
+            "p95": 383,
+            "min": 61,
+            "max": 1148,
+            "count": 2482
+          },
+          "rasterUs": {
+            "mean": 566.3824,
+            "median": 520.0,
+            "p95": 1015,
+            "min": 304,
+            "max": 3127,
+            "count": 2482
+          },
+          "process3dPercent": {
+            "mean": 6.7734,
+            "median": 6.8605,
+            "p95": 7.0775,
+            "min": 6.0569,
+            "max": 7.0775,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 15.5905,
+            "median": 15.4495,
+            "p95": 16.9371,
+            "min": 14.3645,
+            "max": 16.9371,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 234.6429,
+            "median": 225.0,
+            "p95": 300.0,
+            "min": 210.0,
+            "max": 300.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.6786,
+            "median": 17.635,
+            "p95": 18.14,
+            "min": 17.37,
+            "max": 18.14,
+            "count": 14
+          },
+          "visible": {
+            "mean": 18.2,
+            "median": 18,
+            "p95": 20,
+            "min": 18,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000832,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "controls": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 164.5333,
+            "median": 169,
+            "p95": 170,
+            "min": 150,
+            "max": 170,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 185.3797,
+            "median": 145.0,
+            "p95": 448,
+            "min": 63,
+            "max": 2705,
+            "count": 2468
+          },
+          "rasterUs": {
+            "mean": 630.4024,
+            "median": 573.0,
+            "p95": 1100,
+            "min": 305,
+            "max": 2574,
+            "count": 2468
+          },
+          "process3dPercent": {
+            "mean": 7.7603,
+            "median": 7.322,
+            "p95": 9.7736,
+            "min": 6.7802,
+            "max": 9.7736,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 15.9006,
+            "median": 15.7982,
+            "p95": 17.2568,
+            "min": 14.9967,
+            "max": 17.2568,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 221.5385,
+            "median": 210.0,
+            "p95": 270.0,
+            "min": 210.0,
+            "max": 270.0,
+            "count": 13
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.5646,
+            "median": 17.62,
+            "p95": 17.86,
+            "min": 17.27,
+            "max": 17.86,
+            "count": 13
+          },
+          "visible": {
+            "mean": 17.7333,
+            "median": 18,
+            "p95": 20,
+            "min": 16,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000276,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "paused": {
+          "seconds": 3,
+          "dartFramesPerSecond": {
+            "mean": 4.6667,
+            "median": 0,
+            "p95": 14,
+            "min": 0,
+            "max": 14,
+            "count": 3
+          },
+          "uiUs": {
+            "mean": 190.4286,
+            "median": 113.5,
+            "p95": 792,
+            "min": 65,
+            "max": 792,
+            "count": 14
+          },
+          "rasterUs": {
+            "mean": 501.2143,
+            "median": 472.0,
+            "p95": 753,
+            "min": 350,
+            "max": 753,
+            "count": 14
+          },
+          "process3dPercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "processDecodePercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "wholeGpuClockMHz": {
+            "mean": 210.0,
+            "median": 210.0,
+            "p95": 210.0,
+            "min": 210.0,
+            "max": 210.0,
+            "count": 2
+          },
+          "wholeGpuPowerW": {
+            "mean": 11.8,
+            "median": 11.8,
+            "p95": 12.1,
+            "min": 11.5,
+            "max": 12.1,
+            "count": 2
+          },
+          "visible": {
+            "mean": 20,
+            "median": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "count": 3
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 1.4e-05,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        }
+      }
+    },
+    {
+      "label": "panel-direct-20261101",
+      "mpvSha256": "361E3A306707454A24E7D3558B2EB7A9CCC23A4F5ED396FE7E77F0A44908EDA5",
+      "mediaSha256": "9308FEDD5BBF195619C43719EA39A2313D48C8444E60B63F1087016405A3B584",
+      "stages": {
+        "video": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 60.5333,
+            "median": 60,
+            "p95": 66,
+            "min": 60,
+            "max": 66,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 156.1244,
+            "median": 143.0,
+            "p95": 250,
+            "min": 81,
+            "max": 401,
+            "count": 908
+          },
+          "rasterUs": {
+            "mean": 482.7996,
+            "median": 435.0,
+            "p95": 739,
+            "min": 242,
+            "max": 1049,
+            "count": 908
+          },
+          "process3dPercent": {
+            "mean": 2.0714,
+            "median": 2.0513,
+            "p95": 2.6405,
+            "min": 1.7125,
+            "max": 2.6405,
+            "count": 9
+          },
+          "processDecodePercent": {
+            "mean": 13.3408,
+            "median": 13.3007,
+            "p95": 14.1295,
+            "min": 12.4154,
+            "max": 14.1295,
+            "count": 9
+          },
+          "wholeGpuClockMHz": {
+            "mean": 225.0,
+            "median": 210.0,
+            "p95": 390.0,
+            "min": 210.0,
+            "max": 390.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 15.5407,
+            "median": 15.305,
+            "p95": 19.08,
+            "min": 14.88,
+            "max": 19.08,
+            "count": 14
+          },
+          "visible": {
+            "mean": 0,
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000413,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "danmaku": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 165.5333,
+            "median": 170,
+            "p95": 172,
+            "min": 153,
+            "max": 172,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 156.936,
+            "median": 129,
+            "p95": 367,
+            "min": 53,
+            "max": 746,
+            "count": 2483
+          },
+          "rasterUs": {
+            "mean": 546.2549,
+            "median": 509,
+            "p95": 986,
+            "min": 296,
+            "max": 3010,
+            "count": 2483
+          },
+          "process3dPercent": {
+            "mean": 6.5595,
+            "median": 6.742,
+            "p95": 7.1248,
+            "min": 5.015,
+            "max": 7.1248,
+            "count": 11
+          },
+          "processDecodePercent": {
+            "mean": 15.4203,
+            "median": 15.4443,
+            "p95": 16.4499,
+            "min": 14.5314,
+            "max": 16.4499,
+            "count": 11
+          },
+          "wholeGpuClockMHz": {
+            "mean": 233.5714,
+            "median": 210.0,
+            "p95": 360.0,
+            "min": 210.0,
+            "max": 360.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.5671,
+            "median": 17.53,
+            "p95": 18.54,
+            "min": 16.89,
+            "max": 18.54,
+            "count": 14
+          },
+          "visible": {
+            "mean": 18.1333,
+            "median": 18,
+            "p95": 20,
+            "min": 18,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000695,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "controls": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 164.6,
+            "median": 169,
+            "p95": 171,
+            "min": 151,
+            "max": 171,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 172.7805,
+            "median": 130,
+            "p95": 447,
+            "min": 54,
+            "max": 2098,
+            "count": 2469
+          },
+          "rasterUs": {
+            "mean": 626.1835,
+            "median": 565,
+            "p95": 1102,
+            "min": 290,
+            "max": 3192,
+            "count": 2469
+          },
+          "process3dPercent": {
+            "mean": 7.7916,
+            "median": 7.2205,
+            "p95": 10.0727,
+            "min": 6.2089,
+            "max": 10.0727,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 15.7115,
+            "median": 15.4289,
+            "p95": 16.8816,
+            "min": 15.1333,
+            "max": 16.8816,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 227.3077,
+            "median": 225.0,
+            "p95": 285.0,
+            "min": 210.0,
+            "max": 285.0,
+            "count": 13
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.4454,
+            "median": 17.48,
+            "p95": 17.73,
+            "min": 17.21,
+            "max": 17.73,
+            "count": 13
+          },
+          "visible": {
+            "mean": 17.7333,
+            "median": 18,
+            "p95": 20,
+            "min": 16,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000167,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "paused": {
+          "seconds": 3,
+          "dartFramesPerSecond": {
+            "mean": 4,
+            "median": 0,
+            "p95": 12,
+            "min": 0,
+            "max": 12,
+            "count": 3
+          },
+          "uiUs": {
+            "mean": 199.8333,
+            "median": 108.0,
+            "p95": 870,
+            "min": 66,
+            "max": 870,
+            "count": 12
+          },
+          "rasterUs": {
+            "mean": 523.8333,
+            "median": 463.5,
+            "p95": 764,
+            "min": 359,
+            "max": 764,
+            "count": 12
+          },
+          "process3dPercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "processDecodePercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "wholeGpuClockMHz": {
+            "mean": 210.0,
+            "median": 210.0,
+            "p95": 210.0,
+            "min": 210.0,
+            "max": 210.0,
+            "count": 2
+          },
+          "wholeGpuPowerW": {
+            "mean": 11.18,
+            "median": 11.18,
+            "p95": 11.23,
+            "min": 11.13,
+            "max": 11.23,
+            "count": 2
+          },
+          "visible": {
+            "mean": 20,
+            "median": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "count": 3
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 7e-06,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        }
+      }
+    },
+    {
+      "label": "panel-nearest-20261101",
+      "mpvSha256": "361E3A306707454A24E7D3558B2EB7A9CCC23A4F5ED396FE7E77F0A44908EDA5",
+      "mediaSha256": "9308FEDD5BBF195619C43719EA39A2313D48C8444E60B63F1087016405A3B584",
+      "stages": {
+        "video": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 60.3333,
+            "median": 60,
+            "p95": 63,
+            "min": 59,
+            "max": 63,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 166.5171,
+            "median": 164,
+            "p95": 246,
+            "min": 84,
+            "max": 369,
+            "count": 905
+          },
+          "rasterUs": {
+            "mean": 509.1735,
+            "median": 497,
+            "p95": 748,
+            "min": 218,
+            "max": 982,
+            "count": 905
+          },
+          "process3dPercent": {
+            "mean": 2.0144,
+            "median": 1.9982,
+            "p95": 2.2398,
+            "min": 1.6246,
+            "max": 2.2398,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 13.0624,
+            "median": 12.9758,
+            "p95": 13.8872,
+            "min": 12.3742,
+            "max": 13.8872,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 220.7143,
+            "median": 210.0,
+            "p95": 330.0,
+            "min": 210.0,
+            "max": 330.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 15.9986,
+            "median": 15.925,
+            "p95": 17.56,
+            "min": 15.59,
+            "max": 17.56,
+            "count": 14
+          },
+          "visible": {
+            "mean": 0,
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000477,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "danmaku": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 164.4,
+            "median": 170,
+            "p95": 171,
+            "min": 153,
+            "max": 171,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 157.8366,
+            "median": 129.0,
+            "p95": 381,
+            "min": 51,
+            "max": 746,
+            "count": 2466
+          },
+          "rasterUs": {
+            "mean": 537.3058,
+            "median": 507.0,
+            "p95": 942,
+            "min": 294,
+            "max": 2897,
+            "count": 2466
+          },
+          "process3dPercent": {
+            "mean": 6.4088,
+            "median": 6.6376,
+            "p95": 6.9498,
+            "min": 4.6721,
+            "max": 6.9498,
+            "count": 11
+          },
+          "processDecodePercent": {
+            "mean": 15.5383,
+            "median": 15.4673,
+            "p95": 16.32,
+            "min": 14.6539,
+            "max": 16.32,
+            "count": 11
+          },
+          "wholeGpuClockMHz": {
+            "mean": 240.0,
+            "median": 217.5,
+            "p95": 360.0,
+            "min": 210.0,
+            "max": 360.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.5814,
+            "median": 17.55,
+            "p95": 18.63,
+            "min": 17.21,
+            "max": 18.63,
+            "count": 14
+          },
+          "visible": {
+            "mean": 18.0667,
+            "median": 18,
+            "p95": 19,
+            "min": 18,
+            "max": 19,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000264,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "controls": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 163.5333,
+            "median": 168,
+            "p95": 170,
+            "min": 152,
+            "max": 170,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 172.278,
+            "median": 131,
+            "p95": 448,
+            "min": 53,
+            "max": 2164,
+            "count": 2453
+          },
+          "rasterUs": {
+            "mean": 611.3237,
+            "median": 552,
+            "p95": 1078,
+            "min": 298,
+            "max": 3659,
+            "count": 2453
+          },
+          "process3dPercent": {
+            "mean": 7.4992,
+            "median": 6.9825,
+            "p95": 9.1118,
+            "min": 6.4544,
+            "max": 9.1118,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 15.4159,
+            "median": 15.4436,
+            "p95": 16.3553,
+            "min": 14.6404,
+            "max": 16.3553,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 215.7692,
+            "median": 210.0,
+            "p95": 225.0,
+            "min": 210.0,
+            "max": 225.0,
+            "count": 13
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.6238,
+            "median": 17.59,
+            "p95": 17.95,
+            "min": 17.31,
+            "max": 17.95,
+            "count": 13
+          },
+          "visible": {
+            "mean": 17.7333,
+            "median": 18,
+            "p95": 20,
+            "min": 16,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000429,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "paused": {
+          "seconds": 3,
+          "dartFramesPerSecond": {
+            "mean": 3.3333,
+            "median": 0,
+            "p95": 10,
+            "min": 0,
+            "max": 10,
+            "count": 3
+          },
+          "uiUs": {
+            "mean": 202.1,
+            "median": 151.0,
+            "p95": 762,
+            "min": 75,
+            "max": 762,
+            "count": 10
+          },
+          "rasterUs": {
+            "mean": 474,
+            "median": 475.5,
+            "p95": 638,
+            "min": 324,
+            "max": 638,
+            "count": 10
+          },
+          "process3dPercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 2
+          },
+          "processDecodePercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 2
+          },
+          "wholeGpuClockMHz": {
+            "mean": 210.0,
+            "median": 210.0,
+            "p95": 210.0,
+            "min": 210.0,
+            "max": 210.0,
+            "count": 2
+          },
+          "wholeGpuPowerW": {
+            "mean": 11.64,
+            "median": 11.64,
+            "p95": 11.86,
+            "min": 11.42,
+            "max": 11.86,
+            "count": 2
+          },
+          "visible": {
+            "mean": 20,
+            "median": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "count": 3
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 1.3e-05,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        }
+      }
+    },
+    {
+      "label": "panel-opacity1-20261101",
+      "mpvSha256": "361E3A306707454A24E7D3558B2EB7A9CCC23A4F5ED396FE7E77F0A44908EDA5",
+      "mediaSha256": "9308FEDD5BBF195619C43719EA39A2313D48C8444E60B63F1087016405A3B584",
+      "stages": {
+        "video": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 60.1333,
+            "median": 60,
+            "p95": 62,
+            "min": 60,
+            "max": 62,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 165.1408,
+            "median": 157.0,
+            "p95": 251,
+            "min": 82,
+            "max": 489,
+            "count": 902
+          },
+          "rasterUs": {
+            "mean": 499.6608,
+            "median": 462.0,
+            "p95": 754,
+            "min": 301,
+            "max": 902,
+            "count": 902
+          },
+          "process3dPercent": {
+            "mean": 2.0882,
+            "median": 2.0759,
+            "p95": 2.3591,
+            "min": 1.9537,
+            "max": 2.3591,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 13.7268,
+            "median": 13.2348,
+            "p95": 16.0044,
+            "min": 12.8288,
+            "max": 16.0044,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 218.5714,
+            "median": 210.0,
+            "p95": 315.0,
+            "min": 210.0,
+            "max": 315.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 15.9529,
+            "median": 15.725,
+            "p95": 17.12,
+            "min": 15.19,
+            "max": 17.12,
+            "count": 14
+          },
+          "visible": {
+            "mean": 0,
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000415,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "danmaku": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 165.6,
+            "median": 170,
+            "p95": 173,
+            "min": 153,
+            "max": 173,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 169.6204,
+            "median": 140.0,
+            "p95": 381,
+            "min": 62,
+            "max": 832,
+            "count": 2484
+          },
+          "rasterUs": {
+            "mean": 456.1735,
+            "median": 410.0,
+            "p95": 813,
+            "min": 251,
+            "max": 2028,
+            "count": 2484
+          },
+          "process3dPercent": {
+            "mean": 4.8809,
+            "median": 4.9399,
+            "p95": 5.2894,
+            "min": 4.0144,
+            "max": 5.2894,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 13.9931,
+            "median": 13.7075,
+            "p95": 15.7245,
+            "min": 12.6269,
+            "max": 15.7245,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 222.8571,
+            "median": 210.0,
+            "p95": 300.0,
+            "min": 210.0,
+            "max": 300.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.2657,
+            "median": 17.25,
+            "p95": 17.79,
+            "min": 16.96,
+            "max": 17.79,
+            "count": 14
+          },
+          "visible": {
+            "mean": 18.1333,
+            "median": 18,
+            "p95": 20,
+            "min": 18,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000165,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "controls": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 164.3333,
+            "median": 168,
+            "p95": 170,
+            "min": 152,
+            "max": 170,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 182.8037,
+            "median": 142,
+            "p95": 437,
+            "min": 57,
+            "max": 2270,
+            "count": 2465
+          },
+          "rasterUs": {
+            "mean": 542.9355,
+            "median": 496,
+            "p95": 991,
+            "min": 253,
+            "max": 2705,
+            "count": 2465
+          },
+          "process3dPercent": {
+            "mean": 6.488,
+            "median": 5.4004,
+            "p95": 9.6711,
+            "min": 5.0654,
+            "max": 9.6711,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 14.4192,
+            "median": 14.402,
+            "p95": 15.9769,
+            "min": 13.5247,
+            "max": 15.9769,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 215.7692,
+            "median": 210.0,
+            "p95": 255.0,
+            "min": 210.0,
+            "max": 255.0,
+            "count": 13
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.3392,
+            "median": 17.25,
+            "p95": 17.97,
+            "min": 16.94,
+            "max": 17.97,
+            "count": 13
+          },
+          "visible": {
+            "mean": 17.7333,
+            "median": 18,
+            "p95": 20,
+            "min": 16,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000878,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "paused": {
+          "seconds": 3,
+          "dartFramesPerSecond": {
+            "mean": 3,
+            "median": 0,
+            "p95": 9,
+            "min": 0,
+            "max": 9,
+            "count": 3
+          },
+          "uiUs": {
+            "mean": 223.2222,
+            "median": 99,
+            "p95": 935,
+            "min": 70,
+            "max": 935,
+            "count": 9
+          },
+          "rasterUs": {
+            "mean": 426.5556,
+            "median": 366,
+            "p95": 678,
+            "min": 283,
+            "max": 678,
+            "count": 9
+          },
+          "process3dPercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "processDecodePercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "wholeGpuClockMHz": {
+            "mean": 210.0,
+            "median": 210.0,
+            "p95": 210.0,
+            "min": 210.0,
+            "max": 210.0,
+            "count": 2
+          },
+          "wholeGpuPowerW": {
+            "mean": 11.845,
+            "median": 11.845,
+            "p95": 12.08,
+            "min": 11.61,
+            "max": 12.08,
+            "count": 2
+          },
+          "visible": {
+            "mean": 20,
+            "median": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "count": 3
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 3.9e-05,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        }
+      }
+    },
+    {
+      "label": "panel-hints-20261101",
+      "mpvSha256": "361E3A306707454A24E7D3558B2EB7A9CCC23A4F5ED396FE7E77F0A44908EDA5",
+      "mediaSha256": "9308FEDD5BBF195619C43719EA39A2313D48C8444E60B63F1087016405A3B584",
+      "stages": {
+        "video": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 60.2,
+            "median": 60,
+            "p95": 62,
+            "min": 60,
+            "max": 62,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 161.5792,
+            "median": 151,
+            "p95": 247,
+            "min": 86,
+            "max": 439,
+            "count": 903
+          },
+          "rasterUs": {
+            "mean": 489.1683,
+            "median": 450,
+            "p95": 753,
+            "min": 201,
+            "max": 957,
+            "count": 903
+          },
+          "process3dPercent": {
+            "mean": 2.1668,
+            "median": 2.1999,
+            "p95": 2.3323,
+            "min": 1.9395,
+            "max": 2.3323,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 13.7714,
+            "median": 13.7509,
+            "p95": 14.9863,
+            "min": 12.6953,
+            "max": 14.9863,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 214.2857,
+            "median": 210.0,
+            "p95": 270.0,
+            "min": 210.0,
+            "max": 270.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 15.5464,
+            "median": 15.56,
+            "p95": 15.8,
+            "min": 15.15,
+            "max": 15.8,
+            "count": 14
+          },
+          "visible": {
+            "mean": 0,
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 4.2e-05,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "danmaku": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 165.3333,
+            "median": 170,
+            "p95": 171,
+            "min": 152,
+            "max": 171,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 169.671,
+            "median": 141.0,
+            "p95": 379,
+            "min": 59,
+            "max": 785,
+            "count": 2480
+          },
+          "rasterUs": {
+            "mean": 541.0504,
+            "median": 508.0,
+            "p95": 961,
+            "min": 294,
+            "max": 2120,
+            "count": 2480
+          },
+          "process3dPercent": {
+            "mean": 6.4269,
+            "median": 6.7479,
+            "p95": 7.106,
+            "min": 4.6628,
+            "max": 7.106,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 14.7249,
+            "median": 14.7862,
+            "p95": 15.6186,
+            "min": 13.8415,
+            "max": 15.6186,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 232.5,
+            "median": 217.5,
+            "p95": 330.0,
+            "min": 210.0,
+            "max": 330.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.74,
+            "median": 17.735,
+            "p95": 18.03,
+            "min": 17.38,
+            "max": 18.03,
+            "count": 14
+          },
+          "visible": {
+            "mean": 18.2,
+            "median": 18,
+            "p95": 20,
+            "min": 18,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000975,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "controls": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 163,
+            "median": 168,
+            "p95": 170,
+            "min": 149,
+            "max": 170,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 183.0941,
+            "median": 143,
+            "p95": 443,
+            "min": 60,
+            "max": 1987,
+            "count": 2445
+          },
+          "rasterUs": {
+            "mean": 613.3906,
+            "median": 555,
+            "p95": 1064,
+            "min": 302,
+            "max": 2806,
+            "count": 2445
+          },
+          "process3dPercent": {
+            "mean": 7.5575,
+            "median": 6.8577,
+            "p95": 9.8995,
+            "min": 6.2989,
+            "max": 9.8995,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 14.8566,
+            "median": 14.6216,
+            "p95": 16.2366,
+            "min": 14.1244,
+            "max": 16.2366,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 218.0769,
+            "median": 210.0,
+            "p95": 240.0,
+            "min": 210.0,
+            "max": 240.0,
+            "count": 13
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.7085,
+            "median": 17.72,
+            "p95": 17.98,
+            "min": 17.39,
+            "max": 17.98,
+            "count": 13
+          },
+          "visible": {
+            "mean": 17.7333,
+            "median": 18,
+            "p95": 20,
+            "min": 16,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000297,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "paused": {
+          "seconds": 3,
+          "dartFramesPerSecond": {
+            "mean": 6.3333,
+            "median": 0,
+            "p95": 19,
+            "min": 0,
+            "max": 19,
+            "count": 3
+          },
+          "uiUs": {
+            "mean": 168.6842,
+            "median": 109,
+            "p95": 764,
+            "min": 69,
+            "max": 764,
+            "count": 19
+          },
+          "rasterUs": {
+            "mean": 467.5789,
+            "median": 454,
+            "p95": 613,
+            "min": 325,
+            "max": 613,
+            "count": 19
+          },
+          "process3dPercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "processDecodePercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "wholeGpuClockMHz": {
+            "mean": 210.0,
+            "median": 210.0,
+            "p95": 210.0,
+            "min": 210.0,
+            "max": 210.0,
+            "count": 2
+          },
+          "wholeGpuPowerW": {
+            "mean": 11.34,
+            "median": 11.34,
+            "p95": 11.37,
+            "min": 11.31,
+            "max": 11.37,
+            "count": 2
+          },
+          "visible": {
+            "mean": 20,
+            "median": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "count": 3
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 3.7e-05,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        }
+      }
+    },
+    {
+      "label": "panel-fixed-a-20261101",
+      "mpvSha256": "361E3A306707454A24E7D3558B2EB7A9CCC23A4F5ED396FE7E77F0A44908EDA5",
+      "mediaSha256": "9308FEDD5BBF195619C43719EA39A2313D48C8444E60B63F1087016405A3B584",
+      "stages": {
+        "video": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 60.6,
+            "median": 60,
+            "p95": 66,
+            "min": 60,
+            "max": 66,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 150.0286,
+            "median": 133,
+            "p95": 242,
+            "min": 80,
+            "max": 445,
+            "count": 909
+          },
+          "rasterUs": {
+            "mean": 463.0242,
+            "median": 410,
+            "p95": 730,
+            "min": 201,
+            "max": 1163,
+            "count": 909
+          },
+          "process3dPercent": {
+            "mean": 2.0096,
+            "median": 1.9673,
+            "p95": 2.3477,
+            "min": 1.8442,
+            "max": 2.3477,
+            "count": 9
+          },
+          "processDecodePercent": {
+            "mean": 12.6603,
+            "median": 12.6928,
+            "p95": 13.3054,
+            "min": 11.9574,
+            "max": 13.3054,
+            "count": 9
+          },
+          "wholeGpuClockMHz": {
+            "mean": 220.7143,
+            "median": 210.0,
+            "p95": 330.0,
+            "min": 210.0,
+            "max": 330.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 15.7221,
+            "median": 15.61,
+            "p95": 18.24,
+            "min": 15.05,
+            "max": 18.24,
+            "count": 14
+          },
+          "visible": {
+            "mean": 0,
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000992,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "danmaku": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 165.6,
+            "median": 170,
+            "p95": 171,
+            "min": 153,
+            "max": 171,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 167.3704,
+            "median": 141.0,
+            "p95": 381,
+            "min": 62,
+            "max": 673,
+            "count": 2484
+          },
+          "rasterUs": {
+            "mean": 541.6481,
+            "median": 505.0,
+            "p95": 973,
+            "min": 297,
+            "max": 4047,
+            "count": 2484
+          },
+          "process3dPercent": {
+            "mean": 6.2094,
+            "median": 6.4083,
+            "p95": 7.0615,
+            "min": 4.5105,
+            "max": 7.0615,
+            "count": 11
+          },
+          "processDecodePercent": {
+            "mean": 14.7031,
+            "median": 14.7731,
+            "p95": 15.1072,
+            "min": 14.203,
+            "max": 15.1072,
+            "count": 11
+          },
+          "wholeGpuClockMHz": {
+            "mean": 242.1429,
+            "median": 225.0,
+            "p95": 375.0,
+            "min": 210.0,
+            "max": 375.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.895,
+            "median": 17.79,
+            "p95": 19.44,
+            "min": 17.51,
+            "max": 19.44,
+            "count": 14
+          },
+          "visible": {
+            "mean": 18.2,
+            "median": 18,
+            "p95": 20,
+            "min": 18,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000189,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "controls": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 164.9333,
+            "median": 169,
+            "p95": 171,
+            "min": 151,
+            "max": 171,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 172.7688,
+            "median": 140.0,
+            "p95": 402,
+            "min": 62,
+            "max": 2582,
+            "count": 2474
+          },
+          "rasterUs": {
+            "mean": 613.7094,
+            "median": 551.5,
+            "p95": 1087,
+            "min": 299,
+            "max": 3378,
+            "count": 2474
+          },
+          "process3dPercent": {
+            "mean": 7.6318,
+            "median": 6.9975,
+            "p95": 9.6193,
+            "min": 6.3432,
+            "max": 9.6193,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 15.4011,
+            "median": 15.3972,
+            "p95": 15.98,
+            "min": 14.436,
+            "max": 15.98,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 212.3077,
+            "median": 210.0,
+            "p95": 225.0,
+            "min": 210.0,
+            "max": 225.0,
+            "count": 13
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.8492,
+            "median": 17.77,
+            "p95": 18.24,
+            "min": 17.47,
+            "max": 18.24,
+            "count": 13
+          },
+          "visible": {
+            "mean": 17.7333,
+            "median": 18,
+            "p95": 20,
+            "min": 16,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000883,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "paused": {
+          "seconds": 3,
+          "dartFramesPerSecond": {
+            "mean": 4,
+            "median": 0,
+            "p95": 12,
+            "min": 0,
+            "max": 12,
+            "count": 3
+          },
+          "uiUs": {
+            "mean": 234.9167,
+            "median": 145.5,
+            "p95": 856,
+            "min": 87,
+            "max": 856,
+            "count": 12
+          },
+          "rasterUs": {
+            "mean": 547.8333,
+            "median": 550.5,
+            "p95": 776,
+            "min": 364,
+            "max": 776,
+            "count": 12
+          },
+          "process3dPercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 2
+          },
+          "processDecodePercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 2
+          },
+          "wholeGpuClockMHz": {
+            "mean": 210.0,
+            "median": 210.0,
+            "p95": 210.0,
+            "min": 210.0,
+            "max": 210.0,
+            "count": 2
+          },
+          "wholeGpuPowerW": {
+            "mean": 12.275,
+            "median": 12.275,
+            "p95": 12.28,
+            "min": 12.27,
+            "max": 12.28,
+            "count": 2
+          },
+          "visible": {
+            "mean": 20,
+            "median": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "count": 3
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 4.6e-05,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        }
+      }
+    },
+    {
+      "label": "panel-before-c-20261101",
+      "mpvSha256": "361E3A306707454A24E7D3558B2EB7A9CCC23A4F5ED396FE7E77F0A44908EDA5",
+      "mediaSha256": "9308FEDD5BBF195619C43719EA39A2313D48C8444E60B63F1087016405A3B584",
+      "stages": {
+        "video": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 60.3333,
+            "median": 60,
+            "p95": 67,
+            "min": 56,
+            "max": 67,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 156.1238,
+            "median": 144,
+            "p95": 243,
+            "min": 89,
+            "max": 408,
+            "count": 905
+          },
+          "rasterUs": {
+            "mean": 470.5182,
+            "median": 425,
+            "p95": 724,
+            "min": 220,
+            "max": 1065,
+            "count": 905
+          },
+          "process3dPercent": {
+            "mean": 2.0627,
+            "median": 2.1238,
+            "p95": 2.2202,
+            "min": 1.7659,
+            "max": 2.2202,
+            "count": 9
+          },
+          "processDecodePercent": {
+            "mean": 12.4523,
+            "median": 12.409,
+            "p95": 13.2518,
+            "min": 11.9625,
+            "max": 13.2518,
+            "count": 9
+          },
+          "wholeGpuClockMHz": {
+            "mean": 216.4286,
+            "median": 210.0,
+            "p95": 300.0,
+            "min": 210.0,
+            "max": 300.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 15.715,
+            "median": 15.655,
+            "p95": 16.51,
+            "min": 15.23,
+            "max": 16.51,
+            "count": 14
+          },
+          "visible": {
+            "mean": 0,
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000219,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "danmaku": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 165.8,
+            "median": 170,
+            "p95": 173,
+            "min": 153,
+            "max": 173,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 174.8918,
+            "median": 146,
+            "p95": 385,
+            "min": 63,
+            "max": 751,
+            "count": 2487
+          },
+          "rasterUs": {
+            "mean": 551.6775,
+            "median": 513,
+            "p95": 970,
+            "min": 295,
+            "max": 2151,
+            "count": 2487
+          },
+          "process3dPercent": {
+            "mean": 6.0068,
+            "median": 6.144,
+            "p95": 6.8384,
+            "min": 4.9856,
+            "max": 6.8384,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 15.652,
+            "median": 15.5311,
+            "p95": 19.0735,
+            "min": 14.2787,
+            "max": 19.0735,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 251.7857,
+            "median": 232.5,
+            "p95": 345.0,
+            "min": 210.0,
+            "max": 345.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.7457,
+            "median": 17.77,
+            "p95": 18.44,
+            "min": 17.3,
+            "max": 18.44,
+            "count": 14
+          },
+          "visible": {
+            "mean": 18.0667,
+            "median": 18,
+            "p95": 19,
+            "min": 18,
+            "max": 19,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000282,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "controls": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 164.4667,
+            "median": 169,
+            "p95": 170,
+            "min": 149,
+            "max": 170,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 185.4297,
+            "median": 144,
+            "p95": 445,
+            "min": 62,
+            "max": 1977,
+            "count": 2467
+          },
+          "rasterUs": {
+            "mean": 613.8958,
+            "median": 557,
+            "p95": 1094,
+            "min": 293,
+            "max": 2927,
+            "count": 2467
+          },
+          "process3dPercent": {
+            "mean": 7.4825,
+            "median": 6.8928,
+            "p95": 9.6109,
+            "min": 5.7596,
+            "max": 9.6109,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 15.1627,
+            "median": 15.1088,
+            "p95": 16.307,
+            "min": 14.4379,
+            "max": 16.307,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 215.7692,
+            "median": 210.0,
+            "p95": 240.0,
+            "min": 210.0,
+            "max": 240.0,
+            "count": 13
+          },
+          "wholeGpuPowerW": {
+            "mean": 17.6354,
+            "median": 17.59,
+            "p95": 18.08,
+            "min": 17.37,
+            "max": 18.08,
+            "count": 13
+          },
+          "visible": {
+            "mean": 17.7333,
+            "median": 18,
+            "p95": 20,
+            "min": 16,
+            "max": 20,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 0.000988,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "paused": {
+          "seconds": 3,
+          "dartFramesPerSecond": {
+            "mean": 5.3333,
+            "median": 0,
+            "p95": 16,
+            "min": 0,
+            "max": 16,
+            "count": 3
+          },
+          "uiUs": {
+            "mean": 186.1875,
+            "median": 131.0,
+            "p95": 783,
+            "min": 71,
+            "max": 783,
+            "count": 16
+          },
+          "rasterUs": {
+            "mean": 463.25,
+            "median": 460.0,
+            "p95": 771,
+            "min": 313,
+            "max": 771,
+            "count": 16
+          },
+          "process3dPercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "processDecodePercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "wholeGpuClockMHz": {
+            "mean": 210.0,
+            "median": 210.0,
+            "p95": 210.0,
+            "min": 210.0,
+            "max": 210.0,
+            "count": 2
+          },
+          "wholeGpuPowerW": {
+            "mean": 11.925,
+            "median": 11.925,
+            "p95": 12.24,
+            "min": 11.61,
+            "max": 12.24,
+            "count": 2
+          },
+          "visible": {
+            "mean": 20,
+            "median": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "count": 3
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "448x252"
+          ],
+          "maxAbsAvsyncSeconds": 1.2e-05,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        }
+      }
+    },
+    {
+      "label": "panel-fixed-b-20261101",
+      "mpvSha256": "361E3A306707454A24E7D3558B2EB7A9CCC23A4F5ED396FE7E77F0A44908EDA5",
+      "mediaSha256": "9308FEDD5BBF195619C43719EA39A2313D48C8444E60B63F1087016405A3B584",
+      "stages": {
+        "video": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 60.3333,
+            "median": 60,
+            "p95": 66,
+            "min": 59,
+            "max": 66,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 156.495,
+            "median": 145,
+            "p95": 247,
+            "min": 88,
+            "max": 414,
+            "count": 905
+          },
+          "rasterUs": {
+            "mean": 565.1127,
+            "median": 504,
+            "p95": 845,
+            "min": 220,
+            "max": 2116,
+            "count": 905
+          },
+          "process3dPercent": {
+            "mean": 2.8897,
+            "median": 2.9304,
+            "p95": 3.5049,
+            "min": 2.3644,
+            "max": 3.5049,
+            "count": 9
+          },
+          "processDecodePercent": {
+            "mean": 16.5486,
+            "median": 16.4374,
+            "p95": 18.0558,
+            "min": 15.6059,
+            "max": 18.0558,
+            "count": 9
+          },
+          "wholeGpuClockMHz": {
+            "mean": 221.7857,
+            "median": 210.0,
+            "p95": 330.0,
+            "min": 210.0,
+            "max": 330.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 16.2943,
+            "median": 16.2,
+            "p95": 17.4,
+            "min": 15.99,
+            "max": 17.4,
+            "count": 14
+          },
+          "visible": {
+            "mean": 0,
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 0.000312,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "danmaku": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 165.8667,
+            "median": 170,
+            "p95": 172,
+            "min": 153,
+            "max": 172,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 185.4192,
+            "median": 156.0,
+            "p95": 400,
+            "min": 68,
+            "max": 881,
+            "count": 2488
+          },
+          "rasterUs": {
+            "mean": 597.5414,
+            "median": 558.0,
+            "p95": 1023,
+            "min": 331,
+            "max": 5768,
+            "count": 2488
+          },
+          "process3dPercent": {
+            "mean": 9.4836,
+            "median": 9.655,
+            "p95": 10.3079,
+            "min": 8.5497,
+            "max": 10.3079,
+            "count": 11
+          },
+          "processDecodePercent": {
+            "mean": 20.0707,
+            "median": 20.1391,
+            "p95": 20.6818,
+            "min": 19.5784,
+            "max": 20.6818,
+            "count": 11
+          },
+          "wholeGpuClockMHz": {
+            "mean": 277.5,
+            "median": 262.5,
+            "p95": 375.0,
+            "min": 240.0,
+            "max": 375.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 18.6771,
+            "median": 18.65,
+            "p95": 18.99,
+            "min": 18.32,
+            "max": 18.99,
+            "count": 14
+          },
+          "visible": {
+            "mean": 30.7333,
+            "median": 28,
+            "p95": 36,
+            "min": 27,
+            "max": 36,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 0.000443,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "controls": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 163.8667,
+            "median": 169,
+            "p95": 171,
+            "min": 150,
+            "max": 171,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 212.1253,
+            "median": 173.0,
+            "p95": 493,
+            "min": 70,
+            "max": 893,
+            "count": 2458
+          },
+          "rasterUs": {
+            "mean": 861.2486,
+            "median": 801.0,
+            "p95": 1426,
+            "min": 519,
+            "max": 3294,
+            "count": 2458
+          },
+          "process3dPercent": {
+            "mean": 11.6988,
+            "median": 11.8823,
+            "p95": 12.2793,
+            "min": 10.6234,
+            "max": 12.2793,
+            "count": 9
+          },
+          "processDecodePercent": {
+            "mean": 20.3868,
+            "median": 20.2915,
+            "p95": 21.1595,
+            "min": 19.7919,
+            "max": 21.1595,
+            "count": 9
+          },
+          "wholeGpuClockMHz": {
+            "mean": 297.6923,
+            "median": 285.0,
+            "p95": 345.0,
+            "min": 270.0,
+            "max": 345.0,
+            "count": 13
+          },
+          "wholeGpuPowerW": {
+            "mean": 18.6538,
+            "median": 18.66,
+            "p95": 18.96,
+            "min": 18.41,
+            "max": 18.96,
+            "count": 13
+          },
+          "visible": {
+            "mean": 27.4,
+            "median": 24,
+            "p95": 32,
+            "min": 24,
+            "max": 32,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 0.00076,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "paused": {
+          "seconds": 3,
+          "dartFramesPerSecond": {
+            "mean": 5.6667,
+            "median": 0,
+            "p95": 17,
+            "min": 0,
+            "max": 17,
+            "count": 3
+          },
+          "uiUs": {
+            "mean": 288.2941,
+            "median": 156,
+            "p95": 1945,
+            "min": 80,
+            "max": 1945,
+            "count": 17
+          },
+          "rasterUs": {
+            "mean": 764.3529,
+            "median": 788,
+            "p95": 1152,
+            "min": 567,
+            "max": 1152,
+            "count": 17
+          },
+          "process3dPercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 2
+          },
+          "processDecodePercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 2
+          },
+          "wholeGpuClockMHz": {
+            "mean": 270.0,
+            "median": 270.0,
+            "p95": 330.0,
+            "min": 210.0,
+            "max": 330.0,
+            "count": 2
+          },
+          "wholeGpuPowerW": {
+            "mean": 11.91,
+            "median": 11.91,
+            "p95": 12.39,
+            "min": 11.43,
+            "max": 12.39,
+            "count": 2
+          },
+          "visible": {
+            "mean": 32,
+            "median": 32,
+            "p95": 32,
+            "min": 32,
+            "max": 32,
+            "count": 3
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 1.7e-05,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        }
+      }
+    },
+    {
+      "label": "panel-before-d-20261101",
+      "mpvSha256": "361E3A306707454A24E7D3558B2EB7A9CCC23A4F5ED396FE7E77F0A44908EDA5",
+      "mediaSha256": "9308FEDD5BBF195619C43719EA39A2313D48C8444E60B63F1087016405A3B584",
+      "stages": {
+        "video": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 60.2,
+            "median": 60,
+            "p95": 62,
+            "min": 60,
+            "max": 62,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 146.2071,
+            "median": 131,
+            "p95": 237,
+            "min": 85,
+            "max": 299,
+            "count": 903
+          },
+          "rasterUs": {
+            "mean": 533.2846,
+            "median": 469,
+            "p95": 814,
+            "min": 249,
+            "max": 2356,
+            "count": 903
+          },
+          "process3dPercent": {
+            "mean": 2.7744,
+            "median": 2.8149,
+            "p95": 3.0316,
+            "min": 2.158,
+            "max": 3.0316,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 15.4083,
+            "median": 15.3565,
+            "p95": 16.1518,
+            "min": 14.579,
+            "max": 16.1518,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 222.8571,
+            "median": 210.0,
+            "p95": 345.0,
+            "min": 210.0,
+            "max": 345.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 15.5364,
+            "median": 15.375,
+            "p95": 17.87,
+            "min": 15.03,
+            "max": 17.87,
+            "count": 14
+          },
+          "visible": {
+            "mean": 0,
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 0.00079,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "danmaku": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 164.2667,
+            "median": 170,
+            "p95": 171,
+            "min": 152,
+            "max": 171,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 194.3401,
+            "median": 162.0,
+            "p95": 425,
+            "min": 70,
+            "max": 3069,
+            "count": 2464
+          },
+          "rasterUs": {
+            "mean": 619.1761,
+            "median": 579.5,
+            "p95": 1034,
+            "min": 328,
+            "max": 2071,
+            "count": 2464
+          },
+          "process3dPercent": {
+            "mean": 9.6059,
+            "median": 9.6158,
+            "p95": 10.5087,
+            "min": 8.6418,
+            "max": 10.5087,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 20.1263,
+            "median": 20.1154,
+            "p95": 20.5186,
+            "min": 19.7369,
+            "max": 20.5186,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 279.6429,
+            "median": 255.0,
+            "p95": 390.0,
+            "min": 255.0,
+            "max": 390.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 18.3593,
+            "median": 18.225,
+            "p95": 20.8,
+            "min": 17.8,
+            "max": 20.8,
+            "count": 14
+          },
+          "visible": {
+            "mean": 30.7333,
+            "median": 28,
+            "p95": 36,
+            "min": 27,
+            "max": 36,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 0.000203,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "controls": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 165.2667,
+            "median": 170,
+            "p95": 171,
+            "min": 152,
+            "max": 171,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 219.2118,
+            "median": 162,
+            "p95": 530,
+            "min": 68,
+            "max": 1235,
+            "count": 2479
+          },
+          "rasterUs": {
+            "mean": 818.1367,
+            "median": 769,
+            "p95": 1346,
+            "min": 504,
+            "max": 3905,
+            "count": 2479
+          },
+          "process3dPercent": {
+            "mean": 12.2999,
+            "median": 12.3207,
+            "p95": 12.7115,
+            "min": 11.7983,
+            "max": 12.7115,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 20.702,
+            "median": 20.5968,
+            "p95": 21.1276,
+            "min": 20.3127,
+            "max": 21.1276,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 283.8462,
+            "median": 285.0,
+            "p95": 300.0,
+            "min": 270.0,
+            "max": 300.0,
+            "count": 13
+          },
+          "wholeGpuPowerW": {
+            "mean": 18.1031,
+            "median": 18.1,
+            "p95": 18.26,
+            "min": 17.76,
+            "max": 18.26,
+            "count": 13
+          },
+          "visible": {
+            "mean": 27.5333,
+            "median": 25,
+            "p95": 32,
+            "min": 24,
+            "max": 32,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 0.000476,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "paused": {
+          "seconds": 3,
+          "dartFramesPerSecond": {
+            "mean": 2.3333,
+            "median": 0,
+            "p95": 7,
+            "min": 0,
+            "max": 7,
+            "count": 3
+          },
+          "uiUs": {
+            "mean": 506.4286,
+            "median": 284,
+            "p95": 2141,
+            "min": 82,
+            "max": 2141,
+            "count": 7
+          },
+          "rasterUs": {
+            "mean": 811.4286,
+            "median": 774,
+            "p95": 1375,
+            "min": 569,
+            "max": 1375,
+            "count": 7
+          },
+          "process3dPercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "processDecodePercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "wholeGpuClockMHz": {
+            "mean": 262.5,
+            "median": 262.5,
+            "p95": 315.0,
+            "min": 210.0,
+            "max": 315.0,
+            "count": 2
+          },
+          "wholeGpuPowerW": {
+            "mean": 11.155,
+            "median": 11.155,
+            "p95": 11.29,
+            "min": 11.02,
+            "max": 11.29,
+            "count": 2
+          },
+          "visible": {
+            "mean": 32,
+            "median": 32,
+            "p95": 32,
+            "min": 32,
+            "max": 32,
+            "count": 3
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 1.7e-05,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        }
+      }
+    },
+    {
+      "label": "panel-fixed-c-20261101",
+      "mpvSha256": "361E3A306707454A24E7D3558B2EB7A9CCC23A4F5ED396FE7E77F0A44908EDA5",
+      "mediaSha256": "9308FEDD5BBF195619C43719EA39A2313D48C8444E60B63F1087016405A3B584",
+      "stages": {
+        "video": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 60.5333,
+            "median": 60,
+            "p95": 69,
+            "min": 59,
+            "max": 69,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 145,
+            "median": 126.0,
+            "p95": 242,
+            "min": 85,
+            "max": 305,
+            "count": 908
+          },
+          "rasterUs": {
+            "mean": 524.9075,
+            "median": 450.5,
+            "p95": 829,
+            "min": 207,
+            "max": 1096,
+            "count": 908
+          },
+          "process3dPercent": {
+            "mean": 2.7229,
+            "median": 2.7386,
+            "p95": 2.8432,
+            "min": 2.5236,
+            "max": 2.8432,
+            "count": 9
+          },
+          "processDecodePercent": {
+            "mean": 16.6126,
+            "median": 16.6452,
+            "p95": 17.1535,
+            "min": 15.9773,
+            "max": 17.1535,
+            "count": 9
+          },
+          "wholeGpuClockMHz": {
+            "mean": 213.2143,
+            "median": 210.0,
+            "p95": 255.0,
+            "min": 210.0,
+            "max": 255.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 15.685,
+            "median": 15.65,
+            "p95": 15.9,
+            "min": 15.48,
+            "max": 15.9,
+            "count": 14
+          },
+          "visible": {
+            "mean": 0,
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 0.00044,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "danmaku": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 164.4667,
+            "median": 170,
+            "p95": 171,
+            "min": 153,
+            "max": 171,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 172.4333,
+            "median": 143,
+            "p95": 375,
+            "min": 66,
+            "max": 1012,
+            "count": 2467
+          },
+          "rasterUs": {
+            "mean": 562.2019,
+            "median": 524,
+            "p95": 993,
+            "min": 322,
+            "max": 3451,
+            "count": 2467
+          },
+          "process3dPercent": {
+            "mean": 9.5972,
+            "median": 9.8159,
+            "p95": 10.2293,
+            "min": 7.7538,
+            "max": 10.2293,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 20.323,
+            "median": 20.3677,
+            "p95": 21.0129,
+            "min": 19.5974,
+            "max": 21.0129,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 275.3571,
+            "median": 255.0,
+            "p95": 375.0,
+            "min": 240.0,
+            "max": 375.0,
+            "count": 14
+          },
+          "wholeGpuPowerW": {
+            "mean": 18.25,
+            "median": 18.22,
+            "p95": 19.22,
+            "min": 17.8,
+            "max": 19.22,
+            "count": 14
+          },
+          "visible": {
+            "mean": 30.7333,
+            "median": 28,
+            "p95": 36,
+            "min": 27,
+            "max": 36,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 0.000181,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "controls": {
+          "seconds": 15,
+          "dartFramesPerSecond": {
+            "mean": 165.0667,
+            "median": 170,
+            "p95": 170,
+            "min": 150,
+            "max": 170,
+            "count": 15
+          },
+          "uiUs": {
+            "mean": 192.3502,
+            "median": 163.0,
+            "p95": 443,
+            "min": 67,
+            "max": 751,
+            "count": 2476
+          },
+          "rasterUs": {
+            "mean": 804.1826,
+            "median": 749.5,
+            "p95": 1340,
+            "min": 493,
+            "max": 2446,
+            "count": 2476
+          },
+          "process3dPercent": {
+            "mean": 12.1142,
+            "median": 12.056,
+            "p95": 12.7011,
+            "min": 11.4163,
+            "max": 12.7011,
+            "count": 10
+          },
+          "processDecodePercent": {
+            "mean": 20.3694,
+            "median": 20.3747,
+            "p95": 20.7334,
+            "min": 19.7969,
+            "max": 20.7334,
+            "count": 10
+          },
+          "wholeGpuClockMHz": {
+            "mean": 289.6154,
+            "median": 285.0,
+            "p95": 315.0,
+            "min": 270.0,
+            "max": 315.0,
+            "count": 13
+          },
+          "wholeGpuPowerW": {
+            "mean": 18.5738,
+            "median": 18.58,
+            "p95": 18.74,
+            "min": 18.42,
+            "max": 18.74,
+            "count": 13
+          },
+          "visible": {
+            "mean": 27.5333,
+            "median": 25,
+            "p95": 32,
+            "min": 24,
+            "max": 32,
+            "count": 15
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 0.000308,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        },
+        "paused": {
+          "seconds": 3,
+          "dartFramesPerSecond": {
+            "mean": 3.3333,
+            "median": 0,
+            "p95": 10,
+            "min": 0,
+            "max": 10,
+            "count": 3
+          },
+          "uiUs": {
+            "mean": 352.3,
+            "median": 86.0,
+            "p95": 2279,
+            "min": 79,
+            "max": 2279,
+            "count": 10
+          },
+          "rasterUs": {
+            "mean": 773.7,
+            "median": 724.5,
+            "p95": 1408,
+            "min": 559,
+            "max": 1408,
+            "count": 10
+          },
+          "process3dPercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "processDecodePercent": {
+            "mean": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count": 1
+          },
+          "wholeGpuClockMHz": {
+            "mean": 255.0,
+            "median": 255.0,
+            "p95": 300.0,
+            "min": 210.0,
+            "max": 300.0,
+            "count": 2
+          },
+          "wholeGpuPowerW": {
+            "mean": 10.76,
+            "median": 10.76,
+            "p95": 10.84,
+            "min": 10.68,
+            "max": 10.84,
+            "count": 2
+          },
+          "visible": {
+            "mean": 32,
+            "median": 32,
+            "p95": 32,
+            "min": 32,
+            "max": 32,
+            "count": 3
+          },
+          "hwdec": [
+            "d3d11va"
+          ],
+          "outputs": [
+            "960x540"
+          ],
+          "maxAbsAvsyncSeconds": 1.4e-05,
+          "maxFrameDrops": 0,
+          "maxDecoderDrops": 0,
+          "directPaintsDelta": 0
+        }
+      }
+    }
+  ]
+}

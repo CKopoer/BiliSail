@@ -122,6 +122,9 @@ final class _DanmakuOverlayState extends State<DanmakuOverlay>
       return IgnorePointer(
         child: RepaintBoundary(
           child: CustomPaint(
+            // Text bitmaps are cached separately; moving positions change
+            // this picture. This hint does not schedule animation frames.
+            willChange: true,
             painter: _DanmakuPainter(
               widget.controller,
               _repaint,

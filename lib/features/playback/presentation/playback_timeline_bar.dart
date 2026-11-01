@@ -23,6 +23,23 @@ typedef _ChapterTitleInputs = ({
 
 /// Hover and drag state stay local. Preview never commands the media engine.
 class PlaybackTimelineBar extends StatefulWidget {
+  /// Calculates the logical height reserved by the playback control bar.
+  ///
+  /// Tight width and height constraints contain position-driven layout work.
+  /// Recalculate when [width], [duration], [chapters] or [trend] changes.
+  static double heightFor({
+    required double width,
+    required Duration duration,
+    required List<VideoChapter> chapters,
+    required HighEnergyTrend? trend,
+  }) =>
+      22 +
+      (normalizeChapters(chapters, duration).isNotEmpty
+          ? 20
+          : trend != null && trend.matchesDuration(duration)
+          ? (width < 600 ? 16 : 24)
+          : 0);
+
   const PlaybackTimelineBar({
     super.key,
     required this.position,
@@ -155,7 +172,12 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      RepaintBoundary(child: _buildBar(context));
+
+  // Position, buffering and hover paints must not invalidate the surrounding
+  // control gradient, buttons and subtitles on every media clock update.
+  Widget _buildBar(BuildContext context) {
     final total = widget.duration.inMilliseconds.toDouble();
     final enabled = total > 0;
     // Releasing the pointer must not expose the old clock before seek confirms.

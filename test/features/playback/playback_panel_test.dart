@@ -2280,6 +2280,75 @@ void main() {
     });
   }
 
+  for (final fullScreen in [false, true]) {
+    testWidgets(
+      'position ticks retain control decoration: fullscreen $fullScreen',
+      (tester) async {
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(
+            session,
+            _FakeWindowService(),
+            const AppSettings.defaults().copyWith(danmakuEnabled: false),
+            width: 1200,
+          ),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        if (fullScreen) {
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+        }
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find
+              .ancestor(
+                of: find.byKey(const ValueKey('player-controls')),
+                matching: find.byType(RepaintBoundary),
+              )
+              .first,
+        );
+        List<Object?> paints() {
+          final pictures = <Object?>[];
+          void visit(Layer layer) {
+            if (layer.runtimeType == OffsetLayer &&
+                !identical(layer, boundary.debugLayer)) {
+              return;
+            }
+            if (layer is PictureLayer) pictures.add(layer.picture);
+            if (layer is ContainerLayer) {
+              var child = layer.firstChild;
+              while (child != null) {
+                visit(child);
+                child = child.nextSibling;
+              }
+            }
+          }
+
+          visit(boundary.debugLayer!);
+          return pictures;
+        }
+
+        final before = paints();
+        expect(before, isNotEmpty, reason: boundary.debugLayer!.toStringDeep());
+        for (var i = 1; i <= 12; i++) {
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              position: Duration(milliseconds: i * 250),
+              buffered: Duration(seconds: 30 + i),
+            ),
+          );
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        expect(find.text('00:03 / 03:00'), findsOneWidget);
+        expect(paints(), orderedEquals(before));
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
+
   testWidgets('composition strategy follows the same output into fullscreen', (
     tester,
   ) async {
