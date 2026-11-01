@@ -7,7 +7,7 @@ import 'playback_sidebar_toggle.dart';
 import 'scroll_collapsing_header.dart';
 
 /// Keeps the player mounted while the information lists collapse its extra
-/// portrait height before consuming their own scroll distance.
+/// square or portrait height before consuming their own scroll distance.
 class PlaybackPageLayout extends StatefulWidget {
   const PlaybackPageLayout({
     super.key,
@@ -69,7 +69,7 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
           !widget.listening &&
           dimensions != null &&
           dimensions.width > 0 &&
-          dimensions.height > dimensions.width &&
+          dimensions.height >= dimensions.width &&
           bounds.maxHeight.isFinite) {
         // Leave at least 240 logical pixels and 35% of the page for the
         // information tabs. Very short windows simply have no extra height.

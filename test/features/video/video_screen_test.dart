@@ -56,81 +56,101 @@ import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 
 void main() {
-  testWidgets(
-    'decoded portrait video expands and scrolls without replacing player',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(390, 800);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final session = PlaybackLayoutSessionFake();
-      addTearDown(session.dispose);
-      var created = 0;
-      var disposed = 0;
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            playbackSessionProvider.overrideWithValue(session),
-            authControllerProvider.overrideWith(_GuestAuthController.new),
-            videoRepositoryProvider.overrideWithValue(_VideoRepository()),
-            videoExtrasRepositoryProvider.overrideWithValue(
-              _ExtrasRepository(),
-            ),
-          ],
-          child: InputTestApp(
-            home: Scaffold(
-              body: VideoScreen(
-                id: const VideoId('BV1abc123456'),
-                playerBuilder: (context, _, _) {
-                  ProviderScope.containerOf(context)
-                      .read(playbackSessionProvider);
-                  return _TrackedPlayer(
-                    onCreate: () => created++,
-                    onDispose: () => disposed++,
-                  );
-                },
+  for (final (dimensions, expandedHeight) in [
+    (const VideoDimensions(1080, 1920), 520.0),
+    (const VideoDimensions(1080, 1080), 390.0),
+  ]) {
+    testWidgets(
+      'decoded ${dimensions.width}x${dimensions.height} video expands and scrolls without replacing player',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 800);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final session = PlaybackLayoutSessionFake();
+        addTearDown(session.dispose);
+        var created = 0;
+        var disposed = 0;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              playbackSessionProvider.overrideWithValue(session),
+              authControllerProvider.overrideWith(_GuestAuthController.new),
+              videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+              videoExtrasRepositoryProvider.overrideWithValue(
+                _ExtrasRepository(),
+              ),
+            ],
+            child: InputTestApp(
+              home: Scaffold(
+                body: VideoScreen(
+                  id: const VideoId('BV1abc123456'),
+                  playerBuilder: (context, _, _) {
+                    ProviderScope.containerOf(context)
+                        .read(playbackSessionProvider);
+                    return _TrackedPlayer(
+                      onCreate: () => created++,
+                      onDispose: () => disposed++,
+                    );
+                  },
+                ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final player = tester.state(find.byType(_TrackedPlayer));
-      expect(tester.getSize(find.byType(_TrackedPlayer)).height, 390 * 9 / 16);
-      session.snapshots.value = session.snapshots.value.copyWith(
-        videoDimensions: const VideoDimensions(1080, 1920),
-      );
-      await tester.pumpAndSettle();
-      expect(tester.getSize(find.byType(_TrackedPlayer)).height, 520);
-      final gesture = await tester.startGesture(
-        tester.getCenter(find.text('测试视频')),
-      );
-      await gesture.moveBy(const Offset(0, -20));
-      await tester.pump();
-      await gesture.moveBy(const Offset(0, -80));
-      await tester.pump();
-      final halfway = tester.getSize(find.byType(_TrackedPlayer)).height;
-      expect(halfway, greaterThan(390 * 9 / 16));
-      expect(halfway, lessThan(520));
-      await gesture.moveBy(const Offset(0, -320));
-      await tester.pump();
-      expect(tester.getSize(find.byType(_TrackedPlayer)).height, 390 * 9 / 16);
-      await gesture.up();
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('评论'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('简介'));
-      await tester.pumpAndSettle();
-      expect(tester.getSize(find.byType(_TrackedPlayer)).height, 390 * 9 / 16);
-      tester.view.physicalSize = const Size(1200, 800);
-      await tester.pumpAndSettle();
-      expect(tester.getSize(find.byType(_TrackedPlayer)), const Size(820, 800));
-      expect(tester.state(find.byType(_TrackedPlayer)), same(player));
-      expect(created, 1);
-      expect(disposed, 0);
-      expect(tester.takeException(), isNull);
-    },
-  );
+        );
+        await tester.pumpAndSettle();
+        final player = tester.state(find.byType(_TrackedPlayer));
+        expect(
+          tester.getSize(find.byType(_TrackedPlayer)).height,
+          390 * 9 / 16,
+        );
+        session.snapshots.value = session.snapshots.value.copyWith(
+          videoDimensions: dimensions,
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester.getSize(find.byType(_TrackedPlayer)).height,
+          expandedHeight,
+        );
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('测试视频')),
+        );
+        await gesture.moveBy(const Offset(0, -20));
+        await tester.pump();
+        await gesture.moveBy(const Offset(0, -80));
+        await tester.pump();
+        final halfway = tester.getSize(find.byType(_TrackedPlayer)).height;
+        expect(halfway, greaterThan(390 * 9 / 16));
+        expect(halfway, lessThan(expandedHeight));
+        await gesture.moveBy(const Offset(0, -320));
+        await tester.pump();
+        expect(
+          tester.getSize(find.byType(_TrackedPlayer)).height,
+          390 * 9 / 16,
+        );
+        await gesture.up();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('评论'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('简介'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.getSize(find.byType(_TrackedPlayer)).height,
+          390 * 9 / 16,
+        );
+        tester.view.physicalSize = const Size(1200, 800);
+        await tester.pumpAndSettle();
+        expect(
+          tester.getSize(find.byType(_TrackedPlayer)),
+          const Size(820, 800),
+        );
+        expect(tester.state(find.byType(_TrackedPlayer)), same(player));
+        expect(created, 1);
+        expect(disposed, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   for (final (width, complete, folderId) in [
     for (final folderId in [null, '42', 'home:42'])

@@ -90,40 +90,51 @@ void main() {
   double height(WidgetTester tester) =>
       tester.getSize(find.byKey(const ValueKey('player'))).height;
 
-  testWidgets(
-    'portrait reserves information space and collapses continuously',
-    (tester) async {
-      await show(tester);
-      expect(height(tester), 520);
-      expect(tester.getTopLeft(find.byKey(const ValueKey('info'))).dy, 520);
-      expect(tester.getSize(find.byKey(const ValueKey('info'))).height, 280);
-      await tester.tapAt(const Offset(100, 400));
-      await tester.pump();
-      expect(taps, 1);
+  for (final (dimensions, expandedHeight) in [
+    (const VideoDimensions(1080, 1920), 520.0),
+    (const VideoDimensions(1080, 1080), 390.0),
+  ]) {
+    testWidgets(
+      '${dimensions.width}x${dimensions.height} reserves information space and collapses continuously',
+      (tester) async {
+        await show(tester, dimensions: dimensions);
+        expect(height(tester), expandedHeight);
+        expect(
+          tester.getTopLeft(find.byKey(const ValueKey('info'))).dy,
+          expandedHeight,
+        );
+        expect(
+          tester.getSize(find.byKey(const ValueKey('info'))).height,
+          800 - expandedHeight,
+        );
+        await tester.tapAt(Offset(100, expandedHeight / 2));
+        await tester.pump();
+        expect(taps, 1);
 
-      final gesture = await tester.startGesture(const Offset(150, 680));
-      await gesture.moveBy(const Offset(0, -70));
-      await tester.pump();
-      final first = height(tester);
-      expect(first, lessThan(520));
-      expect(first, greaterThan(390 * 9 / 16));
-      expect(scroll.offset, 0);
-      await gesture.moveBy(const Offset(0, -60));
-      await tester.pump();
-      expect(first - height(tester), closeTo(60, .01));
-      expect(scroll.offset, 0);
-      await gesture.moveBy(const Offset(0, -450));
-      await tester.pump();
-      expect(height(tester), 390 * 9 / 16);
-      expect(scroll.offset, greaterThan(0));
-      await gesture.up();
-      await tester.pumpAndSettle();
-      scroll.jumpTo(0);
-      await tester.pumpAndSettle();
-      expect(height(tester), 520);
-      expect(tester.takeException(), isNull);
-    },
-  );
+        final gesture = await tester.startGesture(const Offset(150, 680));
+        await gesture.moveBy(const Offset(0, -70));
+        await tester.pump();
+        final first = height(tester);
+        expect(first, lessThan(expandedHeight));
+        expect(first, greaterThan(390 * 9 / 16));
+        expect(scroll.offset, 0);
+        await gesture.moveBy(const Offset(0, -60));
+        await tester.pump();
+        expect(first - height(tester), closeTo(60, .01));
+        expect(scroll.offset, 0);
+        await gesture.moveBy(const Offset(0, -450));
+        await tester.pump();
+        expect(height(tester), 390 * 9 / 16);
+        expect(scroll.offset, greaterThan(0));
+        await gesture.up();
+        await tester.pumpAndSettle();
+        scroll.jumpTo(0);
+        await tester.pumpAndSettle();
+        expect(height(tester), expandedHeight);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets('short information still permits collapsing and expanding', (
     tester,
@@ -182,7 +193,7 @@ void main() {
   for (final dimensions in [
     null,
     const VideoDimensions(1920, 1080),
-    const VideoDimensions(1000, 1000),
+    const VideoDimensions(1081, 1080),
     const VideoDimensions(0, 1920),
   ]) {
     testWidgets('nonportrait dimensions $dimensions keep landscape height', (
@@ -206,6 +217,20 @@ void main() {
     expect(height(tester), closeTo(429, .01));
     await show(tester, size: const Size(700, 600));
     expect(height(tester), 700 * 9 / 16);
+  });
+
+  testWidgets('square expansion respects available space and player modes', (
+    tester,
+  ) async {
+    const square = VideoDimensions(1080, 1080);
+    await show(tester, size: const Size(480, 660), dimensions: square);
+    expect(height(tester), 420);
+    await show(tester, size: const Size(700, 600), dimensions: square);
+    expect(height(tester), 700 * 9 / 16);
+    await show(tester, dimensions: square, listening: true);
+    expect(height(tester), 400);
+    await show(tester, dimensions: square, showInfo: false);
+    expect(height(tester), 800);
   });
 
   testWidgets('wide listening and hidden information keep their own heights', (
