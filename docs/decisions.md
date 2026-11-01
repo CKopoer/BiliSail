@@ -495,3 +495,9 @@ Android 复用既有媒体服务，暂停／换源期间不撤下前台服务，
 ## D65：播放器与弹幕依赖直接对齐 PiliPlus
 
 **决定（2026-11-01）**：按用户后续要求，替换此前 Predidit 依赖，固定为相邻 PiliPlus 锁文件的核心、视频、原生库插件和 canvas_danmaku 来源。保留应用会话、请求策略、弹幕调度与分层契约，不导入 GPLv3 应用实现。Windows 使用匹配 ANGLE／libmpv，并在构建副本继续提供平台线程、视口和释放保护；Apple／Linux 切换匹配的库插件打包边界。来源、API 差异、回归与验收限制见[依赖切换](validation/piliplus-dependencies-2026-11-01.md)。不以依赖名称或历史数据宣称 GPU 改善。
+
+## D66：Windows 视频与弹幕合成使用 Skia
+
+**决定（2026-11-01）**：继续对比 PiliPlus 后，在 Windows runner 显式关闭 Impeller，与参考应用的渲染后端选择一致。固定引擎此前默认启用 Impeller OpenGLESSDF，真实全屏播放的单独开关对照显示，该路径叠加透明弹幕时成本明显增加。只通过 Flutter 提供的 `DartProject` API 选择后端，不另起原生窗口、修改 Pub 缓存或改变硬解配置／用户透明度／显示刷新率驱动的 Ticker。
+
+同一视频的 `hwdec-current` 在两种后端下均为 `d3d11va-copy`；不能把 `hwdec=auto`、视频纹理 GPU 复制和实际解码模式混为一谈。精确来源、交叉复测、回归及适用范围见[Windows Skia 播放记录](validation/windows-skia-playback-2026-11-01.md)。升级 Flutter 后须重新复核纹理、透明合成和窗口生命周期，再决定是否恢复 Impeller。

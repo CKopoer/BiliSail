@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-11-01 后续核对：PiliPlus 的 Windows runner 明确关闭 Impeller，本项目也改为 Skia。实际硬解仍按 `hwdec-current` 读取，不能由 `auto` 或纹理复制日志推断；渲染后端的独立全屏对照、二进制哈希及验证边界见[Windows Skia 播放记录](validation/windows-skia-playback-2026-11-01.md)。
+
 2026-11-01 后续：按用户要求将核心、视频、原生库插件与 canvas_danmaku 切换为 PiliPlus 锁文件的精确提交，Windows 恢复 ANGLE，保留分层、单一时钟与视口／释放保护。当前来源、异步 API、headers 和首帧适配及验证见[依赖切换](validation/piliplus-dependencies-2026-11-01.md)；下文 Predidit／D3D11 说明属于历史。
 
 2026-11-01 按用户后续要求参考 PiliPlus 分离滚动／固定绘制层，固定内容置于滚动内容之上，各层内部维持到达顺序。两层仍共享一个 Ticker、一次帧准备及原文字缓存，外部整体透明度保持；固定内容不随滚动反复绘制。实现、语义变化与前后性能对照见[分层记录](validation/danmaku-layers-performance-2026-11-01.md)。

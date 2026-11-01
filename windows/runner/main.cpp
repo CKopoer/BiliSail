@@ -13,6 +13,9 @@ int RunFlutterApplication() {
   // changing the selected profile or rebuilding contexts cannot replace it.
   TextServicesScope text_services;
   flutter::DartProject project(L"data");
+  // Skia avoids the pinned engine's costly fullscreen texture/opacity path.
+  // Recheck the playback GPU comparison before enabling Impeller here.
+  project.set_impeller_switch(flutter::ImpellerSwitch::Disabled);
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
