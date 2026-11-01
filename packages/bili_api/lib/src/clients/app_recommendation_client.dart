@@ -134,13 +134,15 @@ final class AppRecommendationClient {
     }
     final title = entry['title'];
     if (bvid == null || title is! String || title.trim().isEmpty) return null;
-    final reason = entry['rcmd_reason'] is String
-        ? entry['rcmd_reason'] as String
+    final rawReason = entry['rcmd_reason'];
+    final reason = rawReason is String && rawReason.trim().isNotEmpty
+        ? rawReason.trim()
         : null;
+    final followReason = const {'已关注', '新关注'}.contains(reason);
     final followed =
         entry['is_followed'] == 1 ||
         entry['is_followed'] == true ||
-        const {'已关注', '新关注'}.contains(reason);
+        followReason;
     final reasons = <ApiAppFeedbackReason>[];
     final groups = entry['three_point_v2'];
     if (groups is List) {
@@ -196,7 +198,7 @@ final class AppRecommendationClient {
         danmakuCount: _count(entry['cover_left_text_2']),
         categoryName: args['tname'] is String ? args['tname'] as String : null,
         isFollowed: followed ? true : null,
-        recommendationReason: followed || reason == '竖屏' ? null : reason,
+        recommendationReason: followReason || reason == '竖屏' ? null : reason,
       ),
     );
   }

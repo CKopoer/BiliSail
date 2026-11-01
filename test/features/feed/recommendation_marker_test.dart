@@ -6,6 +6,46 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('recommendation grid shows follow metadata without a reason', (
+    tester,
+  ) async {
+    for (final channel in [HomeChannel.recommended, HomeChannel.popular]) {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomScrollView(
+                slivers: [
+                  FeedVideoGrid(
+                    items: const [
+                      VideoSummary(
+                        id: VideoId('BV1234567890'),
+                        title: '关注视频',
+                        coverUrl: '',
+                        author: 'UP',
+                        duration: Duration(minutes: 1),
+                        isFollowed: true,
+                      ),
+                    ],
+                    channel: channel,
+                    onReject: (_) {},
+                    onUndo: (_) {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('已关注'),
+        channel == HomeChannel.recommended ? findsOneWidget : findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('retained-content marker spans the grid and can be hidden', (
     tester,
   ) async {

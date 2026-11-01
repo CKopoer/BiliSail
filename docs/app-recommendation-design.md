@@ -77,3 +77,13 @@ API fixture 覆盖签名编码、无 Cookie/重定向、deadline/取消/epoch、
 - `tool/check.ps1 -SkipPub` 全量通过，日志 `build/app-recommendation-acceptance-check-2026-10-31.log`：格式、静态分析与打包边界脚本通过；根应用 3836、bili_api 536、bili_player 105、bili_danmaku 145、bili_mux 5，共 4627 项 Dart／Flutter 测试通过。根应用 13 项 Windows 符号链接用例及未设置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生用例跳过，不计为原生通过。
 - 未构建／安装应用、未使用真实账号请求推荐或提交反馈，未测竖屏比例、三端运行与性能。DTD 探测未发现调试应用，热重载调用返回无连接，未完成热重载验证。
 - 文档相对链接与 `git diff --check` 通过；依赖、锁文件、设备标识和安全凭据未更改。
+
+## 推荐理由与关注标记补齐（2026-11-01）
+
+只读核对本机 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 的 `lib/models/model_rec_video_item.dart`、`lib/models/home/rcmd/result.dart` 和 `lib/common/widgets/video_card/video_card_v.dart`，仅参考字段语义与展示行为，独立实现，未复制 GPLv3 应用代码或资源。参考中的 App `bottom_rcmd_reason`／`top_rcmd_reason` 仅为注释，本轮不据此扩展协议或编造理由。
+
+- Web 已正确解析字符串／`rcmd_reason.content`，仓储已保留 `recommendationReason` 和显式 `is_followed`，无需新增 DTO 字段。App 已把精确“已关注／新关注”转成关注状态，但共享卡片此前没有显示该状态，造成标记丢失；现在开启理由展示的卡片会显示关注徽标，并避免与同义理由重复。
+- App 仅把关注理由本身收敛为关注标记；显式关注字段与普通推荐理由同时出现时，两者均保留。理由去除首尾空白，空值／非法类型不产生文案，“竖屏”继续按参考行为隐藏；不从理由推导点赞数，也不额外请求关注状态。
+- 沿用共享卡片、理由展示开关和原有作者行宽度约束；多个徽标在理由区域换行，长理由可通过 Tooltip 查看全文。普通／紧凑卡片均使用同一路径。将 `isFollowed` 纳入卡片内容比较，保证同 ID 的关注状态更新不会被缓存吞掉；未增加逐帧订阅或全列表缓存。
+- 75 项定向测试通过：API 元数据／App 推荐／热门协议 24 项，共享卡片／内容复用／推荐网格／仓储映射 23 项，推荐反馈／过滤／来源切换及纯规则 28 项。新增脱敏用例覆盖理由与关注状态独立、缺失／非法字段、同义去重、同 ID 更新、140／183／300 逻辑像素宽度、双主题及 1×／2× 文字缩放。相关 Dart／Flutter 文件静态分析、格式和 `git diff --check` 通过。
+- 按用户本次范围未运行整仓检查、构建、安装、在线账号或设备／性能测试，最终统一验收由用户执行。DTD 探测无调试应用，热重载调用返回无连接，未完成运行中验证。依赖与锁文件未变更。

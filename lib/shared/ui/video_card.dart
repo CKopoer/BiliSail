@@ -131,6 +131,7 @@ final class VideoCard extends StatefulWidget {
     video.authorAvatarUrl,
     video.authorId,
     video.recommendationReason,
+    video.isFollowed,
     video.previewCid,
     video.access.kind,
     video.access.canWatch,
@@ -385,6 +386,9 @@ final class _VideoCardState extends State<VideoCard> {
                         reason: widget.showRecommendationReason
                             ? video.recommendationReason
                             : null,
+                        showFollowed:
+                            widget.showRecommendationReason &&
+                            video.isFollowed == true,
                         publishText: widget.publishText,
                         publishTooltip: widget.publishTooltip,
                       ),
@@ -741,6 +745,7 @@ final class _AuthorMetadata extends StatelessWidget {
     required this.onHover,
     required this.showUpBadge,
     required this.reason,
+    required this.showFollowed,
     required this.publishText,
     required this.publishTooltip,
   });
@@ -750,6 +755,7 @@ final class _AuthorMetadata extends StatelessWidget {
   final ValueChanged<bool> onHover;
   final bool showUpBadge;
   final String? reason;
+  final bool showFollowed;
   final String publishText;
   final String? publishTooltip;
 
@@ -765,6 +771,10 @@ final class _AuthorMetadata extends StatelessWidget {
         ? '${date.month}-${date.day}'
         : '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     final reasonText = reason?.trim() ?? '';
+    final labels = [
+      if (reasonText.isNotEmpty) reasonText,
+      if (showFollowed && !const {'已关注', '新关注'}.contains(reasonText)) '已关注',
+    ];
     final author = ScrollAwareHoverRegion(
       onHover: onHover,
       child: InkWell(
@@ -794,19 +804,23 @@ final class _AuthorMetadata extends StatelessWidget {
         ),
       ),
     );
-    final badge = DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFFFF7F50)
-            .withValues(alpha: theme.brightness == Brightness.dark ? .18 : .1),
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-        child: Text(
-          reasonText,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 11, color: Color(0xFFFF7F50)),
+    Widget badge(String text) => Tooltip(
+      message: text,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(
+            0xFFFF7F50,
+          ).withValues(alpha: theme.brightness == Brightness.dark ? .18 : .1),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11, color: Color(0xFFFF7F50)),
+          ),
         ),
       ),
     );
@@ -820,12 +834,18 @@ final class _AuthorMetadata extends StatelessWidget {
       builder: (context, constraints) {
         return Row(
           children: [
-            if (reasonText.isNotEmpty) ...[
+            if (labels.isNotEmpty) ...[
               ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: constraints.maxWidth * .35,
                 ),
-                child: badge,
+                child: labels.length == 1
+                    ? badge(labels.single)
+                    : Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [for (final label in labels) badge(label)],
+                      ),
               ),
               const SizedBox(width: 6),
             ],

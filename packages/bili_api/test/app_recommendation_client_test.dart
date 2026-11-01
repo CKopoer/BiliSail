@@ -41,6 +41,40 @@ ApiHttpResponse _response(Object? data, {int code = 0, int status = 200}) =>
     );
 
 void main() {
+  test(
+    'App follow markers do not discard independent recommendation text',
+    () async {
+      final cases = <(Object?, Object?, String?, bool?)>[
+        (' 已关注 ', null, null, true),
+        ('新关注', null, null, true),
+        (' 3万点赞 ', 1, '3万点赞', true),
+        ('关注的人也在看', true, '关注的人也在看', true),
+        ('竖屏', null, null, null),
+        (' ', null, null, null),
+        (null, null, null, null),
+        (12, null, null, null),
+        ({'content': 12}, null, null, null),
+      ];
+      final transport = _Transport()
+        ..entries = [
+          for (final value in cases)
+            _entry(extra: {'rcmd_reason': value.$1, 'is_followed': value.$2}),
+        ];
+      final api = BiliApiClient(transport: transport);
+      addTearDown(api.close);
+      final page = await AppRecommendationClient(
+        api,
+      ).load(page: 1, buvid: _device);
+      expect(page.items.length, cases.length);
+      for (var index = 0; index < cases.length; index++) {
+        final video = page.items[index].video;
+        expect(video.recommendationReason, cases[index].$3);
+        expect(video.isFollowed, cases[index].$4);
+        expect(video.likeCount, isNull);
+      }
+    },
+  );
+
   test('aid conversion handles known old and new IDs without detail reads', () {
     expect(VideoIdentifiers.bvidFromAid('170001'), 'BV17x411w7KC');
     expect(VideoIdentifiers.bvidFromAid('455017605'), 'BV1Q541167Qg');

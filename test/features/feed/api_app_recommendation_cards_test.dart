@@ -65,6 +65,49 @@ void main() {
     await database.close();
   });
 
+  test(
+    'Web and App mappings retain independent reasons and follow metadata',
+    () async {
+      transport.entries = [
+        {..._entry('av'), 'rcmd_reason': ' 3万点赞 ', 'is_followed': 1},
+        {..._entry('av', param: '43'), 'rcmd_reason': '新关注'},
+        _entry('av', param: '44'),
+      ];
+      final app = await repository.loadAppRecommendations(
+        page: 1,
+        cancellation: RequestCancellation(),
+      );
+      expect(app.items.map((item) => item.recommendationReason), [
+        '3万点赞',
+        null,
+        null,
+      ]);
+      expect(app.items.map((item) => item.isFollowed), [true, true, null]);
+
+      transport.webEntries = [
+        {
+          'bvid': 'BV17x411w7KC',
+          'title': 'Web 推荐',
+          'rcmd_reason': {'content': ' 3万点赞 '},
+          'is_followed': 1,
+        },
+        {'bvid': 'BV17x411w7KC', 'title': 'Web 推荐', 'is_followed': 1},
+        {'bvid': 'BV17x411w7KC', 'title': 'Web 推荐'},
+      ];
+      final web = await repository.loadFeed(
+        page: 1,
+        categoryId: null,
+        cancellation: RequestCancellation(),
+      );
+      expect(web.items.map((item) => item.recommendationReason), [
+        '3万点赞',
+        null,
+        null,
+      ]);
+      expect(web.items.map((item) => item.isFollowed), [true, true, null]);
+    },
+  );
+
   test('different playable types keep distinct keys, destinations and feedback IDs', () async {
     transport.entries = [
       _entry('av'),
@@ -213,6 +256,7 @@ final class _Secure implements CredentialStore {
 
 final class _Transport implements ApiTransport {
   List<Map<String, Object?>> entries = [];
+  List<Map<String, Object?>> webEntries = [];
   final uris = <Uri>[];
   @override
   Future<ApiHttpResponse> get(
@@ -228,7 +272,17 @@ final class _Transport implements ApiTransport {
         utf8.encode(
           jsonEncode({
             'code': 0,
-            'data': uri.path == '/x/v2/feed/index' ? {'items': entries} : null,
+            'data': switch (uri.path) {
+              '/x/v2/feed/index' => {'items': entries},
+              '/x/web-interface/nav' => {
+                'wbi_img': {
+                  'img_url': 'https://i0.hdslb.com/bfs/wbi/${'a' * 32}.png',
+                  'sub_url': 'https://i0.hdslb.com/bfs/wbi/${'b' * 32}.png',
+                },
+              },
+              '/x/web-interface/index/top/feed/rcmd' => {'item': webEntries},
+              _ => null,
+            },
           }),
         ),
       ),

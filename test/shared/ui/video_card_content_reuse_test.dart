@@ -15,6 +15,46 @@ VideoSummary _video(int index, {String? title}) => VideoSummary(
 );
 
 void main() {
+  testWidgets(
+    'same-ID follow changes invalidate cached recommendation content',
+    (tester) async {
+      final followed = ValueNotifier<bool?>(null);
+      addTearDown(followed.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder(
+              valueListenable: followed,
+              builder: (_, value, _) => SizedBox(
+                width: 300,
+                child: VideoCard(
+                  video: VideoSummary(
+                    id: const VideoId('BV1234567890'),
+                    title: '推荐视频',
+                    coverUrl: '',
+                    author: 'UP',
+                    duration: const Duration(minutes: 1),
+                    isFollowed: value,
+                  ),
+                  onTap: () {},
+                  showRecommendationReason: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('已关注'), findsNothing);
+      followed.value = true;
+      await tester.pumpAndSettle();
+      expect(find.text('已关注'), findsOneWidget);
+      followed.value = false;
+      await tester.pumpAndSettle();
+      expect(find.text('已关注'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('content changes and cached undo use current data and actions', (
     tester,
   ) async {
