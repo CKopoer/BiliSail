@@ -14,13 +14,19 @@ void main() {
       final calls = <String>[];
       await _mount(tester, width: 1200, inline: true, calls: calls);
       final field = find.byKey(const ValueKey('workspace-search'));
+      final account = find.byKey(const ValueKey('search-account'));
       final initial = tester.getRect(field);
+      final initialAccount = tester.getRect(account);
       await tester.tap(field);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 130));
       expect(tester.getRect(field).left, greaterThan(initial.left));
+      expect(tester.getRect(account), initialAccount);
+      expect(account.hitTestable(), findsOneWidget);
       await tester.pumpAndSettle();
       expect(tester.getCenter(field).dx, closeTo(600, 1));
+      expect(tester.getRect(account), initialAccount);
+      expect(account.hitTestable(), findsOneWidget);
       expect(find.text('搜索历史'), findsOneWidget);
       expect(find.text('热搜'), findsOneWidget);
       expect(
@@ -43,11 +49,47 @@ void main() {
         closeTo(tester.getTopLeft(field).dx, 1),
       );
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 130));
+      expect(tester.getRect(account), initialAccount);
+      expect(account.hitTestable(), findsOneWidget);
       await tester.pumpAndSettle();
       expect(find.text('搜索历史'), findsNothing);
       expect(tester.getRect(field), initial);
+      expect(tester.getRect(account), initialAccount);
     },
   );
+
+  for (final width in [760.0, 1600.0]) {
+    testWidgets(
+      'inline search keeps account visible and clickable at width $width',
+      (tester) async {
+        var accountTaps = 0;
+        await _mount(
+          tester,
+          width: width,
+          inline: true,
+          calls: [],
+          leadingWidth: 88,
+          onAccountTap: () => accountTaps++,
+        );
+        final field = find.byKey(const ValueKey('workspace-search'));
+        final account = find.byKey(const ValueKey('search-account'));
+        final initialAccount = tester.getRect(account);
+        await tester.tap(field);
+        await tester.pumpAndSettle();
+        expect(tester.getRect(account), initialAccount);
+        expect(tester.getCenter(field).dx, closeTo(width / 2, 1));
+        expect(tester.getRect(field).left, greaterThan(initialAccount.right));
+        await tester.tap(account);
+        await tester.pumpAndSettle();
+        expect(accountTaps, 1);
+        expect(find.text('搜索历史'), findsNothing);
+        expect(tester.getRect(account), initialAccount);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets(
     'separate row stays in place; history expands and clears; hot label searches keyword',
@@ -166,6 +208,8 @@ Future<void> _mount(
   required List<String> calls,
   double height = 800,
   double scale = 1,
+  double leadingWidth = 44,
+  VoidCallback? onAccountTap,
 }) async {
   tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1;
@@ -192,7 +236,14 @@ Future<void> _mount(
           body: Column(
             children: [
               SearchEntryHeader(
-                leading: const SizedBox(width: 44, child: Icon(Icons.person)),
+                leading: SizedBox(
+                  width: leadingWidth,
+                  child: IconButton(
+                    key: const ValueKey('search-account'),
+                    onPressed: onAccountTap ?? () {},
+                    icon: const Icon(Icons.person),
+                  ),
+                ),
                 trailing: const SizedBox(width: 8),
                 controller: text,
                 onSearch: calls.add,

@@ -127,50 +127,44 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
           ? (constraints.maxWidth >= 1300 ? 470.0 : 380.0)
           : constraints.maxWidth;
       final expandedWidth = math.min(480.0, constraints.maxWidth - 20);
-      final tools = Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Row(
-          children: [
-            if (widget.leading case final leading?)
-              _collapsingTool(leading, inline: inline, duration: duration),
-            Expanded(
-              child: CompositedTransformTarget(
-                link: _link,
-                child: TapRegion(
-                  groupId: _tapGroup,
-                  onTapOutside: (_) => _close(),
-                  child: SizedBox(
-                    key: _anchor,
-                    height: 36,
-                    child: CallbackShortcuts(
-                      bindings: {
-                        const SingleActivator(LogicalKeyboardKey.escape):
-                            _close,
-                      },
-                      child: TextField(
-                        key: const ValueKey('workspace-search'),
-                        controller: widget.controller,
-                        focusNode: _focus,
-                        readOnly: mobile,
-                        onTap: mobile ? _openMobile : _show,
-                        textInputAction: TextInputAction.search,
-                        style: const TextStyle(fontSize: 13),
-                        onSubmitted: _submit,
-                        decoration: InputDecoration(
-                          hintText: '搜索视频、UP 主、番剧',
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                          ),
-                          suffixIcon: IconButton(
-                            tooltip: '搜索',
-                            onPressed: mobile
-                                ? _openMobile
-                                : () => widget.controller.text.trim().isEmpty
-                                      ? _show()
-                                      : _submit(widget.controller.text),
-                            icon: const Icon(BiliIcons.search, size: 18),
-                          ),
+      final tools = Row(
+        children: [
+          Expanded(
+            child: CompositedTransformTarget(
+              link: _link,
+              child: TapRegion(
+                groupId: _tapGroup,
+                onTapOutside: (_) => _close(),
+                child: SizedBox(
+                  key: _anchor,
+                  height: 36,
+                  child: CallbackShortcuts(
+                    bindings: {
+                      const SingleActivator(LogicalKeyboardKey.escape): _close,
+                    },
+                    child: TextField(
+                      key: const ValueKey('workspace-search'),
+                      controller: widget.controller,
+                      focusNode: _focus,
+                      readOnly: mobile,
+                      onTap: mobile ? _openMobile : _show,
+                      textInputAction: TextInputAction.search,
+                      style: const TextStyle(fontSize: 13),
+                      onSubmitted: _submit,
+                      decoration: InputDecoration(
+                        hintText: '搜索视频、UP 主、番剧',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                        ),
+                        suffixIcon: IconButton(
+                          tooltip: '搜索',
+                          onPressed: mobile
+                              ? _openMobile
+                              : () => widget.controller.text.trim().isEmpty
+                                    ? _show()
+                                    : _submit(widget.controller.text),
+                          icon: const Icon(BiliIcons.search, size: 18),
                         ),
                       ),
                     ),
@@ -178,10 +172,10 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
                 ),
               ),
             ),
-            if (widget.trailing case final trailing?)
-              _collapsingTool(trailing, inline: inline, duration: duration),
-          ],
-        ),
+          ),
+          if (widget.trailing case final trailing?)
+            _collapsingTool(trailing, inline: inline, duration: duration),
+        ],
       );
       return OverlayPortal(
         controller: _overlay,
@@ -271,16 +265,53 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
                     ),
                   ),
                 ),
-              AnimatedPositioned(
-                duration: duration,
-                curve: Curves.easeInOutCubic,
-                left: inline && _open
-                    ? (constraints.maxWidth - expandedWidth) / 2
-                    : 0,
-                width: inline && _open ? expandedWidth : toolWidth,
-                top: 0,
-                bottom: 0,
-                child: tools,
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    children: [
+                      ?widget.leading,
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, searchConstraints) {
+                            final leadingWidth =
+                                constraints.maxWidth -
+                                searchConstraints.maxWidth -
+                                20;
+                            // Keep the search centered in the whole header while
+                            // the account and back controls retain their space.
+                            return Stack(
+                              children: [
+                                AnimatedPositioned(
+                                  duration: duration,
+                                  curve: Curves.easeInOutCubic,
+                                  left: inline && _open
+                                      ? math.max(
+                                          0,
+                                          (constraints.maxWidth -
+                                                      expandedWidth) /
+                                                  2 -
+                                              leadingWidth,
+                                        )
+                                      : 0,
+                                  width: inline && _open
+                                      ? math.min(
+                                          expandedWidth - 20,
+                                          searchConstraints.maxWidth,
+                                        )
+                                      : toolWidth - 20 - leadingWidth,
+                                  top: 0,
+                                  bottom: 0,
+                                  child: tools,
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
