@@ -182,6 +182,8 @@ void main() {
                   .toList()
                 ..sort();
           final expectedTopButtons = [
+            '返回',
+            '回到主页',
             if (content == 'video' || content == 'pgc') '投屏',
             if (session.canListen) '听视频',
             '播放配置',
@@ -980,7 +982,7 @@ void main() {
               expect(find.byKey(ValueKey(key)), findsNothing);
             }
             for (final key in ['player-back', 'player-home']) {
-              expect(find.byKey(ValueKey(key)), findsNothing);
+              expect(find.byKey(ValueKey(key)).hitTestable(), findsOneWidget);
             }
             final top = find.byKey(
               const ValueKey('player-control-title-layer'),
@@ -2049,6 +2051,78 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await _pumpFrames(tester);
     },
+  );
+
+  testWidgets(
+    'Android small window retains top navigation and fullscreen actions',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      final window = _FakeWindowService();
+      var backs = 0;
+      var homes = 0;
+      await tester.pumpWidget(
+        _app(
+          session,
+          window,
+          const AppSettings.defaults(),
+          width: 320,
+          textScale: 2,
+          onBack: () => backs++,
+          onHome: () => homes++,
+          showNavigationInPlayer: true,
+        ),
+      );
+      await _pumpFrames(tester);
+      final back = find.byKey(const ValueKey('player-back'));
+      final home = find.byKey(const ValueKey('player-home'));
+      expect(back.hitTestable(), findsNothing);
+      expect(home.hitTestable(), findsNothing);
+      await _showControls(tester);
+      expect(
+        find.byKey(const ValueKey('small-window-control-row')),
+        findsOneWidget,
+      );
+      final top = find.byKey(const ValueKey('player-control-title-layer'));
+      for (final button in [back, home]) {
+        expect(find.descendant(of: top, matching: button), findsOneWidget);
+        expect(button.hitTestable(), findsOneWidget);
+        expect(
+          tester.getCenter(button).dy,
+          lessThan(tester.getTopLeft(top).dy + 52),
+        );
+      }
+      expect(tester.getTopLeft(back).dx, tester.getTopLeft(top).dx + 6);
+      expect(tester.getTopLeft(home).dx, tester.getTopRight(back).dx);
+      final opens = engine.opens;
+      await tester.tap(back);
+      await tester.pump();
+      expect(backs, 1);
+      await tester.tap(home);
+      await tester.pump();
+      expect(homes, 1);
+      await tester.tap(find.byTooltip('全屏（F）'));
+      await _pumpFrames(tester);
+      await tester.tap(back);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      expect(backs, 1);
+      await tester.tap(find.byTooltip('全屏（F）'));
+      await _pumpFrames(tester);
+      await tester.tap(home);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      expect(homes, 2);
+      expect(engine.opens, opens);
+      expect(engine.maxSurfaces, 1);
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 
   testWidgets(

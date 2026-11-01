@@ -1615,7 +1615,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   retainDynamicPress: true,
                                   child: _PlayerTopBar(
                                     navigation: widget.navigation,
-                                    showNavigation: !smallWindow,
                                     smallWindow: smallWindow,
                                     onMore: _openMoreDialog,
                                     fullScreen: widget.fullScreen,
@@ -3101,7 +3100,6 @@ class _PlayerRateButton extends StatelessWidget {
 class _PlayerTopBar extends StatelessWidget {
   const _PlayerTopBar({
     required this.navigation,
-    required this.showNavigation,
     required this.smallWindow,
     required this.onMore,
     required this.fullScreen,
@@ -3112,7 +3110,6 @@ class _PlayerTopBar extends StatelessWidget {
     required this.onSettings,
   });
   final ValueListenable<PlaybackNavigation?> navigation;
-  final bool showNavigation;
   final bool smallWindow;
   final VoidCallback onMore;
   final bool fullScreen;
@@ -3153,8 +3150,7 @@ class _PlayerTopBar extends StatelessWidget {
     child: ValueListenableBuilder<PlaybackNavigation?>(
       valueListenable: navigation,
       builder: (context, actions, _) {
-        final showNavigationButtons =
-            showNavigation && (actions?.showInPlayer ?? false);
+        final showNavigationButtons = actions?.showInPlayer ?? false;
         final buttons = <Widget>[
           if (castRequestFor(session) != null)
             _action(
