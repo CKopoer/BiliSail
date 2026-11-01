@@ -2447,7 +2447,7 @@ class PlaybackSession extends ChangeNotifier {
     final revision = ++_temporaryRateRevision;
     return _serializeRate(() async {
       if (revision != _temporaryRateRevision) return;
-      await _command(() => engine.setRate(rate));
+      await _command(() => _setEngineRate(rate));
     });
   }
 
@@ -2468,7 +2468,13 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> _applyRate(double rate) => isLive
       ? Future.value()
-      : _serializeRate(() => _command(() => engine.setRate(rate)));
+      : _serializeRate(() => _command(() => _setEngineRate(rate)));
+
+  Future<void> _setEngineRate(double rate) async {
+    // Compare inside the command pump: an in-flight hold may still need to
+    // finish before its restoration target becomes the current native rate.
+    if (engine.currentSnapshot.rate != rate) await engine.setRate(rate);
+  }
 
   Future<void> setRate(double rate) {
     if (isLive || _disposed || _closing) return Future.value();
@@ -2482,7 +2488,7 @@ class PlaybackSession extends ChangeNotifier {
     return _serializeRate(
       () => _command(() async {
         try {
-          await engine.setRate(rate);
+          await _setEngineRate(rate);
           if (_disposed || _closing || generation != _generation) return;
           _rateMemory.remember(rate, revision: memoryRevision);
         } on PlayerFailure {

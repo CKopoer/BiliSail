@@ -12,6 +12,7 @@ import 'native_error_monitor.dart';
 import 'native_playback_health.dart';
 import 'native_load_observer.dart';
 import 'native_audio_gain.dart';
+import 'native_tempo_filter.dart';
 import 'native_video_frame_queue.dart';
 import 'video_dimensions.dart';
 import 'media_kit_video_output.dart';
@@ -645,6 +646,26 @@ final class MediaKitEngine
           watch,
           openBudget,
         );
+        final rateAdjustable = switch (source) {
+          DashPairSource(:final audio) => audio != null,
+          ProgressiveSource(:final isLive) ||
+          ManifestSource(:final isLive) => !isLive,
+          DashVideoSource() => false,
+        };
+        if (rateAdjustable) {
+          if (platform is! mk.NativePlayer) {
+            throw StateError('Native audio tempo control is unavailable.');
+          }
+          await configureNativeTempoFilter(
+            write: platform.setProperty,
+            read: platform.getProperty,
+            isCurrent: () =>
+                generation == _generation &&
+                !_disposed &&
+                identical(_player, player),
+            timeout: _remaining(watch, openBudget),
+          );
+        }
         if (experimentalVideoFrameQueue && source is DashPairSource) {
           if (platform is! mk.NativePlayer) {
             throw PlayerFailure(
@@ -1306,10 +1327,9 @@ final class MediaKitEngine
   @override
   Future<void> setRate(double rate) {
     if (!rate.isFinite || rate <= 0) throw ArgumentError.value(rate, 'rate');
-    return _command(
-      (player) => player.setRate(rate),
-      optimistic: (s) => s.copyWith(rate: rate),
-    );
+    return _command((player) async {
+      if (player.state.rate != rate) await player.setRate(rate);
+    }, optimistic: (s) => s.copyWith(rate: rate));
   }
 
   @override

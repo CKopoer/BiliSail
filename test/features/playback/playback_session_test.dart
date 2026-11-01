@@ -2253,6 +2253,164 @@ void main() {
       await tester.runAsync(session.close);
     },
   );
+  for (final phase in [
+    PlaybackPhase.playing,
+    PlaybackPhase.paused,
+    PlaybackPhase.buffering,
+  ]) {
+    testWidgets(
+      'keyboard hold changes rate at its deadline without interrupting $phase',
+      (tester) async {
+        final engine = _FakeEngine();
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _FakeRepository(autoResolve: true),
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+        );
+        await tester.runAsync(() => session.open(_detail('1'), _part('1')));
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            phase: phase,
+            desiredPlaying: phase != PlaybackPhase.paused,
+            isBuffering: phase == PlaybackPhase.buffering,
+          ),
+        );
+        final before = engine.currentSnapshot;
+        final playCount = engine.playCount, pauseCount = engine.pauseCount;
+        final shortcuts = PlaybackShortcutController(
+          session: session,
+          settings: () => const ShortcutSettings.defaults(),
+          active: () => true,
+          fullscreen: () => false,
+          toggleFullscreen: () {},
+          toggleDanmaku: () {},
+          volumeFeedback: (_) {},
+        );
+        const down = InputStroke(
+          identity: 'right',
+          device: InputDevice.keyboard,
+          phase: InputPhase.down,
+          sequence: 1,
+          chord: ShortcutChord('ArrowRight'),
+        );
+        await shortcuts.execute(ShortcutAction.seekForward, down);
+        await tester.pump(const Duration(milliseconds: 399));
+        expect(engine.rateCalls, isEmpty);
+        await shortcuts.execute(
+          ShortcutAction.seekForward,
+          const InputStroke(
+            identity: 'right',
+            device: InputDevice.keyboard,
+            phase: InputPhase.repeat,
+            sequence: 2,
+            chord: ShortcutChord('ArrowRight'),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 1));
+        expect(engine.rateCalls, [2]);
+        expect(shortcuts.isHoldingRate, isTrue);
+        await shortcuts.execute(
+          ShortcutAction.seekForward,
+          const InputStroke(
+            identity: 'right',
+            device: InputDevice.keyboard,
+            phase: InputPhase.up,
+            sequence: 3,
+          ),
+        );
+        await tester.pump();
+        expect(engine.rateCalls, [2, 1]);
+        expect(engine.seekTargets, isEmpty);
+        expect(engine.playCount, playCount);
+        expect(engine.pauseCount, pauseCount);
+        expect(engine.currentSnapshot, before);
+        shortcuts.dispose();
+        await tester.runAsync(session.close);
+      },
+    );
+  }
+  test(
+    'same-rate hold and restoration do not send redundant native commands',
+    () async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(_detail('1'), _part('1'));
+      await session.beginTemporaryRate(1);
+      await session.endTemporaryRate();
+      expect(engine.rateCalls, isEmpty);
+    },
+  );
+  test(
+    'pinning an active touch hold remembers rate without applying it twice',
+    () async {
+      final engine = _FakeEngine();
+      final memory = PlaybackRateMemory();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+        rateMemory: memory,
+      );
+      addTearDown(session.close);
+      await session.open(_detail('1'), _part('1'));
+      final shortcuts = PlaybackShortcutController(
+        session: session,
+        settings: () => const ShortcutSettings.defaults(),
+        active: () => true,
+        fullscreen: () => false,
+        toggleFullscreen: () {},
+        toggleDanmaku: () {},
+        volumeFeedback: (_) {},
+      );
+      addTearDown(shortcuts.dispose);
+      shortcuts.prepareTouchHold();
+      shortcuts.beginTouchHold();
+      // The recognizer already waited; begin must not introduce another timer.
+      expect(engine.rateCalls, [2]);
+      await _flush();
+      shortcuts.moveTouchHold(dx: 0, dy: -60);
+      await _flush();
+      shortcuts.endTouchHold();
+      await _flush();
+      expect(engine.rateCalls, [2]);
+      expect(memory.rateFor(1), 2);
+      expect(shortcuts.isRateFixed, isTrue);
+      await session.open(_detail('2'), _part('2'));
+      expect(engine.currentSnapshot.rate, 2);
+    },
+  );
+  test(
+    'release of a queued hold skips its cancelled rate and redundant restore',
+    () async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(_detail('1'), _part('1'));
+      final gate = Completer<void>();
+      engine.nextRate = gate;
+      final permanent = session.setRate(2);
+      final hold = session.beginTemporaryRate(3);
+      final release = session.endTemporaryRate();
+      gate.complete();
+      await Future.wait([permanent, hold, release]);
+      expect(engine.rateCalls, [2]);
+      expect(engine.currentSnapshot.rate, 2);
+      expect(engine.seekTargets, isEmpty);
+    },
+  );
   test('permanent rate chosen during pending temporary speed survives restoration and inheritance', () async {
     final manager = _manager();
     addTearDown(manager.close);
@@ -5937,6 +6095,7 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
   final sources = <ResolvedMediaSource>[];
   final seekTargets = <Duration>[];
   Completer<void>? nextRate;
+  final rateCalls = <double>[];
   Completer<void>? nextVolume;
   Completer<void>? nextGain;
   final gainCalls = <double>[];
@@ -6078,6 +6237,7 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
 
   @override
   Future<void> setRate(double rate) async {
+    rateCalls.add(rate);
     final generation = _current.generation;
     final gate = nextRate;
     nextRate = null;
