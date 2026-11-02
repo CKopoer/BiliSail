@@ -3,6 +3,37 @@ import 'package:bili_player/src/video_decoder_configuration.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'Android source color mode changes before late video parameter setup',
+    () {
+      for (final decoding in VideoDecodingMode.values) {
+        var dolby = false;
+        final configuration = videoDecoderConfiguration(
+          isAndroid: true,
+          decoding: decoding,
+          usesDolbyVisionRenderer: () => dolby,
+        );
+        expect(configuration.vo, isNull);
+        expect(
+          configuration.hwdec,
+          decoding == VideoDecodingMode.automatic
+              ? 'mediacodec,auto-safe'
+              : 'no',
+        );
+        expect(configuration.androidAttachSurfaceAfterVideoParameters, isFalse);
+        dolby = true;
+        expect(configuration.vo, 'gpu-next');
+      }
+      final nextSource = videoDecoderConfiguration(
+        isAndroid: true,
+        decoding: VideoDecodingMode.automatic,
+        usesDolbyVisionRenderer: () => false,
+      );
+      expect(nextSource.vo, isNull);
+      expect(nextSource.hwdec, 'mediacodec,auto-safe');
+    },
+  );
+
   test('Android automatic decoding attaches before decoder creation', () {
     final configuration = videoDecoderConfiguration(
       isAndroid: true,

@@ -220,6 +220,7 @@ final class PlaybackSnapshot {
 enum PlayerFailureKind {
   invalidSource,
   unsupportedHeaders,
+  unsupportedVideoColor,
   nativePlayback,
   videoInterrupted,
   disposed,

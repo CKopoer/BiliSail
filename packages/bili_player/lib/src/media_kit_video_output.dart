@@ -106,6 +106,12 @@ final class MediaKitVideoOutput
   int _sourceGeneration = 0;
   bool _disposed = false;
   VideoDimensions? _videoDimensions;
+  bool _androidDolbyVision = false;
+  Future<void> _androidSurfaceSize = Future.value();
+  bool _androidSurfaceSizeFailed = false;
+  int _androidSurfaceRevision = 0;
+
+  void enableAndroidDolbyVision() => _androidDolbyVision = true;
 
   VideoDimensions? get dimensions {
     final rect = _controller.value?.rect.value;
@@ -122,12 +128,20 @@ final class MediaKitVideoOutput
         size.height > 0;
   }
 
-  Future<void> get firstFrameRendered {
+  Future<void> get firstFrameRendered async {
     final controller = _controller.value;
     if (controller == null) {
-      return Future.error(StateError('No video output is bound.'));
+      throw StateError('No video output is bound.');
     }
-    return controller.waitUntilFirstFrameRendered;
+    await controller.waitUntilFirstFrameRendered;
+    Future<void> pending;
+    do {
+      pending = _androidSurfaceSize;
+      await pending;
+    } while (!identical(pending, _androidSurfaceSize));
+    if (_androidSurfaceSizeFailed) {
+      throw StateError('Android Dolby Vision surface sizing failed.');
+    }
   }
 
   int _bindingRevision = 0;
@@ -146,6 +160,7 @@ final class MediaKitVideoOutput
       configuration: videoDecoderConfiguration(
         isAndroid: Platform.isAndroid,
         decoding: decoding,
+        usesDolbyVisionRenderer: () => _androidDolbyVision,
       ),
     );
     if (_disposed ||
@@ -172,6 +187,42 @@ final class MediaKitVideoOutput
   void _updateDecodedSize() {
     final controller = _controller.value;
     final dimensions = _videoDimensions;
+    if (Platform.isAndroid &&
+        controller?.configuration.vo == 'gpu-next' &&
+        dimensions != null) {
+      final player = _player;
+      if (player == null) return;
+      final revision = _bindingRevision;
+      final sizeRevision = ++_androidSurfaceRevision;
+      bool current() =>
+          !_disposed &&
+          revision == _bindingRevision &&
+          sizeRevision == _androidSurfaceRevision &&
+          identical(_player, player);
+      _androidSurfaceSizeFailed = false;
+      _androidSurfaceSize = () async {
+        try {
+          await _viewportChannel
+              .invokeMethod<void>('VideoOutputManager.SetSurfaceTextureSize', {
+                'handle': player.handle.toString(),
+                'width': dimensions.width.toString(),
+                'height': dimensions.height.toString(),
+              })
+              .timeout(const Duration(seconds: 2));
+          if (!current()) return;
+          player.setProperty(
+            'android-surface-size',
+            '${dimensions.width}x${dimensions.height}',
+          );
+        } on Object catch (error) {
+          if (current()) {
+            _androidSurfaceSizeFailed = true;
+            debugPrint('Android video size failed: ${error.runtimeType}');
+          }
+        }
+      }();
+      return;
+    }
     if (!Platform.isWindows || controller == null || dimensions == null) return;
     // PiliPlus's controller does not forward player size events. Our native
     // viewport patch deliberately avoids synchronous mpv reads on this thread.
@@ -198,6 +249,10 @@ final class MediaKitVideoOutput
     _controller.value = null;
     _player = null;
     _videoDimensions = null;
+    _androidDolbyVision = false;
+    _androidSurfaceSize = Future.value();
+    _androidSurfaceSizeFailed = false;
+    _androidSurfaceRevision++;
   }
 
   void cancelPendingViewport() => _viewportShrinkTimer?.cancel();

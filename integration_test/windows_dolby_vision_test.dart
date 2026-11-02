@@ -10,6 +10,59 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+  final withoutVulkan =
+      Platform.environment['BILI_TEST_DOVI_NO_VULKAN'] == 'true';
+
+  testWidgets('unavailable Dolby converter reports incompatibility', (
+    tester,
+  ) async {
+    final fixtures = Platform.environment['BILI_TEST_DOVI_DIR'];
+    expect(fixtures, isNotNull);
+    final engine = MediaKitEngine();
+    final policy = MediaRequestPolicy();
+    DashPairSource source(Uri video) => DashPairSource(
+      video: MediaTrack(uri: video, requestPolicy: policy),
+      audio: MediaTrack(
+        uri: File('test/fixtures/media/audio.m4a').absolute.uri,
+        requestPolicy: policy,
+      ),
+    );
+    try {
+      await tester.pumpWidget(MaterialApp(home: VideoSurface(engine: engine)));
+      PlayerFailure? failure;
+      final opening = Stopwatch()..start();
+      try {
+        await _withFrames(
+          tester,
+          engine.open(
+            source(File('$fixtures/video.mp4').uri),
+            const OpenOptions(play: false, volume: 0),
+          ),
+        );
+      } on PlayerFailure catch (error) {
+        failure = error;
+      }
+      expect(failure?.kind, PlayerFailureKind.unsupportedVideoColor);
+      expect(
+        opening.elapsed,
+        lessThan(const Duration(seconds: 12)),
+        reason: 'Leave startup time for the compatible stream',
+      );
+      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+      await _withFrames(
+        tester,
+        engine.open(
+          source(File('test/fixtures/media/video.mp4').absolute.uri),
+          const OpenOptions(play: false, volume: 0),
+        ),
+      );
+      expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await engine.dispose();
+    }
+  }, skip: !withoutVulkan);
 
   testWidgets('Profile 5 texture matches a Dolby-aware SDR reference', (
     tester,
@@ -145,7 +198,7 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await engine.dispose();
     }
-  });
+  }, skip: withoutVulkan);
 }
 
 Future<void> _withFrames(WidgetTester tester, Future<void> operation) async {

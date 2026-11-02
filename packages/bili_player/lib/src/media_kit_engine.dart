@@ -105,6 +105,7 @@ final class MediaKitEngine
   double get appliedAudioGainDb => _audioGain?.gainDb ?? 0;
   bool _disposed = false;
   bool _requiresDecodedAudio = false;
+  bool _requiresVideoColorMapping = false;
   NativeReadinessStage? _readinessStage;
   int _generation = 0;
   PlaybackSnapshot _snapshot = const PlaybackSnapshot(
@@ -555,8 +556,8 @@ final class MediaKitEngine
   PlayerFailure? _loadFailure(int generation) {
     if (_nativeLoad?.state.preparationFailed ?? false) {
       return PlayerFailure(
-        PlayerFailureKind.nativePlayback,
-        'Dolby Vision color conversion could not be configured.',
+        PlayerFailureKind.unsupportedVideoColor,
+        '当前播放后端无法正确显示此杜比视界视频',
         generation,
       );
     }
@@ -564,7 +565,12 @@ final class MediaKitEngine
     return code == null
         ? null
         : PlayerFailure(
-            PlayerFailureKind.nativePlayback,
+            // A filter/VO can terminate loading after on_preloaded but
+            // before external audio selection, so do not wait for the
+            // video-readiness stage to classify this as incompatible.
+            _requiresVideoColorMapping
+                ? PlayerFailureKind.unsupportedVideoColor
+                : PlayerFailureKind.nativePlayback,
             'Native source loading terminated with an error.',
             generation,
           );
@@ -589,6 +595,7 @@ final class MediaKitEngine
       if (generation != _generation || _disposed) return;
       await _releasePlayer();
       if (generation != _generation || _disposed) return;
+      Timer? colorPreparationDeadline;
       try {
         final (video, audio) = _validate(source, options, generation);
         _watchDashContinuity = source is DashPairSource && audio != null;
@@ -703,11 +710,30 @@ final class MediaKitEngine
               generation == _generation &&
               !_disposed &&
               identical(_player, player),
-          onPreloaded: Platform.isWindows && !audioOnly
-              ? () => configureNativeVideoColor(
-                  read: platform.getProperty,
-                  write: platform.setProperty,
-                )
+          onPreloaded: !audioOnly
+              ? () {
+                  _requiresVideoColorMapping = configureNativeVideoColor(
+                    read: platform.getProperty,
+                    write: platform.setProperty,
+                    isAndroid: Platform.isAndroid,
+                    onAndroidDolbyVision: _videoOutput.enableAndroidDolbyVision,
+                    codecHint: video.codec,
+                  );
+                  if (_requiresVideoColorMapping) {
+                    // A converter/VO may accept its options but never produce
+                    // a frame. Leave time for the caller's compatible source.
+                    colorPreparationDeadline = Timer(
+                      const Duration(seconds: 6),
+                      () {
+                        if (generation == _generation &&
+                            !_disposed &&
+                            identical(_player, player)) {
+                          _nativeLoad?.state.failPreparation();
+                        }
+                      },
+                    );
+                  }
+                }
               : null,
           onExternalAudio: audioReady == null
               ? null
@@ -847,6 +873,29 @@ final class MediaKitEngine
           // Decoder metadata alone does not establish a native video output.
           // mpv renders a video frame while paused; no audio probe is needed.
           await waitForOutput();
+          final profile = platform.getProperty(
+            'current-tracks/video/dolby-vision-profile',
+          );
+          final outputMatrix = platform.getProperty(
+            'video-out-params/colormatrix',
+          );
+          final unmappedDolby =
+              !_requiresVideoColorMapping &&
+              outputMatrix == 'dolbyvision' &&
+              (profile.isEmpty || profile == '5');
+          final mappingFailed =
+              _requiresVideoColorMapping &&
+              (Platform.isAndroid
+                  ? platform.getProperty('current-vo') != 'gpu-next'
+                  : outputMatrix != 'bt.709');
+          if (unmappedDolby || mappingFailed) {
+            throw PlayerFailure(
+              PlayerFailureKind.unsupportedVideoColor,
+              '当前播放后端无法正确显示此杜比视界视频',
+              generation,
+            );
+          }
+          colorPreparationDeadline?.cancel();
         }
         if (generation != _generation || _disposed) return;
         _readinessStage = null;
@@ -935,19 +984,38 @@ final class MediaKitEngine
       } on SourceSuperseded {
         await _releasePlayer();
       } on PlayerFailure catch (error) {
-        _fail(error);
+        final failure =
+            _requiresVideoColorMapping &&
+                error.kind == PlayerFailureKind.nativePlayback &&
+                (_readinessStage == NativeReadinessStage.videoDecode ||
+                    _readinessStage == NativeReadinessStage.videoOutput)
+            ? PlayerFailure(
+                PlayerFailureKind.unsupportedVideoColor,
+                '当前播放后端无法正确显示此杜比视界视频',
+                generation,
+              )
+            : error;
+        _fail(failure);
         await _releasePlayer();
-        rethrow;
+        throw failure;
       } on Object {
         const message = 'Native player could not open this source.';
+        final colorFailure =
+            _requiresVideoColorMapping &&
+            (_readinessStage == NativeReadinessStage.videoDecode ||
+                _readinessStage == NativeReadinessStage.videoOutput);
         final failure = PlayerFailure(
-          PlayerFailureKind.nativePlayback,
-          message,
+          colorFailure
+              ? PlayerFailureKind.unsupportedVideoColor
+              : PlayerFailureKind.nativePlayback,
+          colorFailure ? '当前播放后端无法正确显示此杜比视界视频' : message,
           generation,
         );
         _fail(failure);
         await _releasePlayer();
         throw failure;
+      } finally {
+        colorPreparationDeadline?.cancel();
       }
     });
   }
@@ -1215,6 +1283,7 @@ final class MediaKitEngine
     _audioGain = null;
     _nativeErrors.reset();
     _requiresDecodedAudio = false;
+    _requiresVideoColorMapping = false;
     _readinessStage = null;
     for (final subscription in _subscriptions) {
       await subscription.cancel();

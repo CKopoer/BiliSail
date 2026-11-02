@@ -347,6 +347,7 @@ class PlaybackSession extends ChangeNotifier {
   bool get isLive => contentTarget is LivePlaybackTarget;
   bool _audioOnly = false;
   bool _foregroundAudioOnly = false;
+  bool _allowColorFallback = true;
   bool get audioOnly => _audioOnly;
   late final ListeningSleepTimer sleepTimer;
   bool get canAutoAdvance => !sleepTimer.elapsed;
@@ -789,6 +790,42 @@ class PlaybackSession extends ChangeNotifier {
     int? liveLine,
     LiveStreamPreference? liveStream,
     bool? audioOnly,
+  }) => _open(
+    video,
+    selected,
+    quality: quality,
+    force: force,
+    position: position,
+    desiredPlaying: desiredPlaying,
+    rate: rate,
+    volume: volume,
+    target: target,
+    title: title,
+    voice: voice,
+    audioQuality: audioQuality,
+    liveLine: liveLine,
+    liveStream: liveStream,
+    audioOnly: audioOnly,
+  );
+
+  Future<void> _open(
+    VideoDetail? video,
+    VideoPart? selected, {
+    int quality = 80,
+    bool force = false,
+    Duration? position,
+    bool? desiredPlaying,
+    double? rate,
+    double? volume,
+    ContentPlaybackTarget? target,
+    String? title,
+    PlaybackVoice? voice,
+    AudioQualityPreference? audioQuality,
+    int? liveLine,
+    LiveStreamPreference? liveStream,
+    bool? audioOnly,
+    bool allowColorFallback = true,
+    Duration? startupBudget,
   }) async {
     if (_disposed || _closing) return;
     if (target == null && (video == null || selected == null)) return;
@@ -803,11 +840,15 @@ class PlaybackSession extends ChangeNotifier {
     final generation = ++_generation;
     _cancelRecovery();
     if (_recoveryGeneration != generation) {
-      _recoveryAttempts = 0;
-      _nativeOpenAttempts = 0;
-      _remainingRecoveryBudget = _PlaybackStartupRecovery.totalBudget;
+      if (startupBudget == null) {
+        _recoveryAttempts = 0;
+        _nativeOpenAttempts = 0;
+      }
+      _remainingRecoveryBudget =
+          startupBudget ?? _PlaybackStartupRecovery.totalBudget;
     }
     _foregroundAudioOnly = audioOnly ?? _foregroundAudioOnly;
+    _allowColorFallback = allowColorFallback;
     final requestedAudioOnly = _foregroundAudioOnly;
     _audioOnly = requestedAudioOnly;
     if (!requestedAudioOnly) sleepTimer.cancel();
@@ -815,7 +856,9 @@ class PlaybackSession extends ChangeNotifier {
     _audioRecovery = null;
     // Capture source settings together; a preference change during resolution
     // applies to the next open rather than half of this source generation.
-    final preferredCodec = _settings.preferredVideoCodec;
+    final preferredCodec = allowColorFallback
+        ? _settings.preferredVideoCodec
+        : VideoCodecPreference.h264;
     final mediaCdn = _settings.mediaCdn;
     final videoDecoding = switch (_settings.videoDecoding) {
       VideoDecodingPreference.automatic => VideoDecodingMode.automatic,
@@ -922,6 +965,7 @@ class PlaybackSession extends ChangeNotifier {
     danmaku.replaceEvents(const []);
     _notify();
     _PlaybackStartupRecovery? preparingRecovery;
+    PlaybackMedia? compatibilityMedia;
     try {
       await savedProgress;
       if (!isCurrent()) return;
@@ -1001,6 +1045,7 @@ class PlaybackSession extends ChangeNotifier {
           resolved = requestedAudioQuality == null
               ? value
               : value.selectAudioQuality(requestedAudioQuality);
+          compatibilityMedia = resolved;
         }),
         if (readResume)
           startupDiagnostics
@@ -1280,7 +1325,55 @@ class PlaybackSession extends ChangeNotifier {
       }
     } on PlayerFailure catch (failure) {
       if (isCurrent()) {
-        error = contentTarget is OfflinePlaybackTarget
+        if (failure.kind == PlayerFailureKind.unsupportedVideoColor &&
+            allowColorFallback &&
+            !isLive &&
+            target is! OfflinePlaybackTarget) {
+          final original = compatibilityMedia;
+          final candidates =
+              original?.qualities
+                  .where(
+                    (candidate) =>
+                        candidate != 126 &&
+                        candidate > 0 &&
+                        candidate <= original.quality,
+                  )
+                  .toList()
+                ?..sort((a, b) => b.compareTo(a));
+          final fallbackQuality =
+              candidates?.firstOrNull ?? (quality < 80 ? quality : 80);
+          final fallbackGeneration = _generation + 1;
+          await _open(
+            video,
+            selected,
+            quality: fallbackQuality,
+            force: true,
+            position: _openingPosition ?? position,
+            desiredPlaying: _desiredPlaying,
+            rate: _openingRate,
+            volume: _openingVolume,
+            target: target,
+            title: title,
+            voice: _voice,
+            audioQuality: requestedAudioQuality,
+            audioOnly: requestedAudioOnly,
+            allowColorFallback: false,
+            startupBudget:
+                preparingRecovery?.totalRemaining ?? _remainingRecoveryBudget,
+          );
+          if (!_disposed &&
+              _generation == fallbackGeneration &&
+              error == null) {
+            auxiliaryMessage = '当前设备无法正确显示所选视频格式，已使用兼容视频流';
+            _notify();
+          }
+          return;
+        }
+        error = failure.kind == PlayerFailureKind.unsupportedVideoColor
+            ? target is OfflinePlaybackTarget
+                  ? '当前设备无法正确显示此离线视频的杜比视界格式'
+                  : '当前设备无法正确显示此视频格式，未取得兼容视频流'
+            : contentTarget is OfflinePlaybackTarget
             ? '无法播放本地视频，文件可能无法解码或已不可访问'
             : failure.message;
         _resolving = false;
@@ -2764,7 +2857,7 @@ class PlaybackSession extends ChangeNotifier {
     final video = detail;
     final selected = part;
     if (contentTarget != null || (video != null && selected != null)) {
-      await open(
+      await _open(
         video,
         selected,
         force: true,
@@ -2777,6 +2870,7 @@ class PlaybackSession extends ChangeNotifier {
         desiredPlaying: _desiredPlaying,
         target: contentTarget,
         title: contentTitle,
+        allowColorFallback: _allowColorFallback,
       );
     }
   }

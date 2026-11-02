@@ -40,6 +40,175 @@ void main() {
   ]) {
     for (final playing in [false, true]) {
       test(
+        'unsupported video color falls back once with transport retained target=$target playing=$playing',
+        () async {
+          final engine = _FakeEngine()
+            ..nextOpenFailure = PlayerFailureKind.unsupportedVideoColor;
+          final repository = _FakeRepository(autoResolve: true)
+            ..mediaForQuality = _colorMedia;
+          final content = _FakeContentRepository()
+            ..mediaForQuality = _colorMedia;
+          final session = PlaybackSession(
+            engine: engine,
+            repository: repository,
+            contentRepository: content,
+            progress: _FakeProgress(),
+            accountScope: () => 'guest',
+          );
+          addTearDown(session.close);
+          session.configureSettings(
+            const AppSettings.defaults().copyWith(
+              preferredVideoCodec: VideoCodecPreference.dolbyVision,
+            ),
+          );
+          await session.open(
+            _detail('one'),
+            _part('one'),
+            target: target,
+            quality: 126,
+            desiredPlaying: playing,
+            position: const Duration(seconds: 17),
+            rate: 1.5,
+            volume: 36,
+          );
+          expect(engine.openOptions, hasLength(2));
+          expect(session.media?.quality, 125);
+          expect(session.media?.video.codec, 'hev1');
+          expect(session.error, isNull);
+          expect(session.auxiliaryMessage, contains('兼容视频流'));
+          expect(engine.currentSnapshot.position, const Duration(seconds: 17));
+          expect(engine.currentSnapshot.rate, 1.5);
+          expect(engine.currentSnapshot.volume, 36);
+          expect(engine.currentSnapshot.desiredPlaying, playing);
+          expect(target == null ? repository.qualities : content.qualities, [
+            126,
+            125,
+          ]);
+          expect(target == null ? repository.codecs : content.codecs, [
+            VideoCodecPreference.dolbyVision,
+            VideoCodecPreference.h264,
+          ]);
+          expect(engine.maxSimultaneousPlayers, 1);
+          await session.retry();
+          expect(
+            (target == null ? repository.codecs : content.codecs).last,
+            VideoCodecPreference.h264,
+          );
+          expect(session.error, isNull);
+        },
+      );
+    }
+  }
+
+  test(
+    'a failed compatibility stream does not recurse or retry a CDN',
+    () async {
+      final engine = _FakeEngine()
+        ..nextOpenFailure = PlayerFailureKind.unsupportedVideoColor;
+      engine.onOpenFailure = () =>
+          engine.nextOpenFailure = PlayerFailureKind.unsupportedVideoColor;
+      final repository = _FakeRepository(autoResolve: true)
+        ..mediaForQuality = _colorMedia;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: repository,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'), quality: 126);
+      await _flush();
+      expect(engine.openOptions, hasLength(2));
+      expect(repository.qualities, [126, 125]);
+      expect(session.error, contains('未取得兼容视频流'));
+      expect(session.media, isNull);
+    },
+  );
+
+  test('compatible source retains the remaining startup budget', () async {
+    var now = Duration.zero;
+    final engine = _FakeEngine()
+      ..nextOpenFailure = PlayerFailureKind.unsupportedVideoColor
+      ..onOpenFailure = () => now = const Duration(seconds: 20);
+    final session = PlaybackSession(
+      engine: engine,
+      repository: _FakeRepository(autoResolve: true)
+        ..mediaForQuality = _colorMedia,
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+      startupNow: () => now,
+    );
+    addTearDown(session.close);
+    await session.open(_detail('one'), _part('one'), quality: 126);
+    expect(session.error, isNull);
+    expect(engine.openOptions, hasLength(2));
+    expect(engine.openOptions.last.openTimeout, const Duration(seconds: 15));
+  });
+
+  test(
+    'unsupported offline color never resolves an online replacement',
+    () async {
+      final engine = _FakeEngine()
+        ..nextOpenFailure = PlayerFailureKind.unsupportedVideoColor;
+      final repository = _FakeRepository(autoResolve: true);
+      final content = _FakeContentRepository()..mediaForQuality = _colorMedia;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: repository,
+        contentRepository: content,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(
+        null,
+        null,
+        target: const OfflinePlaybackTarget('download'),
+        quality: 126,
+      );
+      expect(engine.openOptions, hasLength(1));
+      expect(repository.qualities, isEmpty);
+      expect(content.qualities, [126]);
+      expect(session.error, contains('此离线视频的杜比视界格式'));
+    },
+  );
+
+  test(
+    'a replacement source cancels a pending compatible video response',
+    () async {
+      final engine = _FakeEngine()
+        ..nextOpenFailure = PlayerFailureKind.unsupportedVideoColor;
+      final repository = _FakeRepository(autoResolve: true)
+        ..mediaForQuality = _colorMedia;
+      engine.onOpenFailure = () => repository.autoResolve = false;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: repository,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      final opening = session.open(_detail('one'), _part('one'), quality: 126);
+      await _flush();
+      expect(repository.qualities, [126, 125]);
+      final pending = repository.pendingResolves['one']!;
+      final cancellation = repository.resolveCancellations['one']!;
+      repository.autoResolve = true;
+      await session.open(_detail('two'), _part('two'));
+      expect(cancellation.isCancelled, isTrue);
+      pending.complete(_colorMedia(125));
+      await opening;
+      expect(session.part?.cid, 'two');
+      expect(engine.openOptions, hasLength(2));
+      expect(session.auxiliaryMessage, isNull);
+    },
+  );
+  for (final target in <ContentPlaybackTarget?>[
+    null,
+    const PgcPlaybackTarget('12'),
+  ]) {
+    for (final playing in [false, true]) {
+      test(
         'manual audio quality retains transport and listening state target=$target playing=$playing',
         () async {
           final engine = _FakeEngine();
@@ -6038,6 +6207,22 @@ PlaybackMedia _audioMedia({bool lossless = true}) {
   );
 }
 
+PlaybackMedia _colorMedia(int quality) {
+  final base = _media('color', quality, const Duration(minutes: 2));
+  return PlaybackMedia(
+    video: PlaybackTrack(
+      urls: base.video.urls,
+      codec: quality == 126 ? 'dvh1.05.06' : 'hev1',
+      bandwidth: 1000,
+    ),
+    audio: base.audio,
+    quality: quality,
+    qualities: const [80, 125, 126],
+    duration: base.duration,
+    headers: base.headers,
+  );
+}
+
 PlaybackMedia _backupMedia() => PlaybackMedia(
   video: PlaybackTrack(
     urls: [
@@ -6070,6 +6255,7 @@ final class _FakeRepository implements PlaybackRepository {
   });
   bool autoResolve;
   PlaybackMedia? resolvedMedia;
+  PlaybackMedia Function(int quality)? mediaForQuality;
   AudioLoudness? loudness;
   bool failNextResolve = false;
   final Duration mediaDuration;
@@ -6102,7 +6288,8 @@ final class _FakeRepository implements PlaybackRepository {
     }
     if (autoResolve) {
       return Future.value(
-        resolvedMedia ??
+        mediaForQuality?.call(quality) ??
+            resolvedMedia ??
             _media(cid, quality, mediaDuration, loudness: loudness),
       );
     }
@@ -6571,6 +6758,7 @@ final class _FakeContentRepository implements ContentPlaybackRepository {
   final Duration duration;
   AudioLoudness? loudness;
   PlaybackMedia? resolvedMedia;
+  PlaybackMedia Function(int quality)? mediaForQuality;
   int liveLineCount = 1;
   final targets = <ContentPlaybackTarget>[];
   final qualities = <int>[];
@@ -6591,6 +6779,9 @@ final class _FakeContentRepository implements ContentPlaybackRepository {
     final gate = pending;
     pending = null;
     if (gate != null) return gate.future;
+    if (mediaForQuality case final factory?) {
+      return Future.value(factory(quality));
+    }
     if (resolvedMedia case final media?) return Future.value(media);
     if (target is OfflinePlaybackTarget) {
       return Future.value(_media('offline', quality, duration));

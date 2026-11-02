@@ -92,6 +92,9 @@ final class NativeLoadObserver {
           } on Object {
             // Do not leak native strings or leave the loading core blocked.
             state.failPreparation();
+            // Continue the hook for cleanup, without decoding an unsupported
+            // Profile 5 base layer as ordinary YUV in the meantime.
+            platform.setProperty('vid', 'no');
           } finally {
             mpv.mpv_hook_continue(client, hookId);
           }

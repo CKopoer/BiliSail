@@ -513,3 +513,9 @@ Android 复用既有媒体服务，暂停／换源期间不撤下前台服务，
 **决定（2026-11-01）**：按用户要求，先修复 `d3d11va-copy` 回退并测量性能。保留 D65 的 Dart 核心／视频／库插件／事件桥、ANGLE 和 D66 的 Skia，Windows libmpv SDK 单独固定为包含 mpv `1d156861…` 修复的基础 x86_64 标准 OpenGL 构建。唯一现行资产清单为 `windows/native/media-assets.cmake`；预取、编译、最终打包使用同一清单，整体校验和选择 headers、import library、DLL，不修改 Pub 缓存或启用历史 `mpv.cmake`。
 
 本机 H.264／HEVC／AV1 自动模式实读为 `d3d11va`；三组 Profile 交叉对照同时记录 CPU、GPU、频率、功耗、内存和掉帧。该选择不等于 DXGI／原生视频平面，不更改弹幕或自动解码偏好，也不保证未测 GPU 的直通。完整证据、版本升级的归因限制与未测项见[实施记录](validation/windows-angle-direct-hwdec-2026-11-01.md)。
+
+## D69：杜比视界优先正确映射，不支持时自动选兼容在线视频流
+
+**决定（2026-11-03）**：按用户明确选择，Profile 5 必须经过保留 RPU 的色彩转换后输出 SDR 纹理。Android 仅对此源采用软件 HEVC／gpu-next，其他嵌入式后端通过 libplacebo 滤镜转换；根据固定原生库的运行时能力和实际输出检查是否支持，不从平台名称推断。普通视频继续使用原解码路径，不改用户保存的偏好。
+
+转换不可用或输出准备超时时，由通用播放器返回格式不兼容错误；应用会话最多重新解析一次兼容画质／编码，保留位置、播放意图、倍速和音量，并共享启动预算和打开次数上限。Bilibili 画质规则留在应用层；离线内容不请求在线替代源。这不是 HDR／Dolby Vision 透传，软件解码有功耗成本。源码范围、公开样片、Android 真机证据和 Apple／Linux 未验收项见[跨平台验证](validation/dolby-vision-cross-platform-2026-11-03.md)。

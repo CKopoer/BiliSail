@@ -2,6 +2,8 @@
 
 日期：2026-11-02。问题：[BiliSail #54](https://github.com/CKopoer/BiliSail/issues/54)。本轮使用公开本地样片验证播放器，不使用没有大会员权限的测试账号请求杜比视界流。
 
+本文记录首轮 Windows 修复。后续 Android 真机复现、跨平台能力检查与自动兼容流回退见 [2026-11-03 记录](dolby-vision-cross-platform-2026-11-03.md)。
+
 ## 根因与参考
 
 Profile 5 的 IPTPQc2 基础层没有 HDR10 兼容回退层。解码出 HEVC 像素不等于完成 Dolby Vision 色彩映射；直接交给普通 YUV 色彩转换会产生绿／紫偏色。
