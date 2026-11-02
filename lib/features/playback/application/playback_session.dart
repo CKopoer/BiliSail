@@ -1,4 +1,5 @@
 import 'media_command_pump.dart';
+import 'listening_sleep_timer.dart';
 
 import 'dart:async';
 
@@ -45,6 +46,7 @@ class PlaybackSession extends ChangeNotifier {
     int Function()? sessionEpoch,
     Duration Function()? historyNow,
     Duration Function()? danmakuNow,
+    DateTime Function()? sleepTimerNow,
     this.startupNow,
     PlaybackRateMemory? rateMemory,
     PlaybackVolumeMemory? volumeMemory,
@@ -54,6 +56,26 @@ class PlaybackSession extends ChangeNotifier {
        _rateMemory = rateMemory ?? PlaybackRateMemory(),
        _volumeMemory = volumeMemory ?? PlaybackVolumeMemory() {
     _clock.start();
+    sleepTimer = ListeningSleepTimer(
+      now: sleepTimerNow,
+      onElapsed: () {
+        if (_disposed || _closing || !_audioOnly) return;
+        final next = _nextSourceIntent;
+        if (next != null) {
+          // A related-video route can mount after the alarm. Keep its listening
+          // identity while revoking the already accepted autoplay request.
+          _nextSourceIntent = (
+            id: next.id,
+            cid: next.cid,
+            playing: false,
+            position: next.position,
+            scope: next.scope,
+            epoch: next.epoch,
+          );
+        }
+        unawaited(pause());
+      },
+    );
     final history = historyRepository;
     _historyReporter = history == null
         ? null
@@ -325,8 +347,16 @@ class PlaybackSession extends ChangeNotifier {
   bool _audioOnly = false;
   bool _foregroundAudioOnly = false;
   bool get audioOnly => _audioOnly;
+  late final ListeningSleepTimer sleepTimer;
+  bool get canAutoAdvance => !sleepTimer.elapsed;
+
+  void startSleepTimer(Duration duration) {
+    if (_disposed || _closing || !_audioOnly || !sourceMatchesAccount) return;
+    sleepTimer.start(duration);
+  }
+
   bool get continuousRelatedPlaybackEnabled =>
-      _settings.continuousRelatedPlayback;
+      _settings.continuousRelatedPlayback && canAutoAdvance;
   bool get canListen =>
       !isLive &&
       media?.kind == PlaybackMediaKind.dash &&
@@ -479,7 +509,9 @@ class PlaybackSession extends ChangeNotifier {
         part?.cid != cid ||
         _scope != accountScope() ||
         _epoch != sessionEpoch() ||
-        (completed && snapshots.value.phase != PlaybackPhase.ended)) {
+        (completed &&
+            (!canAutoAdvance ||
+                snapshots.value.phase != PlaybackPhase.ended))) {
       return false;
     }
     _nextSourceIntent = (
@@ -774,6 +806,8 @@ class PlaybackSession extends ChangeNotifier {
     _foregroundAudioOnly = audioOnly ?? _foregroundAudioOnly;
     final requestedAudioOnly = _foregroundAudioOnly;
     _audioOnly = requestedAudioOnly;
+    if (!requestedAudioOnly) sleepTimer.cancel();
+    sleepTimer.checkDeadline();
     _audioRecovery = null;
     // Capture source settings together; a preference change during resolution
     // applies to the next open rather than half of this source generation.
@@ -834,6 +868,7 @@ class PlaybackSession extends ChangeNotifier {
       _desiredPlaying = true;
       _subtitlePreference = null;
     }
+    if (sleepTimer.elapsed) _desiredPlaying = false;
     final oldRate =
         rate ??
         (samePart && media != null
@@ -1259,6 +1294,7 @@ class PlaybackSession extends ChangeNotifier {
     if (_disposed || value.generation != engine.currentSnapshot.generation) {
       return;
     }
+    sleepTimer.checkDeadline();
     final previous = snapshots.value;
     if (value.generation == previous.generation &&
         value.phase == PlaybackPhase.playing &&
@@ -2181,6 +2217,10 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> togglePlaying() async {
+    if (!_desiredPlaying || snapshots.value.phase == PlaybackPhase.ended) {
+      sleepTimer.checkDeadline();
+      sleepTimer.acknowledgeElapsed();
+    }
     if (snapshots.value.phase == PlaybackPhase.ended && !_resolving) {
       if (isLive) {
         _desiredPlaying = true;
@@ -2219,6 +2259,8 @@ class PlaybackSession extends ChangeNotifier {
   /// Idempotent system play commands must never toggle a playing source off.
   Future<void> play() async {
     if (_disposed || _closing) return;
+    sleepTimer.checkDeadline();
+    sleepTimer.acknowledgeElapsed();
     if (error != null && !_resolving) {
       _desiredPlaying = true;
       await retry();
@@ -2341,6 +2383,8 @@ class PlaybackSession extends ChangeNotifier {
       _,
     ) async {
       if (_disposed || generation != _generation) return;
+      sleepTimer.checkDeadline();
+      if (sleepTimer.elapsed) _desiredPlaying = false;
       if (!_playbackAllowed) {
         if (engine.currentSnapshot.desiredPlaying ||
             engine.currentSnapshot.phase == PlaybackPhase.playing) {
@@ -2698,6 +2742,7 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> stop({bool clearCheckpoints = true}) async {
+    sleepTimer.cancel();
     _cancelRecovery();
     _audioRecovery = null;
     _audioOnly = false;
@@ -2778,6 +2823,7 @@ class PlaybackSession extends ChangeNotifier {
     await attempt(engine.dispose);
     await attempt(() async => snapshots.dispose());
     await attempt(() async => highEnergy.dispose());
+    await attempt(() async => sleepTimer.dispose());
     await attempt(() async => danmakuSendStyle.dispose());
     await attempt(() async => danmaku.dispose());
     _clock.stop();

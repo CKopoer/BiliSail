@@ -211,6 +211,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     scheduleMicrotask(() {
       final commands = _pageCommands.value;
       if (!mounted ||
+          !_session.canAutoAdvance ||
           !_session.ownsPlayback(this) ||
           _session.isLive ||
           _session.contentTarget is OfflinePlaybackTarget ||

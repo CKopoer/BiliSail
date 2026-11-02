@@ -9,6 +9,7 @@ import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../application/playback_session.dart';
 import 'audio_subtitle_lyrics.dart';
+import 'listening_sleep_timer_button.dart';
 import 'playback_snapshot_builder.dart';
 
 /// A listening surface with localized timeline and subtitle updates.
@@ -62,7 +63,11 @@ class AudioPlaybackView extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (bounds.maxWidth < 380 ||
+                      ListeningSleepTimerButton(
+                        session: session,
+                        compact: bounds.maxWidth < 520,
+                      ),
+                      if (bounds.maxWidth < 520 ||
                           MediaQuery.textScalerOf(context).scale(14) > 18)
                         IconButton(
                           key: const ValueKey('audio-return-video'),

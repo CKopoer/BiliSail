@@ -227,11 +227,28 @@ void main() {
         expect(session.audioOnly, isFalse);
         expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
         expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        await _withFrames(tester, session.setAudioOnly(true));
+        await _withFrames(tester, session.play());
+        await tester.runAsync(() async {
+          // The session alarm must pause native audio without Flutter frames.
+          session.startSleepTimer(const Duration(milliseconds: 500));
+          final generation = engine.currentSnapshot.generation;
+          await Future<void>.delayed(const Duration(milliseconds: 900));
+          expect(session.sleepTimer.elapsed, isTrue);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(engine.currentSnapshot.generation, generation);
+          final position = engine.currentSnapshot.position;
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          expect(
+            (engine.currentSnapshot.position - position).abs(),
+            lessThan(const Duration(milliseconds: 150)),
+          );
+        });
         expect(forbiddenHeaders, 0);
         expect(tester.takeException(), isNull);
       } finally {
-        await _withFrames(tester, session.close());
         await tester.pumpWidget(const SizedBox.shrink());
+        await _withFrames(tester, session.close());
         await server.close(force: true);
       }
     },
