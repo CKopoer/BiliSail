@@ -5,6 +5,25 @@ import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('preparation failure interrupts readiness and is not revived', () async {
+    final state = NativeLoadState();
+    final waiting = waitForNativeState(
+      ready: () => false,
+      superseded: () => false,
+      changes: [state.changes],
+      timeout: const Duration(seconds: 6),
+      failure: () => state.preparationFailed ? StateError('preparation') : null,
+    );
+    state.failPreparation();
+    await expectLater(
+      waiting.timeout(const Duration(milliseconds: 100)),
+      throwsStateError,
+    );
+    await state.dispose();
+    state.failPreparation();
+    expect(state.preparationFailed, isTrue);
+  });
+
   test('matching error end interrupts readiness before its deadline', () async {
     final state = NativeLoadState()..started(7);
     addTearDown(state.dispose);

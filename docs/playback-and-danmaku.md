@@ -122,6 +122,8 @@ abstract interface class PlayerEngine {
 
 从用户偏好、服务端授权的 representation、后端支持和当前设备能力的交集选轨。优先使用经过验证的 H.264/AAC 组合；HEVC/AV1、HDR、高帧率逐项测试，不仅凭 codec 名宣称硬解成功。
 
+2026-11-02 修复 Windows Dolby Vision Profile 5 的绿／紫偏色：从容器元数据识别后，在解码前设置 libplacebo RPU／色彩转换，输出 BT.709／sRGB 的 SDR 纹理；该源自动模式使用 copy 硬解，其他视频保留原路径。公开样片、实际纹理对照及大会员／其他平台未测项见[Profile 5 验证](validation/dolby-vision-profile5-2026-11-02.md)。
+
 当前设置已提供 H.264/HEVC/AV1 点播编码偏好，以及三类播放共用的自动/软件解码方式。默认 H.264 和 SDK 自动模式；同清晰度优先匹配编码，缺失时使用其他已识别编码。源 generation 捕获偏好，下次打开/重新加载时应用；软件解码保持 GPU 渲染开启。具体选择顺序、SDK 差异和 Windows/其他平台验证边界见 [视频编解码设置](validation/video-codec-settings.md)。
 
 ## 3. DASH 分轨处理

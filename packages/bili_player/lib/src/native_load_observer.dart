@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ffi';
 
 import 'package:media_kit/media_kit.dart' as mk;
+import 'package:media_kit/generated/libmpv/bindings.dart' show mpv_event_hook;
 import 'package:ffi/ffi.dart';
 
 import 'native_readiness.dart';
@@ -12,10 +13,18 @@ final class NativeLoadState {
   final _changes = StreamController<void>.broadcast(sync: true);
   int? _entryId;
   int? _errorCode;
+  bool _preparationFailed = false;
   bool _disposed = false;
 
   Stream<void> get changes => _changes.stream;
   int? get errorCode => _errorCode;
+  bool get preparationFailed => _preparationFailed;
+
+  void failPreparation() {
+    if (_disposed || _preparationFailed) return;
+    _preparationFailed = true;
+    _changes.add(null);
+  }
 
   void started(int entryId) {
     if (!_disposed) _entryId = entryId;
@@ -54,6 +63,7 @@ final class NativeLoadObserver {
     required bool Function() isCurrent,
     required void Function(int errorCode) onFailure,
     void Function(String filename)? onExternalAudio,
+    void Function()? onPreloaded,
   }) async {
     final handle = platform.handle;
     if (!isCurrent()) throw const SourceSuperseded();
@@ -75,7 +85,17 @@ final class NativeLoadObserver {
         final event = mpv.mpv_wait_event(client, 0).ref;
         if (event.event_id == 0) break;
         if (!isCurrent() || event.data == nullptr) continue;
-        if (event.event_id == 22 && onExternalAudio != null) {
+        if (event.event_id == 25 && onPreloaded != null) {
+          final hookId = event.data.cast<mpv_event_hook>().ref.id;
+          try {
+            onPreloaded();
+          } on Object {
+            // Do not leak native strings or leave the loading core blocked.
+            state.failPreparation();
+          } finally {
+            mpv.mpv_hook_continue(client, hookId);
+          }
+        } else if (event.event_id == 22 && onExternalAudio != null) {
           final property = event.data.cast<_MpvEventProperty>().ref;
           if (property.format == 1 && property.data != nullptr) {
             final value = property.data.cast<Pointer<Utf8>>().value;
@@ -99,6 +119,16 @@ final class NativeLoadObserver {
 
     final wakeup = NativeCallable<Void Function(Pointer<Void>)>.listener(drain);
     try {
+      if (onPreloaded != null) {
+        final name = 'on_preloaded'.toNativeUtf8();
+        try {
+          if (mpv.mpv_hook_add(client, 2, name.cast(), 0) < 0) {
+            throw StateError('Native video preparation hook unavailable.');
+          }
+        } finally {
+          calloc.free(name);
+        }
+      }
       if (onExternalAudio != null) {
         final property = 'current-tracks/audio/external-filename'
             .toNativeUtf8();

@@ -15,6 +15,7 @@ import 'native_load_observer.dart';
 import 'native_audio_gain.dart';
 import 'native_rate_audio.dart';
 import 'native_video_frame_queue.dart';
+import 'native_video_color.dart';
 import 'video_dimensions.dart';
 import 'media_kit_video_output.dart';
 import 'video_output.dart';
@@ -552,6 +553,13 @@ final class MediaKitEngine
   }
 
   PlayerFailure? _loadFailure(int generation) {
+    if (_nativeLoad?.state.preparationFailed ?? false) {
+      return PlayerFailure(
+        PlayerFailureKind.nativePlayback,
+        'Dolby Vision color conversion could not be configured.',
+        generation,
+      );
+    }
     final code = _nativeLoad?.state.errorCode;
     return code == null
         ? null
@@ -695,6 +703,12 @@ final class MediaKitEngine
               generation == _generation &&
               !_disposed &&
               identical(_player, player),
+          onPreloaded: Platform.isWindows && !audioOnly
+              ? () => configureNativeVideoColor(
+                  read: platform.getProperty,
+                  write: platform.setProperty,
+                )
+              : null,
           onExternalAudio: audioReady == null
               ? null
               : (uri) {
