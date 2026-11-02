@@ -2746,6 +2746,19 @@ class _ControlBar extends StatelessWidget {
                 '清晰度 ${media.qualityLabels[quality] ?? playbackQualityLabel(quality)}',
               ),
             ),
+        if (!session.isLive && media.audioTracks.isNotEmpty) ...[
+          const PopupMenuDivider(),
+          for (final option in media.audioTracks)
+            CheckedPopupMenuItem(
+              checked: option.quality == media.audioQuality,
+              value: () {
+                if (session.media == media) {
+                  unawaited(session.changeAudioQuality(option.quality));
+                }
+              },
+              child: Text('音质 ${playbackAudioQualityLabel(option.quality)}'),
+            ),
+        ],
         if (session.isLive) ...[
           CheckedPopupMenuItem(
             checked: session.requestedQuality == 0,

@@ -60,6 +60,109 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final fullScreen in [false, true]) {
+    testWidgets(
+      'compact more menu switches audio quality fullscreen=$fullScreen',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(400, 900);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final engine = _FakeEngine();
+        final session = _session(
+          engine,
+          repository: _MenuRepository(withAudioTracks: true),
+        );
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(
+            session,
+            _FakeWindowService(),
+            const AppSettings.defaults(),
+            width: 320,
+            textScale: 2,
+          ),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        if (fullScreen) {
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+        }
+        await session.pause();
+        await session.seek(const Duration(seconds: 45));
+        await session.setRate(1.5);
+        await session.setVolume(36);
+        await _pumpFrames(tester);
+
+        Future<void> openChoices() async {
+          await _showControls(tester);
+          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.pumpAndSettle();
+          if (!fullScreen) {
+            final audio = find.widgetWithText(ExpansionTile, '音质');
+            await tester.ensureVisible(audio);
+            await tester.pumpAndSettle();
+            await tester.tap(audio);
+            await tester.pumpAndSettle();
+          }
+        }
+
+        String label(String quality) => fullScreen ? '音质 $quality' : quality;
+        Finder choice(String quality) => fullScreen
+            ? find.widgetWithText(
+                CheckedPopupMenuItem<VoidCallback>,
+                label(quality),
+              )
+            : find.byWidgetPredicate(
+                (widget) =>
+                    widget is ListTile &&
+                    widget.title is Text &&
+                    (widget.title as Text).data == quality,
+              );
+        bool checked(String quality) {
+          if (fullScreen) {
+            return tester
+                .widget<CheckedPopupMenuItem<VoidCallback>>(choice(quality))
+                .checked;
+          }
+          return tester.widget<ListTile>(choice(quality)).selected;
+        }
+
+        await openChoices();
+        expect(checked('AAC · 192K'), isTrue);
+        expect(find.text(label('杜比音频')), findsNothing);
+        final lossless = choice('Hi-Res / FLAC 无损');
+        await tester.ensureVisible(lossless);
+        await tester.pumpAndSettle();
+        expect(lossless.hitTestable(), findsOneWidget);
+        await tester.tap(lossless);
+        await _pumpFrames(tester);
+        expect(session.media?.audioQuality, AudioQualityPreference.lossless);
+        expect(engine.currentSnapshot.position, const Duration(seconds: 45));
+        expect(engine.currentSnapshot.rate, 1.5);
+        expect(engine.currentSnapshot.volume, 36);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        if (!fullScreen && find.byTooltip('关闭更多播放选项').evaluate().isNotEmpty) {
+          await tester.tap(find.byTooltip('关闭更多播放选项'));
+          await tester.pumpAndSettle();
+        }
+        await openChoices();
+        expect(checked('Hi-Res / FLAC 无损'), isTrue);
+        final aac = choice('AAC · 192K');
+        await tester.ensureVisible(aac);
+        await tester.pumpAndSettle();
+        await tester.tap(aac);
+        await _pumpFrames(tester);
+        expect(session.media?.audioQuality, AudioQualityPreference.aac192);
+        expect(engine.opens, 3);
+        expect(engine.maxSurfaces, 1);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
   for (final width in [320.0, 1200.0]) {
     for (final fullScreen in [false, true]) {
       testWidgets(
