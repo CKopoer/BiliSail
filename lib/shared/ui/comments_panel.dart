@@ -16,6 +16,7 @@ import 'app_network_image.dart';
 import 'app_notice.dart';
 import 'emoticon_picker_dialog.dart';
 import 'network_avatar.dart';
+import 'scroll_collapsing_header.dart';
 import 'bili_icons.dart';
 import 'comment_rich_content.dart';
 import 'comment_text_styles.dart';
@@ -57,9 +58,13 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   final _mentions = <String, UserId>{};
   bool _syncToDynamic = false, _pickingImages = false;
   int _draftGeneration = 0;
-  final _topScroll = ScrollController();
+  final _topScroll = HeaderScrollController();
   // Detail always opens at the top; do not retain a PageStorage entry per root.
-  final _replyScroll = ScrollController(keepScrollOffset: false);
+  final _replyScroll = HeaderScrollController(
+    keepScrollOffset: false,
+    coordinateWithHeader: true,
+  );
+  var _replyStorage = PageStorageBucket();
   double _topOffset = 0;
   String? _shownRoot;
   RequestCancellation? _linkCancellation;
@@ -348,6 +353,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     );
     if (_shownRoot != rootId) {
       _shownRoot = rootId;
+      _replyStorage = PageStorageBucket();
       final offset = rootId == null ? _topOffset : 0.0;
       final scroll = rootId == null ? _topScroll : _replyScroll;
       final target = widget.target;
@@ -356,7 +362,13 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
             widget.target == target &&
             _shownRoot == rootId &&
             scroll.hasClients) {
-          scroll.jumpTo(offset.clamp(0, scroll.position.maxScrollExtent));
+          final targetOffset = offset.clamp(
+            0.0,
+            scroll.position.maxScrollExtent,
+          );
+          // A nested jump also moves the player. A newly opened reply list is
+          // already at zero, so leave the current player height alone.
+          if (scroll.offset != targetOffset) scroll.jumpTo(targetOffset);
         }
       });
     }
@@ -859,6 +871,9 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       );
       final state = ref.read(_provider);
       final root = state.openRoot;
+      final active = WorkspaceActivity.isActive(context);
+      _topScroll.configure(context, active: active && root == null);
+      _replyScroll.configure(context, active: active && root != null);
       final comments = root == null ? state.items : state.replyItems;
       final loading = root == null ? state.loading : state.replyLoading;
       final more = root == null ? state.hasMore : state.replyHasMore;
@@ -870,7 +885,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
             comments[index].id: index,
         };
       }
-      return ListView.builder(
+      final list = ListView.builder(
         controller: root == null ? _topScroll : _replyScroll,
         key: PageStorageKey(
           'comments:${widget.target.type.name}:${widget.target.oid}:${root?.id ?? state.sort.name}',
@@ -942,6 +957,11 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
           );
         },
       );
+      // NestedScrollView creates positions with persistence enabled itself.
+      // Bound reply storage to this one detail visit despite that default.
+      return root == null
+          ? list
+          : PageStorage(bucket: _replyStorage, child: list);
     },
   );
 

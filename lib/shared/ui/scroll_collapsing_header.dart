@@ -154,8 +154,10 @@ class HeaderScrollBody extends StatelessWidget {
 /// list to NestedScrollView. Sharing the primary controller directly would
 /// otherwise scroll every visited tab at once.
 class HeaderScrollController extends ScrollController {
-  HeaderScrollController({super.keepScrollOffset});
+  HeaderScrollController({super.keepScrollOffset, bool? coordinateWithHeader})
+    : _coordinateWithHeader = coordinateWithHeader ?? keepScrollOffset;
 
+  final bool _coordinateWithHeader;
   ScrollController? _parent;
   NestedScrollViewState? _nested;
   bool _active = false;
@@ -164,9 +166,9 @@ class HeaderScrollController extends ScrollController {
   void configure(BuildContext context, {required bool active}) {
     final scope = context
         .dependOnInheritedWidgetOfExactType<_ScrollHeaderBody>();
-    // Query-replacement views (currently search) explicitly opt out of retained
-    // offsets and do not have a scrolling header.
-    final parent = keepScrollOffset ? scope?.nested.innerController : null;
+    // Query-replacement views opt out by default; transient reply lists can
+    // coordinate their gestures without retaining a scroll offset per thread.
+    final parent = _coordinateWithHeader ? scope?.nested.innerController : null;
     // A list stays inside its layout for its lifetime, including width changes.
     assert(!hasClients || identical(parent, _parent));
     if (active == _active && identical(parent, _parent)) return;
