@@ -2621,13 +2621,6 @@ class _ControlBar extends StatelessWidget {
               slot(fullscreenButton),
             ],
           ),
-          Row(
-            key: const ValueKey('small-window-quality-audio-row'),
-            children: [
-              Expanded(child: _ScrollablePlayerTools(children: qualityAndRate)),
-              slot(volumeButton),
-            ],
-          ),
         ],
       );
     }

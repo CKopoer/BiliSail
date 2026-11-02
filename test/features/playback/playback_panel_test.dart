@@ -165,6 +165,7 @@ void main() {
   }
   for (final width in [320.0, 1200.0]) {
     for (final fullScreen in [false, true]) {
+      if (width == 320 && !fullScreen) continue;
       testWidgets(
         'volume menu switches available audio quality width=$width fullscreen=$fullScreen',
         (tester) async {
@@ -346,12 +347,16 @@ void main() {
           expect(find.byTooltip('发送弹幕'), findsOneWidget);
           expect(find.byTooltip('更多播放选项'), findsOneWidget);
           expect(find.byIcon(Icons.more_horiz), findsOneWidget);
-          expectRateAtBottom();
-          expect(find.byTooltip('音量').hitTestable(), findsOneWidget);
-          if (!session.isLive && (session.media?.qualities.length ?? 0) > 1) {
-            expect(find.byTooltip('清晰度'), findsOneWidget);
-          }
-          for (final tooltip in ['字幕', '语音翻译', '弹幕配置', '字幕样式']) {
+          for (final tooltip in [
+            '清晰度',
+            '直播清晰度与线路',
+            '播放速度',
+            '音量',
+            '字幕',
+            '语音翻译',
+            '弹幕配置',
+            '字幕样式',
+          ]) {
             expect(find.byTooltip(tooltip), findsNothing);
           }
           final topButtons =
@@ -381,16 +386,9 @@ void main() {
             tester.getTopLeft(find.byTooltip('更多播放选项')).dx,
             greaterThan(tester.getTopLeft(find.byTooltip('播放配置')).dx),
           );
-          final fullscreenY = tester.getCenter(find.byTooltip('全屏（F）')).dy;
-          final audioRow = find.byKey(
-            const ValueKey('small-window-quality-audio-row'),
-          );
-          expect(tester.getTopLeft(audioRow).dy, greaterThan(fullscreenY));
           expect(
-            tester.getBottomRight(audioRow).dy,
-            lessThanOrEqualTo(
-              tester.getBottomRight(find.byType(PlaybackPanel)).dy,
-            ),
+            find.byKey(const ValueKey('small-window-quality-audio-row')),
+            findsNothing,
           );
           await tester.tap(find.byTooltip('更多播放选项'));
           await tester.pumpAndSettle();
@@ -1162,7 +1160,7 @@ void main() {
                 matching: find.byType(IconButton),
               ),
               findsNWidgets(
-                !session.isLive && target is! OfflinePlaybackTarget ? 6 : 5,
+                !session.isLive && target is! OfflinePlaybackTarget ? 5 : 4,
               ),
             );
             for (final key in ['compact-playback-actions']) {
