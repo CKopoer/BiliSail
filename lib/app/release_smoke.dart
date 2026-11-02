@@ -13,10 +13,10 @@ import '../core/presentation/app_input_host.dart';
 import '../core/presentation/window_input_focus.dart';
 import '../core/storage/credential_store.dart';
 
-// Match the existing outer probe budget. A virtual Mac's platform queue can
+// Bound each focus query. A virtual Mac's platform queue can
 // take longer than the interactive two-second focus RPC limit even when its
-// eventual key-window snapshot is correct. The supervisor still kills the
-// entire probe after 60 seconds; this does not give each step a new budget.
+// eventual key-window snapshot is correct. The supervisor separately caps the
+// complete GUI probe at 180 seconds; queries cannot renew that total budget.
 const releaseSmokeFocusTimeout = Duration(seconds: 60);
 
 String releaseSmokeErrorMarker(Object error) {

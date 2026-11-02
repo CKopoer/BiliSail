@@ -141,6 +141,8 @@ Release 草稿及全部附件上传成功后，使用 GitHub 官方 [actions/git
 
 [CI 41323620524](https://github.com/CKopoer/BiliSail/actions/runs/41323620524/job/124901479137) 只有 Intel macOS job 失败：Release 编译及签名已完成，两轮播放窗 Space 检查通过后，启动探测超时；其他五个平台与所有检查通过。线程采样定位到 AppKit 应用激活／WindowServer 与虚拟 GPU 等待。共享窗口激活现在仅在应用未激活时请求 `NSApp.activate`，并补充窗口再激活和回收阶段记录；完整证据、修复范围及本机验证边界见[启动专项](macos-release-startup.md#2026-11-02intel-重复应用激活与图形等待)。原有发布验收与超时门槛继续保留，新的 Intel 原生运行结果仍待对应 CI 复验。
 
+后续 [CI 41436650047](https://github.com/CKopoer/BiliSail/actions/runs/41436650047/job/125252164120) 仍在第二轮窗口回收时耗尽 60 秒总预算；上一次成功运行的同类回收单次就耗时约 30.8 秒。本轮将共享校验入口的组合 GUI `startup` 预算独立设为 180 秒，凭据执行仍为 60 秒，原生启动仍为 180 秒；保留完整断言和独立硬超时，不自动重试。两份工作流的构建步骤／job 上限继续为 30／40 分钟。证据、父进程与 worker 预算传递及远端验证边界见[组合 GUI 执行预算](macos-release-startup.md#2026-11-02组合-gui-检查的执行预算)。
+
 ## Android 固定签名与覆盖升级
 
 2026-10-07 起，push、手动 CI 和 Release 共用固定 release keystore。仓库 Actions Secrets 配置：

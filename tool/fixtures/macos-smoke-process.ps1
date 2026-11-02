@@ -21,6 +21,16 @@ switch ($scenario) {
 }
 Write-DartEntry
 switch ($scenario) {
+  'gui-progress' {
+    [Console]::Error.WriteLine('BILISAIL_RELEASE_STAGE:first-frame')
+    for ($index = 0; $index -lt 2; $index++) {
+      [Console]::Error.WriteLine('BILISAIL_FOCUS_STAGE:prepare')
+      Start-Sleep -Milliseconds 600
+      [Console]::Error.WriteLine('BILISAIL_FOCUS_STAGE:retire')
+      Start-Sleep -Milliseconds 600
+      [Console]::Error.WriteLine('BILISAIL_FOCUS_STAGE:retired')
+    }
+  }
   'probe-timeout' {
     [Console]::Error.WriteLine('BILISAIL_CREDENTIAL_STAGE:deleted')
     Start-Sleep -Seconds 6

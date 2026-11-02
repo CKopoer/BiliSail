@@ -174,6 +174,44 @@ try {
       }
     }
   }
+  # Exercise the shipped defaults through the real parent -> worker -> child
+  # boundary. A larger parent limit alone is ineffective if the worker rejects
+  # values above 60 or silently falls back to its old credential-only limit.
+  $budgetCases = @(
+    @{ phase = 'startup'; expected = 180; scenario = 'gui-progress' }
+    @{ phase = 'write'; expected = 60; scenario = 'immediate' }
+    @{ phase = 'read-delete'; expected = 60; scenario = 'immediate' }
+    @{ phase = 'verify-deleted'; expected = 60; scenario = 'immediate' }
+    @{ phase = 'cleanup'; expected = 60; scenario = 'immediate' }
+    @{ phase = 'startup'; expected = 4; scenario = 'gui-progress'; timeout = 4 }
+    @{ phase = 'startup'; expected = 1; scenario = 'gui-progress'; timeout = 1 }
+  )
+  foreach ($case in $budgetCases) {
+    $parameters = @{
+      Executable = $pwsh; Phase = $case.phase; RunId = $runId
+      WorkingDirectory = $smokeTestDirectory; LaunchTimeoutSeconds = 10
+      LauncherArguments = @('-NoProfile', '-File', $processFixture, $case.scenario)
+    }
+    if ($case.ContainsKey('timeout')) { $parameters.TimeoutSeconds = $case.timeout }
+    $failure = $null
+    try { Invoke-MacOSReleaseSmokePhase @parameters } catch { $failure = $_.Exception.Message }
+    $status = Get-Content -LiteralPath (Join-Path $smokeTestDirectory "$($case.phase).result.json") -Raw | ConvertFrom-Json
+    if ($status.probeTimeoutSeconds -ne $case.expected -or $status.supervisorTimedOut -or
+        $status.supervisorTimeoutSeconds -ne 10 + $case.expected + 30) {
+      throw "The '$($case.phase)' budget did not survive the worker boundary."
+    }
+    if ($case.expected -eq 1) {
+      if (!$failure -or !$status.timedOut -or $status.timeoutKind -ne 'probe' -or $status.acknowledged -or
+          'BILISAIL_RELEASE_STAGE:first-frame' -cnotin @($status.stages.stage) -or
+          'BILISAIL_FOCUS_STAGE:retire' -cnotin @($status.stages.stage)) {
+        throw 'GUI progress renewed the fixed total execution deadline.'
+      }
+    } elseif ($failure -or $status.timedOut -or !$status.acknowledged -or !$status.outputDrained -or $status.exitCode -ne 0) {
+      throw "A valid '$($case.phase)' probe failed with its selected budget: $failure"
+    } elseif ($case.phase -eq 'startup' -and @($status.stages | Where-Object { $_.stage -ceq 'BILISAIL_FOCUS_STAGE:retired' }).Count -ne 2) {
+      throw 'The GUI budget probe did not complete both window lifecycles.'
+    }
+  }
   # Observe a real worker's snapshot while its native child is still hung, then
   # end it using the independent parent deadline before the inner 60s timer.
   $start = [System.Diagnostics.ProcessStartInfo]::new()
@@ -222,9 +260,11 @@ try {
     }
     Remove-Item -LiteralPath $fixturePidPath -Force -ErrorAction SilentlyContinue
   }
-  Write-Output "macOS smoke process supervision checks passed ($($scenarios.Count + 1) cases)."
+  Write-Output "macOS smoke process supervision checks passed ($($scenarios.Count + $budgetCases.Count + 1) cases)."
 } finally {
   # Remove only the known fixture output and the directory created above.
-  Remove-Item -LiteralPath (Join-Path $smokeTestDirectory 'verify-deleted.result.json') -Force -ErrorAction SilentlyContinue
+  foreach ($phase in @('startup', 'write', 'read-delete', 'verify-deleted', 'cleanup')) {
+    Remove-Item -LiteralPath (Join-Path $smokeTestDirectory "$phase.result.json") -Force -ErrorAction SilentlyContinue
+  }
   Remove-Item -LiteralPath $smokeTestDirectory -Force
 }

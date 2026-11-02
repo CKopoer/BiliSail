@@ -3,7 +3,8 @@ param(
   [Parameter(Mandatory)][ValidateSet('startup', 'write', 'read-delete', 'verify-deleted', 'cleanup')][string]$Phase,
   [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{32}$')][string]$RunId,
   [Parameter(Mandatory)][string]$WorkingDirectory,
-  [ValidateRange(1, 60)][int]$TimeoutSeconds = 60,
+  # The parent resolves the phase policy; never replace it with a worker default.
+  [Parameter(Mandatory)][ValidateRange(1, 180)][int]$TimeoutSeconds,
   [ValidateRange(1, 300)][int]$LaunchTimeoutSeconds = 180,
   [string]$LauncherArgumentsJson = '[]'
 )

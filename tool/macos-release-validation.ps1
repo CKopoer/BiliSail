@@ -122,15 +122,25 @@ function Save-MacOSNativeStack {
   }
 }
 
+function Get-MacOSSmokeProbeTimeoutSeconds {
+  param([ValidateSet('startup', 'write', 'read-delete', 'verify-deleted', 'cleanup')][string]$Phase)
+  # Startup includes a first frame, a three-second observation, and two full
+  # playback-window lifecycles. Intel hosted GUI calls can each take 15-30s;
+  # they must not share the short credential-only probe's execution budget.
+  # This is one fixed deadline from Dart entry, never renewed by progress.
+  if ($Phase -eq 'startup') { return 180 }
+  return 60
+}
+
 function Invoke-MacOSReleaseSmokePhase {
   param(
     [string]$Executable, [string]$Phase, [string]$RunId, [string]$WorkingDirectory,
-    [ValidateRange(1, 60)][int]$TimeoutSeconds = 60,
+    [ValidateRange(1, 180)][int]$TimeoutSeconds = (Get-MacOSSmokeProbeTimeoutSeconds $Phase),
     [ValidateRange(1, 300)][int]$LaunchTimeoutSeconds = 180,
     [string[]]$LauncherArguments = @()
   )
   $resultPath = Join-Path $WorkingDirectory "$Phase.result.json"
-  $status = [ordered]@{ phase = $Phase; timedOut = $false; timeoutKind = $null; acknowledged = $false; lastStage = $null }
+  $status = [ordered]@{ phase = $Phase; timedOut = $false; timeoutKind = $null; acknowledged = $false; lastStage = $null; launchTimeoutSeconds = $LaunchTimeoutSeconds; probeTimeoutSeconds = $TimeoutSeconds }
   Write-MacOSSmokeStatus $resultPath $status
   $start = [System.Diagnostics.ProcessStartInfo]::new()
   $start.FileName = (Get-Process -Id $PID).Path
@@ -226,7 +236,7 @@ function Read-MacOSSmokePipe([hashtable]$Pipe) {
 function Invoke-MacOSReleaseSmokePhaseCore {
   param(
     [string]$Executable, [string]$Phase, [string]$RunId, [string]$WorkingDirectory,
-    [ValidateRange(1, 60)][int]$TimeoutSeconds = 60,
+    [ValidateRange(1, 180)][int]$TimeoutSeconds = (Get-MacOSSmokeProbeTimeoutSeconds $Phase),
     [ValidateRange(1, 300)][int]$LaunchTimeoutSeconds = 180,
     # Offline tests run the same process supervisor against a pwsh fixture.
     [string[]]$LauncherArguments = @()
@@ -247,9 +257,9 @@ function Invoke-MacOSReleaseSmokePhaseCore {
     $started = $process.Start()
     if (!$started) { throw 'Could not launch the macOS Release application.' }
     $processStartedMilliseconds = $clock.ElapsedMilliseconds
-    Write-Host "macOS Release smoke phase '$Phase' launched."
+    Write-Host "macOS Release smoke phase '$Phase' launched (launch budget: ${LaunchTimeoutSeconds}s, probe budget: ${TimeoutSeconds}s)."
     $resultPath = Join-Path $WorkingDirectory "$Phase.result.json"
-    $progress = [ordered]@{ phase = $Phase; processId = $process.Id; processStartedUtc = $startedUtc; timedOut = $false; timeoutKind = $null; acknowledged = $false; lastStage = $null; errorKind = $null; stages = @() }
+    $progress = [ordered]@{ phase = $Phase; processId = $process.Id; processStartedUtc = $startedUtc; timedOut = $false; timeoutKind = $null; acknowledged = $false; lastStage = $null; errorKind = $null; launchTimeoutSeconds = $LaunchTimeoutSeconds; probeTimeoutSeconds = $TimeoutSeconds; stages = @() }
     Write-MacOSSmokeStatus $resultPath $progress
     # Raw output stays in bounded memory; only complete, whitelisted lines can
     # update a diagnostic snapshot or acknowledge the probe.
