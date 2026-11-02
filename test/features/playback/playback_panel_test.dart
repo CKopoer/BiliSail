@@ -2004,6 +2004,97 @@ void main() {
     }
   }
 
+  for (final fullscreen in [false, true]) {
+    for (final visible in [false, true]) {
+      testWidgets(
+        'phone picture swipes work over interactive video after a rate hold fullscreen=$fullscreen controls=$visible',
+        (tester) async {
+          tester.view.physicalSize = const Size(390, 844);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final engine = _FakeEngine()..interactiveSurface = true;
+          final session = _session(engine);
+          final window = _FakeWindowService(desktop: false);
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(session, window, const AppSettings.defaults()),
+          );
+          await _pumpFrames(tester);
+          await _showControls(tester);
+          if (fullscreen) {
+            await tester.tap(find.byTooltip('全屏（F）'));
+            await _pumpFrames(tester);
+          }
+          await session.pause();
+          await session.setVolume(50);
+          await session.seek(const Duration(seconds: 30));
+          await _pumpFrames(tester);
+          if (!visible) {
+            await tester.tapAt(_surfacePoint(tester));
+            await _pumpSurfaceTap(tester);
+          }
+          final hold = await _startRateHold(tester);
+          expect(engine.currentSnapshot.rate, 2);
+          await hold.up();
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.rate, 1);
+          final opens = engine.opens;
+          final generation = session.sourceGeneration;
+          final picture = tester.getRect(
+            find.byKey(const ValueKey('player-surface-tap-target')),
+          );
+          final start =
+              picture.topLeft + Offset(picture.width * .7, picture.height * .4);
+          final seeks = engine.seeks;
+          Future<void> swipe(Offset start, Offset delta) async {
+            final gesture = await tester.startGesture(start);
+            for (var i = 0; i < 10; i++) {
+              await gesture.moveBy(delta / 10);
+              await tester.pump(const Duration(milliseconds: 16));
+            }
+            await gesture.up();
+            await _pumpFrames(tester);
+          }
+
+          await swipe(start, Offset(-picture.width * .2, 0));
+          await _pumpFrames(tester);
+          expect(engine.seeks, seeks + 1);
+          expect(engine.currentSnapshot.position, const Duration(seconds: 6));
+          await swipe(start, Offset(picture.width * .2, 0));
+          expect(engine.seeks, seeks + 2);
+          expect(engine.currentSnapshot.position, const Duration(seconds: 30));
+          await swipe(start, Offset(0, -picture.height * .1));
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.volume, closeTo(60, .01));
+          await swipe(start, Offset(0, picture.height * .1));
+          expect(engine.currentSnapshot.volume, closeTo(50, .01));
+          await swipe(
+            picture.topLeft + Offset(picture.width * .3, picture.height * .4),
+            Offset(0, picture.height * .1),
+          );
+          await _pumpFrames(tester);
+          expect(find.text('亮度 90%'), findsOneWidget);
+          await swipe(
+            picture.topLeft + Offset(picture.width * .3, picture.height * .4),
+            Offset(0, -picture.height * .1),
+          );
+          expect(find.text('亮度 100%'), findsOneWidget);
+          expect(engine.surfaceGestures, 0);
+          expect(engine.currentSnapshot.rate, 1);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(engine.currentSnapshot.position, const Duration(seconds: 30));
+          expect(engine.opens, opens);
+          expect(engine.maxSurfaces, 1);
+          expect(session.sourceGeneration, generation);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+        variant: TargetPlatformVariant.only(TargetPlatform.android),
+      );
+    }
+  }
+
   testWidgets(
     'workspace visibility updates player navigation inline and fullscreen without reopening',
     (tester) async {
@@ -9383,6 +9474,8 @@ final class _RecordingComposition implements VideoCompositionAdapter {
 }
 
 final class _FakeEngine implements PlayerEngine, VideoOutputSource {
+  bool interactiveSurface = false;
+  int surfaceGestures = 0;
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   final _failures = StreamController<PlayerFailure>.broadcast(sync: true);
   PlaybackSnapshot _current = const PlaybackSnapshot(
@@ -9522,7 +9615,23 @@ final class _FakeSurfaceState extends State<_FakeSurface> {
   }
 
   @override
-  Widget build(BuildContext context) => const ColoredBox(color: Colors.black);
+  Widget build(BuildContext context) => widget.engine.interactiveSurface
+      // Match the pinned media-kit Video's low-slop scale recognizer, even
+      // though its panEnabled is false and the app uses NoVideoControls.
+      ? MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            gestureSettings: const DeviceGestureSettings(touchSlop: 4),
+          ),
+          child: InteractiveViewer(
+            panEnabled: false,
+            minScale: .75,
+            maxScale: 2,
+            boundaryMargin: const EdgeInsets.all(double.infinity),
+            onInteractionStart: (_) => widget.engine.surfaceGestures++,
+            child: const ColoredBox(color: Colors.black),
+          ),
+        )
+      : const ColoredBox(color: Colors.black);
 }
 
 final class _FakePlaybackRepository implements PlaybackRepository {

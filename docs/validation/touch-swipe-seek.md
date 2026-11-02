@@ -41,3 +41,12 @@
 - 手势、时间轴、纵向调节和完整播放面板共 344 项定向测试通过，覆盖跳转等待、旧位置采样、失败清理、连续拖动／跳转及失效后的迟到完成。日志：[组件与面板回归](../../build/validation/touch-seek-release-components.log)。
 - `tool/check.ps1 -SkipPub` 全部通过：格式、完整静态分析、打包边界检查通过；根应用 3359、`bili_api` 492、`bili_player` 96、`bili_danmaku` 116、`bili_mux` 5，共 4068 项测试通过。根应用 13 项 Windows 符号链接测试因权限跳过；mux 10 项原生测试因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生验证。工作区包含同期 Windows 安装包修改，本次保留且未纳入提交。日志：[全仓检查](../../build/validation/touch-seek-release-check.log)。文档相对链接与 `git diff --check` 通过。
 - 未构建或安装测试包；`adb devices -l` 无连接设备。DTD 未发现活动调试应用，热重载尝试返回无连接；未执行 Android／Windows 触屏／iOS／macOS 实机验收或 Profile／Release 性能测量。
+
+## 2026-11-02：视频底层手势抢占（Issue #58）
+
+- [#58](https://github.com/CKopoer/BiliSail/issues/58) 反馈 Android 横滑进度、纵滑亮度／音量没有提示，偶尔成功。核对[固定的视频插件](piliplus-dependencies-2026-11-01.md)发现，`media_kit_video` 的 `Video` 在 `NoVideoControls` 下仍挂载 `InteractiveViewer`，默认允许缩放，Android 的局部 `touchSlop` 为 4。应用画面点击层使用 `HitTestBehavior.translucent`，Stack 会继续命中下面的视频组件；其缩放识别器可早于应用的方向拖动识别器赢得手势竞争，随后应用横滑／纵滑被取消。事件若一次跨过应用阈值，也可能由应用先获胜，因此表现为偶发成功。长按倍速不是这次抢占的来源。
+- 将共享画面点击层改为 `HitTestBehavior.opaque`，使触摸事件止于应用画面层。其父级的进度、亮度／音量和长按倍速仍在同一命中路径内；上层按钮、进度条与弹层继续独立处理输入。未修改播放器依赖、原生解码、手势阈值或长按时限。
+- 原来的 fake 视频仅绘制黑色区域，缺少真实视频组件的缩放识别器，因而既有快速滑动测试不能复现。新增与固定插件相同的低阈值 `InteractiveViewer` 夹具，用连续小位移覆盖 390dp 手机画面、普通／全屏、控件显示／隐藏；修复前 4 组均无法提交横滑，修复后均通过。用例还验证长按释放后的双向进度、双向音量和双向亮度、底层缩放未触发、暂停意图／倍速／源代次不变，且没有重新打开或增加视频 surface。
+- 手势组件和完整播放面板 **447 项定向测试通过**，包含原有长按固定／解除倍速、点击／双击、控件和生命周期回归。日志位于忽略目录 `build/validation/issue-58-interactive-before.log`、`issue-58-interactive-after.log` 与 `issue-58-targeted.log`。
+- `tool/check.ps1 -SkipPub` 全量通过：格式、静态分析与打包边界检查通过；根应用 4010、`bili_api` 544、`bili_player` 131、`bili_danmaku` 153、`bili_mux` 5，共 **4843 项测试通过**。13 项 Windows 符号链接用例因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生覆盖。日志为 `build/validation/issue-58-check.log`。
+- `tool/build-android-development.ps1 -Mode Release -SkipMuxBuild` 构建通过，复用既有 Android arm64 mux 资产，普通 `lib/main.dart` 入口的 AOT 测试包输出为 `build/development/android-arm64/BiliSail-test-arm64-release.apk`。脚本已校验 `dev.bilisail.bilisail.test`／`BiliSail 测试版`、`1.2.6+3`、不可调试、arm64 ABI 和既有开发签名，未安装；日志为 `build/validation/issue-58-android-release.log`。没有连接 Android 设备，未验收实际窗口亮度、响度、触摸手感或性能。DTD 发现无活动调试进程，热重载尝试因无连接而未完成；其他平台实机未测。

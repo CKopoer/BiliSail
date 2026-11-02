@@ -1506,7 +1506,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                         key: const ValueKey(
                                           'player-surface-tap-target',
                                         ),
-                                        behavior: HitTestBehavior.translucent,
+                                        // Keep backend surface gestures out of
+                                        // this arena; media-kit's scale recognizer
+                                        // can claim a swipe before our drags.
+                                        behavior: HitTestBehavior.opaque,
                                         onTap: _onSurfaceTap,
                                         onDoubleTapDown: (details) =>
                                             _doubleTapKind = details.kind,
