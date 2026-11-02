@@ -4819,7 +4819,7 @@ void main() {
     testWidgets('$content player wheel adjusts volume inline and fullscreen', (
       tester,
     ) async {
-      final engine = _FakeEngine();
+      final engine = _FakeEngine()..interactiveSurface = true;
       final session = _session(engine);
       addTearDown(session.close);
       await tester.pumpWidget(
@@ -4862,6 +4862,7 @@ void main() {
         expect(engine.currentSnapshot.position, position);
         expect(engine.currentSnapshot.desiredPlaying, isFalse);
         expect(engine.currentSnapshot.generation, generation);
+        expect(engine.surfaceGestures, 0);
         expect(engine.opens, 1);
         expect(engine.maxSurfaces, 1);
       }
@@ -9246,6 +9247,104 @@ void main() {
     _expectPlayerSemantics(tester, '退出全屏（Esc）', focused: true);
     semantics.dispose();
   });
+
+  for (final mode in PlayerControlsMode.values) {
+    for (final (content, target) in <(String, ContentPlaybackTarget?)>[
+      ('video', null),
+      ('pgc', const PgcPlaybackTarget('12', cid: '123')),
+      ('live', const LivePlaybackTarget('12')),
+      ('offline', const OfflinePlaybackTarget('local-task')),
+    ]) {
+      testWidgets('$content fullscreen cursor idles and restores in $mode', (
+        tester,
+      ) async {
+        _resumeApp(tester);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(
+            session,
+            _FakeWindowService(),
+            AppSettings(playerControlsMode: mode),
+            target: target,
+          ),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        await tester.tap(find.byTooltip('全屏（F）'));
+        await _pumpFrames(tester);
+        final mouse = await tester.createGesture(
+          kind: PointerDeviceKind.mouse,
+          pointer: 1,
+        );
+        await mouse.addPointer(location: const Offset(-10, -10));
+        final point = tester.getCenter(
+          find.byKey(const ValueKey('player-surface-tap-target')),
+        );
+        await mouse.moveTo(point);
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 6));
+        await tester.pump(const Duration(milliseconds: 216));
+        await tester.pump();
+        final tracker = RendererBinding.instance.mouseTracker;
+        expect(find.byKey(const ValueKey('player-controls')), findsNothing);
+        expect(tracker.debugDeviceActiveCursor(1), SystemMouseCursors.none);
+
+        if (target == null) {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.inactive,
+          );
+          await tester.pump();
+          expect(tracker.debugDeviceActiveCursor(1), SystemMouseCursors.basic);
+          _resumeApp(tester);
+          await tester.pump(const Duration(seconds: 6));
+          await tester.pump(const Duration(milliseconds: 216));
+          await tester.pump();
+          expect(tracker.debugDeviceActiveCursor(1), SystemMouseCursors.none);
+        }
+
+        await mouse.moveTo(point + const Offset(5, 0));
+        await tester.pump();
+        expect(tracker.debugDeviceActiveCursor(1), SystemMouseCursors.basic);
+        await tester.pump(const Duration(milliseconds: 2499));
+        expect(tracker.debugDeviceActiveCursor(1), SystemMouseCursors.basic);
+        await tester.pump(const Duration(milliseconds: 1));
+        await tester.pump();
+        expect(tracker.debugDeviceActiveCursor(1), SystemMouseCursors.none);
+        await mouse.moveTo(point + const Offset(10, 0));
+        await tester.pump();
+        if (mode == PlayerControlsMode.click) {
+          expect(find.byKey(const ValueKey('player-controls')), findsNothing);
+          await tester.tapAt(point);
+          await _pumpSurfaceTap(tester);
+        }
+        await mouse.moveTo(tester.getCenter(find.byTooltip('音量')));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 6));
+        expect(
+          tracker.debugDeviceActiveCursor(1),
+          isNot(SystemMouseCursors.none),
+        );
+        expect(find.byKey(const ValueKey('player-controls')), findsOneWidget);
+        await mouse.moveTo(point);
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 6));
+        await _pumpFrames(tester);
+        expect(tracker.debugDeviceActiveCursor(1), SystemMouseCursors.none);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await _pumpFrames(tester);
+        await mouse.moveTo(_surfacePoint(tester));
+        await tester.pump(const Duration(seconds: 6));
+        expect(tracker.debugDeviceActiveCursor(1), SystemMouseCursors.basic);
+        expect(engine.opens, 1);
+        expect(engine.maxSurfaces, 1);
+        await mouse.removePointer();
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      });
+    }
+  }
 }
 
 void _expectPlayerSemantics(

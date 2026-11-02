@@ -216,16 +216,20 @@ final class MediaKitVideoOutput
     valueListenable: _controller,
     builder: (context, controller, _) => controller == null
         ? const ColoredBox(color: Color(0xFF000000))
-        : mkv.Video(
-            // VideoState subscribes to its initial player's dimensions. A
-            // same-frame clear/rebind must not retain the old subscriptions.
-            key: ObjectKey(controller),
-            controller: controller,
-            controls: mkv.NoVideoControls,
-            // PlaybackSession owns lifecycle and the user's pause intent.
-            // The old surface may still be mounted while switching to audio.
-            pauseUponEnteringBackgroundMode: false,
-            resumeUponEnteringForegroundMode: false,
+        // The backend is a visual layer. Its built-in InteractiveViewer must
+        // not consume wheel signals or gestures owned by the host controls.
+        : IgnorePointer(
+            child: mkv.Video(
+              // VideoState subscribes to its initial player's dimensions. A
+              // same-frame clear/rebind must not retain the old subscriptions.
+              key: ObjectKey(controller),
+              controller: controller,
+              controls: mkv.NoVideoControls,
+              // PlaybackSession owns lifecycle and the user's pause intent.
+              // The old surface may still be mounted while switching to audio.
+              pauseUponEnteringBackgroundMode: false,
+              resumeUponEnteringForegroundMode: false,
+            ),
           ),
   );
 

@@ -807,6 +807,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   bool _composeExpanded = false;
   final GlobalKey _composerKey = GlobalKey();
   Timer? _controlsHideTimer;
+  Timer? _cursorHideTimer;
+  final _cursorHidden = ValueNotifier(false);
   final Set<int> _pressedPointers = {};
   final Set<String> _hoveredControlRegions = {};
   bool _mouseInside = false;
@@ -933,6 +935,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     _dismissComposerDialog();
     _dismissMoreDialog();
     _controlsHideTimer?.cancel();
+    _cursorHideTimer?.cancel();
+    _cursorHidden.dispose();
     _pressedPointers.clear();
     WidgetsBinding.instance.removeObserver(this);
     widget.settings.removeListener(_onSettingsChanged);
@@ -947,6 +951,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   }
 
   void _scheduleControlsHide() {
+    _scheduleCursorHide();
     _controlsHideTimer?.cancel();
     _controlsHideTimer = null;
     if (!mounted ||
@@ -970,6 +975,29 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         }
       },
     );
+  }
+
+  void _scheduleCursorHide() {
+    if (!mounted) return;
+    _cursorHideTimer?.cancel();
+    _cursorHideTimer = null;
+    _cursorHidden.value = false;
+    if (!mounted ||
+        !widget.fullScreen ||
+        !widget.active ||
+        !_appActive ||
+        _pressedPointers.isNotEmpty ||
+        _hoveredControlRegions.isNotEmpty ||
+        _openControlsMenus > 0 ||
+        _controlEditorFocused) {
+      return;
+    }
+    // Click mode can keep controls hidden while the pointer is moving. Track
+    // cursor idleness separately so movement restores it without opening UI.
+    _cursorHideTimer = Timer(const Duration(milliseconds: 2500), () {
+      _cursorHideTimer = null;
+      if (mounted) _cursorHidden.value = true;
+    });
   }
 
   void _showDynamicControls() {
@@ -1007,6 +1035,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   }
 
   void _onPointerDown(PointerDownEvent event) {
+    _scheduleCursorHide();
     final touchHold =
         !widget.session.isLive && event.kind == PointerDeviceKind.touch;
     if (!touchHold) return;
@@ -1216,10 +1245,26 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     if (!widget.active) return const ColoredBox(color: Colors.black);
-    return MouseRegion(
-      onEnter: _onMouseEnter,
-      onHover: (_) => _onMouseActivity(),
-      onExit: _onMouseExit,
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        widget.controlsVisible,
+        _cursorHidden,
+        widget.session,
+      ]),
+      builder: (context, child) => MouseRegion(
+        cursor:
+            widget.fullScreen &&
+                _appActive &&
+                !widget.session.audioOnly &&
+                !widget.controlsVisible.value &&
+                _cursorHidden.value
+            ? SystemMouseCursors.none
+            : MouseCursor.defer,
+        onEnter: _onMouseEnter,
+        onHover: (_) => _onMouseActivity(),
+        onExit: _onMouseExit,
+        child: child,
+      ),
       child: Listener(
         onPointerSignal: _onSurfacePointerSignal,
         onPointerDown: _onPointerDown,

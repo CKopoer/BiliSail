@@ -796,6 +796,9 @@ void main() {
         await session.close();
       }
     },
+    // Focus changes or competing input can cancel the hold by design. Keep
+    // this acceptance check opt-in; widget tests cover the gesture rules.
+    skip: !const bool.fromEnvironment('BILI_DESKTOP_INTERACTION'),
   );
 
   testWidgets(

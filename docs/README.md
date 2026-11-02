@@ -136,6 +136,7 @@
 | [视频 CDN 设置与测速](validation/video-cdn.md) | 自动／运营商与具体节点、点击展开测速、旧设置兼容、备用与取消 |
 | [悬停预览加载延迟](validation/video-preview-loading.md) | 官网无音轨预览、cid 直传、CDN 顺序、启动预算、静止窗口与首帧切换 |
 | [播放控件与小窗布局](validation/responsive-player.md) | 单行工具栏、弹幕输入自适应、窄窗口布局和播放状态保留 |
+| [全屏鼠标与滚轮输入](validation/fullscreen-pointer-input-2026-11-02.md) | #60 的视频输出输入隔离、全屏光标空闲隐藏与 Windows 验证边界 |
 | [播放器顶部导航与人数](validation/player-top-navigation.md) | 返回／回主页的三种模式、全屏动作、UGC 正在观看人数与取消隔离 |
 | [移动端弹幕输入与键盘布局](validation/mobile-danmaku-keyboard-performance.md) | 高度变化局部布局、控件测量复用、直播弹幕缓存保留及结构对比 |
 | [视频章节与悬停缩略图](validation/playback-timeline.md) | 自适应分段、雪碧图裁剪、预览生命周期与真实视频验证 |

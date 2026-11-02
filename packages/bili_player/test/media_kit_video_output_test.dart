@@ -1,4 +1,5 @@
 import 'package:bili_player/src/media_kit_video_output.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart' as mk;
@@ -90,6 +91,59 @@ final class _Harness {
 }
 
 void main() {
+  testWidgets('video output leaves wheel input and scaling to its host', (
+    tester,
+  ) async {
+    final player = _Player()..publishDimensions(1920, 1080);
+    final controller = _Controller(player, 44);
+    final harness = _Harness();
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      harness.output.dispose();
+      controller.dispose();
+      await player.dispose();
+    });
+    harness.controllers.value = controller;
+    var scrolls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerSignal: (event) {
+            if (event is PointerScrollEvent) {
+              GestureBinding.instance.pointerSignalResolver.register(
+                event,
+                (_) => scrolls++,
+              );
+            }
+          },
+          child: harness.output.buildVideoSurface(),
+        ),
+      ),
+    );
+    await tester.pump();
+    final texture = find.byType(Texture);
+    expect(texture, findsOneWidget);
+    final rect = tester.getRect(texture);
+    for (final delta in [
+      const Offset(0, -120),
+      const Offset(0, 120),
+      const Offset(120, 0),
+    ]) {
+      tester.binding.handlePointerEvent(
+        PointerScrollEvent(
+          position: tester.getCenter(find.byType(mkv.Video)),
+          scrollDelta: delta,
+        ),
+      );
+      await tester.pump();
+      expect(tester.getRect(texture), rect);
+    }
+    expect(scrolls, 3);
+    expect(player.pauses, 0);
+    expect(player.plays, 0);
+  });
+
   for (final delayed in ['dimensions', 'texture', 'frame']) {
     testWidgets('frame readiness waits for $delayed and a surface frame', (
       tester,
