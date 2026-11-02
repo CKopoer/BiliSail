@@ -54,9 +54,9 @@ void main() {
           info,
           quality: 80,
           preferredCodec: VideoCodecPreference.h264,
-          audioQuality: preference,
           headers: const {},
-        );
+        ).selectAudioQuality(preference);
+        expect(media.audioQuality, preference);
         final policy = MediaRequestPolicy();
         final audio = media.audio;
         if (audio == null) {

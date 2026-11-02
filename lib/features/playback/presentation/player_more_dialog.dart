@@ -163,6 +163,22 @@ class PlayerMoreDialog extends StatelessWidget {
               ),
           ],
         ),
+      if (!session.isLive && media != null && media.audioTracks.isNotEmpty)
+        ExpansionTile(
+          title: const Text('音质'),
+          subtitle: switch (media.audioQuality) {
+            final quality? => Text(playbackAudioQualityLabel(quality)),
+            null => null,
+          },
+          children: [
+            for (final option in media.audioTracks)
+              choice(
+                playbackAudioQualityLabel(option.quality),
+                media.audioQuality == option.quality,
+                () => unawaited(session.changeAudioQuality(option.quality)),
+              ),
+          ],
+        ),
       if (session.subtitleTracks.isNotEmpty)
         ExpansionTile(
           title: const Text('字幕'),

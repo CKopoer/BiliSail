@@ -57,6 +57,7 @@
 | [性能热点 P2 优化结果](validation/performance-p2-results-2026-10-11.md) | 图片连接复用、分页索引、启动并发、字幕与评论、影视缓存／解码、直播对账及待实机测量项 |
 | [连续播放与下一集](validation/continuous-playback.md) | 分 P／合集／影视顺序、完播推进、设置持久化与全屏控件 |
 | [播放器音量均衡](validation/audio-normalization.md) | 标准／高动态／关闭、UGC／PGC 元数据、原生增益与验证边界 |
+| [小窗播放控件与音质选择](validation/player-compact-audio-controls-2026-11-02.md) | 小窗清晰度／倍速、音量菜单选音质、换源保留与验证边界 |
 | [与 PiliPlus 的播放音量对照](validation/player-volume-piliplus-comparison-2026-11-01.md) | 默认原生音量、移动端系统／播放器控件差异、放大与音轨偏好、同源 A/B 条件及离线验证边界 |
 | [播放 GPU 与 PiliPlus 对照](validation/playback-gpu-piliplus-2026-11-01.md) | 固定依赖、透明合成、控件重复绘制修复与 Windows Profile 验证边界 |
 | [固定与滚动弹幕分层对照](validation/danmaku-layers-performance-2026-11-01.md) | 单一时钟、固定层保留、覆盖顺序及三类场景的 Profile 前后对照 |

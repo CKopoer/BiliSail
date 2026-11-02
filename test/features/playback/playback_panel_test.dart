@@ -60,6 +60,93 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final width in [320.0, 1200.0]) {
+    for (final fullScreen in [false, true]) {
+      testWidgets(
+        'volume menu switches available audio quality width=$width fullscreen=$fullScreen',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = Size(width == 320 ? 400 : 1400, 1000);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final engine = _FakeEngine();
+          final session = _session(
+            engine,
+            repository: _MenuRepository(withAudioTracks: true),
+          );
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(
+              session,
+              _FakeWindowService(),
+              const AppSettings.defaults(),
+              width: width,
+              textScale: width == 320 ? 2 : 1,
+            ),
+          );
+          await _pumpFrames(tester);
+          await _showControls(tester);
+          if (fullScreen) {
+            await tester.tap(find.byTooltip('全屏（F）'));
+            await _pumpFrames(tester);
+          }
+          await session.pause();
+          await session.seek(const Duration(seconds: 45));
+          await session.setRate(1.5);
+          await session.setVolume(36);
+          await _pumpFrames(tester);
+          await _showControls(tester);
+          await tester.tap(find.byTooltip('音量'));
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('player-volume-slider')),
+            findsOneWidget,
+          );
+          expect(find.text('音质'), findsOneWidget);
+          expect(find.text('杜比音频'), findsNothing);
+          final current = find.widgetWithText(
+            CheckedPopupMenuItem<AudioQualityPreference>,
+            'AAC · 192K',
+          );
+          expect(
+            tester
+                .widget<CheckedPopupMenuItem<AudioQualityPreference>>(current)
+                .checked,
+            isTrue,
+          );
+          await tester.tap(find.text('Hi-Res / FLAC 无损'));
+          await _pumpFrames(tester);
+          expect(session.media?.audioQuality, AudioQualityPreference.lossless);
+          expect(engine.opens, 2);
+          expect(engine.currentSnapshot.position, const Duration(seconds: 45));
+          expect(engine.currentSnapshot.rate, 1.5);
+          expect(engine.currentSnapshot.volume, 36);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          await _showControls(tester);
+          await tester.tap(find.byTooltip('音量'));
+          await tester.pumpAndSettle();
+          final selected = find.widgetWithText(
+            CheckedPopupMenuItem<AudioQualityPreference>,
+            'Hi-Res / FLAC 无损',
+          );
+          expect(
+            tester
+                .widget<CheckedPopupMenuItem<AudioQualityPreference>>(selected)
+                .checked,
+            isTrue,
+          );
+          await tester.tap(find.text('AAC · 192K'));
+          await _pumpFrames(tester);
+          expect(session.media?.audioQuality, AudioQualityPreference.aac192);
+          expect(engine.opens, 3);
+          expect(engine.maxSurfaces, 1);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
   for (final (content, target) in <(String, ContentPlaybackTarget?)>[
     ('video', null),
     ('pgc', const PgcPlaybackTarget('12', cid: '123')),
@@ -156,15 +243,12 @@ void main() {
           expect(find.byTooltip('发送弹幕'), findsOneWidget);
           expect(find.byTooltip('更多播放选项'), findsOneWidget);
           expect(find.byIcon(Icons.more_horiz), findsOneWidget);
-          for (final tooltip in [
-            '播放速度',
-            '清晰度',
-            '音量',
-            '字幕',
-            '语音翻译',
-            '弹幕配置',
-            '字幕样式',
-          ]) {
+          expectRateAtBottom();
+          expect(find.byTooltip('音量').hitTestable(), findsOneWidget);
+          if (!session.isLive && (session.media?.qualities.length ?? 0) > 1) {
+            expect(find.byTooltip('清晰度'), findsOneWidget);
+          }
+          for (final tooltip in ['字幕', '语音翻译', '弹幕配置', '字幕样式']) {
             expect(find.byTooltip(tooltip), findsNothing);
           }
           final topButtons =
@@ -195,16 +279,16 @@ void main() {
             greaterThan(tester.getTopLeft(find.byTooltip('播放配置')).dx),
           );
           final fullscreenY = tester.getCenter(find.byTooltip('全屏（F）')).dy;
-          final controls = find.descendant(
-            of: find.byKey(const ValueKey('player-controls')),
-            matching: find.byType(Tooltip),
+          final audioRow = find.byKey(
+            const ValueKey('small-window-quality-audio-row'),
           );
-          for (var i = 0; i < controls.evaluate().length; i++) {
-            expect(
-              tester.getCenter(controls.at(i)).dy,
-              closeTo(fullscreenY, .1),
-            );
-          }
+          expect(tester.getTopLeft(audioRow).dy, greaterThan(fullscreenY));
+          expect(
+            tester.getBottomRight(audioRow).dy,
+            lessThanOrEqualTo(
+              tester.getBottomRight(find.byType(PlaybackPanel)).dy,
+            ),
+          );
           await tester.tap(find.byTooltip('更多播放选项'));
           await tester.pumpAndSettle();
           final drawer = find.byKey(const ValueKey('player-more-dialog'));
@@ -975,7 +1059,7 @@ void main() {
                 matching: find.byType(IconButton),
               ),
               findsNWidgets(
-                !session.isLive && target is! OfflinePlaybackTarget ? 5 : 4,
+                !session.isLive && target is! OfflinePlaybackTarget ? 6 : 5,
               ),
             );
             for (final key in ['compact-playback-actions']) {
@@ -9692,30 +9776,54 @@ final class _FakePlaybackRepository implements PlaybackRepository {
 
 final class _MenuRepository extends Fake
     implements PlaybackRepository, VoicePlaybackRepository {
+  _MenuRepository({this.withAudioTracks = false});
+  final bool withAudioTracks;
   static const voice = PlaybackVoice(
     languageCode: 'en',
     label: 'English',
     productionType: 2,
     subtitleLanguage: 'ai-en',
   );
-  PlaybackMedia _media(int quality, PlaybackVoice selected) => PlaybackMedia(
-    video: PlaybackTrack(
-      urls: [Uri.https('example.test', '/video/${selected.languageCode}')],
-      codec: 'avc1',
-      bandwidth: 1000,
-    ),
-    audio: PlaybackTrack(
+  PlaybackMedia _media(int quality, PlaybackVoice selected) {
+    final audio = PlaybackTrack(
       urls: [Uri.https('example.test', '/audio/${selected.languageCode}')],
       codec: 'mp4a',
       bandwidth: 128,
-    ),
-    quality: quality,
-    qualities: const [64, 80],
-    duration: const Duration(minutes: 3),
-    headers: const {},
-    voices: const [voice],
-    voice: selected,
-  );
+    );
+    return PlaybackMedia(
+      video: PlaybackTrack(
+        urls: [Uri.https('example.test', '/video/${selected.languageCode}')],
+        codec: 'avc1',
+        bandwidth: 1000,
+      ),
+      audio: audio,
+      audioTracks: withAudioTracks
+          ? [
+              PlaybackAudioTrack(
+                quality: AudioQualityPreference.aac192,
+                track: audio,
+              ),
+              PlaybackAudioTrack(
+                quality: AudioQualityPreference.lossless,
+                track: PlaybackTrack(
+                  urls: [
+                    Uri.https('example.test', '/flac/${selected.languageCode}'),
+                  ],
+                  codec: 'fLaC',
+                  bandwidth: 900000,
+                ),
+              ),
+            ]
+          : const [],
+      quality: quality,
+      qualities: const [64, 80],
+      duration: const Duration(minutes: 3),
+      headers: const {},
+      voices: const [voice],
+      voice: selected,
+    );
+  }
+
   @override
   Future<PlaybackMedia> resolve(
     VideoId video,

@@ -169,6 +169,7 @@ class PlaybackSession extends ChangeNotifier {
   final _clock = Stopwatch();
   final Duration Function()? startupNow;
   _PlaybackStartupRecovery? _audioRecovery;
+  AudioQualityPreference? _audioQuality;
 
   bool _scheduleRecovery(PlayerFailure failure, {Duration? remaining}) {
     if (_disposed ||
@@ -575,6 +576,7 @@ class PlaybackSession extends ChangeNotifier {
       desiredPlaying: _desiredPlaying,
       subtitleLabel: _subtitlePreference,
       voice: _voice,
+      audioQuality: _audioQuality,
       audioOnly: _foregroundAudioOnly,
     );
     _checkpoints[owner] = checkpoint;
@@ -680,6 +682,7 @@ class PlaybackSession extends ChangeNotifier {
       target: target,
       title: title,
       voice: restored?.voice ?? const PlaybackVoice.original(),
+      audioQuality: restored?.audioQuality,
       audioOnly: nextPlaying != null
           ? _foregroundAudioOnly
           : restored?.audioOnly ??
@@ -782,6 +785,7 @@ class PlaybackSession extends ChangeNotifier {
     ContentPlaybackTarget? target,
     String? title,
     PlaybackVoice? voice,
+    AudioQualityPreference? audioQuality,
     int? liveLine,
     LiveStreamPreference? liveStream,
     bool? audioOnly,
@@ -849,6 +853,8 @@ class PlaybackSession extends ChangeNotifier {
         detail?.summary.id == video?.summary.id &&
         part?.cid == selected?.cid &&
         contentTarget == target;
+    _audioQuality = audioQuality ?? (samePart ? _audioQuality : null);
+    final requestedAudioQuality = _audioQuality;
     final requestedLiveLine = target is LivePlaybackTarget
         ? liveLine ?? (samePart ? _liveLine : 0)
         : 0;
@@ -992,7 +998,9 @@ class PlaybackSession extends ChangeNotifier {
       await Future.wait<void>([
         stopped,
         resolution.then<void>((value) {
-          resolved = value;
+          resolved = requestedAudioQuality == null
+              ? value
+              : value.selectAudioQuality(requestedAudioQuality);
         }),
         if (readResume)
           startupDiagnostics
@@ -1205,6 +1213,11 @@ class PlaybackSession extends ChangeNotifier {
         _audioRecovery = recovery;
       }
       media = resolved;
+      if (requestedAudioQuality != null &&
+          resolved.audioTracks.isNotEmpty &&
+          resolved.audioQuality != requestedAudioQuality) {
+        auxiliaryMessage = '所选音质当前不可用，已使用可用音轨';
+      }
       if (isLive) {
         _liveLine = openedLiveLine;
         if (!requestedLiveStream.isAutomatic &&
@@ -2618,6 +2631,33 @@ class PlaybackSession extends ChangeNotifier {
     );
   }
 
+  Future<void> changeAudioQuality(AudioQualityPreference quality) async {
+    final current = media;
+    if (_disposed ||
+        _closing ||
+        _resolving ||
+        isLive ||
+        current == null ||
+        current.kind != PlaybackMediaKind.dash ||
+        !current.audioTracks.any((option) => option.quality == quality) ||
+        current.audioQuality == quality) {
+      return;
+    }
+    await open(
+      detail,
+      part,
+      target: contentTarget,
+      title: contentTitle,
+      quality: _quality,
+      audioQuality: quality,
+      force: true,
+      position: snapshots.value.position,
+      rate: _temporaryRateOriginal ?? snapshots.value.rate,
+      volume: snapshots.value.volume,
+      desiredPlaying: _desiredPlaying,
+    );
+  }
+
   Future<void> setAudioOnly(bool enabled) async {
     if (_disposed ||
         _closing ||
@@ -2746,6 +2786,7 @@ class PlaybackSession extends ChangeNotifier {
     _cancelRecovery();
     _audioRecovery = null;
     _audioOnly = false;
+    _audioQuality = null;
     _foregroundAudioOnly = false;
     _nextSourceIntent = null;
     if (clearCheckpoints) {
@@ -2895,6 +2936,7 @@ final class _PlaybackCheckpoint {
     this.subtitleLabel,
     this.target,
     this.voice = const PlaybackVoice.original(),
+    this.audioQuality,
     this.audioOnly = false,
   });
   final VideoId? videoId;
@@ -2911,6 +2953,7 @@ final class _PlaybackCheckpoint {
   final bool desiredPlaying;
   final String? subtitleLabel;
   final PlaybackVoice voice;
+  final AudioQualityPreference? audioQuality;
   final bool audioOnly;
 }
 

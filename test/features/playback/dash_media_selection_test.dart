@@ -7,6 +7,47 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('audio menu contains only playable distinct formats and keeps media metadata', () {
+    final media = selectDashMedia(
+      ApiPlayInfo(
+        duration: const Duration(seconds: 60),
+        dashVideo: [_track(80, 'avc1')],
+        dashAudio: [
+          _track(30280, 'mp4a.40.2'),
+          _track(30251, 'fLaC'),
+          _track(30250, 'ec-3'),
+          _track(30255, 'ec-3'),
+          _track(999, 'unknown'),
+        ],
+        acceptQuality: const [80],
+      ),
+      quality: 80,
+      preferredCodec: VideoCodecPreference.h264,
+      headers: const {'Referer': 'https://www.bilibili.com/'},
+    );
+    expect(media.audioTracks.map((option) => option.quality), [
+      AudioQualityPreference.aac192,
+      AudioQualityPreference.lossless,
+      AudioQualityPreference.dolby,
+    ]);
+    expect(media.audioQuality, AudioQualityPreference.aac192);
+    final changed = media.selectAudioQuality(AudioQualityPreference.lossless);
+    expect(changed.audio?.codec, 'fLaC');
+    expect(changed.audioQuality, AudioQualityPreference.lossless);
+    expect(changed.video, same(media.video));
+    expect(changed.headers, same(media.headers));
+    expect(changed.voices, same(media.voices));
+    expect(changed.duration, media.duration);
+    expect(changed.qualities, same(media.qualities));
+    expect(
+      media.selectAudioQuality(AudioQualityPreference.aac192),
+      same(media),
+    );
+    expect(
+      media.selectAudioQuality(AudioQualityPreference.aac64).audioQuality,
+      AudioQualityPreference.aac192,
+    );
+  });
   test('dvh1 and dvhe are Dolby Vision rather than ordinary HEVC', () {
     expect(
       VideoCodecPreference.fromCodec('dvh1.05.06'),
@@ -198,6 +239,7 @@ void main() {
       headers: const {},
     );
     expect(resolve(true).audio, isNull);
+    expect(resolve(true).audioTracks, isEmpty);
     expect(() => resolve(false), throwsA(isA<AppFailure>()));
   });
   PlaybackMedia select(

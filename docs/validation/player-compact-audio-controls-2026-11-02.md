@@ -1,0 +1,28 @@
+# 小窗播放控件与音质选择
+
+日期：2026-11-02。
+
+## 行为与范围
+
+- 普通小窗保留原有播放／下一集、时间、弹幕发送／开关与全屏按钮；第二行直接提供清晰度、播放速度和音量。极窄或放大文字时工具区域可横向滚动，音量固定在右侧。直播继续使用直播清晰度／线路入口，不显示倍速。
+- 点击音量按钮，同一菜单内保留连续音量滑块，并列出当前服务端实际返回、客户端能够识别的 DASH 音质，勾选当前音轨。AAC 64K／132K／192K、Hi-Res / FLAC 和杜比按可用情况显示，不把设置偏好或服务端未返回的会员档位冒充可播放选项。同类音轨只保留码率最高的候选。
+- 视频与影视共用 `PlaybackMedia.audioTracks` 和 `PlaybackSession.changeAudioQuality`。切换复用现有换源流程，保留清晰度、语音、位置、倍速、播放器音量、听视频模式与播放／暂停意图；旧源的异步结果不能覆盖新源。更多播放选项与听视频菜单也提供音质入口。
+- 手动音质选择属于当前内容，会随页面／导航检查点保留；换清晰度、重试和切换听视频仍沿用。新内容继续采用已有全局音质偏好，不修改或覆盖已保存设置。重新解析后所选音轨消失时，按已有音质回退规则选取可用轨道并提示。
+- 直播、混流和没有可选音轨的离线源保留音量操作，不添加虚假的音质选项。本次没有新增依赖、数据库字段或播放器原生接口。
+
+## 参考与采用边界
+
+只读参考相邻 PiliPlus 提交 `265f879fa85973b4bf885bde2562f1007f1013b8` 的 [音质菜单](../../../PiliPlus/lib/pages/video/widgets/header_control.dart)（`showSetAudioQa`）与 [视频控制器](../../../PiliPlus/lib/pages/video/controller.dart)（`updatePlayer`）。借鉴按可用音轨列出选项、显示当前选择以及换源恢复位置的职责，独立实现 Flutter/Dart；没有复制 GPLv3 应用源码或资源，没有修改相邻仓库、Pub 缓存或固定依赖。
+
+## 验证
+
+主工作区存在同期“听视频定时关闭”修改；最终验收在基于 `1ec3c47`、只应用本次补丁的隔离检出执行，避免混入其他功能及共用 Windows 构建目录。相邻仓库保持干净。
+
+- 五份锁文件完成 `--enforce-lockfile` 解析且没有差异。最终 `tool/check.ps1 -SkipPub` 全量通过：格式、根应用／包静态分析、打包边界，以及 **4854 项 Dart/Flutter 测试**（根应用 4021、API 544、播放器 131、弹幕 153、封装 5）。根应用 13 项平台用例跳过；mux 10 项因未设置 `BILI_MUX_LIBRARY` 跳过，不计为原生封装验证。日志：`build/validation/player-audio-isolated-final-check.txt`。
+- 新增行为覆盖可用音轨去重／识别、缺档回退、视频／影视播放与暂停、位置／倍速／音量、听视频往返、导航恢复和迟到换源隔离；音量菜单组件覆盖小窗／宽屏、普通／全屏和两倍字体。完整播放器组件测试 407 项通过。
+- Windows-x64 mux 已按固定源码构建，作为本机打包前置；既有 Windows Debug 夹具热重载成功，不作为性能测量。
+- 隔离检出执行 `tool/test-windows-content.ps1`，Windows Debug 原生构建及 **4 项集成用例通过**：内容播放 2 项、音质 1 项（遍历 AAC／FLAC／E-AC-3，确认独立音轨与视频均解码）、直播断流缓存恢复 1 项。音质用例直接调用本次新增的 `selectAudioQuality`，验证实际选中资源。三个媒体归档复用本机缓存，复制前及构建时均执行既有 SHA-256 校验；NuGet 仅加入本次进程的 PATH，工具具有有效 Microsoft 签名。日志：`build/validation/player-audio-isolated-native-final.txt`。
+- 同期定时关闭修改独立提交为 `01ca889` 后，在主工作区追加播放器面板、会话、选轨和定时关闭四组组合回归：**703 项通过**，`flutter analyze --no-pub` 无问题。日志：`artifacts/player-audio-combined-final-tests.txt`、`artifacts/player-audio-combined-final-analyze.txt`。
+- 三份修改文档的 253 处相对链接目标存在；`git diff --check` 通过。
+
+离线夹具不代表真实账号权益、在线 CDN、杜比硬件输出或其他平台设备验收。Android、macOS、iOS、Linux 本轮未构建或实机验收。

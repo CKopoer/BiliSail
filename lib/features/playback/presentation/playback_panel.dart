@@ -2398,7 +2398,7 @@ class _ControlBar extends StatelessWidget {
           ),
       ],
     );
-    final volumeButton = PopupMenuButton<void>(
+    final volumeButton = PopupMenuButton<AudioQualityPreference>(
       tooltip: '音量',
       icon: Icon(
         snapshot.volume <= 0
@@ -2406,10 +2406,27 @@ class _ControlBar extends StatelessWidget {
             : Icons.volume_up_outlined,
         size: 20,
       ),
-      itemBuilder: (_) => [_VolumeSliderEntry(session: session)],
+      itemBuilder: (_) => [
+        _VolumeSliderEntry(session: session),
+        if (!session.isLive &&
+            media != null &&
+            media.audioTracks.isNotEmpty) ...[
+          const PopupMenuDivider(),
+          const PopupMenuItem(enabled: false, child: Text('音质')),
+          for (final option in media.audioTracks)
+            CheckedPopupMenuItem(
+              value: option.quality,
+              checked: option.quality == media.audioQuality,
+              child: Text(playbackAudioQualityLabel(option.quality)),
+            ),
+        ],
+      ],
       onOpened: () => onMenuChanged(true),
       onCanceled: () => onMenuChanged(false),
-      onSelected: (_) => onMenuChanged(false),
+      onSelected: (quality) {
+        onMenuChanged(false);
+        unawaited(session.changeAudioQuality(quality));
+      },
     );
     Widget slot(Widget child, [double width = _ControlsLayout.buttonWidth]) =>
         SizedBox(width: width, height: 40, child: child);
@@ -2541,7 +2558,8 @@ class _ControlBar extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: _ScrollablePlayerTools(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     if (composer != null)
                       slot(
@@ -2556,6 +2574,13 @@ class _ControlBar extends StatelessWidget {
                 ),
               ),
               slot(fullscreenButton),
+            ],
+          ),
+          Row(
+            key: const ValueKey('small-window-quality-audio-row'),
+            children: [
+              Expanded(child: _ScrollablePlayerTools(children: qualityAndRate)),
+              slot(volumeButton),
             ],
           ),
         ],
@@ -2816,7 +2841,7 @@ class _ScrollablePlayerToolsState extends State<_ScrollablePlayerTools> {
   );
 }
 
-class _VolumeSliderEntry extends PopupMenuEntry<void> {
+class _VolumeSliderEntry extends PopupMenuEntry<AudioQualityPreference> {
   const _VolumeSliderEntry({required this.session});
 
   final PlaybackSession session;
@@ -2825,7 +2850,7 @@ class _VolumeSliderEntry extends PopupMenuEntry<void> {
   double get height => 88;
 
   @override
-  bool represents(void value) => false;
+  bool represents(AudioQualityPreference? value) => false;
 
   @override
   State<_VolumeSliderEntry> createState() => _VolumeSliderEntryState();

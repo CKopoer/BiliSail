@@ -3,6 +3,7 @@ import '../../../domain/video.dart';
 import '../../../domain/video_codec.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/audio_normalization.dart';
+import '../../../domain/audio_quality.dart';
 import 'playback_timeline.dart';
 import '../../../domain/live_stream_preference.dart';
 
@@ -23,6 +24,13 @@ final class PlaybackTrack {
 
 enum PlaybackMediaKind { dash, progressive, liveHls, liveFlv }
 
+final class PlaybackAudioTrack {
+  const PlaybackAudioTrack({required this.quality, required this.track});
+
+  final AudioQualityPreference quality;
+  final PlaybackTrack track;
+}
+
 String liveLineLabel(int line) => line == 0 ? '主线' : '备线$line';
 
 final class PlaybackMedia {
@@ -40,9 +48,45 @@ final class PlaybackMedia {
     this.loudness,
     this.liveStreams = const [],
     this.liveStream,
+    this.audioTracks = const [],
   });
   final PlaybackTrack video;
   final PlaybackTrack? audio;
+  final List<PlaybackAudioTrack> audioTracks;
+  AudioQualityPreference? get audioQuality => audioTracks
+      .where((option) => identical(option.track, audio))
+      .firstOrNull
+      ?.quality;
+
+  PlaybackMedia selectAudioQuality(AudioQualityPreference preference) {
+    if (kind != PlaybackMediaKind.dash || audioTracks.isEmpty) return this;
+    final selected = preference.fallbackOrder
+        .map(
+          (quality) => audioTracks
+              .where((option) => option.quality == quality)
+              .firstOrNull,
+        )
+        .whereType<PlaybackAudioTrack>()
+        .firstOrNull;
+    if (selected == null || identical(selected.track, audio)) return this;
+    return PlaybackMedia(
+      video: video,
+      audio: selected.track,
+      audioTracks: audioTracks,
+      kind: kind,
+      quality: quality,
+      qualities: qualities,
+      qualityLabels: qualityLabels,
+      duration: duration,
+      headers: headers,
+      voices: voices,
+      voice: voice,
+      loudness: loudness,
+      liveStreams: liveStreams,
+      liveStream: liveStream,
+    );
+  }
+
   final PlaybackMediaKind kind;
   final Map<int, String> qualityLabels;
   final int quality;

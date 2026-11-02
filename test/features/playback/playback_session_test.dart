@@ -34,6 +34,122 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final target in <ContentPlaybackTarget?>[
+    null,
+    const PgcPlaybackTarget('12'),
+  ]) {
+    for (final playing in [false, true]) {
+      test(
+        'manual audio quality retains transport and listening state target=$target playing=$playing',
+        () async {
+          final engine = _FakeEngine();
+          final repository = _FakeRepository(autoResolve: true)
+            ..resolvedMedia = _audioMedia();
+          final content = _FakeContentRepository()
+            ..resolvedMedia = _audioMedia();
+          final session = PlaybackSession(
+            engine: engine,
+            repository: repository,
+            contentRepository: content,
+            progress: _FakeProgress(),
+            accountScope: () => 'guest',
+          );
+          addTearDown(session.close);
+          await session.open(
+            _detail('one'),
+            _part('one'),
+            target: target,
+            desiredPlaying: playing,
+          );
+          await session.setRate(1.5);
+          await session.setVolume(36);
+          await session.seek(const Duration(seconds: 45));
+          await session.changeAudioQuality(AudioQualityPreference.lossless);
+          void expectChoice() {
+            expect(
+              session.media?.audioQuality,
+              AudioQualityPreference.lossless,
+            );
+            expect(
+              engine.currentSnapshot.position,
+              const Duration(seconds: 45),
+            );
+            expect(engine.currentSnapshot.rate, 1.5);
+            expect(engine.currentSnapshot.volume, 36);
+            expect(engine.currentSnapshot.desiredPlaying, playing);
+          }
+
+          expectChoice();
+          expect((engine.sources.last as DashPairSource).audio?.codec, 'fLaC');
+          await session.changeQuality(64);
+          expectChoice();
+          await session.retry();
+          expectChoice();
+          await session.setAudioOnly(true);
+          expectChoice();
+          expect(
+            (engine.sources.last as ProgressiveSource).media.codec,
+            'fLaC',
+          );
+          await session.setAudioOnly(false);
+          expectChoice();
+          final opens = engine.sources.length;
+          await session.changeAudioQuality(AudioQualityPreference.lossless);
+          await session.changeAudioQuality(AudioQualityPreference.dolby);
+          expect(engine.sources, hasLength(opens));
+        },
+      );
+    }
+  }
+  test('audio choice restores with navigation and falls back if the track disappears', () async {
+    final repository = _FakeRepository(autoResolve: true)
+      ..resolvedMedia = _audioMedia();
+    final session = PlaybackSession(
+      engine: _FakeEngine(),
+      repository: repository,
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    final owner = Object();
+    session.attach(owner);
+    await session.activate(owner, _detail('one'), _part('one'));
+    await session.changeAudioQuality(AudioQualityPreference.lossless);
+    await session.activate(owner, _detail('two'), _part('two'));
+    expect(session.media?.audioQuality, AudioQualityPreference.aac192);
+    await session.activate(owner, _detail('one'), _part('one'));
+    expect(session.media?.audioQuality, AudioQualityPreference.lossless);
+    repository.resolvedMedia = _audioMedia(lossless: false);
+    await session.retry();
+    expect(session.media?.audioQuality, AudioQualityPreference.aac192);
+    expect(session.auxiliaryMessage, contains('音质当前不可用'));
+  });
+  test('late audio change cannot replace a new source', () async {
+    final repository = _FakeRepository(autoResolve: true)
+      ..resolvedMedia = _audioMedia();
+    final engine = _FakeEngine();
+    final session = PlaybackSession(
+      engine: engine,
+      repository: repository,
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    await session.open(_detail('one'), _part('one'));
+    repository.autoResolve = false;
+    final changing = session.changeAudioQuality(
+      AudioQualityPreference.lossless,
+    );
+    await _flush();
+    repository.autoResolve = true;
+    await session.open(_detail('two'), _part('two'));
+    final opens = engine.sources.length;
+    repository.pendingResolves['one']!.complete(_audioMedia());
+    await changing;
+    expect(session.part?.cid, 'two');
+    expect(session.media?.audioQuality, AudioQualityPreference.aac192);
+    expect(engine.sources, hasLength(opens));
+  });
   test('global send style follows new sessions, source changes and a settings restart', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
@@ -5893,6 +6009,35 @@ PlaybackMedia _media(
   headers: const {'Referer': 'https://www.bilibili.com'},
 );
 
+PlaybackMedia _audioMedia({bool lossless = true}) {
+  final aac = PlaybackTrack(
+    urls: [Uri.https('example.test', '/aac.m4a')],
+    codec: 'mp4a.40.2',
+    bandwidth: 192000,
+  );
+  final flac = PlaybackTrack(
+    urls: [Uri.https('example.test', '/flac.m4a')],
+    codec: 'fLaC',
+    bandwidth: 900000,
+  );
+  return PlaybackMedia(
+    video: _media('one', 80, const Duration(minutes: 2)).video,
+    audio: aac,
+    audioTracks: [
+      PlaybackAudioTrack(quality: AudioQualityPreference.aac192, track: aac),
+      if (lossless)
+        PlaybackAudioTrack(
+          quality: AudioQualityPreference.lossless,
+          track: flac,
+        ),
+    ],
+    quality: 80,
+    qualities: const [64, 80],
+    duration: const Duration(minutes: 2),
+    headers: const {},
+  );
+}
+
 PlaybackMedia _backupMedia() => PlaybackMedia(
   video: PlaybackTrack(
     urls: [
@@ -6425,6 +6570,7 @@ final class _FakeContentRepository implements ContentPlaybackRepository {
   _FakeContentRepository({this.duration = const Duration(minutes: 2)});
   final Duration duration;
   AudioLoudness? loudness;
+  PlaybackMedia? resolvedMedia;
   int liveLineCount = 1;
   final targets = <ContentPlaybackTarget>[];
   final qualities = <int>[];
@@ -6445,6 +6591,7 @@ final class _FakeContentRepository implements ContentPlaybackRepository {
     final gate = pending;
     pending = null;
     if (gate != null) return gate.future;
+    if (resolvedMedia case final media?) return Future.value(media);
     if (target is OfflinePlaybackTarget) {
       return Future.value(_media('offline', quality, duration));
     }

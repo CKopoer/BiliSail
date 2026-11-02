@@ -85,6 +85,18 @@ PlaybackMedia selectDashMedia(
     videoMouthShapeChange: voice.videoMouthShapeChange,
   );
   final voices = List<PlaybackVoice>.unmodifiable(info.voices.map(mapVoice));
+  final audioTracks = <PlaybackAudioTrack>[];
+  if (!videoOnly) {
+    for (final track in audios) {
+      final quality = AudioQualityPreference.identify(track.id, track.codecs);
+      if (quality != null &&
+          !audioTracks.any((option) => option.quality == quality)) {
+        audioTracks.add(
+          PlaybackAudioTrack(quality: quality, track: map(track)),
+        );
+      }
+    }
+  }
   final loudness = videoOnly ? null : info.loudness;
   return PlaybackMedia(
     loudness: loudness == null
@@ -96,7 +108,8 @@ PlaybackMedia selectDashMedia(
             undersizedTargetI: loudness.undersizedTargetI,
           ),
     video: map(candidates.first),
-    audio: videoOnly ? null : map(audios.first),
+    audio: audioTracks.firstOrNull?.track,
+    audioTracks: List.unmodifiable(audioTracks),
     quality: selectedQuality,
     qualities: videos.map((track) => track.id).toSet().toList()..sort(),
     duration: info.duration,

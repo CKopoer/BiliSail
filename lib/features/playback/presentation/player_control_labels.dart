@@ -1,8 +1,12 @@
 import '../../../domain/video_quality.dart';
+import '../../../domain/audio_quality.dart';
 import '../domain/playback_repository.dart';
 
 String playbackQualityLabel(int? quality) =>
     quality == null ? '画质' : videoQualityLabel(quality);
+
+String playbackAudioQualityLabel(AudioQualityPreference quality) =>
+    quality == AudioQualityPreference.aac192 ? 'AAC · 192K' : quality.label;
 
 String playbackSubtitleLabel(SubtitleTrack track) {
   final label = track.label.isNotEmpty ? track.label : track.languageCode;
