@@ -106,6 +106,74 @@ try {
   }
 } finally { $pipe.reader.Dispose() }
 
+# Execute the packaging call itself with fake native boundaries. Intel must not
+# launch a probe, while static failures still block both packaging modes.
+& {
+  . (Join-Path $PSScriptRoot 'macos-release-validation.ps1')
+  $calls = [System.Collections.Generic.List[string]]::new()
+  $fixtureState = @{ rejectSignature = $false; failStartup = $false }
+  function Confirm-MacOSReleaseSignature([string]$App, [string]$WorkingDirectory) {
+    $calls.Add('signature')
+    if ($fixtureState.rejectSignature) { throw 'Invalid fixture signature.' }
+  }
+  function Invoke-MacOSReleaseSmokePhase([string]$Executable, [string]$Phase, [string]$RunId, [string]$WorkingDirectory) {
+    $calls.Add($Phase)
+    if ($fixtureState.failStartup -and $Phase -eq 'startup') { throw 'Fixture startup failed.' }
+  }
+  $staging = Join-Path ([System.IO.Path]::GetTempPath()) "bilisail-macos-packaging-$([guid]::NewGuid().ToString('N'))"
+  $outputRoot = $staging
+  $app = Join-Path $staging 'BiliSail.app'
+  $executableDirectory = Join-Path $app 'Contents/MacOS'
+  $executable = Join-Path $executableDirectory 'BiliSail'
+  $parseErrors = $null
+  $buildAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'build-release.ps1'), [ref]$null, [ref]$parseErrors)
+  if ($parseErrors.Count) { throw 'Could not parse the production packaging script.' }
+  $validationCalls = @($buildAst.FindAll({ param($node)
+    $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Test-MacOSReleaseApp'
+  }, $true))
+  if ($validationCalls.Count -ne 1) { throw 'Expected one shared macOS packaging validation call.' }
+  $validate = [scriptblock]::Create($validationCalls[0].Extent.Text)
+  try {
+    New-Item -ItemType Directory -Path $executableDirectory -Force | Out-Null
+    [System.IO.File]::WriteAllText($executable, 'fixture')
+    $Target = 'macos-x64'
+    $result = & $validate
+    $metadata = $result | ConvertTo-Json | ConvertFrom-Json
+    if (($calls -join ',') -cne 'signature' -or $metadata.signature -cne 'passed' -or
+        $metadata.startup -cne 'skipped' -or $metadata.credentials -cne 'skipped' -or
+        $metadata.runtimeSmokeSkipReason -cne 'disabled-for-build-target') {
+      throw 'Intel packaging ran a probe or misreported skipped runtime validation.'
+    }
+    $calls.Clear()
+    $Target = 'macos-arm64'
+    $result = & $validate
+    if (($calls -join ',') -cne 'signature,startup,write,read-delete,verify-deleted,signature' -or
+        $result.startup -cne 'first-frame-and-3-seconds' -or $result.credentials -eq 'skipped') {
+      throw 'Apple Silicon packaging lost its runtime validation or signature recheck.'
+    }
+    $fixtureState.failStartup = $true
+    $calls.Clear()
+    Assert-Rejected { & $validate }
+    if (($calls -join ',') -cne 'signature,startup,cleanup') { throw 'Runtime failure lost its cleanup or stopped blocking packaging.' }
+    $fixtureState.failStartup = $false
+    foreach ($Target in @('macos-x64', 'macos-arm64')) {
+      $fixtureState.rejectSignature = $true
+      $calls.Clear()
+      Assert-Rejected { & $validate }
+      if (($calls -join ',') -cne 'signature') { throw 'An invalid signature reached runtime validation.' }
+    }
+    $fixtureState.rejectSignature = $false
+    Remove-Item -LiteralPath $executable -Force
+    foreach ($Target in @('macos-x64', 'macos-arm64')) { Assert-Rejected { & $validate } }
+    Write-Output 'macOS packaging validation checks passed (7 cases).'
+  } finally {
+    Remove-Item -LiteralPath $executable -Force -ErrorAction SilentlyContinue
+    foreach ($directory in @((Join-Path $staging 'validation'), $executableDirectory, (Join-Path $app 'Contents'), $app, $staging)) {
+      Remove-Item -LiteralPath $directory -Force -ErrorAction SilentlyContinue
+    }
+  }
+}
+
 # Exercise real child processes: parser-only checks cannot detect conflated
 # launch/probe deadlines, pipe deadlocks or acknowledgements on the wrong pipe.
 $processFixture = Join-Path $PSScriptRoot 'fixtures/macos-smoke-process.ps1'

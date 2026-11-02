@@ -373,11 +373,21 @@ function Invoke-MacOSReleaseSmokePhaseCore {
   }
 }
 
-function Test-MacOSReleaseApp([string]$App, [string]$WorkingDirectory) {
+function Test-MacOSReleaseApp([string]$App, [string]$WorkingDirectory, [switch]$SkipRuntimeSmoke) {
   New-Item -ItemType Directory -Path $WorkingDirectory -Force | Out-Null
   Confirm-MacOSReleaseSignature $App $WorkingDirectory
   $executable = Join-Path $App 'Contents/MacOS/BiliSail'
   if (!(Test-Path -LiteralPath $executable -PathType Leaf)) { throw 'macOS Release executable is missing.' }
+  if ($SkipRuntimeSmoke) {
+    Write-Host 'macOS runtime smoke skipped for this build target; signature and entitlements verified.'
+    return [ordered]@{
+      signature = 'passed'
+      entitlements = 'sandbox-network-client-pictures-only'
+      startup = 'skipped'
+      credentials = 'skipped'
+      runtimeSmokeSkipReason = 'disabled-for-build-target'
+    }
+  }
   $runId = [guid]::NewGuid().ToString('N')
   $passed = $false
   try {

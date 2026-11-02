@@ -340,7 +340,8 @@ try {
       $macosBuildNumber = & plutil -extract CFBundleVersion raw -o - $infoPlist
       if ($LASTEXITCODE -ne 0 -or $macosBuildNumber -cne $buildNumber) { throw 'macOS bundle build number does not match.' }
       Write-Output "Verified macOS bundle: versionName=$macosVersionName, buildNumber=$macosBuildNumber"
-      $macosValidation = Test-MacOSReleaseApp (Join-Path $staging 'BiliSail.app') (Join-Path $outputRoot 'validation')
+      # Intel hosted GUI smoke is excluded from packaging; keep static validation.
+      $macosValidation = Test-MacOSReleaseApp (Join-Path $staging 'BiliSail.app') (Join-Path $outputRoot 'validation') -SkipRuntimeSmoke:($Target -eq 'macos-x64')
       Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination $staging
       # A root-level Applications link gives Finder a drag-to-install destination.
       Invoke-BuildCommand ln @('-s', '/Applications', (Join-Path $staging 'Applications'))

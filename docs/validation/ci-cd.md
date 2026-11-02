@@ -15,7 +15,7 @@
 | Android | `ubuntu-24.04`，Temurin JDK 17 | 仅 arm64 的 release APK；正常构建复用固定 keystore，PR 使用临时预览签名 |
 | Windows | `windows-2022`，Visual Studio C++ / Windows SDK / .NET 8 / WiX 6.0.2 | 同时提供 x64 MSIX、MSI 和 EXE 安装包；全部包含完整原生 DLL/data 及 VC++ runtime |
 | macOS | `macos-15`，Apple Silicon / Xcode | arm64 DMG；先验证签名／最终权限、同一 Release 应用首帧和跨进程 Keychain 读写删除，再由 `hdiutil` 打包校验；仅 ad-hoc 签名，未 notarize |
-| macOS Intel | `macos-15-intel`，Intel x64 / Xcode | x64 DMG；复用相同的签名、首帧、Keychain 和镜像校验门槛 |
+| macOS Intel | `macos-15-intel`，Intel x64 / Xcode | x64 DMG；校验架构、版本、签名、权限和镜像；不运行启动／窗口／Keychain smoke，metadata 明确记录跳过 |
 | iOS | `macos-15`，Apple Silicon / Xcode / CocoaPods | arm64 未签名 IPA；核对应用版本、bundle ID、arm64 framework 及 Payload 布局；安装前需自行 Apple 签名 |
 | Linux | `ubuntu-24.04`，GTK / libsecret / libmpv / Flatpak SDK | x64 AppImage 与 Flatpak；携带媒体依赖，核对版本及主机／实际 Flatpak Runtime 内动态依赖；X11／XWayland |
 | Release 上传 | `ubuntu-24.04` | 合并并校验本次所选平台的 Actions artifacts，上传汇总 ZIP artifact 后创建草稿 |
@@ -46,7 +46,7 @@ Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d1
 
 - Android 的 `.apk`、Windows 的 `.msix` / `.msi` / `.exe`、macOS 的 `.dmg`、Linux 的 `.AppImage` / `.flatpak`，命名均为 `BiliSail-<version>-<target>.<extension>`；iOS 使用 `BiliSail-<version>-ios-arm64-unsigned.ipa`。
 - Windows 包旁的 `.cer`，只含签名证书公钥。
-- `.build-info.json`：源码 revision 与 `sourceDirty`、Flutter/engine/Dart 版本、目标、签名类型、Android 签名证书 SHA-256、Windows MSI 内部版本与 WiX 版本、runner image、根锁文件 SHA-256；macOS 的 `macosValidation` 保存发布门槛的通过状态。
+- `.build-info.json`：源码 revision 与 `sourceDirty`、Flutter/engine/Dart 版本、目标、签名类型、Android 签名证书 SHA-256、Windows MSI 内部版本与 WiX 版本、runner image、根锁文件 SHA-256；macOS 的 `macosValidation` 保存校验结果，x64 的 `startup`／`credentials` 为 `skipped`，并记录 `runtimeSmokeSkipReason=disabled-for-build-target`。
 - `.mux-source.zip`：mux 组件源码归档及重建说明。
 - 每个上述文件对应的 `.sha256`，格式兼容 `sha256sum -c`。
 
@@ -198,7 +198,7 @@ PR 不接收长期签名 Secrets，仅通过 `-AndroidPreviewSigning` 显式启�
 
 ## macOS DMG 安装
 
-macOS 分别生成 `BiliSail-<version>-macos-arm64.dmg` 和 `BiliSail-<version>-macos-x64.dmg`，按 Apple Silicon／Intel 芯片选择。脚本用 `lipo -verify_arch` 核对主程序、App、FlutterMacOS 与 BiliMux framework 的目标架构，再使用 `ditto` 复制完整 `BiliSail.app`，调用 [macOS 发布验证](../../tool/macos-release-validation.ps1) 校验签名、最终权限，并启动这份待打包的 Release 应用验证首帧和跨进程 Keychain 读写／删除。通过后在镜像根目录加入指向 `/Applications` 的符号链接与 `THIRD_PARTY_NOTICES.md`，使用 `hdiutil create -srcfolder ... -fs HFS+ -format UDZO` 创建压缩只读镜像并执行 `hdiutil verify`；任一步失败均停止，不上传产物。CI 与 Release 共用此脚本，现有上传通配符同时覆盖两种架构的 DMG、metadata、mux 源码和 SHA-256 文件。
+macOS 分别生成 `BiliSail-<version>-macos-arm64.dmg` 和 `BiliSail-<version>-macos-x64.dmg`，按 Apple Silicon／Intel 芯片选择。脚本用 `lipo -verify_arch` 核对主程序、App、FlutterMacOS 与 BiliMux framework 的目标架构，再使用 `ditto` 复制完整 `BiliSail.app`，调用 [macOS 发布验证](../../tool/macos-release-validation.ps1) 校验签名、最终权限和可执行文件。arm64 继续启动待打包的 Release 应用验证首帧、窗口交互和跨进程 Keychain 读写／删除；2026-11-02 起按用户要求，x64 不运行这些 smoke，明确记录跳过。通过所选门槛后在镜像根目录加入指向 `/Applications` 的符号链接与 `THIRD_PARTY_NOTICES.md`，使用 `hdiutil create -srcfolder ... -fs HFS+ -format UDZO` 创建压缩只读镜像并执行 `hdiutil verify`；任一保留步骤失败均停止，不上传产物。CI 与 Release 共用此脚本，现有上传通配符同时覆盖两种架构的 DMG、metadata、mux 源码和 SHA-256 文件。
 
 2026-10-29 增加 Intel macOS 构建：下载封装组件新增 `macos-x64` 目标，FFmpeg 与 C++ 包装均以 `x86_64`、最低 macOS 12 编译，并沿用独立目标目录、来源归档和 framework 打包流程。最终 [CI #221](https://github.com/CKopoer/BiliSail/actions/runs/40804720827)（代码提交 `64acaa709315b9c91e15c67ae173f56b05689570`）的 Intel／arm64 hosted 构建、签名校验、待打包应用首帧、跨进程合成 Keychain 读写／删除和 DMG 校验均通过。该次运行全部检查及六个平台构建通过，产物均已上传；实际 DMG 安装升级、Gatekeeper、真实账号、音视频播放与设备操作仍待验收。兼容修复与本地检查见 [Native Assets 迁移记录](../predidit-media-migration.md#ci-构建兼容修复2026-10-29)。
 
