@@ -418,6 +418,9 @@ final class WindowFullScreenCoordinator {
   // nil is a close barrier: resolve its target from the current native tab group
   // after any AppKit transition, rather than always exiting shared fullscreen.
   private var requests: [(enabled: Bool?, completion: (String?) -> Void)] = []
+  // Channel requests belong to the video presentation. A system-fullscreen
+  // window (including a native tab group) may already surround that presentation.
+  private var playbackWasFullScreen: Bool?
   private var transitioning = false
   private var retiring = false
   private var closed = false
@@ -467,6 +470,8 @@ final class WindowFullScreenCoordinator {
   }
 
   func setFullScreen(_ enabled: Bool, completion: @escaping (String?) -> Void) {
+    // This channel scopes video fullscreen; system menu/green-button actions
+    // stay with AppKit and do not acquire this presentation's native state.
     // Late route cleanup/entry must not restart presentation of a retiring view.
     if retiring { schedule { completion(nil) }; return }
     enqueue(enabled, completion: completion)
@@ -474,9 +479,11 @@ final class WindowFullScreenCoordinator {
 
   func prepareToClose(_ completion: @escaping (String?) -> Void) {
     retiring = true
-    let entries = requests.filter { $0.enabled == true }
-    requests.removeAll { $0.enabled == true }
-    schedule { for request in entries { request.completion(nil) } }
+    // Retirement owns the final native state. Pending route cleanup must not
+    // exit a shared fullscreen Space ahead of the tab-aware close barrier.
+    let presentations = requests.filter { $0.enabled != nil }
+    requests.removeAll { $0.enabled != nil }
+    schedule { for request in presentations { request.completion(nil) } }
     enqueue(nil, completion: completion)
   }
 
@@ -521,14 +528,29 @@ final class WindowFullScreenCoordinator {
     guard !closed, !transitioning else { return }
     while let request = requests.first {
       let fullscreen = isFullScreen()
-      // AppKit closes one native tab without changing the surviving tabs' Space.
-      // An isolated fullscreen window still needs the original exit barrier.
-      let enabled = request.enabled ?? (fullscreen && hasOtherTabbedWindows())
+      let enabled: Bool
+      if let requested = request.enabled {
+        if requested {
+          // Sample only once, after any existing AppKit animation finishes.
+          // Repeated entries must not overwrite the original window state.
+          if playbackWasFullScreen == nil { playbackWasFullScreen = fullscreen }
+          enabled = true
+        } else {
+          // Only undo a native entry made by this video presentation. Preserve
+          // pre-existing fullscreen, and never reverse a user's system exit.
+          enabled = playbackWasFullScreen == false ? false : fullscreen
+        }
+      } else {
+        // AppKit closes one native tab without changing the surviving tabs' Space.
+        // An isolated fullscreen window still needs the original exit barrier.
+        enabled = fullscreen && hasOtherTabbedWindows()
+      }
       if enabled != fullscreen {
         transitioning = true
         toggle()
         return
       }
+      if request.enabled == false { playbackWasFullScreen = nil }
       requests.removeFirst().completion(nil)
     }
     deadline?.cancel()

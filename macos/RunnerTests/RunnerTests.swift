@@ -72,22 +72,182 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(closes, 1)
   }
 
-  func testExplicitFullscreenExitStillAppliesToTabbedWindow() {
+  func testPlaybackFullscreenExitPreservesExistingWindowAndTabGroupFullscreen() {
+    for otherTabs in [false, true] {
+      var scheduled: [() -> Void] = []
+      var completed = 0
+      let coordinator = WindowFullScreenCoordinator(isFullScreen: { true },
+        toggle: { XCTFail("Video fullscreen must preserve existing window fullscreen") },
+        hasOtherTabbedWindows: { otherTabs }, schedule: { scheduled.append($0) })
+      func drain() { while !scheduled.isEmpty { scheduled.removeFirst()() } }
+      for _ in 0..<2 {
+        coordinator.setFullScreen(true) { error in XCTAssertNil(error); completed += 1 }
+        drain()
+        coordinator.setFullScreen(false) { error in XCTAssertNil(error); completed += 1 }
+        drain()
+      }
+      XCTAssertEqual(completed, 4)
+    }
+  }
+
+  func testPlaybackFullscreenSamplesSystemEntryAfterItsAnimation() {
     var scheduled: [() -> Void] = []
-    var fullscreen = true
+    var fullscreen = false
+    var completed = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { fullscreen },
+      toggle: { XCTFail("An existing system entry must not be undone by video exit") },
+      schedule: { scheduled.append($0) })
+    func drain() { while !scheduled.isEmpty { scheduled.removeFirst()() } }
+    coordinator.transitionWillStart()
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error); completed += 1 }
+    drain()
+    XCTAssertEqual(completed, 0)
+    fullscreen = true
+    coordinator.transitionDidEnd()
+    XCTAssertEqual(completed, 0)
+    drain()
+    coordinator.setFullScreen(false) { error in XCTAssertNil(error); completed += 1 }
+    drain()
+    XCTAssertEqual(completed, 2)
+    XCTAssertTrue(fullscreen)
+  }
+
+  func testPlaybackOwnedFullscreenExitStillAppliesToTabbedWindowAfterRepeatedEntry() {
+    var scheduled: [() -> Void] = []
+    var fullscreen = false
     var toggles = 0
+    var entries = 0
     var exits = 0
     let coordinator = WindowFullScreenCoordinator(isFullScreen: { fullscreen },
       toggle: { toggles += 1 }, hasOtherTabbedWindows: { true },
       schedule: { scheduled.append($0) })
-    coordinator.setFullScreen(false) { error in XCTAssertNil(error); exits += 1 }
-    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    func drain() { while !scheduled.isEmpty { scheduled.removeFirst()() } }
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error); entries += 1 }
+    drain()
     XCTAssertEqual(toggles, 1)
+    XCTAssertEqual(entries, 0)
+    // Repeating the request after native entry must retain its original owner.
+    fullscreen = true
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error); entries += 1 }
+    coordinator.transitionDidEnd()
+    drain()
+    XCTAssertEqual(entries, 2)
+    coordinator.setFullScreen(false) { error in XCTAssertNil(error); exits += 1 }
+    drain()
+    XCTAssertEqual(toggles, 2)
     XCTAssertEqual(exits, 0)
     fullscreen = false
     coordinator.transitionDidEnd()
-    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(exits, 0)
+    drain()
     XCTAssertEqual(exits, 1)
+  }
+
+  func testVideoExitDoesNotReenterFullscreenAfterUserSystemExit() {
+    var scheduled: [() -> Void] = []
+    var fullscreen = true
+    var exits = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { fullscreen },
+      toggle: { XCTFail("Video cleanup must not reverse the user's system exit") },
+      schedule: { scheduled.append($0) })
+    func drain() { while !scheduled.isEmpty { scheduled.removeFirst()() } }
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error) }
+    drain()
+    coordinator.transitionWillStart()
+    coordinator.setFullScreen(false) { error in XCTAssertNil(error); exits += 1 }
+    drain()
+    XCTAssertEqual(exits, 0)
+    fullscreen = false
+    coordinator.transitionDidEnd()
+    drain()
+    XCTAssertEqual(exits, 1)
+    XCTAssertFalse(fullscreen)
+  }
+
+  func testVideoExitDuringOwnedEntryWaitsForBothNativeAnimations() {
+    var scheduled: [() -> Void] = []
+    var fullscreen = false
+    var toggles = 0
+    var completed = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { fullscreen },
+      toggle: { toggles += 1 }, schedule: { scheduled.append($0) })
+    func drain() { while !scheduled.isEmpty { scheduled.removeFirst()() } }
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error); completed += 1 }
+    drain()
+    coordinator.setFullScreen(false) { error in XCTAssertNil(error); completed += 1 }
+    drain()
+    XCTAssertEqual(toggles, 1)
+    XCTAssertEqual(completed, 0)
+    fullscreen = true
+    coordinator.transitionDidEnd()
+    drain()
+    XCTAssertEqual(toggles, 2)
+    XCTAssertEqual(completed, 1)
+    fullscreen = false
+    coordinator.transitionDidEnd()
+    XCTAssertEqual(completed, 1)
+    drain()
+    XCTAssertEqual(completed, 2)
+  }
+
+  func testPlaybackFullscreenRecapturesWindowStateForEachPresentation() {
+    var scheduled: [() -> Void] = []
+    var fullscreen = true
+    var toggles = 0
+    var completed = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { fullscreen },
+      toggle: { toggles += 1 }, schedule: { scheduled.append($0) })
+    func drain() { while !scheduled.isEmpty { scheduled.removeFirst()() } }
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error); completed += 1 }
+    coordinator.setFullScreen(false) { error in XCTAssertNil(error); completed += 1 }
+    drain()
+    XCTAssertEqual(toggles, 0)
+    fullscreen = false
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error); completed += 1 }
+    drain()
+    XCTAssertEqual(toggles, 1)
+    fullscreen = true
+    coordinator.transitionDidEnd()
+    drain()
+    coordinator.setFullScreen(false) { error in XCTAssertNil(error); completed += 1 }
+    drain()
+    XCTAssertEqual(toggles, 2)
+    fullscreen = false
+    coordinator.transitionDidEnd()
+    drain()
+    XCTAssertEqual(completed, 4)
+    // Duplicate cleanup after the user enters system fullscreen is a no-op.
+    fullscreen = true
+    coordinator.setFullScreen(false) { error in XCTAssertNil(error); completed += 1 }
+    drain()
+    XCTAssertEqual(toggles, 2)
+    XCTAssertEqual(completed, 5)
+  }
+
+  func testCloseSupersedesQueuedVideoExitAndKeepsSharedFullscreen() {
+    var scheduled: [() -> Void] = []
+    var fullscreen = false
+    var otherTabs = false
+    var toggles = 0
+    var completed = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { fullscreen },
+      toggle: { toggles += 1 }, hasOtherTabbedWindows: { otherTabs },
+      schedule: { scheduled.append($0) })
+    func drain() { while !scheduled.isEmpty { scheduled.removeFirst()() } }
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error); completed += 1 }
+    drain()
+    fullscreen = true
+    coordinator.transitionDidEnd()
+    drain()
+    XCTAssertEqual(toggles, 1)
+    otherTabs = true
+    coordinator.setFullScreen(false) { error in XCTAssertNil(error); completed += 1 }
+    coordinator.prepareToClose { error in XCTAssertNil(error); completed += 1 }
+    coordinator.prepareToClose { error in XCTAssertNil(error); completed += 1 }
+    drain()
+    XCTAssertEqual(toggles, 1)
+    XCTAssertEqual(completed, 4)
+    XCTAssertTrue(fullscreen)
   }
 
   func testFullscreenCloseWaitsForEntryThenExitAndCoalescesDuplicateClose() {
