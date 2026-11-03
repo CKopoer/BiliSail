@@ -2,6 +2,7 @@ import '../support/input_test_app.dart';
 
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/platform_defaults.dart';
+import 'package:bilisail/core/presentation/page_back_scope.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/presentation/home_channel_swipe.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
@@ -22,6 +23,102 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  for (final mode in WorkspaceNavigationMode.values) {
+    for (final path in ['/video', '/pgc', '/live', '/offline']) {
+      _workspaceTestWidgets(
+        'iOS $path Back keeps detail and media history priority in $mode',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = const Size(390, 844);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          addTearDown(tester.view.resetPhysicalSize);
+          final details = ValueNotifier(false);
+          addTearDown(details.dispose);
+          var detailBacks = 0;
+          final disposed = <String>[];
+          final router = _router(
+            (_, tab) => ValueListenableBuilder<bool>(
+              valueListenable: details,
+              builder: (context, open, _) => PageBackHandler(
+                enabled: open && tab.isPlayback,
+                onBack: () {
+                  detailBacks++;
+                  details.value = false;
+                  return true;
+                },
+                child: Column(
+                  children: [
+                    _CounterPage(tab: tab, onDispose: disposed.add),
+                    if (tab.isPlayback &&
+                        mode == WorkspaceNavigationMode.multipleTabs) ...[
+                      TextButton(
+                        key: const ValueKey('test-player-back'),
+                        onPressed: PlaybackNavigation.maybeOf(context)?.onBack,
+                        child: const Text('player Back'),
+                      ),
+                      TextButton(
+                        key: const ValueKey('test-player-home'),
+                        onPressed: PlaybackNavigation.maybeOf(context)?.onHome,
+                        child: const Text('player Home'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            navigationMode: mode,
+            initialLocation: '/downloads',
+          );
+          addTearDown(router.dispose);
+          await tester.pumpWidget(InputTestApp.router(routerConfig: router));
+          await tester.pumpAndSettle();
+          router.go('$path/1');
+          await tester.pumpAndSettle();
+          router.go('$path/2');
+          await tester.pumpAndSettle();
+          final back = switch (mode) {
+            WorkspaceNavigationMode.singlePage => find.byKey(
+              const ValueKey('workspace-back'),
+            ),
+            WorkspaceNavigationMode.dualTabs => find.byTooltip('返回上一视频'),
+            WorkspaceNavigationMode.multipleTabs => find.byKey(
+              const ValueKey('test-player-back'),
+            ),
+          };
+          details.value = true;
+          await tester.pumpAndSettle();
+          expect(back.hitTestable(), findsOneWidget);
+          await tester.tap(back);
+          await tester.pumpAndSettle();
+          expect(router.routeInformationProvider.value.uri.path, '$path/2');
+          expect(detailBacks, 1);
+          await tester.tap(back);
+          await tester.pumpAndSettle();
+          expect(router.routeInformationProvider.value.uri.path, '$path/1');
+          final home = find.byKey(
+            ValueKey(
+              mode == WorkspaceNavigationMode.multipleTabs
+                  ? 'test-player-home'
+                  : 'workspace-playback-home',
+            ),
+          );
+          await tester.tap(home);
+          await tester.pumpAndSettle();
+          expect(
+            router.routeInformationProvider.value.uri.path,
+            mode == WorkspaceNavigationMode.multipleTabs ? '/' : '/downloads',
+          );
+          if (mode != WorkspaceNavigationMode.singlePage) {
+            expect(disposed, isEmpty);
+          }
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          await tester.pumpAndSettle();
+        },
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+      );
+    }
+  }
   for (final mode in WorkspaceNavigationMode.values) {
     _workspaceTestWidgets(
       'submitted search clears across navigation in $mode',
@@ -476,7 +573,8 @@ void main() {
             );
             expect(
               PlaybackNavigation.maybeOf(body)?.showInPlayer,
-              platform == TargetPlatform.android && (single || dual),
+              (platform == TargetPlatform.android && (single || dual)) ||
+                  (platform == TargetPlatform.iOS && !single && !dual),
             );
             playbackCreated |= playback;
             expect(

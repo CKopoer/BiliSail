@@ -60,6 +60,175 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  testWidgets(
+    'iOS listening fullscreen Back exits presentation without workspace navigation',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService(desktop: false);
+      addTearDown(session.close);
+      var navigationCalls = 0;
+      await tester.pumpWidget(
+        _app(
+          session,
+          window,
+          const AppSettings.defaults(),
+          width: 390,
+          onBack: () => navigationCalls++,
+          onHome: () => navigationCalls++,
+        ),
+      );
+      await _pumpFrames(tester);
+      await session.setAudioOnly(true);
+      await _pumpFrames(tester);
+      expect(find.byKey(const ValueKey('player-back')), findsNothing);
+      await tester.tap(find.byTooltip('全屏'));
+      await _pumpFrames(tester);
+      final generation = session.sourceGeneration;
+      final opens = engine.opens;
+      final back = find.byKey(const ValueKey('player-back'));
+      expect(back.hitTestable(), findsOneWidget);
+      expect(tester.getTopLeft(back).dy, greaterThanOrEqualTo(47));
+      await tester.tap(back);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      expect(navigationCalls, 0);
+      expect(session.audioOnly, isTrue);
+      expect(session.sourceGeneration, generation);
+      expect(engine.opens, opens);
+      expect(find.byKey(const ValueKey('player-back')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
+  for (final mode in WorkspaceNavigationMode.values) {
+    testWidgets(
+      'iOS playback navigation stays reachable and fullscreen Back preserves ${mode.name}',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
+        addTearDown(tester.view.resetPadding);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final window = _FakeWindowService(desktop: false);
+        final settings = AppSettings.defaults(navigationMode: mode);
+        addTearDown(session.close);
+        final router = createBiliRouter(
+          initialLocation: '/video/${_detail.summary.id.value}',
+          playerBuilder: (_, detail, part) => PlaybackPanel(
+            detail: detail,
+            part: part,
+            settings: settings,
+            onToggleComments: () {},
+            window: window,
+          ),
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              playbackSessionProvider.overrideWithValue(session),
+              settingsRepositoryProvider.overrideWithValue(
+                _Settings()..value = settings,
+              ),
+              videoDetailProvider(_detail.summary.id)
+                  .overrideWith((_) => _detail),
+              relatedVideosProvider(_detail.summary.id)
+                  .overrideWith((_) => const []),
+              videoTagsProvider(_detail.summary.id)
+                  .overrideWith((_) => const []),
+            ],
+            child: InputTestApp.router(
+              builder: AppNoticeHost.builder,
+              routerConfig: router,
+            ),
+          ),
+        );
+        await _pumpFrames(tester);
+        await session.pause();
+        await session.seek(const Duration(seconds: 45));
+        await _pumpFrames(tester);
+        expect(find.byKey(const ValueKey('player-controls')), findsNothing);
+        final inPlayer = mode == WorkspaceNavigationMode.multipleTabs;
+        final home = find.byKey(
+          ValueKey(inPlayer ? 'player-home' : 'workspace-playback-home'),
+        );
+        if (!inPlayer) {
+          expect(home.hitTestable(), findsOneWidget);
+          expect(tester.getTopLeft(home).dy, greaterThanOrEqualTo(47));
+        }
+        await _showControls(tester);
+        expect(home.hitTestable(), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('player-back')),
+          inPlayer ? findsOneWidget : findsNothing,
+        );
+        expect(find.byTooltip('回到主页'), findsOneWidget);
+        final opens = engine.opens;
+        final generation = session.sourceGeneration;
+        await tester.tap(find.byTooltip('全屏（F）'));
+        await _pumpFrames(tester);
+        final back = find.byKey(const ValueKey('player-back'));
+        expect(back.hitTestable(), findsOneWidget);
+        expect(tester.getTopLeft(back).dy, greaterThanOrEqualTo(47));
+        tester.view.physicalSize = const Size(844, 390);
+        tester.view.padding = const FakeViewPadding(
+          left: 47,
+          right: 47,
+          bottom: 21,
+        );
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isTrue);
+        expect(back.hitTestable(), findsOneWidget);
+        expect(tester.getTopLeft(back).dx, greaterThanOrEqualTo(47));
+        expect(tester.getTopLeft(back).dy, lessThan(52));
+        await tester.tapAt(_surfacePoint(tester));
+        await _pumpSurfaceTap(tester);
+        expect(back.hitTestable(), findsNothing);
+        await _showControls(tester);
+        expect(back.hitTestable(), findsOneWidget);
+        final fullScreenContext = tester.element(back);
+        unawaited(
+          showDialog<void>(
+            context: fullScreenContext,
+            builder: (_) => const AlertDialog(content: Text('iOS modal')),
+          ),
+        );
+        await _pumpFrames(tester);
+        expect(back.hitTestable(), findsNothing);
+        Navigator.of(fullScreenContext).pop();
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isTrue);
+        await tester.tap(back);
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isFalse);
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          '/video/${_detail.summary.id.value}',
+        );
+        expect(session.sourceGeneration, generation);
+        expect(engine.opens, opens);
+        expect(engine.maxSurfaces, 1);
+        expect(engine.currentSnapshot.position, const Duration(seconds: 45));
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+        expect(tester.takeException(), isNull);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    );
+  }
   for (final fullScreen in [false, true]) {
     testWidgets(
       'compact more menu switches audio quality fullscreen=$fullScreen',

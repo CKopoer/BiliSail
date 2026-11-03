@@ -1398,7 +1398,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                         builder: (context, actions, _) => Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (actions?.showInPlayer ?? false)
+                            if ((widget.fullScreen &&
+                                    Theme.of(context).platform ==
+                                        TargetPlatform.iOS) ||
+                                (actions?.showInPlayer ?? false))
                               IconButton(
                                 key: const ValueKey('player-back'),
                                 tooltip: '返回',
@@ -3231,84 +3234,97 @@ class _PlayerTopBar extends StatelessWidget {
     ),
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
     constraints: const BoxConstraints(minHeight: 52),
-    child: ValueListenableBuilder<PlaybackNavigation?>(
-      valueListenable: navigation,
-      builder: (context, actions, _) {
-        final showNavigationButtons = actions?.showInPlayer ?? false;
-        final buttons = <Widget>[
-          if (castRequestFor(session) != null)
-            _action(
-              '投屏',
-              Icons.cast_rounded,
-              () => unawaited(showCastingDialog(context, session)),
-            ),
-          if (session.canListen)
-            _action(
-              '听视频',
-              Icons.headphones_rounded,
-              () => unawaited(session.setAudioOnly(true)),
-            ),
-          if (!smallWindow)
-            _action('弹幕配置', Icons.tune, () => unawaited(onSettings(1))),
-          if (!smallWindow && !session.isLive)
-            _action('字幕样式', Icons.text_fields, () => unawaited(onSettings(2))),
-          _action('播放配置', BiliIcons.settings, () => unawaited(onSettings(0))),
-          if (smallWindow) _action('更多播放选项', Icons.more_horiz, onMore),
-        ];
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final navigationWidth = showNavigationButtons
-                ? 2 * _ControlsLayout.buttonWidth
-                : 0;
-            final toolsWidth = (constraints.maxWidth - navigationWidth).clamp(
-              0.0,
-              buttons.length * _ControlsLayout.buttonWidth,
-            );
-            return Row(
-              children: [
-                if (showNavigationButtons) ...[
-                  _action(
-                    '返回',
-                    Icons.arrow_back_rounded,
-                    fullScreen
-                        ? onExitFullScreen
-                        : () {
-                            if (actions != null) onNavigate(actions.onBack);
-                          },
-                    key: const ValueKey('player-back'),
-                  ),
-                  _action('回到主页', Icons.home_outlined, () {
-                    if (actions != null) onNavigate(actions.onHome);
-                  }, key: const ValueKey('player-home')),
-                ],
-                if (viewers != null)
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        '$viewers 人正在看',
-                        key: const ValueKey('player-online-viewers'),
-                        textAlign: TextAlign.end,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
+    child: SafeArea(
+      top: fullScreen,
+      left: fullScreen,
+      right: fullScreen,
+      bottom: false,
+      child: ValueListenableBuilder<PlaybackNavigation?>(
+        valueListenable: navigation,
+        builder: (context, actions, _) {
+          final showHomeButton = actions?.showInPlayer ?? false;
+          final showBackButton =
+              showHomeButton ||
+              (fullScreen && Theme.of(context).platform == TargetPlatform.iOS);
+          final buttons = <Widget>[
+            if (castRequestFor(session) != null)
+              _action(
+                '投屏',
+                Icons.cast_rounded,
+                () => unawaited(showCastingDialog(context, session)),
+              ),
+            if (session.canListen)
+              _action(
+                '听视频',
+                Icons.headphones_rounded,
+                () => unawaited(session.setAudioOnly(true)),
+              ),
+            if (!smallWindow)
+              _action('弹幕配置', Icons.tune, () => unawaited(onSettings(1))),
+            if (!smallWindow && !session.isLive)
+              _action(
+                '字幕样式',
+                Icons.text_fields,
+                () => unawaited(onSettings(2)),
+              ),
+            _action('播放配置', BiliIcons.settings, () => unawaited(onSettings(0))),
+            if (smallWindow) _action('更多播放选项', Icons.more_horiz, onMore),
+          ];
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final navigationWidth =
+                  ((showBackButton ? 1 : 0) + (showHomeButton ? 1 : 0)) *
+                  _ControlsLayout.buttonWidth;
+              final toolsWidth = (constraints.maxWidth - navigationWidth).clamp(
+                0.0,
+                buttons.length * _ControlsLayout.buttonWidth,
+              );
+              return Row(
+                children: [
+                  if (showBackButton)
+                    _action(
+                      '返回',
+                      Icons.arrow_back_rounded,
+                      fullScreen
+                          ? onExitFullScreen
+                          : () {
+                              if (actions != null) onNavigate(actions.onBack);
+                            },
+                      key: const ValueKey('player-back'),
+                    ),
+                  if (showHomeButton)
+                    _action('回到主页', Icons.home_outlined, () {
+                      if (actions != null) onNavigate(actions.onHome);
+                    }, key: const ValueKey('player-home')),
+                  if (viewers != null)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          '$viewers 人正在看',
+                          key: const ValueKey('player-online-viewers'),
+                          textAlign: TextAlign.end,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
-                    ),
-                  )
-                else
-                  const Spacer(),
-                SizedBox(
-                  width: toolsWidth,
-                  child: _ScrollablePlayerTools(children: buttons),
-                ),
-              ],
-            );
-          },
-        );
-      },
+                    )
+                  else
+                    const Spacer(),
+                  SizedBox(
+                    width: toolsWidth,
+                    child: _ScrollablePlayerTools(children: buttons),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
     ),
   );
 }
