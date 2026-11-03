@@ -183,10 +183,11 @@ Future<void> pumpActions(
 }
 
 class FakeAuth implements AuthRepository {
-  FakeAuth(bool signedIn)
+  FakeAuth(bool signedIn, {bool vip = false})
     : current = AuthState(
         status: signedIn ? AuthStatus.signedIn : AuthStatus.guest,
         mid: signedIn ? '1' : null,
+        isVip: signedIn && vip,
       );
   @override
   final AuthState current;
@@ -268,8 +269,9 @@ class FakeActions implements VideoActionsRepository {
     Duration position,
     int mode,
     int color,
-    RequestCancellation cancellation,
-  ) async {
+    RequestCancellation cancellation, {
+    bool colorful = false,
+  }) async {
     sentText = message;
     sentPosition = position;
     await write('send:$cid:$mode:$color');

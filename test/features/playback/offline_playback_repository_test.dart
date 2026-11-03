@@ -117,7 +117,7 @@ void main() {
         'version': 1,
         'comments': [
           _comment('a', 0),
-          _comment('b', 359999),
+          {..._comment('b', 359999), 'colorful': true},
           _comment('c', 360000),
         ],
         'subtitles': [
@@ -145,6 +145,7 @@ void main() {
         cancellation: RequestCancellation(),
       );
       expect(first.map((entry) => entry.id), ['a', 'b']);
+      expect(first.map((entry) => entry.colorful), [false, true]);
       expect(second.map((entry) => entry.id), ['c']);
       final tracks = await repository.subtitles(
         const VideoId('BV1xx411c7mD'),

@@ -145,6 +145,7 @@ final class TimedComment {
     required this.color,
     required this.fontSize,
     this.weight = 0,
+    this.colorful = false,
   });
   final String id;
   final Duration position;
@@ -153,6 +154,7 @@ final class TimedComment {
   final int color;
   final double fontSize;
   final int weight;
+  final bool colorful;
 }
 
 final class SubtitleTrack {

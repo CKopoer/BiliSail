@@ -72,9 +72,10 @@ final class AppSettings {
     this.checkPrereleaseUpdates = false,
     this.wheelDampingRatio = 1.3,
     this.danmakuEnabled = true,
+    this.danmakuShowVip = true,
     this.danmakuOpacity = 0.8,
     this.danmakuFontScale = 1.0,
-    this.danmakuSendStyle = (mode: 1, color: 0xffffff),
+    this.danmakuSendStyle = (mode: 1, color: 0xffffff, colorful: false),
     this.autoPlay = true,
     this.defaultShowComments = false,
     this.videoCardHoverPlayback = true,
@@ -147,8 +148,9 @@ final class AppSettings {
        checkPrereleaseUpdates = false,
        wheelDampingRatio = 1.3,
        danmakuEnabled = true,
+       danmakuShowVip = true,
        danmakuOpacity = 0.8,
-       danmakuSendStyle = (mode: 1, color: 0xffffff),
+       danmakuSendStyle = (mode: 1, color: 0xffffff, colorful: false),
        autoPlay = true,
        defaultShowComments = false,
        continuousPlayback = false,
@@ -212,9 +214,10 @@ final class AppSettings {
   /// Mouse-wheel spring damping ratio; 1 is critically damped.
   final double wheelDampingRatio;
   final bool danmakuEnabled;
+  final bool danmakuShowVip;
   final double danmakuOpacity;
   final double danmakuFontScale;
-  final ({int mode, int color}) danmakuSendStyle;
+  final ({int mode, int color, bool colorful}) danmakuSendStyle;
   final bool autoPlay;
   final bool defaultShowComments;
   final bool videoCardHoverPlayback;
@@ -292,9 +295,10 @@ final class AppSettings {
     bool? checkPrereleaseUpdates,
     double? wheelDampingRatio,
     bool? danmakuEnabled,
+    bool? danmakuShowVip,
     double? danmakuOpacity,
     double? danmakuFontScale,
-    ({int mode, int color})? danmakuSendStyle,
+    ({int mode, int color, bool colorful})? danmakuSendStyle,
     bool? autoPlay,
     bool? defaultShowComments,
     bool? videoCardHoverPlayback,
@@ -359,6 +363,7 @@ final class AppSettings {
         checkPrereleaseUpdates ?? this.checkPrereleaseUpdates,
     wheelDampingRatio: wheelDampingRatio ?? this.wheelDampingRatio,
     danmakuEnabled: danmakuEnabled ?? this.danmakuEnabled,
+    danmakuShowVip: danmakuShowVip ?? this.danmakuShowVip,
     danmakuOpacity: danmakuOpacity ?? this.danmakuOpacity,
     danmakuFontScale: danmakuFontScale ?? this.danmakuFontScale,
     danmakuSendStyle: danmakuSendStyle ?? this.danmakuSendStyle,
@@ -473,6 +478,7 @@ final class AppSettings {
       danmakuOpacity: bounded(danmakuOpacity, .2, 1, .8),
       danmakuFontScale: bounded(danmakuFontScale, .2, 1.5, 1),
       danmakuSendStyle: (
+        colorful: danmakuSendStyle.colorful,
         mode: const [1, 4, 5].contains(danmakuSendStyle.mode)
             ? danmakuSendStyle.mode
             : 1,

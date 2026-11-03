@@ -99,8 +99,9 @@ final class ApiVideoActionsRepository implements VideoActionsRepository {
     Duration position,
     int mode,
     int color,
-    RequestCancellation c,
-  ) => _write(
+    RequestCancellation c, {
+    bool colorful = false,
+  }) => _write(
     (ctx) => client.sendDanmaku(
       t.id.value,
       cid,
@@ -108,6 +109,7 @@ final class ApiVideoActionsRepository implements VideoActionsRepository {
       position,
       mode: mode,
       color: color,
+      colorful: colorful,
       context: ctx,
     ),
     c,

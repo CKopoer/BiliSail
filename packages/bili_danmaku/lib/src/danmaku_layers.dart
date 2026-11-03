@@ -45,23 +45,26 @@ final class DanmakuPaintLayers {
     required double fontSize,
     required double x,
     required double y,
+    bool isColorful = false,
   }) {
     final items = scrolling ? _scrolling : _fixed;
     final index = scrolling ? _scrollingUsed++ : _fixedUsed++;
     var changed = index == items.length;
     if (changed) {
-      items.add(_PositionedText(text, color, fontSize, x, y));
+      items.add(_PositionedText(text, color, fontSize, x, y, isColorful));
     } else {
       final item = items[index];
       changed =
           item.text != text ||
           item.color != color ||
+          item.isColorful != isColorful ||
           item.fontSize != fontSize ||
           item.x != x ||
           item.y != y;
       item
         ..text = text
         ..color = color
+        ..isColorful = isColorful
         ..fontSize = fontSize
         ..x = x
         ..y = y;
@@ -101,6 +104,7 @@ final class DanmakuPaintLayers {
           canvas,
           Offset(item.x, item.y),
           pixelRatio: pixelRatio,
+          isColorful: item.isColorful,
         );
       }
     } finally {
@@ -117,9 +121,17 @@ final class DanmakuPaintLayers {
 }
 
 final class _PositionedText {
-  _PositionedText(this.text, this.color, this.fontSize, this.x, this.y);
+  _PositionedText(
+    this.text,
+    this.color,
+    this.fontSize,
+    this.x,
+    this.y,
+    this.isColorful,
+  );
   String text;
   Color color;
+  bool isColorful;
   double fontSize, x, y;
 }
 

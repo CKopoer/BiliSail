@@ -32,6 +32,61 @@ const _target = (episodeId: '7', video: VideoId('BV1234567890'), cid: '101');
 
 void main() {
   test(
+    'member entitlement gates PGC sends and successful echoes keep the effect',
+    () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      expect(
+        await harness.controller.send(
+          'member',
+          mode: 1,
+          color: 0xffffff,
+          colorful: true,
+        ),
+        isFalse,
+      );
+      expect(harness.repository.calls, 0);
+      harness.auth.emit(
+        const AuthState(status: AuthStatus.signedIn, mid: '1', isVip: true),
+      );
+      expect(
+        await harness.controller.send(
+          'member',
+          mode: 4,
+          color: 0x123456,
+          colorful: true,
+        ),
+        isTrue,
+      );
+      expect(harness.repository.colorful, isTrue);
+      expect(harness.session.sentColorful, [true]);
+      expect(harness.session.sent.single.color, 0xffffff);
+    },
+  );
+
+  test(
+    'expired membership during a PGC write cannot echo the previous result',
+    () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      harness.auth.emit(
+        const AuthState(status: AuthStatus.signedIn, mid: '1', isVip: true),
+      );
+      harness.repository.pending = Completer<void>();
+      final sending = harness.controller.send(
+        'member',
+        mode: 1,
+        color: 0xffffff,
+        colorful: true,
+      );
+      harness.auth.emit(const AuthState(status: AuthStatus.signedIn, mid: '1'));
+      harness.repository.pending!.complete();
+      expect(await sending, isFalse);
+      expect(harness.session.sent, isEmpty);
+      expect(harness.repository.calls, 1);
+    },
+  );
+  test(
     'writes only after explicit action and fixes target, text and milliseconds',
     () async {
       final harness = _Harness();
@@ -162,7 +217,11 @@ void main() {
     await tester.tap(find.byTooltip('蓝色'));
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
-    expect(harness.settings.value.danmakuSendStyle, (mode: 4, color: 0x00a1d6));
+    expect(harness.settings.value.danmakuSendStyle, (
+      mode: 4,
+      color: 0x00a1d6,
+      colorful: false,
+    ));
     await _pumpComposer(
       tester,
       harness,
@@ -302,6 +361,7 @@ final class _Repository implements PgcDanmakuRepository {
   String? text;
   Duration? position;
   int? mode, color;
+  bool? colorful;
   RequestCancellation? cancellation;
   Completer<void>? pending;
   Object? failure;
@@ -312,6 +372,7 @@ final class _Repository implements PgcDanmakuRepository {
     Duration position, {
     required int mode,
     required int color,
+    bool colorful = false,
     required RequestCancellation cancellation,
   }) async {
     calls++;
@@ -320,6 +381,7 @@ final class _Repository implements PgcDanmakuRepository {
     this.position = position;
     this.mode = mode;
     this.color = color;
+    this.colorful = colorful;
     this.cancellation = cancellation;
     if (failure case final error?) throw error;
     await pending?.future;
@@ -329,13 +391,16 @@ final class _Repository implements PgcDanmakuRepository {
 
 final class _Session extends ChangeNotifier implements PlaybackSession {
   @override
-  final danmakuSendStyle = ValueNotifier<({int mode, int color})>((
-    mode: 1,
-    color: 0xffffff,
-  ));
+  final danmakuSendStyle =
+      ValueNotifier<({int mode, int color, bool colorful})>((
+        mode: 1,
+        color: 0xffffff,
+        colorful: false,
+      ));
   @override
-  void setDanmakuSendStyle(({int mode, int color}) style) =>
+  void setDanmakuSendStyle(({int mode, int color, bool colorful}) style) =>
       danmakuSendStyle.value = style;
+  final sentColorful = <bool>[];
   final sent = <({String? id, String text, int mode, int color})>[];
   @override
   void showSentDanmaku({
@@ -345,8 +410,13 @@ final class _Session extends ChangeNotifier implements PlaybackSession {
     required Duration position,
     required int mode,
     required int color,
+    bool colorful = false,
     String? id,
-  }) => sent.add((id: id, text: text, mode: mode, color: color));
+  }) {
+    sentColorful.add(colorful);
+    sent.add((id: id, text: text, mode: mode, color: color));
+  }
+
   @override
   int sourceGeneration = 1;
   @override

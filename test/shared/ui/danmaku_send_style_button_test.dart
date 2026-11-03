@@ -6,6 +6,58 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'member style applies atomically, reopens and switches back to RGB',
+    (tester) async {
+      final state = await _pump(tester, vip: true);
+      await _open(tester);
+      await tester.tap(find.byKey(const ValueKey('danmaku-send-vip')));
+      await tester.tap(find.text('顶部'));
+      await tester.ensureVisible(find.text('完成'));
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      expect(state.style.value, (mode: 5, color: 0xffffff, colorful: true));
+      await _open(tester);
+      expect(find.text('预览 · 顶部 · 会员彩色'), findsOneWidget);
+      await tester.tap(find.byTooltip('红色'));
+      await tester.ensureVisible(find.text('完成'));
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      expect(state.style.value, (mode: 5, color: 0xfe0302, colorful: false));
+    },
+  );
+
+  testWidgets('ordinary accounts cannot enable a member send', (tester) async {
+    final state = await _pump(tester);
+    await _open(tester);
+    final vip = tester.widget<InkWell>(
+      find.byKey(const ValueKey('danmaku-send-vip')),
+    );
+    expect(vip.onTap, isNull);
+    expect(state.style.value.colorful, isFalse);
+  });
+
+  testWidgets(
+    'an expired saved member style requires choosing RGB before applying',
+    (tester) async {
+      final state = await _pump(tester);
+      state.style.value = (mode: 4, color: 1, colorful: true);
+      await _open(tester);
+      expect(find.byKey(const ValueKey('danmaku-send-hex')), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, '完成'))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byTooltip('白色'));
+      await tester.pump();
+      await tester.ensureVisible(find.text('完成'));
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      expect(state.style.value, (mode: 4, color: 0xffffff, colorful: false));
+    },
+  );
   testWidgets('reference palette and legacy choices apply together once', (
     tester,
   ) async {
@@ -35,11 +87,11 @@ void main() {
     }
     await tester.tap(find.text('底部'));
     await tester.tap(find.byTooltip('红色'));
-    expect(state.style.value, (mode: 1, color: 0xffffff));
+    expect(state.style.value, (mode: 1, color: 0xffffff, colorful: false));
     expect(state.menuChanges, [true]);
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
-    expect(state.style.value, (mode: 4, color: 0xfe0302));
+    expect(state.style.value, (mode: 4, color: 0xfe0302, colorful: false));
     expect(state.changes, 1);
     expect(state.menuChanges, [true, false]);
   });
@@ -178,9 +230,10 @@ Future<void> _open(WidgetTester tester) async {
 }
 
 final class _State {
-  final style = ValueNotifier<({int mode, int color})>((
+  final style = ValueNotifier<({int mode, int color, bool colorful})>((
     mode: 1,
     color: 0xffffff,
+    colorful: false,
   ));
   int changes = 0;
   final menuChanges = <bool>[];
@@ -191,6 +244,7 @@ Future<_State> _pump(
   TargetPlatform platform = TargetPlatform.windows,
   double textScale = 1,
   bool enabled = true,
+  bool vip = false,
 }) async {
   final state = _State();
   addTearDown(state.style.dispose);
@@ -209,6 +263,7 @@ Future<_State> _pump(
             child: DanmakuSendStyleButton(
               style: state.style,
               enabled: enabled,
+              canSendColorful: vip,
               onChanged: (value) {
                 state.changes++;
                 state.style.value = value;

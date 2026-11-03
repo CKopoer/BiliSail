@@ -43,7 +43,7 @@ void main() {
       final container = ProviderScope.containerOf(
         tester.element(find.byType(VideoDanmakuComposer)),
       );
-      const newer = (mode: 4, color: 0x123456);
+      const newer = (mode: 4, color: 0x123456, colorful: false);
       final newerSave = container
           .read(settingsControllerProvider.notifier)
           .setDanmakuSendStyle(newer);
@@ -78,14 +78,30 @@ void main() {
       }
 
       await choose();
-      expect(session.danmakuSendStyle.value, (mode: 1, color: 0xffffff));
-      expect(settings.value.danmakuSendStyle, (mode: 1, color: 0xffffff));
+      expect(session.danmakuSendStyle.value, (
+        mode: 1,
+        color: 0xffffff,
+        colorful: false,
+      ));
+      expect(settings.value.danmakuSendStyle, (
+        mode: 1,
+        color: 0xffffff,
+        colorful: false,
+      ));
       expect(find.text('弹幕样式保存失败，请重试'), findsOneWidget);
       expect(find.text('保留草稿'), findsOneWidget);
       settings.failWrites = false;
       await choose();
-      expect(session.danmakuSendStyle.value, (mode: 5, color: 0xff6699));
-      expect(settings.value.danmakuSendStyle, (mode: 5, color: 0xff6699));
+      expect(session.danmakuSendStyle.value, (
+        mode: 5,
+        color: 0xff6699,
+        colorful: false,
+      ));
+      expect(settings.value.danmakuSendStyle, (
+        mode: 5,
+        color: 0xff6699,
+        colorful: false,
+      ));
     },
   );
 
@@ -209,6 +225,7 @@ Future<void> pumpComposer(
   VoidCallback? onLogin,
   double textScale = 1,
   FakeComposerSession? session,
+  bool vip = false,
   MemorySettingsRepository? settings,
   Key? composerKey,
 }) async {
@@ -217,7 +234,7 @@ Future<void> pumpComposer(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        authRepositoryProvider.overrideWithValue(FakeAuth(signedIn)),
+        authRepositoryProvider.overrideWithValue(FakeAuth(signedIn, vip: vip)),
         videoActionsRepositoryProvider.overrideWithValue(repo),
         playbackSessionProvider.overrideWithValue(playback),
         settingsRepositoryProvider.overrideWithValue(
@@ -248,13 +265,16 @@ class FakeComposerSession extends ChangeNotifier implements PlaybackSession {
   @override
   int get sourceGeneration => 1;
   @override
-  final danmakuSendStyle = ValueNotifier<({int mode, int color})>((
-    mode: 1,
-    color: 0xffffff,
-  ));
+  final danmakuSendStyle =
+      ValueNotifier<({int mode, int color, bool colorful})>((
+        mode: 1,
+        color: 0xffffff,
+        colorful: false,
+      ));
   @override
-  void setDanmakuSendStyle(({int mode, int color}) style) =>
+  void setDanmakuSendStyle(({int mode, int color, bool colorful}) style) =>
       danmakuSendStyle.value = style;
+  final sentColorful = <bool>[];
   final sent = <({String? id, String text, int mode, int color})>[];
   @override
   void showSentDanmaku({
@@ -264,8 +284,13 @@ class FakeComposerSession extends ChangeNotifier implements PlaybackSession {
     required Duration position,
     required int mode,
     required int color,
+    bool colorful = false,
     String? id,
-  }) => sent.add((id: id, text: text, mode: mode, color: color));
+  }) {
+    sentColorful.add(colorful);
+    sent.add((id: id, text: text, mode: mode, color: color));
+  }
+
   @override
   VideoDetail? get detail => testDetail;
   @override

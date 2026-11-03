@@ -179,6 +179,7 @@ final class VideoActionsClient {
     Duration position, {
     int mode = 1,
     int color = 0xffffff,
+    bool colorful = false,
     ApiRequestContext? context,
   }) async {
     _bvid(bvid);
@@ -198,7 +199,8 @@ final class VideoActionsClient {
       'msg': message,
       'progress': '${position.inMilliseconds}',
       'mode': '$mode',
-      'color': '$color',
+      'color': colorful ? '16777215' : '$color',
+      if (colorful) 'colorful': '60001',
       'fontsize': '25',
       'pool': '0',
       'plat': '1',

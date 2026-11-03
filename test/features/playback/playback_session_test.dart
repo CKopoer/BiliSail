@@ -34,6 +34,39 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'member echoes retain style and obey display and color filters',
+    () async {
+      final repository = _FakeRepository(autoResolve: true);
+      final session = PlaybackSession(
+        engine: _FakeEngine(),
+        repository: repository,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+        danmakuNow: () => Duration.zero,
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      session.danmaku.setViewport(width: 1280, height: 720);
+      session.showSentDanmaku(
+        cid: 'one',
+        generation: session.sourceGeneration,
+        id: 'member',
+        text: 'member',
+        position: Duration.zero,
+        mode: 1,
+        color: 0xffffff,
+        colorful: true,
+      );
+      expect(session.danmaku.frame().single.event.isColorful, isTrue);
+      session.configureSettings(AppSettings(danmakuShowVip: false));
+      expect(session.danmaku.frame().single.event.isColorful, isFalse);
+      session.configureSettings(AppSettings(danmakuShowVip: true));
+      expect(session.danmaku.frame().single.event.isColorful, isTrue);
+      session.configureSettings(AppSettings(danmakuBlockColored: true));
+      expect(session.danmaku.frame(), isEmpty);
+    },
+  );
   for (final target in <ContentPlaybackTarget?>[
     null,
     const PgcPlaybackTarget('12'),
@@ -350,7 +383,7 @@ void main() {
         second.configureSettings(settings);
       }
     });
-    const chosen = (mode: 4, color: 0x0012ab);
+    const chosen = (mode: 4, color: 0x0012ab, colorful: false);
     await firstRun
         .read(settingsControllerProvider.notifier)
         .setDanmakuSendStyle(chosen);
@@ -374,7 +407,11 @@ void main() {
     );
     expect(reopened.danmakuSendStyle.value, chosen);
     reopened.configureSettings(const AppSettings.defaults());
-    expect(reopened.danmakuSendStyle.value, (mode: 1, color: 0xffffff));
+    expect(reopened.danmakuSendStyle.value, (
+      mode: 1,
+      color: 0xffffff,
+      colorful: false,
+    ));
   });
 
   for (final (mode, expected) in [

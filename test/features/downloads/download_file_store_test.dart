@@ -297,6 +297,7 @@ void main() {
       mode: 1,
       color: 1,
       fontSize: 25,
+      colorful: true,
     );
     final extras = DownloadExtras(
       comments: List.filled(60001, comment),
@@ -311,6 +312,7 @@ void main() {
     final decoded =
         jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     expect((decoded['comments'] as List).length, 60000);
+    expect(((decoded['comments'] as List).first as Map)['colorful'], isTrue);
     expect((decoded['subtitles'] as List).length, 16);
     expect(await File('$directory/cover.img').exists(), isFalse);
     final previous = await file.length();

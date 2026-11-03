@@ -361,7 +361,8 @@ final class LiveDanmakuController extends ChangeNotifier
     if (_rasterProtectionDirty) {
       _layouts.protectRasters(
         _visible.map(
-          (item) => (item.event.text, item.event.color, item.event.fontSize),
+          (item) =>
+              (item.event.text, item.event.color, item.event.fontSize, false),
         ),
       );
       _rasterProtectionDirty = false;

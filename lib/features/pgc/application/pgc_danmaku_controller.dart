@@ -74,9 +74,14 @@ final class PgcDanmakuController extends Notifier<PgcDanmakuState> {
     String text, {
     required int mode,
     required int color,
+    bool colorful = false,
   }) async {
     final message = text.trim();
     if (!state.signedIn || state.busy || state.uncertain) return false;
+    if (colorful && !ref.read(authControllerProvider).isVip) {
+      state = PgcDanmakuState(signedIn: true, message: '会员彩色弹幕需要有效的大会员权益');
+      return false;
+    }
     if (message.isEmpty ||
         message.runes.length > 100 ||
         !target.video.isValid ||
@@ -119,6 +124,7 @@ final class PgcDanmakuController extends Notifier<PgcDanmakuState> {
         position,
         mode: mode,
         color: color,
+        colorful: colorful,
         cancellation: cancellation,
       );
       if (!current()) return false;
@@ -129,7 +135,8 @@ final class PgcDanmakuController extends Notifier<PgcDanmakuState> {
         text: message,
         position: position,
         mode: mode,
-        color: color,
+        color: colorful ? 0xffffff : color,
+        colorful: colorful,
       );
       state = const PgcDanmakuState(signedIn: true, message: '弹幕已发送');
       return true;

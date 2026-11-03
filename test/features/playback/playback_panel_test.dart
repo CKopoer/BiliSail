@@ -5922,7 +5922,11 @@ void main() {
           await tester.tap(find.byTooltip('粉色'));
           await tester.tap(find.text('完成'));
           await tester.pumpAndSettle();
-          expect(session.danmakuSendStyle.value, (mode: 5, color: 0xff6699));
+          expect(session.danmakuSendStyle.value, (
+            mode: 5,
+            color: 0xff6699,
+            colorful: false,
+          ));
           expect(
             actions.calls.where((call) => call.startsWith('send:')),
             isEmpty,

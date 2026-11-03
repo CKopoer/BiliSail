@@ -401,6 +401,7 @@ final class ApiDanmakuItem {
     required this.color,
     required this.content,
     this.weight = 0,
+    this.colorful = 0,
   });
   final String id;
   final Duration progress;
@@ -409,6 +410,7 @@ final class ApiDanmakuItem {
   final int color;
   final String content;
   final int weight;
+  final int colorful;
 }
 
 final class ApiQrCode {
@@ -427,11 +429,13 @@ final class ApiQrPollResult {
 final class ApiNavInfo {
   const ApiNavInfo({
     required this.isLogin,
+    this.isVip = false,
     this.mid,
     this.name,
     this.avatarUrl,
   });
   final bool isLogin;
+  final bool isVip;
   final String? mid;
   final String? name;
   final Uri? avatarUrl;

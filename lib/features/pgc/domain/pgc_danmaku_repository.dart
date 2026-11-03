@@ -19,6 +19,7 @@ abstract interface class PgcDanmakuRepository {
     Duration position, {
     required int mode,
     required int color,
+    bool colorful = false,
     required RequestCancellation cancellation,
   });
 }

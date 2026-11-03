@@ -136,6 +136,7 @@ final class DownloadFileStore {
             'color': comment.color,
             'fontSize': comment.fontSize,
             'weight': comment.weight,
+            'colorful': comment.colorful,
           },
         )
         .toList();

@@ -372,6 +372,7 @@ final class ApiDownloadSourceRepository implements DownloadSourceRepository {
                   text: entry.content,
                   mode: entry.mode,
                   color: entry.color,
+                  colorful: entry.colorful == 60001,
                   fontSize: entry.fontSize.toDouble(),
                   weight: entry.weight,
                 ),

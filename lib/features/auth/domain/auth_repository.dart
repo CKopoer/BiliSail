@@ -20,6 +20,7 @@ final class AuthState {
     this.qrUri,
     this.message,
     this.appSessionAvailable = false,
+    this.isVip = false,
   });
   final AuthStatus status;
   final String? userName;
@@ -28,6 +29,7 @@ final class AuthState {
   final Uri? qrUri;
   final String? message;
   final bool appSessionAvailable;
+  final bool isVip;
   bool get isSignedIn => status == AuthStatus.signedIn;
   bool get isBusy => const {
     AuthStatus.restoring,

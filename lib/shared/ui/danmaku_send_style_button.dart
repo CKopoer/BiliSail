@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -14,11 +15,14 @@ final class DanmakuSendStyleButton extends StatefulWidget {
     required this.style,
     required this.onChanged,
     this.enabled = true,
+    this.canSendColorful = false,
   });
 
-  final ValueListenable<({int mode, int color})> style;
-  final FutureOr<void> Function(({int mode, int color})) onChanged;
+  final ValueListenable<({int mode, int color, bool colorful})> style;
+  final FutureOr<void> Function(({int mode, int color, bool colorful}))
+  onChanged;
   final bool enabled;
+  final bool canSendColorful;
 
   @override
   State<DanmakuSendStyleButton> createState() => _DanmakuSendStyleButtonState();
@@ -33,23 +37,25 @@ final class _DanmakuSendStyleButtonState extends State<DanmakuSendStyleButton> {
     final onMenuChanged = PlayerControlsMenuScope.maybeOf(context);
     onMenuChanged?.call(true);
     try {
-      final result = await showAppDialog<({int mode, int color})>(
-        context: context,
-        builder: (context) {
-          final compact = MediaQuery.sizeOf(context).width < 600;
-          return Dialog(
-            alignment: compact ? Alignment.bottomCenter : Alignment.center,
-            insetPadding: EdgeInsets.all(compact ? 12 : 24),
-            constraints: const BoxConstraints(maxWidth: 440),
-            clipBehavior: Clip.antiAlias,
-            child: DanmakuSendStylePanel(
-              initialStyle: widget.style.value,
-              onApply: (value) => Navigator.of(context).pop(value),
-              onCancel: () => Navigator.of(context).pop(),
-            ),
+      final result =
+          await showAppDialog<({int mode, int color, bool colorful})>(
+            context: context,
+            builder: (context) {
+              final compact = MediaQuery.sizeOf(context).width < 600;
+              return Dialog(
+                alignment: compact ? Alignment.bottomCenter : Alignment.center,
+                insetPadding: EdgeInsets.all(compact ? 12 : 24),
+                constraints: const BoxConstraints(maxWidth: 440),
+                clipBehavior: Clip.antiAlias,
+                child: DanmakuSendStylePanel(
+                  initialStyle: widget.style.value,
+                  canSendColorful: widget.canSendColorful,
+                  onApply: (value) => Navigator.of(context).pop(value),
+                  onCancel: () => Navigator.of(context).pop(),
+                ),
+              );
+            },
           );
-        },
-      );
       if (mounted && widget.enabled && result != null) {
         try {
           await widget.onChanged(result);
@@ -72,7 +78,7 @@ final class _DanmakuSendStyleButtonState extends State<DanmakuSendStyleButton> {
             4 => '底部',
             5 => '顶部',
             _ => '滚动',
-          }}，#${value.color.toRadixString(16).padLeft(6, '0').toUpperCase()}',
+          }}，${value.colorful ? '会员彩色' : '#${value.color.toRadixString(16).padLeft(6, '0').toUpperCase()}'}',
       child: IconButton(
         tooltip: '发送弹幕样式',
         onPressed: widget.enabled && !_open ? _show : null,
@@ -92,6 +98,7 @@ final class _DanmakuSendStyleButtonState extends State<DanmakuSendStyleButton> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Color(0xff000000 | value.color),
+                    gradient: value.colorful ? danmakuColorfulGradient : null,
                     border: Border.all(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),

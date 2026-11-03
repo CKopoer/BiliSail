@@ -308,6 +308,11 @@ final class _DanmakuSettingsControlsState
           suffix: ' 级',
         ),
         _toggle(
+          '显示会员彩色弹幕',
+          s.danmakuShowVip,
+          (s, v) => s.copyWith(danmakuShowVip: v),
+        ),
+        _toggle(
           '屏蔽彩色弹幕',
           s.danmakuBlockColored,
           (s, v) => s.copyWith(danmakuBlockColored: v),

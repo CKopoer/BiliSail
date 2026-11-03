@@ -376,6 +376,7 @@ DownloadExtras _decodeExtras(String contents) {
         color: _integer(row, 'color'),
         fontSize: _number(row, 'fontSize'),
         weight: _integer(row, 'weight'),
+        colorful: row['colorful'] == true,
       ),
     );
   }

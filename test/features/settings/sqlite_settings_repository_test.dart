@@ -17,6 +17,38 @@ void main() {
     repository = SqliteSettingsRepository(database);
   });
   tearDown(() => database.close());
+  test('member preferences migrate without losing ordinary RGB and reset consistently', () async {
+    await database.writeSetting(
+      'preferences.v1',
+      jsonEncode({
+        'schemaVersion': 35,
+        'danmakuSendMode': 4,
+        'danmakuSendColor': 1,
+        'danmakuSendColorful': 'true',
+        'danmakuShowVip': 0,
+      }),
+    );
+    var settings = await repository.load();
+    expect(settings.danmakuSendStyle, (mode: 4, color: 1, colorful: false));
+    expect(settings.danmakuShowVip, isTrue);
+    settings = settings.copyWith(
+      danmakuSendStyle: (mode: 4, color: 1, colorful: true),
+      danmakuShowVip: false,
+    );
+    await repository.save(settings);
+    settings = await SqliteSettingsRepository(database).load();
+    expect(settings.danmakuSendStyle, (mode: 4, color: 1, colorful: true));
+    expect(settings.danmakuShowVip, isFalse);
+    expect(
+      (jsonDecode((await database.readSetting('preferences.v1'))!)
+          as Map)['schemaVersion'],
+      36,
+    );
+    await repository.save(const AppSettings.defaults());
+    settings = await repository.load();
+    expect(settings.danmakuSendStyle.colorful, isFalse);
+    expect(settings.danmakuShowVip, isTrue);
+  });
   test('global send style migrates old settings, rejects malformed fields and reloads', () async {
     for (final (mode, color) in <(Object?, Object?)>[
       (null, null),
@@ -35,22 +67,33 @@ void main() {
         }),
       );
       final loaded = await repository.load();
-      expect(loaded.danmakuSendStyle, (mode: 1, color: 0xffffff));
+      expect(loaded.danmakuSendStyle, (
+        mode: 1,
+        color: 0xffffff,
+        colorful: false,
+      ));
       expect(loaded.autoPlay, isFalse);
     }
     for (final mode in [1, 4, 5]) {
       for (final color in [0, 1, 0x123456, 0xffffff]) {
         await repository.save(
-          AppSettings(danmakuSendStyle: (mode: mode, color: color)),
+          AppSettings(
+            danmakuSendStyle: (mode: mode, color: color, colorful: false),
+          ),
         );
         final reloaded = await SqliteSettingsRepository(database).load();
-        expect(reloaded.danmakuSendStyle, (mode: mode, color: color));
+        expect(reloaded.danmakuSendStyle, (
+          mode: mode,
+          color: color,
+          colorful: false,
+        ));
       }
     }
     await repository.save(const AppSettings.defaults());
     expect((await repository.load()).danmakuSendStyle, (
       mode: 1,
       color: 0xffffff,
+      colorful: false,
     ));
     expect(database.schemaVersion, 3);
   });
@@ -157,7 +200,7 @@ void main() {
         final snapshot = jsonDecode(
           (await database.readSetting('preferences.v1'))!,
         );
-        expect(snapshot['schemaVersion'], 35);
+        expect(snapshot['schemaVersion'], 36);
         expect(snapshot['liveStreamPreference'], preference.toJson());
       }
       await repository.save(const AppSettings.defaults());

@@ -208,11 +208,25 @@ class VideoActionsController extends Notifier<VideoActionsState> {
     Duration position,
     int mode,
     int color, {
+    bool colorful = false,
     void Function(String? id)? onSent,
   }) async {
+    if (colorful && !ref.read(authControllerProvider).isVip) {
+      state = state.copyWith(message: '会员彩色弹幕需要有效的大会员权益');
+      return false;
+    }
     String? id;
     final success = await _perform('send', (r, c) async {
-      id = await r.sendDanmaku(target, cid, message, position, mode, color, c);
+      id = await r.sendDanmaku(
+        target,
+        cid,
+        message,
+        position,
+        mode,
+        color,
+        c,
+        colorful: colorful,
+      );
     }, (s) => s);
     if (success) onSent?.call(id);
     return success;

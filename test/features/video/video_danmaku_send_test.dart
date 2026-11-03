@@ -12,6 +12,40 @@ import 'video_danmaku_composer_test.dart'
     show FakeComposerSession, pumpComposer;
 
 void main() {
+  for (final vip in [false, true]) {
+    testWidgets(
+      'member send checks current entitlement vip=$vip and echoes effect',
+      (tester) async {
+        final transport = _SendTransport();
+        final session = FakeComposerSession();
+        addTearDown(session.dispose);
+        await pumpComposer(
+          tester,
+          _repository(transport),
+          session: session,
+          vip: vip,
+        );
+        session.setDanmakuSendStyle((mode: 5, color: 0x123456, colorful: true));
+        await tester.enterText(find.byType(TextField), 'member draft');
+        await tester.tap(find.text('发送'));
+        await tester.pumpAndSettle();
+        if (vip) {
+          expect(transport.posts.single['colorful'], '60001');
+          expect(transport.posts.single['color'], '16777215');
+          expect(session.sentColorful, [true]);
+          expect(session.sent.single.color, 0xffffff);
+        } else {
+          expect(transport.posts, isEmpty);
+          expect(session.sent, isEmpty);
+          expect(
+            tester.widget<TextField>(find.byType(TextField)).controller!.text,
+            'member draft',
+          );
+          expect(find.text('会员彩色弹幕需要有效的大会员权益'), findsOneWidget);
+        }
+      },
+    );
+  }
   for (final (mode, modeLabel) in [(1, '滚动'), (4, '底部'), (5, '顶部')]) {
     for (final (color, colorLabel) in [
       (0xffffff, '白色'),

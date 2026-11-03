@@ -72,6 +72,7 @@ abstract interface class VideoActionsRepository {
     Duration position,
     int mode,
     int color,
-    RequestCancellation cancellation,
-  );
+    RequestCancellation cancellation, {
+    bool colorful = false,
+  });
 }

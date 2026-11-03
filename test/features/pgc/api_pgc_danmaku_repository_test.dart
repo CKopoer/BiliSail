@@ -16,6 +16,24 @@ void main() {
     video: VideoId('BV1234567890'),
     cid: '9007199254740993',
   );
+  test(
+    'PGC forwards the member effect using the shared send protocol',
+    () async {
+      final transport = _Transport();
+      await _repository(transport, ApiRequests()).send(
+        target,
+        'member',
+        Duration.zero,
+        mode: 4,
+        color: 0x123456,
+        colorful: true,
+        cancellation: RequestCancellation(),
+      );
+      expect(transport.posts, 1);
+      expect(transport.fields['colorful'], '60001');
+      expect(transport.fields['color'], '16777215');
+    },
+  );
   test('PGC send reuses Web CSRF and does not need an archive aid', () async {
     final transport = _Transport();
     final requests = ApiRequests();

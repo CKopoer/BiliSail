@@ -10,6 +10,7 @@ import '../../settings/application/settings_controller.dart';
 import '../application/pgc_danmaku_controller.dart';
 import '../domain/pgc_danmaku_repository.dart';
 import '../domain/pgc_repository.dart';
+import '../../auth/application/auth_controller.dart';
 
 final class PgcDanmakuComposer extends ConsumerStatefulWidget {
   const PgcDanmakuComposer({
@@ -70,7 +71,12 @@ final class _PgcDanmakuComposerState extends ConsumerState<PgcDanmakuComposer> {
     final clearSentDraft = DanmakuComposerDraft.clearSentOf(context);
     final success = await ref
         .read(provider.notifier)
-        .send(text, mode: style.mode, color: style.color);
+        .send(
+          text,
+          mode: style.mode,
+          color: style.color,
+          colorful: style.colorful,
+        );
     if (success) clearSentDraft?.call(text);
     if (!mounted || _target != target) return;
     if (success && _text.text.trim() == text) _text.clear();
@@ -95,6 +101,7 @@ final class _PgcDanmakuComposerState extends ConsumerState<PgcDanmakuComposer> {
       child: Row(
         children: [
           DanmakuSendStyleButton(
+            canSendColorful: ref.watch(authControllerProvider).isVip,
             style: session.danmakuSendStyle,
             onChanged: (style) async {
               await ref

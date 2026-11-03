@@ -115,6 +115,28 @@ _FakeTransport _qrTransport() => _FakeTransport((uri) async {
 });
 
 void main() {
+  test('restore exposes verified membership and logout clears it', () async {
+    final requests = ApiRequests();
+    final repository = SessionRepository(
+      api: BiliApiClient(
+        sessionProvider: requests,
+        transport: _FakeTransport(
+          (_) async => _jsonResponse({
+            'code': 0,
+            'data': {'isLogin': true, 'mid': 123, 'vipStatus': 1},
+          }),
+        ),
+      ),
+      requests: requests,
+      credentials: _FakeCredentials(_savedSession()),
+      onSessionChanged: (_) async {},
+    );
+    addTearDown(repository.dispose);
+    await repository.restore();
+    expect(repository.current.isVip, isTrue);
+    await repository.signOut();
+    expect(repository.current.isVip, isFalse);
+  });
   test('restore clears explicitly rejected authentication', () async {
     final requests = ApiRequests();
     final credentials = _FakeCredentials(_savedSession());

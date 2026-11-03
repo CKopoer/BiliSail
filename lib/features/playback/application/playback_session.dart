@@ -303,10 +303,12 @@ class PlaybackSession extends ChangeNotifier {
     const PlaybackSnapshot(phase: PlaybackPhase.idle, generation: 0),
   );
   late final DanmakuController danmaku;
-  final danmakuSendStyle = ValueNotifier<({int mode, int color})>((
-    mode: 1,
-    color: 0xffffff,
-  ));
+  final danmakuSendStyle =
+      ValueNotifier<({int mode, int color, bool colorful})>((
+        mode: 1,
+        color: 0xffffff,
+        colorful: false,
+      ));
   final _sentComments = <TimedComment>[];
   int _sentCommentSequence = 0;
   final _segments = <int, CommentSegment>{};
@@ -1740,6 +1742,7 @@ class PlaybackSession extends ChangeNotifier {
         previous.danmakuTopEnabled != _settings.danmakuTopEnabled ||
         previous.danmakuBottomEnabled != _settings.danmakuBottomEnabled ||
         previous.danmakuBlockColored != _settings.danmakuBlockColored ||
+        previous.danmakuShowVip != _settings.danmakuShowVip ||
         previous.danmakuMinimumWeight != _settings.danmakuMinimumWeight ||
         previous.danmakuMaxPerSecond != _settings.danmakuMaxPerSecond ||
         !listEquals(
@@ -2017,7 +2020,7 @@ class PlaybackSession extends ChangeNotifier {
     });
   }
 
-  void setDanmakuSendStyle(({int mode, int color}) style) {
+  void setDanmakuSendStyle(({int mode, int color, bool colorful}) style) {
     if (_disposed ||
         !const [1, 4, 5].contains(style.mode) ||
         style.color < 0 ||
@@ -2034,6 +2037,7 @@ class PlaybackSession extends ChangeNotifier {
     required Duration position,
     required int mode,
     required int color,
+    bool colorful = false,
     String? id,
   }) {
     if (_disposed ||
@@ -2052,6 +2056,7 @@ class PlaybackSession extends ChangeNotifier {
         text: text,
         mode: mode,
         color: color,
+        colorful: colorful,
         fontSize: 25,
       ),
     );
@@ -2088,7 +2093,7 @@ class PlaybackSession extends ChangeNotifier {
             };
             if (!modeEnabled ||
                 (_settings.danmakuBlockColored &&
-                    (event.color & 0xffffff) != 0xffffff) ||
+                    (event.colorful || (event.color & 0xffffff) != 0xffffff)) ||
                 (!sentIds.contains(event.id) &&
                     _settings.danmakuMinimumWeight > 0 &&
                     event.weight < _settings.danmakuMinimumWeight) ||
@@ -2117,6 +2122,7 @@ class PlaybackSession extends ChangeNotifier {
                 _ => DanmakuMode.scroll,
               },
               color: Color(0xff000000 | event.color),
+              isColorful: event.colorful && _settings.danmakuShowVip,
               fontSize: event.fontSize.clamp(12, 36) * commentFontScale,
             ),
           ),

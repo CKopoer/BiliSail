@@ -30,6 +30,7 @@ final class ApiPgcDanmakuRepository implements PgcDanmakuRepository {
     Duration position, {
     required int mode,
     required int color,
+    bool colorful = false,
     required RequestCancellation cancellation,
   }) => requests.run((context) async {
     try {
@@ -40,6 +41,7 @@ final class ApiPgcDanmakuRepository implements PgcDanmakuRepository {
         position,
         mode: mode,
         color: color,
+        colorful: colorful,
         context: context,
       );
     } on ApiFailure catch (error) {

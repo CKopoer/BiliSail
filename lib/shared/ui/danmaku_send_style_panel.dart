@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:bili_danmaku/bili_danmaku.dart';
 
 // Ordinary RGB presets from the reference palette; retain the original three
 // non-white choices so existing session selections remain directly available.
@@ -30,10 +31,12 @@ final class DanmakuSendStylePanel extends StatefulWidget {
     required this.initialStyle,
     required this.onApply,
     required this.onCancel,
+    this.canSendColorful = false,
   });
-  final ({int mode, int color}) initialStyle;
-  final ValueChanged<({int mode, int color})> onApply;
+  final ({int mode, int color, bool colorful}) initialStyle;
+  final ValueChanged<({int mode, int color, bool colorful})> onApply;
   final VoidCallback onCancel;
+  final bool canSendColorful;
   @override
   State<DanmakuSendStylePanel> createState() => _DanmakuSendStylePanelState();
 }
@@ -41,7 +44,8 @@ final class DanmakuSendStylePanel extends StatefulWidget {
 final class _DanmakuSendStylePanelState extends State<DanmakuSendStylePanel> {
   late int _mode = widget.initialStyle.mode;
   late int _color = widget.initialStyle.color;
-  late bool _custom = !_colors.any((entry) => entry.$1 == _color);
+  late bool _colorful = widget.initialStyle.colorful;
+  late bool _custom = !_colorful && !_colors.any((entry) => entry.$1 == _color);
   late final _hex = TextEditingController(text: _hexValue);
   bool _valid = true;
   String get _hexValue =>
@@ -56,6 +60,7 @@ final class _DanmakuSendStylePanelState extends State<DanmakuSendStylePanel> {
   void _setColor(int color) {
     setState(() {
       _color = color;
+      _colorful = false;
       _valid = true;
       _hex.value = TextEditingValue(
         text: _hexValue,
@@ -65,12 +70,14 @@ final class _DanmakuSendStylePanelState extends State<DanmakuSendStylePanel> {
   }
 
   void _apply() {
-    if (_valid) widget.onApply((mode: _mode, color: _color));
+    if (_valid && (!_colorful || widget.canSendColorful)) {
+      widget.onApply((mode: _mode, color: _color, colorful: _colorful));
+    }
   }
 
   Widget _swatch(int rgb, String label) {
     final color = Color(0xff000000 | rgb);
-    final selected = _color == rgb;
+    final selected = !_colorful && _color == rgb;
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
       label: '$label，#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}',
@@ -191,11 +198,60 @@ final class _DanmakuSendStylePanelState extends State<DanmakuSendStylePanel> {
             runSpacing: 4,
             children: [
               for (final (color, label) in _colors) _swatch(color, label),
+              Tooltip(
+                message: widget.canSendColorful ? '会员彩色' : '会员彩色（大会员专属）',
+                child: Semantics(
+                  label: '会员彩色',
+                  selected: _colorful,
+                  enabled: widget.canSendColorful,
+                  button: true,
+                  child: InkWell(
+                    key: const ValueKey('danmaku-send-vip'),
+                    onTap: !widget.canSendColorful
+                        ? null
+                        : () => setState(() {
+                            _colorful = true;
+                            _valid = true;
+                            _custom = false;
+                          }),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Opacity(
+                      opacity: widget.canSendColorful ? 1 : .4,
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _colorful
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outlineVariant,
+                            width: _colorful ? 2 : 1,
+                          ),
+                        ),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: danmakuColorfulGradient,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            _colorful ? Icons.check : Icons.workspace_premium,
+                            size: 20,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
           TextButton.icon(
             onPressed: () {
+              if (_colorful) _setColor(_color);
               if (_custom && !_valid) _setColor(_color);
               setState(() => _custom = !_custom);
             },
@@ -225,7 +281,10 @@ final class _DanmakuSendStylePanelState extends State<DanmakuSendStylePanel> {
                     ? int.tryParse(value, radix: 16)
                     : null;
                 _valid = parsed != null;
-                if (parsed != null) _color = parsed;
+                if (parsed != null) {
+                  _color = parsed;
+                  _colorful = false;
+                }
               }),
               onSubmitted: (_) => _apply(),
             ),
@@ -235,7 +294,7 @@ final class _DanmakuSendStylePanelState extends State<DanmakuSendStylePanel> {
           ],
           const SizedBox(height: 8),
           Text(
-            '预览 · $modeLabel · #$_hexValue',
+            '预览 · $modeLabel · ${_colorful ? '会员彩色' : '#$_hexValue'}',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
@@ -255,14 +314,41 @@ final class _DanmakuSendStylePanelState extends State<DanmakuSendStylePanel> {
                           horizontal: 8,
                           vertical: 12,
                         ),
-                        child: Text(
-                          '弹幕预览',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Color(0xff000000 | _color),
-                          ),
-                        ),
+                        child: _colorful
+                            ? Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  ShaderMask(
+                                    shaderCallback:
+                                        danmakuColorfulGradient.createShader,
+                                    child: Text(
+                                      '弹幕预览',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        foreground: Paint()
+                                          ..color = Colors.white
+                                          ..style = PaintingStyle.stroke
+                                          ..strokeWidth = 2,
+                                      ),
+                                    ),
+                                  ),
+                                  const Text(
+                                    '弹幕预览',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Text(
+                                '弹幕预览',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Color(0xff000000 | _color),
+                                ),
+                              ),
                       ),
                     ),
                   ),
@@ -270,6 +356,8 @@ final class _DanmakuSendStylePanelState extends State<DanmakuSendStylePanel> {
             ),
           ),
           const SizedBox(height: 16),
+          if (_colorful && !widget.canSendColorful)
+            const Text('会员彩色弹幕需要有效的大会员权益，请选择普通颜色'),
           OverflowBar(
             spacing: 8,
             overflowSpacing: 8,
@@ -277,7 +365,9 @@ final class _DanmakuSendStylePanelState extends State<DanmakuSendStylePanel> {
             children: [
               TextButton(onPressed: widget.onCancel, child: const Text('取消')),
               FilledButton(
-                onPressed: _valid ? _apply : null,
+                onPressed: _valid && (!_colorful || widget.canSendColorful)
+                    ? _apply
+                    : null,
                 child: const Text('完成'),
               ),
             ],

@@ -147,6 +147,7 @@ class SessionRepository
             userName: nav.name ?? name,
             avatarUrl: nav.avatarUrl,
             mid: nav.mid,
+            isVip: nav.isVip,
             appSessionAvailable: _hasApp,
           ),
         );
@@ -378,6 +379,7 @@ class SessionRepository
             userName: nav.name ?? '哔哩哔哩用户',
             avatarUrl: nav.avatarUrl,
             mid: nav.mid,
+            isVip: nav.isVip,
             appSessionAvailable: _hasApp,
           ),
         );
@@ -423,6 +425,7 @@ class SessionRepository
         mid: _current.mid,
         userName: _current.userName,
         avatarUrl: _current.avatarUrl,
+        isVip: _current.isVip,
       ),
     );
     await _credentialOperation(() async {

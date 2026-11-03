@@ -8,6 +8,11 @@ import 'canvas_danmaku_renderer.dart';
 
 enum DanmakuTextEffect { shadow, stroke, plain }
 
+/// Colorful text uses white glyphs with a pink-to-blue outline.
+const danmakuColorfulGradient = LinearGradient(
+  colors: [Color(0xfff2509e), Color(0xff308bcd)],
+);
+
 /// Cumulative local paint counters. A paint is one item on one rendered frame,
 /// not one Flutter frame. Reading a snapshot never retains text or images.
 @immutable
@@ -74,9 +79,9 @@ final class DanmakuTextLayouts {
     _style = value;
   }
 
-  final _cache = <(double, int, String), _TextLayout>{};
+  final _cache = <(double, int, String, bool), _TextLayout>{};
   final _rasters = <_TextLayout, int>{};
-  final _protectedKeys = <(double, int, String)>{};
+  final _protectedKeys = <(double, int, String, bool)>{};
   final _renderer = CanvasDanmakuRenderer();
 
   void beginFrame(Canvas canvas, double pixelRatio) =>
@@ -111,43 +116,55 @@ final class DanmakuTextLayouts {
 
   /// Avoid cyclic bitmap eviction when the visible working set exceeds the
   /// pixel budget: keep resident visible images and draw overflow as text.
-  void protectRasters(Iterable<(String, Color, double)> visible) {
+  void protectRasters(Iterable<(String, Color, double, bool)> visible) {
     _protectedKeys.clear();
-    for (final (text, color, size) in visible) {
+    for (final (text, color, size, colorful) in visible) {
       _protectedKeys.add((
         size.clamp(minFontSize, 54.0),
         color.toARGB32(),
         text,
+        colorful,
       ));
     }
   }
 
-  TextPainter layout(String text, Color color, double fontSize) =>
-      _entry(text, color, fontSize).fill;
+  TextPainter layout(
+    String text,
+    Color color,
+    double fontSize, {
+    bool isColorful = false,
+  }) => _entry(text, color, fontSize, isColorful).fill;
 
-  _TextLayout _entry(String text, Color color, double fontSize) {
+  _TextLayout _entry(
+    String text,
+    Color color,
+    double fontSize,
+    bool isColorful,
+  ) {
     final size = fontSize.clamp(minFontSize, 54.0);
-    final key = (size, color.toARGB32(), text);
+    final key = (size, color.toARGB32(), text, isColorful);
     final cached = _cache.remove(key);
     if (cached != null) {
       _cache[key] = cached;
       return cached;
     }
-    TextPainter make({bool outline = false}) => TextPainter(
+    TextPainter make({Paint? outline}) => TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
           fontFamily: style.fontFamily,
           fontWeight: style.bold ? FontWeight.bold : FontWeight.normal,
           fontSize: size,
-          color: outline ? null : color,
-          foreground: outline
-              ? (Paint()
-                  ..color = const Color(0xff000000)
-                  ..style = PaintingStyle.stroke
-                  ..strokeWidth = 2)
-              : null,
-          shadows: !outline && style.effect == DanmakuTextEffect.shadow
+          color: outline != null
+              ? null
+              : isColorful
+              ? const Color(0xffffffff)
+              : color,
+          foreground: outline,
+          shadows:
+              outline == null &&
+                  !isColorful &&
+                  style.effect == DanmakuTextEffect.shadow
               ? const [Shadow(color: Color(0xff000000), blurRadius: 2)]
               : null,
         ),
@@ -155,11 +172,22 @@ final class DanmakuTextLayouts {
       textDirection: TextDirection.ltr,
       maxLines: 1,
     )..layout();
+    final fill = make();
     final entry = _TextLayout(
       key,
-      make(),
-      style.effect == DanmakuTextEffect.stroke
-          ? () => make(outline: true)
+      fill,
+      isColorful || style.effect == DanmakuTextEffect.stroke
+          ? () => make(
+              outline: Paint()
+                ..color = const Color(0xff000000)
+                ..shader = isColorful
+                    ? danmakuColorfulGradient.createShader(
+                        Offset.zero & fill.size,
+                      )
+                    : null
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 2,
+            )
           : null,
     );
     buildCount++;
@@ -182,8 +210,9 @@ final class DanmakuTextLayouts {
     Offset offset, {
     double pixelRatio = 1,
     bool cacheRaster = true,
+    bool isColorful = false,
   }) {
-    final entry = _entry(text, color, fontSize);
+    final entry = _entry(text, color, fontSize, isColorful);
     // Rasterize only painted text at the actual display DPR. Moving images
     // avoids per-frame glyph/effect rendering, especially blurred shadows.
     // The native paragraphs remain available for pixel-budget overflow.
@@ -295,7 +324,7 @@ final class DanmakuTextLayouts {
 
 final class _TextLayout {
   _TextLayout(this.key, this.fill, this._makeOutline);
-  final (double, int, String) key;
+  final (double, int, String, bool) key;
   final TextPainter fill;
   final TextPainter Function()? _makeOutline;
   TextPainter? _outline;

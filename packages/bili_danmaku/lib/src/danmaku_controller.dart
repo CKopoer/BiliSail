@@ -15,6 +15,7 @@ final class DanmakuEvent {
     this.mode = DanmakuMode.scroll,
     this.color = const Color(0xFFFFFFFF),
     this.fontSize = 24,
+    this.isColorful = false,
   });
 
   final String id;
@@ -23,6 +24,7 @@ final class DanmakuEvent {
   final DanmakuMode mode;
   final Color color;
   final double fontSize;
+  final bool isColorful;
 }
 
 @immutable
@@ -362,6 +364,7 @@ final class DanmakuController extends ChangeNotifier
   bool _sameEvent(DanmakuEvent a, DanmakuEvent b) =>
       a.text == b.text &&
       a.color == b.color &&
+      a.isColorful == b.isColorful &&
       a.fontSize == b.fontSize &&
       a.at == b.at &&
       a.mode == b.mode;
@@ -443,8 +446,12 @@ final class DanmakuController extends ChangeNotifier
     return low;
   }
 
-  TextPainter _layout(DanmakuEvent event) =>
-      _layouts.layout(event.text, event.color, event.fontSize);
+  TextPainter _layout(DanmakuEvent event) => _layouts.layout(
+    event.text,
+    event.color,
+    event.fontSize,
+    isColorful: event.isColorful,
+  );
 
   void paintText(
     DanmakuEvent event,
@@ -458,6 +465,7 @@ final class DanmakuController extends ChangeNotifier
     canvas,
     offset,
     pixelRatio: pixelRatio,
+    isColorful: event.isColorful,
   );
 
   @override
@@ -474,6 +482,7 @@ final class DanmakuController extends ChangeNotifier
           text: event.text,
           color: event.color,
           fontSize: event.fontSize,
+          isColorful: event.isColorful,
           x: x,
           y: y,
         );
@@ -536,7 +545,12 @@ final class DanmakuController extends ChangeNotifier
     if (_rasterProtectionDirty) {
       _layouts.protectRasters(
         _active.map(
-          (item) => (item.event.text, item.event.color, item.event.fontSize),
+          (item) => (
+            item.event.text,
+            item.event.color,
+            item.event.fontSize,
+            item.event.isColorful,
+          ),
         ),
       );
       _rasterProtectionDirty = false;

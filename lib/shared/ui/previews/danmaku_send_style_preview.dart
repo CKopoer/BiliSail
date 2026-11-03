@@ -13,7 +13,7 @@ Widget danmakuSendStylePreview() => MaterialApp(
         constraints: const BoxConstraints(maxWidth: 440),
         child: Material(
           child: DanmakuSendStylePanel(
-            initialStyle: (mode: 1, color: 0xff6699),
+            initialStyle: (mode: 1, color: 0xff6699, colorful: false),
             onApply: (_) {},
             onCancel: () {},
           ),

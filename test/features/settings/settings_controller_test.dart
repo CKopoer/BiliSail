@@ -17,7 +17,7 @@ void main() {
     addTearDown(container.dispose);
     await container.read(settingsControllerProvider.future);
     final controller = container.read(settingsControllerProvider.notifier);
-    const chosen = (mode: 5, color: 0x123456);
+    const chosen = (mode: 5, color: 0x123456, colorful: false);
     final style = controller.setDanmakuSendStyle(chosen);
     final theme = controller.setTheme(AppThemePreference.dark);
     await Future<void>.delayed(Duration.zero);
@@ -28,7 +28,11 @@ void main() {
     await theme;
     expect(repository.stored.danmakuSendStyle, chosen);
     expect(repository.stored.theme, AppThemePreference.dark);
-    final failed = controller.setDanmakuSendStyle((mode: 4, color: 1));
+    final failed = controller.setDanmakuSendStyle((
+      mode: 4,
+      color: 1,
+      colorful: false,
+    ));
     final assertion = expectLater(failed, throwsStateError);
     await Future<void>.delayed(Duration.zero);
     repository.failNext();
@@ -41,7 +45,11 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     repository.completeNext();
     await reset;
-    expect(repository.stored.danmakuSendStyle, (mode: 1, color: 0xffffff));
+    expect(repository.stored.danmakuSendStyle, (
+      mode: 1,
+      color: 0xffffff,
+      colorful: false,
+    ));
   });
 
   test('failed reset restores saved settings and never activates default shortcuts', () async {

@@ -545,8 +545,8 @@ void main() {
       addTearDown(layouts.clear);
       for (var frame = 0; frame < 10; frame++) {
         layouts.protectRasters([
-          ('one', const Color(0xffffffff), 24.0),
-          ('two', const Color(0xffffffff), 24.0),
+          ('one', const Color(0xffffffff), 24.0, false),
+          ('two', const Color(0xffffffff), 24.0, false),
         ]);
         final recorder = ui.PictureRecorder();
         final canvas = Canvas(recorder);

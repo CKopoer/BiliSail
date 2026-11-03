@@ -8,6 +8,7 @@ import '../../../shared/ui/danmaku_send_style_button.dart';
 import '../../playback/application/playback_session.dart';
 import '../../settings/application/settings_controller.dart';
 import '../application/video_actions_controller.dart';
+import '../../auth/application/auth_controller.dart';
 
 class VideoDanmakuComposer extends ConsumerStatefulWidget {
   const VideoDanmakuComposer({
@@ -82,6 +83,7 @@ class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
           position,
           style.mode,
           style.color,
+          colorful: style.colorful,
           onSent: (id) => session.showSentDanmaku(
             cid: sendingCid,
             generation: generation,
@@ -89,7 +91,8 @@ class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
             text: text,
             position: position,
             mode: style.mode,
-            color: style.color,
+            color: style.colorful ? 0xffffff : style.color,
+            colorful: style.colorful,
           ),
         );
     if (successful) clearSentDraft?.call(text);
@@ -125,6 +128,7 @@ class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
       child: Row(
         children: [
           DanmakuSendStyleButton(
+            canSendColorful: ref.watch(authControllerProvider).isVip,
             style: session.danmakuSendStyle,
             onChanged: (style) async {
               await ref

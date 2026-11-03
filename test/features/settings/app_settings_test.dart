@@ -5,34 +5,38 @@ void main() {
   test(
     'send style defaults, copies and validates each field independently',
     () {
-      expect(AppSettings().danmakuSendStyle, (mode: 1, color: 0xffffff));
+      expect(AppSettings().danmakuSendStyle, (
+        mode: 1,
+        color: 0xffffff,
+        colorful: false,
+      ));
       expect(const AppSettings.defaults().danmakuSendStyle, (
         mode: 1,
         color: 0xffffff,
+        colorful: false,
       ));
       for (final mode in [1, 4, 5]) {
         for (final color in [0, 1, 0x123456, 0xffffff]) {
           expect(
-            AppSettings(danmakuSendStyle: (mode: mode, color: color))
-                .normalized()
-                .copyWith(autoPlay: false)
-                .danmakuSendStyle,
-            (mode: mode, color: color),
+            AppSettings(
+              danmakuSendStyle: (mode: mode, color: color, colorful: false),
+            ).normalized().copyWith(autoPlay: false).danmakuSendStyle,
+            (mode: mode, color: color, colorful: false),
           );
         }
       }
       expect(
-        AppSettings(danmakuSendStyle: (mode: 2, color: 0x123456))
-            .normalized()
-            .danmakuSendStyle,
-        (mode: 1, color: 0x123456),
+        AppSettings(
+          danmakuSendStyle: (mode: 2, color: 0x123456, colorful: false),
+        ).normalized().danmakuSendStyle,
+        (mode: 1, color: 0x123456, colorful: false),
       );
       for (final color in [-1, 0x1000000]) {
         expect(
-          AppSettings(danmakuSendStyle: (mode: 4, color: color))
-              .normalized()
-              .danmakuSendStyle,
-          (mode: 4, color: 0xffffff),
+          AppSettings(
+            danmakuSendStyle: (mode: 4, color: color, colorful: false),
+          ).normalized().danmakuSendStyle,
+          (mode: 4, color: 0xffffff, colorful: false),
         );
       }
     },

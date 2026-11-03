@@ -209,8 +209,9 @@ final class _Repository implements VideoActionsRepository {
     Duration position,
     int mode,
     int color,
-    RequestCancellation cancellation,
-  ) async {
+    RequestCancellation cancellation, {
+    bool colorful = false,
+  }) async {
     await write();
     return '9007199254740993';
   }

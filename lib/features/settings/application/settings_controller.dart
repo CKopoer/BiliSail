@@ -121,12 +121,15 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(playerControlsMode: value));
   Future<void> setFullscreenSwipeControls(bool value) =>
       update((current) => current.copyWith(fullscreenSwipeControls: value));
+  Future<void> setDanmakuShowVip(bool value) =>
+      update((current) => current.copyWith(danmakuShowVip: value));
   Future<void> setDanmakuOpacity(double value) =>
       update((current) => current.copyWith(danmakuOpacity: value));
   Future<void> setDanmakuFontScale(double value) =>
       update((current) => current.copyWith(danmakuFontScale: value));
-  Future<void> setDanmakuSendStyle(({int mode, int color}) value) =>
-      update((current) => current.copyWith(danmakuSendStyle: value));
+  Future<void> setDanmakuSendStyle(
+    ({int mode, int color, bool colorful}) value,
+  ) => update((current) => current.copyWith(danmakuSendStyle: value));
   Future<void> setAutoPlay(bool value) =>
       update((current) => current.copyWith(autoPlay: value));
   Future<void> setDefaultShowComments(bool value) =>

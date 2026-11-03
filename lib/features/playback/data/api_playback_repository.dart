@@ -330,6 +330,7 @@ class ApiPlaybackRepository
             text: item.content,
             mode: item.mode,
             color: item.color,
+            colorful: item.colorful == 60001,
             fontSize: item.fontSize.toDouble(),
             weight: item.weight,
           ),
