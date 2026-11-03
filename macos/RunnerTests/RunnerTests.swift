@@ -5,6 +5,88 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
+  func testFullscreenCloseWaitsForEntryThenExitAndCoalescesDuplicateClose() {
+    var scheduled: [() -> Void] = []
+    var fullscreen = false
+    var toggles = 0
+    var entries = 0
+    var closes = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { fullscreen },
+      toggle: { toggles += 1 }, schedule: { scheduled.append($0) })
+    func drain() { while !scheduled.isEmpty { scheduled.removeFirst()() } }
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error); entries += 1 }
+    drain()
+    XCTAssertEqual(toggles, 1)
+    XCTAssertEqual(entries, 0)
+    coordinator.prepareToClose { error in XCTAssertNil(error); closes += 1 }
+    coordinator.prepareToClose { error in XCTAssertNil(error); closes += 1 }
+    drain()
+    XCTAssertEqual(toggles, 1)
+    XCTAssertEqual(closes, 0)
+    fullscreen = true
+    coordinator.transitionDidEnd()
+    drain()
+    XCTAssertEqual(toggles, 2)
+    XCTAssertEqual(closes, 0)
+    fullscreen = false
+    coordinator.transitionDidEnd()
+    // The didExit notification stack must unwind before replying to Dart.
+    XCTAssertEqual(closes, 0)
+    drain()
+    XCTAssertEqual(closes, 2)
+    XCTAssertEqual(entries, 1)
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error) }
+    drain()
+    XCTAssertEqual(toggles, 2)
+  }
+
+  func testCloseCancelsAQueuedFullscreenEntryBeforeItStarts() {
+    var scheduled: [() -> Void] = []
+    var completed = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { false },
+      toggle: { XCTFail("A retiring window must not enter fullscreen") },
+      schedule: { scheduled.append($0) })
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error); completed += 1 }
+    coordinator.prepareToClose { error in XCTAssertNil(error); completed += 1 }
+    XCTAssertEqual(completed, 0)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(completed, 2)
+  }
+
+  func testSystemFullscreenExitAndAlreadyNormalCloseWaitForQueuedReply() {
+    var scheduled: [() -> Void] = []
+    var fullscreen = true
+    var completed = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { fullscreen },
+      toggle: { XCTFail("An existing AppKit transition must finish first") },
+      schedule: { scheduled.append($0) })
+    coordinator.transitionWillStart()
+    coordinator.prepareToClose { error in XCTAssertNil(error); completed += 1 }
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(completed, 0)
+    fullscreen = false
+    coordinator.transitionDidEnd()
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(completed, 1)
+    coordinator.prepareToClose { error in XCTAssertNil(error); completed += 1 }
+    XCTAssertEqual(completed, 1)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(completed, 2)
+  }
+
+  func testUnexpectedWindowCloseFailsPendingRequestsOutsideNotification() {
+    var scheduled: [() -> Void] = []
+    var failures = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { true }, toggle: {},
+      schedule: { scheduled.append($0) })
+    coordinator.prepareToClose { error in XCTAssertNotNil(error); failures += 1 }
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    coordinator.windowClosed()
+    XCTAssertEqual(failures, 0)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(failures, 1)
+  }
+
   @MainActor
   func testPlaybackCaptionHomeVisibilityAndCallbacks() {
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 360),

@@ -148,6 +148,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('failed fullscreen close barrier retains the native view', (
+    tester,
+  ) async {
+    final controller = DesktopPlaybackWindowController();
+    final normal = Completer<void>();
+    final failure = StateError('AppKit transition failed');
+    late _FakeWindow window;
+    await tester.pumpWidget(
+      DesktopPlaybackWindow(
+        controller: controller,
+        playback: const SizedBox(),
+        onCloseRequested: () {},
+        onError: (error) => fail('$error'),
+        windowFactory: ({required title, required onCloseRequested}) =>
+            window = _FakeWindow(
+              tester.view,
+              onCloseRequested,
+              onPrepareClose: () => normal.future,
+            ),
+        child: const SizedBox(key: ValueKey('browser')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final closing = controller.close();
+    final failed = expectLater(closing, throwsA(same(failure)));
+    await tester.pumpAndSettle();
+    normal.completeError(failure);
+    await tester.pumpAndSettle();
+    await failed;
+    expect(tester.takeException(), same(failure));
+    expect(window.disposed, isFalse);
+    expect(find.byKey(const ValueKey('browser')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('application exit drains every cancelled and current prepare', (
     tester,
   ) async {
@@ -425,6 +461,8 @@ void main() {
       await tester.pump(Duration.zero);
       window.requestClose();
       window.requestClose();
+      expect(closeRequests, 0);
+      await tester.pump(Duration.zero);
       expect(closeRequests, 1);
       expect(window.disposed, isFalse);
       expect(playbackUnmounted, isFalse);
@@ -519,6 +557,58 @@ void main() {
     await tester.pump(Duration.zero);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'reopen waits for the previous engine and fullscreen window to retire',
+    (tester) async {
+      final release = Completer<void>();
+      final normal = Completer<void>();
+      final windows = <_FakeWindow>[];
+      Widget build(bool open) => DesktopPlaybackWindow(
+        playback: open ? const SizedBox(key: ValueKey('player')) : null,
+        waitForPlaybackRelease: () => release.future,
+        onCloseRequested: () {},
+        onError: (error) => fail('$error'),
+        windowFactory: ({required title, required onCloseRequested}) {
+          final window = _FakeWindow(
+            tester.view,
+            onCloseRequested,
+            viewId: 100 + windows.length,
+            onPrepareClose: () => normal.future,
+          );
+          windows.add(window);
+          return window;
+        },
+        child: const SizedBox(key: ValueKey('browser')),
+      );
+      Future<void> frames() async {
+        for (var frame = 0; frame < 5; frame++) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        await tester.pumpAndSettle();
+      }
+
+      await tester.pumpWidget(build(true));
+      await frames();
+      await tester.pumpWidget(build(false));
+      await tester.pumpWidget(build(true));
+      await frames();
+      expect(windows, hasLength(1));
+      expect(windows.first.disposed, isFalse);
+      expect(find.byKey(const ValueKey('player')), findsNothing);
+      release.complete();
+      await frames();
+      expect(windows, hasLength(1));
+      normal.complete();
+      await frames();
+      expect(windows.first.disposed, isTrue);
+      expect(windows, hasLength(2));
+      expect(find.byKey(const ValueKey('player')), findsOneWidget);
+      expect(find.byKey(const ValueKey('browser')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await frames();
+    },
+  );
 
   testWidgets('closing after the frame cancels the queued native event', (
     tester,
@@ -712,6 +802,7 @@ void main() {
       expect(closes, 0);
       expect(windows.first.disposed, isFalse);
       windows.last.requestClose();
+      await tester.pump(Duration.zero);
       expect(closes, 1);
       saved.complete();
       await tester.pumpAndSettle();
@@ -740,6 +831,7 @@ void main() {
       await tester.pumpAndSettle();
       window.destroyNative();
       expect(window.disposed, isFalse);
+      await tester.pump(Duration.zero);
       expect(closes, 1);
       await tester.pumpAndSettle();
       expect(window.disposed, isTrue);
@@ -817,6 +909,7 @@ class _FakeWindow extends DetachedPlaybackWindow {
     this.onDispose,
     this.onPrepare,
     this.onSave,
+    this.onPrepareClose,
     this.onSetTitle,
     int viewId = 100,
   }) : view = _SecondaryView(mainView, viewId: viewId);
@@ -826,6 +919,7 @@ class _FakeWindow extends DetachedPlaybackWindow {
   final VoidCallback? onDispose;
   final Future<void> Function()? onPrepare;
   final Future<void> Function()? onSave;
+  final Future<void> Function()? onPrepareClose;
   final ValueChanged<String>? onSetTitle;
   bool nativeClosed = false;
   var disposed = false;
@@ -847,6 +941,9 @@ class _FakeWindow extends DetachedPlaybackWindow {
 
   @override
   Future<void> saveGeometry() => onSave?.call() ?? Future.value();
+
+  @override
+  Future<void> prepareToClose() => onPrepareClose?.call() ?? Future.value();
 
   @override
   late final windowService = WindowService.forView(

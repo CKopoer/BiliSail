@@ -43,6 +43,7 @@ class WindowService {
     : viewId = null,
       nativeWindowHandle = null,
       _setViewFullScreen = null,
+      _prepareViewToClose = null,
       _activateView = null,
       _isViewAvailable = null;
 
@@ -51,8 +52,10 @@ class WindowService {
     this.nativeWindowHandle,
     required Future<void> Function(bool value) setFullScreen,
     required Future<void> Function() activate,
+    Future<void> Function()? prepareToClose,
     bool Function()? isAvailable,
   }) : _setViewFullScreen = setFullScreen,
+       _prepareViewToClose = prepareToClose,
        _activateView = activate,
        _isViewAvailable = isAvailable;
 
@@ -73,6 +76,7 @@ class WindowService {
   bool _backEnabled = false;
   bool _handlesMainWindowClose = false;
   bool _requestingExit = false;
+  Future<void>? _preparingToClose;
 
   final _maximized = ValueNotifier(false);
   ValueListenable<bool> get maximized => _maximized;
@@ -285,6 +289,7 @@ class WindowService {
   final int? viewId;
   final int? nativeWindowHandle;
   final Future<void> Function(bool value)? _setViewFullScreen;
+  final Future<void> Function()? _prepareViewToClose;
   final Future<void> Function()? _activateView;
   final bool Function()? _isViewAvailable;
 
@@ -422,19 +427,31 @@ class WindowService {
     }
   }
 
+  /// Stops accepting presentation changes and waits for AppKit to leave its
+  /// asynchronous fullscreen transition before the SDK destroys this view.
+  Future<void> prepareToClose() =>
+      _preparingToClose ??= _isViewAvailable?.call() == false
+      ? Future<void>.value()
+      : _prepareViewToClose?.call() ?? Future<void>.value();
+
   Future<void> setFullScreen(
     bool value, {
     FullScreenOrientation? orientation,
   }) async {
+    if (_preparingToClose != null) return;
     final setViewFullScreen = _setViewFullScreen;
     if (setViewFullScreen != null) {
       if (_isViewAvailable?.call() == false) return;
       // The native fullscreen transition may replace the normal placement.
       // Capture before entering; fullscreen frames never become restore bounds.
       if (value && !_fullScreen) await capturePlaybackGeometry();
-      if (_isViewAvailable?.call() == false) return;
+      if (_preparingToClose != null || _isViewAvailable?.call() == false) {
+        return;
+      }
       await setViewFullScreen(value);
-      if (_isViewAvailable?.call() == false) return;
+      if (_preparingToClose != null || _isViewAvailable?.call() == false) {
+        return;
+      }
     } else if (hasDesktopWindow) {
       await windowManager.setFullScreen(value);
     } else {

@@ -110,6 +110,8 @@ class _BiliAppState extends ConsumerState<BiliApp> {
             }) => DesktopPlaybackWindow(
               keepPlaybackMounted: keepPlaybackMounted,
               controller: widget.dependencies.playbackWindow,
+              waitForPlaybackRelease:
+                  widget.dependencies.playback.drainReleases,
               activationToken: activationToken,
               onCloseRequested: onClose,
               onError: onError,

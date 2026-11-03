@@ -96,6 +96,7 @@ final class MacOSApplication {
       window.contentMinSize = NSSize(width: 420, height: 560)
       window.center()
       self.mainGeometry = PersistentWindowGeometry(window: window, role: "main")
+      self.desktopWindows?.trackPresentation(window, viewID: viewID)
       result(nil)
     }
 
@@ -279,6 +280,7 @@ private final class DesktopWindowController {
   private var captions: [Int64: PlaybackTitlebarBack] = [:]
   private var geometryOwner: (view: Int64, owner: Int64)?
   private var geometryTracker: PersistentWindowGeometry?
+  private var presentations: [Int64: WindowFullScreenCoordinator] = [:]
 
   init(messenger: FlutterBinaryMessenger) {
     channel = FlutterMethodChannel(
@@ -319,15 +321,36 @@ private final class DesktopWindowController {
       guard let handle = (args["windowHandle"] as? NSNumber)?.uint64Value,
             let window = NSApp.windows.first(where: {
               UInt64(UInt(bitPattern: Unmanaged.passUnretained($0).toOpaque())) == handle
-            }) else {
+            }),
+            let controller = window.contentViewController as? FlutterViewController,
+            controller.viewIdentifier == viewID else {
         result(FlutterError(code: "window_unavailable", message: "Flutter window is unavailable.", details: nil))
         return
       }
       switch call.method {
+      case "setFullScreen", "prepareToClose":
+        if call.method == "setFullScreen" && args["enabled"] as? Bool == nil {
+          result(FlutterError(code: "invalid_argument", message: "Expected fullscreen state.", details: nil))
+          return
+        }
+        let presentation = self.trackPresentation(window, viewID: viewID)
+        let completion: (String?) -> Void = { error in
+          if let error = error {
+            result(FlutterError(code: "fullscreen_transition", message: error, details: nil))
+          } else {
+            result(nil)
+          }
+        }
+        if call.method == "prepareToClose" {
+          presentation.prepareToClose(completion)
+        } else {
+          presentation.setFullScreen(args["enabled"] as? Bool ?? false, completion: completion)
+        }
       case "restoreGeometry":
         self.geometryTracker?.detach()
         self.geometryOwner = (viewID, owner)
         self.geometryTracker = PersistentWindowGeometry(window: window, role: "playback")
+        self.trackPresentation(window, viewID: viewID)
         result(nil)
       case "captureGeometry":
         self.geometryTracker?.capture()
@@ -365,10 +388,147 @@ private final class DesktopWindowController {
     }
   }
 
+  @discardableResult
+  func trackPresentation(_ window: NSWindow, viewID: Int64) -> WindowFullScreenCoordinator {
+    if let existing = presentations[viewID] { return existing }
+    let presentation = WindowFullScreenCoordinator(window: window) { [weak self] in
+      self?.presentations.removeValue(forKey: viewID)
+    }
+    presentations[viewID] = presentation
+    return presentation
+  }
+
   deinit {
     channel.setMethodCallHandler(nil)
     for caption in captions.values { caption.detach() }
     geometryTracker?.detach()
+  }
+}
+
+// Flutter 3.47.6's FFI fullscreen setter only calls toggleFullScreen and returns.
+// Its destroyWindow immediately disposes the view controller before closing the
+// NSWindow. Keep that controller alive until AppKit has finished transitioning;
+// do not replace the SDK's window delegate or run toggles inside its callbacks.
+final class WindowFullScreenCoordinator {
+  private let isFullScreen: () -> Bool
+  private let toggle: () -> Void
+  private let schedule: (@escaping () -> Void) -> Void
+  private var observers: [NSObjectProtocol] = []
+  private var requests: [(enabled: Bool, completion: (String?) -> Void)] = []
+  private var transitioning = false
+  private var retiring = false
+  private var closed = false
+  private var scheduled = false
+  private var deadline: DispatchWorkItem?
+
+  init(isFullScreen: @escaping () -> Bool, toggle: @escaping () -> Void,
+       schedule: @escaping (@escaping () -> Void) -> Void = { action in
+         DispatchQueue.main.async(execute: action)
+       }) {
+    self.isFullScreen = isFullScreen
+    self.toggle = toggle
+    self.schedule = schedule
+  }
+
+  convenience init(window: NSWindow, onClosed: @escaping () -> Void) {
+    self.init(isFullScreen: { [weak window] in
+      window?.styleMask.contains(.fullScreen) == true
+    }, toggle: { [weak window] in window?.toggleFullScreen(nil) })
+    let center = NotificationCenter.default
+    for name in [NSWindow.willEnterFullScreenNotification, NSWindow.willExitFullScreenNotification] {
+      observers.append(center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+        self?.transitionWillStart()
+      })
+    }
+    for name in [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
+      observers.append(center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+        self?.transitionDidEnd()
+      })
+    }
+    observers.append(center.addObserver(forName: NSWindow.willCloseNotification,
+                                       object: window, queue: .main) { [weak self] _ in
+      self?.windowClosed()
+      onClosed()
+    })
+  }
+
+  deinit {
+    deadline?.cancel()
+    for observer in observers { NotificationCenter.default.removeObserver(observer) }
+  }
+
+  func setFullScreen(_ enabled: Bool, completion: @escaping (String?) -> Void) {
+    // Late route cleanup/entry must not restart presentation of a retiring view.
+    if retiring { schedule { completion(nil) }; return }
+    enqueue(enabled, completion: completion)
+  }
+
+  func prepareToClose(_ completion: @escaping (String?) -> Void) {
+    retiring = true
+    let entries = requests.filter { $0.enabled }
+    requests.removeAll { $0.enabled }
+    schedule { for request in entries { request.completion(nil) } }
+    enqueue(false, completion: completion)
+  }
+
+  func transitionWillStart() { transitioning = true }
+
+  func transitionDidEnd() {
+    transitioning = false
+    pumpLater()
+  }
+
+  func windowClosed() {
+    closed = true
+    finishAll("Window closed during fullscreen transition.")
+  }
+
+  private func enqueue(_ enabled: Bool, completion: @escaping (String?) -> Void) {
+    guard !closed else { schedule { completion("Window is closed.") }; return }
+    requests.append((enabled, completion))
+    if deadline == nil {
+      let timeout = DispatchWorkItem { [weak self] in
+        // Failure is explicit: Dart must retain the native view rather than
+        // destroy a controller still being used by an AppKit animation.
+        self?.finishAll("Timed out waiting for fullscreen transition.")
+      }
+      deadline = timeout
+      DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeout)
+    }
+    pumpLater()
+  }
+
+  private func pumpLater() {
+    if scheduled { return }
+    scheduled = true
+    schedule { [weak self] in
+      guard let self = self else { return }
+      self.scheduled = false
+      self.pump()
+    }
+  }
+
+  private func pump() {
+    guard !closed, !transitioning else { return }
+    while let request = requests.first {
+      if request.enabled != isFullScreen() {
+        transitioning = true
+        toggle()
+        return
+      }
+      requests.removeFirst().completion(nil)
+    }
+    deadline?.cancel()
+    deadline = nil
+  }
+
+  private func finishAll(_ error: String) {
+    deadline?.cancel()
+    deadline = nil
+    let pending = requests
+    requests.removeAll()
+    // Notification delivery may be inside an SDK FFI stack too.
+    schedule { for request in pending { request.completion(error) } }
   }
 }
 

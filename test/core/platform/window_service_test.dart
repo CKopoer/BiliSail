@@ -715,6 +715,70 @@ void main() {
     },
   );
 
+  test('closing a view cancels pending and late fullscreen requests', () async {
+    final capture = Completer<void>();
+    const channel = MethodChannel('bilisail/desktop_window');
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      if (call.method == 'captureGeometry') await capture.future;
+      return null;
+    });
+    addTearDown(
+      () => binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    final changes = <bool>[];
+    final window = WindowService.forView(
+      viewId: 84,
+      setFullScreen: (value) async => changes.add(value),
+      activate: () async {},
+    );
+    await window.restorePlaybackGeometry();
+    final entering = window.setFullScreen(true);
+    await Future<void>.delayed(Duration.zero);
+    final closing = window.prepareToClose();
+    expect(window.prepareToClose(), same(closing));
+    capture.complete();
+    await entering;
+    await closing;
+    await window.setFullScreen(true);
+    await window.setFullScreen(false);
+    expect(changes, isEmpty);
+    expect(window.isFullScreen, isFalse);
+  });
+
+  test(
+    'view close awaits its injected native transition exactly once',
+    () async {
+      final normal = Completer<void>();
+      var requests = 0;
+      var completed = false;
+      final window = WindowService.forView(
+        viewId: 85,
+        setFullScreen: (_) async =>
+            fail('Closing views cannot change presentation'),
+        prepareToClose: () {
+          requests++;
+          return normal.future;
+        },
+        activate: () async {},
+      );
+      final closing = window.prepareToClose();
+      expect(window.prepareToClose(), same(closing));
+      unawaited(closing.then((_) => completed = true));
+      await window.setFullScreen(true);
+      await window.setFullScreen(false);
+      expect(requests, 1);
+      expect(completed, isFalse);
+      normal.complete();
+      await closing;
+      expect(completed, isTrue);
+    },
+  );
+
   test('Windows routes a detached IME policy by view ID', () async {
     const channel = MethodChannel('bilisail/text_input');
     final calls = <MethodCall>[];

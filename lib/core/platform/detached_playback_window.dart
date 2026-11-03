@@ -92,6 +92,7 @@ abstract class DetachedPlaybackWindow extends ChangeNotifier {
   void setTitle(String title);
   Future<void> prepare() async {}
   Future<void> saveGeometry() async {}
+  Future<void> prepareToClose() => windowService.prepareToClose();
 }
 
 /// Drains secondary views before the shared engine is allowed to terminate.
@@ -120,6 +121,7 @@ class DesktopPlaybackWindow extends StatefulWidget {
     this.windowFactory,
     this.controller,
     this.keepPlaybackMounted = false,
+    this.waitForPlaybackRelease,
   });
 
   final Widget child;
@@ -136,6 +138,9 @@ class DesktopPlaybackWindow extends StatefulWidget {
   /// out once under the browser and again after its inherited view changes.
   final bool keepPlaybackMounted;
 
+  /// Called after the playback subtree unmounts, before its native view dies.
+  final Future<void> Function()? waitForPlaybackRelease;
+
   @override
   State<DesktopPlaybackWindow> createState() => _DesktopPlaybackWindowState();
 }
@@ -144,6 +149,7 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
   final _playbackKey = GlobalKey();
   DetachedPlaybackWindow? _window;
   bool _closeRequested = false;
+  Timer? _closeTimer;
   Object? _pendingWindowUpdate;
   Timer? _windowUpdateTimer;
   bool _createRequested = false;
@@ -213,6 +219,8 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
   }
 
   void _cancelWindowUpdate() {
+    _closeTimer?.cancel();
+    _closeTimer = null;
     _windowUpdateTimer?.cancel();
     _windowUpdateTimer = null;
     _pendingWindowUpdate = null;
@@ -229,6 +237,16 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
     final initialTitle = widget.title;
     final initialActivation = widget.activationToken;
     try {
+      // A rapid reopen must not attach another player while the previous
+      // window's engine or AppKit fullscreen transition is still retiring.
+      await _retiring;
+      if (!mounted ||
+          !identical(_opening, request) ||
+          widget.playback == null ||
+          _closeRequested ||
+          _shuttingDown) {
+        return;
+      }
       final factory = widget.windowFactory ?? DetachedPlaybackWindow.create;
       final window = factory(
         title: widget.title,
@@ -305,6 +323,7 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
 
   void _disposeAfterFrame(DetachedPlaybackWindow window) {
     final disposed = Completer<void>();
+    final waitForPlaybackRelease = widget.waitForPlaybackRelease;
     // Start the capture now, before a rapid new open queues its restore. Native
     // geometry is owner checked, so late capture/retire cannot change that view.
     final saved = window
@@ -324,18 +343,20 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
           );
         });
     _afterFrame(() {
-      unawaited(
-        saved.whenComplete(
-          () => Timer.run(() {
-            try {
-              window.dispose();
-              disposed.complete();
-            } catch (error, stack) {
-              disposed.completeError(error, stack);
-            }
-          }),
-        ),
-      );
+      unawaited(() async {
+        try {
+          await saved;
+          await waitForPlaybackRelease?.call();
+          await window.prepareToClose();
+          // Channel completion can run inside a Flutter frame microtask.
+          await Future<void>.delayed(Duration.zero);
+          window.dispose();
+          disposed.complete();
+        } catch (error, stack) {
+          // A failed fullscreen barrier must never fall through to destroy.
+          disposed.completeError(error, stack);
+        }
+      }());
     });
     _retiring = Future.wait([_retiring, disposed.future]).then((_) {});
     unawaited(
@@ -369,7 +390,14 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
   void _requestClose() {
     if (!mounted || _closeRequested) return;
     _closeRequested = true;
-    widget.onCloseRequested();
+    // Native Cmd+W enters through the SDK's isolate-local windowShouldClose
+    // callback. Leave that Cocoa stack before navigation or focus can reenter.
+    _closeTimer = Timer(Duration.zero, () {
+      _closeTimer = null;
+      if (mounted && !_shuttingDown && _closeRequested) {
+        widget.onCloseRequested();
+      }
+    });
   }
 
   void _windowChanged() {
@@ -431,7 +459,14 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
     _cancelWindowUpdate();
     _retireWindow();
     final controller = widget.controller;
-    unawaited(_drain().then((_) => controller?._hosts.remove(this)));
+    unawaited(
+      _drain().then(
+        (_) => controller?._hosts.remove(this),
+        // Retirement already reports its error. Widget disposal cannot return
+        // a Future; avoid an unhandled duplicate from this bookkeeping drain.
+        onError: (Object _, StackTrace _) => controller?._hosts.remove(this),
+      ),
+    );
     super.dispose();
   }
 
@@ -499,7 +534,12 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
       viewId: viewId,
       nativeWindowHandle: _nativeWindowHandle,
       isAvailable: () => _open,
-      setFullScreen: (value) async => _controller.setFullscreen(value),
+      setFullScreen: Platform.isMacOS
+          ? (value) => _macOSPresentationCall('setFullScreen', enabled: value)
+          : (value) async => _controller.setFullscreen(value),
+      prepareToClose: Platform.isMacOS
+          ? () => _macOSPresentationCall('prepareToClose')
+          : null,
       activate: () => WindowService.activateDesktopView(
         viewId,
         windowHandle: _nativeWindowHandle,
@@ -508,6 +548,15 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
     _controller.addListener(_rememberPresentation);
     _rememberPresentation();
   }
+
+  Future<void> _macOSPresentationCall(String method, {bool? enabled}) =>
+      const MethodChannel('bilisail/desktop_window')
+          .invokeMethod<void>(method, {
+            'viewId': viewId,
+            'windowHandle': _nativeWindowHandle,
+            'enabled': ?enabled,
+          })
+          .timeout(const Duration(seconds: 12));
 
   void _rememberPresentation() {
     if (!_open) return;

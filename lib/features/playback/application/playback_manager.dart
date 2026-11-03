@@ -99,6 +99,11 @@ final class PlaybackManager extends ChangeNotifier {
     unawaited(closing.whenComplete(() => _releases.remove(closing)));
   }
 
+  /// Waits for unmounted pages' native engines, leaving retained sessions alone.
+  Future<void> drainReleases() async {
+    await Future.wait(_releases.toList());
+  }
+
   Future<void> stop() async {
     ++_revision;
     _systemMedia?.clear();
