@@ -10,12 +10,14 @@ final class HighlightedText extends StatelessWidget {
     this.style,
     this.maxLines = 1,
     this.showOverflowTooltip = false,
+    this.tooltipTriggerMode = TooltipTriggerMode.longPress,
   });
 
   final String text, query;
   final TextStyle? style;
   final int maxLines;
   final bool showOverflowTooltip;
+  final TooltipTriggerMode tooltipTriggerMode;
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +64,12 @@ final class HighlightedText extends StatelessWidget {
 
   Widget _withOverflowTooltip(BuildContext context, Text child) {
     if (!showOverflowTooltip) return child;
-    return _OverflowTooltip(text: text, maxLines: maxLines, child: child);
+    return _OverflowTooltip(
+      text: text,
+      maxLines: maxLines,
+      triggerMode: tooltipTriggerMode,
+      child: child,
+    );
   }
 }
 
@@ -81,11 +88,13 @@ final class _OverflowTooltip extends StatefulWidget {
   const _OverflowTooltip({
     required this.text,
     required this.maxLines,
+    required this.triggerMode,
     required this.child,
   });
 
   final String text;
   final int maxLines;
+  final TooltipTriggerMode triggerMode;
   final Text child;
 
   @override
@@ -174,7 +183,7 @@ final class _OverflowTooltipState extends State<_OverflowTooltip> {
         return Tooltip(
           message: _overflowing ? widget.text : '',
           excludeFromSemantics: true,
-          triggerMode: TooltipTriggerMode.longPress,
+          triggerMode: widget.triggerMode,
           child: child,
         );
       },

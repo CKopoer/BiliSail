@@ -38,6 +38,239 @@ const _remove = VideoCardMenu(actions: [VideoCardMenuAction.removeWatchLater]);
 final _button = find.byKey(const ValueKey('video-card-title-menu'));
 
 void main() {
+  for (final width in [390.0, 599.0, 600.0, 1000.0]) {
+    for (final longPress in [true, false]) {
+      testWidgets(
+        '${longPress ? 'long press' : 'button'} at $width uses the same actions and one selection',
+        (tester) async {
+          _setWindow(tester, Size(width, 700));
+          final selected = <VideoCardMenuAction>[];
+          final operations = _Operations();
+          var opens = 0;
+          await tester.pumpWidget(
+            _card(
+              VideoCardMenu(
+                actions: _recommended.actions,
+                onSelected: selected.add,
+              ),
+              platform: TargetPlatform.android,
+              operations: operations,
+              open: () => opens++,
+            ),
+          );
+          final anchor = tester.getRect(_button);
+          if (longPress) {
+            await tester.longPress(find.byType(AspectRatio));
+          } else {
+            await tester.tap(_button);
+          }
+          await tester.pumpAndSettle();
+          expect(find.text('不感兴趣'), findsOneWidget);
+          expect(find.text('稍后再看'), findsOneWidget);
+          expect(find.text('删除'), findsNothing);
+          expect(find.text('收藏'), findsNothing);
+          expect(operations.writes, 0);
+          expect(selected, isEmpty);
+          expect(opens, 0);
+          if (width < 600) {
+            expect(find.byType(BottomSheet), findsOneWidget);
+            expect(
+              find.byType(PopupMenuItem<VideoCardMenuAction>),
+              findsNothing,
+            );
+            expect(tester.getRect(find.byType(BottomSheet)).bottom, 700);
+            // A second tap during reverse animation cannot pop the page.
+            final position = tester.getCenter(find.text('不感兴趣'));
+            await tester.tapAt(position);
+            await tester.tapAt(position);
+          } else {
+            expect(find.byType(BottomSheet), findsNothing);
+            final item = tester.getRect(
+              find.byType(PopupMenuItem<VideoCardMenuAction>).first,
+            );
+            expect(item.top, closeTo(anchor.bottom + 8, 1));
+            expect(item.right, closeTo(anchor.right, 1));
+            await tester.tap(find.text('不感兴趣'));
+          }
+          await tester.pumpAndSettle();
+          expect(selected, [VideoCardMenuAction.notInterested]);
+          expect(opens, 0);
+          expect(find.byType(VideoCard), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets(
+    'long press on overflowing title and author opens only the menu',
+    (tester) async {
+      _setWindow(tester, const Size(390, 700));
+      final operations = _Operations();
+      var opens = 0, authors = 0;
+      const video = VideoSummary(
+        id: VideoId('BV1234567890'),
+        title:
+            '很长的视频标题'
+            '很长的视频标题'
+            '很长的视频标题'
+            '很长的视频标题',
+        coverUrl: '',
+        author: '测试作者',
+        authorId: UserId('7'),
+        duration: Duration(seconds: 60),
+      );
+      await tester.pumpWidget(
+        _card(
+          _recommended,
+          video: video,
+          platform: TargetPlatform.iOS,
+          operations: operations,
+          open: () => opens++,
+          author: (_) => authors++,
+        ),
+      );
+      for (final text in [video.title, video.author]) {
+        await tester.longPress(find.text(text));
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsOneWidget);
+        expect(find.text('不感兴趣'), findsOneWidget);
+        expect(opens, 0);
+        expect(authors, 0);
+        expect(operations.writes, 0);
+        await tester.tapAt(const Offset(5, 400));
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsNothing);
+      }
+      await tester.tap(find.text(video.title));
+      expect(opens, 1);
+    },
+  );
+
+  testWidgets('scrolling and cancelled holds never open a menu or video', (
+    tester,
+  ) async {
+    var opens = 0;
+    final operations = _Operations();
+    await tester.pumpWidget(
+      _card(_recommended, open: () => opens++, operations: operations),
+    );
+    final position = tester.getCenter(find.byType(AspectRatio));
+    final cancelled = await tester.startGesture(position);
+    await tester.pump(const Duration(milliseconds: 200));
+    await cancelled.cancel();
+    await tester.pumpAndSettle();
+    final scrolling = await tester.startGesture(position);
+    await scrolling.moveBy(const Offset(0, 70));
+    await tester.pump(const Duration(seconds: 1));
+    await scrolling.up();
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(PopupMenuItem<VideoCardMenuAction>), findsNothing);
+    expect(opens, 0);
+    expect(operations.writes, 0);
+  });
+
+  testWidgets('busy, empty and feedback cards do not show menus or navigate', (
+    tester,
+  ) async {
+    var opens = 0;
+    for (final (menu, feedback) in [
+      (null, null),
+      (const VideoCardMenu(actions: [], busy: false), null),
+      (VideoCardMenu(actions: _recommended.actions, busy: true), null),
+      (_recommended, const VideoCardFeedback()),
+    ]) {
+      await tester.pumpWidget(
+        _card(
+          menu,
+          feedback: feedback,
+          platform: TargetPlatform.android,
+          open: () => opens++,
+        ),
+      );
+      await tester.longPress(find.byType(AspectRatio));
+      await tester.pump();
+      if (_button.evaluate().isNotEmpty) await tester.tap(_button);
+      await tester.pump();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(PopupMenuItem<VideoCardMenuAction>), findsNothing);
+      expect(opens, 0);
+    }
+    // Dispose the busy spinner instead of waiting for it to settle.
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('narrow history menu keeps its action set, theme and safe area', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 700);
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(bottom: 34);
+    addTearDown(tester.view.reset);
+    final selected = <VideoCardMenuAction>[];
+    await tester.pumpWidget(
+      _card(
+        VideoCardMenu(
+          actions: const [VideoCardMenuAction.removeHistory],
+          onSelected: selected.add,
+        ),
+        platform: TargetPlatform.android,
+        theme: ThemeData.dark().copyWith(platform: TargetPlatform.android),
+        textScaler: TextScaler.linear(2),
+      ),
+    );
+    await tester.longPress(find.byType(AspectRatio));
+    await tester.pumpAndSettle();
+    expect(find.text('删除记录'), findsOneWidget);
+    expect(find.text('稍后再看'), findsNothing);
+    final tile = find.widgetWithText(ListTile, '删除记录');
+    expect(tester.getRect(tile).bottom, lessThanOrEqualTo(700 - 34));
+    final context = tester.element(tile);
+    expect(Theme.of(context).brightness, Brightness.dark);
+    expect(MediaQuery.textScalerOf(context).scale(15), 30);
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+    expect(selected, [VideoCardMenuAction.removeHistory]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'selection is ignored after operations, activity or menu changes',
+    (tester) async {
+      final original = _Operations();
+      final replacement = _Operations();
+      for (final change in ['account', 'hidden', 'busy', 'actions']) {
+        final selected = <VideoCardMenuAction>[];
+        final initial = VideoCardMenu(
+          actions: _recommended.actions,
+          onSelected: selected.add,
+        );
+        await tester.pumpWidget(_card(initial, operations: original));
+        await tester.longPress(find.byType(AspectRatio));
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          _card(
+            VideoCardMenu(
+              actions: change == 'actions' ? _remove.actions : initial.actions,
+              onSelected: selected.add,
+              busy: change == 'busy',
+            ),
+            operations: change == 'account' ? replacement : original,
+            active: change != 'hidden',
+          ),
+        );
+        await tester.tap(find.text('不感兴趣'));
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(selected, isEmpty);
+        expect(original.writes, 0);
+        expect(replacement.writes, 0);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      }
+    },
+  );
+
   testWidgets(
     'title addition completes silently when the workspace becomes hidden',
     (tester) async {
@@ -67,10 +300,7 @@ void main() {
       operations.pending?.complete(WatchLaterResult.added);
       await tester.pump();
       expect(notices, isEmpty);
-      expect(
-        tester.widget<PopupMenuButton<VideoCardMenuAction>>(_button).enabled,
-        true,
-      );
+      expect(tester.widget<IconButton>(_button).onPressed, isNotNull);
     },
   );
 
@@ -120,8 +350,7 @@ void main() {
   testWidgets(
     'desktop title menu stays hidden at narrow widths until hover and remains open outside the card',
     (tester) async {
-      await tester.binding.setSurfaceSize(const Size(320, 500));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+      _setWindow(tester, const Size(320, 500));
       var opens = 0;
       final selected = <VideoCardMenuAction>[];
       await tester.pumpWidget(
@@ -255,10 +484,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('稍后再看'));
       await tester.pump(const Duration(milliseconds: 250));
-      expect(
-        tester.widget<PopupMenuButton<VideoCardMenuAction>>(_button).enabled,
-        false,
-      );
+      expect(tester.widget<IconButton>(_button).onPressed, isNull);
       await tester.pumpWidget(
         _card(
           _recommended,
@@ -267,10 +493,7 @@ void main() {
           notices: notices.add,
         ),
       );
-      expect(
-        tester.widget<PopupMenuButton<VideoCardMenuAction>>(_button).enabled,
-        true,
-      );
+      expect(tester.widget<IconButton>(_button).onPressed, isNotNull);
       old.pending?.complete(WatchLaterResult.added);
       await tester.pump();
       expect(notices, isEmpty);
@@ -359,8 +582,18 @@ double _opacity(WidgetTester tester) => tester
     )
     .opacity;
 
+void _setWindow(WidgetTester tester, Size size) {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+}
+
 Widget _card(
   VideoCardMenu? menu, {
+  VideoSummary video = _video,
+  VideoCardFeedback? feedback,
+  ThemeData? theme,
+  TextScaler textScaler = TextScaler.noScaling,
   VoidCallback? open,
   ValueChanged<UserId>? author,
   TargetPlatform platform = TargetPlatform.windows,
@@ -368,7 +601,11 @@ Widget _card(
   void Function(String)? notices,
   bool active = true,
 }) => MaterialApp(
-  theme: ThemeData(platform: platform),
+  theme: theme ?? ThemeData(platform: platform),
+  builder: (context, child) => MediaQuery(
+    data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+    child: child ?? const SizedBox(),
+  ),
   home: Scaffold(
     body: Align(
       alignment: Alignment.topCenter,
@@ -380,8 +617,9 @@ Widget _card(
             interactions: operations ?? _Operations(),
             onNotice: (_, text) => notices?.call(text),
             child: VideoCard(
-              video: _video,
+              video: video,
               menu: menu,
+              feedback: feedback,
               onTap: open ?? () {},
               onOpenUser: author,
             ),

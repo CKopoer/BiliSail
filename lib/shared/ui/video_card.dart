@@ -170,6 +170,16 @@ final class _VideoCardState extends State<VideoCard> {
   int _addGeneration = 0;
   VideoCardInteractions? _interactions;
   Widget? _card;
+  final _menuAnchor = GlobalKey();
+
+  bool get _canShowMenu => switch (widget.menu) {
+    final menu? =>
+      widget.feedback == null &&
+          !menu.busy &&
+          menu.actions.isNotEmpty &&
+          !_addingWatchLater,
+    null => false,
+  };
 
   void _update(VoidCallback change) => setState(() {
     _card = null;
@@ -241,6 +251,7 @@ final class _VideoCardState extends State<VideoCard> {
           clipBehavior: Clip.none,
           child: InkWell(
             onTap: widget.feedback == null ? () => widget.onTap() : null,
+            onLongPress: widget.feedback == null ? _showMenu : null,
             hoverColor: Colors.transparent,
             hoverDuration: Duration.zero,
             onFocusChange: (value) => _update(() => _focused = value),
@@ -358,6 +369,12 @@ final class _VideoCardState extends State<VideoCard> {
                                 query: widget.highlightQuery,
                                 maxLines: 2,
                                 showOverflowTooltip: true,
+                                // Hover still reveals the full title. Cards
+                                // with actions reserve touch long-press for
+                                // their menu instead of the nested tooltip.
+                                tooltipTriggerMode: widget.menu == null
+                                    ? TooltipTriggerMode.longPress
+                                    : TooltipTriggerMode.manual,
                                 style: titleStyle?.copyWith(
                                   color: highlighted
                                       ? scheme.primary
@@ -404,7 +421,6 @@ final class _VideoCardState extends State<VideoCard> {
   }
 
   Widget _menuButton(VideoCardMenu menu, double cardWidth) {
-    final actions = menu.actions;
     final tier = _VideoCardWidthTier.fromWidth(cardWidth);
     final buttonSize = Size.square(tier.menuButtonSize);
     final progressSize = tier.menuIconSize * .8;
@@ -422,91 +438,175 @@ final class _VideoCardState extends State<VideoCard> {
         opacity: visible ? 1 : 0,
         child: IgnorePointer(
           ignoring: !visible,
-          child: PopupMenuButton<VideoCardMenuAction>(
-            key: const ValueKey('video-card-title-menu'),
-            tooltip: '',
-            enabled: !busy,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 156, maxWidth: 240),
-            position: PopupMenuPosition.under,
-            color: Theme.of(context).colorScheme.surface,
-            surfaceTintColor: Colors.transparent,
-            elevation: 3,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(
-                color: Theme.of(context).colorScheme.outlineVariant
-                    .withValues(alpha: .6),
+          // A disabled nested button must consume taps rather than open video.
+          child: GestureDetector(
+            key: _menuAnchor,
+            onTap: () {},
+            excludeFromSemantics: true,
+            child: IconButton(
+              key: const ValueKey('video-card-title-menu'),
+              onPressed: _canShowMenu ? _showMenu : null,
+              icon: busy
+                  ? SizedBox.square(
+                      dimension: progressSize,
+                      child: const CircularProgressIndicator(
+                        strokeWidth: 2,
+                        semanticsLabel: '操作中',
+                      ),
+                    )
+                  : Icon(
+                      Icons.more_vert,
+                      size: tier.menuIconSize,
+                      semanticLabel: '更多操作',
+                    ),
+              iconSize: tier.menuIconSize,
+              style: IconButton.styleFrom(
+                minimumSize: buttonSize,
+                maximumSize: buttonSize,
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.standard,
+                // Padded tap targets would still reserve 48px beside the title.
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
-            onOpened: () => _update(() => _menuOpen = true),
-            onCanceled: () {
-              if (mounted) _update(() => _menuOpen = false);
-            },
-            onSelected: (action) {
-              if (!mounted) return;
-              _update(() => _menuOpen = false);
-              if (action == VideoCardMenuAction.watchLater) {
-                _addWatchLater();
-              } else {
-                widget.menu?.onSelected?.call(action);
-              }
-            },
-            icon: busy
-                ? SizedBox.square(
-                    dimension: progressSize,
-                    child: const CircularProgressIndicator(
-                      strokeWidth: 2,
-                      semanticsLabel: '操作中',
-                    ),
-                  )
-                : Icon(
-                    Icons.more_vert,
-                    size: tier.menuIconSize,
-                    semanticLabel: '更多操作',
-                  ),
-            iconSize: tier.menuIconSize,
-            style: IconButton.styleFrom(
-              minimumSize: buttonSize,
-              maximumSize: buttonSize,
-              padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.standard,
-              // Padded tap targets would still reserve 48px beside the title.
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            itemBuilder: (_) => [
-              for (final action in actions)
-                PopupMenuItem(
-                  value: action,
-                  child: Row(
-                    children: [
-                      Icon(switch (action) {
-                        VideoCardMenuAction.notInterested =>
-                          Icons.not_interested_outlined,
-                        VideoCardMenuAction.watchLater =>
-                          Icons.watch_later_outlined,
-                        VideoCardMenuAction.removeWatchLater ||
-                        VideoCardMenuAction.removeHistory =>
-                          Icons.delete_outline,
-                      }, size: 19),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Text(switch (action) {
-                          VideoCardMenuAction.notInterested => '不感兴趣',
-                          VideoCardMenuAction.watchLater => '稍后再看',
-                          VideoCardMenuAction.removeWatchLater => '删除',
-                          VideoCardMenuAction.removeHistory => '删除记录',
-                        }),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
           ),
         ),
       ),
     );
   }
+
+  Future<void> _showMenu() async {
+    if (!_canShowMenu || _menuOpen || !WorkspaceActivity.isActive(context)) {
+      return;
+    }
+    final menu = widget.menu;
+    if (menu == null) return;
+    final id = widget.video.id;
+    final generation = _addGeneration;
+    final interactions = _interactions;
+    _update(() => _menuOpen = true);
+    VideoCardMenuAction? selected;
+    try {
+      if (MediaQuery.sizeOf(context).width < 600) {
+        var selecting = false;
+        selected = await showModalBottomSheet<VideoCardMenuAction>(
+          context: context,
+          useSafeArea: true,
+          isScrollControlled: true,
+          showDragHandle: true,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          builder: (context) => SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final action in menu.actions)
+                    ListTile(
+                      leading: Icon(_menuIcon(action)),
+                      title: Text(_menuLabel(action)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      onTap: () {
+                        if (selecting) return;
+                        selecting = true;
+                        Navigator.of(context).pop(action);
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      } else {
+        final overlay = Navigator.of(context).overlay;
+        final anchor = _menuAnchor.currentContext?.findRenderObject();
+        if (overlay == null || anchor is! RenderBox) return;
+        final overlayBox = overlay.context.findRenderObject() as RenderBox;
+        RelativeRect position() => RelativeRect.fromRect(
+          Rect.fromPoints(
+            anchor.localToGlobal(
+              Offset(0, anchor.size.height),
+              ancestor: overlayBox,
+            ),
+            anchor.localToGlobal(
+              anchor.size.bottomRight(Offset.zero),
+              ancestor: overlayBox,
+            ),
+          ),
+          Offset.zero & overlayBox.size,
+        );
+        final initialPosition = position();
+        selected = await showMenu<VideoCardMenuAction>(
+          context: context,
+          positionBuilder: (_, _) =>
+              anchor.attached ? position() : initialPosition,
+          constraints: const BoxConstraints(minWidth: 156, maxWidth: 240),
+          color: Theme.of(context).colorScheme.surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 3,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant
+                  .withValues(alpha: .6),
+            ),
+          ),
+          items: [
+            for (final action in menu.actions)
+              PopupMenuItem(
+                value: action,
+                child: Row(
+                  children: [
+                    Icon(_menuIcon(action), size: 19),
+                    const SizedBox(width: 10),
+                    Flexible(child: Text(_menuLabel(action))),
+                  ],
+                ),
+              ),
+          ],
+        );
+      }
+    } finally {
+      if (mounted) _update(() => _menuOpen = false);
+    }
+    // The retained tile may now represent another account, video or action set.
+    if (!mounted ||
+        selected == null ||
+        widget.video.id != id ||
+        generation != _addGeneration ||
+        interactions != _interactions ||
+        !_canShowMenu ||
+        !WorkspaceActivity.isActive(context) ||
+        widget.menu?.actions.contains(selected) != true) {
+      return;
+    }
+    if (selected == VideoCardMenuAction.watchLater) {
+      await _addWatchLater();
+    } else {
+      widget.menu?.onSelected?.call(selected);
+    }
+  }
+
+  static IconData _menuIcon(VideoCardMenuAction action) => switch (action) {
+    VideoCardMenuAction.notInterested => Icons.not_interested_outlined,
+    VideoCardMenuAction.watchLater => Icons.watch_later_outlined,
+    VideoCardMenuAction.removeWatchLater ||
+    VideoCardMenuAction.removeHistory => Icons.delete_outline,
+  };
+
+  static String _menuLabel(VideoCardMenuAction action) => switch (action) {
+    VideoCardMenuAction.notInterested => '不感兴趣',
+    VideoCardMenuAction.watchLater => '稍后再看',
+    VideoCardMenuAction.removeWatchLater => '删除',
+    VideoCardMenuAction.removeHistory => '删除记录',
+  };
 
   Future<void> _addWatchLater() async {
     if (!WorkspaceActivity.isActive(context)) return;
