@@ -20,7 +20,6 @@ class PlayerSeekControls extends StatefulWidget {
     required this.onPreviewRequest,
     required this.child,
     this.storyboard,
-    this.storyboardLoading = false,
   });
 
   final bool enabled;
@@ -33,7 +32,6 @@ class PlayerSeekControls extends StatefulWidget {
   final Future<void> Function(Duration) onSeek;
   final VoidCallback onPreviewRequest;
   final VideoStoryboard? storyboard;
-  final bool storyboardLoading;
   final Widget child;
 
   @override
@@ -237,7 +235,6 @@ class _PlayerSeekControlsState extends State<PlayerSeekControls>
                               position: position,
                               duration: _total,
                               storyboard: widget.storyboard,
-                              loading: widget.storyboardLoading,
                             ),
                           ),
                   ),
@@ -256,16 +253,15 @@ class _SeekPreview extends StatelessWidget {
     required this.position,
     required this.duration,
     required this.storyboard,
-    required this.loading,
   });
 
   final Duration position, duration;
   final VideoStoryboard? storyboard;
-  final bool loading;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      final storyboard = this.storyboard;
       final availableWidth = math.min(
         100.0,
         math.max(0.0, constraints.maxWidth - 16),
@@ -281,16 +277,6 @@ class _SeekPreview extends StatelessWidget {
           ? imageHeight * aspectRatio
           : availableWidth;
       final frame = storyboard?.frameAt(position);
-      final placeholder = ColoredBox(
-        color: const Color(0xff303030),
-        child: Center(
-          child: Icon(
-            loading ? Icons.image_outlined : Icons.image_not_supported_outlined,
-            color: Colors.white54,
-            size: 24,
-          ),
-        ),
-      );
       return SizedBox(
         key: const ValueKey('player-swipe-seek-preview'),
         width: width,
@@ -298,19 +284,17 @@ class _SeekPreview extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (imageHeight >= 24)
+            if (imageHeight >= 24 && storyboard != null && frame != null)
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
-                child: switch (storyboard) {
-                  final storyboard? when frame != null => StoryboardThumbnail(
-                    storyboard: storyboard,
-                    frame: frame,
-                    width: width,
-                    height: imageHeight,
-                    fallback: placeholder,
-                  ),
-                  _ => SizedBox(height: imageHeight, child: placeholder),
-                },
+                child: StoryboardThumbnail(
+                  storyboard: storyboard,
+                  frame: frame,
+                  width: width,
+                  height: imageHeight,
+                  hideUntilLoaded: true,
+                  fallback: const SizedBox.shrink(),
+                ),
               ),
             Padding(
               padding: const EdgeInsets.only(top: 4),

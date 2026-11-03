@@ -1471,7 +1471,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   duration: snapshot.duration,
                                   preview: _swipeSeekPreview,
                                   storyboard: session.storyboard,
-                                  storyboardLoading: session.storyboardLoading,
                                   onPreviewRequest: () {
                                     if (session.sourceGeneration ==
                                         sourceGeneration) {

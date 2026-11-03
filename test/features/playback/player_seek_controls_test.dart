@@ -1,7 +1,12 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
 
+import 'package:bilisail/core/presentation/app_image_provider.dart';
+import 'package:bilisail/core/storage/image_byte_cache.dart';
 import 'package:bilisail/features/playback/domain/playback_timeline.dart';
 import 'package:bilisail/features/playback/presentation/player_seek_controls.dart';
+import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/storyboard_thumbnail.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +23,13 @@ void main() {
     await tester.pump();
     expect(state.preview.value, const Duration(seconds: 90));
     expect(find.text('01:30 / 10:00'), findsOneWidget);
+    expect(find.byType(Icon), findsNothing);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('player-swipe-seek-preview')))
+          .height,
+      lessThan(30),
+    );
     final card = tester.getRect(
       find.byKey(const ValueKey('player-swipe-seek-preview')),
     );
@@ -330,10 +342,94 @@ void main() {
   }
 
   testWidgets(
+    'shows only time until the current sprite loads, including sheet changes',
+    (tester) async {
+      final first = _ManualImageCompleter();
+      final second = _ManualImageCompleter();
+      final cache = _imageCache(first);
+      cache.decoded.putIfAbsent(
+        AppImageProvider(
+          cache: cache,
+          url: 'https://i0.hdslb.com/second.jpg',
+          cacheWidth: 1280,
+          cacheHeight: 1280,
+        ),
+        () => second,
+      );
+      final storyboard = VideoStoryboard(
+        columns: 1,
+        rows: 1,
+        tileWidth: 160,
+        tileHeight: 90,
+        images: [
+          Uri.parse('https://i0.hdslb.com/test.jpg'),
+          Uri.parse('https://i0.hdslb.com/second.jpg'),
+        ],
+        times: const [Duration.zero, Duration(minutes: 1)],
+      );
+      final state = _State()..position = const Duration(seconds: 10);
+      await tester.pumpWidget(
+        _app(state, storyboard: storyboard, cache: cache),
+      );
+      final drag = await tester.startGesture(const Offset(100, 100));
+      await drag.moveBy(const Offset(100, 0));
+      await tester.pumpAndSettle();
+
+      void expectOnlyTime(String text) {
+        expect(find.text(text), findsOneWidget);
+        expect(find.byType(RawImage), findsNothing);
+        expect(find.byType(Icon), findsNothing);
+        expect(
+          tester
+              .getSize(find.byKey(const ValueKey('player-swipe-seek-preview')))
+              .height,
+          lessThan(30),
+        );
+      }
+
+      expect(first.hasListeners, isTrue);
+      expectOnlyTime('00:40 / 10:00');
+      final image = await tester.runAsync(
+        () => createTestImage(width: 160, height: 90),
+      );
+      if (image == null) throw StateError('Missing image');
+      first.show(image);
+      await tester.pumpAndSettle();
+      expect(find.byType(RawImage), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(StoryboardThumbnail)).height,
+        closeTo(56.25, .01),
+      );
+      expect(find.text('00:40 / 10:00'), findsOneWidget);
+
+      await drag.moveBy(const Offset(100, 0));
+      await tester.pumpAndSettle();
+      expect(second.hasListeners, isTrue);
+      expectOnlyTime('01:10 / 10:00');
+      second.fail();
+      await tester.pumpAndSettle();
+      expectOnlyTime('01:10 / 10:00');
+
+      await drag.moveBy(const Offset(-100, 0));
+      await tester.pump();
+      expect(find.byType(RawImage), findsOneWidget);
+      expect(find.text('00:40 / 10:00'), findsOneWidget);
+      expect(state.requests, 1);
+      expect(state.seeks, isEmpty);
+      await drag.up();
+      expect(state.seeks, [const Duration(seconds: 40)]);
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
+      await cache.close();
+    },
+  );
+
+  testWidgets(
     'late storyboard uses the current target without restarting drag',
     (tester) async {
+      final cache = await _loadedImageCache(tester);
       final state = _State();
-      await tester.pumpWidget(_app(state));
+      await tester.pumpWidget(_app(state, cache: cache));
       final drag = await tester.startGesture(const Offset(100, 100));
       await drag.moveBy(const Offset(100, 0));
       await tester.pump();
@@ -346,7 +442,9 @@ void main() {
         images: [Uri.parse('https://i0.hdslb.com/test.jpg')],
         times: const [Duration.zero, Duration(seconds: 80)],
       );
-      await tester.pumpWidget(_app(state, storyboard: storyboard));
+      await tester.pumpWidget(
+        _app(state, storyboard: storyboard, cache: cache),
+      );
       final thumbnail = tester.widget<StoryboardThumbnail>(
         find.byType(StoryboardThumbnail),
       );
@@ -364,6 +462,7 @@ void main() {
       await drag.up();
       expect(state.seeks, [const Duration(seconds: 90)]);
       await tester.pumpWidget(const SizedBox());
+      await cache.close();
     },
   );
 
@@ -371,6 +470,7 @@ void main() {
     testWidgets('preview fits $size while preserving image proportions', (
       tester,
     ) async {
+      final cache = await _loadedImageCache(tester);
       final state = _State();
       final storyboard = VideoStoryboard(
         columns: 1,
@@ -386,6 +486,7 @@ void main() {
           width: size.width,
           height: size.height,
           storyboard: storyboard,
+          cache: cache,
         ),
       );
       final drag = await tester.startGesture(Offset(20, size.height / 2));
@@ -409,6 +510,7 @@ void main() {
       expect(tester.takeException(), isNull);
       await drag.up();
       await tester.pumpWidget(const SizedBox());
+      await cache.close();
     });
   }
 
@@ -442,6 +544,39 @@ class _State {
   Completer<void>? nextSeek;
 }
 
+class _ManualImageCompleter extends ImageStreamCompleter {
+  void show(ui.Image image) => setImage(ImageInfo(image: image));
+
+  void fail() => reportError(exception: StateError('Sprite load failed'));
+}
+
+AppImageCache _imageCache(ImageStreamCompleter completer) {
+  final cache = AppImageCache(
+    ImageByteCache(
+      directory: () async => throw const FileSystemException('No disk in test'),
+      loader: (_, _) async => throw StateError('Unexpected image request'),
+    ),
+  );
+  cache.decoded.putIfAbsent(
+    AppImageProvider(
+      cache: cache,
+      url: 'https://i0.hdslb.com/test.jpg',
+      cacheWidth: 1280,
+      cacheHeight: 1280,
+    ),
+    () => completer,
+  );
+  return cache;
+}
+
+Future<AppImageCache> _loadedImageCache(WidgetTester tester) async {
+  final image = await tester.runAsync(
+    () => createTestImage(width: 320, height: 90),
+  );
+  if (image == null) throw StateError('Missing image');
+  return _imageCache(_ManualImageCompleter()..show(image));
+}
+
 Widget _app(
   _State state, {
   bool enabled = true,
@@ -451,34 +586,38 @@ Widget _app(
   double height = 200,
   double textScale = 1,
   VideoStoryboard? storyboard,
+  AppImageCache? cache,
   Widget? picture,
-}) => MaterialApp(
-  home: MediaQuery(
-    data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
-    child: Scaffold(
-      body: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: width,
-          height: height,
-          child: PlayerSeekControls(
-            enabled: enabled,
-            sourceGeneration: generation,
-            position: () => state.position,
-            duration: duration,
-            preview: state.preview,
-            onSeek: (position) async {
-              state.seeks.add(position);
-              final gate = state.nextSeek;
-              state.nextSeek = null;
-              if (gate != null) await gate.future;
-            },
-            onPreviewRequest: () => state.requests++,
-            storyboard: storyboard,
-            child: picture ?? const ColoredBox(color: Colors.blue),
+}) {
+  final app = MaterialApp(
+    home: MediaQuery(
+      data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+      child: Scaffold(
+        body: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: PlayerSeekControls(
+              enabled: enabled,
+              sourceGeneration: generation,
+              position: () => state.position,
+              duration: duration,
+              preview: state.preview,
+              onSeek: (position) async {
+                state.seeks.add(position);
+                final gate = state.nextSeek;
+                state.nextSeek = null;
+                if (gate != null) await gate.future;
+              },
+              onPreviewRequest: () => state.requests++,
+              storyboard: storyboard,
+              child: picture ?? const ColoredBox(color: Colors.blue),
+            ),
           ),
         ),
       ),
     ),
-  ),
-);
+  );
+  return cache == null ? app : AppImageCacheScope(cache: cache, child: app);
+}
