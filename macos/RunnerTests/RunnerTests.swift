@@ -5,6 +5,91 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
+  func testFullscreenTabClosePreservesSurvivingTabsAndDefersDuplicateReplies() {
+    var scheduled: [() -> Void] = []
+    var closes = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { true },
+      toggle: { XCTFail("Closing one tab must preserve the group's fullscreen Space") },
+      hasOtherTabbedWindows: { true }, schedule: { scheduled.append($0) })
+    coordinator.prepareToClose { error in XCTAssertNil(error); closes += 1 }
+    coordinator.prepareToClose { error in XCTAssertNil(error); closes += 1 }
+    XCTAssertEqual(closes, 0)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(closes, 2)
+    coordinator.setFullScreen(false) { error in XCTAssertNil(error) }
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error) }
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(closes, 2)
+  }
+
+  func testTabCloseDuringEntryWaitsForTransitionAndKeepsSharedFullscreen() {
+    var scheduled: [() -> Void] = []
+    var fullscreen = false
+    var otherTabs = false
+    var toggles = 0
+    var closes = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { fullscreen },
+      toggle: { toggles += 1 }, hasOtherTabbedWindows: { otherTabs },
+      schedule: { scheduled.append($0) })
+    coordinator.setFullScreen(true) { error in XCTAssertNil(error) }
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(toggles, 1)
+    coordinator.prepareToClose { error in XCTAssertNil(error); closes += 1 }
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(closes, 0)
+    fullscreen = true
+    otherTabs = true
+    coordinator.transitionDidEnd()
+    XCTAssertEqual(closes, 0)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(closes, 1)
+    XCTAssertEqual(toggles, 1)
+    XCTAssertTrue(fullscreen)
+  }
+
+  func testCloseRechecksTabGroupAfterTransitionBeforeExitingLastFullscreenWindow() {
+    var scheduled: [() -> Void] = []
+    var fullscreen = true
+    var otherTabs = true
+    var toggles = 0
+    var closes = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { fullscreen },
+      toggle: { toggles += 1 }, hasOtherTabbedWindows: { otherTabs },
+      schedule: { scheduled.append($0) })
+    coordinator.transitionWillStart()
+    coordinator.prepareToClose { error in XCTAssertNil(error); closes += 1 }
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(closes, 0)
+    XCTAssertEqual(toggles, 0)
+    otherTabs = false
+    coordinator.transitionDidEnd()
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(toggles, 1)
+    XCTAssertEqual(closes, 0)
+    fullscreen = false
+    coordinator.transitionDidEnd()
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(closes, 1)
+  }
+
+  func testExplicitFullscreenExitStillAppliesToTabbedWindow() {
+    var scheduled: [() -> Void] = []
+    var fullscreen = true
+    var toggles = 0
+    var exits = 0
+    let coordinator = WindowFullScreenCoordinator(isFullScreen: { fullscreen },
+      toggle: { toggles += 1 }, hasOtherTabbedWindows: { true },
+      schedule: { scheduled.append($0) })
+    coordinator.setFullScreen(false) { error in XCTAssertNil(error); exits += 1 }
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(toggles, 1)
+    XCTAssertEqual(exits, 0)
+    fullscreen = false
+    coordinator.transitionDidEnd()
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(exits, 1)
+  }
+
   func testFullscreenCloseWaitsForEntryThenExitAndCoalescesDuplicateClose() {
     var scheduled: [() -> Void] = []
     var fullscreen = false

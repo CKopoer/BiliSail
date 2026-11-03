@@ -3,12 +3,14 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
 
 import 'player_contract.dart';
+import 'native_video_surface.dart';
 import 'video_composition.dart';
 import 'video_decoder_configuration.dart';
 
@@ -23,6 +25,10 @@ final class MediaKitVideoOutput
   final ValueNotifier<bool> _frameReady = ValueNotifier(false);
   final List<VoidCallback> _readinessCleanup = [];
   int _readinessRevision = 0;
+  Future<void>? _presentation;
+
+  Future<void> get videoFramePresented =>
+      _presentation ?? Future.error(StateError('No video output is bound.'));
 
   @override
   ValueListenable<bool> get frameReady => _frameReady;
@@ -33,6 +39,7 @@ final class MediaKitVideoOutput
       cleanup();
     }
     _readinessCleanup.clear();
+    _presentation = null;
     _frameReady.value = false;
     final controller = _controller.value;
     if (controller == null || _disposed) return;
@@ -78,8 +85,16 @@ final class MediaKitVideoOutput
       () => controller.rect.removeListener(update),
       () => unawaited(size.cancel()),
     ]);
+    // Android's SDK signal also finishes paused preparation. Presentation
+    // must wait for a sized video buffer without blocking that preparation.
+    final presentation = Platform.isAndroid
+        ? _viewportChannel.invokeMethod<void>('BiliSail.WaitForVideoFrame', {
+            'handle': controller.player.handle.toString(),
+          })
+        : controller.waitUntilFirstFrameRendered;
+    _presentation = presentation;
     unawaited(
-      controller.waitUntilFirstFrameRendered.then(
+      presentation.then(
         (_) {
           rendered = true;
           update();
@@ -112,6 +127,41 @@ final class MediaKitVideoOutput
   int _androidSurfaceRevision = 0;
 
   void enableAndroidDolbyVision() => _androidDolbyVision = true;
+
+  Future<void> prepareAndroidSurface(String Function(String) read) async {
+    if (!Platform.isAndroid) return;
+    final player = _player;
+    final revision = _bindingRevision;
+    final dimensions = nativeVideoSurfaceDimensions(read);
+    if (_disposed || player == null || dimensions == null) return;
+    await _sizeAndroidSurface(player, dimensions, revision);
+  }
+
+  Future<void> _sizeAndroidSurface(
+    mk.Player player,
+    VideoDimensions dimensions,
+    int revision,
+  ) async {
+    // Android attaches the Surface before MediaCodec is created. Its default
+    // 1x1 buffer would turn the paused first frame into a stretched solid color.
+    // on_preloaded keeps decoding blocked until both sizes have been applied.
+    await _viewportChannel
+        .invokeMethod<void>('VideoOutputManager.SetSurfaceTextureSize', {
+          'handle': player.handle.toString(),
+          'width': dimensions.width.toString(),
+          'height': dimensions.height.toString(),
+        })
+        .timeout(const Duration(seconds: 2));
+    if (_disposed ||
+        revision != _bindingRevision ||
+        !identical(_player, player)) {
+      return;
+    }
+    player.setProperty(
+      'android-surface-size',
+      '${dimensions.width}x${dimensions.height}',
+    );
+  }
 
   VideoDimensions? get dimensions {
     final rect = _controller.value?.rect.value;
@@ -167,6 +217,36 @@ final class MediaKitVideoOutput
         revision != _bindingRevision ||
         !identical(_player, player)) {
       return;
+    }
+    if (Platform.isAndroid) {
+      // Size SurfaceTexture before on_load creates android.view.Surface and
+      // attaches it to the decoder. Resizing only in on_preloaded is too late
+      // for the GPU's initial buffer, especially during paused startup.
+      final layout = _viewportLayout;
+      final viewSize =
+          WidgetsBinding.instance.platformDispatcher.implicitView?.physicalSize;
+      int pixels(double? value, int fallback) =>
+          value != null && value.isFinite && value > 1
+          ? value.ceil().clamp(2, 8192)
+          : fallback;
+      final width = pixels(
+        layout == null ? viewSize?.width : layout.width * layout.dpr,
+        640,
+      );
+      final height = pixels(
+        layout == null ? viewSize?.height : layout.height * layout.dpr,
+        360,
+      );
+      await _sizeAndroidSurface(
+        player,
+        VideoDimensions(width, height),
+        revision,
+      );
+      if (_disposed ||
+          revision != _bindingRevision ||
+          !identical(_player, player)) {
+        return;
+      }
     }
     _controller.value = controller;
     _updateDecodedSize();
@@ -273,30 +353,40 @@ final class MediaKitVideoOutput
         ? const ColoredBox(color: Color(0xFF000000))
         // The backend is a visual layer. Its built-in InteractiveViewer must
         // not consume wheel signals or gestures owned by the host controls.
-        : IgnorePointer(
-            child: mkv.Video(
-              // VideoState subscribes to its initial player's dimensions. A
-              // same-frame clear/rebind must not retain the old subscriptions.
-              key: ObjectKey(controller),
-              controller: controller,
-              controls: mkv.NoVideoControls,
-              // PlaybackSession owns lifecycle and the user's pause intent.
-              // The old surface may still be mounted while switching to audio.
-              pauseUponEnteringBackgroundMode: false,
-              resumeUponEnteringForegroundMode: false,
+        : ValueListenableBuilder<bool>(
+            valueListenable: _frameReady,
+            child: IgnorePointer(
+              child: mkv.Video(
+                // VideoState subscribes to its initial player's dimensions. A
+                // same-frame clear/rebind must not retain the old subscriptions.
+                key: ObjectKey(controller),
+                controller: controller,
+                controls: mkv.NoVideoControls,
+                // PlaybackSession owns lifecycle and the user's pause intent.
+                // The old surface may still be mounted while switching to audio.
+                pauseUponEnteringBackgroundMode: false,
+                resumeUponEnteringForegroundMode: false,
+              ),
+            ),
+            builder: (_, ready, child) => _VideoFrameMask(
+              key: const ValueKey('video-first-frame-mask'),
+              ready: ready,
+              child: child,
             ),
           ),
   );
 
   @override
   void attach(Object owner) {
-    if (!Platform.isWindows || _disposed) return;
+    if ((!Platform.isWindows && !Platform.isAndroid) || _disposed) return;
     _viewportOwner = owner;
     _viewportLayout = null;
     _viewportShrinkTimer?.cancel();
     // An inline surface may have left a small cap. Remove it immediately when
     // a new surface claims the same player, before its first layout callback.
-    _requestViewport((width: null, height: null), force: true);
+    if (Platform.isWindows) {
+      _requestViewport((width: null, height: null), force: true);
+    }
   }
 
   @override
@@ -306,7 +396,7 @@ final class MediaKitVideoOutput
     required double logicalHeight,
     required double devicePixelRatio,
   }) {
-    if (!Platform.isWindows ||
+    if ((!Platform.isWindows && !Platform.isAndroid) ||
         _disposed ||
         !identical(_viewportOwner, owner) ||
         !logicalWidth.isFinite ||
@@ -426,5 +516,76 @@ final class MediaKitVideoOutput
         );
       }
     }
+  }
+}
+
+/// Consume native buffers while hiding their uninitialized RGB contents. An
+/// opaque layer above Texture can prevent buffer consumption and stall paused
+/// startup. The filter is removed from painting as soon as the frame is ready.
+final class _VideoFrameMask extends SingleChildRenderObjectWidget {
+  const _VideoFrameMask({super.key, required this.ready, super.child});
+
+  final bool ready;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderVideoFrameMask(ready);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderVideoFrameMask renderObject,
+  ) => renderObject.ready = ready;
+}
+
+final class _RenderVideoFrameMask extends RenderProxyBox {
+  _RenderVideoFrameMask(this._ready);
+
+  bool _ready;
+  bool get ready => _ready;
+  set ready(bool value) {
+    if (_ready == value) return;
+    _ready = value;
+    markNeedsCompositingBitsUpdate();
+    markNeedsPaint();
+  }
+
+  @override
+  bool get alwaysNeedsCompositing => !_ready && child != null;
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (_ready) {
+      layer = null;
+      super.paint(context, offset);
+      return;
+    }
+    layer = context.pushColorFilter(
+      offset,
+      const ColorFilter.matrix([
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+      ]),
+      super.paint,
+      oldLayer: layer as ColorFilterLayer?,
+    );
   }
 }

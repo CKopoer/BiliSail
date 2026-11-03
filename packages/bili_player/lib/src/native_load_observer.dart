@@ -14,15 +14,18 @@ final class NativeLoadState {
   int? _entryId;
   int? _errorCode;
   bool _preparationFailed = false;
+  Object? _preparationError;
   bool _disposed = false;
 
   Stream<void> get changes => _changes.stream;
   int? get errorCode => _errorCode;
   bool get preparationFailed => _preparationFailed;
+  Object? get preparationError => _preparationError;
 
-  void failPreparation() {
+  void failPreparation({Object? error}) {
     if (_disposed || _preparationFailed) return;
     _preparationFailed = true;
+    _preparationError = error;
     _changes.add(null);
   }
 
@@ -63,7 +66,7 @@ final class NativeLoadObserver {
     required bool Function() isCurrent,
     required void Function(int errorCode) onFailure,
     void Function(String filename)? onExternalAudio,
-    void Function()? onPreloaded,
+    FutureOr<void> Function()? onPreloaded,
   }) async {
     final handle = platform.handle;
     if (!isCurrent()) throw const SourceSuperseded();
@@ -77,6 +80,22 @@ final class NativeLoadObserver {
     }
     final state = NativeLoadState();
     var detached = false;
+    Future<void> prepare(int hookId) async {
+      try {
+        await onPreloaded!();
+      } on Object catch (error) {
+        if (!detached && isCurrent()) {
+          // Keep a safe typed output failure when supplied by the caller.
+          state.failPreparation(error: error);
+          platform.setProperty('vid', 'no');
+        }
+      } finally {
+        // Detaching destroys the weak client and releases its pending hooks.
+        // A late platform-channel reply must not access that destroyed client.
+        if (!detached) mpv.mpv_hook_continue(client, hookId);
+      }
+    }
+
     // NativeCallable.listener only posts a message from the foreign thread;
     // draining runs on the Dart isolate after the native callback has returned.
     void drain(Pointer<Void> _) {
@@ -87,17 +106,7 @@ final class NativeLoadObserver {
         if (!isCurrent() || event.data == nullptr) continue;
         if (event.event_id == 25 && onPreloaded != null) {
           final hookId = event.data.cast<mpv_event_hook>().ref.id;
-          try {
-            onPreloaded();
-          } on Object {
-            // Do not leak native strings or leave the loading core blocked.
-            state.failPreparation();
-            // Continue the hook for cleanup, without decoding an unsupported
-            // Profile 5 base layer as ordinary YUV in the meantime.
-            platform.setProperty('vid', 'no');
-          } finally {
-            mpv.mpv_hook_continue(client, hookId);
-          }
+          unawaited(prepare(hookId));
         } else if (event.event_id == 22 && onExternalAudio != null) {
           final property = event.data.cast<_MpvEventProperty>().ref;
           if (property.format == 1 && property.data != nullptr) {

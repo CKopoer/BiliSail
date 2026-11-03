@@ -81,7 +81,8 @@ def main() -> None:
             try:
                 focus = subprocess.run(
                     ['adb', '-s', args.device, 'shell', 'dumpsys', 'window'],
-                    capture_output=True, text=True, timeout=10, check=True,
+                    capture_output=True, text=True, encoding='utf-8',
+                    errors='replace', timeout=10, check=True,
                 ).stdout
                 if not any('mCurrentFocus=' in line and
                            'dev.bilisail.bilisail.test/' in line

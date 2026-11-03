@@ -13,11 +13,23 @@
 ## 修复
 
 1. [macOS 原生宿主](../../macos/Runner/MainFlutterWindow.swift)按 viewId 和 NSWindow handle 双重匹配接收全屏请求。每个窗口独立的 `WindowFullScreenCoordinator` 观察 AppKit 的 will/did enter/exit 通知，将切换和通道回复排到下一轮主线程；不替换 SDK 的窗口 delegate。
-2. 普通全屏切换等到 didEnter/didExit 才完成；关闭开始后丢弃未启动的进入请求，等待已开始的转换，最后退出全屏。重复关闭共用同一完成条件，迟到的全屏请求不能重新启动退休窗口。原生等待限 10 秒，Dart 通道限 12 秒；失败明确报错，不能继续执行 SDK destroy。
+2. 普通全屏切换等到 didEnter/didExit 才完成；关闭开始后丢弃未启动的进入请求，等待已开始的转换。独立全屏窗口随后退出全屏；原生标签组仍有其他窗口时保留共享全屏，见下节后续修正。重复关闭共用同一完成条件，迟到的全屏请求不能重新启动退休窗口。原生等待限 10 秒，Dart 通道限 12 秒；失败明确报错，不能继续执行 SDK destroy。
 3. [WindowService](../../lib/core/platform/window_service.dart)通过注入的窗口能力接收完成信号，关闭 Future 单飞并禁止迟到呈现变更。[组合根](../../lib/app/bili_app.dart)将 [PlaybackManager.drainReleases](../../lib/features/playback/application/playback_manager.dart)接入独立窗口退休：子树卸载后等待已关闭页面的 engine 释放，再等待原生退出全屏，离开帧/通道回调栈后才销毁窗口。保留的其他会话不参与释放。
 4. 原生播放窗关闭请求先离开 SDK isolate-local FFI 回调，再执行工作区导航和焦点切换；快速重开等待上一个窗口退休完成，避免两个播放器的创建/释放重叠。
 
 保留“主浏览窗＋独立播放窗”、现有媒体历史和单会话所有权；无依赖、设置、持久化格式或 Flutter/插件缓存修改。原生关闭失败会保留未安全退出全屏的 native view 并报告错误，避免强行销毁；实际 AppKit 失败恢复体验仍需 Mac 验收。
+
+## 原生播放标签关闭保留全屏（2026-11-03 后续）
+
+用户报告双标签模式下，先将应用进入系统全屏，再打开视频并切到播放标签，Cmd+W 会使整个应用退出全屏。本次源码定位到上述退出屏障的边界错误：`prepareToClose` 无条件排入 `false`；macOS 将浏览窗和播放窗合并为原生标签时，对播放窗调用 `toggleFullScreen` 会改变共享全屏呈现。
+
+- 关闭请求改为独立的等待条件。等正在进行的 AppKit 转换结束后，读取该窗口当前的 [`tabGroup`](https://developer.apple.com/documentation/appkit/nswindow/tabgroup) 和组内 [`windows`](https://developer.apple.com/documentation/appkit/nswindowtabgroup/windows)；仍有其他窗口时直接允许关闭当前标签，不主动切换全屏。只检查同一原生标签组，不把应用中未分组的其他窗口算作保留条件。
+- 只有当前窗口独占全屏时，才沿用原有的退出全屏完成屏障。判断在队列执行时进行，避免等待动画期间的分组变化导致使用旧状态。显式进入／退出全屏仍按原命令执行。
+- 播放子树卸载、engine 释放、原生转换等待、通知栈外回复、迟到请求抑制和最终 SDK 销毁顺序均保留。没有更改 Cmd+W 绑定、窗口分组偏好或主窗口退出语义。
+- 新增 4 项 Swift XCTest：共享全屏标签关闭与重复请求、进入动画中关闭且随后形成标签组、等待期间退组后单窗退出屏障，以及原生标签中的显式退出全屏。
+- 本次 `tool/check.ps1 -SkipPub` 完整通过，日志 `build/macos-tab-fullscreen-check.log`：格式、静态分析、脚本／打包边界及 4973 项 Dart/Flutter 离线测试（根应用 4112、API 547、播放器 148、弹幕 161、封装 5）。另有 15 项 Python 测试和 22 项真实子进程监督场景通过。13 项 Windows 符号链接用例因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过；均不计为原生通过。测试计数包含工作区同期播放器修改，任务代码改动仅在 macOS 宿主与 XCTest。两份文档的 194 条本地路径及 `git diff --check` 通过。
+
+本次 Windows 主机没有 Swift/Xcode，新增 XCTest 和 macOS 构建尚未执行。Mac 复测需覆盖上述原始步骤，以及关闭非当前播放标签、重复 Cmd+W、全屏动画中关闭、未分组的独立全屏播放窗关闭和关闭后重新打开视频；浏览窗应继续全屏，媒体仅释放关闭页的会话。
 
 ## 回归与平台边界
 

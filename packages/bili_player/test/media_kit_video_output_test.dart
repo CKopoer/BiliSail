@@ -1,6 +1,7 @@
 import 'package:bili_player/src/media_kit_video_output.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
@@ -91,6 +92,45 @@ final class _Harness {
 }
 
 void main() {
+  testWidgets('surface masks the texture until the current first frame', (
+    tester,
+  ) async {
+    final player = _Player()..publishDimensions(1920, 1080);
+    final controller = _Controller(player, 44, rendered: false);
+    final harness = _Harness();
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      harness.output.dispose();
+      controller.dispose();
+      await player.dispose();
+    });
+    harness.controllers.value = controller;
+    await tester.pumpWidget(harness.build());
+    await tester.pump();
+    // Keep the native texture mounted so it can receive frames, while its
+    // its uninitialized RGB contents are filtered out until the first frame.
+    expect(find.byType(Texture), findsOneWidget);
+    final mask = find.byKey(const ValueKey('video-first-frame-mask'));
+    expect(mask, findsOneWidget);
+    final videoState = tester.state(find.byType(mkv.Video));
+    expect(
+      tester.renderObject<RenderProxyBox>(mask).debugLayer,
+      isA<ColorFilterLayer>(),
+    );
+    expect(harness.output.frameReady.value, isFalse);
+
+    controller.renderFrame();
+    await tester.pump();
+    await tester.pump();
+    expect(harness.output.frameReady.value, isTrue);
+    await tester.pump();
+    expect(tester.renderObject<RenderProxyBox>(mask).debugLayer, isNull);
+    expect(tester.state(find.byType(mkv.Video)), same(videoState));
+    expect(find.byType(Texture), findsOneWidget);
+    expect(player.pauses, 0);
+    expect(player.plays, 0);
+  });
+
   testWidgets('video output leaves wheel input and scaling to its host', (
     tester,
   ) async {

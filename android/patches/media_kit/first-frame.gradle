@@ -1,0 +1,127 @@
+import java.security.MessageDigest
+
+// Pinned media_kit_video (MIT): patch verified build copies, never Pub's cache.
+def patchScript = file('patches/media_kit/first-frame.gradle')
+project(':media_kit_video') {
+    plugins.withId('com.android.library') {
+        def sources = android.sourceSets.getByName('main').java
+        def upstreamDirectories = sources.srcDirs.toList()
+        def patchedDirectory = layout.buildDirectory.dir('bilisail-patched-java')
+        def prepareSources = tasks.register('prepareBilisailVideoFirstFrame', Sync) {
+            inputs.file(patchScript)
+            from(upstreamDirectories)
+            into(patchedDirectory)
+            doLast {
+                def replace = { String text, String before, String after, int count = 1 ->
+                    if (text.count(before) != count) {
+                        throw new GradleException('Android video first-frame patch anchor changed.')
+                    }
+                    text.replace(before, after)
+                }
+                def patch = { String name, String expectedHash, Closure transform ->
+                    def source = patchedDirectory.get().file("com/alexmercerind/media_kit_video/${name}.java").asFile
+                    def original = source.getText('UTF-8').replace('\r\n', '\n')
+                    def hash = MessageDigest.getInstance('SHA-256')
+                        .digest(original.getBytes('UTF-8')).encodeHex().toString()
+                    if (hash != expectedHash) {
+                        throw new GradleException("Pinned media_kit_video $name changed; review the Android first-frame patch.")
+                    }
+                    source.setText(transform(original), 'UTF-8')
+                }
+                patch('VideoOutput', 'c2cd529fdec78274ad1aa3890bb7dac050aed6d718c851bb1334f36eabce5f3d') { text ->
+                    text = replace(text, '    private boolean waitUntilFirstFrameRenderedNotify;', '''    private boolean waitUntilFirstFrameRenderedNotify;
+    private boolean surfaceSized;
+    private boolean videoFrameReady;
+    private boolean disposed;
+    private MethodChannel.Result frameWaiter;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());''')
+                    // Keep SDK preparation separate from sized-frame presentation.
+                    text = replace(text, '''                        try {
+                            if (!waitUntilFirstFrameRenderedNotify) {''', '''                        try {
+                            notifyVideoFrame();
+                            if (!waitUntilFirstFrameRenderedNotify) {''', 2)
+                    text = replace(text, '''        if (flutterJNIAPIAvailable) {
+            if (Build.VERSION.SDK_INT''', '''        if (!flutterJNIAPIAvailable) {
+            surfaceTextureEntry.setOnFrameConsumedListener(
+                () -> mainHandler.post(this::notifyVideoFrame));
+        }
+        if (flutterJNIAPIAvailable) {
+            if (Build.VERSION.SDK_INT''')
+                    text = replace(text, '''    public void dispose() {
+        try {''', '''    public void waitForVideoFrame(MethodChannel.Result result) {
+        synchronized (lock) {
+            if (disposed) {
+                result.error("disposed", "Video output was disposed.", null);
+            } else if (videoFrameReady) {
+                result.success(null);
+            } else if (frameWaiter != null) {
+                result.error("already_waiting", "A video frame wait already exists.", null);
+            } else {
+                // One wait per output, released on first frame or disposal.
+                frameWaiter = result;
+            }
+        }
+    }
+
+    private void notifyVideoFrame() {
+        synchronized (lock) {
+            if (disposed || !surfaceSized || videoFrameReady) return;
+            videoFrameReady = true;
+            if (frameWaiter != null) {
+                MethodChannel.Result result = frameWaiter;
+                frameWaiter = null;
+                result.success(null);
+            }
+        }
+    }
+
+    public void dispose() {
+        synchronized (lock) {
+            disposed = true;
+            if (frameWaiter != null) {
+                frameWaiter.error("disposed", "Video output was disposed.", null);
+                frameWaiter = null;
+            }
+        }
+        surfaceTextureEntry.setOnFrameConsumedListener(null);
+        mainHandler.removeCallbacksAndMessages(null);
+        try {''')
+                    replace(text, '''            surfaceTextureEntry.surfaceTexture().setDefaultBufferSize(width, height);''', '''            synchronized (lock) {
+                surfaceTextureEntry.surfaceTexture().setDefaultBufferSize(width, height);
+                surfaceSized = width > 1 && height > 1;
+            }''')
+                }
+                patch('VideoOutputManager', '411c5c5912a8bcbd95e90db0b974c5fd28181b595a6fd756b1bfec3077d41813') { text ->
+                    replace(text, '    public void dispose(long handle) {', '''    public void waitForVideoFrame(long handle, MethodChannel.Result result) {
+        synchronized (lock) {
+            VideoOutput output = videoOutputs.get(handle);
+            if (output == null) {
+                result.error("disposed", "Video output is unavailable.", null);
+            } else {
+                output.waitForVideoFrame(result);
+            }
+        }
+    }
+
+    public void dispose(long handle) {''')
+                }
+                patch('MediaKitVideoPlugin', '2db42dc040455b7a6fc7f506a8b47b131c89124db1c47c5c7c909a2dd2f4039d') { text ->
+                    replace(text, '                case "VideoOutputManager.Dispose": {', '''                case "BiliSail.WaitForVideoFrame": {
+                    final String handle = call.argument("handle");
+                    if (handle == null) {
+                        result.error("invalid_handle", "Video output handle is required.", null);
+                    } else {
+                        videoOutputManager.waitForVideoFrame(Long.parseLong(handle), result);
+                    }
+                    break;
+                }
+                case "VideoOutputManager.Dispose": {''')
+                }
+            }
+        }
+        sources.setSrcDirs([prepareSources.map { it.destinationDir }])
+        tasks.matching { it.name.startsWith('compile') || it.name.startsWith('lint') }.configureEach {
+            dependsOn(prepareSources)
+        }
+    }
+}

@@ -411,10 +411,13 @@ private final class DesktopWindowController {
 // do not replace the SDK's window delegate or run toggles inside its callbacks.
 final class WindowFullScreenCoordinator {
   private let isFullScreen: () -> Bool
+  private let hasOtherTabbedWindows: () -> Bool
   private let toggle: () -> Void
   private let schedule: (@escaping () -> Void) -> Void
   private var observers: [NSObjectProtocol] = []
-  private var requests: [(enabled: Bool, completion: (String?) -> Void)] = []
+  // nil is a close barrier: resolve its target from the current native tab group
+  // after any AppKit transition, rather than always exiting shared fullscreen.
+  private var requests: [(enabled: Bool?, completion: (String?) -> Void)] = []
   private var transitioning = false
   private var retiring = false
   private var closed = false
@@ -422,10 +425,12 @@ final class WindowFullScreenCoordinator {
   private var deadline: DispatchWorkItem?
 
   init(isFullScreen: @escaping () -> Bool, toggle: @escaping () -> Void,
+       hasOtherTabbedWindows: @escaping () -> Bool = { false },
        schedule: @escaping (@escaping () -> Void) -> Void = { action in
          DispatchQueue.main.async(execute: action)
        }) {
     self.isFullScreen = isFullScreen
+    self.hasOtherTabbedWindows = hasOtherTabbedWindows
     self.toggle = toggle
     self.schedule = schedule
   }
@@ -433,7 +438,11 @@ final class WindowFullScreenCoordinator {
   convenience init(window: NSWindow, onClosed: @escaping () -> Void) {
     self.init(isFullScreen: { [weak window] in
       window?.styleMask.contains(.fullScreen) == true
-    }, toggle: { [weak window] in window?.toggleFullScreen(nil) })
+    }, toggle: { [weak window] in window?.toggleFullScreen(nil) },
+      hasOtherTabbedWindows: { [weak window] in
+        guard let window = window else { return false }
+        return window.tabGroup?.windows.contains(where: { $0 !== window }) == true
+      })
     let center = NotificationCenter.default
     for name in [NSWindow.willEnterFullScreenNotification, NSWindow.willExitFullScreenNotification] {
       observers.append(center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
@@ -465,10 +474,10 @@ final class WindowFullScreenCoordinator {
 
   func prepareToClose(_ completion: @escaping (String?) -> Void) {
     retiring = true
-    let entries = requests.filter { $0.enabled }
-    requests.removeAll { $0.enabled }
+    let entries = requests.filter { $0.enabled == true }
+    requests.removeAll { $0.enabled == true }
     schedule { for request in entries { request.completion(nil) } }
-    enqueue(false, completion: completion)
+    enqueue(nil, completion: completion)
   }
 
   func transitionWillStart() { transitioning = true }
@@ -483,7 +492,7 @@ final class WindowFullScreenCoordinator {
     finishAll("Window closed during fullscreen transition.")
   }
 
-  private func enqueue(_ enabled: Bool, completion: @escaping (String?) -> Void) {
+  private func enqueue(_ enabled: Bool?, completion: @escaping (String?) -> Void) {
     guard !closed else { schedule { completion("Window is closed.") }; return }
     requests.append((enabled, completion))
     if deadline == nil {
@@ -511,7 +520,11 @@ final class WindowFullScreenCoordinator {
   private func pump() {
     guard !closed, !transitioning else { return }
     while let request = requests.first {
-      if request.enabled != isFullScreen() {
+      let fullscreen = isFullScreen()
+      // AppKit closes one native tab without changing the surviving tabs' Space.
+      // An isolated fullscreen window still needs the original exit barrier.
+      let enabled = request.enabled ?? (fullscreen && hasOtherTabbedWindows())
+      if enabled != fullscreen {
         transitioning = true
         toggle()
         return

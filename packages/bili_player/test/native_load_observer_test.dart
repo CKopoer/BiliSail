@@ -5,6 +5,21 @@ import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'preparation keeps the original failure and ignores late errors',
+    () async {
+      final state = NativeLoadState();
+      final outputFailure = StateError('surface unavailable');
+      state.failPreparation(error: outputFailure);
+      state.failPreparation(error: StateError('late reply'));
+      expect(state.preparationFailed, isTrue);
+      expect(state.preparationError, same(outputFailure));
+      await state.dispose();
+      state.failPreparation(error: StateError('disposed'));
+      expect(state.preparationError, same(outputFailure));
+    },
+  );
+
   test('preparation failure interrupts readiness and is not revived', () async {
     final state = NativeLoadState();
     final waiting = waitForNativeState(

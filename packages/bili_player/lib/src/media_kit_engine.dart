@@ -555,6 +555,10 @@ final class MediaKitEngine
 
   PlayerFailure? _loadFailure(int generation) {
     if (_nativeLoad?.state.preparationFailed ?? false) {
+      if (_nativeLoad?.state.preparationError
+          case final PlayerFailure failure) {
+        return failure;
+      }
       return PlayerFailure(
         PlayerFailureKind.unsupportedVideoColor,
         '当前播放后端无法正确显示此杜比视界视频',
@@ -711,7 +715,12 @@ final class MediaKitEngine
               !_disposed &&
               identical(_player, player),
           onPreloaded: !audioOnly
-              ? () {
+              ? () async {
+                  if (generation != _generation ||
+                      _disposed ||
+                      !identical(_player, player)) {
+                    return;
+                  }
                   _requiresVideoColorMapping = configureNativeVideoColor(
                     read: platform.getProperty,
                     write: platform.setProperty,
@@ -731,6 +740,21 @@ final class MediaKitEngine
                           _nativeLoad?.state.failPreparation();
                         }
                       },
+                    );
+                  }
+                  try {
+                    // Size the active renderer after any source-specific
+                    // switch, including Android's Dolby Vision output.
+                    await _videoOutput.prepareAndroidSurface(
+                      platform.getProperty,
+                    );
+                  } on Object {
+                    throw PlayerFailure(
+                      _requiresVideoColorMapping
+                          ? PlayerFailureKind.unsupportedVideoColor
+                          : PlayerFailureKind.nativePlayback,
+                      'Android video surface could not be prepared.',
+                      generation,
                     );
                   }
                 }
@@ -816,19 +840,22 @@ final class MediaKitEngine
           );
         }
         if (audioOnly) _requiresDecodedAudio = true;
-        Future<void> waitForOutput() => waitForNativeSignal(
-          signal: _videoOutput.firstFrameRendered,
-          superseded: () =>
-              generation != _generation ||
-              _disposed ||
-              !identical(_player, player),
-          changes: [
-            _generationChanges.stream,
-            if (_nativeLoad case final load?) load.state.changes,
-          ],
-          timeout: _remaining(watch, openBudget),
-          failure: () => _loadFailure(generation),
-        );
+        Future<void> waitForOutput({bool presentation = false}) =>
+            waitForNativeSignal(
+              signal: presentation
+                  ? _videoOutput.videoFramePresented
+                  : _videoOutput.firstFrameRendered,
+              superseded: () =>
+                  generation != _generation ||
+                  _disposed ||
+                  !identical(_player, player),
+              changes: [
+                _generationChanges.stream,
+                if (_nativeLoad case final load?) load.state.changes,
+              ],
+              timeout: _remaining(watch, openBudget),
+              failure: () => _loadFailure(generation),
+            );
         if (generation != _generation || _disposed) return;
         if (audioReady != null) {
           _readinessStage = NativeReadinessStage.externalAudio;
@@ -895,7 +922,11 @@ final class MediaKitEngine
               generation,
             );
           }
-          colorPreparationDeadline?.cancel();
+          if (!options.play && !_requiresVideoColorMapping) {
+            // Finish the initial paused render before issuing another pause
+            // command, which can suppress that pending render on Android.
+            await waitForOutput(presentation: true);
+          }
         }
         if (generation != _generation || _disposed) return;
         _readinessStage = null;
@@ -961,6 +992,14 @@ final class MediaKitEngine
               _remaining(watch, openBudget),
             );
           }
+          if (requireVideoOutput) {
+            // gpu-next may only submit a video buffer after play. Confirm it
+            // here, rather than using the SDK's early preparation buffer as
+            // proof of presentation or blocking the start that produces it.
+            _readinessStage = NativeReadinessStage.videoOutput;
+            await waitForOutput(presentation: true);
+            _readinessStage = null;
+          }
           if (generation == _generation && !_disposed) {
             _publish(
               _snapshot.copyWith(
@@ -981,6 +1020,7 @@ final class MediaKitEngine
         }
         if (generation != _generation || _disposed) return;
         if (_loadFailure(generation) case final failure?) throw failure;
+        colorPreparationDeadline?.cancel();
       } on SourceSuperseded {
         await _releasePlayer();
       } on PlayerFailure catch (error) {
