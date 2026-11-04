@@ -23,6 +23,13 @@ final class _WbiKeyFlight {
   late final Future<WbiSigner> result;
 }
 
+/// Share a read limit across transport, WBI and payload recovery.
+final class _ReadAttemptBudget {
+  int used = 0;
+  bool get isExhausted => used >= 3;
+  void consume() => used++;
+}
+
 abstract interface class ApiSessionProvider {
   int get sessionEpoch;
 }
@@ -1599,6 +1606,53 @@ final class BiliApiClient {
     int productionType = 0,
     ApiRequestContext? context,
   }) async {
+    final active = boundedReadContext(context);
+    final attempts = _ReadAttemptBudget();
+    // Entitlement is checked only after a failed payload and reused within this
+    // operation. Complete DASH playback still needs no extra detail request.
+    late final access = getVideoDetail(
+      bvid,
+      context: active,
+    ).then((detail) => detail.access);
+    while (true) {
+      try {
+        return await _getPlayInfoAttempt(
+          bvid,
+          cid,
+          qn: qn,
+          preview: preview,
+          language: language,
+          productionType: productionType,
+          context: active,
+          attempts: attempts,
+          readAccess: () => access,
+        );
+      } on ApiFailure catch (failure) {
+        if (failure.endpointId != 'playurl' ||
+            failure.category != ApiFailureCategory.unavailable ||
+            attempts.isExhausted) {
+          rethrow;
+        }
+        await _retryDelay(
+          attempts.used - 1,
+          active.deadline!,
+          active.cancellation,
+        );
+      }
+    }
+  }
+
+  Future<ApiPlayInfo> _getPlayInfoAttempt(
+    String bvid,
+    String cid, {
+    required int qn,
+    required bool preview,
+    required String language,
+    required int productionType,
+    required ApiRequestContext context,
+    required _ReadAttemptBudget attempts,
+    required Future<ApiVideoAccess> Function() readAccess,
+  }) async {
     _validateBvid(bvid);
     if (int.tryParse(cid) == null ||
         qn < 1 ||
@@ -1631,21 +1685,20 @@ final class BiliApiClient {
         },
         'playurl',
         context,
+        attemptBudget: attempts,
       );
     } on ApiFailure catch (failure) {
       if (failure.category != ApiFailureCategory.permission &&
           failure.category != ApiFailureCategory.unavailable) {
         rethrow;
       }
-      throw await _videoPlaybackFailure(
-        bvid,
-        context,
-        originalFailure: failure,
-      );
+      throw await _videoPlaybackFailure(readAccess, originalFailure: failure);
     }
+    final trial =
+        !preview && (data['is_preview'] == true || data['is_preview'] == 1);
     final dash = _optionalMap(data['dash']);
     if (dash == null || dash['video'] == null) {
-      throw await _videoPlaybackFailure(bvid, context);
+      throw await _videoPlaybackFailure(readAccess, trial: trial);
     }
     final videos = _list(
       dash['video'],
@@ -1655,12 +1708,12 @@ final class BiliApiClient {
         ? const <ApiMediaTrack>[]
         : dashAudioEntries(dash, 'playurl').map(_track).toList();
     if (videos.isEmpty || !preview && audios.isEmpty) {
-      throw await _videoPlaybackFailure(bvid, context);
+      throw await _videoPlaybackFailure(readAccess, trial: trial);
     }
     // A trial must never be treated as the complete video by downloads,
     // progress reporting or automatic queue advancement.
-    if (!preview && (data['is_preview'] == true || data['is_preview'] == 1)) {
-      throw await _videoPlaybackFailure(bvid, context, trial: true);
+    if (trial) {
+      throw await _videoPlaybackFailure(readAccess, trial: true);
     }
     final dashSeconds = _num(dash['duration']);
     final durationMs = dashSeconds == null
@@ -1702,14 +1755,13 @@ final class BiliApiClient {
   }
 
   Future<ApiFailure> _videoPlaybackFailure(
-    String bvid,
-    ApiRequestContext? context, {
+    Future<ApiVideoAccess> Function() readAccess, {
     bool trial = false,
     ApiFailure? originalFailure,
   }) async {
     // Only unsupported/blocked play responses need this extra read. Successful
     // authorized DASH playback keeps its existing request count and behavior.
-    final access = (await getVideoDetail(bvid, context: context)).access;
+    final access = await readAccess();
     if (trial ||
         access.kind != ApiVideoAccessKind.normal && access.canWatch != true) {
       return ApiFailure(
@@ -2063,6 +2115,7 @@ final class BiliApiClient {
     String endpoint,
     ApiRequestContext? context, {
     Uri? origin,
+    _ReadAttemptBudget? attemptBudget,
   }) async {
     final base = origin ?? _api;
     var signed = await _signed(parameters, context);
@@ -2071,9 +2124,12 @@ final class BiliApiClient {
         base.replace(path: path, queryParameters: signed),
         endpoint,
         context,
+        attemptBudget: attemptBudget,
       );
     } on ApiFailure catch (failure) {
-      if (failure.businessCode != -403) rethrow;
+      if (failure.businessCode != -403 || attemptBudget?.isExhausted == true) {
+        rethrow;
+      }
       _wbi = null;
       _wbiFetched = null;
       signed = await _signed(parameters, context);
@@ -2081,6 +2137,7 @@ final class BiliApiClient {
         base.replace(path: path, queryParameters: signed),
         endpoint,
         context,
+        attemptBudget: attemptBudget,
       );
     }
   }
@@ -2088,15 +2145,25 @@ final class BiliApiClient {
   Future<Map<String, Object?>> _json(
     Uri uri,
     String endpoint,
-    ApiRequestContext? context,
-  ) async => _map(await _jsonValue(uri, endpoint, context), endpoint);
+    ApiRequestContext? context, {
+    _ReadAttemptBudget? attemptBudget,
+  }) async => _map(
+    await _jsonValue(uri, endpoint, context, attemptBudget: attemptBudget),
+    endpoint,
+  );
 
   Future<Object?> _jsonValue(
     Uri uri,
     String endpoint,
-    ApiRequestContext? context,
-  ) async {
-    final response = await _request(uri, endpoint, context);
+    ApiRequestContext? context, {
+    _ReadAttemptBudget? attemptBudget,
+  }) async {
+    final response = await _request(
+      uri,
+      endpoint,
+      context,
+      attemptBudget: attemptBudget,
+    );
     return _decodeJson(response, endpoint);
   }
 
@@ -2133,6 +2200,7 @@ final class BiliApiClient {
     String endpoint,
     ApiRequestContext? context, {
     int? maxAttempts,
+    _ReadAttemptBudget? attemptBudget,
     bool readOnly = true,
     String referer = 'https://www.bilibili.com/',
   }) async {
@@ -2163,6 +2231,7 @@ final class BiliApiClient {
       // The official progress preview retries on the next interaction, rather
       // than replaying a failed videoshot request inside the same interaction.
       maxAttempts: maxAttempts ?? (endpoint == 'video_storyboard' ? 1 : 3),
+      attemptBudget: attemptBudget,
       readOnly: readOnly,
     );
     if (epoch != null && _sessionProvider?.sessionEpoch != epoch ||
@@ -2329,11 +2398,18 @@ final class BiliApiClient {
     ApiRequestContext? context,
     int? epoch, {
     int maxAttempts = 3,
+    _ReadAttemptBudget? attemptBudget,
     bool readOnly = true,
     int? maxBytes,
   }) async {
     final deadline = context?.deadline ?? _clock().add(timeout);
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+    bool canRetry(int attempt) =>
+        attempt + 1 < maxAttempts && attemptBudget?.isExhausted != true;
+    for (
+      var attempt = 0;
+      attempt < maxAttempts && attemptBudget?.isExhausted != true;
+      attempt++
+    ) {
       if (context?.cancellation?.isCancelled == true ||
           (epoch != null && _sessionProvider?.sessionEpoch != epoch)) {
         throw ApiFailure(ApiFailureCategory.cancelled, endpoint);
@@ -2342,6 +2418,10 @@ final class BiliApiClient {
       if (remaining <= Duration.zero) {
         throw ApiFailure(ApiFailureCategory.timeout, endpoint);
       }
+      attemptBudget?.consume();
+      final retryIndex = attemptBudget == null
+          ? attempt
+          : attemptBudget.used - 1;
       try {
         // A stalled read must leave room for another attempt in the same budget.
         final attemptTimeout = readOnly && remaining > _readAttemptTimeout
@@ -2355,18 +2435,18 @@ final class BiliApiClient {
           context?.cancellation,
           maxBytes: maxBytes,
         );
-        if (attempt + 1 < maxAttempts &&
+        if (canRetry(attempt) &&
             const [500, 502, 503, 504].contains(response.statusCode)) {
-          await _retryDelay(attempt, deadline, context?.cancellation);
+          await _retryDelay(retryIndex, deadline, context?.cancellation);
           continue;
         }
         return response;
       } on TimeoutException {
-        if (attempt + 1 == maxAttempts) {
+        if (!canRetry(attempt)) {
           throw ApiFailure(ApiFailureCategory.timeout, endpoint);
         }
       } on ApiFailure catch (failure) {
-        if (attempt + 1 == maxAttempts ||
+        if (!canRetry(attempt) ||
             (failure.category != ApiFailureCategory.timeout &&
                 failure.category != ApiFailureCategory.network)) {
           throw ApiFailure(
@@ -2377,7 +2457,7 @@ final class BiliApiClient {
           );
         }
       }
-      await _retryDelay(attempt, deadline, context?.cancellation);
+      await _retryDelay(retryIndex, deadline, context?.cancellation);
     }
     throw ApiFailure(ApiFailureCategory.timeout, endpoint);
   }

@@ -40,6 +40,7 @@
 | [Android 视频灰黑首帧](validation/android-video-first-frame-2026-11-03.md) | Surface 初始尺寸、首帧通知、加载纹理过滤与硬解／软件解码真机回归 |
 | [会员彩色弹幕](validation/vip-danmaku-2026-11-03.md) | #35 渐变显示／发送、权限与回显、离线保存及验证边界 |
 | [1080P60 播放请求对照](validation/playurl-quality-2026-11-01.md) | PiliPlus 请求上下文、最高档发现／缺档补取、普通账号在线证据与大会员验收边界 |
+| [播放地址内容不可用重试](validation/playurl-unavailable-retry-2026-11-05.md) | DASH 缺失／未分类业务错误恢复、网络与 WBI 共享次数预算、取消／账号／超时边界 |
 | [DLNA 投屏](validation/dlna-casting.md) | 视频／影视 TV 地址、设备发现与控制、生命周期及平台验收边界 |
 | [系统媒体通知与控制](validation/system-media-controls.md) | Android 通知、Apple 正在播放、Windows SMTC、Linux MPRIS、会话目标与验证边界 |
 | [PiliPlus 播放器与弹幕依赖切换](validation/piliplus-dependencies-2026-11-01.md) | 精确提交、库插件打包、异步 API、headers、首帧与原生回归 |

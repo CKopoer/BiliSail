@@ -205,6 +205,7 @@ Cookie 由 domain/path/secure/expiry 规则的 CookieStore 维护，持久化整
 | --- | --- |
 | 取消、旧 epoch、旧 query | 停止，不 toast，不重试，不写缓存 |
 | 网络断开/超时/部分 5xx | 对读请求最多额外 2 次，指数退避+抖动；每次网络尝试最多 2 秒，且不超过剩余总 deadline |
+| UGC playurl 缺少 DASH／所需音视频轨，或未分类业务错误 | 核对权益后仅重试 `unavailable`；与网络重试、WBI 重签共用最多 3 次 playurl 请求和同一 deadline，见[播放地址重试](validation/playurl-unavailable-retry-2026-11-05.md) |
 | 限流或风控 | 停止自动重试，遵守 Retry-After 或冷却；向用户显示可恢复状态 |
 | 认证失效 | 单飞刷新或重新登录；不循环切换 Web/App/TV |
 | 内容不存在/权限不足/区域受限 | 明确不可用；不尝试其他通道绕过服务端限制 |
@@ -215,6 +216,8 @@ Cookie 由 domain/path/secure/expiry 规则的 CookieStore 维护，持久化整
 端点降级在 Repository/能力策略层可见，不能 `catch (Exception)` 后依次遍历全部 API。网络请求去重只合并相同账号、端点和参数的在途只读请求，不跨账号缓存响应。
 
 2026-10-31 统一只读 HTTP 管线增加独立的 2 秒单次超时，覆盖常规 Web、WBI（含共享 key 获取）、App 推荐和已接入该管线的公开读取。计时覆盖连接至完整响应正文，超时先取消本次底层请求，再按既有退避规则重试；每次使用独立取消信号，不能取消整个调用而阻止后续尝试。应用 `ApiRequests` 的 25 秒总预算及常规最多 3 次尝试保持不变，前置读取与退避都计入同一预算；直接使用 API 包时沿用调用者 deadline／包默认总预算。分镜单次、高能／投屏两次等端点限制继续生效。表单／JSON／图片上传，以及不感兴趣反馈、消息已读回执等有副作用的 GET 保持原超时与单次提交，不适用只读 2 秒策略。原生播放器、下载传输和独立外部 HTTP 客户端不属于此管线。
+
+2026-11-05 UGC `GET /x/player/wbi/playurl` 增加内容不可用恢复：每次 `getPlayInfo`／`getVideoPreviewInfo` 固定 deadline 和 account epoch，网络失败、指定 5xx、WBI `-403` 重签与内容缺失共用 3 次 playurl 请求额度，不将内外重试相乘。失败时懒读取一次视频权益并仅在本次操作内复用；充电／付费未授权、完整播放的试看、明确的权限／认证／删除／风控及协议错误不触发新增重试。悬停仍只要求视频轨，下载复用相同 UGC 解析入口；PGC、直播与原生播放器不变。
 
 ## 7. 协议健壮性和版本
 
