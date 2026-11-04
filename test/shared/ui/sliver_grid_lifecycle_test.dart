@@ -66,7 +66,9 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.text('删除'));
+        await tester.tap(
+          find.text(kind == _GridKind.responsive ? '删除' : '取消稍后再看'),
+        );
         await tester.pumpAndSettle();
         expect(menus, ['b1']);
         expect(opened, ['b0', 'b1'], reason: 'menu must not open the video');

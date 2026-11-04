@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
@@ -26,6 +27,7 @@ void main() {
   late List<CardFakeEngine> engines;
   late _Actions actions;
   late VideoCardController controller;
+  late _WatchLater watchLater;
   setUp(() {
     videos = _Videos();
     playback = _Playback();
@@ -38,18 +40,168 @@ void main() {
       },
     );
     actions = _Actions();
+    watchLater = _WatchLater();
     controller = VideoCardController(
       videos: videos,
       playback: playback,
       previews: previews,
       actions: actions,
       signedIn: true,
+      watchLater: watchLater,
     );
   });
   tearDown(() async {
     controller.dispose();
     await previews.close();
   });
+
+  test(
+    'membership reads are shared and recognize videos added before startup',
+    () async {
+      watchLater.read = Completer<Map<VideoId, String>>();
+      final first = controller.refreshWatchLater();
+      final second = controller.refreshWatchLater();
+      expect(watchLater.reads, 1);
+      watchLater.read?.complete({id: '9007199254740993'});
+      expect(await first, true);
+      expect(await second, true);
+      expect(controller.isAdded(id), true);
+      expect(await controller.addWatchLater(id), WatchLaterResult.alreadyAdded);
+      expect(actions.writes, 0);
+      expect(await controller.refreshWatchLater(), true);
+      expect(watchLater.reads, 1);
+      expect(await controller.removeWatchLater(id), WatchLaterResult.removed);
+      expect(watchLater.removed, [(id, '9007199254740993')]);
+      expect(videos.calls, 0);
+      expect(controller.isAdded(id), false);
+    },
+  );
+
+  test('add, cancel and add again share one owner and resolve aid only for removal', () async {
+    expect(await controller.addWatchLater(id), WatchLaterResult.added);
+    expect(videos.calls, 0);
+    final changes = <VideoId>[];
+    final subscription = controller.watchLaterChanges.listen(changes.add);
+    addTearDown(subscription.cancel);
+    expect(await controller.removeWatchLater(id), WatchLaterResult.removed);
+    expect(watchLater.removed, [(id, '9007199254740993')]);
+    expect(videos.calls, 1);
+    expect(controller.isAdded(id), false);
+    expect(await controller.addWatchLater(id), WatchLaterResult.added);
+    expect(actions.writes, 2);
+    await Future<void>.delayed(Duration.zero);
+    expect(changes, isNotEmpty);
+  });
+
+  test(
+    'removal blocks all duplicate writes and explicit failure allows retry',
+    () async {
+      await controller.addWatchLater(id);
+      watchLater.write = Completer<bool>();
+      final remove = controller.removeWatchLater(id);
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.isWatchLaterBusy(id), true);
+      expect(await controller.removeWatchLater(id), WatchLaterResult.busy);
+      expect(await controller.addWatchLater(id), WatchLaterResult.busy);
+      expect(controller.beginWatchLaterRemoval(id), false);
+      watchLater.write?.completeError(
+        const AppFailure(AppFailureKind.rateLimited, 'fixture'),
+      );
+      expect(await remove, WatchLaterResult.failed);
+      expect(controller.isAdded(id), true);
+      watchLater.write = null;
+      expect(await controller.removeWatchLater(id), WatchLaterResult.removed);
+      expect(watchLater.removed.length, 2);
+    },
+  );
+
+  test(
+    'unknown removal clears certainty and never replays either direction',
+    () async {
+      await controller.addWatchLater(id);
+      watchLater.write = Completer<bool>();
+      final remove = controller.removeWatchLater(id);
+      await Future<void>.delayed(Duration.zero);
+      watchLater.write?.completeError(const UnknownWriteOutcome());
+      expect(await remove, WatchLaterResult.uncertain);
+      expect(controller.isAdded(id), false);
+      expect(controller.isUncertain(id), true);
+      expect(await controller.removeWatchLater(id), WatchLaterResult.uncertain);
+      expect(await controller.addWatchLater(id), WatchLaterResult.uncertain);
+      expect(controller.beginWatchLaterRemoval(id), false);
+      expect(watchLater.removed.length, 1);
+    },
+  );
+
+  test('a stale membership read cannot revive a confirmed removal', () async {
+    await controller.addWatchLater(id);
+    watchLater.read = Completer<Map<VideoId, String>>();
+    final read = controller.refreshWatchLater();
+    expect(await controller.removeWatchLater(id), WatchLaterResult.removed);
+    watchLater.read?.complete({id: '42'});
+    expect(await read, false);
+    expect(controller.isAdded(id), false);
+  });
+
+  test('read failure is not cached as an empty successful list', () async {
+    watchLater.read = Completer<Map<VideoId, String>>();
+    final read = controller.refreshWatchLater();
+    watchLater.read?.completeError(
+      const AppFailure(AppFailureKind.network, 'fixture'),
+    );
+    expect(await read, false);
+    watchLater.read = null;
+    expect(await controller.refreshWatchLater(), true);
+    expect(watchLater.reads, 2);
+  });
+
+  test(
+    'membership cache expires after 30 seconds and reconciles external changes',
+    () async {
+      var now = DateTime.utc(2026, 11, 5);
+      final cached = VideoCardController(
+        videos: videos,
+        playback: playback,
+        previews: previews,
+        actions: actions,
+        signedIn: true,
+        watchLater: watchLater,
+        now: () => now,
+      );
+      addTearDown(cached.dispose);
+      await cached.addWatchLater(id);
+      expect(await cached.refreshWatchLater(), true);
+      expect(cached.isAdded(id), false);
+      expect(watchLater.reads, 1);
+      now = now.add(const Duration(seconds: 29));
+      expect(await cached.refreshWatchLater(), true);
+      expect(watchLater.reads, 1);
+      now = now.add(const Duration(seconds: 1));
+      watchLater.read = Completer<Map<VideoId, String>>()..complete({id: '42'});
+      expect(await cached.refreshWatchLater(), true);
+      expect(cached.isAdded(id), true);
+      expect(watchLater.reads, 2);
+    },
+  );
+
+  test(
+    'dispose cancels pending membership and removal before any late result',
+    () async {
+      await controller.addWatchLater(id);
+      watchLater.read = Completer<Map<VideoId, String>>();
+      final read = controller.refreshWatchLater();
+      watchLater.write = Completer<bool>();
+      final remove = controller.removeWatchLater(id);
+      await Future<void>.delayed(Duration.zero);
+      controller.dispose();
+      expect(watchLater.readToken?.isCancelled, true);
+      expect(watchLater.writeToken?.isCancelled, true);
+      watchLater.read?.complete({id: '42'});
+      watchLater.write?.complete(true);
+      expect(await read, false);
+      expect(await remove, WatchLaterResult.cancelled);
+    },
+  );
 
   test(
     'hover resolves first part and caches bounded metadata with LRU ordering',
@@ -242,6 +394,7 @@ VideoDetail _detail(VideoId id) => VideoDetail(
     duration: const Duration(seconds: 30),
   ),
   description: '',
+  aid: '9007199254740993',
   parts: const [
     VideoPart(
       cid: '42',
@@ -296,6 +449,32 @@ class _Actions extends Fake implements VideoActionsRepository {
     writes++;
     lastToken = cancellation;
     await pending?.future;
+  }
+}
+
+class _WatchLater implements VideoCardWatchLaterRepository {
+  int reads = 0;
+  Completer<Map<VideoId, String>>? read;
+  Completer<bool>? write;
+  RequestCancellation? readToken, writeToken;
+  final removed = <(VideoId, String)>[];
+
+  @override
+  Future<Map<VideoId, String>> load(RequestCancellation cancellation) async {
+    reads++;
+    readToken = cancellation;
+    return read?.future ?? {};
+  }
+
+  @override
+  Future<bool> remove(
+    VideoId id,
+    String aid,
+    RequestCancellation cancellation,
+  ) async {
+    removed.add((id, aid));
+    writeToken = cancellation;
+    return write?.future ?? true;
   }
 }
 

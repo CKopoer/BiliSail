@@ -1,4 +1,5 @@
 import '../features/downloads/data/android_public_download_storage.dart';
+import 'video_card_watch_later.dart';
 
 import 'dart:async';
 import 'dart:io';
@@ -510,6 +511,17 @@ class AppDependencies {
           ApiVideoRepository(api, requests),
         ),
         videoCardPreviewPlaybackProvider.overrideWithValue(cardPreviews),
+        videoCardWatchLaterRepositoryProvider.overrideWith(
+          (ref) => AppVideoCardWatchLaterRepository(
+            ref.watch(homeRepositoryProvider),
+            (entry, cancellation) => ref
+                .read(watchLaterRemovalProvider(session.accountScope).notifier)
+                .remove(entry, cancellation: cancellation),
+            removedIds: () => ref
+                .read(watchLaterRemovalProvider(session.accountScope))
+                .removed,
+          ),
+        ),
         videoCardWatchLaterAddedProvider.overrideWith(
           (ref) =>
               (id) => ref

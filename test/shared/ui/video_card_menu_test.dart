@@ -13,6 +13,7 @@ import 'package:bilisail/features/feed/presentation/feed_screen.dart';
 import 'package:bilisail/features/feed/presentation/home_content.dart';
 import 'package:bilisail/features/video/application/video_card_preview_playback.dart';
 import 'package:bilisail/features/video/domain/video_card_interactions.dart';
+import 'package:bilisail/features/profile/presentation/profile_video_card.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/video_card_interaction_scope.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
@@ -38,6 +39,117 @@ const _remove = VideoCardMenu(actions: [VideoCardMenuAction.removeWatchLater]);
 final _button = find.byKey(const ValueKey('video-card-title-menu'));
 
 void main() {
+  for (final menu in [
+    null,
+    _recommended,
+    const VideoCardMenu(actions: [VideoCardMenuAction.removeHistory]),
+  ]) {
+    testWidgets(
+      'shared long press toggles existing membership with menu $menu',
+      (tester) async {
+        _setWindow(tester, const Size(390, 700));
+        final operations = _ToggleOperations()..added = true;
+        var opens = 0;
+        final notices = <String>[];
+        await tester.pumpWidget(
+          _card(
+            menu,
+            operations: operations,
+            open: () => opens++,
+            notices: notices.add,
+          ),
+        );
+        await tester.longPress(find.byType(AspectRatio));
+        await tester.pumpAndSettle();
+        expect(find.text('取消稍后再看'), findsOneWidget);
+        expect(find.text('稍后再看'), findsNothing);
+        await tester.tap(find.text('取消稍后再看'));
+        await tester.pumpAndSettle();
+        expect(operations.removals, 1);
+        expect(operations.writes, 0);
+        expect(opens, 0);
+        expect(notices, ['已取消稍后再看']);
+        await tester.longPress(find.byType(AspectRatio));
+        await tester.pumpAndSettle();
+        expect(find.text('稍后再看'), findsOneWidget);
+        await tester.tap(find.text('稍后再看'));
+        await tester.pumpAndSettle();
+        expect(operations.writes, 1);
+        expect(opens, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'hover check cancels without opening the video and returns to add',
+    (tester) async {
+      final operations = _ToggleOperations()..added = true;
+      var opens = 0;
+      await tester.pumpWidget(
+        _card(null, operations: operations, open: () => opens++),
+      );
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(1, 1));
+      await mouse.moveTo(tester.getCenter(find.byType(AspectRatio)));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+      expect(find.byTooltip('取消稍后再看'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('video-card-watch-later')));
+      await tester.pumpAndSettle();
+      expect(operations.removals, 1);
+      expect(find.byIcon(Icons.check_rounded), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('video-card-watch-later')));
+      await tester.pumpAndSettle();
+      expect(operations.writes, 1);
+      expect(opens, 0);
+      await mouse.removePointer();
+    },
+  );
+
+  testWidgets('horizontal profile card shares the narrow cancel sheet', (
+    tester,
+  ) async {
+    _setWindow(tester, const Size(390, 700));
+    final operations = _ToggleOperations()..added = true;
+    var opens = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: VideoCardInteractionScope(
+            interactions: operations,
+            onNotice: (_, _) {},
+            child: ProfileVideoCard(video: _video, onTap: () => opens++),
+          ),
+        ),
+      ),
+    );
+    await tester.longPress(find.text(_video.title));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消稍后再看'));
+    await tester.pumpAndSettle();
+    expect(operations.removals, 1);
+    expect(opens, 0);
+  });
+
+  testWidgets(
+    'membership read failure opens no misleading action and writes nothing',
+    (tester) async {
+      _setWindow(tester, const Size(390, 700));
+      final operations = _ToggleOperations()..loaded = false;
+      final notices = <String>[];
+      await tester.pumpWidget(
+        _card(null, operations: operations, notices: notices.add),
+      );
+      await tester.longPress(find.byType(AspectRatio));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(operations.writes, 0);
+      expect(operations.removals, 0);
+      expect(notices.single, contains('无法读取稍后再看状态'));
+    },
+  );
+
   for (final width in [390.0, 599.0, 600.0, 1000.0]) {
     for (final longPress in [true, false]) {
       testWidgets(
@@ -67,7 +179,7 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.text('不感兴趣'), findsOneWidget);
           expect(find.text('稍后再看'), findsOneWidget);
-          expect(find.text('删除'), findsNothing);
+          expect(find.text('取消稍后再看'), findsNothing);
           expect(find.text('收藏'), findsNothing);
           expect(operations.writes, 0);
           expect(selected, isEmpty);
@@ -336,7 +448,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(_button.last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('删除'));
+      await tester.tap(find.text('取消稍后再看'));
       await tester.pump(const Duration(milliseconds: 300));
       update?.call(() => active = false);
       await tester.pump();
@@ -404,9 +516,9 @@ void main() {
       expect(_opacity(tester), 1);
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
-      expect(find.text('删除'), findsOneWidget);
+      expect(find.text('取消稍后再看'), findsOneWidget);
       expect(find.text('不感兴趣'), findsNothing);
-      await tester.tap(find.text('删除'));
+      await tester.tap(find.text('取消稍后再看'));
       await tester.pumpAndSettle();
       expect(selected, [VideoCardMenuAction.removeWatchLater]);
       expect(opens, 0);
@@ -551,9 +663,9 @@ void main() {
       expect(_button, findsNWidgets(2));
       await tester.tap(_button.last);
       await tester.pumpAndSettle();
-      expect(find.text('删除'), findsOneWidget);
+      expect(find.text('取消稍后再看'), findsOneWidget);
       expect(find.text('不感兴趣'), findsNothing);
-      await tester.tap(find.text('删除'));
+      await tester.tap(find.text('取消稍后再看'));
       await tester.pumpAndSettle();
       expect(repository.removed?.aid, '43');
       expect(find.text('已失效内容'), findsNothing);
@@ -597,7 +709,7 @@ Widget _card(
   VoidCallback? open,
   ValueChanged<UserId>? author,
   TargetPlatform platform = TargetPlatform.windows,
-  _Operations? operations,
+  VideoCardOperations? operations,
   void Function(String)? notices,
   bool active = true,
 }) => MaterialApp(
@@ -648,6 +760,43 @@ final class _Operations implements VideoCardOperations {
     writes++;
     return pending?.future ?? WatchLaterResult.added;
   }
+}
+
+final class _ToggleOperations
+    implements VideoCardOperations, VideoCardWatchLaterToggle {
+  bool added = false;
+  bool loaded = true;
+  int writes = 0, removals = 0;
+  @override
+  Stream<VideoId> get watchLaterChanges => const Stream.empty();
+  @override
+  bool isWatchLaterBusy(VideoId id) => false;
+  @override
+  Future<bool> refreshWatchLater() async => loaded;
+  @override
+  bool isAdded(VideoId id) => added;
+  @override
+  bool isUncertain(VideoId id) => false;
+  @override
+  Future<WatchLaterResult> addWatchLater(VideoId id) async {
+    writes++;
+    added = true;
+    return WatchLaterResult.added;
+  }
+
+  @override
+  Future<WatchLaterResult> removeWatchLater(VideoId id) async {
+    removals++;
+    added = false;
+    return WatchLaterResult.removed;
+  }
+
+  @override
+  Future<VideoCardPreviewSession?> preview(
+    VideoId id,
+    RequestCancellation cancellation, {
+    String? cid,
+  }) async => null;
 }
 
 final class _Feed extends Fake implements FeedRepository {

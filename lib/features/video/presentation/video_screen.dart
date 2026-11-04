@@ -26,6 +26,7 @@ import '../../../domain/comment_target.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/video_card_cover.dart';
+import '../../../shared/ui/video_card_menu_sheet.dart';
 import '../../../shared/ui/scroll_aware_hover_region.dart';
 import '../../../shared/ui/video_card_interaction_scope.dart';
 import '../../feed/application/home_repository_provider.dart';
@@ -1066,6 +1067,11 @@ final class _RelatedVideoCardState extends State<_RelatedVideoCard> {
       onHover: (hovered) => setState(() => _hovered = hovered),
       child: InkWell(
         onTap: widget.onTap,
+        onLongPress: () => showVideoCardWatchLaterMenu(
+          context,
+          video.id,
+          isCurrent: () => widget.video.id == video.id,
+        ),
         onFocusChange: (focused) => setState(() => _focused = focused),
         hoverColor: Colors.transparent,
         hoverDuration: Duration.zero,
@@ -1133,6 +1139,9 @@ final class _RelatedVideoCardState extends State<_RelatedVideoCard> {
                       query: '',
                       maxLines: 2,
                       showOverflowTooltip: true,
+                      tooltipTriggerMode: MediaQuery.sizeOf(context).width < 600
+                          ? TooltipTriggerMode.manual
+                          : TooltipTriggerMode.longPress,
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                     Padding(

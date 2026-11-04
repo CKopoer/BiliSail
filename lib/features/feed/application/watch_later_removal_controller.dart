@@ -52,7 +52,10 @@ final class WatchLaterRemovalController
     _publish();
   }
 
-  Future<bool> remove(HomeEntry entry) async {
+  Future<bool> remove(
+    HomeEntry entry, {
+    RequestCancellation? cancellation,
+  }) async {
     if (entry.kind != HomeEntryKind.video ||
         !RegExp(r'^[1-9]\d*$').hasMatch(entry.aid ?? '')) {
       throw const AppFailure(AppFailureKind.protocol, '稍后再看条目缺少视频标识，请刷新');
@@ -72,6 +75,8 @@ final class WatchLaterRemovalController
       throw const AppFailure(AppFailureKind.protocol, '本次浏览的删除操作已达上限');
     }
     final token = RequestCancellation();
+    cancellation?.onCancel(token.cancel);
+    if (token.isCancelled) return false;
     bool current() =>
         ref.mounted && !token.isCancelled && repository.accountScope == scope;
     _writes[entry.id] = token;

@@ -13,6 +13,7 @@ import '../../features/video/application/video_card_preview_playback.dart';
 import 'bili_icons.dart';
 import 'scroll_aware_hover_region.dart';
 import 'video_card_interaction_scope.dart';
+import 'video_card_menu_sheet.dart';
 import 'video_access_badge.dart';
 
 const _coverHoverScale = 1.05;
@@ -47,6 +48,7 @@ class _VideoCardCoverState extends State<VideoCardCover> {
   int _writeGeneration = 0;
   Object? _coverConfiguration;
   Widget? _cover;
+  StreamSubscription<VideoId>? _watchLaterSubscription;
 
   bool get _hovered => _active && (widget.hovered ?? _pointerHovered);
 
@@ -79,8 +81,37 @@ class _VideoCardCoverState extends State<VideoCardCover> {
       _busy = false;
       ++_writeGeneration;
     }
+    if (scope?.interactions != _scope?.interactions) {
+      unawaited(_watchLaterSubscription?.cancel());
+      final interactions = scope?.interactions;
+      _watchLaterSubscription = interactions is VideoCardWatchLaterToggle
+          ? (interactions as VideoCardWatchLaterToggle).watchLaterChanges
+                .listen((id) {
+                  if (mounted && id == widget.video.id) setState(() {});
+                })
+          : null;
+    }
     _scope = scope;
     _active = active;
+    if (_hovered || widget.focused) _refreshWatchLater();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_watchLaterSubscription?.cancel());
+    super.dispose();
+  }
+
+  void _refreshWatchLater() {
+    final interactions = _scope?.interactions;
+    if (_active &&
+        widget.showWatchLaterButton &&
+        widget.video.id.isValid &&
+        interactions is VideoCardWatchLaterToggle) {
+      unawaited(
+        (interactions as VideoCardWatchLaterToggle).refreshWatchLater(),
+      );
+    }
   }
 
   @override
@@ -93,6 +124,7 @@ class _VideoCardCoverState extends State<VideoCardCover> {
     if (oldWidget.hovered != widget.hovered) {
       _snapBack = widget.hovered == false && _ancestorScrolling();
     }
+    if (_hovered || widget.focused) _refreshWatchLater();
   }
 
   void _hoverCover(bool hovered) {
@@ -101,6 +133,7 @@ class _VideoCardCoverState extends State<VideoCardCover> {
       _pointerHovered = hovered;
       _snapBack = !hovered && _ancestorScrolling();
     });
+    if (hovered) _refreshWatchLater();
   }
 
   Future<void> _watchLater() async {
@@ -108,21 +141,22 @@ class _VideoCardCoverState extends State<VideoCardCover> {
     if (scope == null || _busy) return;
     final generation = ++_writeGeneration;
     setState(() => _busy = true);
-    final result = await scope.interactions.addWatchLater(widget.video.id);
+    final interactions = scope.interactions;
+    final remove =
+        interactions.isAdded(widget.video.id) &&
+        interactions is VideoCardWatchLaterToggle;
+    final result = remove
+        ? await (interactions as VideoCardWatchLaterToggle).removeWatchLater(
+            widget.video.id,
+          )
+        : await interactions.addWatchLater(widget.video.id);
     if (!mounted ||
         generation != _writeGeneration ||
         scope.interactions != _scope?.interactions) {
       return;
     }
     setState(() => _busy = false);
-    final message = switch (result) {
-      WatchLaterResult.added => '已加入稍后再看',
-      WatchLaterResult.alreadyAdded => '已加入稍后再看',
-      WatchLaterResult.signIn => '请先登录后再添加稍后再看',
-      WatchLaterResult.uncertain => '添加结果暂时无法确认，请在稍后再看列表核对',
-      WatchLaterResult.failed => '添加失败，请稍后重试',
-      WatchLaterResult.busy || WatchLaterResult.cancelled => null,
-    };
+    final message = watchLaterResultMessage(result, removing: remove);
     if (message != null && _active) scope.onNotice(context, message);
   }
 
@@ -146,6 +180,11 @@ class _VideoCardCoverState extends State<VideoCardCover> {
       showAction,
       _snapBack,
       _busy,
+      scope?.interactions is VideoCardWatchLaterToggle
+          ? (scope?.interactions as VideoCardWatchLaterToggle).isWatchLaterBusy(
+              widget.video.id,
+            )
+          : false,
       scope?.interactions,
       scope?.hoverPlaybackEnabled,
       showAction ? scope.interactions.isAdded(widget.video.id) : null,
@@ -205,6 +244,11 @@ class _VideoCardCoverState extends State<VideoCardCover> {
   }
 
   Widget _watchLaterButton() {
+    final interactions = _scope?.interactions;
+    final toggle = interactions is VideoCardWatchLaterToggle
+        ? interactions as VideoCardWatchLaterToggle
+        : null;
+    final busy = _busy || (toggle?.isWatchLaterBusy(widget.video.id) ?? false);
     final added = _scope?.interactions.isAdded(widget.video.id) ?? false;
     final uncertain =
         _scope?.interactions.isUncertain(widget.video.id) ?? false;
@@ -214,9 +258,11 @@ class _VideoCardCoverState extends State<VideoCardCover> {
       excludeFromSemantics: true,
       child: Tooltip(
         message: added
-            ? '已加入稍后再看'
+            ? toggle != null
+                  ? '取消稍后再看'
+                  : '已加入稍后再看'
             : uncertain
-            ? '请在稍后再看列表核对添加结果'
+            ? '请在稍后再看列表核对操作结果'
             : '添加稍后再看',
         child: Material(
           color: const Color(0x99000000),
@@ -224,12 +270,14 @@ class _VideoCardCoverState extends State<VideoCardCover> {
           child: InkWell(
             key: const ValueKey('video-card-watch-later'),
             borderRadius: BorderRadius.circular(5),
-            onTap: _busy || added || uncertain ? null : _watchLater,
+            onTap: busy || (added && toggle == null) || uncertain
+                ? null
+                : _watchLater,
             child: SizedBox(
               width: 30,
               height: 30,
               child: Center(
-                child: _busy
+                child: busy
                     ? const SizedBox(
                         width: 17,
                         height: 17,

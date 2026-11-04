@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../domain/user.dart';
 import 'bili_icons.dart';
 import 'app_cover_image.dart';
@@ -5,6 +7,7 @@ import 'bili_badges.dart';
 import 'highlighted_text.dart';
 import 'video_card_cover.dart';
 import 'video_card_interaction_scope.dart';
+import 'video_card_menu_sheet.dart';
 import 'scroll_aware_hover_region.dart';
 import 'video_card_feedback.dart';
 import 'text_measurement_cache.dart';
@@ -44,6 +47,7 @@ String durationLabel(Duration duration) {
 enum VideoCardMenuAction {
   notInterested,
   watchLater,
+  cancelWatchLater,
   removeWatchLater,
   removeHistory,
 }
@@ -171,8 +175,35 @@ final class _VideoCardState extends State<VideoCard> {
   VideoCardInteractions? _interactions;
   Widget? _card;
   final _menuAnchor = GlobalKey();
+  StreamSubscription<VideoId>? _watchLaterSubscription;
 
-  bool get _canShowMenu => switch (widget.menu) {
+  VideoCardMenu? get _menu {
+    final menu = widget.menu;
+    final interactions = _interactions;
+    if (interactions is! VideoCardWatchLaterToggle ||
+        !widget.showWatchLaterButton ||
+        !widget.video.id.isValid ||
+        menu?.actions.contains(VideoCardMenuAction.removeWatchLater) == true) {
+      return menu;
+    }
+    final action = interactions.isAdded(widget.video.id)
+        ? VideoCardMenuAction.cancelWatchLater
+        : VideoCardMenuAction.watchLater;
+    return VideoCardMenu(
+      actions: [
+        for (final existing in menu?.actions ?? <VideoCardMenuAction>[])
+          if (existing != VideoCardMenuAction.watchLater &&
+              existing != VideoCardMenuAction.cancelWatchLater)
+            existing,
+        action,
+      ],
+      busy:
+          menu?.busy == true || interactions.isWatchLaterBusy(widget.video.id),
+      onSelected: menu?.onSelected,
+    );
+  }
+
+  bool get _canShowMenu => switch (_menu) {
     final menu? =>
       widget.feedback == null &&
           !menu.busy &&
@@ -193,10 +224,23 @@ final class _VideoCardState extends State<VideoCard> {
     final interactions = VideoCardInteractionScope.maybeOf(context)
         ?.interactions;
     if (_interactions != interactions) {
+      unawaited(_watchLaterSubscription?.cancel());
       _interactions = interactions;
+      _watchLaterSubscription = interactions is VideoCardWatchLaterToggle
+          ? (interactions as VideoCardWatchLaterToggle).watchLaterChanges
+                .listen((id) {
+                  if (mounted && widget.video.id == id) _update(() {});
+                })
+          : null;
       _addGeneration++;
       _addingWatchLater = false;
     }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_watchLaterSubscription?.cancel());
+    super.dispose();
   }
 
   @override
@@ -222,6 +266,7 @@ final class _VideoCardState extends State<VideoCard> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final video = widget.video;
+    final menu = _menu;
     final playLabel = compactCountLabel(video.playCount, widget.playCountText);
     final danmakuLabel = compactCountLabel(
       video.danmakuCount,
@@ -372,7 +417,7 @@ final class _VideoCardState extends State<VideoCard> {
                                 // Hover still reveals the full title. Cards
                                 // with actions reserve touch long-press for
                                 // their menu instead of the nested tooltip.
-                                tooltipTriggerMode: widget.menu == null
+                                tooltipTriggerMode: menu == null
                                     ? TooltipTriggerMode.longPress
                                     : TooltipTriggerMode.manual,
                                 style: titleStyle?.copyWith(
@@ -383,7 +428,7 @@ final class _VideoCardState extends State<VideoCard> {
                               ),
                             ),
                             if (widget.feedback == null)
-                              if (widget.menu case final menu?)
+                              if (menu case final menu?)
                                 _menuButton(menu, cardWidth),
                           ],
                         ),
@@ -479,51 +524,37 @@ final class _VideoCardState extends State<VideoCard> {
     if (!_canShowMenu || _menuOpen || !WorkspaceActivity.isActive(context)) {
       return;
     }
-    final menu = widget.menu;
-    if (menu == null) return;
     final id = widget.video.id;
     final generation = _addGeneration;
     final interactions = _interactions;
     _update(() => _menuOpen = true);
     VideoCardMenuAction? selected;
     try {
+      if (interactions is VideoCardWatchLaterToggle &&
+          widget.showWatchLaterButton &&
+          widget.menu?.actions.contains(VideoCardMenuAction.removeWatchLater) !=
+              true) {
+        final loaded = await interactions.refreshWatchLater();
+        if (!mounted ||
+            generation != _addGeneration ||
+            interactions != _interactions ||
+            widget.video.id != id ||
+            !WorkspaceActivity.isActive(context)) {
+          return;
+        }
+        if (!loaded) {
+          VideoCardInteractionScope.maybeOf(context)
+              ?.onNotice(context, '无法读取稍后再看状态，请稍后重试');
+          return;
+        }
+      }
+      final menu = _menu;
+      if (menu == null || !_canShowMenu) return;
       if (MediaQuery.sizeOf(context).width < 600) {
-        var selecting = false;
-        selected = await showModalBottomSheet<VideoCardMenuAction>(
-          context: context,
-          useSafeArea: true,
-          isScrollControlled: true,
-          showDragHandle: true,
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          clipBehavior: Clip.antiAlias,
-          builder: (context) => SafeArea(
-            top: false,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final action in menu.actions)
-                    ListTile(
-                      leading: Icon(_menuIcon(action)),
-                      title: Text(_menuLabel(action)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      onTap: () {
-                        if (selecting) return;
-                        selecting = true;
-                        Navigator.of(context).pop(action);
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
+        selected = await showVideoCardMenuSheet(context, [
+          for (final action in menu.actions)
+            (value: action, icon: _menuIcon(action), label: _menuLabel(action)),
+        ]);
       } else {
         final overlay = Navigator.of(context).overlay;
         final anchor = _menuAnchor.currentContext?.findRenderObject();
@@ -584,11 +615,13 @@ final class _VideoCardState extends State<VideoCard> {
         interactions != _interactions ||
         !_canShowMenu ||
         !WorkspaceActivity.isActive(context) ||
-        widget.menu?.actions.contains(selected) != true) {
+        _menu?.actions.contains(selected) != true) {
       return;
     }
     if (selected == VideoCardMenuAction.watchLater) {
       await _addWatchLater();
+    } else if (selected == VideoCardMenuAction.cancelWatchLater) {
+      await _addWatchLater(remove: true);
     } else {
       widget.menu?.onSelected?.call(selected);
     }
@@ -597,6 +630,7 @@ final class _VideoCardState extends State<VideoCard> {
   static IconData _menuIcon(VideoCardMenuAction action) => switch (action) {
     VideoCardMenuAction.notInterested => Icons.not_interested_outlined,
     VideoCardMenuAction.watchLater => Icons.watch_later_outlined,
+    VideoCardMenuAction.cancelWatchLater => Icons.watch_later_outlined,
     VideoCardMenuAction.removeWatchLater ||
     VideoCardMenuAction.removeHistory => Icons.delete_outline,
   };
@@ -604,18 +638,22 @@ final class _VideoCardState extends State<VideoCard> {
   static String _menuLabel(VideoCardMenuAction action) => switch (action) {
     VideoCardMenuAction.notInterested => '不感兴趣',
     VideoCardMenuAction.watchLater => '稍后再看',
-    VideoCardMenuAction.removeWatchLater => '删除',
+    VideoCardMenuAction.cancelWatchLater => '取消稍后再看',
+    VideoCardMenuAction.removeWatchLater => '取消稍后再看',
     VideoCardMenuAction.removeHistory => '删除记录',
   };
 
-  Future<void> _addWatchLater() async {
+  Future<void> _addWatchLater({bool remove = false}) async {
     if (!WorkspaceActivity.isActive(context)) return;
     final scope = VideoCardInteractionScope.maybeOf(context);
     if (scope == null || _addingWatchLater) return;
     final id = widget.video.id;
     final generation = ++_addGeneration;
     _update(() => _addingWatchLater = true);
-    final result = await scope.interactions.addWatchLater(id);
+    final interactions = scope.interactions;
+    final result = remove && interactions is VideoCardWatchLaterToggle
+        ? await (interactions as VideoCardWatchLaterToggle).removeWatchLater(id)
+        : await interactions.addWatchLater(id);
     if (!mounted ||
         generation != _addGeneration ||
         widget.video.id != id ||
@@ -624,13 +662,7 @@ final class _VideoCardState extends State<VideoCard> {
       return;
     }
     _update(() => _addingWatchLater = false);
-    final message = switch (result) {
-      WatchLaterResult.added || WatchLaterResult.alreadyAdded => '已加入稍后再看',
-      WatchLaterResult.signIn => '请先登录后再添加稍后再看',
-      WatchLaterResult.uncertain => '添加结果暂时无法确认，请在稍后再看列表核对',
-      WatchLaterResult.failed => '添加失败，请稍后重试',
-      WatchLaterResult.busy || WatchLaterResult.cancelled => null,
-    };
+    final message = watchLaterResultMessage(result, removing: remove);
     if (message != null && WorkspaceActivity.isActive(context)) {
       scope.onNotice(context, message);
     }
