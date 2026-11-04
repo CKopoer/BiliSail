@@ -44,6 +44,7 @@ void main() {
     final api = ApiDynamicPost(
       id: '1',
       authorId: '900719925474099312345',
+      actionText: '投稿了视频',
       text: '[表情]@用户',
       spans: [
         ApiDynamicTextSpan(
@@ -87,6 +88,7 @@ void main() {
       linkUrl: Uri.https('t.bilibili.com', '/1'),
     );
     final post = mapDynamicPost(api);
+    expect(post.actionText, '投稿了视频');
     expect(post.authorId?.value, '900719925474099312345');
     expect(post.spans.first.kind, DynamicTextKind.emoji);
     expect(post.spans.first.emojiSize, 2);

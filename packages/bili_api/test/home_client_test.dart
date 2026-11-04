@@ -95,6 +95,7 @@ void main() {
                         'face': '//i0.hdslb.com/face.jpg',
                         'pub_ts': 1700000000,
                         'pub_time': '今天',
+                        'pub_action': '投稿了视频',
                       },
                       'module_dynamic': {
                         'major': {
@@ -125,6 +126,7 @@ void main() {
       expect(entry.duration, const Duration(hours: 1, minutes: 2, seconds: 3));
       expect(entry.publishedAt?.millisecondsSinceEpoch, 1700000000000);
       expect(entry.publishText, '今天');
+      expect(entry.dynamicPost?.actionText, '投稿了视频');
       expect(entry.playCountText, '1.2万');
       expect(entry.danmakuCountText, '35');
     },

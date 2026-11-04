@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/comment_target.dart';
+import 'package:bilisail/domain/dynamic_post.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/feed/application/home_controller.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
@@ -50,6 +52,242 @@ final class Repository implements HomeRepository {
 }
 
 void main() {
+  for (final value in [
+    (
+      channel: HomeChannel.videoDynamic,
+      section: '最新视频',
+      scope: query.scope,
+      folderId: null,
+    ),
+    (
+      channel: HomeChannel.dynamic,
+      section: '视频',
+      scope: query.scope,
+      folderId: null,
+    ),
+  ]) {
+    for (final uploaderFirst in [false, true]) {
+      test(
+        '${value.channel.name} coauthored video prefers uploader ($uploaderFirst)',
+        () async {
+          final (container, repository, _) = await _setup(value);
+          final uploader = _videoPost('1', action: '投稿了视频');
+          final contributor = _videoPost('2');
+          repository.calls.single.result.complete(
+            HomePage([
+              if (uploaderFirst) uploader,
+              contributor,
+              if (!uploaderFirst) uploader,
+              _videoPost('3'),
+              _videoPost('4', bvid: 'BV1234567891'),
+            ], hasMore: false),
+          );
+          await _settle();
+          final items = container
+              .read(homeControllerProvider(value))
+              .items
+              .requireValue;
+          expect(items.map((item) => item.id), ['1', '4']);
+          // Keep the selected author's entire dynamic, including interaction IDs.
+          expect(items.first, same(uploader));
+          expect(
+            items.first.dynamicPost?.commentTarget,
+            const CommentTarget('42', CommentTargetType.video),
+          );
+        },
+      );
+    }
+  }
+  test(
+    'coauthored video merges across pages and refresh resets selection',
+    () async {
+      const value = (
+        channel: HomeChannel.videoDynamic,
+        section: '最新视频',
+        scope: 'user:1',
+        folderId: null,
+      );
+      final (container, repository, controller) = await _setup(value);
+      final contributor = _videoPost('1');
+      repository.calls.single.result.complete(
+        HomePage(
+          [contributor, _videoPost('2', bvid: 'BV1234567891')],
+          hasMore: true,
+          nextCursor: 'first',
+        ),
+      );
+      await _settle();
+      await _more(
+        controller,
+        repository,
+        HomePage(
+          [_videoPost('3'), _videoPost('4', action: '投稿了视频')],
+          hasMore: true,
+          nextCursor: 'second',
+        ),
+      );
+      expect(
+        container
+            .read(homeControllerProvider(value))
+            .items
+            .requireValue
+            .map((item) => item.id),
+        ['4', '2'],
+      );
+      // A later collaborator cannot replace the uploader or reorder its slot.
+      await _more(
+        controller,
+        repository,
+        HomePage([_videoPost('5')], hasMore: false),
+      );
+      expect(
+        container
+            .read(homeControllerProvider(value))
+            .items
+            .requireValue
+            .map((item) => item.id),
+        ['4', '2'],
+      );
+      final refresh = controller.refresh();
+      repository.calls.last.result.complete(
+        HomePage([contributor, _videoPost('6')], hasMore: false),
+      );
+      await refresh;
+      expect(container.read(homeControllerProvider(value)).items.requireValue, [
+        contributor,
+      ]);
+    },
+  );
+  test('coauthors without uploader keep first record but allow its metadata update', () async {
+    const value = (
+      channel: HomeChannel.videoDynamic,
+      section: '最新视频',
+      scope: 'user:1',
+      folderId: null,
+    );
+    final (container, repository, controller) = await _setup(value);
+    repository.calls.single.result.complete(
+      HomePage(
+        [for (var i = 0; i < 250; i++) _videoPost('$i')],
+        hasMore: true,
+        nextCursor: 'first',
+      ),
+    );
+    await _settle();
+    expect(
+      container
+          .read(homeControllerProvider(value))
+          .items
+          .requireValue
+          .single
+          .id,
+      '0',
+    );
+    expect(container.read(homeControllerProvider(value)).limitReached, isFalse);
+    final update = _videoPost('0', title: '更新后的标题');
+    await _more(
+      controller,
+      repository,
+      HomePage([_videoPost('251'), update], hasMore: false),
+    );
+    expect(container.read(homeControllerProvider(value)).items.requireValue, [
+      update,
+    ]);
+  });
+  test(
+    'all dynamics and favorites preserve distinct posts for the same video',
+    () async {
+      for (final value in [
+        query,
+        (
+          channel: HomeChannel.favorites,
+          section: '默认收藏夹',
+          scope: query.scope,
+          folderId: null,
+        ),
+      ]) {
+        final (container, repository, _) = await _setup(value);
+        final items = [_videoPost('1'), _videoPost('2', action: '投稿了视频')];
+        repository.calls.single.result.complete(
+          HomePage(items, hasMore: false),
+        );
+        await _settle();
+        expect(
+          container.read(homeControllerProvider(value)).items.requireValue,
+          items,
+        );
+      }
+    },
+  );
+  test('coauthored duplicates do not consume capacity and uploader can replace at the cap', () async {
+    const value = (
+      channel: HomeChannel.videoDynamic,
+      section: '最新视频',
+      scope: 'user:1',
+      folderId: null,
+    );
+    final (container, repository, _) = await _setup(value);
+    final uploader = _videoPost('primary', action: '投稿了视频');
+    repository.calls.single.result.complete(
+      HomePage(
+        [
+          _videoPost('first'),
+          for (var i = 1; i < HomeController.maxDynamicEntries + 5; i++)
+            _videoPost('$i', bvid: 'BV${i.toString().padLeft(10, '0')}'),
+          uploader,
+          _videoPost('last'),
+        ],
+        hasMore: true,
+        nextCursor: 'next',
+      ),
+    );
+    await _settle();
+    final state = container.read(homeControllerProvider(value));
+    expect(
+      state.items.requireValue,
+      hasLength(HomeController.maxDynamicEntries),
+    );
+    expect(state.items.requireValue.first, same(uploader));
+    expect(state.items.requireValue.last.id, '199');
+    expect(state.limitReached, isTrue);
+    expect(state.hasMore, isFalse);
+  });
+  test(
+    'video dynamic preserves reposts and entries without a valid BVID',
+    () async {
+      const value = (
+        channel: HomeChannel.videoDynamic,
+        section: '最新视频',
+        scope: 'user:1',
+        folderId: null,
+      );
+      final (container, repository, _) = await _setup(value);
+      final repost = HomeEntry(
+        id: '2',
+        title: '转发附言',
+        kind: HomeEntryKind.video,
+        bvid: 'BV1234567890',
+        dynamicPost: DynamicPost(
+          id: '2',
+          original: DynamicPost(id: '1'),
+        ),
+      );
+      final items = [
+        _videoPost('1'),
+        repost,
+        _videoPost('3', bvid: ''),
+        _videoPost('4', bvid: ''),
+        _videoPost('5', bvid: 'invalid'),
+        _videoPost('6', bvid: 'invalid'),
+      ];
+      repository.calls.single.result.complete(HomePage(items, hasMore: false));
+      await _settle();
+      expect(
+        container.read(homeControllerProvider(value)).items.requireValue,
+        items,
+      );
+    },
+  );
   test(
     'favorite paging retains distinct folder types and caps loaded media',
     () async {
@@ -604,6 +842,25 @@ void main() {
 }
 
 Future<void> _settle() => Future<void>.delayed(Duration.zero);
+
+HomeEntry _videoPost(
+  String id, {
+  String bvid = 'BV1234567890',
+  String action = '与他人联合创作',
+  String title = '合作视频',
+}) => HomeEntry(
+  id: id,
+  title: title,
+  kind: HomeEntryKind.video,
+  bvid: bvid,
+  authorMid: id,
+  authorName: '作者$id',
+  dynamicPost: DynamicPost(
+    id: id,
+    actionText: action,
+    commentTarget: const CommentTarget('42', CommentTargetType.video),
+  ),
+);
 
 Future<(ProviderContainer, Repository, HomeController)> _setup([
   HomeQuery value = query,

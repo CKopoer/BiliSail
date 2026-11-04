@@ -342,6 +342,22 @@ final class HomeController extends Notifier<HomeState> {
   bool _cursorAdvances(String? cursor) =>
       cursor != null && cursor.isNotEmpty && !_seenCursors.contains(cursor);
 
+  (HomeEntryKind, String) _mergeKey(HomeEntry entry) {
+    final videoOnly =
+        query.channel == HomeChannel.videoDynamic ||
+        query.channel == HomeChannel.dynamic && query.section == '视频';
+    final bvid = entry.bvid;
+    if (videoOnly &&
+        entry.kind == HomeEntryKind.video &&
+        bvid != null &&
+        VideoId(bvid).isValid &&
+        entry.dynamicPost?.original == null) {
+      // Each coauthor has a different dynamic ID for the same archive.
+      return (entry.kind, bvid);
+    }
+    return (entry.kind, entry.id);
+  }
+
   List<HomeEntry> _mergeItems(
     List<HomeEntry> current,
     List<HomeEntry> incoming,
@@ -351,13 +367,22 @@ final class HomeController extends Notifier<HomeState> {
         : const <String>{};
     final unique = {
       for (final entry in current)
-        if (!removedWatchLater.contains(entry.id))
-          (entry.kind, entry.id): entry,
+        if (!removedWatchLater.contains(entry.id)) _mergeKey(entry): entry,
     };
     for (final entry in incoming) {
-      final key = (entry.kind, entry.id);
-      if (_removedSubscriptions.contains(key)) continue;
+      if (_removedSubscriptions.contains((entry.kind, entry.id))) continue;
       if (removedWatchLater.contains(entry.id)) continue;
+      final key = _mergeKey(entry);
+      final previous = unique[key];
+      if (previous != null && previous.id != entry.id && key.$2 == entry.bvid) {
+        // Only the explicit upload action identifies the primary submission.
+        // Otherwise keep the first coauthor in server order, including across
+        // pages. Replacing the value preserves its slot and full interaction ID.
+        if (previous.dynamicPost?.actionText == '投稿了视频' ||
+            entry.dynamicPost?.actionText != '投稿了视频') {
+          continue;
+        }
+      }
       final limit = _entryLimit;
       if (limit != null && unique.length >= limit && !unique.containsKey(key)) {
         continue;
