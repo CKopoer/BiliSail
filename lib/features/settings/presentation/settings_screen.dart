@@ -331,6 +331,14 @@ final class _SettingsCategoryPageState
                             '使用侧边栏时生效；随窗口宽度模式在 1600 起展开。可用左上角按钮完全收起或展开，保留当前页面和侧栏样式。',
                             style: TextStyle(fontSize: 12),
                           ),
+                          _choices('动态页默认标签', s.defaultDynamicTab, const {
+                            DynamicPageTab.dynamic: '动态',
+                            DynamicPageTab.videoDynamic: '视频动态',
+                          }, controller.setDefaultDynamicTab),
+                          const Text(
+                            '首次进入动态页时打开所选标签，本次运行内保留手动切换；修改此设置后，下次进入动态页生效。',
+                            style: TextStyle(fontSize: 12),
+                          ),
                           _choices('应用主题', s.theme, const {
                             AppThemePreference.system: '跟随系统',
                             AppThemePreference.light: '浅色',

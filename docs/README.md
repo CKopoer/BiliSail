@@ -19,6 +19,7 @@
 | [晴湾第四轮调整](ui-redesign/fourth-round-plan.md) | 一级导航同层、双标签返回关闭、直播与消息标签、热门四栏目与旧链接兼容 |
 | [晴湾第五轮调整](ui-redesign/fifth-round-plan.md) | 消息/下载/设置同层、统一标签与导航图标、窄屏卡片留白、紧凑账号资料 |
 | [晴湾第六轮调整](ui-redesign/sixth-round-plan.md) | 热门内容子标签、动态工具与初始分类、播放窗口会话位置和尺寸记忆 |
+| [动态页默认标签](validation/default-dynamic-tab-2026-11-05.md) | #66 动态／视频动态偏好、跨启动保存、会话选择与显式链接优先级 |
 | [晴湾第七轮调整](ui-redesign/seventh-round-plan.md) | 设置标题与分类顺序、消息标签精简、播放窗口最大化恢复优先级 |
 | [桌面窗口状态持久化](validation/window-geometry-persistence.md) | 主窗口／播放窗口独立保存大小、位置与最大化，跨启动恢复及平台验证边界 |
 | [热门四子标签](validation/popular-tabs.md) | 官网协议依据、期数切换与缓存、排行兼容、游客单期风控的验证边界 |

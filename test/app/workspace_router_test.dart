@@ -76,6 +76,72 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mode in WorkspaceNavigationMode.values) {
+    for (final width in [390.0, 1280.0]) {
+      _workspaceTestWidgets(
+        'dynamic default loads and changes without restarting at $width in $mode',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = Size(width, 900);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          addTearDown(tester.view.resetPhysicalSize);
+          final settings = _SettingsRepository(navigationMode: mode)
+            ..settings = AppSettings(
+              navigationMode: mode,
+              defaultDynamicTab: DynamicPageTab.videoDynamic,
+            );
+          final router = createBiliRouter(
+            initialLocation: '/settings',
+            playerBuilder: (_, _, _) => const SizedBox(),
+          );
+          addTearDown(router.dispose);
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                settingsRepositoryProvider.overrideWithValue(settings),
+                feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+                homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+              ],
+              child: InputTestApp.router(routerConfig: router),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final shell = tester.state(find.byType(BiliAppShell));
+          final prefix = width < 600 ? 'workspace-bottom' : 'workspace-nav';
+          Future<void> enter(String section) async {
+            await tester.tap(find.byKey(ValueKey('$prefix-$section')));
+            await tester.pumpAndSettle();
+          }
+
+          String? channel() => router
+              .routeInformationProvider
+              .value
+              .uri
+              .queryParameters['channel'];
+          await enter('dynamic');
+          expect(channel(), 'videoDynamic');
+          await tester.tap(find.byKey(const ValueKey('channel-dynamic')));
+          await tester.pumpAndSettle();
+          await enter('home');
+          await enter('dynamic');
+          expect(channel(), 'dynamic');
+          await enter('settings');
+          // Changing the preference replaces the previous in-session choice.
+          for (final label in ['动态', '视频动态']) {
+            final choice = find.widgetWithText(ChoiceChip, label);
+            await tester.ensureVisible(choice);
+            await tester.pumpAndSettle();
+            await tester.tap(choice);
+            await tester.pumpAndSettle();
+          }
+          await enter('dynamic');
+          expect(channel(), 'videoDynamic');
+          expect(tester.state(find.byType(BiliAppShell)), same(shell));
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
   for (final width in [800.0, 1680.0]) {
     _workspaceTestWidgets(
       'sidebar brand follows restored and repeatedly changed icons at width=$width',

@@ -26,6 +26,8 @@ enum NavigationBarMode { automatic, bottom, sidebar }
 
 enum SidebarStyle { automatic, expanded, compact }
 
+enum DynamicPageTab { dynamic, videoDynamic }
+
 enum PlayerControlsMode { click, dynamic }
 
 enum AppFontPreference { harmonyOsSans, system, installed }
@@ -64,6 +66,7 @@ final class AppSettings {
     this.navigationBarMode = NavigationBarMode.automatic,
     this.sidebarStyle = SidebarStyle.automatic,
     this.sidebarCollapsed = false,
+    this.defaultDynamicTab = DynamicPageTab.dynamic,
     this.allowConcurrentPlayback = false,
     this.font = AppFontPreference.harmonyOsSans,
     this.systemFontFamily = '',
@@ -132,6 +135,7 @@ final class AppSettings {
     this.navigationBarMode = NavigationBarMode.automatic,
     this.sidebarStyle = SidebarStyle.automatic,
     this.sidebarCollapsed = false,
+    this.defaultDynamicTab = DynamicPageTab.dynamic,
     this.allowConcurrentPlayback = false,
     this.videoCardHoverPlayback = true,
     this.highEnergyProgressEnabled = false,
@@ -200,6 +204,7 @@ final class AppSettings {
   final NavigationBarMode navigationBarMode;
   final SidebarStyle sidebarStyle;
   final bool sidebarCollapsed;
+  final DynamicPageTab defaultDynamicTab;
   final bool allowConcurrentPlayback;
   bool get concurrentPlaybackEnabled =>
       navigationMode == WorkspaceNavigationMode.multipleTabs &&
@@ -287,6 +292,7 @@ final class AppSettings {
     NavigationBarMode? navigationBarMode,
     SidebarStyle? sidebarStyle,
     bool? sidebarCollapsed,
+    DynamicPageTab? defaultDynamicTab,
     bool? allowConcurrentPlayback,
     AppFontPreference? font,
     String? systemFontFamily,
@@ -353,6 +359,7 @@ final class AppSettings {
     navigationBarMode: navigationBarMode ?? this.navigationBarMode,
     sidebarStyle: sidebarStyle ?? this.sidebarStyle,
     sidebarCollapsed: sidebarCollapsed ?? this.sidebarCollapsed,
+    defaultDynamicTab: defaultDynamicTab ?? this.defaultDynamicTab,
     allowConcurrentPlayback:
         allowConcurrentPlayback ?? this.allowConcurrentPlayback,
     font: font ?? this.font,

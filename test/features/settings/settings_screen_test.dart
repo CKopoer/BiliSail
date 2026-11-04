@@ -14,6 +14,45 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   for (final failSave in [false, true]) {
+    testWidgets('default dynamic tab saves or rolls back: $failSave', (
+      tester,
+    ) async {
+      final repository = _SettingsRepository()..failSave = failSave;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+          child: MaterialApp(
+            builder: AppNoticeHost.builder,
+            home: const Scaffold(body: SettingsScreen()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final video = find.widgetWithText(ChoiceChip, '视频动态');
+      final all = find.widgetWithText(ChoiceChip, '动态');
+      expect(find.text('动态页默认标签'), findsOneWidget);
+      expect(tester.widget<ChoiceChip>(all).selected, isTrue);
+      await tester.ensureVisible(video);
+      await tester.pumpAndSettle();
+      await tester.tap(video);
+      await tester.pumpAndSettle();
+      expect(tester.widget<ChoiceChip>(video).selected, !failSave);
+      expect(
+        repository.settings.defaultDynamicTab,
+        failSave ? DynamicPageTab.dynamic : DynamicPageTab.videoDynamic,
+      );
+      expect(repository.settings.theme, AppThemePreference.system);
+      if (failSave) {
+        expect(find.text('设置保存失败，请重试'), findsOneWidget);
+      }
+      ProviderScope.containerOf(tester.element(video))
+          .invalidate(settingsControllerProvider);
+      await tester.pumpAndSettle();
+      expect(tester.widget<ChoiceChip>(video).selected, !failSave);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  for (final failSave in [false, true]) {
     testWidgets(
       'global volume memory retains defaults and rolls back on failure: $failSave',
       (tester) async {

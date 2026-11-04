@@ -42,7 +42,7 @@ void main() {
     expect(
       (jsonDecode((await database.readSetting('preferences.v1'))!)
           as Map)['schemaVersion'],
-      36,
+      37,
     );
     await repository.save(const AppSettings.defaults());
     settings = await repository.load();
@@ -200,7 +200,7 @@ void main() {
         final snapshot = jsonDecode(
           (await database.readSetting('preferences.v1'))!,
         );
-        expect(snapshot['schemaVersion'], 36);
+        expect(snapshot['schemaVersion'], 37);
         expect(snapshot['liveStreamPreference'], preference.toJson());
       }
       await repository.save(const AppSettings.defaults());

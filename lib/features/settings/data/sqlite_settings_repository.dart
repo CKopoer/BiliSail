@@ -88,6 +88,11 @@ class SqliteSettingsRepository implements SettingsRepository {
               .firstOrNull ??
           NavigationBarMode.automatic,
       sidebarCollapsed: boolean('sidebarCollapsed', false),
+      defaultDynamicTab:
+          DynamicPageTab.values
+              .where((item) => item.name == decoded['defaultDynamicTab'])
+              .firstOrNull ??
+          DynamicPageTab.dynamic,
       allowConcurrentPlayback: boolean('allowConcurrentPlayback', false),
       cacheImages: boolean('cacheImages', true),
       recordSearchHistory: boolean('recordSearchHistory', true),
@@ -247,12 +252,13 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 36,
+        'schemaVersion': 37,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
         'sidebarStyle': value.sidebarStyle.name,
         'sidebarCollapsed': value.sidebarCollapsed,
+        'defaultDynamicTab': value.defaultDynamicTab.name,
         'fullscreenSwipeControls': value.fullscreenSwipeControls,
         'navigationMode': value.navigationMode.name,
         'allowConcurrentPlayback': value.allowConcurrentPlayback,

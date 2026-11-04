@@ -44,6 +44,7 @@ void main() {
       await repository.save(
         defaults.copyWith(
           theme: AppThemePreference.dark,
+          defaultDynamicTab: DynamicPageTab.videoDynamic,
           navigationMode: WorkspaceNavigationMode.multipleTabs,
           allowConcurrentPlayback: true,
           font: AppFontPreference.installed,
@@ -104,6 +105,7 @@ void main() {
           defaults.shortcuts.keysFor(ShortcutAction.nextTab),
         );
         expect(settings.theme, AppThemePreference.system);
+        expect(settings.defaultDynamicTab, DynamicPageTab.dynamic);
         expect(settings.checkPrereleaseUpdates, isFalse);
         expect(settings.navigationMode, defaults.navigationMode);
         expect(settings.danmakuArea, defaults.danmakuArea);
