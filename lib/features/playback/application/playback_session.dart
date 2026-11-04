@@ -1711,6 +1711,7 @@ class PlaybackSession extends ChangeNotifier {
   void configureSettings(AppSettings settings) {
     final previous = _settings;
     _settings = settings.normalized();
+    _rateMemory.configure(enabled: _settings.rememberPlaybackRate);
     if (previous.danmakuSendStyle != _settings.danmakuSendStyle) {
       setDanmakuSendStyle(_settings.danmakuSendStyle);
     }

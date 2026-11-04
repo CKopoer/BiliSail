@@ -97,6 +97,7 @@ final class AppSettings {
     this.mediaCdn = MediaCdnPreference.automatic,
     this.videoDecoding = VideoDecodingPreference.automatic,
     this.defaultPlaybackRate = 1.0,
+    this.rememberPlaybackRate = true,
     this.defaultVolume = 100.0,
     this.rememberVolumeGlobally = false,
     this.audioNormalization = AudioNormalizationMode.off,
@@ -169,6 +170,7 @@ final class AppSettings {
        mediaCdn = MediaCdnPreference.automatic,
        videoDecoding = VideoDecodingPreference.automatic,
        defaultPlaybackRate = 1.0,
+       rememberPlaybackRate = true,
        defaultVolume = 100.0,
        rememberVolumeGlobally = false,
        audioNormalization = AudioNormalizationMode.off,
@@ -241,6 +243,7 @@ final class AppSettings {
   final MediaCdnPreference mediaCdn;
   final VideoDecodingPreference videoDecoding;
   final double defaultPlaybackRate;
+  final bool rememberPlaybackRate;
   final double defaultVolume;
   final bool rememberVolumeGlobally;
   final AudioNormalizationMode audioNormalization;
@@ -323,6 +326,7 @@ final class AppSettings {
     MediaCdnPreference? mediaCdn,
     VideoDecodingPreference? videoDecoding,
     double? defaultPlaybackRate,
+    bool? rememberPlaybackRate,
     double? defaultVolume,
     bool? rememberVolumeGlobally,
     AudioNormalizationMode? audioNormalization,
@@ -396,6 +400,7 @@ final class AppSettings {
     mediaCdn: mediaCdn ?? this.mediaCdn,
     videoDecoding: videoDecoding ?? this.videoDecoding,
     defaultPlaybackRate: defaultPlaybackRate ?? this.defaultPlaybackRate,
+    rememberPlaybackRate: rememberPlaybackRate ?? this.rememberPlaybackRate,
     defaultVolume: defaultVolume ?? this.defaultVolume,
     rememberVolumeGlobally:
         rememberVolumeGlobally ?? this.rememberVolumeGlobally,

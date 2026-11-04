@@ -2949,6 +2949,109 @@ void main() {
     );
   }
 
+  for (final concurrent in [false, true]) {
+    test(
+      'disabled rate memory uses defaults for new sources: $concurrent',
+      () async {
+        final manager = _manager();
+        addTearDown(manager.close);
+        final settings = AppSettings(
+          rememberPlaybackRate: false,
+          defaultPlaybackRate: 1.25,
+        );
+        final first = manager.acquire('first')..configureSettings(settings);
+        final second = manager.acquire('second')..configureSettings(settings);
+        final owner = Object();
+        first.attach(owner);
+        await manager.updateWorkspace(
+          allowConcurrent: concurrent,
+          activeTabId: 'first',
+        );
+        await first.activate(owner, _detail('1'), _part('1'));
+        await first.setRate(2);
+        await first.changeQuality(64);
+        expect(first.snapshots.value.rate, 2);
+        await first.deactivate(owner);
+        await first.activate(owner, _detail('1'), _part('1'));
+        expect(first.snapshots.value.rate, 2);
+        await manager.updateWorkspace(
+          allowConcurrent: concurrent,
+          activeTabId: 'second',
+        );
+        await second.open(_detail('2'), _part('2'));
+        expect(second.snapshots.value.rate, 1.25);
+        await second.setRate(.75);
+        expect(first.snapshots.value.rate, 2);
+        await first.activate(owner, _detail('1'), _part('next-part'));
+        expect(first.snapshots.value.rate, 1.25);
+        await first.setRate(3);
+        await first.open(_detail('3'), _part('3'));
+        expect(first.snapshots.value.rate, 1.25);
+      },
+    );
+  }
+
+  test(
+    'rate memory toggles preserve current rate and discard late choices',
+    () async {
+      final rates = PlaybackRateMemory();
+      final manager = _manager(rateMemory: rates);
+      addTearDown(manager.close);
+      final first = manager.acquire('first');
+      final settings = AppSettings(defaultPlaybackRate: 1.25);
+      first.configureSettings(settings);
+      await first.open(_detail('1'), _part('1'));
+      await first.setRate(2);
+      final gate = Completer<void>();
+      (first.engine as _FakeEngine).nextRate = gate;
+      final pending = first.setRate(3);
+      await _flush();
+      first.configureSettings(settings.copyWith(rememberPlaybackRate: false));
+      expect(first.snapshots.value.rate, 2);
+      first.configureSettings(settings);
+      gate.complete();
+      await pending;
+      expect(first.snapshots.value.rate, 3);
+      await first.open(_detail('2'), _part('2'));
+      expect(first.snapshots.value.rate, 1.25);
+      await first.setRate(1.5);
+      await first.open(_detail('3'), _part('3'));
+      expect(first.snapshots.value.rate, 1.5);
+    },
+  );
+
+  test('disabled rate memory covers PGC, offline and live playback', () async {
+    final session = PlaybackSession(
+      engine: _FakeEngine(),
+      repository: _FakeRepository(autoResolve: true),
+      contentRepository: _FakeContentRepository(),
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    session.configureSettings(
+      AppSettings(rememberPlaybackRate: false, defaultPlaybackRate: 1.25),
+    );
+    await session.open(null, null, target: const PgcPlaybackTarget('1'));
+    expect(session.snapshots.value.rate, 1.25);
+    await session.setRate(2);
+    await session.open(null, null, target: const PgcPlaybackTarget('2'));
+    expect(session.snapshots.value.rate, 1.25);
+    await session.setRate(3);
+    await session.open(
+      _detail('offline'),
+      _part('offline'),
+      target: const OfflinePlaybackTarget('local-task'),
+    );
+    expect(session.snapshots.value.rate, 1.25);
+    await session.setRate(.75);
+    await session.open(null, null, target: const LivePlaybackTarget('42'));
+    expect(session.snapshots.value.rate, 1);
+    await session.setRate(2);
+    await session.open(null, null, target: const PgcPlaybackTarget('3'));
+    expect(session.snapshots.value.rate, 1.25);
+  });
+
   test('a fresh application run uses the saved default instead of the previous run rate', () async {
     final settings = AppSettings(defaultPlaybackRate: 1.25);
     final previousRun = _manager();

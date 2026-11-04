@@ -525,8 +525,14 @@ final class _SettingsCategoryPageState
                               rate: '${rate}x',
                           }, controller.setDefaultPlaybackRate),
                           const Text(
-                            '启动时使用默认倍速；播放页修改后，本次运行中的后续视频继承修改后的倍速',
+                            '启动时使用默认倍速；关闭倍速记忆后，每个新视频、分 P 和剧集都使用此倍速',
                             style: TextStyle(fontSize: 12),
+                          ),
+                          _toggle(
+                            '记忆播放倍速',
+                            s.rememberPlaybackRate,
+                            controller.setRememberPlaybackRate,
+                            '开启后，本次运行中的后续视频继承最近手动选择的倍速；重启应用使用默认倍速',
                           ),
                           _toggle(
                             '全局音量记忆',

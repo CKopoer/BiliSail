@@ -53,6 +53,48 @@ void main() {
     });
   }
   for (final failSave in [false, true]) {
+    testWidgets('rate memory saves or rolls back: $failSave', (tester) async {
+      final repository = _SettingsRepository()
+        ..settings = AppSettings(defaultPlaybackRate: 1.25)
+        ..failSave = failSave;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+          child: MaterialApp(
+            builder: AppNoticeHost.builder,
+            home: const Scaffold(
+              body: SettingsScreen(category: SettingsCategory.playback),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final toggle = find.widgetWithText(SwitchListTile, '记忆播放倍速');
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(toggle).value, failSave);
+      expect(repository.settings.rememberPlaybackRate, failSave);
+      expect(repository.settings.defaultPlaybackRate, 1.25);
+      if (failSave) {
+        expect(find.text('设置保存失败，请重试'), findsOneWidget);
+      }
+      ProviderScope.containerOf(tester.element(toggle))
+          .invalidate(settingsControllerProvider);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(toggle).value, failSave);
+      if (!failSave) {
+        await tester.ensureVisible(toggle);
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(repository.settings.rememberPlaybackRate, isTrue);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+  for (final failSave in [false, true]) {
     testWidgets(
       'global volume memory retains defaults and rolls back on failure: $failSave',
       (tester) async {

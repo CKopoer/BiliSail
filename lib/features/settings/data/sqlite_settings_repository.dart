@@ -187,6 +187,7 @@ class SqliteSettingsRepository implements SettingsRepository {
               .firstOrNull ??
           VideoDecodingPreference.automatic,
       defaultPlaybackRate: number('defaultPlaybackRate', 1.0),
+      rememberPlaybackRate: boolean('rememberPlaybackRate', true),
       fullscreenSwipeControls: boolean('fullscreenSwipeControls', true),
       defaultVolume: number('defaultVolume', 100.0),
       rememberVolumeGlobally: boolean('rememberVolumeGlobally', false),
@@ -295,6 +296,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'mediaCdn': value.mediaCdn.name,
         'videoDecoding': value.videoDecoding.name,
         'defaultPlaybackRate': value.defaultPlaybackRate,
+        'rememberPlaybackRate': value.rememberPlaybackRate,
         'defaultVolume': value.defaultVolume,
         'rememberVolumeGlobally': value.rememberVolumeGlobally,
         'audioNormalization': value.audioNormalization.name,

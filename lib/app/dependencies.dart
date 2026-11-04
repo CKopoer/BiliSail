@@ -120,6 +120,7 @@ class AppDependencies {
     this.session,
     this.library,
     this.playback,
+    this.playbackRateMemory,
     this.playbackVolumeMemory,
     this.window,
     this.sponsorTransport,
@@ -148,6 +149,7 @@ class AppDependencies {
   );
   final SqliteLibraryRepository library;
   final PlaybackManager playback;
+  final PlaybackRateMemory playbackRateMemory;
   final PlaybackVolumeMemory playbackVolumeMemory;
   final WindowService window;
   final playbackWindow = DesktopPlaybackWindowController();
@@ -338,6 +340,7 @@ class AppDependencies {
       session,
       library,
       playback,
+      playbackRateMemory,
       playbackVolumeMemory,
       window,
       sponsorTransport,

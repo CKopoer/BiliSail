@@ -423,6 +423,9 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         ref.watch<AppSettings>(settingsDefaultsProvider);
     final cardInteractions = ref.watch(videoCardControllerProvider);
     _input.configure(settings.shortcuts);
+    widget.dependencies.playbackRateMemory.configure(
+      enabled: settings.rememberPlaybackRate,
+    );
     widget.dependencies.playbackVolumeMemory.configure(
       enabled: settings.rememberVolumeGlobally,
       defaultVolume: settings.defaultVolume,
