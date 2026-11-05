@@ -14,7 +14,10 @@ final class FollowGroupClient {
 
   final BiliApiClient api;
 
-  Future<List<ApiFollowGroup>> groups({ApiRequestContext? context}) async {
+  Future<List<ApiFollowGroup>> groups({
+    bool includeReserved = false,
+    ApiRequestContext? context,
+  }) async {
     const endpoint = 'follow_groups';
     final value = await api.requestValue(
       Uri.https('api.bilibili.com', '/x/relation/tags'),
@@ -36,7 +39,7 @@ final class FollowGroupClient {
         throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
       }
       // Reserved negative relation tags are not editable in this picker.
-      if (!id.startsWith('-') && seen.add(id)) {
+      if ((includeReserved || !id.startsWith('-')) && seen.add(id)) {
         groups.add(ApiFollowGroup(id: id, name: name));
       }
     }

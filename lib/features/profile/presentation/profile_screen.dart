@@ -25,6 +25,7 @@ import 'profile_header.dart';
 import 'profile_details_dialog.dart';
 import 'profile_report_dialog.dart';
 import 'profile_section_content.dart';
+import 'profile_follow_groups_tabs.dart';
 import '../application/profile_controller.dart';
 import '../application/profile_actions_controller.dart';
 import '../domain/profile_repository.dart';
@@ -394,10 +395,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               color: Theme.of(context).colorScheme.surface,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: ProfileSectionNavigation(
-                  section: section,
-                  progress: _pagingProgress,
-                  onSelected: controller.select,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ProfileSectionNavigation(
+                      section: section,
+                      progress: _pagingProgress,
+                      onSelected: controller.select,
+                    ),
+                    if (section == ProfileSection.following)
+                      ProfileFollowGroupsTabs(id: widget.id),
+                  ],
                 ),
               ),
             ),
@@ -515,6 +524,7 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
       folderTitle,
       collection,
       collectionTitle,
+      followingGroupId,
     ) = ref.watch(
       profileControllerProvider(widget.id).select(
         (state) => (
@@ -530,6 +540,9 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
           widget.section == ProfileSection.collections
               ? state.collectionTitle
               : null,
+          widget.section == ProfileSection.following
+              ? state.followingGroupId
+              : null,
         ),
       ),
     );
@@ -540,6 +553,7 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
       widget.section,
       widget.section == ProfileSection.folders ? folderId : null,
       collection,
+      followingGroupId,
     );
     return PagedScrollViewport(
       key: ValueKey(listKey),
@@ -560,6 +574,8 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
                 current.folderId == folderId) &&
             (widget.section != ProfileSection.collections ||
                 current.collection == collection) &&
+            (widget.section != ProfileSection.following ||
+                current.followingGroupId == followingGroupId) &&
             (widget.section != ProfileSection.videos ||
                 (current.order == order && current.keyword == keyword)) &&
             current.current.message == null) {

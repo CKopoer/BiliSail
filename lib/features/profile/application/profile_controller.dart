@@ -54,6 +54,11 @@ final class ProfileState {
     this.collectionTitle,
     this.queueLoading = false,
     this.queueMessage,
+    this.followGroupsAvailable = false,
+    this.followGroups,
+    this.followGroupsLoading = false,
+    this.followGroupsMessage,
+    this.followingGroupId,
   });
   final UserProfile? profile;
   final ProfileSpaceDetails? details;
@@ -72,6 +77,9 @@ final class ProfileState {
   final String order, keyword;
   final bool queueLoading;
   final String? queueMessage;
+  final bool followGroupsAvailable, followGroupsLoading;
+  final List<ProfileFollowGroup>? followGroups;
+  final String? followGroupsMessage, followingGroupId;
   ProfileListState get current => lists[section] ?? const ProfileListState();
   ProfileState copy({
     UserProfile? profile,
@@ -98,6 +106,12 @@ final class ProfileState {
     bool? queueLoading,
     String? queueMessage,
     bool clearQueueMessage = false,
+    List<ProfileFollowGroup>? followGroups,
+    bool? followGroupsLoading,
+    String? followGroupsMessage,
+    bool clearFollowGroupsMessage = false,
+    String? followingGroupId,
+    bool allFollowing = false,
   }) => ProfileState(
     sessionGeneration: sessionGeneration,
     profile: profile ?? this.profile,
@@ -125,6 +139,15 @@ final class ProfileState {
         : collectionTitle ?? this.collectionTitle,
     queueLoading: queueLoading ?? this.queueLoading,
     queueMessage: clearQueueMessage ? null : queueMessage ?? this.queueMessage,
+    followGroupsAvailable: followGroupsAvailable,
+    followGroups: followGroups ?? this.followGroups,
+    followGroupsLoading: followGroupsLoading ?? this.followGroupsLoading,
+    followGroupsMessage: clearFollowGroupsMessage
+        ? null
+        : followGroupsMessage ?? this.followGroupsMessage,
+    followingGroupId: allFollowing
+        ? null
+        : followingGroupId ?? this.followingGroupId,
   );
 }
 
@@ -134,6 +157,8 @@ class ProfileController extends Notifier<ProfileState> {
   int _generation = 0, _profileGeneration = 0;
   int _liveRoomGeneration = 0;
   int _detailsGeneration = 0;
+  int _followGroupsGeneration = 0;
+  RequestCancellation _followGroupsRead = RequestCancellation();
   RequestCancellation _detailsRead = RequestCancellation();
   RequestCancellation _profileRead = RequestCancellation();
   RequestCancellation _liveRoomRead = RequestCancellation();
@@ -157,7 +182,13 @@ class ProfileController extends Notifier<ProfileState> {
         load();
       }
     });
-    return ProfileState(sessionGeneration: generation);
+    final repository = ref.read(profileRepositoryProvider);
+    return ProfileState(
+      sessionGeneration: generation,
+      followGroupsAvailable:
+          repository is ProfileFollowGroupsRepository &&
+          repository.accountScope == 'user:${id.value}',
+    );
   }
 
   void _cancel() {
@@ -165,6 +196,7 @@ class ProfileController extends Notifier<ProfileState> {
     _liveRoomRead.cancel();
     _queueRead.cancel();
     _detailsRead.cancel();
+    _followGroupsRead.cancel();
     for (final read in _reads.values) {
       read.cancel();
     }
@@ -173,6 +205,7 @@ class ProfileController extends Notifier<ProfileState> {
     ++_profileGeneration;
     ++_liveRoomGeneration;
     ++_detailsGeneration;
+    ++_followGroupsGeneration;
   }
 
   bool _current(int generation, String scope, int epoch) =>
@@ -335,9 +368,86 @@ class ProfileController extends Notifier<ProfileState> {
   }
 
   void select(ProfileSection section) {
+    if (section == ProfileSection.following &&
+        state.followGroupsAvailable &&
+        state.followGroups == null &&
+        !state.followGroupsLoading) {
+      loadFollowGroups();
+    }
     if (section == state.section) return;
     state = state.copy(section: section);
-    if (!state.lists.containsKey(section)) load();
+    if (!state.lists.containsKey(section) ||
+        (state.current.page == 0 && !state.current.loading)) {
+      load();
+    }
+  }
+
+  Future<void> loadFollowGroups() async {
+    if (!state.followGroupsAvailable) return;
+    final repository = ref.read(profileRepositoryProvider);
+    if (repository is! ProfileFollowGroupsRepository) return;
+    _followGroupsRead.cancel();
+    final read = _followGroupsRead = RequestCancellation();
+    final version = ++_followGroupsGeneration, generation = _generation;
+    final scope = repository.accountScope, epoch = repository.sessionEpoch;
+    bool current() =>
+        _current(generation, scope, epoch) &&
+        version == _followGroupsGeneration;
+    state = state.copy(
+      followGroupsLoading: true,
+      clearFollowGroupsMessage: true,
+    );
+    try {
+      final groups = await (repository as ProfileFollowGroupsRepository)
+          .loadFollowGroups(id, cancellation: read);
+      if (!current()) return;
+      state = state.copy(
+        followGroups: List.unmodifiable(groups),
+        followGroupsLoading: false,
+      );
+      final selected = state.followingGroupId;
+      if (selected != null && !groups.any((group) => group.id == selected)) {
+        selectFollowingGroup(null);
+      }
+    } on AppFailure catch (error) {
+      if (current()) {
+        state = state.copy(
+          followGroupsLoading: false,
+          followGroupsMessage: error.kind == AppFailureKind.cancelled
+              ? null
+              : error.message,
+        );
+      }
+    } catch (_) {
+      if (current()) {
+        state = state.copy(
+          followGroupsLoading: false,
+          followGroupsMessage: '关注分组暂时无法加载，请重试',
+        );
+      }
+    }
+  }
+
+  void selectFollowingGroup(String? groupId) {
+    if (!state.followGroupsAvailable ||
+        groupId == state.followingGroupId ||
+        (groupId != null &&
+            state.followGroups?.any((group) => group.id == groupId) != true)) {
+      return;
+    }
+    _reads[ProfileSection.following]?.cancel();
+    _versions[ProfileSection.following] =
+        (_versions[ProfileSection.following] ?? 0) + 1;
+    state = state.copy(
+      followingGroupId: groupId,
+      allFollowing: groupId == null,
+      lists: Map.unmodifiable({
+        ...state.lists,
+        ProfileSection.following: const ProfileListState(),
+      }),
+    );
+    // A group refresh can finish while another section is visible.
+    if (state.section == ProfileSection.following) load();
   }
 
   void filter({String? order, String? keyword}) {
@@ -380,6 +490,7 @@ class ProfileController extends Notifier<ProfileState> {
       loadProfile(),
       loadDetails(),
       loadLiveRoom(),
+      if (state.section == ProfileSection.following) loadFollowGroups(),
       load(refresh: true),
     ]);
   }
@@ -481,19 +592,28 @@ class ProfileController extends Notifier<ProfileState> {
       ),
     );
     try {
-      final result = await repository.loadEntries(
-        id,
-        section,
-        page: page,
-        cursor: base.cursor,
-        order: state.order,
-        keyword: state.keyword,
-        folderId: section == ProfileSection.folders ? state.folderId : null,
-        collection: section == ProfileSection.collections
-            ? state.collection
-            : null,
-        cancellation: read,
-      );
+      final groupId = section == ProfileSection.following
+          ? state.followingGroupId
+          : null;
+      final result =
+          groupId != null && repository is ProfileFollowGroupsRepository
+          ? await (repository as ProfileFollowGroupsRepository)
+                .loadFollowingGroup(id, groupId, page: page, cancellation: read)
+          : await repository.loadEntries(
+              id,
+              section,
+              page: page,
+              cursor: base.cursor,
+              order: state.order,
+              keyword: state.keyword,
+              folderId: section == ProfileSection.folders
+                  ? state.folderId
+                  : null,
+              collection: section == ProfileSection.collections
+                  ? state.collection
+                  : null,
+              cancellation: read,
+            );
       if (!_current(generation, scope, epoch) ||
           _versions[section] != version) {
         return;

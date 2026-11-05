@@ -16,6 +16,7 @@ import '../domain/profile_report.dart';
 class ApiProfileRepository
     implements
         ProfileRepository,
+        ProfileFollowGroupsRepository,
         ProfileDetailsRepository,
         ProfileReportRepository,
         ProfileActionsRepository {
@@ -31,6 +32,50 @@ class ApiProfileRepository
   String get accountScope => _scope();
   @override
   int get sessionEpoch => requests.sessionEpoch;
+
+  void _requireFollowGroupOwner(UserId id) {
+    if (accountScope != 'user:${id.value}') {
+      throw const AppFailure(AppFailureKind.permission, '只能查看自己的关注分组');
+    }
+  }
+
+  @override
+  Future<List<ProfileFollowGroup>> loadFollowGroups(
+    UserId id, {
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    _requireFollowGroupOwner(id);
+    final groups = await FollowGroupClient(client.api)
+        .groups(includeReserved: true, context: context);
+    return List.unmodifiable([
+      if (!groups.any((group) => group.id == '0'))
+        const ProfileFollowGroup(id: '0', name: '默认分组'),
+      for (final group in groups)
+        ProfileFollowGroup(id: group.id, name: group.name),
+    ]);
+  }, cancellation: cancellation);
+
+  @override
+  Future<ProfilePage> loadFollowingGroup(
+    UserId id,
+    String groupId, {
+    required int page,
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    _requireFollowGroupOwner(id);
+    final result = await client.loadFollowingGroup(
+      id.value,
+      groupId,
+      page: page,
+      context: context,
+    );
+    return ProfilePage(
+      items: List.unmodifiable(result.items.map(_entry)),
+      hasMore: result.hasMore,
+      cursor: result.nextCursor,
+    );
+  }, cancellation: cancellation);
+
   @override
   Future<void> report(
     UserId id,

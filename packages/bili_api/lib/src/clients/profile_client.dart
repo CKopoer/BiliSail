@@ -491,21 +491,58 @@ final class ProfileClient {
       {'vmid': mid, 'pn': '$page', 'ps': '$_size', 'order': 'desc'},
       context,
     );
-    final items = _list(data['list'], e).map((v) {
-      final item = _map(v, e);
-      final id = _key(item['mid'], e);
-      return ApiProfileEntry(
-        id: id,
-        kind: ApiProfileEntryKind.user,
-        userMid: id,
-        title: _text(item['uname'], e),
-        subtitle: _string(item['sign']),
-        coverUrl: _uri(item['face']),
-      );
-    }).toList();
+    final items = _list(data['list'], e).map((v) => _relation(v, e)).toList();
     final total = _number(data['total']);
     if (total == null || total < 0) _fail(e);
     return _paged(items, page, total);
+  }
+
+  Future<ApiPage<ApiProfileEntry>> loadFollowingGroup(
+    String mid,
+    String groupId, {
+    required int page,
+    ApiRequestContext? context,
+  }) async {
+    _id(mid);
+    _page(page);
+    if (!RegExp(r'^-?(0|[1-9]\d*)$').hasMatch(groupId)) {
+      throw ArgumentError('Invalid follow group ID');
+    }
+    const e = 'profile_following_group';
+    final data = await api.requestValue(
+      Uri.https('api.bilibili.com', '/x/relation/tag', {
+        'mid': mid,
+        'tagid': groupId,
+        'pn': '$page',
+        'ps': '$_size',
+      }),
+      e,
+      context: context,
+    );
+    final items = _list(
+      data ?? const [],
+      e,
+    ).map((v) => _relation(v, e)).toList();
+    // This endpoint returns an array without a total or continuation flag.
+    final more = items.length >= _size;
+    return ApiPage(
+      List.unmodifiable(items),
+      hasMore: more,
+      nextCursor: more ? '${page + 1}' : null,
+    );
+  }
+
+  static ApiProfileEntry _relation(Object? value, String e) {
+    final item = _map(value, e);
+    final id = _key(item['mid'], e);
+    return ApiProfileEntry(
+      id: id,
+      kind: ApiProfileEntryKind.user,
+      userMid: id,
+      title: _text(item['uname'], e),
+      subtitle: _string(item['sign']),
+      coverUrl: _uri(item['face']),
+    );
   }
 
   static ApiPage<ApiProfileEntry> _paged(

@@ -17,6 +17,26 @@ enum ProfileSection {
 
 enum ProfileEntryKind { video, dynamic, folder, user, collection, season }
 
+final class ProfileFollowGroup {
+  const ProfileFollowGroup({required this.id, required this.name});
+
+  final String id, name;
+}
+
+abstract interface class ProfileFollowGroupsRepository {
+  Future<List<ProfileFollowGroup>> loadFollowGroups(
+    UserId id, {
+    required RequestCancellation cancellation,
+  });
+
+  Future<ProfilePage> loadFollowingGroup(
+    UserId id,
+    String groupId, {
+    required int page,
+    required RequestCancellation cancellation,
+  });
+}
+
 final class ProfileCollectionId {
   const ProfileCollectionId(this.value, {required this.isSeries});
   final String value;

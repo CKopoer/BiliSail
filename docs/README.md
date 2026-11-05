@@ -139,7 +139,7 @@
 | [悬停预览与主视频出帧争用](validation/video-preview-contention.md) | 渲染线程尺寸查询、保留 GPU 的修复与 Windows Profile 对照 |
 | [Windows 硬解输出性能](validation/windows-video-render-performance-2026-10-11.md) | 中间纹理尺寸、渲染通知合并、GPU 与音画同步对照及验收边界 |
 | [硬解播放后端调研](validation/playback-backend-research-2026-10-11.md) | Flutter 纹理交付、fvp/Media3/libmpv 候选与分轨、许可和同步验证门槛 |
-| [关注用户分组](validation/follow-groups.md) | 已关注菜单、现有分组选择、特殊分组保留与单次保存 |
+| [关注用户分组](validation/follow-groups.md) | 关注列表分组子标签、账号隔离、已关注菜单与单次保存 |
 | [快捷键与富评论](validation/shortcuts-rich-comments.md) | UWP 默认键位、悬浮控制栏、评论标识/表情/图片和资源来源 |
 | [快捷键体系重构方案](shortcut-system/refactor-design.md) | 设计基线：单一输入入口、完整功能清单、作用域、迁移及实键验收 |
 | [快捷键重构实施记录](shortcut-system/implementation-results.md) | 单入口分发、页面能力、全屏／录制／图片作用域、异步媒体目标及验证边界 |
