@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/messages/application/message_center_controller.dart';
@@ -9,7 +10,6 @@ import 'package:bilisail/features/messages/application/message_image_picker.dart
 import 'package:bilisail/features/messages/application/messages_controller.dart';
 import 'package:bilisail/features/messages/domain/message_center_repository.dart';
 import 'package:bilisail/features/messages/domain/message_composer.dart';
-import 'package:bilisail/features/messages/domain/message_management.dart';
 import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/message_rich_text.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
@@ -28,6 +28,8 @@ void main() {
     _CenterFake center, {
     double width = 390,
     Future<MessageLocalImage?> Function()? picker,
+    bool workspaceScope = false,
+    ValueNotifier<bool>? pageVisible,
   }) async {
     tester.view.physicalSize = Size(width, 900);
     tester.view.devicePixelRatio = 1;
@@ -47,7 +49,25 @@ void main() {
         ],
         child: MaterialApp(
           builder: AppNoticeHost.builder,
-          home: const Scaffold(body: MessagesScreen()),
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable:
+                  pageVisible ?? const AlwaysStoppedAnimation(true),
+              builder: (_, visible, _) => !visible
+                  ? const SizedBox.shrink()
+                  : workspaceScope
+                  ? ProviderScope(
+                      // Match the controller scope used by workspace pages.
+                      overrides: [
+                        messagesControllerProvider.overrideWith(
+                          MessagesController.new,
+                        ),
+                      ],
+                      child: const MessagesScreen(),
+                    )
+                  : const MessagesScreen(),
+            ),
+          ),
         ),
       ),
     );
@@ -85,7 +105,7 @@ void main() {
       tester,
     ) async {
       final center = _CenterFake();
-      await mount(tester, _RichMessages(), center);
+      await mount(tester, _RichMessages(), center, workspaceScope: true);
       await tester.tap(find.text('测试会话'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('聊天设置'));
@@ -143,7 +163,13 @@ void main() {
     'chat uses one narrow header and settings continue working after pinning',
     (tester) async {
       final center = _CenterFake();
-      await mount(tester, _RichMessages(), center);
+      final messages = _RichMessages();
+      final container = await mount(
+        tester,
+        messages,
+        center,
+        workspaceScope: true,
+      );
       await tester.tap(find.text('测试会话'));
       await tester.pumpAndSettle();
       expect(find.text('我的消息'), findsNothing);
@@ -155,6 +181,17 @@ void main() {
       expect(find.text('UID 2'), findsOneWidget);
       await tester.tap(find.widgetWithText(SwitchListTile, '置顶会话'));
       await tester.pumpAndSettle();
+      expect(messages.pins, 1);
+      expect(
+        container.read(messagesControllerProvider).selected?.pinned,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<SwitchListTile>(find.widgetWithText(SwitchListTile, '置顶会话'))
+            .value,
+        isTrue,
+      );
       await tester.tap(find.widgetWithText(SwitchListTile, '接收内容推送'));
       await tester.pumpAndSettle();
       expect(center.pushWrites, 1);
@@ -170,7 +207,12 @@ void main() {
     'manual read in chat settings disables during thread pagination',
     (tester) async {
       final messages = _RichMessages();
-      final container = await mount(tester, messages, _CenterFake());
+      final container = await mount(
+        tester,
+        messages,
+        _CenterFake(),
+        workspaceScope: true,
+      );
       await tester.tap(find.text('测试会话'));
       await tester.pumpAndSettle();
       messages.threadPending = Completer<MessagePage<PrivateMessage>>();
@@ -192,6 +234,189 @@ void main() {
       await tester.pumpAndSettle();
     },
   );
+
+  for (final width in [390.0, 1440.0]) {
+    testWidgets('chat settings manage the owning workspace page at $width', (
+      tester,
+    ) async {
+      final messages = _RichMessages();
+      final center = _CenterFake();
+      final container = await mount(
+        tester,
+        messages,
+        center,
+        width: width,
+        workspaceScope: true,
+      );
+      await tester.tap(find.text('测试会话'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('聊天设置'));
+      await tester.pumpAndSettle();
+
+      for (final value in [true, false]) {
+        await tester.tap(find.widgetWithText(SwitchListTile, '置顶会话'));
+        await tester.pumpAndSettle();
+        expect(messages.pinnedValue, value);
+        expect(
+          container.read(messagesControllerProvider).selected?.pinned,
+          value,
+        );
+        expect(
+          tester
+              .widget<SwitchListTile>(
+                find.widgetWithText(SwitchListTile, '置顶会话'),
+              )
+              .value,
+          value,
+        );
+        await tester.tap(find.widgetWithText(SwitchListTile, '消息免打扰'));
+        await tester.pumpAndSettle();
+        expect(messages.mutedValue, value);
+        expect(
+          container.read(messagesControllerProvider).selected?.muted,
+          value,
+        );
+        expect(
+          tester
+              .widget<SwitchListTile>(
+                find.widgetWithText(SwitchListTile, '消息免打扰'),
+              )
+              .value,
+          value,
+        );
+      }
+      expect(messages.pins, 2);
+      expect(messages.mutes, 2);
+
+      final marks = messages.marks;
+      await tester.tap(find.widgetWithText(ListTile, '标为已读'));
+      await tester.pumpAndSettle();
+      expect(messages.marks, marks + 1);
+      messages.messages = const [];
+      await tester.tap(find.widgetWithText(ListTile, '重新加载会话'));
+      await tester.pumpAndSettle();
+      expect(container.read(messagesControllerProvider).thread.items, isEmpty);
+
+      await tester.ensureVisible(find.text('移除当前会话'));
+      await tester.tap(find.text('移除当前会话'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '取消'));
+      await tester.pumpAndSettle();
+      expect(messages.removals, 0);
+      await tester.tap(find.text('移除当前会话'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '确认'));
+      await tester.pumpAndSettle();
+      expect(messages.removals, 1);
+      expect(container.read(messagesControllerProvider).selected, isNull);
+      expect(
+        container.read(messagesControllerProvider).inbox.items.map((e) => e.id),
+        [otherConversation.id],
+      );
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('chat settings show failures and disable pending management', (
+    tester,
+  ) async {
+    final messages = _RichMessages()
+      ..managementFailure = const AppFailure(AppFailureKind.timeout, 'timeout');
+    final container = await mount(
+      tester,
+      messages,
+      _CenterFake(),
+      workspaceScope: true,
+    );
+    await tester.tap(find.text('测试会话'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('聊天设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(SwitchListTile, '置顶会话'));
+    await tester.pumpAndSettle();
+    expect(messages.pins, 1);
+    expect(
+      container.read(messagesControllerProvider).selected?.pinned,
+      isFalse,
+    );
+    final scrollable = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(Scrollable),
+    );
+    final errorMessage = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.textContaining('尚未确认'),
+    );
+    await tester.scrollUntilVisible(errorMessage, 250, scrollable: scrollable);
+    expect(errorMessage, findsOneWidget);
+    final pending = messages.managementPending = Completer<void>();
+    messages.managementFailure = null;
+    await tester.scrollUntilVisible(
+      find.widgetWithText(SwitchListTile, '消息免打扰'),
+      -250,
+      scrollable: scrollable,
+    );
+    await tester.tap(find.widgetWithText(SwitchListTile, '消息免打扰'));
+    await tester.pump();
+    expect(
+      tester
+          .widget<SwitchListTile>(find.widgetWithText(SwitchListTile, '置顶会话'))
+          .onChanged,
+      isNull,
+    );
+    expect(
+      tester.widget<ListTile>(find.widgetWithText(ListTile, '重新加载会话')).onTap,
+      isNull,
+    );
+    pending.complete();
+    await tester.pumpAndSettle();
+    expect(messages.mutes, 1);
+    expect(container.read(messagesControllerProvider).selected?.muted, isTrue);
+  });
+
+  for (final removePage in [false, true]) {
+    for (final block in [false, true]) {
+      testWidgets(
+        'chat confirmation rejects stale origin: removed=$removePage block=$block',
+        (tester) async {
+          final messages = _RichMessages();
+          final center = _CenterFake();
+          final visible = ValueNotifier(true);
+          addTearDown(visible.dispose);
+          await mount(
+            tester,
+            messages,
+            center,
+            workspaceScope: true,
+            pageVisible: visible,
+          );
+          await tester.tap(find.text('测试会话'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byTooltip('聊天设置'));
+          await tester.pumpAndSettle();
+          final target = block ? '加入黑名单' : '移除当前会话';
+          await tester.ensureVisible(find.text(target));
+          await tester.tap(find.text(target));
+          await tester.pumpAndSettle();
+          if (removePage) {
+            visible.value = false;
+            await tester.pump();
+          } else {
+            messages.sessionEpoch++;
+          }
+          await tester.tap(find.widgetWithText(FilledButton, '确认'));
+          await tester.pumpAndSettle();
+          expect(messages.removals, 0);
+          expect(center.blockWrites, 0);
+          expect(tester.takeException(), isNull);
+          await tester.tap(find.widgetWithText(TextButton, '关闭'));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
 
   testWidgets('emote selection inserts the token at the draft cursor', (
     tester,
@@ -268,8 +493,8 @@ void main() {
   );
 }
 
-class _RichMessages extends MessageRepositoryFake
-    implements MessageComposeRepository, MessageManagementRepository {
+class _RichMessages extends ManagementMessageRepositoryFake
+    implements MessageComposeRepository {
   int imageSends = 0;
   @override
   Future<List<MessageEmotePackage>> emotes({
@@ -285,24 +510,6 @@ class _RichMessages extends MessageRepositoryFake
   }) async {
     imageSends++;
   }
-
-  @override
-  Future<void> setPinned(
-    InboxEntry entry,
-    bool pinned, {
-    required RequestCancellation cancellation,
-  }) async {}
-  @override
-  Future<void> setMuted(
-    InboxEntry entry,
-    bool muted, {
-    required RequestCancellation cancellation,
-  }) async {}
-  @override
-  Future<void> removeConversation(
-    InboxEntry entry, {
-    required RequestCancellation cancellation,
-  }) async {}
 }
 
 class _CenterFake extends Fake implements MessageCenterRepository {

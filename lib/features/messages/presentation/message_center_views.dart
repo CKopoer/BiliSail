@@ -220,21 +220,57 @@ Future<void> showConversationSettings(
   required VoidCallback onRefresh,
   required Future<bool> Function() onMarkRead,
 }) async {
+  final repository = ref.read(messageRepositoryProvider);
+  final account = (repository.accountScope, repository.sessionEpoch);
+  final controller = ref.read(messagesControllerProvider.notifier);
+  InboxEntry? resolveEntry() {
+    if (!context.mounted) return null;
+    final currentRepository = ref.read(messageRepositoryProvider);
+    if (!identical(repository, currentRepository) ||
+        (currentRepository.accountScope, currentRepository.sessionEpoch) !=
+            account) {
+      return null;
+    }
+    final selected = ref.read(messagesControllerProvider).selected;
+    return selected?.id == entry.id && selected?.userId == entry.userId
+        ? selected
+        : null;
+  }
+
   if (ref.read(messageCenterRepositoryProvider) != null && entry.canSend) {
     unawaited(
       ref.read(messageCenterControllerProvider.notifier).loadChat(entry),
     );
   }
-  await _show(
-    context,
-    '聊天设置',
-    _ChatSettings(
-      entry: entry,
-      onOpenUser: onOpenUser,
-      onRefresh: onRefresh,
-      onMarkRead: onMarkRead,
-    ),
+  // The dialog lives above the page's ProviderScope. Observe the owning page
+  // explicitly rather than creating another messages controller on Navigator.
+  // A snapshot also lets the dialog finish closing after its page is disposed.
+  final messages = ValueNotifier(ref.read(messagesControllerProvider));
+  final subscription = ref.listenManual(
+    messagesControllerProvider,
+    (_, next) => messages.value = next,
   );
+  try {
+    await _show(
+      context,
+      '聊天设置',
+      ValueListenableBuilder<MessagesState>(
+        valueListenable: messages,
+        builder: (_, state, _) => _ChatSettings(
+          entry: entry,
+          messages: state,
+          controller: controller,
+          resolveEntry: resolveEntry,
+          onOpenUser: onOpenUser,
+          onRefresh: onRefresh,
+          onMarkRead: onMarkRead,
+        ),
+      ),
+    );
+  } finally {
+    subscription.close();
+    messages.dispose();
+  }
 }
 
 Future<void> _show(BuildContext context, String title, Widget child) =>
@@ -609,19 +645,24 @@ class _Assistants extends ConsumerWidget {
 class _ChatSettings extends ConsumerWidget {
   const _ChatSettings({
     required this.entry,
+    required this.messages,
+    required this.controller,
+    required this.resolveEntry,
     this.onOpenUser,
     required this.onRefresh,
     required this.onMarkRead,
   });
   final InboxEntry entry;
+  final MessagesState messages;
+  final MessagesController controller;
+  final InboxEntry? Function() resolveEntry;
   final ValueChanged<UserId>? onOpenUser;
   final VoidCallback onRefresh;
   final Future<bool> Function() onMarkRead;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(messagesControllerProvider);
-    final controller = ref.read(messagesControllerProvider.notifier);
+    final state = messages;
     final centerEnabled =
         ref.watch(messageCenterRepositoryProvider) != null && entry.canSend;
     final center = centerEnabled
@@ -630,6 +671,7 @@ class _ChatSettings extends ConsumerWidget {
     final centerController = ref.read(messageCenterControllerProvider.notifier);
     final current = state.selected?.id == entry.id ? state.selected! : entry;
     final busy =
+        resolveEntry() == null ||
         state.sending ||
         state.markingRead ||
         state.managingIds.contains(entry.id) ||
@@ -645,27 +687,37 @@ class _ChatSettings extends ConsumerWidget {
           ),
           title: Text(current.title),
           subtitle: Text('UID ${current.userId?.value ?? '—'}'),
-          onTap: current.userId == null
+          onTap: current.userId == null || onOpenUser == null || busy
               ? null
               : () {
-                  Navigator.pop(context);
-                  onOpenUser?.call(current.userId!);
+                  if (resolveEntry()?.userId case final userId?) {
+                    Navigator.pop(context);
+                    onOpenUser?.call(userId);
+                  }
                 },
         ),
-        if (controller.supportsManagement && current.canSend) ...[
+        if (state.supportsManagement && current.canSend) ...[
           SwitchListTile(
             title: const Text('置顶会话'),
             value: current.pinned,
             onChanged: busy
                 ? null
-                : (value) => controller.setPinned(current, value),
+                : (value) {
+                    if (resolveEntry() case final latest?) {
+                      controller.setPinned(latest, value);
+                    }
+                  },
           ),
           SwitchListTile(
             title: const Text('消息免打扰'),
             value: current.muted,
             onChanged: busy
                 ? null
-                : (value) => controller.setMuted(current, value),
+                : (value) {
+                    if (resolveEntry() case final latest?) {
+                      controller.setMuted(latest, value);
+                    }
+                  },
           ),
         ],
         if (center?.loadingChat ?? false) const LinearProgressIndicator(),
@@ -675,7 +727,11 @@ class _ChatSettings extends ConsumerWidget {
             value: chat.contentPush,
             onChanged: busy
                 ? null
-                : (value) => centerController.setContentPush(current, value),
+                : (value) {
+                    if (resolveEntry() case final latest?) {
+                      centerController.setContentPush(latest, value);
+                    }
+                  },
           ),
         if (chat != null)
           SwitchListTile(
@@ -684,10 +740,17 @@ class _ChatSettings extends ConsumerWidget {
             onChanged: busy
                 ? null
                 : (value) async {
+                    if (resolveEntry() == null) return;
                     if (!value ||
-                        await _confirm(context, '加入黑名单？', '将阻止该用户向你发送私信。')) {
+                        await _confirm(
+                          context,
+                          '加入黑名单？',
+                          '将解除关注和合集订阅关系，并限制该用户与你互动或查看你的空间。',
+                        )) {
                       if (context.mounted) {
-                        await centerController.setBlocked(current, value);
+                        if (resolveEntry() case final latest?) {
+                          await centerController.setBlocked(latest, value);
+                        }
                       }
                     }
                   },
@@ -698,13 +761,17 @@ class _ChatSettings extends ConsumerWidget {
           onTap: busy || state.thread.loading || state.thread.items.isEmpty
               ? null
               : () async {
-                  await onMarkRead();
+                  if (resolveEntry() != null) await onMarkRead();
                 },
         ),
         ListTile(
           leading: const Icon(Icons.refresh),
           title: const Text('重新加载会话'),
-          onTap: busy ? null : onRefresh,
+          onTap: busy
+              ? null
+              : () {
+                  if (resolveEntry() != null) onRefresh();
+                },
         ),
         if (centerEnabled)
           ListTile(
@@ -712,13 +779,16 @@ class _ChatSettings extends ConsumerWidget {
             title: const Text('举报会话'),
             onTap: busy
                 ? null
-                : () => _show(
-                    context,
-                    '举报会话',
-                    _ReportConversation(entry: current),
-                  ),
+                : () async {
+                    if (resolveEntry() == null) return;
+                    await _show(
+                      context,
+                      '举报会话',
+                      _ReportConversation(resolveEntry: resolveEntry),
+                    );
+                  },
           ),
-        if (controller.supportsManagement && current.canSend)
+        if (state.supportsManagement && current.canSend)
           ListTile(
             leading: const Icon(Icons.delete_outline),
             title: const Text('移除当前会话'),
@@ -726,13 +796,12 @@ class _ChatSettings extends ConsumerWidget {
             onTap: busy
                 ? null
                 : () async {
+                    if (resolveEntry() == null) return;
                     if (await _confirm(context, '移除当前会话？', '此操作不会撤回已发送的消息。') &&
                         context.mounted) {
-                      final latest = ref
-                          .read(messagesControllerProvider)
-                          .selected;
-                      if (latest?.id == current.id &&
-                          await controller.removeConversation(latest!)) {
+                      final latest = resolveEntry();
+                      if (latest != null &&
+                          await controller.removeConversation(latest)) {
                         if (context.mounted) Navigator.pop(context);
                       }
                     }
@@ -747,8 +816,8 @@ class _ChatSettings extends ConsumerWidget {
 }
 
 class _ReportConversation extends ConsumerStatefulWidget {
-  const _ReportConversation({required this.entry});
-  final InboxEntry entry;
+  const _ReportConversation({required this.resolveEntry});
+  final InboxEntry? Function() resolveEntry;
   @override
   ConsumerState<_ReportConversation> createState() =>
       _ReportConversationState();
@@ -811,6 +880,8 @@ class _ReportConversationState extends ConsumerState<_ReportConversation> {
           onPressed: state.busy
               ? null
               : () async {
+                  final entry = widget.resolveEntry();
+                  if (entry == null) return;
                   final details = _text.text.trim();
                   if (_reason == 0 && details.isEmpty) {
                     setState(() => _validationMessage = '选择“其他”时请补充说明');
@@ -819,7 +890,7 @@ class _ReportConversationState extends ConsumerState<_ReportConversation> {
                   if (await ref
                           .read(messageCenterControllerProvider.notifier)
                           .reportConversation(
-                            widget.entry,
+                            entry,
                             _reason,
                             details.isEmpty
                                 ? (_reasons[_reason] ?? '其他')
