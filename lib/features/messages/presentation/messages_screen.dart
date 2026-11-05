@@ -1386,102 +1386,92 @@ class _ConversationThread extends ConsumerWidget {
       return StateView.error(message: error, onAction: onRefresh);
     }
     if (items.isEmpty) return const StateView.empty(message: '暂无会话消息');
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 625),
-        child: ListView.builder(
-          reverse: true,
-          padding: const EdgeInsets.all(16),
-          itemCount: items.length + 1,
-          itemBuilder: (context, index) {
-            if (index == items.length) {
-              return _ThreadFooter(onMore: onMore);
-            }
-            final message = items[items.length - 1 - index];
-            final own = message.senderId.value == ownMid;
-            if (message.kind == MessageContentKind.withdrawn ||
-                message.kind == MessageContentKind.notice) {
-              return Padding(
-                key: ValueKey(message.id),
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 20,
-                ),
-                child: Center(
+    return ListView.builder(
+      reverse: true,
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length + 1,
+      itemBuilder: (context, index) {
+        if (index == items.length) {
+          return _ThreadFooter(onMore: onMore);
+        }
+        final message = items[items.length - 1 - index];
+        final own = message.senderId.value == ownMid;
+        if (message.kind == MessageContentKind.withdrawn ||
+            message.kind == MessageContentKind.notice) {
+          return Padding(
+            key: ValueKey(message.id),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+            child: Center(
+              child: Text(
+                message.text,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          );
+        }
+        final older = items.length - 2 - index >= 0
+            ? items[items.length - 2 - index]
+            : null;
+        final showTime =
+            message.time != null &&
+            (older?.time == null ||
+                message.time!.difference(older!.time!).abs() >=
+                    const Duration(minutes: 5));
+        final avatar = NetworkAvatar(
+          url: own ? ownProfile.$2 : contact.$2,
+          name: own ? ownProfile.$1 ?? '我' : contact.$1 ?? '',
+          radius: 17,
+        );
+        return Padding(
+          key: ValueKey(message.id),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            children: [
+              if (showTime)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
                   child: Text(
-                    message.text,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall,
+                    _time(message.time),
+                    style: Theme.of(context).textTheme.labelSmall,
                   ),
                 ),
-              );
-            }
-            final older = items.length - 2 - index >= 0
-                ? items[items.length - 2 - index]
-                : null;
-            final showTime =
-                message.time != null &&
-                (older?.time == null ||
-                    message.time!.difference(older!.time!).abs() >=
-                        const Duration(minutes: 5));
-            final avatar = NetworkAvatar(
-              url: own ? ownProfile.$2 : contact.$2,
-              name: own ? ownProfile.$1 ?? '我' : contact.$1 ?? '',
-              radius: 17,
-            );
-            return Padding(
-              key: ValueKey(message.id),
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: own
+                    ? MainAxisAlignment.end
+                    : MainAxisAlignment.start,
                 children: [
-                  if (showTime)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Text(
-                        _time(message.time),
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: own
-                        ? MainAxisAlignment.end
-                        : MainAxisAlignment.start,
-                    children: [
-                      if (!own) ...[avatar, const SizedBox(width: 8)],
-                      Flexible(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 460),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: own
-                                  ? Theme.of(context)
-                                        .colorScheme
-                                        .secondaryContainer
-                                  : Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: MessageContentView(
-                                message: message,
-                                onOpenTarget: onOpenTarget,
-                              ),
-                            ),
+                  if (!own) ...[avatar, const SizedBox(width: 8)],
+                  Flexible(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 460),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: own
+                              ? Theme.of(context).colorScheme.secondaryContainer
+                              : Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: MessageContentView(
+                            message: message,
+                            onOpenTarget: onOpenTarget,
                           ),
                         ),
                       ),
-                      if (own) ...[const SizedBox(width: 8), avatar],
-                    ],
+                    ),
                   ),
+                  if (own) ...[const SizedBox(width: 8), avatar],
                 ],
               ),
-            );
-          },
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

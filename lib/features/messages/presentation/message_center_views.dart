@@ -523,6 +523,8 @@ Future<void> _showAssistants(
   WidgetRef ref,
   MessageAssistantKind kind,
 ) async {
+  final repository = ref.read(messageRepositoryProvider);
+  final account = (repository.accountScope, repository.sessionEpoch);
   unawaited(
     ref
         .read(messageCenterControllerProvider.notifier)
@@ -531,13 +533,29 @@ Future<void> _showAssistants(
   await _show(
     context,
     kind == MessageAssistantKind.up ? 'UP 助手' : '粉丝团助手',
-    _Assistants(kind: kind),
+    _Assistants(
+      kind: kind,
+      onOpenConversation: (entry) {
+        if (!context.mounted) return;
+        final current = ref.read(messageRepositoryProvider);
+        if (!identical(current, repository) ||
+            (current.accountScope, current.sessionEpoch) != account) {
+          return;
+        }
+        // Dialogs are above the workspace page's ProviderScope. Resolve this
+        // controller from the caller rather than the dialog's root scope.
+        final messages = ref.read(messagesControllerProvider.notifier);
+        messages.selectSection(InboxSection.private);
+        messages.selectConversation(entry);
+      },
+    ),
   );
 }
 
 class _Assistants extends ConsumerWidget {
-  const _Assistants({required this.kind});
+  const _Assistants({required this.kind, required this.onOpenConversation});
   final MessageAssistantKind kind;
+  final ValueChanged<InboxEntry> onOpenConversation;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(messageCenterControllerProvider);
@@ -568,11 +586,7 @@ class _Assistants extends ConsumerWidget {
                       ),
                       onTap: () {
                         Navigator.pop(context);
-                        final messages = ref.read(
-                          messagesControllerProvider.notifier,
-                        );
-                        messages.selectSection(InboxSection.private);
-                        messages.selectConversation(entry);
+                        onOpenConversation(entry);
                       },
                     );
                   },
