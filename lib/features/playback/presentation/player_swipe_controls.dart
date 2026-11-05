@@ -15,6 +15,9 @@ class PlayerSwipeControls extends StatefulWidget {
     required this.setVolume,
     required this.child,
     this.brightness,
+    this.onFullScreen,
+    this.fullScreen = false,
+    this.reverseFullScreenGesture = false,
   });
 
   final bool enabled;
@@ -23,6 +26,8 @@ class PlayerSwipeControls extends StatefulWidget {
   final Future<void> Function(double) setVolume;
   final Widget child;
   final WindowBrightnessService? brightness;
+  final VoidCallback? onFullScreen;
+  final bool fullScreen, reverseFullScreenGesture;
 
   @override
   State<PlayerSwipeControls> createState() => _PlayerSwipeControlsState();
@@ -34,6 +39,9 @@ class _PlayerSwipeControlsState extends State<PlayerSwipeControls>
       widget.brightness ?? WindowBrightnessService();
   Object? _drag;
   bool _left = false;
+  bool _center = false;
+  final _pointers = <int>{};
+  bool _multiplePointers = false;
   bool _foreground = true;
   bool _readingBrightness = false;
   bool _released = false;
@@ -46,7 +54,8 @@ class _PlayerSwipeControlsState extends State<PlayerSwipeControls>
   String? _feedback;
   Timer? _feedbackTimer;
 
-  bool get _enabled => widget.enabled && _foreground;
+  bool get _enabled =>
+      (widget.enabled || widget.onFullScreen != null) && _foreground;
 
   @override
   void initState() {
@@ -66,7 +75,10 @@ class _PlayerSwipeControlsState extends State<PlayerSwipeControls>
   void didUpdateWidget(covariant PlayerSwipeControls oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.sourceGeneration != widget.sourceGeneration ||
-        oldWidget.enabled != widget.enabled) {
+        oldWidget.enabled != widget.enabled ||
+        oldWidget.fullScreen != widget.fullScreen ||
+        oldWidget.reverseFullScreenGesture != widget.reverseFullScreenGesture ||
+        (oldWidget.onFullScreen == null) != (widget.onFullScreen == null)) {
       _cancel();
       if (!widget.enabled) _resetBrightness();
     }
@@ -109,16 +121,25 @@ class _PlayerSwipeControlsState extends State<PlayerSwipeControls>
   }
 
   void _start(DragStartDetails details, Size size) {
-    if (!_enabled || ModalRoute.of(context)?.isCurrent == false) return;
+    if (!_enabled ||
+        _multiplePointers ||
+        ModalRoute.of(context)?.isCurrent == false) {
+      return;
+    }
+    _center =
+        details.localPosition.dx >= size.width / 3 &&
+        details.localPosition.dx < size.width * 2 / 3;
+    if (_center ? widget.onFullScreen == null : !widget.enabled) return;
     _feedbackTimer?.cancel();
+    if (_center) setState(() => _feedback = null);
     final drag = Object();
     _drag = drag;
     _released = false;
-    _left = details.localPosition.dx < size.width / 2;
+    _left = details.localPosition.dx < size.width / 3;
     _height = size.height;
     _delta = 0;
     _startValue = _left ? _brightness : widget.volume / 100;
-    _readingBrightness = _left && _brightnessService.isNative;
+    _readingBrightness = !_center && _left && _brightnessService.isNative;
     if (_readingBrightness) unawaited(_readBrightness(drag));
   }
 
@@ -156,6 +177,7 @@ class _PlayerSwipeControlsState extends State<PlayerSwipeControls>
       return;
     }
     _delta -= details.delta.dy / _height;
+    if (_center) return;
     if (!_readingBrightness) _apply();
   }
 
@@ -203,6 +225,20 @@ class _PlayerSwipeControlsState extends State<PlayerSwipeControls>
 
   void _end() {
     if (_drag == null) return;
+    if (_center) {
+      _drag = null;
+      // Confirm on release, once per gesture, after deliberate movement.
+      final pixels = _delta * _height;
+      final enter = widget.reverseFullScreenGesture ? pixels < 0 : pixels > 0;
+      if (_enabled &&
+          !_multiplePointers &&
+          ModalRoute.of(context)?.isCurrent != false &&
+          pixels.abs() >= 36 &&
+          enter != widget.fullScreen) {
+        widget.onFullScreen?.call();
+      }
+      return;
+    }
     _released = true;
     if (!_readingBrightness) {
       _drag = null;
@@ -226,7 +262,23 @@ class _PlayerSwipeControlsState extends State<PlayerSwipeControls>
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) => Listener(
-      onPointerCancel: (_) => _cancelGesture(),
+      onPointerDown: (event) {
+        if (event.kind != PointerDeviceKind.touch) return;
+        _pointers.add(event.pointer);
+        if (_pointers.length > 1) {
+          _multiplePointers = true;
+          setState(_cancel);
+        }
+      },
+      onPointerUp: (event) {
+        _pointers.remove(event.pointer);
+        if (_pointers.isEmpty) _multiplePointers = false;
+      },
+      onPointerCancel: (event) {
+        _pointers.remove(event.pointer);
+        _cancelGesture();
+        if (_pointers.isEmpty) _multiplePointers = false;
+      },
       child: RawGestureDetector(
         behavior: HitTestBehavior.translucent,
         excludeFromSemantics: true,

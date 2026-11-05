@@ -7,6 +7,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'center fullscreen gesture clears side feedback without changing volume',
+    (tester) async {
+      final volumes = <double>[];
+      var fullscreenCalls = 0;
+      await tester.pumpWidget(
+        _app(volumes: volumes, onFullScreen: () => fullscreenCalls++),
+      );
+      await tester.dragFrom(const Offset(300, 100), const Offset(0, -40));
+      await tester.pump();
+      expect(find.text('音量 70%'), findsOneWidget);
+      final writes = volumes.length;
+      // Downwards in inline presentation deliberately does not enter fullscreen.
+      await tester.dragFrom(const Offset(200, 100), const Offset(0, 50));
+      await tester.pump();
+      expect(fullscreenCalls, 0);
+      expect(volumes.length, writes);
+      expect(find.byKey(const ValueKey('player-swipe-feedback')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets('quick swipe applies its final delta after the brightness read', (
     tester,
   ) async {
@@ -200,6 +221,7 @@ Widget _app({
   _Brightness? brightness,
   bool enabled = true,
   int generation = 1,
+  VoidCallback? onFullScreen,
 }) => MaterialApp(
   home: Scaffold(
     body: Align(
@@ -210,6 +232,7 @@ Widget _app({
         child: PlayerSwipeControls(
           enabled: enabled,
           sourceGeneration: generation,
+          onFullScreen: onFullScreen,
           volume: 50,
           setVolume: (value) async {
             volumes?.add(value);

@@ -168,6 +168,7 @@
 | [触摸长按临时倍速](validation/touch-hold-playback-rate.md) | 画面长按使用已有延迟／倍速、松开恢复、全屏与取消边界 |
 | [长按倍速的音频输出缓冲](validation/hold-rate-output-buffer-2026-11-01.md) | 剩余停顿原因、PiliPlus 对照、50 ms 输出队列与 Windows Profile ABBA 验证 |
 | [播放器滑动亮度与音量](validation/fullscreen-swipe-controls.md) | 普通／全屏左侧亮度与右侧音量、设置开关、窗口亮度恢复和验证边界 |
+| [双指缩放与中部全屏手势](validation/player-picture-gestures-2026-11-06.md) | #64 双指缩放／移动／还原、三分区纵滑、设置兼容与手势冲突验证 |
 | [首页刷新、自动分页与图片缓存](validation/feed-scroll-image-cache.md) | 悬浮刷新/回顶部、首屏补页、隐藏列表隔离和图片缓存设置 |
 | [列表滚动性能修复](validation/feed-scroll-performance.md) | Windows profile 对比、首页及搜索/历史虚拟化、局部重建和悬停生命周期 |
 | [页面性能热点复查](validation/page-performance-hotspots-2026-10-28.md) | 下载／离线页、用户空间和消息页的热点证据、局部更新方案及验证边界 |

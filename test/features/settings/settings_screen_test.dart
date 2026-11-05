@@ -613,6 +613,16 @@ void main() {
       if (inPlayer) {
         await tester.tap(find.text('播放配置'));
         await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('视频默认清晰度'),
+          120,
+          scrollable: find
+              .descendant(
+                of: find.byType(ListView).first,
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
       }
       expect(find.text('视频默认清晰度'), findsOneWidget);
       if (inPlayer) {

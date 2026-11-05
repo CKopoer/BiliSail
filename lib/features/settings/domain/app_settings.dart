@@ -89,6 +89,9 @@ final class AppSettings {
     this.highEnergyProgressEnabled = false,
     this.playerControlsMode = PlayerControlsMode.click,
     this.fullscreenSwipeControls = true,
+    this.playerFullscreenGestureReverse = false,
+    this.playerFullscreenGesture = true,
+    this.playerShrinkVideo = true,
     this.preferredQuality = 80,
     this.preferredLiveQuality = 10000,
     this.liveStreamPreference = LiveStreamPreference.automatic,
@@ -144,6 +147,9 @@ final class AppSettings {
     this.danmakuFontScale = 1.0,
     this.playerControlsMode = PlayerControlsMode.click,
     this.fullscreenSwipeControls = true,
+    this.playerFullscreenGestureReverse = false,
+    this.playerFullscreenGesture = true,
+    this.playerShrinkVideo = true,
   }) : theme = AppThemePreference.system,
        appIcon = AppIconPreference.bilisail,
        font = AppFontPreference.harmonyOsSans,
@@ -235,6 +241,9 @@ final class AppSettings {
   final bool highEnergyProgressEnabled;
   final PlayerControlsMode playerControlsMode;
   final bool fullscreenSwipeControls;
+  final bool playerFullscreenGestureReverse;
+  final bool playerFullscreenGesture;
+  final bool playerShrinkVideo;
   final int preferredQuality;
   final int preferredLiveQuality;
   final LiveStreamPreference liveStreamPreference;
@@ -318,6 +327,9 @@ final class AppSettings {
     bool? highEnergyProgressEnabled,
     PlayerControlsMode? playerControlsMode,
     bool? fullscreenSwipeControls,
+    bool? playerFullscreenGestureReverse,
+    bool? playerFullscreenGesture,
+    bool? playerShrinkVideo,
     int? preferredQuality,
     int? preferredLiveQuality,
     LiveStreamPreference? liveStreamPreference,
@@ -390,6 +402,11 @@ final class AppSettings {
     highEnergyProgressEnabled:
         highEnergyProgressEnabled ?? this.highEnergyProgressEnabled,
     playerControlsMode: playerControlsMode ?? this.playerControlsMode,
+    playerFullscreenGestureReverse:
+        playerFullscreenGestureReverse ?? this.playerFullscreenGestureReverse,
+    playerFullscreenGesture:
+        playerFullscreenGesture ?? this.playerFullscreenGesture,
+    playerShrinkVideo: playerShrinkVideo ?? this.playerShrinkVideo,
     fullscreenSwipeControls:
         fullscreenSwipeControls ?? this.fullscreenSwipeControls,
     preferredQuality: preferredQuality ?? this.preferredQuality,

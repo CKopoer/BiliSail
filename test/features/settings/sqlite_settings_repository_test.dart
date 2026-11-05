@@ -12,6 +12,52 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late AppDatabase database;
   late SqliteSettingsRepository repository;
+  test(
+    'picture gesture preferences migrate, validate, persist and reset',
+    () async {
+      for (final legacy in [
+        <String, Object?>{},
+        {
+          'playerShrinkVideo': 'false',
+          'playerFullscreenGesture': 0,
+          'playerFullscreenGestureReverse': null,
+        },
+      ]) {
+        await database.writeSetting(
+          'preferences.v1',
+          jsonEncode({
+            'schemaVersion': 37,
+            'fullscreenSwipeControls': false,
+            ...legacy,
+          }),
+        );
+        final loaded = await repository.load();
+        expect(loaded.playerShrinkVideo, isTrue);
+        expect(loaded.playerFullscreenGesture, isTrue);
+        expect(loaded.playerFullscreenGestureReverse, isFalse);
+        expect(loaded.fullscreenSwipeControls, isFalse);
+      }
+      await repository.save(
+        AppSettings(
+          playerShrinkVideo: false,
+          playerFullscreenGesture: false,
+          playerFullscreenGestureReverse: true,
+        ),
+      );
+      final loaded = (await SqliteSettingsRepository(
+        database,
+      ).load()).normalized().copyWith(defaultVolume: 50);
+      expect(loaded.playerShrinkVideo, isFalse);
+      expect(loaded.playerFullscreenGesture, isFalse);
+      expect(loaded.playerFullscreenGestureReverse, isTrue);
+      await repository.save(const AppSettings.defaults());
+      final reset = await repository.load();
+      expect(reset.playerShrinkVideo, isTrue);
+      expect(reset.playerFullscreenGesture, isTrue);
+      expect(reset.playerFullscreenGestureReverse, isFalse);
+    },
+  );
+
   setUp(() {
     database = AppDatabase(NativeDatabase.memory());
     repository = SqliteSettingsRepository(database);
@@ -42,7 +88,7 @@ void main() {
     expect(
       (jsonDecode((await database.readSetting('preferences.v1'))!)
           as Map)['schemaVersion'],
-      37,
+      38,
     );
     await repository.save(const AppSettings.defaults());
     settings = await repository.load();
@@ -200,7 +246,7 @@ void main() {
         final snapshot = jsonDecode(
           (await database.readSetting('preferences.v1'))!,
         );
-        expect(snapshot['schemaVersion'], 37);
+        expect(snapshot['schemaVersion'], 38);
         expect(snapshot['liveStreamPreference'], preference.toJson());
       }
       await repository.save(const AppSettings.defaults());

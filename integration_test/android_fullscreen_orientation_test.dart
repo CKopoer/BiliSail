@@ -10,7 +10,10 @@ import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
+import 'package:bilisail/features/playback/presentation/player_picture_controls.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +25,125 @@ import '../test/support/video_card_fake_engine.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+
+  testWidgets(
+    'Android native picture pinch changes texture composition and preserves session',
+    (tester) async {
+      const base = String.fromEnvironment('GESTURE_FIXTURE_BASE');
+      if (!Platform.isAndroid || base.isEmpty) return;
+      initializePlayerBackend();
+      final engine = MediaKitEngine();
+      final window = WindowService();
+      final repository = _NativeRepository(base);
+      final session = PlaybackSession(
+        engine: engine,
+        repository: repository,
+        progress: _Progress(),
+        accountScope: () => 'guest',
+      );
+      final boundaryKey = GlobalKey();
+      try {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [playbackSessionProvider.overrideWithValue(session)],
+            child: InputTestApp(
+              home: Scaffold(
+                body: RepaintBoundary(
+                  key: boundaryKey,
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: PlaybackPanel(
+                      detail: _detail,
+                      part: _detail.parts.first,
+                      settings: const AppSettings.defaults(),
+                      onToggleComments: () {},
+                      window: window,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await _until(
+          tester,
+          () =>
+              engine.currentSnapshot.phase == PlaybackPhase.playing &&
+              (engine.videoOutput as VideoFrameReadiness).frameReady.value,
+        );
+        await session.pause();
+        await _until(
+          tester,
+          () => engine.currentSnapshot.phase == PlaybackPhase.paused,
+        );
+        final before = engine.currentSnapshot;
+        final generation = session.sourceGeneration;
+        final pixels = await _picturePixels(tester, boundaryKey);
+        expect(pixels.toSet().length, greaterThan(16));
+        final controller = tester
+            .widget<PlayerPicture>(find.byType(PlayerPicture))
+            .controller;
+        await _pinch(tester);
+        expect(controller.value.scale, closeTo(1.5, .01));
+        final zoomedPixels = await _picturePixels(tester, boundaryKey);
+        expect(listEquals(pixels, zoomedPixels), isFalse);
+        expect(engine.currentSnapshot.position, before.position);
+        expect(engine.currentSnapshot.volume, before.volume);
+        expect(engine.currentSnapshot.rate, before.rate);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(session.sourceGeneration, generation);
+        var surface = tester.getRect(
+          find.byKey(const ValueKey('player-surface-tap-target')),
+        );
+        await tester.dragFrom(surface.center, const Offset(0, -65));
+        await _until(tester, () => window.isFullScreen && _isLandscape(tester));
+        expect(controller.value.scale, closeTo(1.5, .01));
+        await _pinch(tester);
+        expect(controller.value.scale, 2);
+        surface = tester.getRect(
+          find.byKey(const ValueKey('player-surface-tap-target')),
+        );
+        await tester.dragFrom(surface.center, const Offset(0, 65));
+        await _until(
+          tester,
+          () => !window.isFullScreen && !_isLandscape(tester),
+        );
+        expect(controller.value.scale, 2);
+        await tester.tapAt(
+          tester.getCenter(
+            find.byKey(const ValueKey('player-surface-tap-target')),
+          ),
+        );
+        await _until(
+          tester,
+          () => find
+              .byKey(const ValueKey('player-restore-picture'))
+              .hitTestable()
+              .evaluate()
+              .isNotEmpty,
+        );
+        await tester.tap(find.byKey(const ValueKey('player-restore-picture')));
+        expect(controller.value, PlayerPictureController.identity);
+        expect(session.sourceGeneration, generation);
+        expect(engine.currentSnapshot.generation, before.generation);
+        expect(engine.currentSnapshot.position, before.position);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(tester.takeException(), isNull);
+        IntegrationTestWidgetsFlutterBinding.instance.reportData = {
+          'nativePicture': {
+            'textureChanged': true,
+            'fullscreenRetainedTransform': true,
+            'restoredPicture': true,
+            'sourceGenerationUnchanged': true,
+          },
+        };
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        await session.close();
+        await window.setFullScreen(false);
+      }
+    },
+  );
 
   testWidgets(
     'Android video and live fullscreen rotate and adjust brightness and volume',
@@ -233,3 +355,64 @@ const _detail = VideoDetail(
     ),
   ],
 );
+
+Future<Uint8List> _picturePixels(WidgetTester tester, GlobalKey key) async {
+  await tester.pump(const Duration(milliseconds: 100));
+  return (await tester.runAsync(() async {
+    final boundary =
+        key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+    final image = await boundary.toImage(pixelRatio: .1);
+    try {
+      return (await image.toByteData())!.buffer.asUint8List();
+    } finally {
+      image.dispose();
+    }
+  }))!;
+}
+
+Future<void> _pinch(WidgetTester tester) async {
+  final surface = tester.getRect(
+    find.byKey(const ValueKey('player-surface-tap-target')),
+  );
+  final a = await tester.startGesture(
+    surface.topLeft + Offset(surface.width * .4, surface.height * .4),
+    pointer: 1,
+  );
+  final b = await tester.startGesture(
+    surface.topLeft + Offset(surface.width * .6, surface.height * .4),
+    pointer: 2,
+  );
+  await a.moveBy(Offset(-surface.width * .05, 0));
+  await b.moveBy(Offset(surface.width * .05, 0));
+  await a.up();
+  await b.up();
+  await tester.pump(const Duration(milliseconds: 100));
+}
+
+class _NativeRepository extends _Repository {
+  _NativeRepository(this.base);
+  final String base;
+  @override
+  Future<PlaybackMedia> resolve(
+    VideoId video,
+    String cid, {
+    required int quality,
+    VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
+    required RequestCancellation cancellation,
+  }) async => PlaybackMedia(
+    video: PlaybackTrack(
+      urls: [Uri.parse('$base/sdr.mp4')],
+      codec: 'avc1',
+      bandwidth: 1000000,
+    ),
+    audio: PlaybackTrack(
+      urls: [Uri.parse('$base/audio.m4a')],
+      codec: 'mp4a',
+      bandwidth: 128000,
+    ),
+    quality: 16,
+    qualities: const [16],
+    duration: const Duration(seconds: 20),
+    headers: const {},
+  );
+}

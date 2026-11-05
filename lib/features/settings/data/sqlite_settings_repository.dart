@@ -189,6 +189,12 @@ class SqliteSettingsRepository implements SettingsRepository {
       defaultPlaybackRate: number('defaultPlaybackRate', 1.0),
       rememberPlaybackRate: boolean('rememberPlaybackRate', true),
       fullscreenSwipeControls: boolean('fullscreenSwipeControls', true),
+      playerFullscreenGestureReverse: boolean(
+        'playerFullscreenGestureReverse',
+        false,
+      ),
+      playerFullscreenGesture: boolean('playerFullscreenGesture', true),
+      playerShrinkVideo: boolean('playerShrinkVideo', true),
       defaultVolume: number('defaultVolume', 100.0),
       rememberVolumeGlobally: boolean('rememberVolumeGlobally', false),
       audioNormalization:
@@ -253,7 +259,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 37,
+        'schemaVersion': 38,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -261,6 +267,9 @@ class SqliteSettingsRepository implements SettingsRepository {
         'sidebarCollapsed': value.sidebarCollapsed,
         'defaultDynamicTab': value.defaultDynamicTab.name,
         'fullscreenSwipeControls': value.fullscreenSwipeControls,
+        'playerFullscreenGestureReverse': value.playerFullscreenGestureReverse,
+        'playerFullscreenGesture': value.playerFullscreenGesture,
+        'playerShrinkVideo': value.playerShrinkVideo,
         'navigationMode': value.navigationMode.name,
         'allowConcurrentPlayback': value.allowConcurrentPlayback,
         'cacheImages': value.cacheImages,

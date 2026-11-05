@@ -36,6 +36,7 @@ import 'casting_dialog.dart';
 import '../application/casting_controller.dart';
 import 'player_swipe_controls.dart';
 import 'player_seek_controls.dart';
+import 'player_picture_controls.dart';
 import 'audio_playback_view.dart';
 import 'playback_timeline_bar.dart';
 import 'playback_snapshot_builder.dart';
@@ -85,6 +86,8 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   int? _handledCompletionGeneration;
   // Inline and fullscreen views are recreated, but share the page's intent.
   late final ValueNotifier<bool> _controlsVisible;
+  final _picture = PlayerPictureController();
+  late int _pictureGeneration;
   bool _fullScreen = false;
   bool _active = false;
   bool _surfaceReady = false;
@@ -117,6 +120,8 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     );
     _settings = ValueNotifier(widget.settings);
     _session = ref.read(playbackSessionProvider)..attach(this);
+    _pictureGeneration = _session.sourceGeneration;
+    _session.addListener(_syncPicture);
     _session.snapshots.addListener(_updateFullScreenOrientation);
     _session.snapshots.addListener(_onPlaybackCompleted);
     _shortcuts = PlaybackShortcutController(
@@ -296,6 +301,8 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _session.snapshots.removeListener(_updateFullScreenOrientation);
     _session.snapshots.removeListener(_onPlaybackCompleted);
     _dismissFullScreen();
+    _session.removeListener(_syncPicture);
+    _picture.dispose();
     _shortcuts.dispose();
     _session.detach(this);
     _settings.dispose();
@@ -598,6 +605,13 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _deviceOrientationSubscription = null;
   }
 
+  void _syncPicture() {
+    if (_pictureGeneration != _session.sourceGeneration || _session.audioOnly) {
+      _pictureGeneration = _session.sourceGeneration;
+      _picture.reset();
+    }
+  }
+
   void _updateFullScreenOrientation() {
     _syncDeviceOrientation();
     _scheduleAutoFullScreen();
@@ -659,6 +673,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
                 session: _session,
                 settings: _settings,
                 controlsVisible: _controlsVisible,
+                picture: _picture,
                 shortcuts: _shortcuts,
                 onToggleComments: () => widget.onToggleComments(),
                 danmakuComposerBuilder: widget.danmakuComposerBuilder == null
@@ -722,6 +737,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             session: _session,
             settings: _settings,
             controlsVisible: _controlsVisible,
+            picture: _picture,
             shortcuts: _shortcuts,
             onToggleComments: widget.onToggleComments,
             danmakuComposerBuilder: widget.danmakuComposerBuilder == null
@@ -770,6 +786,7 @@ class _PlayerView extends StatefulWidget {
     required this.session,
     required this.settings,
     required this.controlsVisible,
+    required this.picture,
     required this.shortcuts,
     required this.onToggleComments,
     required this.onFullScreen,
@@ -784,6 +801,7 @@ class _PlayerView extends StatefulWidget {
   final PlaybackSession session;
   final ValueListenable<AppSettings> settings;
   final ValueNotifier<bool> controlsVisible;
+  final PlayerPictureController picture;
   final PlaybackShortcutController shortcuts;
   final VoidCallback onToggleComments;
   final VoidCallback onFullScreen;
@@ -813,6 +831,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   final Set<String> _hoveredControlRegions = {};
   bool _mouseInside = false;
   PointerDeviceKind? _doubleTapKind;
+  bool _multiplePictureTouches = false;
   late AppLifecycleState? _appLifecycleState;
   bool _controlEditorFocused = false;
   int _openControlsMenus = 0;
@@ -891,6 +910,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   }
 
   void _onSettingsChanged() {
+    if (!widget.settings.value.playerShrinkVideo &&
+        widget.picture.value.scale < 1) {
+      widget.picture.reset();
+    }
     final mode = widget.settings.value.playerControlsMode;
     if (_controlsMode != mode) {
       _controlsMode = mode;
@@ -1052,7 +1075,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   }
 
   void _onSurfaceTap() {
-    if (!widget.active) return;
+    if (!widget.active || _multiplePictureTouches) return;
     _focusNode.requestFocus();
     if (_dynamicControls) {
       if (!widget.session.isLive) {
@@ -1068,7 +1091,12 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   void _onSurfaceDoubleTap() {
     final kind = _doubleTapKind;
     _doubleTapKind = null;
-    if (!widget.active || !_appActive || kind == null) return;
+    if (!widget.active ||
+        !_appActive ||
+        kind == null ||
+        _multiplePictureTouches) {
+      return;
+    }
     final input = InputScope.of<Object>(context);
     if (input?.routes.modal == true || (input?.dispatcher.barriers ?? 0) != 0) {
       return;
@@ -1443,7 +1471,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                           context,
                           layers: [
                             if (widget.active)
-                              VideoSurface(engine: session.engine),
+                              PlayerPicture(
+                                controller: widget.picture,
+                                child: VideoSurface(engine: session.engine),
+                              ),
                             if (widget.active &&
                                 settings.danmakuEnabled &&
                                 !session.isResolving &&
@@ -1456,118 +1487,189 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                               _buildDanmakuOverlay(controls, settings),
                             Positioned.fill(
                               child: RepaintBoundary(
-                                child: PlayerSeekControls(
+                                child: PlayerPictureControls(
+                                  controller: widget.picture,
                                   enabled:
                                       widget.active &&
-                                      !session.isLive &&
                                       !session.isResolving &&
                                       session.media != null &&
-                                      session.error == null &&
-                                      snapshot.phase != PlaybackPhase.opening &&
-                                      snapshot.phase != PlaybackPhase.idle,
+                                      session.error == null,
                                   sourceGeneration: sourceGeneration,
-                                  position: () =>
-                                      session.snapshots.value.position,
-                                  duration: snapshot.duration,
-                                  preview: _swipeSeekPreview,
-                                  storyboard: session.storyboard,
-                                  onPreviewRequest: () {
-                                    if (session.sourceGeneration ==
-                                        sourceGeneration) {
-                                      unawaited(session.ensureStoryboard());
-                                    }
+                                  isCurrent: () =>
+                                      widget.active &&
+                                      session.sourceGeneration ==
+                                          sourceGeneration &&
+                                      !session.isResolving &&
+                                      !session.audioOnly &&
+                                      session.error == null,
+                                  allowShrink: settings.playerShrinkVideo,
+                                  onTouchSequence: () =>
+                                      _multiplePictureTouches = false,
+                                  onMultipleTouches: () {
+                                    _multiplePictureTouches = true;
+                                    widget.shortcuts.endTouchHold();
                                   },
-                                  onSeek: (position) async {
-                                    // A source may change before the next UI frame.
-                                    if (widget.active &&
-                                        _appActive &&
-                                        session.sourceGeneration ==
-                                            sourceGeneration &&
-                                        !session.isResolving &&
-                                        !session.isLive &&
-                                        session.media != null &&
-                                        session.error == null) {
-                                      await session.seek(position);
-                                    }
-                                  },
-                                  child: PlayerSwipeControls(
+                                  child: PlayerSeekControls(
                                     enabled:
-                                        settings.fullscreenSwipeControls &&
-                                        widget.active,
+                                        widget.active &&
+                                        !session.isLive &&
+                                        !session.isResolving &&
+                                        session.media != null &&
+                                        session.error == null &&
+                                        snapshot.phase !=
+                                            PlaybackPhase.opening &&
+                                        snapshot.phase != PlaybackPhase.idle,
                                     sourceGeneration: sourceGeneration,
-                                    volume: snapshot.volume,
-                                    setVolume: session.setVolume,
-                                    child: RawGestureDetector(
-                                      // The recognizer's deadline is fixed at creation.
-                                      key: ValueKey(
-                                        settings.shortcuts.holdDelayMs,
-                                      ),
-                                      behavior: HitTestBehavior.translucent,
-                                      excludeFromSemantics: true,
-                                      gestures: {
-                                        if (!session.isLive)
-                                          LongPressGestureRecognizer:
-                                              GestureRecognizerFactoryWithHandlers<
-                                                LongPressGestureRecognizer
-                                              >(
-                                                () =>
-                                                    LongPressGestureRecognizer(
-                                                      duration: Duration(
-                                                        milliseconds: settings
-                                                            .shortcuts
-                                                            .holdDelayMs,
-                                                      ),
-                                                      supportedDevices: {
-                                                        PointerDeviceKind.touch,
-                                                      },
-                                                    ),
-                                                (recognizer) {
-                                                  recognizer.onLongPressDown =
-                                                      (_) => widget.shortcuts
-                                                          .prepareTouchHold();
-                                                  recognizer.onLongPressStart =
-                                                      (_) => widget.shortcuts
-                                                          .beginTouchHold();
-                                                  recognizer
-                                                          .onLongPressMoveUpdate =
-                                                      (details) => widget
-                                                          .shortcuts
-                                                          .moveTouchHold(
-                                                            dx: details
-                                                                .offsetFromOrigin
-                                                                .dx,
-                                                            dy: details
-                                                                .offsetFromOrigin
-                                                                .dy,
-                                                          );
-                                                  recognizer.onLongPressEnd =
-                                                      (_) => widget.shortcuts
-                                                          .endTouchHold();
-                                                  recognizer.onLongPressCancel =
-                                                      widget
-                                                          .shortcuts
-                                                          .endTouchHold;
-                                                },
-                                              ),
-                                      },
-                                      child: GestureDetector(
-                                        key: const ValueKey(
-                                          'player-surface-tap-target',
+                                    position: () =>
+                                        session.snapshots.value.position,
+                                    duration: snapshot.duration,
+                                    preview: _swipeSeekPreview,
+                                    storyboard: session.storyboard,
+                                    onPreviewRequest: () {
+                                      if (session.sourceGeneration ==
+                                          sourceGeneration) {
+                                        unawaited(session.ensureStoryboard());
+                                      }
+                                    },
+                                    onSeek: (position) async {
+                                      // A source may change before the next UI frame.
+                                      if (widget.active &&
+                                          _appActive &&
+                                          session.sourceGeneration ==
+                                              sourceGeneration &&
+                                          !session.isResolving &&
+                                          !session.isLive &&
+                                          session.media != null &&
+                                          session.error == null) {
+                                        await session.seek(position);
+                                      }
+                                    },
+                                    child: PlayerSwipeControls(
+                                      enabled:
+                                          settings.fullscreenSwipeControls &&
+                                          widget.active,
+                                      sourceGeneration: sourceGeneration,
+                                      volume: snapshot.volume,
+                                      setVolume: session.setVolume,
+                                      fullScreen: widget.fullScreen,
+                                      reverseFullScreenGesture: settings
+                                          .playerFullscreenGestureReverse,
+                                      onFullScreen:
+                                          widget.active &&
+                                              settings.playerFullscreenGesture
+                                          ? () {
+                                              if (_appActive &&
+                                                  session.sourceGeneration ==
+                                                      sourceGeneration &&
+                                                  !_multiplePictureTouches) {
+                                                _toggleFullScreen();
+                                              }
+                                            }
+                                          : null,
+                                      child: RawGestureDetector(
+                                        // The recognizer's deadline is fixed at creation.
+                                        key: ValueKey(
+                                          settings.shortcuts.holdDelayMs,
                                         ),
-                                        // Keep backend surface gestures out of
-                                        // this arena; media-kit's scale recognizer
-                                        // can claim a swipe before our drags.
-                                        behavior: HitTestBehavior.opaque,
-                                        onTap: _onSurfaceTap,
-                                        onDoubleTapDown: (details) =>
-                                            _doubleTapKind = details.kind,
-                                        onDoubleTapCancel: () =>
-                                            _doubleTapKind = null,
-                                        onDoubleTap: _onSurfaceDoubleTap,
+                                        behavior: HitTestBehavior.translucent,
+                                        excludeFromSemantics: true,
+                                        gestures: {
+                                          if (!session.isLive)
+                                            LongPressGestureRecognizer:
+                                                GestureRecognizerFactoryWithHandlers<
+                                                  LongPressGestureRecognizer
+                                                >(
+                                                  () =>
+                                                      LongPressGestureRecognizer(
+                                                        duration: Duration(
+                                                          milliseconds: settings
+                                                              .shortcuts
+                                                              .holdDelayMs,
+                                                        ),
+                                                        supportedDevices: {
+                                                          PointerDeviceKind
+                                                              .touch,
+                                                        },
+                                                      ),
+                                                  (recognizer) {
+                                                    recognizer
+                                                        .onLongPressDown = (_) {
+                                                      if (!_multiplePictureTouches) {
+                                                        widget.shortcuts
+                                                            .prepareTouchHold();
+                                                      }
+                                                    };
+                                                    recognizer
+                                                        .onLongPressStart = (_) {
+                                                      if (!_multiplePictureTouches) {
+                                                        widget.shortcuts
+                                                            .beginTouchHold();
+                                                      }
+                                                    };
+                                                    recognizer
+                                                            .onLongPressMoveUpdate =
+                                                        (details) => widget
+                                                            .shortcuts
+                                                            .moveTouchHold(
+                                                              dx: details
+                                                                  .offsetFromOrigin
+                                                                  .dx,
+                                                              dy: details
+                                                                  .offsetFromOrigin
+                                                                  .dy,
+                                                            );
+                                                    recognizer.onLongPressEnd =
+                                                        (_) => widget.shortcuts
+                                                            .endTouchHold();
+                                                    recognizer
+                                                            .onLongPressCancel =
+                                                        widget
+                                                            .shortcuts
+                                                            .endTouchHold;
+                                                  },
+                                                ),
+                                        },
+                                        child: GestureDetector(
+                                          key: const ValueKey(
+                                            'player-surface-tap-target',
+                                          ),
+                                          // Keep backend surface gestures out of
+                                          // this arena; media-kit's scale recognizer
+                                          // can claim a swipe before our drags.
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: _onSurfaceTap,
+                                          onDoubleTapDown: (details) =>
+                                              _doubleTapKind = details.kind,
+                                          onDoubleTapCancel: () =>
+                                              _doubleTapKind = null,
+                                          onDoubleTap: _onSurfaceDoubleTap,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: smallWindow ? 56 : 96,
+                              left: 0,
+                              right: 0,
+                              child: ValueListenableBuilder(
+                                valueListenable: widget.picture,
+                                builder: (context, value, _) =>
+                                    controls &&
+                                        value !=
+                                            PlayerPictureController.identity
+                                    ? Center(
+                                        child: FilledButton.tonal(
+                                          key: const ValueKey(
+                                            'player-restore-picture',
+                                          ),
+                                          onPressed: widget.picture.reset,
+                                          child: const Text('还原画面'),
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
                               ),
                             ),
                             if (widget.shortcuts.rateFeedback ||

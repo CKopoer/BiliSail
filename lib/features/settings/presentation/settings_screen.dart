@@ -413,10 +413,35 @@ final class _SettingsCategoryPageState
                       if (widget.category == SettingsCategory.playback)
                         _section('播放', [
                           _toggle(
+                            '双指缩小视频',
+                            s.playerShrinkVideo,
+                            (v) => controller.update(
+                              (c) => c.copyWith(playerShrinkVideo: v),
+                            ),
+                            '双指缩放和移动画面，允许缩小至 0.75 倍，最大放大至 2 倍',
+                          ),
+                          _toggle(
+                            '中部滑动切换全屏',
+                            s.playerFullscreenGesture,
+                            (v) => controller.update(
+                              (c) => c.copyWith(playerFullscreenGesture: v),
+                            ),
+                            '触摸视频中间三分之一区域，上滑进入全屏，下滑退出',
+                          ),
+                          _toggle(
+                            '全屏手势反向',
+                            s.playerFullscreenGestureReverse,
+                            (v) => controller.update(
+                              (c) =>
+                                  c.copyWith(playerFullscreenGestureReverse: v),
+                            ),
+                            '开启后中部下滑进入全屏，上滑退出',
+                          ),
+                          _toggle(
                             '滑动调节亮度和音量',
                             s.fullscreenSwipeControls,
                             controller.setFullscreenSwipeControls,
-                            '普通和全屏画面均可用，触摸左侧上下滑动调亮度，右侧调音量',
+                            '普通和全屏画面均可用，触摸左侧三分之一调亮度，右侧三分之一调音量',
                           ),
                           PlayerControlsModeSetting(
                             value: s.playerControlsMode,

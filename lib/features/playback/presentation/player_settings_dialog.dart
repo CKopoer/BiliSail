@@ -151,6 +151,22 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                           (c, v) => c.copyWith(autoPlay: v),
                         ),
                         _switch(
+                          '双指缩小视频（0.75–2 倍）',
+                          s.playerShrinkVideo,
+                          (c, v) => c.copyWith(playerShrinkVideo: v),
+                        ),
+                        _switch(
+                          '中部滑动切换全屏',
+                          s.playerFullscreenGesture,
+                          (c, v) => c.copyWith(playerFullscreenGesture: v),
+                        ),
+                        _switch(
+                          '全屏手势反向',
+                          s.playerFullscreenGestureReverse,
+                          (c, v) =>
+                              c.copyWith(playerFullscreenGestureReverse: v),
+                        ),
+                        _switch(
                           '滑动调节亮度和音量（左侧亮度，右侧音量）',
                           s.fullscreenSwipeControls,
                           (c, v) => c.copyWith(fullscreenSwipeControls: v),

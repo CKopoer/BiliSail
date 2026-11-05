@@ -41,6 +41,7 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/playback/presentation/player_seek_controls.dart';
+import 'package:bilisail/features/playback/presentation/player_picture_controls.dart';
 import 'package:bilisail/features/playback/presentation/playback_timeline_bar.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
@@ -60,6 +61,213 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final (name, target) in <(String, ContentPlaybackTarget?)>[
+    ('video', null),
+    ('pgc', const PgcPlaybackTarget('12', cid: '123')),
+    ('live', const LivePlaybackTarget('12')),
+    ('offline', const OfflinePlaybackTarget('local-task')),
+  ]) {
+    testWidgets(
+      '$name pinch and fullscreen gestures share output state without playback commands',
+      (tester) async {
+        final engine = _FakeEngine()..interactiveSurface = true;
+        final session = _session(engine);
+        final window = _FakeWindowService();
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(session, window, const AppSettings.defaults(), target: target),
+        );
+        await _pumpFrames(tester);
+        await session.pause();
+        await session.setVolume(50);
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        final before = engine.currentSnapshot;
+        final opens = engine.opens;
+        final seeks = engine.seeks;
+        final picture = tester
+            .widget<PlayerPicture>(find.byType(PlayerPicture))
+            .controller;
+        await _pinchPicture(tester);
+        expect(picture.value.scale, closeTo(1.5, .001));
+        expect(
+          find.byKey(const ValueKey('player-restore-picture')).hitTestable(),
+          findsOneWidget,
+        );
+        final transformed = picture.value;
+        var surface = tester.getRect(
+          find.byKey(const ValueKey('player-surface-tap-target')),
+        );
+        await tester.dragFrom(surface.center, const Offset(0, -65));
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isTrue);
+        expect(
+          tester.widget<PlayerPicture>(find.byType(PlayerPicture)).controller,
+          same(picture),
+        );
+        expect(picture.value, transformed);
+        await _pinchPicture(tester);
+        expect(picture.value.scale, 2);
+        surface = tester.getRect(
+          find.byKey(const ValueKey('player-surface-tap-target')),
+        );
+        await tester.dragFrom(surface.center, const Offset(0, 65));
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isFalse);
+        expect(picture.value.scale, 2);
+        await _showControls(tester);
+        await tester.tap(find.byKey(const ValueKey('player-restore-picture')));
+        expect(picture.value, PlayerPictureController.identity);
+        expect(engine.currentSnapshot.volume, before.volume);
+        expect(engine.currentSnapshot.rate, before.rate);
+        expect(engine.currentSnapshot.position, before.position);
+        expect(engine.currentSnapshot.desiredPlaying, before.desiredPlaying);
+        expect(engine.opens, opens);
+        expect(engine.seeks, seeks);
+        expect(engine.surfaceGestures, 0);
+        expect(engine.maxSurfaces, 1);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+  for (final firstAction in ['seek', 'volume', 'hold']) {
+    testWidgets(
+      'a second finger cancels $firstAction before manipulating picture',
+      (tester) async {
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final window = _FakeWindowService();
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(session, window, const AppSettings.defaults()),
+        );
+        await _pumpFrames(tester);
+        await session.pause();
+        await session.setVolume(50);
+        await _pumpFrames(tester);
+        final surface = tester.getRect(
+          find.byKey(const ValueKey('player-surface-tap-target')),
+        );
+        final a = await tester.startGesture(
+          surface.topLeft + Offset(surface.width * .75, surface.height * .4),
+          pointer: 1,
+        );
+        if (firstAction == 'seek') {
+          await a.moveBy(const Offset(30, 0));
+        } else if (firstAction == 'volume') {
+          await a.moveBy(const Offset(0, -30));
+        } else {
+          await tester.pump(const Duration(milliseconds: 501));
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.rate, 2);
+        }
+        await tester.pump();
+        final volume = engine.currentSnapshot.volume;
+        final seeks = engine.seeks;
+        final b = await tester.startGesture(
+          surface.topLeft + Offset(surface.width * .3, surface.height * .4),
+          pointer: 2,
+        );
+        await b.moveBy(const Offset(-30, 20));
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.rate, 1);
+        expect(engine.currentSnapshot.volume, volume);
+        expect(
+          find.byKey(const ValueKey('player-swipe-seek-preview')),
+          findsNothing,
+        );
+        final controller = tester
+            .widget<PlayerPicture>(find.byType(PlayerPicture))
+            .controller;
+        expect(controller.value.scale, greaterThan(1));
+        await a.up();
+        final transform = controller.value;
+        await b.moveBy(const Offset(50, -80));
+        await b.up();
+        await _pumpFrames(tester);
+        expect(controller.value, transform);
+        expect(engine.seeks, seeks);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(window.fullScreen, isFalse);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
+  testWidgets('picture resets on source changes and audio-only transitions', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    final window = _FakeWindowService();
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(session, window, const AppSettings.defaults()),
+    );
+    await _pumpFrames(tester);
+    await _pinchPicture(tester);
+    final controller = tester
+        .widget<PlayerPicture>(find.byType(PlayerPicture))
+        .controller;
+    expect(controller.value.scale, greaterThan(1));
+    await session.retry();
+    await _pumpFrames(tester);
+    expect(controller.value, PlayerPictureController.identity);
+    await _pinchPicture(tester);
+    await session.setAudioOnly(true);
+    await _pumpFrames(tester);
+    expect(controller.value, PlayerPictureController.identity);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+  for (final reverse in [false, true]) {
+    testWidgets(
+      'fullscreen gesture reverse=$reverse works with side swipes disabled',
+      (tester) async {
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final window = _FakeWindowService();
+        addTearDown(session.close);
+        final settings = AppSettings(
+          fullscreenSwipeControls: false,
+          playerFullscreenGestureReverse: reverse,
+        );
+        await tester.pumpWidget(_app(session, window, settings));
+        await _pumpFrames(tester);
+        var center = tester.getCenter(
+          find.byKey(const ValueKey('player-surface-tap-target')),
+        );
+        await tester.dragFrom(center, Offset(0, reverse ? -65 : 65));
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isFalse);
+        await tester.dragFrom(center, Offset(0, reverse ? 65 : -65));
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isTrue);
+        center = tester.getCenter(
+          find.byKey(const ValueKey('player-surface-tap-target')),
+        );
+        await tester.dragFrom(center, Offset(0, reverse ? -65 : 65));
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isFalse);
+        await tester.pumpWidget(
+          _app(
+            session,
+            window,
+            settings.copyWith(playerFullscreenGesture: false),
+          ),
+        );
+        await _pumpFrames(tester);
+        await tester.dragFrom(center, Offset(0, reverse ? 65 : -65));
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isFalse);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
+
   testWidgets(
     'iOS listening fullscreen Back exits presentation without workspace navigation',
     (tester) async {
@@ -10385,4 +10593,24 @@ class _ViewerRepository implements PlaybackViewerRepository {
     reads.add(cid);
     return '92';
   }
+}
+
+Future<void> _pinchPicture(WidgetTester tester) async {
+  final surface = tester.getRect(
+    find.byKey(const ValueKey('player-surface-tap-target')),
+  );
+  final a = await tester.startGesture(
+    surface.topLeft + Offset(surface.width * .4, surface.height * .4),
+    pointer: 1,
+  );
+  final b = await tester.startGesture(
+    surface.topLeft + Offset(surface.width * .6, surface.height * .4),
+    pointer: 2,
+  );
+  await a.moveBy(Offset(-surface.width * .05, 0));
+  await b.moveBy(Offset(surface.width * .05, 0));
+  await tester.pump();
+  await a.up();
+  await b.up();
+  await _pumpFrames(tester);
 }
