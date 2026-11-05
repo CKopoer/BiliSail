@@ -447,6 +447,9 @@ final class BiliApiClient {
     if (!const {
       '/web_im/v1/web_im/send_msg',
       '/session_svr/v1/session_svr/update_ack',
+      '/session_svr/v1/session_svr/set_top',
+      '/session_svr/v1/session_svr/remove_session',
+      '/link_setting/v1/link_setting/set_msg_dnd',
     }.contains(path)) {
       throw ArgumentError('Unsupported message mutation');
     }

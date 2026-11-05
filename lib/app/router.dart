@@ -15,6 +15,7 @@ import '../domain/user.dart';
 import '../core/platform/external_links.dart';
 import '../features/profile/domain/profile_repository.dart';
 import '../features/messages/application/messages_controller.dart';
+import '../features/messages/domain/message_target.dart';
 import '../features/messages/presentation/messages_screen.dart';
 import '../features/profile/application/profile_controller.dart';
 import '../features/profile/presentation/profile_screen.dart';
@@ -439,12 +440,9 @@ final class _WorkspacePage extends ConsumerWidget {
     ),
     onOpenUser: (user) => context.go('/user/${user.value}'),
     onOpenTarget: (target) {
-      final parts = target.pathSegments;
-      if (target.host == 'www.bilibili.com' &&
-          parts.length >= 2 &&
-          parts.first == 'video' &&
-          VideoId(parts[1]).isValid) {
-        context.go('/video/${parts[1]}');
+      final location = messageWorkspaceLocation(target);
+      if (location != null) {
+        context.go(location);
       } else {
         ProviderScope.containerOf(
           context,

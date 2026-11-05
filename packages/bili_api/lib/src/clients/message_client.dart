@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../api_client.dart';
 import '../models.dart';
 import '../models/message_models.dart';
+import '../video_identifiers.dart';
 
 /// Web Cookie inbox. IDs, sequences and microsecond cursors stay decimal strings.
 final class MessageClient {
@@ -109,6 +110,9 @@ final class MessageClient {
             ),
             time: message?.time,
             unread: _count(row['unread_count']),
+            pinned:
+                _yes(row['is_top']) || _positiveDecimal(row['top_ts']) != null,
+            muted: _yes(row['is_dnd']),
             lastSequence: row['max_seqno'] == null
                 ? message?.sequence
                 : _decimal(row['max_seqno'], e, zero: true),
@@ -211,9 +215,10 @@ final class MessageClient {
             return ApiInboxEntry(
               id: _decimal(row['id'], e),
               title: _text(row['title']).isEmpty ? '系统通知' : _text(row['title']),
-              text: _text(row['content']),
+              text: _systemText(row['content']),
               time: _time(row['time_at']),
-              targetUrl: _uri(row['link']),
+              targetUrl:
+                  _targetUri(row['link']) ?? _markupTarget(row['content']),
               system: true,
               readCursor: row['cursor'] == null
                   ? null
@@ -255,14 +260,25 @@ final class MessageClient {
         id: id,
         title:
             '${actor.isEmpty ? '用户' : actor}${_count(row['counts']) > 1 ? '等${_count(row['counts'])}人' : ''}$verb',
-        text: [
-          _text(item['source_content']),
-          _text(item['title'] ?? item['desc']),
-        ].where((v) => v.isNotEmpty).toSet().join('\n'),
+        text: _firstText([
+          item['source_content'],
+          item['title'],
+          item['desc'],
+          item['business'],
+        ]),
+        sourceText: _firstText([
+          item['target_reply_content'],
+          item['root_reply_content'],
+          item['desc'],
+        ]),
+        sourceTitle: _firstText([item['title'], item['business']]),
+        sourceImageUrl: _uri(
+          item['image'] ?? item['cover'] ?? item['cover_url'],
+        ),
         userMid: mid,
         avatarUrl: _uri(user['avatar'] ?? user['face']),
         time: _time(row['${name}_time']),
-        targetUrl: _uri(item['uri']),
+        targetUrl: _targetUri(item['uri'] ?? item['native_uri']),
       );
     }
     final c = _map(total['cursor'], e);
@@ -334,28 +350,123 @@ final class MessageClient {
     final revoked =
         _count(row['msg_status']) == 1 ||
         _count(row['msg_status']) == 2 ||
-        type == 5;
+        type == 5 ||
+        type == 8;
     // The server may still include recalled text: never decode or display it.
-    var content = const <String, Object?>{};
-    if (!revoked && row['content'] is String) {
-      try {
-        content = _map(jsonDecode(row['content'] as String), e);
-      } on FormatException {
-        _fail(e);
-      }
-    }
-    if (!revoked && type == 1 && content['content'] is! String) _fail(e);
-    final image = !revoked && type == 2 ? _uri(content['url']) : null;
+    final content = revoked
+        ? const <String, Object?>{}
+        : _payload(row['content']);
+    final kind = revoked
+        ? ApiMessageContentKind.withdrawn
+        : switch (type) {
+            1 => ApiMessageContentKind.text,
+            2 || 6 => ApiMessageContentKind.image,
+            3 => ApiMessageContentKind.voice,
+            4 || 7 => ApiMessageContentKind.share,
+            9 => ApiMessageContentKind.miniProgram,
+            10 => ApiMessageContentKind.notification,
+            11 => ApiMessageContentKind.video,
+            12 => ApiMessageContentKind.article,
+            13 => ApiMessageContentKind.pictureCard,
+            14 => ApiMessageContentKind.commonCard,
+            16 => ApiMessageContentKind.autoReply,
+            18 => ApiMessageContentKind.notice,
+            _ => ApiMessageContentKind.unsupported,
+          };
+    final title = _firstText([
+      content['title'],
+      content['main_title'],
+      content['name'],
+    ]);
+    final subtitle = _firstText([
+      content['author'],
+      content['source'],
+      content['subtitle'],
+    ]);
+    final details = <ApiMessageDetail>[
+      for (final value in _contentList(content['modules']))
+        if (_optionalMap(value) case final module when module.isNotEmpty)
+          ApiMessageDetail(
+            label: _text(module['title']),
+            value: _text(module['detail']),
+          ),
+    ];
+    final cards = <ApiMessageCard>[
+      for (final value in _contentList(content['sub_cards']))
+        if (_optionalMap(value) case final card when card.isNotEmpty)
+          ApiMessageCard(
+            title: _firstText([card['field1'], card['title']]),
+            description: _joinText([
+              card['field2'],
+              card['field3'],
+              card['desc'],
+            ]),
+            imageUrl: _uri(card['cover_url'] ?? card['cover']),
+            targetUrl: _targetUri(card['jump_url']),
+          ),
+    ];
+    final image = switch (kind) {
+      ApiMessageContentKind.image => _uri(content['url'] ?? content['pic_url']),
+      ApiMessageContentKind.pictureCard => _uri(
+        content['pic_url'] ?? content['url'],
+      ),
+      ApiMessageContentKind.video ||
+      ApiMessageContentKind.commonCard => _uri(content['cover']),
+      ApiMessageContentKind.share => _uri(content['thumb'] ?? content['cover']),
+      ApiMessageContentKind.article => _firstImage(content['image_urls']),
+      _ => null,
+    };
+    final target = revoked ? null : _messageTarget(content, type);
+    final links = <ApiMessageLink>[
+      for (final suffix in ['', '_2', '_3'])
+        if (_targetUri(content['jump_uri$suffix']) case final url?)
+          ApiMessageLink(
+            label: _firstText([content['jump_text$suffix'], '查看详情']),
+            url: url,
+          ),
+    ];
+    final duration = _duration(
+      content['duration'] ?? content['times'] ?? content['length'],
+    );
+    final attached = _payload(content['attach_msg']);
     final text = revoked
         ? '消息已撤回'
-        : type == 2
-        ? '[图片]'
-        : _text(content['content']).isNotEmpty
-        ? _text(content['content'])
-        : [
-            _text(content['title']),
-            _text(content['text']),
-          ].where((s) => s.isNotEmpty).join('\n');
+        : switch (kind) {
+            ApiMessageContentKind.image => type == 6 ? '[表情]' : '[图片]',
+            ApiMessageContentKind.voice =>
+              duration == null ? '[语音消息]' : '[语音消息 · $duration 秒]',
+            ApiMessageContentKind.notice => _noticeText(content['content']),
+            ApiMessageContentKind.text => _text(content['content']),
+            ApiMessageContentKind.notification => _systemText(content['text']),
+            _ => _joinText([
+              content['text'],
+              content['summary'],
+              content['description'],
+              content['desc'],
+              attached['content'],
+            ]),
+          };
+    if (!revoked && kind == ApiMessageContentKind.notification) {
+      final url = _markupTarget(content['text']);
+      if (url != null && !links.any((link) => link.url == url)) {
+        links.add(ApiMessageLink(label: '查看详情', url: url));
+      }
+    }
+    if (!revoked && kind == ApiMessageContentKind.text) {
+      for (final match in RegExp(
+        r'https?://[^\s<>\x00-\x1f]+',
+      ).allMatches(text).take(10)) {
+        final value = match
+            .group(0)
+            ?.replaceFirst(RegExp(r'[,.;!?)，。！？）]+$'), '');
+        final url = _targetUri(value);
+        if (url != null && !links.any((link) => link.url == url)) {
+          links.add(ApiMessageLink(label: '打开链接', url: url));
+        }
+      }
+    }
+    final missing =
+        content.isEmpty || (kind == ApiMessageContentKind.text && text.isEmpty);
     return ApiPrivateMessage(
       // Some notification messages reuse msg_key=0; sequence is unique per thread.
       id: sequence,
@@ -363,10 +474,214 @@ final class MessageClient {
       senderMid: sender,
       type: type,
       time: _time(row['timestamp']),
-      text: text.isEmpty ? '暂不支持的消息类型（$type）' : text,
+      text: revoked
+          ? text
+          : missing
+          ? '消息内容暂时无法解析（类型 $type）'
+          : text.isNotEmpty
+          ? text
+          : title.isNotEmpty
+          ? title
+          : switch (kind) {
+              ApiMessageContentKind.notification => '[业务通知]',
+              ApiMessageContentKind.share => '[分享消息]',
+              ApiMessageContentKind.miniProgram => '[小程序消息]',
+              _ => '暂不支持的消息类型（$type）',
+            },
       imageUrl: image,
-      targetUrl: revoked ? null : _uri(content['url'] ?? content['jump_uri']),
+      targetUrl: target,
+      kind: missing && !revoked ? ApiMessageContentKind.unsupported : kind,
+      title: title,
+      subtitle: subtitle,
+      cards: List.unmodifiable(cards),
+      details: List.unmodifiable(details),
+      links: List.unmodifiable(links),
+      durationSeconds: duration,
+      imageAspectRatio: _aspectRatio(content['width'], content['height']),
     );
+  }
+
+  // Payload failure is local to one message. Identity/sequence validation above
+  // remains strict so broken content never changes deduplication or read ACKs.
+  Map<String, Object?> _payload(Object? value) {
+    if (value is Map<String, Object?>) return value;
+    if (value is! String || value.length > 131072) return const {};
+    try {
+      return _optionalMap(jsonDecode(value));
+    } on FormatException {
+      return const {};
+    }
+  }
+
+  List<Object?> _contentList(Object? value) => value is List<Object?>
+      ? value.take(20).toList(growable: false)
+      : const [];
+
+  String _firstText(List<Object?> values) {
+    for (final value in values) {
+      final text = _text(value);
+      if (text.isNotEmpty) return text;
+    }
+    return '';
+  }
+
+  String _joinText(List<Object?> values) =>
+      values.map(_text).where((text) => text.isNotEmpty).toSet().join('\n');
+
+  String _noticeText(Object? value) {
+    if (value is String && value.length <= 131072) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is List<Object?>) value = decoded;
+      } on FormatException {
+        return _text(value);
+      }
+    }
+    return value is List<Object?>
+        ? _joinText(
+            _contentList(
+              value,
+            ).map((part) => _optionalMap(part)['text']).toList(),
+          )
+        : _text(value);
+  }
+
+  Uri? _firstImage(Object? value) {
+    for (final image in _contentList(value)) {
+      if (_uri(image) case final url?) return url;
+    }
+    return null;
+  }
+
+  String? _positiveDecimal(Object? value) {
+    if (value is! String && value is! int) return null;
+    final text = '$value';
+    return text.length <= 40 && RegExp(r'^[1-9][0-9]*$').hasMatch(text)
+        ? text
+        : null;
+  }
+
+  int? _duration(Object? value) {
+    final number = value is int
+        ? value
+        : value is String
+        ? int.tryParse(value)
+        : null;
+    return number != null && number >= 0 && number <= 86400 ? number : null;
+  }
+
+  double? _aspectRatio(Object? width, Object? height) {
+    if (width is! num || height is! num || width <= 0 || height <= 0) {
+      return null;
+    }
+    final ratio = width / height;
+    return ratio.isFinite && ratio > 0 ? ratio.clamp(0.1, 10.0) : null;
+  }
+
+  Uri? _messageTarget(Map<String, Object?> content, int type) {
+    if (type == 2 || type == 6 || type == 3) return null;
+    final direct = _targetUri(
+      content['jump_url'] ?? content['jump_uri'] ?? content['uri'],
+    );
+    if (direct != null) return direct;
+    final bvid = _text(content['bvid']);
+    if (RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid)) {
+      return Uri.https('www.bilibili.com', '/video/$bvid');
+    }
+    final id = _positiveDecimal(
+      content['id'] ?? content['rid'] ?? content['sourceID'] ?? content['aid'],
+    );
+    if (id != null) {
+      if (type == 11) return _videoTarget(id);
+      if (type == 12) return Uri.https('www.bilibili.com', '/read/cv$id');
+      if (type == 14 && content['source'] == '直播') {
+        return Uri.https('live.bilibili.com', '/$id');
+      }
+      final source = content['source'];
+      switch (source is String ? int.tryParse(source) : source) {
+        case 2 || 11:
+          return Uri.https('t.bilibili.com', '/$id');
+        case 5:
+          return _videoTarget(id);
+        case 6:
+          return Uri.https('www.bilibili.com', '/read/cv$id');
+        case 16:
+          return Uri.https('www.bilibili.com', '/bangumi/play/ep$id');
+      }
+    }
+    return _targetUri(content['url']);
+  }
+
+  Uri? _targetUri(Object? value) {
+    if (value is! String || value.length > 8192) return null;
+    final parsed = Uri.tryParse(value);
+    if (parsed?.scheme == 'bilibili' && parsed != null) {
+      final id = parsed.pathSegments.isEmpty ? null : parsed.pathSegments.last;
+      if (parsed.host == 'video' &&
+          id != null &&
+          RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(id)) {
+        return Uri.https('www.bilibili.com', '/video/$id');
+      }
+      final decimal = id?.startsWith('av') == true ? id?.substring(2) : id;
+      if (decimal != null && _positiveDecimal(decimal) != null) {
+        return switch (parsed.host) {
+          'video' => _videoTarget(decimal),
+          'article' => Uri.https('www.bilibili.com', '/read/cv$decimal'),
+          'dynamic' => Uri.https('t.bilibili.com', '/$decimal'),
+          'live' => Uri.https('live.bilibili.com', '/$decimal'),
+          _ => null,
+        };
+      }
+      return null;
+    }
+    final uri = _uri(value);
+    if (uri == null) return null;
+    final host = uri.host.toLowerCase();
+    return host == 'bilibili.com' ||
+            host.endsWith('.bilibili.com') ||
+            host == 'b23.tv'
+        ? uri
+        : null;
+  }
+
+  Uri _videoTarget(String aid) => Uri.https(
+    'www.bilibili.com',
+    '/video/${VideoIdentifiers.bvidFromAid(aid) ?? 'av$aid'}',
+  );
+
+  String _systemText(Object? value) => _text(value)
+      .replaceAll(
+        RegExp(
+          r'<(?:script|style)\b[^>]*>.*?</(?:script|style)>',
+          caseSensitive: false,
+          dotAll: true,
+        ),
+        '',
+      )
+      .replaceAll(
+        RegExp(r'<br\s*/?>|</p\s*>|</div\s*>', caseSensitive: false),
+        '\n',
+      )
+      .replaceAll(RegExp(r'<[^>]*>'), '')
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .trim();
+
+  Uri? _markupTarget(Object? value) {
+    final text = _text(value);
+    final pattern = RegExp(
+      "href\\s*=\\s*[\"']([^\"']+)[\"']",
+      caseSensitive: false,
+    );
+    for (final match in pattern.allMatches(text).take(20)) {
+      final url = _targetUri(match.group(1)?.replaceAll('&amp;', '&'));
+      if (url != null) return url;
+    }
+    return null;
   }
 
   ApiPage<T> _page<T>(
@@ -400,7 +715,14 @@ final class MessageClient {
   int _number(Object? v, String e) => v is int ? v : _fail(e);
   int _count(Object? v) => v is int && v >= 0 ? v : 0;
   bool _yes(Object? v) => v == 1 || v == true;
-  String _text(Object? v) => v is String ? v : '';
+  String _text(Object? v) {
+    if (v is! String) return '';
+    if (v.length <= 16000) return v;
+    // Do not split a surrogate pair when capping server-provided display text.
+    final last = v.codeUnitAt(15999);
+    return v.substring(0, last >= 0xd800 && last <= 0xdbff ? 15999 : 16000);
+  }
+
   DateTime? _time(Object? v) {
     final n = v is int ? v : int.tryParse('$v');
     return n != null && n > 0 && n < 8640000000000

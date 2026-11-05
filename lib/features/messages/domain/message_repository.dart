@@ -12,6 +12,45 @@ enum InboxSection {
   final String label;
 }
 
+enum MessageContentKind {
+  text,
+  image,
+  share,
+  notification,
+  video,
+  article,
+  pictureCard,
+  commonCard,
+  autoReply,
+  notice,
+  voice,
+  miniProgram,
+  withdrawn,
+  unsupported,
+}
+
+final class MessageCard {
+  const MessageCard({
+    this.title = '',
+    this.description = '',
+    this.imageUrl,
+    this.targetUrl,
+  });
+  final String title, description;
+  final Uri? imageUrl, targetUrl;
+}
+
+final class MessageDetail {
+  const MessageDetail({required this.label, required this.value});
+  final String label, value;
+}
+
+final class MessageLink {
+  const MessageLink({required this.label, required this.url});
+  final String label;
+  final Uri url;
+}
+
 final class InboxEntry {
   const InboxEntry({
     required this.id,
@@ -26,6 +65,11 @@ final class InboxEntry {
     this.unread = 0,
     this.lastSequence,
     this.readCursor,
+    this.sourceText = '',
+    this.sourceTitle = '',
+    this.sourceImageUrl,
+    this.pinned = false,
+    this.muted = false,
   });
   final String id, title, text;
   final UserId? userId;
@@ -36,6 +80,9 @@ final class InboxEntry {
   final int unread;
   final String? lastSequence;
   final String? readCursor;
+  final String sourceText, sourceTitle;
+  final Uri? sourceImageUrl;
+  final bool pinned, muted;
   bool get canSend => sessionType == 1 && !system && userId != null;
 }
 
@@ -49,12 +96,27 @@ final class PrivateMessage {
     this.time,
     this.imageUrl,
     this.targetUrl,
+    this.kind = MessageContentKind.text,
+    this.title = '',
+    this.subtitle = '',
+    this.cards = const [],
+    this.details = const [],
+    this.links = const [],
+    this.durationSeconds,
+    this.imageAspectRatio,
   });
   final String id, sequence, text;
   final UserId senderId;
   final int type;
   final DateTime? time;
   final Uri? imageUrl, targetUrl;
+  final MessageContentKind kind;
+  final String title, subtitle;
+  final List<MessageCard> cards;
+  final List<MessageDetail> details;
+  final List<MessageLink> links;
+  final int? durationSeconds;
+  final double? imageAspectRatio;
 }
 
 final class MessagePage<T> {

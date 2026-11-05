@@ -7,6 +7,7 @@ import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../../auth/application/auth_controller.dart';
 import '../domain/message_repository.dart';
+import '../domain/message_management.dart';
 
 final messageRepositoryProvider = Provider<MessageRepository>(
   (ref) => throw UnimplementedError('MessageRepository'),
@@ -67,6 +68,8 @@ final class MessagesState {
     this.sending = false,
     this.markingRead = false,
     this.writeMessage,
+    this.managingIds = const {},
+    this.supportsManagement = false,
   });
   final InboxSection section;
   final MessageListState<InboxEntry> inbox;
@@ -74,6 +77,8 @@ final class MessagesState {
   final InboxEntry? selected;
   final bool sending, markingRead;
   final String? writeMessage;
+  final Set<String> managingIds;
+  final bool supportsManagement;
   MessagesState copy({
     InboxSection? section,
     MessageListState<InboxEntry>? inbox,
@@ -84,6 +89,7 @@ final class MessagesState {
     bool? markingRead,
     String? writeMessage,
     bool clearWriteMessage = false,
+    Set<String>? managingIds,
   }) => MessagesState(
     section: section ?? this.section,
     inbox: inbox ?? this.inbox,
@@ -92,6 +98,8 @@ final class MessagesState {
     sending: sending ?? this.sending,
     markingRead: markingRead ?? this.markingRead,
     writeMessage: clearWriteMessage ? null : writeMessage ?? this.writeMessage,
+    managingIds: managingIds ?? this.managingIds,
+    supportsManagement: supportsManagement,
   );
 }
 
@@ -104,6 +112,12 @@ class MessagesController extends Notifier<MessagesState> {
   (String, int)? _inboxAccount;
   (String, int)? _threadAccount;
   final Map<InboxSection, Map<InboxSection, int>> _readUnreadSnapshots = {};
+  int _managementRevision = 0;
+  final Map<String, ({int revision, bool? pinned, bool? muted, bool removed})>
+  _managementChanges = {};
+  final Map<String, int> _privateOrder = {};
+
+  bool get supportsManagement => state.supportsManagement;
 
   @override
   MessagesState build() {
@@ -121,7 +135,10 @@ class MessagesController extends Notifier<MessagesState> {
         if (ref.mounted && generation == _generation) loadInbox();
       });
     }
-    return const MessagesState();
+    return MessagesState(
+      supportsManagement:
+          ref.read(messageRepositoryProvider) is MessageManagementRepository,
+    );
   }
 
   void _cancel() {
@@ -130,6 +147,9 @@ class MessagesController extends Notifier<MessagesState> {
     _inboxAccount = null;
     _threadAccount = null;
     _readUnreadSnapshots.clear();
+    _managementChanges.clear();
+    _privateOrder.clear();
+    _managementRevision = 0;
     _inboxRead?.cancel();
     _threadRead?.cancel();
     for (final write in _writes) {
@@ -224,6 +244,7 @@ class MessagesController extends Notifier<MessagesState> {
     final repository = ref.read(messageRepositoryProvider);
     if (repository.accountScope == 'guest') return;
     final generation = _generation, version = ++_inboxVersion;
+    final managementRevision = _managementRevision;
     final scope = repository.accountScope,
         epoch = repository.sessionEpoch,
         section = state.section;
@@ -254,11 +275,25 @@ class MessagesController extends Notifier<MessagesState> {
       for (final item in page.items) {
         unique[item.id] = item;
       }
+      if (section == InboxSection.private) {
+        if (refresh) _privateOrder.clear();
+        for (final id in unique.keys) {
+          if (_privateOrder.length < 500) {
+            _privateOrder.putIfAbsent(id, () => _privateOrder.length);
+          }
+        }
+        _applyManagementChanges(unique, managementRevision);
+      }
       _inboxAccount = (scope, epoch);
       state = state.copy(
         selected: unique[state.selected?.id],
         inbox: MessageListState(
-          items: List.unmodifiable(unique.values.take(500)),
+          items: List.unmodifiable(
+            (section == InboxSection.private
+                    ? _sortConversations(unique.values)
+                    : unique.values)
+                .take(500),
+          ),
           cursor: page.cursor,
           hasMore:
               page.hasMore &&
@@ -282,9 +317,15 @@ class MessagesController extends Notifier<MessagesState> {
       }
     } catch (error) {
       if (_current(generation, scope, epoch) && version == _inboxVersion) {
+        final restored = {for (final item in old.items) item.id: item};
+        if (section == InboxSection.private) {
+          _applyManagementChanges(restored, managementRevision);
+        }
         state = state.copy(
           inbox: MessageListState(
-            items: old.items,
+            items: section == InboxSection.private
+                ? List.unmodifiable(_sortConversations(restored.values))
+                : old.items,
             cursor: old.cursor,
             hasMore: old.hasMore,
             error: _error(error),
@@ -417,7 +458,11 @@ class MessagesController extends Notifier<MessagesState> {
 
   Future<bool> send(String text) async {
     final entry = state.selected;
-    if (entry == null || !entry.canSend || state.sending || state.markingRead) {
+    if (entry == null ||
+        !entry.canSend ||
+        state.sending ||
+        state.markingRead ||
+        state.managingIds.contains(entry.id)) {
       return false;
     }
     if (text.trim().isEmpty || text.runes.length > 1000) {
@@ -440,6 +485,7 @@ class MessagesController extends Notifier<MessagesState> {
         state.section != InboxSection.private ||
         state.markingRead ||
         state.sending ||
+        state.managingIds.contains(entry.id) ||
         thread.loading ||
         thread.error != null ||
         _threadAccount != (repository.accountScope, repository.sessionEpoch) ||
@@ -522,6 +568,187 @@ class MessagesController extends Notifier<MessagesState> {
       return false;
     } finally {
       _writes.remove(cancellation);
+    }
+  }
+
+  void _applyManagementChanges(Map<String, InboxEntry> entries, int revision) {
+    // Both successful and failed old reads must retain newer confirmed writes.
+    for (final change in _managementChanges.entries) {
+      if (change.value.revision <= revision) continue;
+      final item = entries[change.key];
+      if (change.value.removed) {
+        entries.remove(change.key);
+      } else if (item != null) {
+        entries[change.key] = _withFlags(
+          item,
+          pinned: change.value.pinned,
+          muted: change.value.muted,
+        );
+      }
+    }
+  }
+
+  List<InboxEntry> _sortConversations(Iterable<InboxEntry> entries) {
+    final sorted = entries.toList();
+    sorted.sort((a, b) {
+      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      return (_privateOrder[a.id] ?? 500).compareTo(_privateOrder[b.id] ?? 500);
+    });
+    return sorted;
+  }
+
+  InboxEntry _withFlags(InboxEntry entry, {bool? pinned, bool? muted}) =>
+      InboxEntry(
+        id: entry.id,
+        title: entry.title,
+        text: entry.text,
+        userId: entry.userId,
+        avatarUrl: entry.avatarUrl,
+        time: entry.time,
+        targetUrl: entry.targetUrl,
+        sessionType: entry.sessionType,
+        system: entry.system,
+        unread: entry.unread,
+        lastSequence: entry.lastSequence,
+        readCursor: entry.readCursor,
+        sourceText: entry.sourceText,
+        sourceTitle: entry.sourceTitle,
+        sourceImageUrl: entry.sourceImageUrl,
+        pinned: pinned ?? entry.pinned,
+        muted: muted ?? entry.muted,
+      );
+
+  Future<bool> setPinned(InboxEntry entry, bool pinned) => _manage(
+    entry,
+    pinned: pinned,
+    action: (repository, cancellation) =>
+        repository.setPinned(entry, pinned, cancellation: cancellation),
+  );
+
+  Future<bool> setMuted(InboxEntry entry, bool muted) => _manage(
+    entry,
+    muted: muted,
+    action: (repository, cancellation) =>
+        repository.setMuted(entry, muted, cancellation: cancellation),
+  );
+
+  Future<bool> removeConversation(InboxEntry entry) => _manage(
+    entry,
+    removed: true,
+    action: (repository, cancellation) =>
+        repository.removeConversation(entry, cancellation: cancellation),
+  );
+
+  Future<bool> _manage(
+    InboxEntry entry, {
+    bool? pinned,
+    bool? muted,
+    bool removed = false,
+    required Future<void> Function(
+      MessageManagementRepository,
+      RequestCancellation,
+    )
+    action,
+  }) async {
+    final repository = ref.read(messageRepositoryProvider);
+    final account = (repository.accountScope, repository.sessionEpoch);
+    final currentEntry =
+        (_inboxAccount == account &&
+            state.section == InboxSection.private &&
+            state.inbox.items.any((item) => identical(item, entry))) ||
+        (_threadAccount == account && identical(state.selected, entry));
+    if (repository is! MessageManagementRepository ||
+        !currentEntry ||
+        !entry.canSend ||
+        state.managingIds.contains(entry.id) ||
+        (state.selected?.id == entry.id &&
+            (state.sending || state.markingRead))) {
+      return false;
+    }
+    final generation = _generation,
+        scope = repository.accountScope,
+        epoch = repository.sessionEpoch;
+    final cancellation = RequestCancellation();
+    _writes.add(cancellation);
+    state = state.copy(
+      managingIds: Set.unmodifiable({...state.managingIds, entry.id}),
+      clearWriteMessage: true,
+    );
+    try {
+      await action(repository as MessageManagementRepository, cancellation);
+      if (!_current(generation, scope, epoch)) return false;
+      final previous = _managementChanges[entry.id];
+      _managementChanges.remove(entry.id);
+      _managementChanges[entry.id] = (
+        revision: ++_managementRevision,
+        pinned: pinned ?? previous?.pinned,
+        muted: muted ?? previous?.muted,
+        removed: removed,
+      );
+      if (_managementChanges.length > 500) {
+        _managementChanges.remove(_managementChanges.keys.first);
+      }
+      final selected = state.selected;
+      final clearSelection = removed && selected?.id == entry.id;
+      if (clearSelection) {
+        _threadRead?.cancel();
+        ++_threadVersion;
+        _threadAccount = null;
+      }
+      final inbox = state.inbox;
+      state = state.copy(
+        selected: selected?.id == entry.id && selected != null
+            ? _withFlags(selected, pinned: pinned, muted: muted)
+            : null,
+        clearSelection: clearSelection,
+        thread: clearSelection ? const MessageListState() : null,
+        inbox: state.section == InboxSection.private
+            ? MessageListState(
+                items: List.unmodifiable(
+                  _sortConversations([
+                    for (final item in inbox.items)
+                      if (item.id != entry.id)
+                        item
+                      else if (!removed)
+                        _withFlags(item, pinned: pinned, muted: muted),
+                  ]),
+                ),
+                cursor: inbox.cursor,
+                hasMore: inbox.hasMore,
+                loading: inbox.loading,
+                error: inbox.error,
+              )
+            : null,
+        writeMessage: state.section == InboxSection.private
+            ? removed
+                  ? '已移除会话'
+                  : pinned != null
+                  ? pinned
+                        ? '已置顶会话'
+                        : '已取消置顶'
+                  : muted == true
+                  ? '已开启免打扰'
+                  : '已关闭免打扰'
+            : null,
+        clearWriteMessage: state.section != InboxSection.private,
+      );
+      if (removed && entry.unread > 0) ref.invalidate(unreadMessagesProvider);
+      return true;
+    } catch (error) {
+      if (_current(generation, scope, epoch) &&
+          state.section == InboxSection.private) {
+        state = state.copy(writeMessage: _error(error, write: true));
+      }
+      return false;
+    } finally {
+      _writes.remove(cancellation);
+      if (ref.mounted && generation == _generation) {
+        state = state.copy(
+          managingIds: Set.unmodifiable(
+            {...state.managingIds}..remove(entry.id),
+          ),
+        );
+      }
     }
   }
 

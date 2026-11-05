@@ -12,7 +12,6 @@ import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:bilisail/shared/ui/retained_tab_view.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -683,7 +682,7 @@ void main() {
   );
 
   testWidgets(
-    'narrow message tabs scroll by mouse wheel and switch without writes',
+    'narrow shortcuts navigate to a category and return without writes',
     (tester) async {
       tester.view.physicalSize = const Size(320, 700);
       tester.view.devicePixelRatio = 1;
@@ -693,44 +692,20 @@ void main() {
       final scope = ProviderScope.containerOf(
         tester.element(find.byType(MessagesScreen)),
       );
-      expect(find.text('私信 · 3'), findsOneWidget);
-      final strip = find.byKey(const ValueKey('message-section-strip'));
-      final scrollable = tester.state<ScrollableState>(
-        find.descendant(of: strip, matching: find.byType(Scrollable)),
-      );
-      expect(scrollable.position.maxScrollExtent, greaterThan(0));
-      await tester.sendEventToBinding(
-        PointerScrollEvent(
-          kind: PointerDeviceKind.mouse,
-          position: tester.getCenter(strip),
-          scrollDelta: const Offset(0, 2000),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final system = find.byKey(const ValueKey('message-section-system'));
-      expect(system.hitTestable(), findsOneWidget);
-      await tester.tap(system);
+      expect(find.byKey(const ValueKey('message-shortcuts')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('message-section-system')));
       await tester.pumpAndSettle();
       expect(
         scope.read(messagesControllerProvider).section,
         InboxSection.system,
       );
-      await tester.sendEventToBinding(
-        PointerScrollEvent(
-          kind: PointerDeviceKind.mouse,
-          position: tester.getCenter(strip),
-          scrollDelta: const Offset(0, -2000),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('message-section-private')));
+      await tester.tap(find.byTooltip('返回消息首页'));
       await tester.pumpAndSettle();
       expect(
         scope.read(messagesControllerProvider).section,
         InboxSection.private,
       );
-      expect(repo.sends, 0);
-      expect(repo.marks, 0);
+      expect(repo.sends + repo.marks, 0);
       expect(tester.takeException(), isNull);
     },
   );
@@ -744,10 +719,9 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       await mount(tester);
-      expect(find.text('回复'), findsOneWidget);
-      expect(find.text('我的'), findsOneWidget);
-      expect(find.text('回复我的'), findsNothing);
-      expect(find.text('@我的'), findsNothing);
+      expect(find.byKey(const ValueKey('message-sidebar')), findsOneWidget);
+      expect(find.text('回复我的'), findsOneWidget);
+      expect(find.text('@我的'), findsOneWidget);
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('message-section-replies')),

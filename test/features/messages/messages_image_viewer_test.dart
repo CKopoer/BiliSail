@@ -73,7 +73,7 @@ void main() {
 
   void expectConversation(WidgetTester tester) {
     expect(find.byType(ImageViewer), findsNothing);
-    expect(find.text('[图片]'), findsOneWidget);
+    expect(find.bySemanticsLabel('查看私信图片'), findsOneWidget);
     expect(find.text('保留私信草稿'), findsOneWidget);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(MessagesScreen)),

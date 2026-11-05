@@ -154,7 +154,7 @@ void main() {
     expect(entry.imageUrl, isNull);
     expect(entry.targetUrl, isNull);
   });
-  test('unknown message types degrade visibly; malformed JSON fails', () async {
+  test('unknown and malformed content degrade within the message', () async {
     transport.handler = (_) => {
       'messages': [message(type: 99, content: '{}')],
       'has_more': 0,
@@ -164,7 +164,9 @@ void main() {
       'messages': [message(content: '{bad')],
       'has_more': 0,
     };
-    await expectLater(client.thread('123', 1), throwsA(isA<ApiFailure>()));
+    final malformed = (await client.thread('123', 1)).items.single;
+    expect(malformed.kind, ApiMessageContentKind.unsupported);
+    expect(malformed.text, contains('无法解析'));
   });
   test('reply cursor keeps exact ID/time; empty notices are valid', () async {
     transport.handler = (uri) {

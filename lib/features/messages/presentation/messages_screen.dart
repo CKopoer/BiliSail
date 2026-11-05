@@ -6,7 +6,6 @@ import '../../../core/platform/external_links.dart';
 import '../../../core/presentation/page_back_scope.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/user.dart';
-import '../../../shared/ui/image_viewer.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/page_tab_style.dart';
 import '../../../shared/ui/page_toolbar.dart';
@@ -17,6 +16,7 @@ import '../../../shared/ui/state_view.dart';
 import '../../auth/application/auth_controller.dart';
 import '../application/messages_controller.dart';
 import '../domain/message_repository.dart';
+import 'message_content_view.dart';
 
 class MessagesScreen extends ConsumerStatefulWidget {
   const MessagesScreen({
@@ -42,6 +42,7 @@ class MessagesScreen extends ConsumerStatefulWidget {
 
 class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   final Map<String, String> _drafts = {};
+  final _privateFilter = _ConversationFilter();
   final _pagingProgress = TabPagingProgress(0);
   int _openVersion = 0;
 
@@ -131,6 +132,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
       _,
     ) {
       _drafts.clear();
+      _privateFilter.clear();
       _openInitialConversation();
     });
     if (!auth.$1) {
@@ -159,9 +161,13 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     );
     final controller = ref.read(messagesControllerProvider.notifier);
     return PageBackHandler(
-      enabled: section == InboxSection.private && selectedId != null,
+      enabled: selectedId != null || section != InboxSection.private,
       onBack: () {
-        controller.closeConversation();
+        if (section == InboxSection.private && selectedId != null) {
+          controller.closeConversation();
+        } else {
+          controller.selectSection(InboxSection.private);
+        }
         return true;
       },
       child: TabPagingScope(
@@ -185,88 +191,135 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                 ),
               ],
             ),
-            const _MessageSections(),
-            const Divider(height: 1),
             Expanded(
-              child: RetainedTabView<InboxSection>(
-                key: ValueKey(auth.$2),
-                viewKey: const ValueKey('message-section-pager'),
-                tabs: InboxSection.values,
-                value: section,
-                progress: _pagingProgress,
-                onChanged: controller.selectSection,
-                pageBuilder: (context, tab, active) => TickerMode(
-                  enabled: active && WorkspaceActivity.isActive(context),
-                  child: Column(
-                    children: [
-                      if (tab == InboxSection.system)
-                        const _SystemWriteMessage(),
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final wide = constraints.maxWidth >= 720;
-                            final list = _InboxList(
-                              section: tab,
-                              onOpenUser: widget.onOpenUser,
-                              onOpenTarget: widget.onOpenTarget,
-                            );
-                            if (tab != InboxSection.private) return list;
-                            final thread = selectedId == null
-                                ? const StateView.empty(
-                                    message: '选择一个会话查看消息',
-                                    icon: Icons.chat_bubble_outline,
-                                  )
-                                : _ConversationView(
-                                    key: ValueKey('${auth.$2}:$selectedId'),
-                                    ownMid: auth.$2,
-                                    narrow: !wide,
-                                    initialDraft: _drafts[selectedId] ?? '',
-                                    onDraftChanged: (text) {
-                                      _drafts.remove(selectedId);
-                                      if (text.isNotEmpty) {
-                                        _drafts[selectedId] = text;
-                                      }
-                                      if (_drafts.length > 500) {
-                                        _drafts.remove(_drafts.keys.first);
-                                      }
-                                    },
-                                    onBack: controller.closeConversation,
-                                    onMore: controller.loadThread,
-                                    onRefresh: () =>
-                                        controller.loadThread(refresh: true),
-                                    onSend: (text) async {
-                                      final sent = await controller.send(text);
-                                      if (sent &&
-                                          mounted &&
-                                          _drafts[selectedId] == text) {
-                                        // A different view of this conversation may have
-                                        // reopened while the original send was pending.
-                                        setState(
-                                          () => _drafts.remove(selectedId),
-                                        );
-                                      }
-                                      return sent;
-                                    },
-                                    onMarkRead: controller.markRead,
-                                    onOpenUser: widget.onOpenUser,
-                                    onOpenTarget: widget.onOpenTarget,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final sidebar = constraints.maxWidth >= 1000;
+                  final narrow = constraints.maxWidth < 600;
+                  final pages = RetainedTabView<InboxSection>(
+                    key: ValueKey(auth.$2),
+                    viewKey: const ValueKey('message-section-pager'),
+                    tabs: InboxSection.values,
+                    value: section,
+                    progress: _pagingProgress,
+                    onChanged: controller.selectSection,
+                    pageBuilder: (context, tab, active) => TickerMode(
+                      enabled: active && WorkspaceActivity.isActive(context),
+                      child: Column(
+                        children: [
+                          if (tab == InboxSection.system)
+                            const _SystemWriteMessage(),
+                          Expanded(
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final wide = constraints.maxWidth >= 720;
+                                final list = _InboxList(
+                                  section: tab,
+                                  filter: tab == InboxSection.private
+                                      ? _privateFilter
+                                      : null,
+                                  onOpenUser: widget.onOpenUser,
+                                  onOpenTarget: widget.onOpenTarget,
+                                );
+                                if (tab != InboxSection.private) {
+                                  return Center(
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 860,
+                                      ),
+                                      child: list,
+                                    ),
                                   );
-                            if (!wide) {
-                              return selectedId == null ? list : thread;
-                            }
-                            return Row(
-                              children: [
-                                SizedBox(width: 300, child: list),
-                                const VerticalDivider(width: 1),
-                                Expanded(child: thread),
-                              ],
-                            );
-                          },
-                        ),
+                                }
+                                final thread = selectedId == null
+                                    ? const StateView.empty(
+                                        message: '选择一个会话查看消息',
+                                        icon: Icons.chat_bubble_outline,
+                                      )
+                                    : _ConversationView(
+                                        key: ValueKey('${auth.$2}:$selectedId'),
+                                        ownMid: auth.$2,
+                                        narrow: !wide,
+                                        initialDraft: _drafts[selectedId] ?? '',
+                                        onDraftChanged: (text) {
+                                          _drafts.remove(selectedId);
+                                          if (text.isNotEmpty) {
+                                            _drafts[selectedId] = text;
+                                          }
+                                          if (_drafts.length > 500) {
+                                            _drafts.remove(_drafts.keys.first);
+                                          }
+                                        },
+                                        onBack: controller.closeConversation,
+                                        onMore: controller.loadThread,
+                                        onRefresh: () => controller.loadThread(
+                                          refresh: true,
+                                        ),
+                                        onSend: (text) async {
+                                          final sent = await controller.send(
+                                            text,
+                                          );
+                                          if (sent &&
+                                              mounted &&
+                                              _drafts[selectedId] == text) {
+                                            // A different view of this conversation may have
+                                            // reopened while the original send was pending.
+                                            setState(
+                                              () => _drafts.remove(selectedId),
+                                            );
+                                          }
+                                          return sent;
+                                        },
+                                        onMarkRead: controller.markRead,
+                                        onOpenUser: widget.onOpenUser,
+                                        onOpenTarget: widget.onOpenTarget,
+                                      );
+                                if (!wide) {
+                                  return selectedId == null ? list : thread;
+                                }
+                                return Row(
+                                  children: [
+                                    SizedBox(
+                                      width: sidebar ? 300 : 280,
+                                      child: list,
+                                    ),
+                                    const VerticalDivider(width: 1),
+                                    Expanded(child: thread),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
+                  );
+                  if (sidebar) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(
+                          width: 180,
+                          child: _MessageSections(sidebar: true),
+                        ),
+                        const VerticalDivider(width: 1),
+                        Expanded(child: pages),
+                      ],
+                    );
+                  }
+                  return Column(
+                    children: [
+                      if (!narrow)
+                        const _MessageSections()
+                      else if (section != InboxSection.private)
+                        _MessageSectionBack(section: section)
+                      else if (selectedId == null)
+                        const _MessageSections(shortcuts: true),
+                      const Divider(height: 1),
+                      Expanded(child: pages),
                     ],
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ],
@@ -277,7 +330,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
 }
 
 class _MessageSections extends ConsumerWidget {
-  const _MessageSections();
+  const _MessageSections({this.sidebar = false, this.shortcuts = false});
+  final bool sidebar, shortcuts;
 
   IconData _icon(InboxSection section) => switch (section) {
     InboxSection.private => Icons.chat_bubble_outline_rounded,
@@ -302,6 +356,115 @@ class _MessageSections extends ConsumerWidget {
     final unread = unreadState.isLoading || unreadState.hasError
         ? const <InboxSection, int>{}
         : unreadState.value ?? const {};
+    final controller = ref.read(messagesControllerProvider.notifier);
+    if (sidebar) {
+      return SingleChildScrollView(
+        key: const ValueKey('message-sidebar'),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            for (final tab in InboxSection.values)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: TextButton(
+                  key: ValueKey('message-section-${tab.name}'),
+                  style: TextButton.styleFrom(
+                    alignment: Alignment.centerLeft,
+                    minimumSize: const Size(double.infinity, 56),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    backgroundColor: tab == section
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                        : null,
+                    foregroundColor: tab == section
+                        ? Theme.of(context).colorScheme.onSecondaryContainer
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () => controller.selectSection(tab),
+                  child: Row(
+                    children: [
+                      Icon(_icon(tab), size: 21),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tab.label),
+                            if ((unread[tab] ?? 0) > 0)
+                              Text(
+                                '${unread[tab]} 条未读',
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+    if (shortcuts) {
+      return Padding(
+        key: const ValueKey('message-shortcuts'),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final tab in InboxSection.values.skip(1))
+              Expanded(
+                child: InkWell(
+                  key: ValueKey('message-section-${tab.name}'),
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => controller.selectSection(tab),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 6,
+                      horizontal: 2,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Badge(
+                          isLabelVisible: (unread[tab] ?? 0) > 0,
+                          label: Text(
+                            (unread[tab] ?? 0) > 99
+                                ? '99+'
+                                : '${unread[tab] ?? 0}',
+                          ),
+                          child: CircleAvatar(
+                            radius: 23,
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .secondaryContainer,
+                            foregroundColor: Theme.of(context)
+                                .colorScheme
+                                .primary,
+                            child: Icon(_icon(tab)),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          tab == InboxSection.mentions ? '@我' : tab.label,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
     return SizedBox(
       height: PageTabStyle.barHeight,
       child: ScrollConfiguration(
@@ -336,6 +499,34 @@ class _MessageSections extends ConsumerWidget {
   }
 }
 
+class _MessageSectionBack extends ConsumerWidget {
+  const _MessageSectionBack({required this.section});
+  final InboxSection section;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    child: Row(
+      children: [
+        IconButton(
+          key: const ValueKey('message-section-private'),
+          tooltip: '返回消息首页',
+          onPressed: () => ref
+              .read(messagesControllerProvider.notifier)
+              .selectSection(InboxSection.private),
+          icon: const Icon(Icons.arrow_back),
+        ),
+        Expanded(
+          child: Text(
+            section.label,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _SystemWriteMessage extends ConsumerWidget {
   const _SystemWriteMessage();
 
@@ -353,9 +544,25 @@ class _SystemWriteMessage extends ConsumerWidget {
   }
 }
 
+class _ConversationFilter {
+  String query = '';
+  bool searching = false, unreadOnly = false;
+  void clear() {
+    query = '';
+    searching = false;
+    unreadOnly = false;
+  }
+}
+
 class _InboxList extends ConsumerStatefulWidget {
-  const _InboxList({required this.section, this.onOpenUser, this.onOpenTarget});
+  const _InboxList({
+    required this.section,
+    this.filter,
+    this.onOpenUser,
+    this.onOpenTarget,
+  });
   final InboxSection section;
+  final _ConversationFilter? filter;
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<Uri>? onOpenTarget;
   @override
@@ -363,6 +570,12 @@ class _InboxList extends ConsumerStatefulWidget {
 }
 
 class _InboxListState extends ConsumerState<_InboxList> {
+  String get _query => widget.filter?.query ?? '';
+  set _query(String value) => widget.filter?.query = value;
+  bool get _searching => widget.filter?.searching ?? false;
+  set _searching(bool value) => widget.filter?.searching = value;
+  bool get _unreadOnly => widget.filter?.unreadOnly ?? false;
+  set _unreadOnly(bool value) => widget.filter?.unreadOnly = value;
   // A retained neighbor must keep its own rows during the next swipe rather
   // than render the newly selected category's inbox.
   (List<InboxEntry>, String?, bool, String?) _snapshot = (
@@ -398,75 +611,451 @@ class _InboxListState extends ConsumerState<_InboxList> {
         onAction: () => controller.loadInbox(refresh: true),
       );
     }
-    if (items.isEmpty) {
-      return const StateView.empty(
-        message: '暂时没有消息',
-        icon: Icons.inbox_outlined,
-      );
-    }
-    return ListView.builder(
-      key: PageStorageKey('inbox-${section.name}'),
-      padding: const EdgeInsets.all(8),
-      itemCount: items.length + 1,
-      itemBuilder: (context, index) {
-        if (index == items.length) return _InboxFooter(section: section);
-        final entry = items[index], user = items[index].userId;
-        return Card(
-          elevation: 0,
-          color: entry.id == selected
-              ? Theme.of(context).colorScheme.secondaryContainer
-              : null,
-          child: ListTile(
-            key: ValueKey(entry.id),
-            leading: InkWell(
-              onTap: !isPrivate && user != null
-                  ? () => widget.onOpenUser?.call(user)
-                  : null,
-              child: Badge(
-                isLabelVisible: entry.unread > 0,
-                label: Text(entry.unread > 99 ? '99+' : '${entry.unread}'),
-                child: NetworkAvatar(
-                  url: entry.avatarUrl,
-                  name: entry.title,
-                  radius: 20,
+    final visible = isPrivate
+        ? items
+              .where(
+                (entry) =>
+                    (!_unreadOnly || entry.unread > 0) &&
+                    (_query.isEmpty ||
+                        '${entry.title} ${entry.text}'.toLowerCase().contains(
+                          _query.toLowerCase(),
+                        )),
+              )
+              .toList(growable: false)
+        : items;
+    final list = visible.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    items.isEmpty ? '暂时没有消息' : '已加载的会话中没有匹配结果',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                _InboxFooter(section: section),
+              ],
+            ),
+          )
+        : ListView.builder(
+            key: PageStorageKey('inbox-${section.name}'),
+            padding: EdgeInsets.symmetric(
+              horizontal: isPrivate ? 8 : 16,
+              vertical: 8,
+            ),
+            itemCount: visible.length + 1,
+            itemBuilder: (context, index) {
+              if (index == visible.length) {
+                return _InboxFooter(section: section);
+              }
+              final entry = visible[index];
+              if (isPrivate) {
+                return _ConversationRow(
+                  entry: entry,
+                  selected: entry.id == selected,
+                  onOpen: () => controller.selectConversation(entry),
+                );
+              }
+              return _NotificationRow(
+                entry: entry,
+                onOpenUser: widget.onOpenUser,
+                onOpenTarget: widget.onOpenTarget,
+              );
+            },
+          );
+    if (!isPrivate) return list;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '私信',
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
               ),
+              IconButton(
+                key: const ValueKey('message-search-toggle'),
+                tooltip: _searching ? '关闭会话搜索' : '搜索会话',
+                onPressed: () => setState(() {
+                  _searching = !_searching;
+                  if (!_searching) _query = '';
+                }),
+                icon: Icon(
+                  _searching ? Icons.search_off_rounded : Icons.search_rounded,
+                ),
+              ),
+              FilterChip(
+                key: const ValueKey('message-unread-filter'),
+                label: const Text('未读'),
+                selected: _unreadOnly,
+                onSelected: (value) => setState(() => _unreadOnly = value),
+              ),
+            ],
+          ),
+        ),
+        if (_searching)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: TextFormField(
+              key: const ValueKey('message-search-field'),
+              initialValue: _query,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: const InputDecoration(
+                hintText: '搜索已加载的会话',
+                prefixIcon: Icon(Icons.search),
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
             ),
-            title: Text(
-              entry.title,
-              maxLines: isPrivate ? 1 : 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.text,
-                    maxLines: isPrivate ? 2 : null,
-                    overflow: isPrivate ? TextOverflow.ellipsis : null,
+          ),
+        const _InboxWriteMessage(),
+        Expanded(child: list),
+      ],
+    );
+  }
+}
+
+class _InboxWriteMessage extends ConsumerWidget {
+  const _InboxWriteMessage();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final message = ref.watch(
+      messagesControllerProvider.select(
+        (state) => state.selected == null ? state.writeMessage : null,
+      ),
+    );
+    return message == null
+        ? const SizedBox.shrink()
+        : Padding(
+            padding: const EdgeInsets.all(8),
+            child: Text(message, textAlign: TextAlign.center),
+          );
+  }
+}
+
+enum _ConversationAction { pin, mute, remove }
+
+class _ConversationRow extends ConsumerWidget {
+  const _ConversationRow({
+    required this.entry,
+    required this.selected,
+    required this.onOpen,
+  });
+  final InboxEntry entry;
+  final bool selected;
+  final VoidCallback onOpen;
+
+  List<PopupMenuEntry<_ConversationAction>> _items() => [
+    PopupMenuItem(
+      value: _ConversationAction.pin,
+      child: Text(entry.pinned ? '取消置顶' : '置顶会话'),
+    ),
+    PopupMenuItem(
+      value: _ConversationAction.mute,
+      child: Text(entry.muted ? '关闭免打扰' : '消息免打扰'),
+    ),
+    const PopupMenuDivider(),
+    const PopupMenuItem(value: _ConversationAction.remove, child: Text('移除会话')),
+  ];
+
+  Future<void> _act(
+    BuildContext context,
+    WidgetRef ref,
+    _ConversationAction action,
+  ) async {
+    if (!context.mounted) return;
+    final original = ref.read(messagesControllerProvider);
+    if (!original.inbox.items.any((item) => identical(item, entry)) &&
+        !identical(original.selected, entry)) {
+      return;
+    }
+    final repository = ref.read(messageRepositoryProvider);
+    final account = (repository.accountScope, repository.sessionEpoch);
+    final controller = ref.read(messagesControllerProvider.notifier);
+    InboxEntry? currentEntry() {
+      if (!context.mounted) return null;
+      final currentRepository = ref.read(messageRepositoryProvider);
+      if ((currentRepository.accountScope, currentRepository.sessionEpoch) !=
+          account) {
+        return null;
+      }
+      final state = ref.read(messagesControllerProvider);
+      for (final item in state.inbox.items) {
+        if (item.id == entry.id && item.canSend) return item;
+      }
+      final selected = state.selected;
+      return selected?.id == entry.id && (selected?.canSend ?? false)
+          ? selected
+          : null;
+    }
+
+    switch (action) {
+      case _ConversationAction.pin:
+        await controller.setPinned(entry, !entry.pinned);
+      case _ConversationAction.mute:
+        await controller.setMuted(entry, !entry.muted);
+      case _ConversationAction.remove:
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('移除会话？'),
+            content: Text('将“${entry.title}”从会话列表中移除，此操作不会撤回已发送的消息。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('移除'),
+              ),
+            ],
+          ),
+        );
+        if (confirm == true && context.mounted) {
+          final latest = currentEntry();
+          if (latest != null) await controller.removeConversation(latest);
+        }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(messagesControllerProvider.notifier);
+    final busy = ref.watch(
+      messagesControllerProvider.select(
+        (state) => state.managingIds.contains(entry.id),
+      ),
+    );
+    final manageable = controller.supportsManagement && entry.canSend;
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onLongPress: !manageable || busy
+          ? null
+          : () async {
+              final action = await showModalBottomSheet<_ConversationAction>(
+                context: context,
+                showDragHandle: true,
+                builder: (context) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        title: Text(entry.pinned ? '取消置顶' : '置顶会话'),
+                        leading: const Icon(Icons.push_pin_outlined),
+                        onTap: () =>
+                            Navigator.pop(context, _ConversationAction.pin),
+                      ),
+                      ListTile(
+                        title: Text(entry.muted ? '关闭免打扰' : '消息免打扰'),
+                        leading: const Icon(Icons.notifications_off_outlined),
+                        onTap: () =>
+                            Navigator.pop(context, _ConversationAction.mute),
+                      ),
+                      ListTile(
+                        title: const Text('移除会话'),
+                        leading: const Icon(Icons.delete_outline),
+                        onTap: () =>
+                            Navigator.pop(context, _ConversationAction.remove),
+                      ),
+                    ],
                   ),
+                ),
+              );
+              if (action != null && context.mounted) {
+                await _act(context, ref, action);
+              }
+            },
+      onSecondaryTapDown: !manageable || busy
+          ? null
+          : (details) async {
+              final overlay =
+                  Overlay.of(context).context.findRenderObject() as RenderBox;
+              final local = overlay.globalToLocal(details.globalPosition);
+              final action = await showMenu<_ConversationAction>(
+                context: context,
+                position: RelativeRect.fromSize(
+                  Rect.fromLTWH(local.dx, local.dy, 0, 0),
+                  overlay.size,
+                ),
+                items: _items(),
+              );
+              if (action != null && context.mounted) {
+                await _act(context, ref, action);
+              }
+            },
+      child: Material(
+        color: selected
+            ? theme.colorScheme.secondaryContainer
+            : entry.pinned
+            ? theme.colorScheme.surfaceContainerLow
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: ListTile(
+          key: ValueKey(entry.id),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 4,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          leading: Badge(
+            isLabelVisible: entry.unread > 0,
+            label: Text(entry.unread > 99 ? '99+' : '${entry.unread}'),
+            child: NetworkAvatar(
+              url: entry.avatarUrl,
+              name: entry.title,
+              radius: 22,
+            ),
+          ),
+          title: Text(
+            entry.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleSmall,
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(entry.text, maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 3),
+              Wrap(
+                spacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
                   if (entry.time != null)
-                    Text(
-                      _time(entry.time),
-                      style: Theme.of(context).textTheme.labelSmall,
+                    Text(_time(entry.time), style: theme.textTheme.labelSmall),
+                  if (entry.pinned)
+                    const Tooltip(
+                      message: '已置顶',
+                      child: Icon(Icons.push_pin_rounded, size: 13),
                     ),
-                  if (!isPrivate && entry.targetUrl != null)
-                    TextButton(
-                      onPressed: () =>
-                          widget.onOpenTarget?.call(entry.targetUrl ?? Uri()),
-                      child: const Text('查看原内容'),
+                  if (entry.muted)
+                    const Tooltip(
+                      message: '免打扰',
+                      child: Icon(Icons.notifications_off_outlined, size: 13),
                     ),
                 ],
               ),
-            ),
-            onTap: isPrivate
-                ? () => controller.selectConversation(entry)
-                : null,
+            ],
           ),
-        );
-      },
+          trailing: !manageable
+              ? null
+              : PopupMenuButton<_ConversationAction>(
+                  key: ValueKey('message-menu-${entry.id}'),
+                  tooltip: '管理会话',
+                  enabled: !busy,
+                  onSelected: (action) => _act(context, ref, action),
+                  itemBuilder: (_) => _items(),
+                  icon: busy
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.more_horiz_rounded),
+                ),
+          onTap: onOpen,
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationRow extends StatelessWidget {
+  const _NotificationRow({
+    required this.entry,
+    this.onOpenUser,
+    this.onOpenTarget,
+  });
+  final InboxEntry entry;
+  final ValueChanged<UserId>? onOpenUser;
+  final ValueChanged<Uri>? onOpenTarget;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final user = entry.userId;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Card(
+        elevation: 0,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap: user == null ? null : () => onOpenUser?.call(user),
+                    child: NetworkAvatar(
+                      url: entry.avatarUrl,
+                      name: entry.title,
+                      radius: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(entry.title, style: theme.textTheme.titleSmall),
+                        if (entry.time != null)
+                          Text(
+                            _time(entry.time),
+                            style: theme.textTheme.labelSmall,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (entry.text.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: SelectableText(entry.text),
+                ),
+              if (entry.sourceText.isNotEmpty ||
+                  entry.sourceTitle.isNotEmpty ||
+                  entry.sourceImageUrl != null)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (entry.sourceImageUrl case final image?)
+                        PrivateMessageImage(url: image, aspectRatio: 16 / 9),
+                      if (entry.sourceTitle.isNotEmpty)
+                        Text(
+                          entry.sourceTitle,
+                          style: theme.textTheme.titleSmall,
+                        ),
+                      if (entry.sourceText.isNotEmpty) Text(entry.sourceText),
+                    ],
+                  ),
+                ),
+              if (entry.targetUrl case final target?)
+                TextButton(
+                  onPressed: () => onOpenTarget?.call(target),
+                  child: const Text('查看原内容'),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -712,6 +1301,20 @@ class _ConversationThread extends ConsumerWidget {
         }
         final message = items[items.length - 1 - index];
         final own = message.senderId.value == ownMid;
+        if (message.kind == MessageContentKind.withdrawn ||
+            message.kind == MessageContentKind.notice) {
+          return Padding(
+            key: ValueKey(message.id),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+            child: Center(
+              child: Text(
+                message.text,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          );
+        }
         return Align(
           key: ValueKey(message.id),
           alignment: own ? Alignment.centerRight : Alignment.centerLeft,
@@ -741,15 +1344,10 @@ class _ConversationThread extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          SelectableText(message.text),
-                          if (message.imageUrl case final image?)
-                            _PrivateImage(url: image),
-                          if (message.targetUrl case final Uri target
-                              when message.imageUrl == null)
-                            TextButton(
-                              onPressed: () => onOpenTarget?.call(target),
-                              child: const Text('查看分享内容'),
-                            ),
+                          MessageContentView(
+                            message: message,
+                            onOpenTarget: onOpenTarget,
+                          ),
                         ],
                       ),
                     ),
@@ -789,42 +1387,6 @@ class _ThreadFooter extends ConsumerWidget {
       endLabel: length >= 500 ? '已加载 500 条消息' : '没有更早的消息',
     );
   }
-}
-
-/// Private pictures never enter the public disk cache; evict decoded pixels on close.
-class _PrivateImage extends StatefulWidget {
-  const _PrivateImage({required this.url});
-  final Uri url;
-  @override
-  State<_PrivateImage> createState() => _PrivateImageState();
-}
-
-class _PrivateImageState extends State<_PrivateImage> {
-  late final _image = NetworkImage(widget.url.toString());
-  @override
-  void dispose() {
-    _image.evict();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 8),
-    child: Semantics(
-      label: '查看私信图片',
-      button: true,
-      child: InkWell(
-        onTap: () => showImageViewer(context, [widget.url], 0),
-        child: Image(
-          image: _image,
-          width: 220,
-          height: 180,
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => const Text('图片暂时无法加载'),
-        ),
-      ),
-    ),
-  );
 }
 
 class _ListFooter extends StatelessWidget {

@@ -1,5 +1,44 @@
 enum ApiInboxSection { private, replies, mentions, likes, system }
 
+enum ApiMessageContentKind {
+  text,
+  image,
+  share,
+  notification,
+  video,
+  article,
+  pictureCard,
+  commonCard,
+  autoReply,
+  notice,
+  voice,
+  miniProgram,
+  withdrawn,
+  unsupported,
+}
+
+final class ApiMessageCard {
+  const ApiMessageCard({
+    this.title = '',
+    this.description = '',
+    this.imageUrl,
+    this.targetUrl,
+  });
+  final String title, description;
+  final Uri? imageUrl, targetUrl;
+}
+
+final class ApiMessageDetail {
+  const ApiMessageDetail({required this.label, required this.value});
+  final String label, value;
+}
+
+final class ApiMessageLink {
+  const ApiMessageLink({required this.label, required this.url});
+  final String label;
+  final Uri url;
+}
+
 final class ApiInboxEntry {
   const ApiInboxEntry({
     required this.id,
@@ -14,6 +53,11 @@ final class ApiInboxEntry {
     this.unread = 0,
     this.lastSequence,
     this.readCursor,
+    this.sourceText = '',
+    this.sourceTitle = '',
+    this.sourceImageUrl,
+    this.pinned = false,
+    this.muted = false,
   });
   final String id, title, text;
   final String? userMid, lastSequence, readCursor;
@@ -22,6 +66,9 @@ final class ApiInboxEntry {
   final int? sessionType;
   final bool system;
   final int unread;
+  final String sourceText, sourceTitle;
+  final Uri? sourceImageUrl;
+  final bool pinned, muted;
 }
 
 final class ApiPrivateMessage {
@@ -34,11 +81,26 @@ final class ApiPrivateMessage {
     this.time,
     this.imageUrl,
     this.targetUrl,
+    this.kind = ApiMessageContentKind.text,
+    this.title = '',
+    this.subtitle = '',
+    this.cards = const [],
+    this.details = const [],
+    this.links = const [],
+    this.durationSeconds,
+    this.imageAspectRatio,
   });
   final String id, sequence, senderMid, text;
   final int type;
   final DateTime? time;
   final Uri? imageUrl, targetUrl;
+  final ApiMessageContentKind kind;
+  final String title, subtitle;
+  final List<ApiMessageCard> cards;
+  final List<ApiMessageDetail> details;
+  final List<ApiMessageLink> links;
+  final int? durationSeconds;
+  final double? imageAspectRatio;
 }
 
 final class ApiAccountOverview {

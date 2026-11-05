@@ -198,7 +198,12 @@ void main() {
     final auth = AuthFake();
     addTearDown(auth.stream.close);
     final controller = _MessagesProbeController(itemCount: 2);
-    const provider = NetworkImage('https://example.test/private.png');
+    final provider = await const ResizeImage(
+      NetworkImage('https://example.test/private.png'),
+      width: 880,
+      height: 1280,
+      policy: ResizeImagePolicy.fit,
+    ).obtainKey(ImageConfiguration.empty);
     final recorder = ui.PictureRecorder();
     Canvas(recorder).drawColor(Colors.blue, BlendMode.src);
     final picture = recorder.endRecording();

@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-05 消息重构只读参考 PiliPlus `3565a2031fbdca180d03fad9999e48b4b0f7a4b5` 的消息首页、会话行、富消息展示及 Web 管理端点。仅采用交互职责和协议字段，独立实现 Flutter/Riverpod 页面及纯 Dart 模型，未复制 GPLv3 应用源码、资源或 gRPC schema；具体路径、当前官方脚本核对及验证边界见[消息中心重构](validation/messages-redesign-2026-11-05.md)。
+
 2026-11-01 只读核对相邻 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 的 pubspec 与锁文件，按用户要求直接采用其锁定的 MIT 播放器和弹幕依赖。没有复制 GPLv3 的应用源码；完整来源、许可及适配见[依赖切换](validation/piliplus-dependencies-2026-11-01.md)。
 
 检查日期：2026-10-05。两个参考项目只读查看，未修改它们。设计阶段未调用真实接口；随后实现首版时已进行游客公开 API 和 Windows 媒体烟测，结果见 [实测记录](validation/m0-results.md)。以下路径按三个仓库在同一父目录下给出；在其他机器上可按仓库名、提交和相对路径定位。

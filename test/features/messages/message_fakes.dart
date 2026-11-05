@@ -4,6 +4,7 @@ import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/messages/domain/message_repository.dart';
+import 'package:bilisail/features/messages/domain/message_management.dart';
 
 const conversation = InboxEntry(
   id: '1:2',
@@ -163,5 +164,51 @@ class MessageRepositoryFake implements MessageRepository {
     if (writeFailure case final error?) throw error;
     await writePending?.future;
     counts[InboxSection.system] = 0;
+  }
+}
+
+class ManagementMessageRepositoryFake extends MessageRepositoryFake
+    implements MessageManagementRepository {
+  int pins = 0, mutes = 0, removals = 0;
+  Completer<void>? managementPending;
+  Object? managementFailure;
+  RequestCancellation? managementCancellation;
+  bool? pinnedValue, mutedValue;
+
+  Future<void> _manage(RequestCancellation cancellation) async {
+    managementCancellation = cancellation;
+    if (managementFailure case final error?) throw error;
+    await managementPending?.future;
+  }
+
+  @override
+  Future<void> setPinned(
+    InboxEntry entry,
+    bool pinned, {
+    required RequestCancellation cancellation,
+  }) {
+    pins++;
+    pinnedValue = pinned;
+    return _manage(cancellation);
+  }
+
+  @override
+  Future<void> setMuted(
+    InboxEntry entry,
+    bool muted, {
+    required RequestCancellation cancellation,
+  }) {
+    mutes++;
+    mutedValue = muted;
+    return _manage(cancellation);
+  }
+
+  @override
+  Future<void> removeConversation(
+    InboxEntry entry, {
+    required RequestCancellation cancellation,
+  }) {
+    removals++;
+    return _manage(cancellation);
   }
 }

@@ -32,6 +32,7 @@ bool isAllowedExternalLink(Uri uri) {
     't.bilibili.com',
     'message.bilibili.com',
     'space.bilibili.com',
+    'b23.tv',
   }.contains(uri.host)) {
     return true;
   }
