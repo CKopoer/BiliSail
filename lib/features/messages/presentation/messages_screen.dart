@@ -187,8 +187,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
             LayoutBuilder(
               builder: (context, constraints) {
                 if (constraints.maxWidth < 600 &&
-                    section == InboxSection.private &&
-                    selectedId != null) {
+                    (section != InboxSection.private || selectedId != null)) {
                   return const SizedBox.shrink();
                 }
                 return PageToolbar(
@@ -1045,15 +1044,17 @@ class _NotificationRow extends ConsumerWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  InkWell(
-                    onTap: user == null ? null : () => onOpenUser?.call(user),
-                    child: NetworkAvatar(
-                      url: entry.avatarUrl,
-                      name: entry.title,
-                      radius: 21,
+                  if (!entry.system) ...[
+                    InkWell(
+                      onTap: user == null ? null : () => onOpenUser?.call(user),
+                      child: NetworkAvatar(
+                        url: entry.avatarUrl,
+                        name: entry.title,
+                        radius: 21,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1140,7 +1141,7 @@ class _NotificationRow extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 10),
-              const Divider(height: 1, indent: 54),
+              Divider(height: 1, indent: entry.system ? 0 : 54),
             ],
           ),
         ),
