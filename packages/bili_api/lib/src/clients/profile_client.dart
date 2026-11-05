@@ -11,6 +11,18 @@ final class ProfileClient {
   static const _size = 30;
   static const _collectionSize = 10;
 
+  Future<void> report(
+    String mid, {
+    required Set<int> contents,
+    int? reason,
+    ApiRequestContext? context,
+  }) => api.reportMember(
+    mid,
+    contents: contents,
+    reason: reason,
+    context: context,
+  );
+
   Future<ApiProfileSpaceDetails> loadDetails(
     String mid, {
     ApiRequestContext? context,

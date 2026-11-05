@@ -9,6 +9,7 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/profile/application/profile_actions_controller.dart';
 import 'package:bilisail/features/profile/application/profile_controller.dart';
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
+import 'package:bilisail/features/profile/domain/profile_report.dart';
 import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/features/video/application/video_author_controller.dart';
@@ -143,7 +144,7 @@ void main() {
   }
 
   testWidgets(
-    'blacklist requires explicit confirmation and report opens official target',
+    'blacklist requires confirmation and report stays inside the app',
     (tester) async {
       await mount(tester);
       await menu(tester, '加入黑名单');
@@ -155,14 +156,16 @@ void main() {
       await tester.tap(find.text('确认'));
       await tester.pumpAndSettle();
       expect(repo.writes, [true]);
-      await menu(tester, '举报（打开官方页面）');
-      expect(
-        opened.single,
-        Uri.https('account.bilibili.com', '/h5/account-h5/gr/report', {
-          'navhide': '1',
-          'targetmid': '2',
-        }),
-      );
+      await menu(tester, '举报');
+      expect(find.text('举报 UP 主'), findsOneWidget);
+      expect(repo.reports, isEmpty);
+      await tester.tap(find.text('头像违规'));
+      await tester.pump();
+      await tester.tap(find.text('提交举报'));
+      await tester.pumpAndSettle();
+      expect(repo.reports.single.contents, {ProfileReportContent.avatar});
+      expect(find.text('举报已提交'), findsOneWidget);
+      expect(opened, isEmpty);
     },
   );
   testWidgets('confirmation does not cross a changed session epoch', (
@@ -177,7 +180,11 @@ void main() {
   });
 }
 
-final class _Repository implements ProfileRepository, ProfileActionsRepository {
+final class _Repository
+    implements
+        ProfileRepository,
+        ProfileActionsRepository,
+        ProfileReportRepository {
   @override
   String accountScope = 'user:1';
   @override
@@ -187,6 +194,16 @@ final class _Repository implements ProfileRepository, ProfileActionsRepository {
   Completer<void>? write;
   final writes = <bool>[];
   final signals = <RequestCancellation>[];
+  final reports = <ProfileReport>[];
+  @override
+  Future<void> report(
+    UserId id,
+    ProfileReport report, {
+    required RequestCancellation cancellation,
+  }) async {
+    reports.add(report);
+  }
+
   @override
   Future<bool> loadBlocked(
     UserId id, {

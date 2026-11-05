@@ -10,11 +10,66 @@ import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/profile/data/api_profile_repository.dart';
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
+import 'package:bilisail/features/profile/domain/profile_report.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const id = UserId('9007199254740993123');
 
 void main() {
+  test(
+    'profile report maps all content and reason codes through ApiRequests',
+    () async {
+      final transport = _Transport((_) => {'status': true});
+      final requests = ApiRequests();
+      final jar = ApiCookieJar()
+        ..receive(Uri.https('space.bilibili.com', '/'), [
+          'SESSDATA=fixture; Domain=.bilibili.com; Path=/; Secure',
+          'bili_jct=csrf-fixture; Domain=.bilibili.com; Path=/; Secure',
+        ]);
+      final api = BiliApiClient(
+        transport: transport,
+        cookieJar: jar,
+        sessionProvider: requests,
+      );
+      addTearDown(api.close);
+      final repository = ApiProfileRepository(
+        ProfileClient(api),
+        requests,
+        accountScope: () => 'user:1',
+      );
+      for (final reason in [null, ...ProfileReportReason.values]) {
+        await repository.report(
+          id,
+          ProfileReport(
+            contents: ProfileReportContent.values.toSet(),
+            reason: reason,
+          ),
+          cancellation: RequestCancellation(),
+        );
+        expect(transport.fields, {
+          'mid': id.value,
+          'reason': '1,2,3',
+          if (reason != null) 'reason_v2': '${reason.index + 1}',
+          'csrf': 'csrf-fixture',
+        });
+      }
+      await expectLater(
+        repository.report(
+          id,
+          ProfileReport(contents: {ProfileReportContent.avatar}),
+          cancellation: RequestCancellation()..cancel(),
+        ),
+        throwsA(
+          isA<AppFailure>().having(
+            (e) => e.kind,
+            'kind',
+            AppFailureKind.cancelled,
+          ),
+        ),
+      );
+      expect(transport.posts, 7);
+    },
+  );
   for (final section in [
     ProfileSection.folders,
     ProfileSection.bangumi,
@@ -386,9 +441,29 @@ void main() {
   );
 }
 
-final class _Transport implements ApiTransport {
+final class _Transport implements ApiTransport, ApiFormTransport {
   _Transport(this.handler);
   final FutureOr<Object> Function(Uri) handler;
+  Map<String, String>? fields;
+  int posts = 0;
+
+  @override
+  Future<ApiHttpResponse> postForm(
+    Uri uri, {
+    required Map<String, String> fields,
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  }) {
+    this.fields = fields;
+    posts++;
+    return get(
+      uri,
+      headers: headers,
+      timeout: timeout,
+      cancellation: cancellation,
+    );
+  }
 
   @override
   Future<ApiHttpResponse> get(

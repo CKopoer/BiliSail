@@ -422,6 +422,32 @@ final class BiliApiClient {
     return _submitForm(_api.replace(path: path), endpoint, fields, context);
   }
 
+  /// Reports profile fields through the space site's legacy status envelope.
+  Future<void> reportMember(
+    String mid, {
+    required Set<int> contents,
+    int? reason,
+    ApiRequestContext? context,
+  }) async {
+    if (!RegExp(r'^[1-9][0-9]*$').hasMatch(mid) ||
+        contents.isEmpty ||
+        contents.any((value) => value < 1 || value > 3) ||
+        (reason != null && (reason < 1 || reason > 6))) {
+      throw ArgumentError('Invalid profile report');
+    }
+    final ordered = contents.toList()..sort();
+    await _submitForm(
+      Uri.https('space.bilibili.com', '/ajax/report/add'),
+      'profile_report',
+      {
+        'mid': mid,
+        'reason': ordered.join(','),
+        if (reason != null) 'reason_v2': '$reason',
+      },
+      context,
+    );
+  }
+
   /// The live host has its own Cookie scope, Origin and mutation allowlist.
   Future<Object?> submitLiveForm(
     String path,
@@ -561,6 +587,7 @@ final class BiliApiClient {
   }) async {
     final live = uri.host == 'api.live.bilibili.com';
     final message = uri.host == 'api.vc.bilibili.com';
+    final space = uri.host == 'space.bilibili.com';
     final epoch = _sessionProvider?.sessionEpoch;
     void check() {
       if (context?.cancellation?.isCancelled == true ||
@@ -595,11 +622,15 @@ final class BiliApiClient {
             ? 'https://message.bilibili.com/'
             : live
             ? 'https://live.bilibili.com/'
+            : space
+            ? 'https://space.bilibili.com/${fields['mid']}/'
             : 'https://www.bilibili.com/',
         'Origin': message
             ? 'https://message.bilibili.com'
             : live
             ? 'https://live.bilibili.com'
+            : space
+            ? 'https://space.bilibili.com'
             : 'https://www.bilibili.com',
         'Cookie': cookie,
       };
@@ -649,6 +680,27 @@ final class BiliApiClient {
         endpoint,
         httpStatus: response.statusCode,
       );
+    }
+    if (space) {
+      Object? decoded;
+      try {
+        decoded = jsonDecode(utf8.decode(response.body));
+      } on FormatException {
+        throw ApiFailure(ApiFailureCategory.protocol, endpoint);
+      }
+      final root = _map(decoded, endpoint);
+      // A code envelope may carry an authentication/risk-control rejection.
+      // A missing or false status must never become a successful report.
+      if (root.containsKey('code')) _decodeJson(response, endpoint);
+      if (root['status'] != true) {
+        throw ApiFailure(
+          root['status'] == false
+              ? ApiFailureCategory.unavailable
+              : ApiFailureCategory.protocol,
+          endpoint,
+        );
+      }
+      return null;
     }
     final result = _decodeJson(response, endpoint);
     if (live) {

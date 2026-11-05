@@ -39,6 +39,7 @@
 | [消息表情、发送与管理入口](validation/messages-rich-composition-2026-11-05.md) | 私信表情／图片、直接回复、紧凑通知、聊天设置及外层菜单 |
 | [私信聊天设置操作修复](validation/chat-settings-actions-2026-11-05.md) | 弹窗与工作区控制器归属、开关同步、确认操作隔离及回归测试 |
 | [空间与消息反馈修复](validation/profile-message-fixes-2026-11-05.md) | 空间头图徽章、隐私提示与操作、私信助手入口及宽窄屏通知布局 |
+| [UP 主主页应用内举报](validation/profile-report-2026-11-05.md) | 内容多选、可选理由、空间 Cookie/CSRF 单次提交、账号隔离与验证边界 |
 | [搜索历史与热搜](validation/search-discovery-2026-11-01.md) | 居中搜索动效、宽窄屏入口、账号历史存储、热搜协议与自动验证边界 |
 | [密码、短信与移动登录窗口](validation/password-sms-login.md) | 三种 Web 登录、交互验证码、安全会话与小屏/键盘布局 |
 | [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |

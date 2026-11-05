@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/platform/external_links.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../core/presentation/page_back_scope.dart';
+import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/app_notice.dart';
@@ -22,6 +23,7 @@ import '../../../shared/ui/user_follow_button.dart';
 import '../../auth/application/auth_controller.dart';
 import 'profile_header.dart';
 import 'profile_details_dialog.dart';
+import 'profile_report_dialog.dart';
 import 'profile_section_content.dart';
 import '../application/profile_controller.dart';
 import '../application/profile_actions_controller.dart';
@@ -56,6 +58,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  RequestCancellation? _reportCancellation;
   late final _pagingProgress = TabPagingProgress(
     widget.initialSection.index.toDouble(),
   );
@@ -80,17 +83,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  Future<void> _report() async {
+  Future<void> _report(UserProfile profile) async {
+    if (!ref.read(authControllerProvider).isSignedIn) {
+      widget.onLogin?.call();
+      return;
+    }
+    final repository = ref.read(profileRepositoryProvider);
+    final account = (repository.accountScope, repository.sessionEpoch);
+    final cancellation = _reportCancellation = RequestCancellation();
+    final bool? submitted;
     try {
-      final opened = await ref.read(webLinkOpenerProvider)(
-        Uri.https('account.bilibili.com', '/h5/account-h5/gr/report', {
-          'navhide': '1',
-          'targetmid': widget.id.value,
-        }),
+      submitted = await showAppDialog<bool>(
+        context: context,
+        builder: (_) =>
+            ProfileReportDialog(profile: profile, cancellation: cancellation),
       );
-      if (mounted && !opened) showAppNotice(context, '无法打开官方举报页面');
-    } catch (_) {
-      if (mounted) showAppNotice(context, '无法打开官方举报页面');
+    } finally {
+      _reportCancellation = null;
+      cancellation.cancel();
+    }
+    if (!mounted || submitted != true) return;
+    final current = ref.read(profileRepositoryProvider);
+    if (account == (current.accountScope, current.sessionEpoch)) {
+      showAppNotice(context, '举报已提交');
     }
   }
 
@@ -144,6 +159,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   void dispose() {
+    _reportCancellation?.cancel();
     _pagingProgress.dispose();
     super.dispose();
   }
@@ -296,7 +312,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               blocked: signedIn ? actions.blocked : false,
                               blockBusy: actions.busy,
                               onBlock: _block,
-                              onReport: _report,
+                              onReport: () => _report(p),
                               details: details,
                               onOpenAvatar: switch (p.avatarUrl) {
                                 final url? => () => showImageViewer(context, [

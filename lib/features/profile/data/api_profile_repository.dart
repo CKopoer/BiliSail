@@ -11,11 +11,13 @@ import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../live/domain/live_room.dart';
 import '../domain/profile_repository.dart';
+import '../domain/profile_report.dart';
 
 class ApiProfileRepository
     implements
         ProfileRepository,
         ProfileDetailsRepository,
+        ProfileReportRepository,
         ProfileActionsRepository {
   ApiProfileRepository(
     this.client,
@@ -29,6 +31,36 @@ class ApiProfileRepository
   String get accountScope => _scope();
   @override
   int get sessionEpoch => requests.sessionEpoch;
+  @override
+  Future<void> report(
+    UserId id,
+    ProfileReport report, {
+    required RequestCancellation cancellation,
+  }) => requests.run(
+    (context) => client.report(
+      id.value,
+      contents: report.contents
+          .map(
+            (content) => switch (content) {
+              ProfileReportContent.avatar => 1,
+              ProfileReportContent.nickname => 2,
+              ProfileReportContent.signature => 3,
+            },
+          )
+          .toSet(),
+      reason: switch (report.reason) {
+        null => null,
+        ProfileReportReason.sexualContent => 1,
+        ProfileReportReason.misinformation => 2,
+        ProfileReportReason.prohibitedContent => 3,
+        ProfileReportReason.personalAttack => 4,
+        ProfileReportReason.gamblingFraud => 5,
+        ProfileReportReason.illegalPromotion => 6,
+      },
+      context: context,
+    ),
+    cancellation: cancellation,
+  );
   @override
   Future<bool> loadBlocked(
     UserId id, {

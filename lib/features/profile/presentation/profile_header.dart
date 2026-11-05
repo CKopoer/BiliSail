@@ -412,7 +412,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                                 PopupMenuItem(
                                   value: 'report',
                                   enabled: widget.onReport != null,
-                                  child: const Text('举报（打开官方页面）'),
+                                  child: const Text('举报'),
                                 ),
                                 const PopupMenuDivider(),
                               ],
