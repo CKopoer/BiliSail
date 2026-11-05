@@ -3,6 +3,8 @@ import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/profile/presentation/profile_header.dart';
+import 'package:bilisail/shared/ui/app_cover_image.dart';
+import 'package:bilisail/shared/ui/bili_badges.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,6 +19,7 @@ const profile = UserProfile(
   verifyType: 0,
   verifyDescription: '个人认证信息',
   vipLabel: '年度大会员',
+  vipStatus: 1,
   followingCount: 14,
   followerCount: 51000,
   likeCount: 1165000,
@@ -50,6 +53,80 @@ Future<void> pumpLayout(
 }
 
 void main() {
+  testWidgets(
+    'header uses real user images and anchors certification on avatar',
+    (tester) async {
+      final decorated = UserProfile(
+        id: profile.id,
+        name: '装扮用户',
+        bannerUrl: Uri.https('i0.hdslb.com', '/banner.png'),
+        pendantUrl: Uri.https('i0.hdslb.com', '/pendant.png'),
+        vipStatus: 1,
+        vipLabel: '年度大会员',
+        vipLabelImageUrl: Uri.https('i0.hdslb.com', '/vip.png'),
+        verifyType: 0,
+        level: 6,
+      );
+      var backs = 0;
+      await pumpLayout(
+        tester,
+        ProfileHeader(
+          profile: decorated,
+          onSelectSection: (_) {},
+          onBack: () => backs++,
+        ),
+      );
+      expect(
+        tester
+            .widget<AppCoverImage>(
+              find.byKey(const ValueKey('profile-avatar-pendant')),
+            )
+            .url,
+        decorated.pendantUrl.toString(),
+      );
+      expect(
+        tester
+            .widget<AppCoverImage>(
+              find.byKey(const ValueKey('profile-vip-image')),
+            )
+            .url,
+        decorated.vipLabelImageUrl.toString(),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('profile-banner')),
+          matching: find.byType(AppCoverImage),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('profile-avatar')),
+          matching: find.byType(BiliVerifyBadge),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('profile-back')));
+      expect(backs, 1);
+    },
+  );
+  testWidgets('expired VIP does not show a membership badge', (tester) async {
+    await pumpLayout(
+      tester,
+      ProfileHeader(
+        profile: UserProfile(
+          id: profile.id,
+          name: '普通用户',
+          vipStatus: 0,
+          vipLabel: '年度大会员',
+          vipLabelImageUrl: Uri.https('i0.hdslb.com', '/expired.png'),
+        ),
+        onSelectSection: (_) {},
+      ),
+    );
+    expect(find.text('年度大会员'), findsNothing);
+    expect(find.byKey(const ValueKey('profile-vip-image')), findsNothing);
+  });
   testWidgets(
     'expanded biography survives switching between narrow and wide layouts',
     (tester) async {

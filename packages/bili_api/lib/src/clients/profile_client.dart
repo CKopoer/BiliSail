@@ -4,7 +4,7 @@ import '../api_client.dart';
 import '../models.dart';
 import '../models/profile_models.dart';
 
-/// Read-only Web space protocol. Private or restricted content stays restricted.
+/// Web space reads and explicit relationship writes. Privacy remains enforced.
 final class ProfileClient {
   const ProfileClient(this.api);
   final BiliApiClient api;
@@ -25,7 +25,9 @@ final class ProfileClient {
     );
     if (_key(data['mid'], e) != mid) _fail(e);
     return ApiProfileSpaceDetails(
-      bannerUrl: _uri(data['top_photo']),
+      bannerUrl:
+          _uri(_optionalMap(data['top_photo_v2'])['l_img']) ??
+          _uri(data['top_photo']),
       gender: _string(data['sex']),
       birthday: _string(data['birthday']),
     );
@@ -172,15 +174,29 @@ final class ProfileClient {
   }) async {
     _id(mid);
     const e = 'profile';
-    final data = await _get('/x/web-interface/card', e, {'mid': mid}, context);
+    final data = await _get('/x/web-interface/card', e, {
+      'mid': mid,
+      'photo': 'true',
+    }, context);
     final card = _map(data['card'], e);
     if (_key(card['mid'], e) != mid) _fail(e);
     final official = _optionalMap(card['official_verify']);
     final vip = _optionalMap(card['vip']);
+    final label = _optionalMap(vip['label']);
     return ApiUserProfile(
       mid: mid,
       name: _text(card['name'], e),
       avatarUrl: _uri(card['face']),
+      pendantUrl: _uri(_optionalMap(card['pendant'])['image']),
+      bannerUrl:
+          _uri(_optionalMap(data['space'])['l_img']) ??
+          _uri(_optionalMap(data['space'])['s_img']),
+      vipLabelImageUrl: label['use_img_label'] == true
+          ? _uri(label['img_label_uri_hans_static']) ??
+                _uri(label['img_label_uri_hans'])
+          : null,
+      vipStatus: _number(vip['status']),
+      vipType: _number(vip['type']),
       signature: _string(card['sign']),
       level: _number(_optionalMap(card['level_info'])['current_level']),
       verifyType: _number(official['type']),
@@ -405,6 +421,47 @@ final class ProfileClient {
       followingHidden: hidden(privacy['disable_following']),
       followersHidden: hidden(privacy['disable_show_fans']),
     );
+  }
+
+  Future<ApiProfileContentPrivacy> loadContentPrivacy(
+    String mid, {
+    ApiRequestContext? context,
+  }) async {
+    _id(mid);
+    const e = 'profile_content_privacy';
+    final data = await _get('/x/space/setting', e, {'mid': mid}, context);
+    final privacy = _map(data['privacy'], e);
+    bool hidden(Object? value) => switch (_number(value)) {
+      0 => true,
+      1 => false,
+      _ => _fail(e),
+    };
+    return ApiProfileContentPrivacy(
+      foldersHidden: hidden(privacy['fav_video']),
+      seasonsHidden: hidden(privacy['bangumi']),
+    );
+  }
+
+  Future<bool> loadBlocked(String mid, {ApiRequestContext? context}) async {
+    _id(mid);
+    const e = 'profile_relation';
+    final data = await _get('/x/relation', e, {'fid': mid}, context);
+    final attribute = _number(data['attribute']);
+    if (attribute == null || attribute < 0) _fail(e);
+    return attribute & 128 != 0;
+  }
+
+  Future<void> setBlocked(
+    String mid,
+    bool blocked, {
+    ApiRequestContext? context,
+  }) async {
+    _id(mid);
+    await api.submitForm('/x/relation/modify', 'profile_set_blocked', {
+      'fid': mid,
+      'act': blocked ? '5' : '6',
+      're_src': '11',
+    }, context: context);
   }
 
   Future<ApiPage<ApiProfileEntry>> loadRelations(

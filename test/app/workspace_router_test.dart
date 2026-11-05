@@ -259,6 +259,117 @@ void main() {
       },
     );
   }
+  for (final mode in [
+    WorkspaceNavigationMode.singlePage,
+    WorkspaceNavigationMode.dualTabs,
+  ]) {
+    _workspaceTestWidgets(
+      'profile button backs out of details before navigation and retains playback in $mode',
+      (tester) async {
+        tester.view.physicalSize = const Size(1280, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final auth = AuthFake();
+        addTearDown(auth.stream.close);
+        final settings = _SettingsRepository(navigationMode: mode);
+        final profiles = _ProfileRepository(withFolders: true);
+        final engines = <CardFakeEngine>[];
+        final sessions = <PlaybackSession>[];
+        final manager = PlaybackManager(
+          createSession: () {
+            final engine = CardFakeEngine();
+            engines.add(engine);
+            final session = PlaybackSession(
+              engine: engine,
+              repository: _UnusedPlaybackRepository(),
+              progress: _UnusedProgressRepository(),
+              accountScope: () => 'guest',
+            );
+            sessions.add(session);
+            return session;
+          },
+        );
+        addTearDown(manager.close);
+        final router = createBiliRouter(
+          playerBuilder: (_, _, part) => Consumer(
+            builder: (context, ref, _) {
+              ref.watch(playbackSessionProvider);
+              return Text('保留播放 ${part.cid}');
+            },
+          ),
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(settings),
+              playbackManagerProvider.overrideWithValue(manager),
+              videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+              profileRepositoryProvider.overrideWithValue(profiles),
+              authRepositoryProvider.overrideWithValue(auth),
+              videoAuthorRepositoryProvider.overrideWithValue(
+                FollowRepositoryFake(),
+              ),
+              relatedVideosProvider.overrideWith((ref, id) async => []),
+              videoTagsProvider.overrideWith((ref, id) async => []),
+              feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+              homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            ],
+            child: InputTestApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        router.go('/video/BV1234567890?cid=2');
+        await tester.pumpAndSettle();
+        final original = tester.state(find.byType(VideoScreen));
+        final session = sessions.single;
+        router.go('/user/42?section=folders');
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('返回测试收藏夹'));
+        await tester.pumpAndSettle();
+        final profileContext = tester.element(find.byType(ProfileScreen));
+        final scope = ProviderScope.containerOf(profileContext);
+        expect(
+          scope.read(profileControllerProvider(const UserId('42'))).folderId,
+          '12',
+        );
+        await tester.tap(find.byKey(const ValueKey('profile-back')));
+        await tester.pumpAndSettle();
+        expect(router.routeInformationProvider.value.uri.path, '/user/42');
+        expect(
+          scope.read(profileControllerProvider(const UserId('42'))).folderId,
+          isNull,
+        );
+        await tester.tap(find.byKey(const ValueKey('profile-back')));
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          mode == WorkspaceNavigationMode.singlePage
+              ? '/video/BV1234567890'
+              : '/',
+        );
+        expect(
+          tester.state(find.byType(VideoScreen, skipOffstage: false)),
+          same(original),
+        );
+        expect(sessions.single, same(session));
+        expect(engines.single.disposals, 0);
+        expect(
+          find.byKey(const ValueKey('workspace-profile-back-header')),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        final closing = manager.close();
+        for (var frame = 0; frame < 5; frame++) {
+          await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+          await tester.pump();
+        }
+        await closing;
+      },
+    );
+  }
   for (final platform in [TargetPlatform.android, TargetPlatform.windows]) {
     _workspaceTestWidgets(
       'single page avatar returns to the same video, part and session on $platform',
@@ -375,7 +486,7 @@ void main() {
             }
             await tester.binding.handlePopRoute();
           } else {
-            await tester.tap(find.byKey(const ValueKey('workspace-back')));
+            await tester.tap(find.byKey(const ValueKey('profile-back')));
           }
           await tester.pumpAndSettle();
           expect(tester.state(find.byType(VideoScreen)), same(original));
@@ -2755,8 +2866,9 @@ final class _HomeRepository implements HomeRepository {
 }
 
 final class _ProfileRepository implements ProfileRepository {
-  _ProfileRepository({this.liveRoom});
+  _ProfileRepository({this.liveRoom, this.withFolders = false});
   final ProfileLiveRoom? liveRoom;
+  final bool withFolders;
   @override
   Future<ProfileLiveRoom?> loadLiveRoom(
     UserId id, {
@@ -2795,6 +2907,18 @@ final class _ProfileRepository implements ProfileRepository {
     required RequestCancellation cancellation,
   }) async {
     signals.putIfAbsent(id.value, () => []).add(cancellation);
+    if (withFolders && section == ProfileSection.folders && folderId == null) {
+      return const ProfilePage(
+        items: [
+          ProfileEntry(
+            id: '12',
+            kind: ProfileEntryKind.folder,
+            title: '返回测试收藏夹',
+          ),
+        ],
+        hasMore: false,
+      );
+    }
     return const ProfilePage(items: [], hasMore: false);
   }
 }

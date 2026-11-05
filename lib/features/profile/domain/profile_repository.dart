@@ -48,6 +48,18 @@ abstract interface class ProfileDetailsRepository {
   });
 }
 
+abstract interface class ProfileActionsRepository {
+  Future<bool> loadBlocked(
+    UserId id, {
+    required RequestCancellation cancellation,
+  });
+  Future<void> setBlocked(
+    UserId id,
+    bool blocked, {
+    required RequestCancellation cancellation,
+  });
+}
+
 final class ProfileLiveRoom {
   const ProfileLiveRoom({required this.id, required this.isLive});
 
@@ -60,6 +72,11 @@ final class UserProfile {
     required this.id,
     required this.name,
     this.avatarUrl,
+    this.pendantUrl,
+    this.bannerUrl,
+    this.vipLabelImageUrl,
+    this.vipStatus,
+    this.vipType,
     this.signature = '',
     this.level,
     this.verifyType,
@@ -72,7 +89,8 @@ final class UserProfile {
   });
   final UserId id;
   final String name, signature;
-  final Uri? avatarUrl;
+  final Uri? avatarUrl, pendantUrl, bannerUrl, vipLabelImageUrl;
+  final int? vipStatus, vipType;
   final int? level,
       verifyType,
       followerCount,

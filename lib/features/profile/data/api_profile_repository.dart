@@ -13,7 +13,10 @@ import '../../live/domain/live_room.dart';
 import '../domain/profile_repository.dart';
 
 class ApiProfileRepository
-    implements ProfileRepository, ProfileDetailsRepository {
+    implements
+        ProfileRepository,
+        ProfileDetailsRepository,
+        ProfileActionsRepository {
   ApiProfileRepository(
     this.client,
     this.requests, {
@@ -26,6 +29,23 @@ class ApiProfileRepository
   String get accountScope => _scope();
   @override
   int get sessionEpoch => requests.sessionEpoch;
+  @override
+  Future<bool> loadBlocked(
+    UserId id, {
+    required RequestCancellation cancellation,
+  }) => requests.run(
+    (context) => client.loadBlocked(id.value, context: context),
+    cancellation: cancellation,
+  );
+  @override
+  Future<void> setBlocked(
+    UserId id,
+    bool blocked, {
+    required RequestCancellation cancellation,
+  }) => requests.run(
+    (context) => client.setBlocked(id.value, blocked, context: context),
+    cancellation: cancellation,
+  );
   @override
   Future<ProfileSpaceDetails> loadDetails(
     UserId id, {
@@ -51,6 +71,11 @@ class ApiProfileRepository
         id: UserId(p.mid),
         name: p.name,
         avatarUrl: p.avatarUrl,
+        pendantUrl: p.pendantUrl,
+        bannerUrl: p.bannerUrl,
+        vipLabelImageUrl: p.vipLabelImageUrl,
+        vipStatus: p.vipStatus,
+        vipType: p.vipType,
         signature: p.signature,
         level: p.level,
         verifyType: p.verifyType,
@@ -89,6 +114,21 @@ class ApiProfileRepository
       final isRelation =
           section == ProfileSection.following ||
           section == ProfileSection.followers;
+      final isPrivateContent =
+          section == ProfileSection.folders ||
+          section == ProfileSection.bangumi ||
+          section == ProfileSection.cinema;
+      if (isPrivateContent && accountScope != 'user:${id.value}') {
+        final privacy = await client.loadContentPrivacy(
+          id.value,
+          context: context,
+        );
+        if (section == ProfileSection.folders
+            ? privacy.foldersHidden
+            : privacy.seasonsHidden) {
+          return const ProfilePage.hidden();
+        }
+      }
       // The owner can view their own lists even when hidden from visitors.
       if (isRelation && accountScope != 'user:${id.value}') {
         final privacy = await client.loadRelationPrivacy(

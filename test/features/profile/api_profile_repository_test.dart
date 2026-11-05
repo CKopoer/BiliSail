@@ -15,6 +15,111 @@ import 'package:flutter_test/flutter_test.dart';
 const id = UserId('9007199254740993123');
 
 void main() {
+  for (final section in [
+    ProfileSection.folders,
+    ProfileSection.bangumi,
+    ProfileSection.cinema,
+  ]) {
+    for (final hidden in [false, true]) {
+      test('${section.name} respects content privacy $hidden', () async {
+        final paths = <String>[];
+        final requests = ApiRequests();
+        final api = BiliApiClient(
+          sessionProvider: requests,
+          transport: _Transport((uri) {
+            paths.add(uri.path);
+            if (uri.path == '/x/space/setting') {
+              return {
+                'code': 0,
+                'data': {
+                  'privacy': {
+                    'fav_video': section == ProfileSection.folders && hidden
+                        ? 0
+                        : 1,
+                    'bangumi': section != ProfileSection.folders && hidden
+                        ? 0
+                        : 1,
+                  },
+                },
+              };
+            }
+            return {
+              'code': 0,
+              'data': {'count': 0, 'total': 0, 'list': []},
+            };
+          }),
+        );
+        addTearDown(api.close);
+        final repository = ApiProfileRepository(
+          ProfileClient(api),
+          requests,
+          accountScope: () => 'guest',
+        );
+        final result = await repository.loadEntries(
+          id,
+          section,
+          page: 1,
+          cancellation: RequestCancellation(),
+        );
+        expect(result.isHidden, hidden);
+        expect(result.items, isEmpty);
+        expect(result.hasMore, isFalse);
+        expect(paths.length, hidden ? 1 : 2);
+      });
+    }
+    test('owner bypasses ${section.name} visitor privacy', () async {
+      final requests = ApiRequests();
+      final api = BiliApiClient(
+        sessionProvider: requests,
+        transport: _Transport((uri) {
+          expect(uri.path, isNot('/x/space/setting'));
+          return {
+            'code': 0,
+            'data': {'count': 0, 'total': 0, 'list': []},
+          };
+        }),
+      );
+      addTearDown(api.close);
+      final repository = ApiProfileRepository(
+        ProfileClient(api),
+        requests,
+        accountScope: () => 'user:${id.value}',
+      );
+      expect(
+        (await repository.loadEntries(
+          id,
+          section,
+          page: 1,
+          cancellation: RequestCancellation(),
+        )).isHidden,
+        isFalse,
+      );
+    });
+    for (final code in [-101, -352, -404, 12345]) {
+      test('${section.name} privacy does not mask error $code', () async {
+        final requests = ApiRequests();
+        final api = BiliApiClient(
+          sessionProvider: requests,
+          transport: _Transport((_) => {'code': code}),
+        );
+        addTearDown(api.close);
+        final repository = ApiProfileRepository(
+          ProfileClient(api),
+          requests,
+          accountScope: () => 'guest',
+        );
+        await expectLater(
+          repository.loadEntries(
+            id,
+            section,
+            page: 1,
+            cancellation: RequestCancellation(),
+          ),
+          throwsA(isA<AppFailure>()),
+        );
+      });
+    }
+  }
   test(
     'live lookup maps an offline room without losing its string ID',
     () async {

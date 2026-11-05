@@ -377,7 +377,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('用户甲'), findsOneWidget);
   });
-  for (final section in [ProfileSection.following, ProfileSection.followers]) {
+  for (final section in [
+    ProfileSection.following,
+    ProfileSection.followers,
+    ProfileSection.folders,
+    ProfileSection.bangumi,
+    ProfileSection.cinema,
+  ]) {
     testWidgets(
       'hidden ${section.name} is a privacy state and can be refreshed',
       (tester) async {
@@ -404,7 +410,14 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        final label = section == ProfileSection.following ? '关注' : '粉丝';
+        final label = switch (section) {
+          ProfileSection.following => '关注',
+          ProfileSection.followers => '粉丝',
+          ProfileSection.folders => '收藏夹',
+          ProfileSection.bangumi => '追番',
+          ProfileSection.cinema => '追剧',
+          _ => throw StateError('Unexpected section'),
+        };
         expect(find.text('该用户未公开$label列表'), findsOneWidget);
         expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
         expect(find.text('重试'), findsNothing);

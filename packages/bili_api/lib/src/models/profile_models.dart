@@ -29,11 +29,24 @@ final class ApiProfileRelationPrivacy {
   final bool followingHidden, followersHidden;
 }
 
+final class ApiProfileContentPrivacy {
+  const ApiProfileContentPrivacy({
+    required this.foldersHidden,
+    required this.seasonsHidden,
+  });
+  final bool foldersHidden, seasonsHidden;
+}
+
 final class ApiUserProfile {
   const ApiUserProfile({
     required this.mid,
     required this.name,
     this.avatarUrl,
+    this.pendantUrl,
+    this.bannerUrl,
+    this.vipLabelImageUrl,
+    this.vipStatus,
+    this.vipType,
     this.signature = '',
     this.level,
     this.verifyType,
@@ -45,7 +58,8 @@ final class ApiUserProfile {
     this.videoCount,
   });
   final String mid, name, signature;
-  final Uri? avatarUrl;
+  final Uri? avatarUrl, pendantUrl, bannerUrl, vipLabelImageUrl;
+  final int? vipStatus, vipType;
   final int? level,
       verifyType,
       followerCount,

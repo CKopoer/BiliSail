@@ -4,6 +4,7 @@ import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/workspace_tabs.dart';
 import 'package:bilisail/core/platform/detached_playback_window.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
+import 'package:bilisail/shared/ui/playback_navigation.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
@@ -278,14 +279,11 @@ void main() {
         tester.view.physicalSize = Size(width, 844);
         fixture.router.go('/user/123');
         await tester.pumpAndSettle();
-        final header = find.byKey(
-          const ValueKey('workspace-profile-back-header'),
-        );
+        final header = find.byKey(const ValueKey('profile-back'));
         expect(header, findsOneWidget);
         expect(View.of(tester.element(header)).viewId, tester.view.viewId);
-        expect(tester.getSize(header).height, 42);
         expect(
-          find.byKey(const ValueKey('workspace-back')).hitTestable(),
+          find.byKey(const ValueKey('profile-back')).hitTestable(),
           findsOneWidget,
         );
         expect(find.byKey(const ValueKey('workspace-tab-strip')), findsNothing);
@@ -294,7 +292,7 @@ void main() {
           findsNothing,
         );
         _expectViews(tester, [tester.view.viewId, window.viewId]);
-        await tester.tap(find.byKey(const ValueKey('workspace-back')));
+        await tester.tap(find.byKey(const ValueKey('profile-back')));
         await tester.pumpAndSettle();
         expect(tester.element(_page('home')), same(browser));
         expect(tester.element(_page('tab-1')), same(playback));
@@ -748,6 +746,12 @@ class _PageProbeState extends ConsumerState<_PageProbe> {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (widget.tab.isProfile)
+          IconButton(
+            key: const ValueKey('profile-back'),
+            onPressed: PlaybackNavigation.maybeOf(context)?.onBack,
+            icon: const Icon(Icons.arrow_back),
+          ),
         Text('${widget.tab.id} ${widget.tab.location}'),
         Text('count ${ref.watch(_counterProvider)}'),
         ElevatedButton(

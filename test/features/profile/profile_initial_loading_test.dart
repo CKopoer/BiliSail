@@ -8,6 +8,7 @@ import 'package:bilisail/features/profile/application/profile_controller.dart';
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/profile/presentation/profile_header.dart';
 import 'package:bilisail/features/profile/presentation/profile_screen.dart';
+import 'package:bilisail/shared/ui/playback_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +42,7 @@ void main() {
   Future<void> mount(
     WidgetTester tester, {
     ProfileSection section = ProfileSection.videos,
+    VoidCallback? onBack,
   }) async {
     repository.pending = Completer<UserProfile>();
     await tester.pumpWidget(
@@ -48,7 +50,11 @@ void main() {
         container: container,
         child: MaterialApp(
           home: Scaffold(
-            body: ProfileScreen(id: _id, initialSection: section),
+            body: PlaybackNavigation(
+              onBack: onBack ?? () {},
+              onHome: () {},
+              child: ProfileScreen(id: _id, initialSection: section),
+            ),
           ),
         ),
       ),
@@ -63,6 +69,22 @@ void main() {
     expect(find.textContaining('暂无公开内容'), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
   }
+
+  testWidgets(
+    'back remains available before load and after a profile failure',
+    (tester) async {
+      var backs = 0;
+      await mount(tester, onBack: () => backs++);
+      await tester.tap(find.byKey(const ValueKey('profile-back')));
+      expect(backs, 1);
+      repository.pending.completeError(
+        const AppFailure(AppFailureKind.network, '资料加载失败'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('profile-back')));
+      expect(backs, 2);
+    },
+  );
 
   testWidgets('fast profile opens without a partial page or loading flash', (
     tester,

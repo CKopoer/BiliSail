@@ -880,20 +880,6 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                           : const SizedBox.shrink(),
                                       child: Column(
                                         children: [
-                                          if (_frameShowsBack(context) &&
-                                              widget.windowControlsBuilder ==
-                                                  null &&
-                                              tab.isProfile)
-                                            SizedBox(
-                                              key: const ValueKey(
-                                                'workspace-profile-back-header',
-                                              ),
-                                              height: 42,
-                                              child: Align(
-                                                alignment: Alignment.centerLeft,
-                                                child: _backButton(),
-                                              ),
-                                            ),
                                           if (tab.location.path != '/search' &&
                                               !tab.isPlayback &&
                                               !tab.isProfile &&
@@ -1208,7 +1194,9 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                     widget.pageBuilder?.call(context, view) ??
                                     widget.child;
                                 return PlaybackNavigation(
-                                  onBack: _desktopDual
+                                  onBack:
+                                      _desktopDual &&
+                                          tab.id == _workspace.playbackId
                                       ? _playbackWindowBack
                                       : () {
                                           _goBack();

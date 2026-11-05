@@ -599,12 +599,19 @@ void main() {
                 (dual || single) &&
                 !const ['/', '/settings'].contains(location) &&
                 (!mobile ||
-                    !playback ||
-                    (single && platform == TargetPlatform.iOS));
+                    (!profile &&
+                        (!playback ||
+                            (single && platform == TargetPlatform.iOS))));
             expect(
               find.byKey(const ValueKey('workspace-back')),
               hasBack ? findsOneWidget : findsNothing,
               reason: '$location width=$width',
+            );
+            // The real profile owns its Back button inside the image header;
+            // the shell must not reserve a second row above this page probe.
+            expect(
+              find.byKey(const ValueKey('workspace-profile-back-header')),
+              findsNothing,
             );
             expect(
               find.byTooltip('返回上一视频'),
@@ -656,8 +663,6 @@ void main() {
                                     ? (platform == TargetPlatform.android
                                           ? 0
                                           : 44)
-                                    : profile
-                                    ? 42
                                     : 0)
                               : 44
                         : !mobile

@@ -27,6 +27,11 @@ class ProfileHeader extends StatefulWidget {
     this.onCopyLink,
     this.onOpenWebsite,
     this.onRefresh,
+    this.onBack,
+    this.onBlock,
+    this.onReport,
+    this.blocked,
+    this.blockBusy = false,
   });
 
   final UserProfile profile;
@@ -41,7 +46,12 @@ class ProfileHeader extends StatefulWidget {
       onCopyUid,
       onCopyLink,
       onOpenWebsite,
-      onRefresh;
+      onRefresh,
+      onBack,
+      onBlock,
+      onReport;
+  final bool? blocked;
+  final bool blockBusy;
   final Widget? followAction, messageAction;
 
   @override
@@ -75,6 +85,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
         onOpenWebsite = widget.onOpenWebsite,
         onRefresh = widget.onRefresh;
     final theme = Theme.of(context), scheme = theme.colorScheme;
+    final bannerUrl = details?.bannerUrl ?? profile.bannerUrl;
     final actions = Wrap(
       alignment: WrapAlignment.end,
       spacing: 8,
@@ -115,27 +126,39 @@ class _ProfileHeaderState extends State<ProfileHeader> {
               ),
             ),
             if (profile.level case final level?) BiliLevelBadge(level: level),
-            if (profile.verifyType case final type? when type >= 0)
-              BiliVerifyBadge(type: type),
-            if (profile.vipLabel case final label? when label.isNotEmpty)
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
+            if (profile.vipLabel case final label?
+                when profile.vipStatus == 1 && label.isNotEmpty)
+              if (profile.vipLabelImageUrl case final image?)
+                Semantics(
+                  label: label,
+                  child: AppCoverImage(
+                    key: const ValueKey('profile-vip-image'),
+                    url: image.toString(),
+                    width: 88,
+                    height: 24,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => Text(label),
                   ),
-                  child: Text(
-                    label,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: scheme.onPrimaryContainer,
+                )
+              else
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    child: Text(
+                      label,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onPrimaryContainer,
+                      ),
                     ),
                   ),
                 ),
-              ),
           ],
         ),
         const SizedBox(height: 6),
@@ -241,9 +264,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                         color: scheme.secondaryContainer,
                         child: InkWell(
                           key: const ValueKey('profile-banner'),
-                          onTap: details?.bannerUrl == null
-                              ? null
-                              : onOpenBanner,
+                          onTap: bannerUrl == null ? null : onOpenBanner,
                           child: Ink(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
@@ -254,7 +275,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                                 ],
                               ),
                             ),
-                            child: switch (details?.bannerUrl) {
+                            child: switch (bannerUrl) {
                               final url? => AppCoverImage(
                                 url: url.toString(),
                                 excludeFromSemantics: true,
@@ -281,16 +302,72 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                               key: const ValueKey('profile-avatar'),
                               customBorder: const CircleBorder(),
                               onTap: onOpenAvatar,
-                              child: NetworkAvatar(
-                                url: profile.avatarUrl,
-                                name: profile.name,
-                                radius: 36,
+                              child: SizedBox.square(
+                                dimension: 88,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    NetworkAvatar(
+                                      url: profile.avatarUrl,
+                                      name: profile.name,
+                                      radius: 32,
+                                    ),
+                                    if (profile.pendantUrl case final pendant?)
+                                      IgnorePointer(
+                                        child: AppCoverImage(
+                                          key: const ValueKey(
+                                            'profile-avatar-pendant',
+                                          ),
+                                          url: pendant.toString(),
+                                          width: 88,
+                                          height: 88,
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (_, _, _) =>
+                                              const SizedBox.shrink(),
+                                        ),
+                                      ),
+                                    if (profile.verifyType case final type?
+                                        when type == 0 || type == 1)
+                                      Positioned(
+                                        right: 4,
+                                        bottom: 4,
+                                        child: BiliVerifyBadge(
+                                          type: type,
+                                          size: 20,
+                                        ),
+                                      )
+                                    else if (profile.vipStatus == 1)
+                                      Positioned(
+                                        right: 4,
+                                        bottom: 4,
+                                        child: Semantics(
+                                          label: '大会员',
+                                          child: Icon(
+                                            Icons.workspace_premium,
+                                            size: 22,
+                                            color: scheme.primary,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
+                    if (widget.onBack != null)
+                      Positioned(
+                        left: 8,
+                        top: 8,
+                        child: IconButton.filledTonal(
+                          key: const ValueKey('profile-back'),
+                          tooltip: '返回',
+                          onPressed: widget.onBack,
+                          icon: const Icon(Icons.arrow_back),
+                        ),
+                      ),
                     Positioned(
                       right: 8,
                       bottom: 0,
@@ -311,9 +388,34 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                               'link' => onCopyLink?.call(),
                               'web' => onOpenWebsite?.call(),
                               'refresh' => onRefresh?.call(),
+                              'block' => widget.onBlock?.call(),
+                              'report' => widget.onReport?.call(),
                               _ => null,
                             },
                             itemBuilder: (_) => [
+                              if (!isSelf) ...[
+                                PopupMenuItem(
+                                  value: 'block',
+                                  enabled:
+                                      widget.onBlock != null &&
+                                      !widget.blockBusy,
+                                  child: Text(
+                                    widget.blockBusy
+                                        ? '正在读取黑名单状态…'
+                                        : widget.blocked == true
+                                        ? '移出黑名单'
+                                        : widget.blocked == false
+                                        ? '加入黑名单'
+                                        : '刷新黑名单状态',
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'report',
+                                  enabled: widget.onReport != null,
+                                  child: const Text('举报（打开官方页面）'),
+                                ),
+                                const PopupMenuDivider(),
+                              ],
                               PopupMenuItem(
                                 value: 'uid',
                                 enabled: onCopyUid != null,
