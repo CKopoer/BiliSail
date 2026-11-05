@@ -143,6 +143,14 @@ Release 草稿及全部附件上传成功后，使用 GitHub 官方 [actions/git
 
 后续 [CI 41436650047](https://github.com/CKopoer/BiliSail/actions/runs/41436650047/job/125252164120) 仍在第二轮窗口回收时耗尽 60 秒总预算；上一次成功运行的同类回收单次就耗时约 30.8 秒。本轮将共享校验入口的组合 GUI `startup` 预算独立设为 180 秒，凭据执行仍为 60 秒，原生启动仍为 180 秒；保留完整断言和独立硬超时，不自动重试。两份工作流的构建步骤／job 上限继续为 30／40 分钟。证据、父进程与 worker 预算传递及远端验证边界见[组合 GUI 执行预算](macos-release-startup.md#2026-11-02组合-gui-检查的执行预算)。
 
+### CI #293：字体选择测试点击屏幕外控件（2026-11-05）
+
+[CI #293](https://github.com/CKopoer/BiliSail/actions/runs/41876045873) 对应提交 `55601c393ea093ebe65c2759ac607f51df6206ec`。唯一失败的 [Root app tests (shard 0)](https://github.com/CKopoer/BiliSail/actions/runs/41876045873/job/126735823585) 中，`font_selection_test.dart` 的 `appearance saves bundled and installed fonts independently` 点击未命中，预期保存 `HarmonyOS Sans`，实际仍为 `null`；该分片通过 2159 项、失败 1 项、跳过 2 项。格式／分析、另一根测试分片、包测试及原生 mux 回归均通过，检查汇总随之失败，平台构建被跳过。
+
+外观设置新增“动态页默认标签”后，界面字体选项被推到测试固定的 650 × 850 窗口下方；原测试直接点击文字中心 `(155.7, 855.0)`，未先滚动。Windows 本机原用例复现了相同坐标及断言失败，确认这不是字体保存逻辑的错误。修复在三处入口选择内置字体前调用 `ensureVisible`，等待滚动结束并断言目标可命中，再执行真实点击；继续验证字体保存及界面／弹幕偏好相互独立，不扩大测试窗口或放宽保存断言。
+
+字体专项 6 项通过，修复前后日志分别为 `build/ci-font-selection-before.log`、`build/ci-font-selection-after.log`。Windows / Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 完整通过打包边界、格式、静态分析及 5077 项 Dart／Flutter 测试（根应用 4177、API 586、播放器 148、弹幕 161、封装 5），日志为 `build/ci-font-selection-check.log`；13 项 Windows 符号链接用例因权限不足、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。本文 45 条本地链接及 `git diff --check` 通过，五份锁文件未变。未修改应用或原生实现，本轮未执行安装包构建和设备操作；未发现运行中的调试应用，无法热重载，测试代码由新测试进程验证。推送后的新 CI 结果另行确认，重跑旧 run 仍会使用旧测试。
+
 ## Android 固定签名与覆盖升级
 
 2026-10-07 起，push、手动 CI 和 Release 共用固定 release keystore。仓库 Actions Secrets 配置：
