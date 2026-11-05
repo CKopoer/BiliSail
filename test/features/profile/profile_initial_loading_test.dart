@@ -195,6 +195,7 @@ class _ProfileRepository implements ProfileRepository {
     String order = 'pubdate',
     String keyword = '',
     String? folderId,
+    ProfileCollectionId? collection,
     required RequestCancellation cancellation,
   }) async => ProfilePage(
     items: [

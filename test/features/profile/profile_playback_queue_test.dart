@@ -525,6 +525,7 @@ class _Repository extends Fake implements ProfileRepository {
     String order = 'pubdate',
     String keyword = '',
     String? folderId,
+    ProfileCollectionId? collection,
     required RequestCancellation cancellation,
   }) async {
     calls.add((page: page, order: order, keyword: keyword));

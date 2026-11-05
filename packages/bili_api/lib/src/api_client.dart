@@ -86,6 +86,7 @@ final class BiliApiClient {
   }) {
     if (!const {
       '/x/space/wbi/arc/search',
+      '/x/space/wbi/acc/info',
       '/x/web-interface/wbi/search/type',
       '/x/web-interface/wbi/search/all/v2',
       '/x/web-interface/suggest',
@@ -2263,14 +2264,23 @@ final class BiliApiClient {
     if (context?.sessionEpoch != null && context!.sessionEpoch != epoch) {
       throw ApiFailure(ApiFailureCategory.cancelled, endpoint);
     }
+    final spaceDetails =
+        endpoint == 'profile_details' &&
+        uri.host == 'api.bilibili.com' &&
+        uri.path == '/x/space/wbi/acc/info';
     final headers = <String, String>{
       'Accept': endpoint == 'danmaku_segment'
           ? 'application/octet-stream'
           : 'application/json',
-      'User-Agent': endpoint == 'video_storyboard'
+      'User-Agent': spaceDetails
+          ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
+          : endpoint == 'video_storyboard'
           ? 'Mozilla/5.0'
           : 'BiliSail/0.1',
-      'Referer': referer,
+      'Referer': spaceDetails
+          ? 'https://space.bilibili.com/${uri.queryParameters['mid']}/dynamic'
+          : referer,
+      if (spaceDetails) 'Origin': 'https://space.bilibili.com',
     };
     final cookie = cookieJar.headerFor(uri, now: _clock());
     if (cookie != null) headers['Cookie'] = cookie;

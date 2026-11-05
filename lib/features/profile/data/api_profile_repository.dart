@@ -12,7 +12,8 @@ import '../../../domain/video.dart';
 import '../../live/domain/live_room.dart';
 import '../domain/profile_repository.dart';
 
-class ApiProfileRepository implements ProfileRepository {
+class ApiProfileRepository
+    implements ProfileRepository, ProfileDetailsRepository {
   ApiProfileRepository(
     this.client,
     this.requests, {
@@ -25,6 +26,20 @@ class ApiProfileRepository implements ProfileRepository {
   String get accountScope => _scope();
   @override
   int get sessionEpoch => requests.sessionEpoch;
+  @override
+  Future<ProfileSpaceDetails> loadDetails(
+    UserId id, {
+    required RequestCancellation cancellation,
+  }) => _read(
+    requests.run((context) async {
+      final details = await client.loadDetails(id.value, context: context);
+      return ProfileSpaceDetails(
+        bannerUrl: details.bannerUrl,
+        gender: details.gender,
+        birthday: details.birthday,
+      );
+    }, cancellation: cancellation),
+  );
   @override
   Future<UserProfile> loadProfile(
     UserId id, {
@@ -67,6 +82,7 @@ class ApiProfileRepository implements ProfileRepository {
     String order = 'pubdate',
     String keyword = '',
     String? folderId,
+    ProfileCollectionId? collection,
     required RequestCancellation cancellation,
   }) => _read(
     requests.run((context) async {
@@ -113,6 +129,23 @@ class ApiProfileRepository implements ProfileRepository {
           page: page,
           context: context,
         ),
+        ProfileSection.collections =>
+          collection == null
+              ? client.loadCollections(id.value, page: page, context: context)
+              : client.loadCollectionVideos(
+                  id.value,
+                  collection.value,
+                  isSeries: collection.isSeries,
+                  page: page,
+                  context: context,
+                ),
+        ProfileSection.bangumi ||
+        ProfileSection.cinema => client.loadFollowedSeasons(
+          id.value,
+          cinema: section == ProfileSection.cinema,
+          page: page,
+          context: context,
+        ),
       };
       return ProfilePage(
         items: List.unmodifiable(result.items.map(_entry)),
@@ -152,6 +185,11 @@ class ApiProfileRepository implements ProfileRepository {
       userId: e.userMid == null ? null : UserId(e.userMid!),
       publishedAt: e.publishedAt,
       count: e.count,
+      collection: switch (e.collectionId) {
+        final id? => ProfileCollectionId(id, isSeries: e.isSeries),
+        _ => null,
+      },
+      seasonId: e.seasonId,
       imageUrls: List.unmodifiable(e.imageUrls),
       video: v == null
           ? null

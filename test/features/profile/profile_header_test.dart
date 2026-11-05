@@ -50,6 +50,41 @@ Future<void> pumpLayout(
 }
 
 void main() {
+  testWidgets(
+    'expanded biography survives switching between narrow and wide layouts',
+    (tester) async {
+      final longProfile = UserProfile(
+        id: profile.id,
+        name: profile.name,
+        signature: List.filled(30, '这是一段需要展开阅读的简介。').join(),
+      );
+      await pumpLayout(
+        tester,
+        ProfileHeader(profile: longProfile, onSelectSection: (_) {}),
+        width: 375,
+      );
+      await tester.tap(find.byKey(const ValueKey('profile-signature-toggle')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.text(longProfile.signature)).maxLines,
+        isNull,
+      );
+      await tester.binding.setSurfaceSize(const Size(1440, 1400));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('profile-header-wide')), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.text(longProfile.signature)).maxLines,
+        isNull,
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('profile-signature-toggle')),
+      );
+      await tester.tap(find.byKey(const ValueKey('profile-signature-toggle')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.text(longProfile.signature)).maxLines, 2);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('profile name UID signature and verification support drag copy', (
     tester,
   ) async {
@@ -64,6 +99,8 @@ void main() {
       scale: 2,
       platform: TargetPlatform.windows,
     );
+    await tester.tap(find.byKey(const ValueKey('profile-signature-toggle')));
+    await tester.pumpAndSettle();
     for (final value in [
       profile.name,
       'UID ${profile.id.value}',

@@ -1,5 +1,7 @@
 # API、鉴权与数据边界
 
+2026-11-05 主页补充五个 `api.bilibili.com` Web JSON 只读 GET：`/x/space/wbi/acc/info`（`mid/platform=web/web_location=1550101/token`，WBI，空间 Referer/Origin 和桌面浏览器 UA，无分页）、`/x/polymer/web-space/seasons_series_list`（`mid/page_num/page_size=10`，合集/系列目录）、`/x/polymer/web-space/seasons_archives_list`（`mid/season_id/page_num/page_size=30/sort_reverse=false`）、`/x/series/archives`（`mid/series_id/pn/ps=30/sort=asc`）和 `/x/space/bangumi/follow/list`（`vmid/type=1或2/pn/ps=30`，追番/追剧）。除资料端点外无签名；Cookie 可选，无 CSRF/App token，分页依据服务端 total，空页停止。均沿用 ApiRequests 的 25 秒总 deadline、账号 epoch、取消和有界读重试；风控不自动重放，资料失败不阻塞基本用户卡。公开合集与追番/追剧读取通过，扩展资料游客请求返回 `-352`；协议与未验收边界见[主页重构方案](ui-redesign/profile-redesign-2026-11-05.md)。
+
 2026-11-05 消息第二轮扩展 Web IM 表情面板、`biz=im` 图片上传、内容推送／消息设置、屏蔽词、黑名单和举报。通知回复严格使用 `business_id/subject_id/source_id/root_id`，复用现有评论写端点。批量已读为用户确认范围内逐会话 `update_ack`，`ack_sessions` 仅同步已读变更；全部写入保持单次执行、账号／取消／deadline 隔离。端点与未验收边界见[消息表情、发送与管理入口](validation/messages-rich-composition-2026-11-05.md)。
 
 2026-11-05 消息管理新增 Web Cookie JSON 响应的三个单次 form-urlencoded POST，host 为 `api.vc.bilibili.com`：`/session_svr/v1/session_svr/set_top`（`talker_id/session_type=1/op_type`，0 置顶、1 取消）、`/link_setting/v1/link_setting/set_msg_dnd`（`uid/dnd_uid/setting`，1 开启、0 关闭）和 `/session_svr/v1/session_svr/remove_session`（`talker_id/session_type=1`）。均复用固定目标域 Cookie/CSRF、25 秒总 deadline、取消/epoch 与写请求不重试，不需要 App token，无分页。官方公开脚本核对到路径和参数，不等于真实账号写操作已验收；消息富内容、来源与测试见[消息中心重构](validation/messages-redesign-2026-11-05.md)。

@@ -4,188 +4,435 @@ import '../../../shared/ui/paging_tab_strip.dart';
 import '../../../shared/ui/retained_tab_view.dart';
 
 import '../../../shared/ui/bili_badges.dart';
+import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/video_card.dart';
 import '../domain/profile_repository.dart';
 
-class ProfileHeader extends StatelessWidget {
+class ProfileHeader extends StatefulWidget {
   const ProfileHeader({
     super.key,
     required this.profile,
     required this.onSelectSection,
+    this.details,
     this.isSelf = false,
     this.liveRoom,
     this.onOpenLiveRoom,
     this.followAction,
     this.messageAction,
+    this.onOpenAvatar,
+    this.onOpenBanner,
+    this.onShowDetails,
+    this.onCopyUid,
+    this.onCopyLink,
+    this.onOpenWebsite,
+    this.onRefresh,
   });
 
   final UserProfile profile;
+  final ProfileSpaceDetails? details;
   final ValueChanged<ProfileSection> onSelectSection;
   final bool isSelf;
   final ProfileLiveRoom? liveRoom;
-  final VoidCallback? onOpenLiveRoom;
-  final Widget? followAction;
-  final Widget? messageAction;
+  final VoidCallback? onOpenLiveRoom,
+      onOpenAvatar,
+      onOpenBanner,
+      onShowDetails,
+      onCopyUid,
+      onCopyLink,
+      onOpenWebsite,
+      onRefresh;
+  final Widget? followAction, messageAction;
+
+  @override
+  State<ProfileHeader> createState() => _ProfileHeaderState();
+}
+
+class _ProfileHeaderState extends State<ProfileHeader> {
+  bool _signatureExpanded = false;
+
+  @override
+  void didUpdateWidget(ProfileHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profile.id != widget.profile.id) _signatureExpanded = false;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final actions = <Widget>[
-      ?followAction,
-      if (liveRoom case final room? when room.id.isValid)
-        Tooltip(
-          message: room.isLive ? '进入正在直播的直播间' : '进入直播间，当前未开播',
-          child: OutlinedButton.icon(
-            key: const ValueKey('profile-live-room'),
-            onPressed: onOpenLiveRoom,
-            icon: Icon(
-              room.isLive ? Icons.live_tv : Icons.live_tv_outlined,
-              size: 18,
+    final profile = widget.profile,
+        details = widget.details,
+        isSelf = widget.isSelf,
+        liveRoom = widget.liveRoom,
+        followAction = widget.followAction,
+        messageAction = widget.messageAction;
+    final onSelectSection = widget.onSelectSection,
+        onOpenLiveRoom = widget.onOpenLiveRoom,
+        onOpenAvatar = widget.onOpenAvatar,
+        onOpenBanner = widget.onOpenBanner,
+        onShowDetails = widget.onShowDetails,
+        onCopyUid = widget.onCopyUid,
+        onCopyLink = widget.onCopyLink,
+        onOpenWebsite = widget.onOpenWebsite,
+        onRefresh = widget.onRefresh;
+    final theme = Theme.of(context), scheme = theme.colorScheme;
+    final actions = Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 8,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        ?followAction,
+        ?messageAction,
+        if (liveRoom case final room? when room.id.isValid)
+          Tooltip(
+            message: room.isLive ? '进入正在直播的直播间' : '进入直播间，当前未开播',
+            child: OutlinedButton.icon(
+              key: const ValueKey('profile-live-room'),
+              onPressed: onOpenLiveRoom,
+              icon: Icon(
+                room.isLive ? Icons.live_tv : Icons.live_tv_outlined,
+                size: 18,
+              ),
+              label: Text(room.isLive ? '正在直播' : '直播间'),
             ),
-            label: Text(room.isLive ? '正在直播' : '直播间'),
           ),
-        ),
-      ?messageAction,
-    ];
-    return Column(
+      ],
+    );
+    final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            NetworkAvatar(
-              url: profile.avatarUrl,
-              name: profile.name,
-              radius: 32,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      SelectionArea(
-                        child: Text(
-                          profile.name,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      if (profile.level case final level?)
-                        BiliLevelBadge(level: level),
-                      if (profile.verifyType case final type?)
-                        BiliVerifyBadge(type: type),
-                      if (profile.vipLabel case final label?
-                          when label.isNotEmpty)
-                        Text(
-                          label,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      SelectionArea(
-                        child: Text(
-                          'UID ${profile.id.value}',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                      if (isSelf)
-                        Text(
-                          '我的主页',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (profile.verifyDescription case final description?
-                      when description.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: SelectionArea(
-                        child: Text(
-                          description,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: muted,
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (profile.signature.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: SelectionArea(
-                        child: Text(
-                          profile.signature,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: muted,
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+            SelectionArea(
+              child: Text(
+                profile.name,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
+            if (profile.level case final level?) BiliLevelBadge(level: level),
+            if (profile.verifyType case final type? when type >= 0)
+              BiliVerifyBadge(type: type),
+            if (profile.vipLabel case final label? when label.isNotEmpty)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  child: Text(
+                    label,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
-        if (actions.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: actions,
-            ),
-          ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 12,
-          runSpacing: 2,
-          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: 4,
           children: [
-            _ProfileStatistic(
-              key: const ValueKey('profile-following-stat'),
-              count: profile.followingCount,
-              label: '关注',
-              onTap: () => onSelectSection(ProfileSection.following),
+            SelectionArea(
+              child: Text(
+                'UID ${profile.id.value}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
             ),
-            _ProfileStatistic(
-              key: const ValueKey('profile-followers-stat'),
-              count: profile.followerCount,
-              label: '粉丝',
-              onTap: () => onSelectSection(ProfileSection.followers),
-            ),
-            _ProfileStatistic(
-              key: const ValueKey('profile-likes-stat'),
-              count: profile.likeCount,
-              label: '获赞',
-            ),
-            if (profile.videoCount case final count?)
-              _ProfileStatistic(
-                key: const ValueKey('profile-videos-stat'),
-                count: count,
-                label: '投稿',
+            if (isSelf)
+              Text(
+                '我的主页',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.primary,
+                ),
               ),
           ],
         ),
+        if (profile.verifyDescription case final description?
+            when description.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: SelectionArea(
+              child: Text(
+                description,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        if (profile.signature.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _ProfileBiography(
+              text: profile.signature,
+              expanded: _signatureExpanded,
+              onToggle: () =>
+                  setState(() => _signatureExpanded = !_signatureExpanded),
+            ),
+          ),
       ],
+    );
+    final statistics = Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        _ProfileStatistic(
+          key: const ValueKey('profile-following-stat'),
+          count: profile.followingCount,
+          label: '关注',
+          onTap: () => onSelectSection(ProfileSection.following),
+        ),
+        _ProfileStatistic(
+          key: const ValueKey('profile-followers-stat'),
+          count: profile.followerCount,
+          label: '粉丝',
+          onTap: () => onSelectSection(ProfileSection.followers),
+        ),
+        _ProfileStatistic(
+          key: const ValueKey('profile-likes-stat'),
+          count: profile.likeCount,
+          label: '获赞',
+        ),
+        if (profile.videoCount case final count?)
+          _ProfileStatistic(
+            key: const ValueKey('profile-videos-stat'),
+            count: count,
+            label: '投稿',
+            onTap: () => onSelectSection(ProfileSection.videos),
+          ),
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide =
+            constraints.maxWidth >= 840 &&
+            MediaQuery.textScalerOf(context).scale(14) < 21;
+        return Material(
+          key: ValueKey(wide ? 'profile-header-wide' : 'profile-header-narrow'),
+          color: scheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: wide ? 138 : 142,
+                child: Stack(
+                  children: [
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      height: 108,
+                      child: Material(
+                        color: scheme.secondaryContainer,
+                        child: InkWell(
+                          key: const ValueKey('profile-banner'),
+                          onTap: details?.bannerUrl == null
+                              ? null
+                              : onOpenBanner,
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  scheme.primaryContainer,
+                                  scheme.secondaryContainer,
+                                  scheme.tertiaryContainer,
+                                ],
+                              ),
+                            ),
+                            child: switch (details?.bannerUrl) {
+                              final url? => AppCoverImage(
+                                url: url.toString(),
+                                excludeFromSemantics: true,
+                                errorBuilder: (_, _, _) =>
+                                    const SizedBox.expand(),
+                              ),
+                              _ => const SizedBox.expand(),
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 20,
+                      bottom: 0,
+                      child: Tooltip(
+                        message: '查看头像',
+                        child: Material(
+                          color: scheme.surfaceContainerLow,
+                          shape: const CircleBorder(),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: InkWell(
+                              key: const ValueKey('profile-avatar'),
+                              customBorder: const CircleBorder(),
+                              onTap: onOpenAvatar,
+                              child: NetworkAvatar(
+                                url: profile.avatarUrl,
+                                name: profile.name,
+                                radius: 36,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 8,
+                      bottom: 0,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            key: const ValueKey('profile-details'),
+                            tooltip: '用户资料',
+                            onPressed: onShowDetails,
+                            icon: const Icon(Icons.info_outline, size: 20),
+                          ),
+                          PopupMenuButton<String>(
+                            key: const ValueKey('profile-more'),
+                            tooltip: '主页更多操作',
+                            onSelected: (value) => switch (value) {
+                              'uid' => onCopyUid?.call(),
+                              'link' => onCopyLink?.call(),
+                              'web' => onOpenWebsite?.call(),
+                              'refresh' => onRefresh?.call(),
+                              _ => null,
+                            },
+                            itemBuilder: (_) => [
+                              PopupMenuItem(
+                                value: 'uid',
+                                enabled: onCopyUid != null,
+                                child: const Text('复制 UID'),
+                              ),
+                              PopupMenuItem(
+                                value: 'link',
+                                enabled: onCopyLink != null,
+                                child: const Text('复制主页链接'),
+                              ),
+                              PopupMenuItem(
+                                value: 'web',
+                                enabled: onOpenWebsite != null,
+                                child: const Text('在浏览器打开'),
+                              ),
+                              PopupMenuItem(
+                                value: 'refresh',
+                                enabled: onRefresh != null,
+                                child: const Text('刷新主页'),
+                              ),
+                            ],
+                            icon: const Icon(Icons.more_horiz),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                child: wide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: identity),
+                          const SizedBox(width: 24),
+                          SizedBox(
+                            width: 360,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                statistics,
+                                const SizedBox(height: 8),
+                                actions,
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (followAction != null ||
+                              messageAction != null ||
+                              liveRoom?.id.isValid == true)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: actions,
+                            ),
+                          identity,
+                          const SizedBox(height: 8),
+                          statistics,
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ProfileBiography extends StatelessWidget {
+  const _ProfileBiography({
+    required this.text,
+    required this.expanded,
+    required this.onToggle,
+  });
+  final String text;
+  final bool expanded;
+  final VoidCallback onToggle;
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+      height: 1.4,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: style),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          maxLines: 2,
+        )..layout(maxWidth: constraints.maxWidth);
+        final overflow = painter.didExceedMaxLines;
+        painter.dispose();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectionArea(
+              child: Text(
+                text,
+                style: style,
+                maxLines: expanded ? null : 2,
+                overflow: expanded ? null : TextOverflow.ellipsis,
+              ),
+            ),
+            if (overflow)
+              TextButton(
+                key: const ValueKey('profile-signature-toggle'),
+                onPressed: onToggle,
+                child: Text(expanded ? '收起简介' : '展开简介'),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -197,45 +444,43 @@ class _ProfileStatistic extends StatelessWidget {
     required this.label,
     this.onTap,
   });
-
   final int? count;
   final String label;
   final VoidCallback? onTap;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final foreground = onTap == null
-        ? theme.colorScheme.onSurface
-        : theme.colorScheme.primary;
-    final content = ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 44),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        child: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: compactCount(count),
-                style: const TextStyle(fontWeight: FontWeight.w500),
+    return Tooltip(
+      message: '$label：${count ?? '未知'}',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 60, minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    compactCount(count),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    label,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
-              TextSpan(text: ' $label'),
-            ],
-          ),
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: foreground,
-            height: 1.35,
+            ),
           ),
         ),
-      ),
-    );
-    if (onTap == null) return content;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(4),
-        onTap: onTap,
-        child: content,
       ),
     );
   }
@@ -292,6 +537,9 @@ String profileSectionLabel(ProfileSection section) => switch (section) {
   ProfileSection.videos => '投稿',
   ProfileSection.dynamics => '动态',
   ProfileSection.folders => '收藏夹',
+  ProfileSection.collections => '合集',
+  ProfileSection.bangumi => '追番',
+  ProfileSection.cinema => '追剧',
   ProfileSection.following => '关注',
   ProfileSection.followers => '粉丝',
 };

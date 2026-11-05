@@ -5,6 +5,8 @@ import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/dynamic_post_interactions.dart';
 import '../../../shared/ui/network_avatar.dart';
+import '../../../shared/ui/app_cover_image.dart';
+import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/sliver_dynamic_post_list.dart';
 import '../domain/profile_repository.dart';
 import 'profile_folder_video_grid.dart';
@@ -22,6 +24,8 @@ class ProfileSectionContent extends StatefulWidget {
     this.folderOpen = false,
     this.onOpenVideo,
     this.onOpenUser,
+    this.onOpenCollection,
+    this.onOpenSeason,
   });
 
   final ProfileSection section;
@@ -31,6 +35,8 @@ class ProfileSectionContent extends StatefulWidget {
   final ValueChanged<Uri> onOpenLink;
   final ValueChanged<VideoSummary>? onOpenVideo;
   final ValueChanged<UserId>? onOpenUser;
+  final ValueChanged<ProfileEntry>? onOpenCollection;
+  final ValueChanged<String>? onOpenSeason;
 
   @override
   State<ProfileSectionContent> createState() => _ProfileSectionContentState();
@@ -57,7 +63,9 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
         oldWidget.onOpenFolder != widget.onOpenFolder ||
         oldWidget.onOpenLink != widget.onOpenLink ||
         oldWidget.onOpenVideo != widget.onOpenVideo ||
-        oldWidget.onOpenUser != widget.onOpenUser) {
+        oldWidget.onOpenUser != widget.onOpenUser ||
+        oldWidget.onOpenCollection != widget.onOpenCollection ||
+        oldWidget.onOpenSeason != widget.onOpenSeason) {
       _content = null;
       _videoGrid = null;
     }
@@ -105,6 +113,20 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
       );
     }
     if (kind == _ContentKind.entries) {
+      if (widget.entries.isNotEmpty &&
+          widget.entries.every(
+            (entry) => const {
+              ProfileEntryKind.folder,
+              ProfileEntryKind.collection,
+              ProfileEntryKind.season,
+            }.contains(entry.kind),
+          )) {
+        return SliverResponsiveCardGrid(
+          itemCount: widget.entries.length,
+          itemBuilder: (context, index) =>
+              _libraryCard(context, widget.entries[index]),
+        );
+      }
       return SliverList.builder(
         itemCount: widget.entries.length,
         itemBuilder: (context, index) => Padding(
@@ -151,6 +173,113 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
     video: video,
     onTap: () => widget.onOpenVideo?.call(video),
   );
+
+  Widget _libraryCard(BuildContext context, ProfileEntry entry) {
+    final scheme = Theme.of(context).colorScheme;
+    final season = entry.kind == ProfileEntryKind.season;
+    final label = switch (entry.kind) {
+      ProfileEntryKind.folder => '收藏夹',
+      ProfileEntryKind.collection =>
+        entry.collection?.isSeries == true ? '系列' : '合集',
+      _ => widget.section == ProfileSection.bangumi ? '追番' : '追剧',
+    };
+    final VoidCallback? open = switch (entry.kind) {
+      ProfileEntryKind.folder => () => widget.onOpenFolder(entry),
+      ProfileEntryKind.collection when widget.onOpenCollection != null =>
+        () => widget.onOpenCollection?.call(entry),
+      ProfileEntryKind.season
+          when entry.seasonId != null && widget.onOpenSeason != null =>
+        () => widget.onOpenSeason?.call(entry.seasonId!),
+      _ => null,
+    };
+    return Material(
+      color: scheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: ValueKey('profile-library-${entry.kind.name}-${entry.id}'),
+        onTap: open,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: season ? 3 / 4 : 16 / 9,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(
+                    color: scheme.surfaceContainerHighest,
+                    child: entry.coverUrl == null
+                        ? Icon(
+                            season
+                                ? Icons.movie_outlined
+                                : Icons.video_library_outlined,
+                            size: 36,
+                          )
+                        : AppCoverImage(
+                            url: entry.coverUrl.toString(),
+                            excludeFromSemantics: true,
+                            errorBuilder: (_, _, _) =>
+                                const Icon(Icons.broken_image_outlined),
+                          ),
+                  ),
+                  Positioned(
+                    left: 8,
+                    bottom: 8,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0xB3000000),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        child: Text(
+                          label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    season
+                        ? entry.subtitle
+                        : entry.count == null
+                        ? '视频数量未知'
+                        : '${entry.count} 个视频',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _entry(BuildContext context, ProfileEntry entry) {
     final post = entry.dynamicPost;

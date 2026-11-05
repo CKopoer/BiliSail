@@ -52,6 +52,93 @@ void main() {
     container.dispose();
     auth.stream.close();
   });
+  test(
+    'details failure preserves the basic card and list; retry recovers',
+    () async {
+      repo.detailsFailure = const AppFailure(AppFailureKind.network, '资料失败');
+      await controller.loadDetails();
+      expect(state().detailsMessage, '资料失败');
+      expect(state().profile?.name, '个人主页');
+      expect(state().current.items, [entry]);
+      repo.detailsFailure = null;
+      await controller.loadDetails();
+      expect(state().details?.gender, '保密');
+      expect(state().detailsMessage, isNull);
+    },
+  );
+  test('details refresh and account change reject late enrichment', () async {
+    final pending = repo.detailsPending = Completer<ProfileSpaceDetails>();
+    final old = controller.loadDetails();
+    final read = repo.detailsRead;
+    repo.detailsPending = null;
+    await controller.loadDetails();
+    expect(read?.isCancelled, true);
+    pending.complete(const ProfileSpaceDetails(gender: '旧资料'));
+    await old;
+    expect(state().details?.gender, '保密');
+    final accountPending = repo.detailsPending =
+        Completer<ProfileSpaceDetails>();
+    final accountRead = controller.loadDetails();
+    final cancellation = repo.detailsRead;
+    repo.detailsPending = null;
+    repo.epoch++;
+    auth.emit(const AuthState());
+    await Future<void>.delayed(Duration.zero);
+    expect(cancellation?.isCancelled, true);
+    accountPending.complete(const ProfileSpaceDetails(gender: '上个账号资料'));
+    await accountRead;
+    expect(state().details?.gender, '保密');
+  });
+  test(
+    'collections keep an independent folder path and cancel old archives',
+    () async {
+      controller.openFolder(
+        const ProfileEntry(
+          id: '55',
+          kind: ProfileEntryKind.folder,
+          title: '收藏夹',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final pending = repo.pending = Completer<ProfilePage>();
+      controller.openCollection(
+        const ProfileEntry(
+          id: 'season:1',
+          kind: ProfileEntryKind.collection,
+          title: '旧合集',
+          collection: ProfileCollectionId('1', isSeries: false),
+        ),
+      );
+      final read = repo.read;
+      repo.pending = null;
+      repo.items = const [];
+      controller.openCollection(
+        const ProfileEntry(
+          id: 'series:1',
+          kind: ProfileEntryKind.collection,
+          title: '新系列',
+          collection: ProfileCollectionId('1', isSeries: true),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(read?.isCancelled, true);
+      pending.complete(const ProfilePage(items: [entry], hasMore: false));
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        state().collection,
+        const ProfileCollectionId('1', isSeries: true),
+      );
+      expect(state().current.items, isEmpty);
+      expect(state().folderId, '55');
+      expect(repo.collection, state().collection);
+      controller.closeCollection();
+      await Future<void>.delayed(Duration.zero);
+      expect(state().collection, isNull);
+      expect(state().folderId, '55');
+      controller.select(ProfileSection.folders);
+      expect(state().folderTitle, '收藏夹');
+    },
+  );
   test('refresh cancels pagination and ignores its late response', () async {
     final pending = Completer<ProfilePage>();
     repo.pending = pending;
@@ -285,6 +372,7 @@ void main() {
     expect(find.text('此列表不可见'), findsOneWidget);
     expect(find.text('个人主页'), findsOneWidget);
     repo.failure = null;
+    repo.hasMore = false;
     await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
     expect(find.text('用户甲'), findsOneWidget);
@@ -495,7 +583,21 @@ void main() {
   });
 }
 
-class _Repo implements ProfileRepository {
+class _Repo implements ProfileRepository, ProfileDetailsRepository {
+  AppFailure? detailsFailure;
+  Completer<ProfileSpaceDetails>? detailsPending;
+  RequestCancellation? detailsRead;
+  ProfileCollectionId? collection;
+  @override
+  Future<ProfileSpaceDetails> loadDetails(
+    UserId id, {
+    required RequestCancellation cancellation,
+  }) async {
+    detailsRead = cancellation;
+    if (detailsFailure case final error?) throw error;
+    return detailsPending?.future ?? const ProfileSpaceDetails(gender: '保密');
+  }
+
   ProfileLiveRoom? liveRoom;
   AppFailure? liveFailure;
   Completer<ProfileLiveRoom?>? livePending;
@@ -548,9 +650,11 @@ class _Repo implements ProfileRepository {
     String order = 'pubdate',
     String keyword = '',
     String? folderId,
+    ProfileCollectionId? collection,
     required RequestCancellation cancellation,
   }) async {
     listReads++;
+    this.collection = collection;
     read = cancellation;
     this.keyword = keyword;
     if (failure case final error?) throw error;

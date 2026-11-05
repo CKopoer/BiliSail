@@ -325,6 +325,7 @@ final class _Profile implements ProfileRepository {
     String order = 'pubdate',
     String keyword = '',
     String? folderId,
+    ProfileCollectionId? collection,
     required RequestCancellation cancellation,
   }) async {
     calls.add((section, folderId, page));

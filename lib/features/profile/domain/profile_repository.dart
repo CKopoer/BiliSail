@@ -4,9 +4,49 @@ import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../live/domain/live_room.dart';
 
-enum ProfileSection { videos, dynamics, folders, following, followers }
+enum ProfileSection {
+  videos,
+  dynamics,
+  folders,
+  collections,
+  bangumi,
+  cinema,
+  following,
+  followers,
+}
 
-enum ProfileEntryKind { video, dynamic, folder, user }
+enum ProfileEntryKind { video, dynamic, folder, user, collection, season }
+
+final class ProfileCollectionId {
+  const ProfileCollectionId(this.value, {required this.isSeries});
+  final String value;
+  final bool isSeries;
+  @override
+  bool operator ==(Object other) =>
+      other is ProfileCollectionId &&
+      other.value == value &&
+      other.isSeries == isSeries;
+  @override
+  int get hashCode => Object.hash(value, isSeries);
+}
+
+final class ProfileSpaceDetails {
+  const ProfileSpaceDetails({
+    this.bannerUrl,
+    this.gender = '',
+    this.birthday = '',
+  });
+  final Uri? bannerUrl;
+  final String gender, birthday;
+}
+
+/// Optional enrichment never blocks the basic public card or its content.
+abstract interface class ProfileDetailsRepository {
+  Future<ProfileSpaceDetails> loadDetails(
+    UserId id, {
+    required RequestCancellation cancellation,
+  });
+}
 
 final class ProfileLiveRoom {
   const ProfileLiveRoom({required this.id, required this.isLive});
@@ -54,6 +94,8 @@ final class ProfileEntry {
     this.userId,
     this.publishedAt,
     this.count,
+    this.collection,
+    this.seasonId,
     this.imageUrls = const [],
   });
   final DynamicPost? dynamicPost;
@@ -64,6 +106,8 @@ final class ProfileEntry {
   final UserId? userId;
   final DateTime? publishedAt;
   final int? count;
+  final ProfileCollectionId? collection;
+  final String? seasonId;
   final List<Uri> imageUrls;
 }
 
@@ -99,6 +143,7 @@ abstract interface class ProfileRepository {
     String order = 'pubdate',
     String keyword = '',
     String? folderId,
+    ProfileCollectionId? collection,
     required RequestCancellation cancellation,
   });
 }

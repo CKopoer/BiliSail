@@ -259,6 +259,7 @@ final class _Profile implements ProfileRepository {
     String order = 'pubdate',
     String keyword = '',
     String? folderId,
+    ProfileCollectionId? collection,
     required RequestCancellation cancellation,
   }) async {
     if (section != ProfileSection.folders || folderId == null) {

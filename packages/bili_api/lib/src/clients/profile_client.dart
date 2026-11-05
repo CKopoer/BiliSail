@@ -9,6 +9,152 @@ final class ProfileClient {
   const ProfileClient(this.api);
   final BiliApiClient api;
   static const _size = 30;
+  static const _collectionSize = 10;
+
+  Future<ApiProfileSpaceDetails> loadDetails(
+    String mid, {
+    ApiRequestContext? context,
+  }) async {
+    _id(mid);
+    const e = 'profile_details';
+    final data = await api.requestWbiJson(
+      '/x/space/wbi/acc/info',
+      {'mid': mid, 'platform': 'web', 'web_location': '1550101', 'token': ''},
+      e,
+      context: context,
+    );
+    if (_key(data['mid'], e) != mid) _fail(e);
+    return ApiProfileSpaceDetails(
+      bannerUrl: _uri(data['top_photo']),
+      gender: _string(data['sex']),
+      birthday: _string(data['birthday']),
+    );
+  }
+
+  Future<ApiPage<ApiProfileEntry>> loadCollections(
+    String mid, {
+    required int page,
+    ApiRequestContext? context,
+  }) async {
+    _id(mid);
+    _page(page);
+    const e = 'profile_collections';
+    final data = await _get('/x/polymer/web-space/seasons_series_list', e, {
+      'mid': mid,
+      'page_num': '$page',
+      'page_size': '$_collectionSize',
+    }, context);
+    final lists = _map(data['items_lists'], e);
+    final total = _number(_map(lists['page'], e)['total']);
+    if (total == null || total < 0) _fail(e);
+    final entries = <ApiProfileEntry>[];
+    for (final isSeries in [false, true]) {
+      for (final value in _list(
+        lists[isSeries ? 'series_list' : 'seasons_list'],
+        e,
+      )) {
+        final meta = _map(_map(value, e)['meta'], e);
+        final id = _key(meta[isSeries ? 'series_id' : 'season_id'], e);
+        entries.add(
+          ApiProfileEntry(
+            id: '${isSeries ? 'series' : 'season'}:$id',
+            kind: ApiProfileEntryKind.collection,
+            collectionId: id,
+            isSeries: isSeries,
+            title: _text(meta['name'], e),
+            subtitle: _string(meta['description']),
+            coverUrl: _uri(meta['cover']),
+            count: _number(meta['total']),
+          ),
+        );
+      }
+    }
+    return _paged(entries, page, total, pageSize: _collectionSize);
+  }
+
+  Future<ApiPage<ApiProfileEntry>> loadCollectionVideos(
+    String mid,
+    String id, {
+    required bool isSeries,
+    required int page,
+    ApiRequestContext? context,
+  }) async {
+    _id(mid);
+    _id(id);
+    _page(page);
+    const e = 'profile_collection_videos';
+    final data = await _get(
+      isSeries
+          ? '/x/series/archives'
+          : '/x/polymer/web-space/seasons_archives_list',
+      e,
+      isSeries
+          ? {
+              'mid': mid,
+              'series_id': id,
+              'pn': '$page',
+              'ps': '$_size',
+              'sort': 'asc',
+            }
+          : {
+              'mid': mid,
+              'season_id': id,
+              'page_num': '$page',
+              'page_size': '$_size',
+              'sort_reverse': 'false',
+            },
+      context,
+    );
+    final total = _number(_map(data['page'], e)['total']);
+    if (total == null || total < 0) _fail(e);
+    final items = _list(data['archives'], e).map((value) {
+      final item = _map(value, e), stat = _optionalMap(_map(value, e)['stat']);
+      return _video({
+        ...item,
+        'mid': mid,
+        'play': stat['view'],
+        'danmaku': stat['danmaku'],
+      }, e);
+    }).toList();
+    return _paged(items, page, total);
+  }
+
+  Future<ApiPage<ApiProfileEntry>> loadFollowedSeasons(
+    String mid, {
+    required bool cinema,
+    required int page,
+    ApiRequestContext? context,
+  }) async {
+    _id(mid);
+    _page(page);
+    const e = 'profile_followed_seasons';
+    final data = await _get('/x/space/bangumi/follow/list', e, {
+      'vmid': mid,
+      'type': cinema ? '2' : '1',
+      'pn': '$page',
+      'ps': '$_size',
+    }, context);
+    final total = _number(data['total']);
+    if (total == null || total < 0) _fail(e);
+    final items = _list(data['list'] ?? (total == 0 ? const [] : null), e).map((
+      value,
+    ) {
+      final item = _map(value, e);
+      final id = _key(item['season_id'], e);
+      return ApiProfileEntry(
+        id: id,
+        seasonId: id,
+        kind: ApiProfileEntryKind.season,
+        title: _text(item['title'], e),
+        subtitle: _string(
+          item['index_show'] ?? _optionalMap(item['new_ep'])['index_show'],
+        ),
+        coverUrl: _uri(item['cover']),
+      );
+    }).toList();
+    return _paged(items, page, total);
+  }
+
   Future<Map<String, Object?>> _get(
     String path,
     String endpoint,
@@ -296,9 +442,10 @@ final class ProfileClient {
   static ApiPage<ApiProfileEntry> _paged(
     List<ApiProfileEntry> items,
     int page,
-    int total,
-  ) {
-    final more = items.isNotEmpty && page * _size < total;
+    int total, {
+    int pageSize = _size,
+  }) {
+    final more = items.isNotEmpty && page * pageSize < total;
     return ApiPage(
       List.unmodifiable(items),
       hasMore: more,

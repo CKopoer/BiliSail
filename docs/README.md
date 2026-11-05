@@ -153,6 +153,7 @@
 | [高能进度条实现方案](high-energy-progress-design.md) | 官网聚合接口、章节互斥、静态曲线、平台默认、时长校验与性能预算；[实现验证](validation/high-energy-progress.md) |
 | [字幕与 AI 原声翻译](validation/subtitles-translated-audio.md) | 动态菜单选择修复、空文本字幕、AI 标识与语音双轨切换、登录态 Windows 验证及新版 Protobuf 调查 |
 | [用户主页](validation/user-profile.md) | 个人/UP 主空间、头像入口、投稿与动态/收藏/关注列表、会话隔离和实测边界 |
+| [UP 主与个人主页重构](ui-redesign/profile-redesign-2026-11-05.md) | PiliPlus 行为参考、宽窄屏头图资料、合集/系列、追番追剧和验证边界 |
 | [账号菜单与消息](validation/account-messages.md) | 头像资料/入口、五类收件箱、私信分页/发送/已读、账号隔离与 Windows 只读实测 |
 | [主页卡片与富动态](validation/profile-dynamic-style.md) | UWP 横向投稿卡、居中动态列表、行内表情与转发内容、验证边界 |
 | [动态分享、评论与点赞](validation/dynamic-interactions.md) | Web 评论身份、共用评论区、复制/转发、单次写与会话隔离 |

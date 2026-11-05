@@ -1,7 +1,17 @@
 import 'dynamic_models.dart';
 import '../models.dart';
 
-enum ApiProfileEntryKind { video, dynamic, folder, user }
+enum ApiProfileEntryKind { video, dynamic, folder, user, collection, season }
+
+final class ApiProfileSpaceDetails {
+  const ApiProfileSpaceDetails({
+    this.bannerUrl,
+    this.gender = '',
+    this.birthday = '',
+  });
+  final Uri? bannerUrl;
+  final String gender, birthday;
+}
 
 final class ApiProfileLiveRoom {
   const ApiProfileLiveRoom({required this.roomId, required this.isLive});
@@ -57,6 +67,9 @@ final class ApiProfileEntry {
     this.userMid,
     this.publishedAt,
     this.count,
+    this.collectionId,
+    this.isSeries = false,
+    this.seasonId,
     List<Uri> imageUrls = const [],
   }) : imageUrls = List.unmodifiable(imageUrls);
   final ApiDynamicPost? dynamicPost;
@@ -67,5 +80,7 @@ final class ApiProfileEntry {
   final String? userMid;
   final DateTime? publishedAt;
   final int? count;
+  final String? collectionId, seasonId;
+  final bool isSeries;
   final List<Uri> imageUrls;
 }

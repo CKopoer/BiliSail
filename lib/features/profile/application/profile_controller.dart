@@ -40,6 +40,8 @@ final class ProfileState {
     this.profile,
     this.profileLoading = false,
     this.profileMessage,
+    this.details,
+    this.detailsMessage,
     this.liveRoom,
     this.liveRoomMessage,
     this.section = ProfileSection.videos,
@@ -48,10 +50,16 @@ final class ProfileState {
     this.keyword = '',
     this.folderId,
     this.folderTitle,
+    this.collection,
+    this.collectionTitle,
     this.queueLoading = false,
     this.queueMessage,
   });
   final UserProfile? profile;
+  final ProfileSpaceDetails? details;
+  final String? detailsMessage;
+  final ProfileCollectionId? collection;
+  final String? collectionTitle;
 
   /// Retained presentation state must be discarded when account state resets.
   final int sessionGeneration;
@@ -70,6 +78,9 @@ final class ProfileState {
     bool? profileLoading,
     String? profileMessage,
     bool clearProfileMessage = false,
+    ProfileSpaceDetails? details,
+    String? detailsMessage,
+    bool clearDetailsMessage = false,
     ProfileLiveRoom? liveRoom,
     String? liveRoomMessage,
     bool clearLiveRoom = false,
@@ -81,6 +92,9 @@ final class ProfileState {
     String? folderId,
     String? folderTitle,
     bool closeFolder = false,
+    ProfileCollectionId? collection,
+    String? collectionTitle,
+    bool closeCollection = false,
     bool? queueLoading,
     String? queueMessage,
     bool clearQueueMessage = false,
@@ -91,6 +105,10 @@ final class ProfileState {
     profileMessage: clearProfileMessage
         ? null
         : profileMessage ?? this.profileMessage,
+    details: details ?? this.details,
+    detailsMessage: clearDetailsMessage
+        ? null
+        : detailsMessage ?? this.detailsMessage,
     liveRoom: clearLiveRoom ? null : liveRoom ?? this.liveRoom,
     liveRoomMessage: clearLiveRoomMessage
         ? null
@@ -101,6 +119,10 @@ final class ProfileState {
     keyword: keyword ?? this.keyword,
     folderId: closeFolder ? null : folderId ?? this.folderId,
     folderTitle: closeFolder ? null : folderTitle ?? this.folderTitle,
+    collection: closeCollection ? null : collection ?? this.collection,
+    collectionTitle: closeCollection
+        ? null
+        : collectionTitle ?? this.collectionTitle,
     queueLoading: queueLoading ?? this.queueLoading,
     queueMessage: clearQueueMessage ? null : queueMessage ?? this.queueMessage,
   );
@@ -111,6 +133,8 @@ class ProfileController extends Notifier<ProfileState> {
   final UserId id;
   int _generation = 0, _profileGeneration = 0;
   int _liveRoomGeneration = 0;
+  int _detailsGeneration = 0;
+  RequestCancellation _detailsRead = RequestCancellation();
   RequestCancellation _profileRead = RequestCancellation();
   RequestCancellation _liveRoomRead = RequestCancellation();
   RequestCancellation _queueRead = RequestCancellation();
@@ -129,6 +153,7 @@ class ProfileController extends Notifier<ProfileState> {
       if (ref.mounted && generation == _generation) {
         loadProfile();
         loadLiveRoom();
+        loadDetails();
         load();
       }
     });
@@ -139,6 +164,7 @@ class ProfileController extends Notifier<ProfileState> {
     _profileRead.cancel();
     _liveRoomRead.cancel();
     _queueRead.cancel();
+    _detailsRead.cancel();
     for (final read in _reads.values) {
       read.cancel();
     }
@@ -146,6 +172,7 @@ class ProfileController extends Notifier<ProfileState> {
     _versions.clear();
     ++_profileGeneration;
     ++_liveRoomGeneration;
+    ++_detailsGeneration;
   }
 
   bool _current(int generation, String scope, int epoch) =>
@@ -332,8 +359,58 @@ class ProfileController extends Notifier<ProfileState> {
     load(refresh: true);
   }
 
+  void openCollection(ProfileEntry entry) {
+    final collection = entry.collection;
+    if (collection == null) return;
+    state = state.copy(
+      collection: collection,
+      collectionTitle: entry.title,
+      section: ProfileSection.collections,
+    );
+    load(refresh: true);
+  }
+
+  void closeCollection() {
+    state = state.copy(closeCollection: true);
+    load(refresh: true);
+  }
+
   Future<void> refresh() async {
-    await Future.wait([loadProfile(), loadLiveRoom(), load(refresh: true)]);
+    await Future.wait([
+      loadProfile(),
+      loadDetails(),
+      loadLiveRoom(),
+      load(refresh: true),
+    ]);
+  }
+
+  Future<void> loadDetails() async {
+    final repository = ref.read(profileRepositoryProvider);
+    if (repository is! ProfileDetailsRepository) return;
+    _detailsRead.cancel();
+    final read = _detailsRead = RequestCancellation();
+    final version = ++_detailsGeneration, generation = _generation;
+    final scope = repository.accountScope, epoch = repository.sessionEpoch;
+    state = state.copy(clearDetailsMessage: true);
+    try {
+      final details = await (repository as ProfileDetailsRepository)
+          .loadDetails(id, cancellation: read);
+      if (_current(generation, scope, epoch) && version == _detailsGeneration) {
+        state = state.copy(details: details);
+      }
+    } on AppFailure catch (error) {
+      if (_current(generation, scope, epoch) && version == _detailsGeneration) {
+        state = state.copy(
+          detailsMessage: error.kind == AppFailureKind.cancelled
+              ? null
+              : error.message,
+        );
+      }
+    } catch (_) {
+      if (_current(generation, scope, epoch) && version == _detailsGeneration) {
+        state = state.copy(detailsMessage: '扩展资料暂时无法加载');
+      }
+    }
   }
 
   Future<void> loadLiveRoom() async {
@@ -411,7 +488,10 @@ class ProfileController extends Notifier<ProfileState> {
         cursor: base.cursor,
         order: state.order,
         keyword: state.keyword,
-        folderId: state.folderId,
+        folderId: section == ProfileSection.folders ? state.folderId : null,
+        collection: section == ProfileSection.collections
+            ? state.collection
+            : null,
         cancellation: read,
       );
       if (!_current(generation, scope, epoch) ||

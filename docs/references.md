@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-05 主页重构只读参考 PiliPlus `265f879fa85973b4bf885bde2562f1007f1013b8` 的 `lib/pages/member/view.dart`、`member/widget/user_info_card.dart`、`member_home/view.dart`、`member_video_web/season_series/controller.dart`、`member_season_series/controller.dart`、`http/member.dart` 及对应空间模型。仅采用头图/头像/统计的信息层级、原图预览、资料/主页操作和合集/追番浏览职责，以及 Web 请求参数和响应字段；独立编写 Flutter/Riverpod 与纯 Dart 模型，未复制 GPLv3 应用源码、资源或 schema，未修改相邻仓库或增加依赖。方案与验证边界见[主页重构方案](ui-redesign/profile-redesign-2026-11-05.md)。
+
 2026-11-05 消息重构只读参考 PiliPlus `3565a2031fbdca180d03fad9999e48b4b0f7a4b5` 的消息首页、会话行、富消息展示及 Web 管理端点。仅采用交互职责和协议字段，独立实现 Flutter/Riverpod 页面及纯 Dart 模型，未复制 GPLv3 应用源码、资源或 gRPC schema；具体路径、当前官方脚本核对及验证边界见[消息中心重构](validation/messages-redesign-2026-11-05.md)。
 
 2026-11-01 只读核对相邻 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 的 pubspec 与锁文件，按用户要求直接采用其锁定的 MIT 播放器和弹幕依赖。没有复制 GPLv3 的应用源码；完整来源、许可及适配见[依赖切换](validation/piliplus-dependencies-2026-11-01.md)。

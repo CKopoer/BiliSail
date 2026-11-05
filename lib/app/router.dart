@@ -748,6 +748,7 @@ final class _WorkspacePage extends ConsumerWidget {
                           ),
                           onOpenLiveRoom: (room) =>
                               context.go('/live/${room.value}'),
+                          onOpenSeason: (id) => context.go('/pgc/season/$id'),
                           onLogin: () => showAppDialog<void>(
                             context: context,
                             builder: (_) => const AccountDialog(),

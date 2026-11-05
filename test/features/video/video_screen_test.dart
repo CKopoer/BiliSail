@@ -2667,6 +2667,7 @@ final class _ProfilePagingRepository extends Fake implements ProfileRepository {
     String order = 'pubdate',
     String keyword = '',
     String? folderId,
+    ProfileCollectionId? collection,
     required RequestCancellation cancellation,
   }) {
     expect(id, const UserId('7'));

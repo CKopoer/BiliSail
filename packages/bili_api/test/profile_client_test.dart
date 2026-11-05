@@ -4,24 +4,269 @@ import 'package:bili_api/bili_api.dart';
 import 'package:test/test.dart';
 
 final class FakeTransport implements ApiTransport {
-  FakeTransport(this.handler);
+  FakeTransport(this.handler, {this.onRequest});
   final Object Function(Uri) handler;
+  final void Function(Uri, Map<String, String>)? onRequest;
   @override
   Future<ApiHttpResponse> get(
     Uri uri, {
     required Map<String, String> headers,
     required Duration timeout,
     ApiCancellation? cancellation,
-  }) async => ApiHttpResponse(
-    200,
-    Uint8List.fromList(utf8.encode(jsonEncode(handler(uri)))),
-    const {},
-  );
+  }) async {
+    onRequest?.call(uri, headers);
+    return ApiHttpResponse(
+      200,
+      Uint8List.fromList(utf8.encode(jsonEncode(handler(uri)))),
+      const {},
+    );
+  }
 }
 
-ProfileClient client(Object Function(Uri) handler) =>
-    ProfileClient(BiliApiClient(transport: FakeTransport(handler)));
+ProfileClient client(
+  Object Function(Uri) handler, {
+  void Function(Uri, Map<String, String>)? onRequest,
+}) => ProfileClient(
+  BiliApiClient(transport: FakeTransport(handler, onRequest: onRequest)),
+);
 void main() {
+  test(
+    'collections distinguish overlapping season/series IDs and page counts',
+    () async {
+      final page = await client((uri) {
+        expect(uri.path, '/x/polymer/web-space/seasons_series_list');
+        expect(uri.queryParameters, {
+          'mid': '9007199254740993123',
+          'page_num': '2',
+          'page_size': '10',
+        });
+        return {
+          'code': 0,
+          'data': {
+            'items_lists': {
+              'page': {'total': 61},
+              'seasons_list': [
+                {
+                  'meta': {
+                    'season_id': '9007199254740993123',
+                    'name': '合集',
+                    'total': 12,
+                    'cover': '//i0.hdslb.com/cover.png',
+                  },
+                },
+              ],
+              'series_list': [
+                {
+                  'meta': {
+                    'series_id': '9007199254740993123',
+                    'name': '系列',
+                    'total': 3,
+                  },
+                },
+              ],
+            },
+          },
+        };
+      }).loadCollections('9007199254740993123', page: 2);
+      expect(page.hasMore, true);
+      expect(page.items.map((e) => e.id), [
+        'season:9007199254740993123',
+        'series:9007199254740993123',
+      ]);
+      expect(page.items.map((e) => e.isSeries), [false, true]);
+      expect(page.items.first.coverUrl?.scheme, 'https');
+      expect(() => page.items.clear(), throwsUnsupportedError);
+    },
+  );
+  for (final isSeries in [false, true]) {
+    test(
+      'collection archives map statistics and correct parameters $isSeries',
+      () async {
+        final page =
+            await client((uri) {
+              expect(
+                uri.path,
+                isSeries
+                    ? '/x/series/archives'
+                    : '/x/polymer/web-space/seasons_archives_list',
+              );
+              expect(
+                uri.queryParameters[isSeries ? 'series_id' : 'season_id'],
+                '9007199254740993123',
+              );
+              expect(uri.queryParameters[isSeries ? 'pn' : 'page_num'], '1');
+              expect(
+                uri.queryParameters[isSeries ? 'sort' : 'sort_reverse'],
+                isSeries ? 'asc' : 'false',
+              );
+              return {
+                'code': 0,
+                'data': {
+                  'page': {'total': 1},
+                  'archives': [
+                    {
+                      'bvid': 'BV1234567890',
+                      'title': '合集投稿',
+                      'duration': 123,
+                      'pubdate': 1700000000,
+                      'stat': {'view': 156, 'danmaku': 7},
+                    },
+                  ],
+                },
+              };
+            }).loadCollectionVideos(
+              '7',
+              '9007199254740993123',
+              isSeries: isSeries,
+              page: 1,
+            );
+        final video = page.items.single.video;
+        expect(page.hasMore, false);
+        expect(video?.playCount, 156);
+        expect(video?.danmakuCount, 7);
+        expect(video?.ownerMid, '7');
+        expect(video?.duration.inSeconds, 123);
+      },
+    );
+  }
+  for (final cinema in [false, true]) {
+    test('followed seasons preserve target ID and paging $cinema', () async {
+      final page = await client((uri) {
+        expect(uri.path, '/x/space/bangumi/follow/list');
+        expect(uri.queryParameters['type'], cinema ? '2' : '1');
+        expect(uri.queryParameters['vmid'], '7');
+        return {
+          'code': 0,
+          'data': {
+            'total': 31,
+            'list': [
+              {
+                'season_id': '9007199254740993123',
+                'title': '番剧标题',
+                'new_ep': {'index_show': '更新至第 3 集'},
+                'cover': '//i0.hdslb.com/poster.png',
+              },
+            ],
+          },
+        };
+      }).loadFollowedSeasons('7', cinema: cinema, page: 1);
+      expect(page.hasMore, true);
+      expect(page.items.single.seasonId, '9007199254740993123');
+      expect(page.items.single.kind, ApiProfileEntryKind.season);
+      expect(page.items.single.subtitle, '更新至第 3 集');
+    });
+    test('hidden followed seasons stay permission failures $cinema', () async {
+      await expectLater(
+        client(
+          (_) => {'code': -403},
+        ).loadFollowedSeasons('7', cinema: cinema, page: 1),
+        throwsA(
+          isA<ApiFailure>().having(
+            (e) => e.category,
+            'category',
+            ApiFailureCategory.permission,
+          ),
+        ),
+      );
+    });
+  }
+  test('empty libraries stop paging while malformed payloads fail', () async {
+    final empty = await client(
+      (_) => {
+        'code': 0,
+        'data': {
+          'items_lists': {
+            'page': {'total': 0},
+            'seasons_list': [],
+            'series_list': [],
+          },
+        },
+      },
+    ).loadCollections('7', page: 1);
+    expect(empty.items, isEmpty);
+    expect(empty.hasMore, false);
+    for (final data in [
+      <String, Object?>{},
+      {
+        'items_lists': {
+          'page': {'total': 0},
+        },
+      },
+    ]) {
+      await expectLater(
+        client((_) => {'code': 0, 'data': data}).loadCollections('7', page: 1),
+        throwsA(
+          isA<ApiFailure>().having(
+            (e) => e.category,
+            'category',
+            ApiFailureCategory.protocol,
+          ),
+        ),
+      );
+    }
+    final followed = await client(
+      (_) => {
+        'code': 0,
+        'data': {'total': 0, 'list': null},
+      },
+    ).loadFollowedSeasons('7', cinema: false, page: 1);
+    expect(followed.hasMore, false);
+  });
+  test(
+    'space details use WBI, reject another user and filter unsafe images',
+    () async {
+      for (final responseId in ['7', '8']) {
+        final request = client(
+          (uri) {
+            if (uri.path.endsWith('/nav')) {
+              return {
+                'code': 0,
+                'data': {
+                  'wbi_img': {
+                    'img_url':
+                        'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+                    'sub_url':
+                        'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+                  },
+                },
+              };
+            }
+            expect(uri.path, '/x/space/wbi/acc/info');
+            expect(uri.queryParameters['w_rid'], isNotEmpty);
+            expect(uri.queryParameters['platform'], 'web');
+            expect(uri.queryParameters['web_location'], '1550101');
+            return {
+              'code': 0,
+              'data': {
+                'mid': responseId,
+                'top_photo': 'javascript:bad',
+                'sex': '保密',
+                'birthday': '01-02',
+              },
+            };
+          },
+          onRequest: (uri, headers) {
+            if (uri.path == '/x/space/wbi/acc/info') {
+              expect(
+                headers['Referer'],
+                'https://space.bilibili.com/7/dynamic',
+              );
+              expect(headers['Origin'], 'https://space.bilibili.com');
+              expect(headers['User-Agent'], startsWith('Mozilla/5.0'));
+            }
+          },
+        ).loadDetails('7');
+        if (responseId == '7') {
+          final details = await request;
+          expect(details.bannerUrl, isNull);
+          expect(details.gender, '保密');
+          expect(details.birthday, '01-02');
+        } else {
+          await expectLater(request, throwsA(isA<ApiFailure>()));
+        }
+      }
+    },
+  );
   for (final status in [0, 1]) {
     for (final roomId in [1024, '9007199254740993123']) {
       test(
