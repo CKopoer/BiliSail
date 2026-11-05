@@ -254,7 +254,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ],
       );
     }
-    final scrollBehavior = ScrollConfiguration.of(context);
     final (folderOpen, collectionOpen) = ref.watch(
       profileControllerProvider(widget.id).select(
         (state) => (
@@ -277,170 +276,145 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1920),
-          child: LayoutBuilder(
+          child: ScrollHeaderLayout(
             key: ValueKey(session),
-            builder: (context, constraints) => ScrollHeaderLayout(
-              enabled: constraints.maxWidth < 600,
-              // Long introductions retain a bounded, independent scroll area.
-              header: KeyedSubtree(
-                key: const ValueKey('profile-collapsing-header'),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * .5,
-                  ),
-                  child: ScrollConfiguration(
-                    behavior: scrollBehavior.copyWith(scrollbars: false),
-                    child: SingleChildScrollView(
-                      key: const ValueKey('profile-header-scroll'),
-                      primary: false,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (p == null && navigation != null)
-                            IconButton.filledTonal(
-                              key: const ValueKey('profile-back'),
-                              tooltip: '返回',
-                              onPressed: navigation.onBack,
-                              icon: const Icon(Icons.arrow_back),
-                            ),
-                          if (p != null)
-                            ProfileHeader(
-                              profile: p,
-                              onBack: navigation?.onBack,
-                              blocked: signedIn ? actions.blocked : false,
-                              blockBusy: actions.busy,
-                              onBlock: _block,
-                              onReport: () => _report(p),
-                              details: details,
-                              onOpenAvatar: switch (p.avatarUrl) {
-                                final url? => () => showImageViewer(context, [
-                                  url,
-                                ], 0),
-                                _ => null,
-                              },
-                              onOpenBanner: switch (details?.bannerUrl ??
-                                  p.bannerUrl) {
-                                final url? => () => showImageViewer(context, [
-                                  url,
-                                ], 0),
-                                _ => null,
-                              },
-                              onShowDetails: () => showProfileDetails(
-                                context,
-                                profile: p,
-                                details: details,
-                                detailsMessage: detailsMessage,
-                              ),
-                              onCopyUid: () =>
-                                  _copy(widget.id.value, '已复制 UID'),
-                              onCopyLink: () => _copy(
-                                Uri.https(
-                                  'space.bilibili.com',
-                                  '/${widget.id.value}',
-                                ).toString(),
-                                '已复制主页链接',
-                              ),
-                              onOpenWebsite: _openWebsite,
-                              onRefresh: controller.refresh,
-                              isSelf: isSelf,
-                              followAction: isSelf
-                                  ? null
-                                  : UserFollowButton(
-                                      key: const ValueKey('profile-follow'),
-                                      id: widget.id,
-                                      onLogin: widget.onLogin,
-                                    ),
-                              messageAction: isSelf
-                                  ? null
-                                  : OutlinedButton.icon(
-                                      key: const ValueKey('profile-message'),
-                                      style: OutlinedButton.styleFrom(
-                                        minimumSize: const Size(80, 40),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 8,
-                                        ),
-                                      ),
-                                      onPressed: signedIn
-                                          ? widget.onMessage == null
-                                                ? null
-                                                : () =>
-                                                      widget.onMessage?.call(p)
-                                          : widget.onLogin,
-                                      icon: const Icon(
-                                        Icons.mail_outline,
-                                        size: 18,
-                                      ),
-                                      label: const Text('私信'),
-                                    ),
-                              onSelectSection: controller.select,
-                              liveRoom: liveRoom,
-                              onOpenLiveRoom: switch ((
-                                liveRoom,
-                                widget.onOpenLiveRoom,
-                              )) {
-                                (final room?, final open?) => () => open(
-                                  room.id,
-                                ),
-                                _ => null,
-                              },
-                            ),
-                          if (profileMessage case final message?)
-                            StateView.error(
-                              message: message,
-                              onAction: controller.loadProfile,
-                            ),
-                          if (liveRoomMessage case final message?)
-                            StateView.error(
-                              message: '直播间：$message',
-                              onAction: controller.loadLiveRoom,
-                            ),
-                          if (detailsMessage != null)
-                            TextButton.icon(
-                              key: const ValueKey('profile-details-retry'),
-                              onPressed: controller.loadDetails,
-                              icon: const Icon(Icons.refresh, size: 16),
-                              label: const Text('扩展资料加载失败，点击重试'),
-                            ),
-                        ],
+            enabled: true,
+            header: KeyedSubtree(
+              key: const ValueKey('profile-collapsing-header'),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (p == null && navigation != null)
+                      IconButton.filledTonal(
+                        key: const ValueKey('profile-back'),
+                        tooltip: '返回',
+                        onPressed: navigation.onBack,
+                        icon: const Icon(Icons.arrow_back),
                       ),
-                    ),
-                  ),
+                    if (p != null)
+                      ProfileHeader(
+                        profile: p,
+                        onBack: navigation?.onBack,
+                        blocked: signedIn ? actions.blocked : false,
+                        blockBusy: actions.busy,
+                        onBlock: _block,
+                        onReport: () => _report(p),
+                        details: details,
+                        onOpenAvatar: switch (p.avatarUrl) {
+                          final url? => () => showImageViewer(context, [
+                            url,
+                          ], 0),
+                          _ => null,
+                        },
+                        onOpenBanner: switch (details?.bannerUrl ??
+                            p.bannerUrl) {
+                          final url? => () => showImageViewer(context, [
+                            url,
+                          ], 0),
+                          _ => null,
+                        },
+                        onShowDetails: () => showProfileDetails(
+                          context,
+                          profile: p,
+                          details: details,
+                          detailsMessage: detailsMessage,
+                        ),
+                        onCopyUid: () => _copy(widget.id.value, '已复制 UID'),
+                        onCopyLink: () => _copy(
+                          Uri.https(
+                            'space.bilibili.com',
+                            '/${widget.id.value}',
+                          ).toString(),
+                          '已复制主页链接',
+                        ),
+                        onOpenWebsite: _openWebsite,
+                        onRefresh: controller.refresh,
+                        isSelf: isSelf,
+                        followAction: isSelf
+                            ? null
+                            : UserFollowButton(
+                                key: const ValueKey('profile-follow'),
+                                id: widget.id,
+                                onLogin: widget.onLogin,
+                              ),
+                        messageAction: isSelf
+                            ? null
+                            : OutlinedButton.icon(
+                                key: const ValueKey('profile-message'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(80, 40),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                ),
+                                onPressed: signedIn
+                                    ? widget.onMessage == null
+                                          ? null
+                                          : () => widget.onMessage?.call(p)
+                                    : widget.onLogin,
+                                icon: const Icon(Icons.mail_outline, size: 18),
+                                label: const Text('私信'),
+                              ),
+                        onSelectSection: controller.select,
+                        liveRoom: liveRoom,
+                        onOpenLiveRoom: switch ((
+                          liveRoom,
+                          widget.onOpenLiveRoom,
+                        )) {
+                          (final room?, final open?) => () => open(room.id),
+                          _ => null,
+                        },
+                      ),
+                    if (profileMessage case final message?)
+                      StateView.error(
+                        message: message,
+                        onAction: controller.loadProfile,
+                      ),
+                    if (liveRoomMessage case final message?)
+                      StateView.error(
+                        message: '直播间：$message',
+                        onAction: controller.loadLiveRoom,
+                      ),
+                    if (detailsMessage != null)
+                      TextButton.icon(
+                        key: const ValueKey('profile-details-retry'),
+                        onPressed: controller.loadDetails,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: const Text('扩展资料加载失败，点击重试'),
+                      ),
+                  ],
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                    child: ProfileSectionNavigation(
-                      section: section,
-                      progress: _pagingProgress,
-                      onSelected: controller.select,
-                    ),
-                  ),
-                  Expanded(
-                    child: RetainedTabView<ProfileSection>(
-                      progress: _pagingProgress,
-                      tabs: ProfileSection.values,
-                      value: section,
-                      onChanged: controller.select,
-                      viewKey: const ValueKey('profile-section-swipe'),
-                      pageBuilder: (context, section, active) =>
-                          _ProfileSectionPage(
-                            id: widget.id,
-                            section: section,
-                            active: active,
-                            onOpenVideo: widget.onOpenVideo,
-                            onOpenUser: widget.onOpenUser,
-                            onOpenPlaylist: widget.onOpenPlaylist,
-                            onOpenSeason: widget.onOpenSeason,
-                          ),
-                    ),
-                  ),
-                ],
+            ),
+            pinnedHeader: Material(
+              color: Theme.of(context).colorScheme.surface,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                child: ProfileSectionNavigation(
+                  section: section,
+                  progress: _pagingProgress,
+                  onSelected: controller.select,
+                ),
+              ),
+            ),
+            child: RetainedTabView<ProfileSection>(
+              progress: _pagingProgress,
+              tabs: ProfileSection.values,
+              value: section,
+              onChanged: controller.select,
+              viewKey: const ValueKey('profile-section-swipe'),
+              pageBuilder: (context, section, active) => _ProfileSectionPage(
+                id: widget.id,
+                section: section,
+                active: active,
+                onOpenVideo: widget.onOpenVideo,
+                onOpenUser: widget.onOpenUser,
+                onOpenPlaylist: widget.onOpenPlaylist,
+                onOpenSeason: widget.onOpenSeason,
               ),
             ),
           ),
@@ -597,6 +571,9 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
         controller: scrollController,
         primary: false,
         slivers: [
+          SliverOverlapInjector(
+            handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+          ),
           SliverPadding(
             padding: const EdgeInsets.all(16),
             sliver: SliverToBoxAdapter(

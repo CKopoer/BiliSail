@@ -31,11 +31,14 @@ class ScrollHeaderLayout extends StatefulWidget {
     super.key,
     required this.enabled,
     required this.header,
+    this.pinnedHeader,
     required this.child,
   });
 
   final bool enabled;
   final Widget header;
+  // Body slivers must begin with SliverOverlapInjector when this is provided.
+  final Widget? pinnedHeader;
   final Widget child;
 
   @override
@@ -111,6 +114,13 @@ class _ScrollHeaderLayoutState extends State<ScrollHeaderLayout> {
                   _FadingHeaderSliver(
                     child: widget.enabled ? header : const SizedBox.shrink(),
                   ),
+                  if (widget.pinnedHeader case final pinnedHeader?)
+                    SliverOverlapAbsorber(
+                      handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                        context,
+                      ),
+                      sliver: PinnedHeaderSliver(child: pinnedHeader),
+                    ),
                 ],
                 body: Builder(
                   builder: (context) => _ScrollHeaderBody(
