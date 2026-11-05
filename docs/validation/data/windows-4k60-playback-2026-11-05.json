@@ -1,0 +1,983 @@
+[
+  {
+    "label": "sparse_a_20261105",
+    "stage": "video",
+    "arrivalsPerSecond": 2,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.0,
+    "gpuSamples": 28,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 0.6706968379222871,
+    "process3dP95": 1.0725619063256637,
+    "videoDecodeMean": 44.898079933633376,
+    "copyMean": 0.007072560898885356,
+    "dwm3dMean": 0.40876365757351585,
+    "whole3dMean": 1.0885970304969153,
+    "cpuOneCorePercent": 16.36894300444181,
+    "workingSetPeakMiB": 608.07421875,
+    "privatePeakMiB": 1056.12109375,
+    "dartFps": 60.0,
+    "uiP95Ms": 0.189,
+    "rasterP95Ms": 0.392,
+    "rasterP99Ms": 0.447,
+    "rasterMaxMs": 0.626,
+    "totalP95Ms": 1.857,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1800,
+    "visibleMean": 0,
+    "visibleMin": 0,
+    "visibleMax": 0,
+    "commentDropDelta": 0,
+    "pendingMax": 0,
+    "controlsVisible": [
+      false
+    ],
+    "rasterCachePeakMiB": 0.0,
+    "cacheHitPercent": null,
+    "rasterBuilds": 0,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 0.562,
+    "positionStartMs": 45083,
+    "positionEndMs": 75083,
+    "mediaAdvancePerWallSecond": 1.0,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5",
+      "P8"
+    ],
+    "gpuClockMeanMHz": 1703.0357142857142,
+    "gpuPowerMeanW": 24.41357142857143,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  },
+  {
+    "label": "sparse_a_20261105",
+    "stage": "controls",
+    "arrivalsPerSecond": 2,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.0,
+    "gpuSamples": 28,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 0.667231274538449,
+    "process3dP95": 1.019854211176354,
+    "videoDecodeMean": 45.150351242707636,
+    "copyMean": 0.006981082451668053,
+    "dwm3dMean": 0.4319107793121631,
+    "whole3dMean": 1.1177297480257455,
+    "cpuOneCorePercent": 15.481861026323019,
+    "workingSetPeakMiB": 612.31640625,
+    "privatePeakMiB": 1056.890625,
+    "dartFps": 60.0,
+    "uiP95Ms": 0.254,
+    "rasterP95Ms": 0.559,
+    "rasterP99Ms": 0.631,
+    "rasterMaxMs": 0.753,
+    "totalP95Ms": 2.074,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1800,
+    "visibleMean": 0,
+    "visibleMin": 0,
+    "visibleMax": 0,
+    "commentDropDelta": 0,
+    "pendingMax": 0,
+    "controlsVisible": [
+      true
+    ],
+    "rasterCachePeakMiB": 0.0,
+    "cacheHitPercent": null,
+    "rasterBuilds": 0,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 0.873,
+    "positionStartMs": 45216,
+    "positionEndMs": 75216,
+    "mediaAdvancePerWallSecond": 1.0,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5",
+      "P8"
+    ],
+    "gpuClockMeanMHz": 1478.7931034482758,
+    "gpuPowerMeanW": 24.56,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  },
+  {
+    "label": "sparse_a_20261105",
+    "stage": "danmaku",
+    "arrivalsPerSecond": 2,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.001,
+    "gpuSamples": 28,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 0.7991039200302812,
+    "process3dP95": 1.3127696163921176,
+    "videoDecodeMean": 44.604623129694,
+    "copyMean": 0.015957916114705328,
+    "dwm3dMean": 0.4383362832460858,
+    "whole3dMean": 1.2535164362690938,
+    "cpuOneCorePercent": 13.702200107287226,
+    "workingSetPeakMiB": 617.96484375,
+    "privatePeakMiB": 1201.1328125,
+    "dartFps": 60.0313322889237,
+    "uiP95Ms": 0.268,
+    "rasterP95Ms": 0.563,
+    "rasterP99Ms": 0.66,
+    "rasterMaxMs": 0.887,
+    "totalP95Ms": 2.244,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1801,
+    "visibleMean": 14.4,
+    "visibleMin": 14,
+    "visibleMax": 15,
+    "commentDropDelta": 0,
+    "pendingMax": 119,
+    "controlsVisible": [
+      false
+    ],
+    "rasterCachePeakMiB": 6.496009826660156,
+    "cacheHitPercent": 99.73985431841832,
+    "rasterBuilds": 60,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 0.024,
+    "positionStartMs": 45050,
+    "positionEndMs": 75050,
+    "mediaAdvancePerWallSecond": 0.9999666677777407,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5",
+      "P8"
+    ],
+    "gpuClockMeanMHz": 1680.5172413793102,
+    "gpuPowerMeanW": 24.76551724137931,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  },
+  {
+    "label": "sparse_a_20261105",
+    "stage": "danmaku-controls",
+    "arrivalsPerSecond": 2,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.001,
+    "gpuSamples": 28,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 1.104861492539586,
+    "process3dP95": 1.733297437796004,
+    "videoDecodeMean": 44.606829946838374,
+    "copyMean": 0.013341482023014474,
+    "dwm3dMean": 0.3468258735188926,
+    "whole3dMean": 1.4610971313493666,
+    "cpuOneCorePercent": 15.210411042672272,
+    "workingSetPeakMiB": 623.51953125,
+    "privatePeakMiB": 1203.44921875,
+    "dartFps": 59.89800339988667,
+    "uiP95Ms": 0.328,
+    "rasterP95Ms": 0.724,
+    "rasterP99Ms": 0.825,
+    "rasterMaxMs": 1.056,
+    "totalP95Ms": 2.38,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1797,
+    "visibleMean": 14.4,
+    "visibleMin": 14,
+    "visibleMax": 15,
+    "commentDropDelta": 0,
+    "pendingMax": 119,
+    "controlsVisible": [
+      true
+    ],
+    "rasterCachePeakMiB": 6.496009826660156,
+    "cacheHitPercent": 100.0,
+    "rasterBuilds": 0,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 0.025,
+    "positionStartMs": 45250,
+    "positionEndMs": 75250,
+    "mediaAdvancePerWallSecond": 0.9999666677777407,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5",
+      "P8"
+    ],
+    "gpuClockMeanMHz": 1506.4285714285713,
+    "gpuPowerMeanW": 24.548571428571428,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  },
+  {
+    "label": "dense_a_20261105",
+    "stage": "video",
+    "arrivalsPerSecond": 20,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.001,
+    "gpuSamples": 28,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 0.8289775356102288,
+    "process3dP95": 1.2575901068035684,
+    "videoDecodeMean": 44.69278291050529,
+    "copyMean": 0.009546792367480277,
+    "dwm3dMean": 0.45408664515993447,
+    "whole3dMean": 1.291744571465193,
+    "cpuOneCorePercent": 13.798435791595088,
+    "workingSetPeakMiB": 608.765625,
+    "privatePeakMiB": 1055.74609375,
+    "dartFps": 59.89800339988667,
+    "uiP95Ms": 0.18,
+    "rasterP95Ms": 0.395,
+    "rasterP99Ms": 0.449,
+    "rasterMaxMs": 0.572,
+    "totalP95Ms": 1.886,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1797,
+    "visibleMean": 0,
+    "visibleMin": 0,
+    "visibleMax": 0,
+    "commentDropDelta": 0,
+    "pendingMax": 0,
+    "controlsVisible": [
+      false
+    ],
+    "rasterCachePeakMiB": 0.0,
+    "cacheHitPercent": null,
+    "rasterBuilds": 0,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 0.666,
+    "positionStartMs": 45083,
+    "positionEndMs": 75083,
+    "mediaAdvancePerWallSecond": 0.9999666677777407,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5"
+    ],
+    "gpuClockMeanMHz": 1643.0357142857142,
+    "gpuPowerMeanW": 24.56892857142857,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  },
+  {
+    "label": "dense_a_20261105",
+    "stage": "controls",
+    "arrivalsPerSecond": 20,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.001,
+    "gpuSamples": 28,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 1.1954983411759017,
+    "process3dP95": 1.6043890204499465,
+    "videoDecodeMean": 45.711992547219396,
+    "copyMean": 0.007191233384785934,
+    "dwm3dMean": 0.3692343087347628,
+    "whole3dMean": 1.574713253728272,
+    "cpuOneCorePercent": 16.40499674877939,
+    "workingSetPeakMiB": 612.0390625,
+    "privatePeakMiB": 1059.0390625,
+    "dartFps": 59.79800673310889,
+    "uiP95Ms": 0.249,
+    "rasterP95Ms": 0.535,
+    "rasterP99Ms": 0.613,
+    "rasterMaxMs": 0.71,
+    "totalP95Ms": 2.028,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1794,
+    "visibleMean": 0,
+    "visibleMin": 0,
+    "visibleMax": 0,
+    "commentDropDelta": 0,
+    "pendingMax": 0,
+    "controlsVisible": [
+      true
+    ],
+    "rasterCachePeakMiB": 0.0,
+    "cacheHitPercent": null,
+    "rasterBuilds": 0,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 0.025,
+    "positionStartMs": 45250,
+    "positionEndMs": 75250,
+    "mediaAdvancePerWallSecond": 0.9999666677777407,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5"
+    ],
+    "gpuClockMeanMHz": 1778.2758620689656,
+    "gpuPowerMeanW": 24.56758620689655,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  },
+  {
+    "label": "dense_a_20261105",
+    "stage": "danmaku",
+    "arrivalsPerSecond": 20,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.0,
+    "gpuSamples": 28,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 1.9302922330497543,
+    "process3dP95": 2.585072657797304,
+    "videoDecodeMean": 43.54805769217231,
+    "copyMean": 0.024444993252361852,
+    "dwm3dMean": 0.5128847665061939,
+    "whole3dMean": 2.4529334022528455,
+    "cpuOneCorePercent": 16.81201020752221,
+    "workingSetPeakMiB": 629.5078125,
+    "privatePeakMiB": 1210.18359375,
+    "dartFps": 60.166666666666664,
+    "uiP95Ms": 0.587,
+    "rasterP95Ms": 1.051,
+    "rasterP99Ms": 1.207,
+    "rasterMaxMs": 1.635,
+    "totalP95Ms": 2.795,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1805,
+    "visibleMean": 119.86666666666666,
+    "visibleMin": 117,
+    "visibleMax": 120,
+    "commentDropDelta": 1829,
+    "pendingMax": 374,
+    "controlsVisible": [
+      false
+    ],
+    "rasterCachePeakMiB": 19.1162109375,
+    "cacheHitPercent": 99.72876857749469,
+    "rasterBuilds": 511,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 0.025,
+    "positionStartMs": 45050,
+    "positionEndMs": 75050,
+    "mediaAdvancePerWallSecond": 1.0,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5",
+      "P8"
+    ],
+    "gpuClockMeanMHz": 1501.551724137931,
+    "gpuPowerMeanW": 25.897241379310344,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  },
+  {
+    "label": "dense_a_20261105",
+    "stage": "danmaku-controls",
+    "arrivalsPerSecond": 20,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.001,
+    "gpuSamples": 28,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 1.6441368747349911,
+    "process3dP95": 2.373472224903941,
+    "videoDecodeMean": 44.279125219763245,
+    "copyMean": 0.017392422179345814,
+    "dwm3dMean": 0.404060264657154,
+    "whole3dMean": 2.057856810796848,
+    "cpuOneCorePercent": 24.556687519920686,
+    "workingSetPeakMiB": 635.25,
+    "privatePeakMiB": 1205.9140625,
+    "dartFps": 60.06466451118296,
+    "uiP95Ms": 0.629,
+    "rasterP95Ms": 1.166,
+    "rasterP99Ms": 1.378,
+    "rasterMaxMs": 4.251,
+    "totalP95Ms": 2.874,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1802,
+    "visibleMean": 117.3,
+    "visibleMin": 114,
+    "visibleMax": 119,
+    "commentDropDelta": 1840,
+    "pendingMax": 370,
+    "controlsVisible": [
+      true
+    ],
+    "rasterCachePeakMiB": 17.398738861083984,
+    "cacheHitPercent": 99.72804803759465,
+    "rasterBuilds": 500,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 0.41,
+    "positionStartMs": 45266,
+    "positionEndMs": 75266,
+    "mediaAdvancePerWallSecond": 0.9999666677777407,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5",
+      "P8"
+    ],
+    "gpuClockMeanMHz": 1530.0,
+    "gpuPowerMeanW": 25.5975,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  },
+  {
+    "label": "dense_b_20261105",
+    "stage": "danmaku-controls",
+    "arrivalsPerSecond": 20,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.001,
+    "gpuSamples": 27,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 1.9160151611266607,
+    "process3dP95": 2.458917690648836,
+    "videoDecodeMean": 46.4065166450519,
+    "copyMean": 0.01558802457398325,
+    "dwm3dMean": 0.33816760347381136,
+    "whole3dMean": 2.281815803089575,
+    "cpuOneCorePercent": 22.59889955714468,
+    "workingSetPeakMiB": 630.4765625,
+    "privatePeakMiB": 1185.37109375,
+    "dartFps": 60.097996733442216,
+    "uiP95Ms": 0.642,
+    "rasterP95Ms": 1.161,
+    "rasterP99Ms": 1.303,
+    "rasterMaxMs": 1.44,
+    "totalP95Ms": 3.031,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1803,
+    "visibleMean": 117.06666666666666,
+    "visibleMin": 111,
+    "visibleMax": 119,
+    "commentDropDelta": 2141,
+    "pendingMax": 356,
+    "controlsVisible": [
+      true
+    ],
+    "rasterCachePeakMiB": 17.548084259033203,
+    "cacheHitPercent": 99.7277963481158,
+    "rasterBuilds": 500,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 1.234,
+    "positionStartMs": 44983,
+    "positionEndMs": 74983,
+    "mediaAdvancePerWallSecond": 0.9999666677777407,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5",
+      "P8"
+    ],
+    "gpuClockMeanMHz": 1555.8620689655172,
+    "gpuPowerMeanW": 25.74310344827586,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  },
+  {
+    "label": "dense_b_20261105",
+    "stage": "danmaku",
+    "arrivalsPerSecond": 20,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.001,
+    "gpuSamples": 28,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 2.2105524753179835,
+    "process3dP95": 3.232671155685908,
+    "videoDecodeMean": 44.70343582084318,
+    "copyMean": 0.03425082389881018,
+    "dwm3dMean": 0.3122852481058938,
+    "whole3dMean": 2.5333890491900353,
+    "cpuOneCorePercent": 17.812736521554047,
+    "workingSetPeakMiB": 634.7890625,
+    "privatePeakMiB": 1212.8828125,
+    "dartFps": 59.964667844405184,
+    "uiP95Ms": 0.606,
+    "rasterP95Ms": 1.184,
+    "rasterP99Ms": 1.437,
+    "rasterMaxMs": 3.058,
+    "totalP95Ms": 2.903,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1799,
+    "visibleMean": 119.86666666666666,
+    "visibleMin": 116,
+    "visibleMax": 120,
+    "commentDropDelta": 1828,
+    "pendingMax": 375,
+    "controlsVisible": [
+      false
+    ],
+    "rasterCachePeakMiB": 19.1162109375,
+    "cacheHitPercent": 99.72823923439897,
+    "rasterBuilds": 512,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 0.026,
+    "positionStartMs": 45050,
+    "positionEndMs": 75050,
+    "mediaAdvancePerWallSecond": 0.9999666677777407,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5"
+    ],
+    "gpuClockMeanMHz": 1666.551724137931,
+    "gpuPowerMeanW": 25.95310344827586,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  },
+  {
+    "label": "dense_b_20261105",
+    "stage": "controls",
+    "arrivalsPerSecond": 20,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.001,
+    "gpuSamples": 28,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 0.6288968878714809,
+    "process3dP95": 1.099432087956883,
+    "videoDecodeMean": 44.88371796756905,
+    "copyMean": 0.008880789898143235,
+    "dwm3dMean": 0.3726887254389669,
+    "whole3dMean": 1.0116267967941441,
+    "cpuOneCorePercent": 16.64619046502017,
+    "workingSetPeakMiB": 635.4921875,
+    "privatePeakMiB": 1090.55078125,
+    "dartFps": 59.83133895536815,
+    "uiP95Ms": 0.258,
+    "rasterP95Ms": 0.568,
+    "rasterP99Ms": 0.648,
+    "rasterMaxMs": 0.925,
+    "totalP95Ms": 2.273,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1795,
+    "visibleMean": 0,
+    "visibleMin": 0,
+    "visibleMax": 0,
+    "commentDropDelta": 0,
+    "pendingMax": 500,
+    "controlsVisible": [
+      true
+    ],
+    "rasterCachePeakMiB": 0.0,
+    "cacheHitPercent": null,
+    "rasterBuilds": 0,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 0.022,
+    "positionStartMs": 45250,
+    "positionEndMs": 75250,
+    "mediaAdvancePerWallSecond": 0.9999666677777407,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5",
+      "P8"
+    ],
+    "gpuClockMeanMHz": 1580.1724137931035,
+    "gpuPowerMeanW": 25.021379310344827,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  },
+  {
+    "label": "dense_b_20261105",
+    "stage": "video",
+    "arrivalsPerSecond": 20,
+    "fullscreen": true,
+    "profile": true,
+    "release": false,
+    "seconds": 30.002,
+    "gpuSamples": 28,
+    "luid": "0x00000000_0x0000e0b9",
+    "process3dMean": 1.0856899846125394,
+    "process3dP95": 1.5805393299624368,
+    "videoDecodeMean": 45.0448007725034,
+    "copyMean": 0.00794230991569318,
+    "dwm3dMean": 0.501647822247511,
+    "whole3dMean": 1.5973860771623012,
+    "cpuOneCorePercent": 15.214598046173483,
+    "workingSetPeakMiB": 635.71875,
+    "privatePeakMiB": 1084.65234375,
+    "dartFps": 59.99600026664889,
+    "uiP95Ms": 0.182,
+    "rasterP95Ms": 0.385,
+    "rasterP99Ms": 0.437,
+    "rasterMaxMs": 0.522,
+    "totalP95Ms": 1.892,
+    "busyOver16_67": 0,
+    "busyOver6_06": 0,
+    "frameCount": 1800,
+    "visibleMean": 0,
+    "visibleMin": 0,
+    "visibleMax": 0,
+    "commentDropDelta": 0,
+    "pendingMax": 500,
+    "controlsVisible": [
+      false
+    ],
+    "rasterCachePeakMiB": 0.0,
+    "cacheHitPercent": null,
+    "rasterBuilds": 0,
+    "directPaints": 0,
+    "frameDropDelta": 0,
+    "decoderDropDelta": 0,
+    "frameDropStart": 0,
+    "frameDropEnd": 0,
+    "maxAvsyncMs": 0.038,
+    "positionStartMs": 45050,
+    "positionEndMs": 75050,
+    "mediaAdvancePerWallSecond": 0.9999333377774815,
+    "hwdec": [
+      "d3d11va"
+    ],
+    "decoded": [
+      [
+        3840,
+        2160
+      ]
+    ],
+    "output": [
+      [
+        1920,
+        1080
+      ]
+    ],
+    "surface": [
+      [
+        1920.0,
+        1080.0
+      ]
+    ],
+    "refreshRateApi": [
+      60.0
+    ],
+    "buffering": false,
+    "errors": 0,
+    "pstates": [
+      "P5",
+      "P8"
+    ],
+    "gpuClockMeanMHz": 1637.5862068965516,
+    "gpuPowerMeanW": 25.052413793103447,
+    "fixtureSha256": "35DB9A007021F1B0066993E1D2C4448C83A8B279F799C97D33CBBA73980A8A36"
+  }
+]

@@ -1,0 +1,148 @@
+[
+  {
+    "name": "1080-surface",
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-1080p60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30
+  },
+  {
+    "name": "4k-surface",
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30
+  },
+  {
+    "name": "4k-noqueue",
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30,
+    "queue": false
+  },
+  {
+    "name": "4k-progressive",
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/progressive-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30,
+    "progressive": true
+  },
+  {
+    "name": "4k-panel",
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30,
+    "panel": true
+  },
+  {
+    "name": "4k-controls",
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30,
+    "panel": true,
+    "controls": true
+  },
+  {
+    "name": "4k-danmaku",
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30,
+    "panel": true,
+    "comments": true
+  },
+  {
+    "name": "4k-danmaku-controls",
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30,
+    "panel": true,
+    "comments": true,
+    "controls": true
+  },
+  {
+    "name": "4k-portrait",
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30,
+    "panel": true,
+    "portrait": true
+  },
+  {
+    "name": "4k-panel-repeat",
+    "panel": true,
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30
+  },
+  {
+    "name": "4k-panel-no-progress",
+    "panel": true,
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30,
+    "progress": false
+  },
+  {
+    "name": "4k-danmaku-repeat",
+    "panel": true,
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30,
+    "comments": true
+  },
+  {
+    "name": "4k-danmaku-no-progress",
+    "panel": true,
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30,
+    "comments": true,
+    "progress": false
+  },
+  {
+    "name": "http-fast",
+    "panel": true,
+    "video": "http://127.0.0.1:18965/media/fast/video.mp4",
+    "audio": "http://127.0.0.1:18965/media/fast/audio.mp4",
+    "seconds": 30,
+    "allowBuffering": true
+  },
+  {
+    "name": "http-slow",
+    "panel": true,
+    "video": "http://127.0.0.1:18965/media/slow/video.mp4",
+    "audio": "http://127.0.0.1:18965/media/slow/audio.mp4",
+    "seconds": 30,
+    "allowBuffering": true
+  },
+  {
+    "name": "http-stall",
+    "panel": true,
+    "video": "http://127.0.0.1:18965/media/stall/video.mp4",
+    "audio": "http://127.0.0.1:18965/media/stall/audio.mp4",
+    "seconds": 30,
+    "allowBuffering": true
+  },
+  {
+    "name": "4k-surface-present",
+    "panel": false,
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30
+  },
+  {
+    "name": "4k-panel-present",
+    "panel": true,
+    "progress": false,
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30
+  },
+  {
+    "name": "4k-danmaku-present",
+    "panel": true,
+    "comments": true,
+    "controls": true,
+    "video": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/video-4k60.mp4",
+    "audio": "/sdcard/Android/data/dev.bilisail.bilisail.test/files/4k60/audio.m4a",
+    "seconds": 30
+  }
+]

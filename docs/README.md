@@ -55,6 +55,9 @@
 | [滚动与混合弹幕性能复查](validation/scrolling-mixed-danmaku-performance-2026-10-28.md) | 逐帧分配、直接绘制、混合覆盖顺序和图集候选对照 |
 | [首页推荐与三类播放性能热点](validation/performance-hotspots-2026-10-11.md) | 当前源码定位、图片／播放器／影视／直播结构探针、优化优先级与验收方案 |
 | [Windows 播放器与网页 GPU 对照分析](validation/windows-player-gpu-analysis-2026-10-12.md) | copy-back、ANGLE／纹理复制、空弹幕调度、纯视频 GPU 实测与优化顺序 |
+| [Windows 公开 4K60 播放性能](validation/windows-4k60-playback-2026-11-05.md) | Blender 公开素材、实际硬解、弹幕／控件叠加、Profile 稳态采样与瓶颈边界 |
+| [Android 4K60 播放热点](validation/android-4k60-playback-2026-11-05.md) | 真机硬解／高刷合成、Perfetto 热点、HTTP 弱网模拟及音画同步边界 |
+| [Android 4K60 HEVC／AV1 对照](validation/android-4k60-codecs-2026-11-05.md) | 8-bit／10-bit 实际硬件组件、同片对照、合成帧率复测与解码瓶颈边界 |
 | [Windows GPU 优化结果](validation/windows-gpu-optimization-2026-10-13.md) | 非 copy-back 硬解、GPU 有序提交、空弹幕单次唤醒与同素材前后实测 |
 | [Windows 弹幕 GPU 对照](validation/windows-danmaku-gpu-analysis-2026-10-13.md) | 弹幕密度、固定文字、合成帧率与同素材测量边界 |
 | [官方弹幕合成检查](validation/official-danmaku-composition-2026-10-13.md) | 官网 DOM、图层和录制行为的参考证据 |
