@@ -361,7 +361,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                       Positioned(
                         left: 8,
                         top: 8,
-                        child: IconButton.filledTonal(
+                        child: IconButton(
                           key: const ValueKey('profile-back'),
                           tooltip: '返回',
                           onPressed: widget.onBack,
@@ -370,7 +370,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                       ),
                     Positioned(
                       right: 8,
-                      bottom: 0,
+                      top: 8,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
