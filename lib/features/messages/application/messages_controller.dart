@@ -8,6 +8,7 @@ import '../../../domain/user.dart';
 import '../../auth/application/auth_controller.dart';
 import '../domain/message_repository.dart';
 import '../domain/message_management.dart';
+import '../domain/message_composer.dart';
 
 final messageRepositoryProvider = Provider<MessageRepository>(
   (ref) => throw UnimplementedError('MessageRepository'),
@@ -70,6 +71,10 @@ final class MessagesState {
     this.writeMessage,
     this.managingIds = const {},
     this.supportsManagement = false,
+    this.supportsRichComposition = false,
+    this.emotePackages = const [],
+    this.emotesLoading = false,
+    this.emotesMessage,
   });
   final InboxSection section;
   final MessageListState<InboxEntry> inbox;
@@ -79,6 +84,9 @@ final class MessagesState {
   final String? writeMessage;
   final Set<String> managingIds;
   final bool supportsManagement;
+  final bool supportsRichComposition, emotesLoading;
+  final List<MessageEmotePackage> emotePackages;
+  final String? emotesMessage;
   MessagesState copy({
     InboxSection? section,
     MessageListState<InboxEntry>? inbox,
@@ -90,6 +98,10 @@ final class MessagesState {
     String? writeMessage,
     bool clearWriteMessage = false,
     Set<String>? managingIds,
+    List<MessageEmotePackage>? emotePackages,
+    bool? emotesLoading,
+    String? emotesMessage,
+    bool clearEmotesMessage = false,
   }) => MessagesState(
     section: section ?? this.section,
     inbox: inbox ?? this.inbox,
@@ -100,6 +112,12 @@ final class MessagesState {
     writeMessage: clearWriteMessage ? null : writeMessage ?? this.writeMessage,
     managingIds: managingIds ?? this.managingIds,
     supportsManagement: supportsManagement,
+    supportsRichComposition: supportsRichComposition,
+    emotePackages: emotePackages ?? this.emotePackages,
+    emotesLoading: emotesLoading ?? this.emotesLoading,
+    emotesMessage: clearEmotesMessage
+        ? null
+        : emotesMessage ?? this.emotesMessage,
   );
 }
 
@@ -116,8 +134,13 @@ class MessagesController extends Notifier<MessagesState> {
   final Map<String, ({int revision, bool? pinned, bool? muted, bool removed})>
   _managementChanges = {};
   final Map<String, int> _privateOrder = {};
+  RequestCancellation? _emotesRead;
+  int _emoteVersion = 0;
+  (String, int)? _emoteAccount;
+  final Map<String, Uri> _emoteLookup = {};
 
   bool get supportsManagement => state.supportsManagement;
+  bool get supportsRichComposition => state.supportsRichComposition;
 
   @override
   MessagesState build() {
@@ -138,10 +161,16 @@ class MessagesController extends Notifier<MessagesState> {
     return MessagesState(
       supportsManagement:
           ref.read(messageRepositoryProvider) is MessageManagementRepository,
+      supportsRichComposition:
+          ref.read(messageRepositoryProvider) is MessageComposeRepository,
     );
   }
 
   void _cancel() {
+    _emotesRead?.cancel();
+    _emoteAccount = null;
+    _emoteLookup.clear();
+    ++_emoteVersion;
     _systemReadAttempt = null;
     _threadReadAttempt = null;
     _inboxAccount = null;
@@ -273,7 +302,7 @@ class MessagesController extends Notifier<MessagesState> {
       }
       final unique = {for (final item in old.items) item.id: item};
       for (final item in page.items) {
-        unique[item.id] = item;
+        unique[item.id] = _enrichEntry(item);
       }
       if (section == InboxSection.private) {
         if (refresh) _privateOrder.clear();
@@ -303,6 +332,12 @@ class MessagesController extends Notifier<MessagesState> {
               unique.length < 500,
         ),
       );
+      if (supportsRichComposition &&
+          page.items.any(
+            (item) => item.text.contains('[') || item.sourceText.contains('['),
+          )) {
+        unawaited(loadEmotes());
+      }
       // These reads acknowledge notifications, but revisiting a read category
       // must not refresh the account badge.
       if (unreadBefore != null &&
@@ -346,6 +381,7 @@ class MessagesController extends Notifier<MessagesState> {
       clearWriteMessage: true,
     );
     unawaited(loadThread());
+    if (supportsRichComposition) unawaited(loadEmotes());
   }
 
   /// Opening a profile reuses a conversation or creates a local empty one.
@@ -419,7 +455,7 @@ class MessagesController extends Notifier<MessagesState> {
       }
       final unique = {for (final item in old.items) item.id: item};
       for (final item in page.items) {
-        unique[item.id] = item;
+        unique[item.id] = _enrichMessage(item);
       }
       final sorted = unique.values.toList()
         ..sort(
@@ -454,6 +490,148 @@ class MessagesController extends Notifier<MessagesState> {
         );
       }
     }
+  }
+
+  Future<void> loadEmotes() async {
+    final repository = ref.read(messageRepositoryProvider);
+    if (repository is! MessageComposeRepository ||
+        !repository.accountScope.startsWith('user:')) {
+      return;
+    }
+    final account = (repository.accountScope, repository.sessionEpoch);
+    if (_emoteAccount == account &&
+        (state.emotesLoading || state.emotePackages.isNotEmpty)) {
+      return;
+    }
+    if (_emoteAccount != account) {
+      _emoteLookup.clear();
+      state = state.copy(
+        emotePackages: const [],
+        emotesLoading: false,
+        clearEmotesMessage: true,
+      );
+    }
+    _emotesRead?.cancel();
+    final cancellation = _emotesRead = RequestCancellation();
+    final version = ++_emoteVersion, generation = _generation;
+    _emoteAccount = account;
+    state = state.copy(emotesLoading: true, clearEmotesMessage: true);
+    try {
+      final packages = await (repository as MessageComposeRepository).emotes(
+        cancellation: cancellation,
+      );
+      if (!_current(generation, account.$1, account.$2) ||
+          version != _emoteVersion) {
+        return;
+      }
+      for (final package in packages.take(50)) {
+        for (final item in package.items.take(200)) {
+          if (item.imageUrl case final url?
+              when item.text.isNotEmpty &&
+                  item.text.length <= 100 &&
+                  _emoteLookup.length < 2000) {
+            _emoteLookup[item.text] = url;
+          }
+        }
+      }
+      final inbox = state.inbox, thread = state.thread;
+      final enrichedInbox = MessageListState<InboxEntry>(
+        items: List.unmodifiable(inbox.items.map(_enrichEntry)),
+        cursor: inbox.cursor,
+        hasMore: inbox.hasMore,
+        loading: inbox.loading,
+        error: inbox.error,
+      );
+      final enrichedThread = MessageListState<PrivateMessage>(
+        items: List.unmodifiable(thread.items.map(_enrichMessage)),
+        cursor: thread.cursor,
+        hasMore: thread.hasMore,
+        loading: thread.loading,
+        error: thread.error,
+      );
+      if (identical(_systemReadAttempt, inbox)) {
+        _systemReadAttempt = enrichedInbox;
+      }
+      if (identical(_threadReadAttempt, thread)) {
+        _threadReadAttempt = enrichedThread;
+      }
+      state = state.copy(
+        emotePackages: List.unmodifiable(packages),
+        emotesLoading: false,
+        emotesMessage: packages.isEmpty ? '暂无可用表情' : null,
+        clearEmotesMessage: packages.isNotEmpty,
+        selected: switch (state.selected) {
+          final selected? => _enrichEntry(selected),
+          _ => null,
+        },
+        inbox: enrichedInbox,
+        thread: enrichedThread,
+      );
+    } catch (error) {
+      if (_current(generation, account.$1, account.$2) &&
+          version == _emoteVersion) {
+        state = state.copy(emotesLoading: false, emotesMessage: _error(error));
+      }
+    } finally {
+      if (ref.mounted &&
+          generation == _generation &&
+          version == _emoteVersion) {
+        _emotesRead = null;
+        if (state.emotesLoading) state = state.copy(emotesLoading: false);
+      }
+    }
+  }
+
+  Map<String, Uri>? _emotesFor(String text, Map<String, Uri> original) {
+    if (_emoteLookup.isEmpty) return null;
+    final emotes = {...original};
+    for (final entry in _emoteLookup.entries) {
+      if (emotes.length >= 100) break;
+      if (text.contains(entry.key)) {
+        emotes.putIfAbsent(entry.key, () => entry.value);
+      }
+    }
+    return emotes.length == original.length ? null : emotes;
+  }
+
+  InboxEntry _enrichEntry(InboxEntry entry) {
+    final emotes = _emotesFor(
+      '${entry.text}\n${entry.sourceText}',
+      entry.emotes,
+    );
+    return emotes == null ? entry : entry.withEmotes(emotes);
+  }
+
+  PrivateMessage _enrichMessage(PrivateMessage message) {
+    if (message.kind == MessageContentKind.withdrawn) return message;
+    final emotes = _emotesFor(
+      '${message.text}\n${message.title}\n${message.subtitle}\n${message.cards.map((card) => '${card.title}\n${card.description}').join('\n')}',
+      message.emotes,
+    );
+    return emotes == null ? message : message.withEmotes(emotes);
+  }
+
+  Future<bool> sendImage(MessageLocalImage image) async {
+    final entry = state.selected;
+    final repository = ref.read(messageRepositoryProvider);
+    if (repository is! MessageComposeRepository ||
+        entry == null ||
+        !entry.canSend ||
+        state.sending ||
+        state.markingRead ||
+        state.managingIds.contains(entry.id)) {
+      return false;
+    }
+    return _write(
+      entry,
+      send: true,
+      action: (repository, cancellation) =>
+          (repository as MessageComposeRepository).sendImage(
+            entry,
+            image,
+            cancellation: cancellation,
+          ),
+    );
   }
 
   Future<bool> send(String text) async {
@@ -616,6 +794,8 @@ class MessagesController extends Notifier<MessagesState> {
         sourceImageUrl: entry.sourceImageUrl,
         pinned: pinned ?? entry.pinned,
         muted: muted ?? entry.muted,
+        emotes: entry.emotes,
+        replyContext: entry.replyContext,
       );
 
   Future<bool> setPinned(InboxEntry entry, bool pinned) => _manage(

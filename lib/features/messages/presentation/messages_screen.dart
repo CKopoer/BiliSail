@@ -2,7 +2,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/platform/external_links.dart';
 import '../../../core/presentation/page_back_scope.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/user.dart';
@@ -13,10 +12,17 @@ import '../../../shared/ui/paging_tab_strip.dart';
 import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/state_view.dart';
+import '../../../shared/ui/app_dialog.dart';
 import '../../auth/application/auth_controller.dart';
 import '../application/messages_controller.dart';
+import '../application/message_center_controller.dart';
 import '../domain/message_repository.dart';
+import '../domain/message_composer.dart';
 import 'message_content_view.dart';
+import 'message_center_views.dart';
+import 'message_composer_bar.dart';
+import 'message_rich_text.dart';
+import 'message_reply_sheet.dart';
 
 class MessagesScreen extends ConsumerStatefulWidget {
   const MessagesScreen({
@@ -42,6 +48,7 @@ class MessagesScreen extends ConsumerStatefulWidget {
 
 class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   final Map<String, String> _drafts = {};
+  final Map<String, MessageLocalImage> _imageDrafts = {};
   final _privateFilter = _ConversationFilter();
   final _pagingProgress = TabPagingProgress(0);
   int _openVersion = 0;
@@ -124,6 +131,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The page owns dialog work even when its narrow toolbar is not mounted.
+    ref.watch(messageCenterControllerProvider.notifier);
     final auth = ref.watch(
       authControllerProvider.select((state) => (state.isSignedIn, state.mid)),
     );
@@ -132,6 +141,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
       _,
     ) {
       _drafts.clear();
+      _imageDrafts.clear();
       _privateFilter.clear();
       _openInitialConversation();
     });
@@ -174,22 +184,22 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
         progress: _pagingProgress,
         child: Column(
           children: [
-            PageToolbar(
-              title: '我的消息',
-              actions: [
-                IconButton(
-                  tooltip: '刷新消息',
-                  onPressed: controller.refresh,
-                  icon: const Icon(Icons.refresh),
-                ),
-                IconButton(
-                  tooltip: '官方消息页',
-                  icon: const Icon(Icons.open_in_new),
-                  onPressed: () => ref.read(externalLinkOpenerProvider)(
-                    Uri.https('message.bilibili.com', '/'),
-                  ),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 600 &&
+                    section == InboxSection.private &&
+                    selectedId != null) {
+                  return const SizedBox.shrink();
+                }
+                return PageToolbar(
+                  title: '我的消息',
+                  actions: [
+                    MessageFansButton(onOpenUser: widget.onOpenUser),
+                    const MessageReadAllButton(),
+                    MessageCenterMoreButton(onOpenUser: widget.onOpenUser),
+                  ],
+                );
+              },
             ),
             Expanded(
               child: LayoutBuilder(
@@ -241,6 +251,37 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                                         ownMid: auth.$2,
                                         narrow: !wide,
                                         initialDraft: _drafts[selectedId] ?? '',
+                                        initialImage: _imageDrafts[selectedId],
+                                        onSendImage: (image) async {
+                                          final sent = await controller
+                                              .sendImage(image);
+                                          if (sent &&
+                                              mounted &&
+                                              identical(
+                                                _imageDrafts[selectedId],
+                                                image,
+                                              )) {
+                                            setState(
+                                              () => _imageDrafts.remove(
+                                                selectedId,
+                                              ),
+                                            );
+                                          }
+                                          return sent;
+                                        },
+                                        onImageChanged: (image) {
+                                          setState(() {
+                                            _imageDrafts.remove(selectedId);
+                                            if (image != null) {
+                                              _imageDrafts[selectedId] = image;
+                                            }
+                                            while (_imageDrafts.length > 8) {
+                                              _imageDrafts.remove(
+                                                _imageDrafts.keys.first,
+                                              );
+                                            }
+                                          });
+                                        },
                                         onDraftChanged: (text) {
                                           _drafts.remove(selectedId);
                                           if (text.isNotEmpty) {
@@ -800,7 +841,7 @@ class _ConversationRow extends ConsumerWidget {
       case _ConversationAction.mute:
         await controller.setMuted(entry, !entry.muted);
       case _ConversationAction.remove:
-        final confirm = await showDialog<bool>(
+        final confirm = await showAppDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('移除会话？'),
@@ -967,7 +1008,7 @@ class _ConversationRow extends ConsumerWidget {
   }
 }
 
-class _NotificationRow extends StatelessWidget {
+class _NotificationRow extends ConsumerWidget {
   const _NotificationRow({
     required this.entry,
     this.onOpenUser,
@@ -978,17 +1019,28 @@ class _NotificationRow extends StatelessWidget {
   final ValueChanged<Uri>? onOpenTarget;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final user = entry.userId;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Card(
-        elevation: 0,
+    final canReply = entry.replyContext != null;
+    final source = [
+      entry.sourceTitle,
+      entry.sourceText,
+    ].where((text) => text.isNotEmpty).join(' · ');
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: !canReply
+            ? null
+            : () => showMessageReply(
+                context,
+                ref,
+                entry,
+                onOpenTarget: onOpenTarget,
+              ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(4, 14, 4, 0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -998,7 +1050,7 @@ class _NotificationRow extends StatelessWidget {
                     child: NetworkAvatar(
                       url: entry.avatarUrl,
                       name: entry.title,
-                      radius: 20,
+                      radius: 21,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1006,52 +1058,89 @@ class _NotificationRow extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(entry.title, style: theme.textTheme.titleSmall),
-                        if (entry.time != null)
-                          Text(
-                            _time(entry.time),
-                            style: theme.textTheme.labelSmall,
+                        Text(
+                          entry.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        if (entry.text.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: MessageRichText(
+                              text: entry.text,
+                              emotes: entry.emotes,
+                              onOpenTarget: onOpenTarget,
+                              maxLines: entry.system ? null : 2,
+                            ),
                           ),
+                        if (source.isNotEmpty || entry.sourceImageUrl != null)
+                          Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (entry.sourceImageUrl case final image?) ...[
+                                  PrivateMessageImage(
+                                    url: image,
+                                    width: 72,
+                                    height: 48,
+                                    preview: false,
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Expanded(
+                                  child: MessageRichText(
+                                    text: source,
+                                    emotes: entry.emotes,
+                                    onOpenTarget: onOpenTarget,
+                                    maxLines: 2,
+                                    style: theme.textTheme.bodySmall,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        const SizedBox(height: 5),
+                        Wrap(
+                          spacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (entry.time != null)
+                              Text(
+                                _time(entry.time),
+                                style: theme.textTheme.labelSmall,
+                              ),
+                            if (canReply)
+                              TextButton.icon(
+                                onPressed: () => showMessageReply(
+                                  context,
+                                  ref,
+                                  entry,
+                                  onOpenTarget: onOpenTarget,
+                                ),
+                                icon: const Icon(Icons.reply_rounded, size: 17),
+                                label: const Text('回复'),
+                              ),
+                            if (entry.targetUrl case final target?)
+                              TextButton(
+                                onPressed: () => onOpenTarget?.call(target),
+                                child: const Text('查看原内容'),
+                              ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
                 ],
               ),
-              if (entry.text.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: SelectableText(entry.text),
-                ),
-              if (entry.sourceText.isNotEmpty ||
-                  entry.sourceTitle.isNotEmpty ||
-                  entry.sourceImageUrl != null)
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(top: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (entry.sourceImageUrl case final image?)
-                        PrivateMessageImage(url: image, aspectRatio: 16 / 9),
-                      if (entry.sourceTitle.isNotEmpty)
-                        Text(
-                          entry.sourceTitle,
-                          style: theme.textTheme.titleSmall,
-                        ),
-                      if (entry.sourceText.isNotEmpty) Text(entry.sourceText),
-                    ],
-                  ),
-                ),
-              if (entry.targetUrl case final target?)
-                TextButton(
-                  onPressed: () => onOpenTarget?.call(target),
-                  child: const Text('查看原内容'),
-                ),
+              const SizedBox(height: 10),
+              const Divider(height: 1, indent: 54),
             ],
           ),
         ),
@@ -1108,6 +1197,9 @@ class _ConversationView extends ConsumerStatefulWidget {
     required this.narrow,
     required this.initialDraft,
     required this.onDraftChanged,
+    required this.onImageChanged,
+    required this.onSendImage,
+    this.initialImage,
     required this.onBack,
     required this.onMore,
     required this.onRefresh,
@@ -1119,6 +1211,9 @@ class _ConversationView extends ConsumerStatefulWidget {
   final String? ownMid;
   final bool narrow;
   final String initialDraft;
+  final MessageLocalImage? initialImage;
+  final ValueChanged<MessageLocalImage?> onImageChanged;
+  final Future<bool> Function(MessageLocalImage) onSendImage;
   final ValueChanged<String> onDraftChanged;
   final VoidCallback onBack, onMore, onRefresh;
   final Future<bool> Function(String) onSend;
@@ -1169,14 +1264,13 @@ class _ConversationViewState extends ConsumerState<_ConversationView> {
 
   @override
   Widget build(BuildContext context) {
-    final (entry, sending, markingRead, writeMessage, canMarkRead) = ref.watch(
+    final (entry, sending, markingRead, writeMessage) = ref.watch(
       messagesControllerProvider.select(
         (state) => (
           state.selected,
           state.sending,
           state.markingRead,
           state.writeMessage,
-          !state.thread.loading && state.thread.items.isNotEmpty,
         ),
       ),
     );
@@ -1194,6 +1288,12 @@ class _ConversationViewState extends ConsumerState<_ConversationView> {
                   onPressed: widget.onBack,
                   icon: const Icon(Icons.arrow_back),
                 ),
+              NetworkAvatar(
+                url: entry.avatarUrl,
+                name: entry.title,
+                radius: 18,
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: TextButton(
                   onPressed: entry.userId == null || entry.system
@@ -1209,14 +1309,16 @@ class _ConversationViewState extends ConsumerState<_ConversationView> {
                 ),
               ),
               IconButton(
-                tooltip: '刷新会话',
-                onPressed: widget.onRefresh,
-                icon: const Icon(Icons.refresh),
-              ),
-              IconButton(
-                tooltip: '标为已读',
-                onPressed: busy || !canMarkRead ? null : widget.onMarkRead,
-                icon: const Icon(Icons.done_all),
+                tooltip: '聊天设置',
+                onPressed: () => showConversationSettings(
+                  context,
+                  ref,
+                  entry,
+                  onOpenUser: widget.onOpenUser,
+                  onRefresh: widget.onRefresh,
+                  onMarkRead: widget.onMarkRead,
+                ),
+                icon: const Icon(Icons.settings_outlined),
               ),
             ],
           ),
@@ -1229,32 +1331,14 @@ class _ConversationViewState extends ConsumerState<_ConversationView> {
             child: Text(message, textAlign: TextAlign.center),
           ),
         if (entry.canSend)
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _draft,
-                    minLines: 1,
-                    maxLines: 4,
-                    maxLength: 1000,
-                    onChanged: widget.onDraftChanged,
-                    decoration: const InputDecoration(
-                      hintText: '输入私信消息',
-                      border: OutlineInputBorder(),
-                      counterText: '',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: busy ? null : _send,
-                  child: Text(sending ? '发送中' : '发送'),
-                ),
-              ],
-            ),
+          MessageComposerBar(
+            text: _draft,
+            onChanged: widget.onDraftChanged,
+            onSend: _send,
+            busy: busy,
+            image: widget.initialImage,
+            onImageChanged: widget.onImageChanged,
+            onSendImage: widget.onSendImage,
           )
         else
           const Padding(padding: EdgeInsets.all(12), child: Text('此会话仅支持查看')),
@@ -1286,78 +1370,117 @@ class _ConversationThread extends ConsumerWidget {
         ),
       ),
     );
+    final contact = ref.watch(
+      messagesControllerProvider.select(
+        (state) => (state.selected?.title, state.selected?.avatarUrl),
+      ),
+    );
+    final ownProfile = ref.watch(
+      authControllerProvider.select(
+        (state) => (state.userName, state.avatarUrl),
+      ),
+    );
     if (loading) return const StateView.loading();
     if (error != null) {
       return StateView.error(message: error, onAction: onRefresh);
     }
     if (items.isEmpty) return const StateView.empty(message: '暂无会话消息');
-    return ListView.builder(
-      reverse: true,
-      padding: const EdgeInsets.all(16),
-      itemCount: items.length + 1,
-      itemBuilder: (context, index) {
-        if (index == items.length) {
-          return _ThreadFooter(onMore: onMore);
-        }
-        final message = items[items.length - 1 - index];
-        final own = message.senderId.value == ownMid;
-        if (message.kind == MessageContentKind.withdrawn ||
-            message.kind == MessageContentKind.notice) {
-          return Padding(
-            key: ValueKey(message.id),
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-            child: Center(
-              child: Text(
-                message.text,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          );
-        }
-        return Align(
-          key: ValueKey(message.id),
-          alignment: own ? Alignment.centerRight : Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: Column(
-                crossAxisAlignment: own
-                    ? CrossAxisAlignment.end
-                    : CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _time(message.time),
-                    style: Theme.of(context).textTheme.labelSmall,
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 625),
+        child: ListView.builder(
+          reverse: true,
+          padding: const EdgeInsets.all(16),
+          itemCount: items.length + 1,
+          itemBuilder: (context, index) {
+            if (index == items.length) {
+              return _ThreadFooter(onMore: onMore);
+            }
+            final message = items[items.length - 1 - index];
+            final own = message.senderId.value == ownMid;
+            if (message.kind == MessageContentKind.withdrawn ||
+                message.kind == MessageContentKind.notice) {
+              return Padding(
+                key: ValueKey(message.id),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 20,
+                ),
+                child: Center(
+                  child: Text(
+                    message.text,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  const SizedBox(height: 3),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: own
-                          ? Theme.of(context).colorScheme.secondaryContainer
-                          : Theme.of(context).colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          MessageContentView(
-                            message: message,
-                            onOpenTarget: onOpenTarget,
-                          ),
-                        ],
+                ),
+              );
+            }
+            final older = items.length - 2 - index >= 0
+                ? items[items.length - 2 - index]
+                : null;
+            final showTime =
+                message.time != null &&
+                (older?.time == null ||
+                    message.time!.difference(older!.time!).abs() >=
+                        const Duration(minutes: 5));
+            final avatar = NetworkAvatar(
+              url: own ? ownProfile.$2 : contact.$2,
+              name: own ? ownProfile.$1 ?? '我' : contact.$1 ?? '',
+              radius: 17,
+            );
+            return Padding(
+              key: ValueKey(message.id),
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                children: [
+                  if (showTime)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        _time(message.time),
+                        style: Theme.of(context).textTheme.labelSmall,
                       ),
                     ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: own
+                        ? MainAxisAlignment.end
+                        : MainAxisAlignment.start,
+                    children: [
+                      if (!own) ...[avatar, const SizedBox(width: 8)],
+                      Flexible(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 460),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: own
+                                  ? Theme.of(context)
+                                        .colorScheme
+                                        .secondaryContainer
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: MessageContentView(
+                                message: message,
+                                onOpenTarget: onOpenTarget,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (own) ...[const SizedBox(width: 8), avatar],
+                    ],
                   ),
                 ],
               ),
-            ),
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ),
     );
   }
 }

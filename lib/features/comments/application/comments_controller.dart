@@ -124,7 +124,15 @@ final class CommentsState {
 }
 
 class CommentsController extends Notifier<CommentsState> {
-  CommentsController(this.oid, {this.type = CommentTargetType.video});
+  CommentsController(
+    this.oid, {
+    this.type = CommentTargetType.video,
+    this.initialReply,
+    this.loadInitially = true,
+  });
+  final CommentEntry? initialReply;
+  final bool loadInitially;
+  bool _initialReplyUsed = false;
   final CommentTargetType type;
   CommentsRepository get _repository =>
       ref.read(commentsRepositoryProvider(type));
@@ -146,13 +154,18 @@ class CommentsController extends Notifier<CommentsState> {
       ++_replyGeneration;
       _cancel();
     });
-    Future<void>.microtask(() {
-      if (ref.mounted && generation == _generation) return load();
-    });
+    if (loadInitially) {
+      Future<void>.microtask(() {
+        if (ref.mounted && generation == _generation) return load();
+      });
+    }
+    final reply = _initialReplyUsed ? null : initialReply;
+    _initialReplyUsed = true;
     return CommentsState(
       signedIn: auth.isSignedIn,
       accountScope: _repository.accountScope,
       sessionEpoch: _repository.sessionEpoch,
+      replyTarget: reply,
     );
   }
 

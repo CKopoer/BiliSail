@@ -35,6 +35,8 @@ class CommentsPanel extends ConsumerStatefulWidget {
     this.onLogin,
     this.onOpenUser,
     this.playbackPosition,
+    this.composerOnly = false,
+    this.onSent,
   });
   final CommentTarget target;
   final int? replyCount;
@@ -42,6 +44,8 @@ class CommentsPanel extends ConsumerStatefulWidget {
   final VoidCallback? onLogin;
   final ValueChanged<UserId>? onOpenUser;
   final Duration? Function()? playbackPosition;
+  final bool composerOnly;
+  final VoidCallback? onSent;
   @override
   ConsumerState<CommentsPanel> createState() => _CommentsPanelState();
 }
@@ -265,6 +269,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
 
   Future<void> _send() async {
     final state = ref.read(_provider);
+    if (widget.composerOnly && state.replyTarget == null) return;
     if (!state.signedIn) {
       _login();
       return;
@@ -291,6 +296,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       if (current.openRoot?.id == root && current.replyTarget == null) {
         _resetDraft();
       }
+      widget.onSent?.call();
     }
   }
 
@@ -351,6 +357,27 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
         _shownRoot = null;
       },
     );
+    if (widget.composerOnly) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Consumer(
+            builder: (context, ref, _) {
+              final message = ref.watch(
+                _provider.select((state) => state.message),
+              );
+              return message == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(message),
+                    );
+            },
+          ),
+          Flexible(child: _composer()),
+        ],
+      );
+    }
     if (_shownRoot != rootId) {
       _shownRoot = rootId;
       _replyStorage = PageStorageBucket();
@@ -497,7 +524,10 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
           _text,
         ]),
         builder: (context, _) => _composerContent(
-          expanded: _composerFocus.hasFocus || _emotePickerOpen.value,
+          expanded:
+              widget.composerOnly ||
+              _composerFocus.hasFocus ||
+              _emotePickerOpen.value,
           duration: MediaQuery.disableAnimationsOf(context)
               ? Duration.zero
               : const Duration(milliseconds: 200),
@@ -570,14 +600,15 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
                             style: theme.textTheme.bodySmall,
                           ),
                         ),
-                        IconButton(
-                          tooltip: '取消回复',
-                          style: iconStyle,
-                          onPressed: state.busy
-                              ? null
-                              : controller.cancelTarget,
-                          icon: const Icon(Icons.close, size: 16),
-                        ),
+                        if (!widget.composerOnly)
+                          IconButton(
+                            tooltip: '取消回复',
+                            style: iconStyle,
+                            onPressed: state.busy
+                                ? null
+                                : controller.cancelTarget,
+                            icon: const Icon(Icons.close, size: 16),
+                          ),
                       ],
                     ),
                   AnimatedSize(
@@ -709,6 +740,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     final length = _text.text.runes.length;
     final canSend =
         canEdit &&
+        (!widget.composerOnly || state.replyTarget != null) &&
         !state.loading &&
         !state.replyLoading &&
         !state.uncertain.contains('send') &&
@@ -769,12 +801,16 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     final submit = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          '$length/1000',
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: length > 1000
-                ? theme.colorScheme.error
-                : theme.colorScheme.onSurfaceVariant,
+        Flexible(
+          child: Text(
+            '$length/1000',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: length > 1000
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
         const SizedBox(width: 10),

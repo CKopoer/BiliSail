@@ -44,12 +44,12 @@ class PageToolbar extends StatelessWidget {
           builder: (context, constraints) {
             // Below the width of the controls themselves, allow scrolling
             // instead of shrinking or overlapping their touch targets.
-            final minimumWidth =
-                (actions.length + (leading == null ? 0 : 1)) * 48.0 + 48;
+            final controlsWidth =
+                (actions.length + (leading == null ? 0 : 1)) * 48.0;
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: SizedBox(
-                width: math.max(constraints.maxWidth, minimumWidth),
+                width: math.max(constraints.maxWidth, controlsWidth),
                 child: Row(
                   children: [
                     ?leading,

@@ -450,6 +450,11 @@ final class BiliApiClient {
       '/session_svr/v1/session_svr/set_top',
       '/session_svr/v1/session_svr/remove_session',
       '/link_setting/v1/link_setting/set_msg_dnd',
+      '/link_setting/v1/link_setting/set',
+      '/link_setting/v1/link_setting/set_push_ss',
+      '/x/im/link_setting/add_block_word',
+      '/x/im/link_setting/del_block_word',
+      '/x/bplus/im/report/add',
     }.contains(path)) {
       throw ArgumentError('Unsupported message mutation');
     }
@@ -1187,6 +1192,50 @@ final class BiliApiClient {
         width <= 0 ||
         height == null ||
         height <= 0) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    return ApiCommentPicture(url, width, height, bytes.length / 1024);
+  }
+
+  /// Uploads one private-message attachment only after an explicit send action.
+  Future<ApiCommentPicture> uploadMessagePicture(
+    Uint8List bytes,
+    String mimeType, {
+    ApiRequestContext? context,
+  }) async {
+    if (bytes.isEmpty ||
+        bytes.length > 10 * 1024 * 1024 ||
+        !const {'image/jpeg', 'image/png', 'image/gif'}.contains(mimeType)) {
+      throw ArgumentError('Invalid message image');
+    }
+    const endpoint = 'message_picture_upload';
+    final data = _map(
+      await _submitForm(
+        _api.replace(path: '/x/dynamic/feed/draw/upload_bfs'),
+        endpoint,
+        {'biz': 'im'},
+        context,
+        upload: (bytes: bytes, mimeType: mimeType),
+      ),
+      endpoint,
+    );
+    final url = _uri(data['image_url']);
+    final width = _int(data['image_width']);
+    final height = _int(data['image_height']);
+    if (url == null ||
+        url.scheme != 'https' ||
+        url.userInfo.isNotEmpty ||
+        url.port != 443 ||
+        url.hasQuery ||
+        !(url.host.endsWith('.hdslb.com') ||
+            url.host.endsWith('.biliimg.com')) ||
+        width == null ||
+        height == null ||
+        width <= 0 ||
+        height <= 0 ||
+        width > 20000 ||
+        height > 20000 ||
+        width * height > 40000000) {
       throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
     return ApiCommentPicture(url, width, height, bytes.length / 1024);

@@ -1,5 +1,4 @@
 import 'package:bilisail/app/shell.dart';
-import 'package:bilisail/core/platform/external_links.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/messages/application/messages_controller.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
@@ -24,7 +23,6 @@ void main() {
         final auth = AuthFake();
         addTearDown(auth.stream.close);
         final repo = MessageRepositoryFake();
-        final opened = <Uri>[];
         final scale = ValueNotifier(1.0);
         addTearDown(scale.dispose);
         final router = GoRouter(
@@ -54,10 +52,6 @@ void main() {
             overrides: [
               authRepositoryProvider.overrideWithValue(auth),
               messageRepositoryProvider.overrideWithValue(repo),
-              externalLinkOpenerProvider.overrideWithValue((uri) async {
-                opened.add(uri);
-                return true;
-              }),
             ],
             child: MaterialApp.router(
               routerConfig: router,
@@ -75,8 +69,9 @@ void main() {
         await tester.pumpAndSettle();
         router.go('/messages');
         await tester.pumpAndSettle();
-        final refresh = find.byTooltip('刷新消息');
-        final official = find.byTooltip('官方消息页');
+        final fans = find.byTooltip('新增粉丝');
+        final readAll = find.byTooltip('已加载私信一键已读');
+        final more = find.byTooltip('更多消息操作');
         final title = find.descendant(
           of: find.byType(MessagesScreen),
           matching: find.text('我的消息'),
@@ -96,8 +91,9 @@ void main() {
             );
             final titleRect = tester.getRect(title);
             for (final action in [
-              refresh,
-              official,
+              fans,
+              readAll,
+              more,
               if (android && mode != WorkspaceNavigationMode.multipleTabs) back,
             ]) {
               final rect = tester.getRect(action);
@@ -117,29 +113,28 @@ void main() {
           }
         }
         final reads = repo.reads;
-        await tester.tap(refresh);
+        expect(find.byTooltip('刷新消息'), findsNothing);
+        expect(find.byTooltip('官方消息页'), findsNothing);
+        await tester.tap(more);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('重新加载消息'));
         await tester.pumpAndSettle();
         expect(repo.reads, reads + 1);
-        await tester.tap(official);
-        await tester.pumpAndSettle();
-        expect(opened, [Uri.https('message.bilibili.com', '/')]);
         if (mode != WorkspaceNavigationMode.multipleTabs) {
           await tester.tap(find.text('测试会话'));
           await tester.pumpAndSettle();
-          expect(
-            tester.getCenter(back).dy,
-            closeTo(tester.getCenter(title).dy, .01),
-          );
+          expect(title, findsNothing);
+          expect(find.byTooltip('聊天设置'), findsOneWidget);
           expect(find.byType(TextField), findsOneWidget);
           await tester.enterText(find.byType(TextField), '顶栏返回后保留草稿');
-          await tester.tap(back);
+          await tester.tap(find.byTooltip('返回会话列表'));
           await tester.pumpAndSettle();
           expect(router.routeInformationProvider.value.uri.path, '/messages');
           expect(find.text('测试会话'), findsOneWidget);
           await tester.tap(find.text('测试会话'));
           await tester.pumpAndSettle();
           expect(find.text('顶栏返回后保留草稿'), findsOneWidget);
-          await tester.tap(back);
+          await tester.tap(find.byTooltip('返回会话列表'));
           await tester.pumpAndSettle();
           if (android) {
             await auth.signOut();

@@ -6,6 +6,8 @@ export 'src/models/app_recommendation_models.dart';
 export 'src/video_identifiers.dart';
 export 'src/clients/account_client.dart';
 export 'src/clients/message_client.dart';
+export 'src/clients/message_center_client.dart';
+export 'src/models/message_center_models.dart';
 export 'src/clients/message_management_client.dart';
 export 'src/models/message_models.dart';
 export 'src/clients/playback_metadata_client.dart';

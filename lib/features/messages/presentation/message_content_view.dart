@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../shared/ui/image_viewer.dart';
 import '../domain/message_repository.dart';
+import 'message_rich_text.dart';
+import 'private_message_image.dart';
+export 'private_message_image.dart';
 
 /// Renders normalized message content without interpreting protocol payloads.
 class MessageContentView extends StatelessWidget {
@@ -30,7 +32,11 @@ class MessageContentView extends StatelessWidget {
           const SizedBox(height: 8),
         ],
         if ((!imageOnly || message.imageUrl == null) && message.text.isNotEmpty)
-          SelectableText(message.text),
+          MessageRichText(
+            text: message.text,
+            emotes: message.emotes,
+            onOpenTarget: onOpenTarget,
+          ),
         if (message.subtitle.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 6),
@@ -154,84 +160,6 @@ class _ContentCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Private media uses credential-free memory decoding and never the disk cache.
-class PrivateMessageImage extends StatefulWidget {
-  const PrivateMessageImage({
-    super.key,
-    required this.url,
-    this.aspectRatio,
-    this.preview = true,
-    this.label = '查看消息图片',
-  });
-  final Uri url;
-  final double? aspectRatio;
-  final bool preview;
-  final String label;
-
-  @override
-  State<PrivateMessageImage> createState() => _PrivateMessageImageState();
-}
-
-class _PrivateMessageImageState extends State<PrivateMessageImage> {
-  late NetworkImage _image = NetworkImage(widget.url.toString());
-  late ImageProvider<Object> _previewImage = ResizeImage(
-    _image,
-    width: 880,
-    height: 1280,
-    policy: ResizeImagePolicy.fit,
-  );
-
-  void _evict() {
-    _previewImage.evict();
-    _image.evict();
-  }
-
-  @override
-  void didUpdateWidget(PrivateMessageImage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.url != widget.url) {
-      _evict();
-      _image = NetworkImage(widget.url.toString());
-      _previewImage = ResizeImage(
-        _image,
-        width: 880,
-        height: 1280,
-        policy: ResizeImagePolicy.fit,
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _evict();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ratio = widget.aspectRatio;
-    final image = Image(
-      image: _previewImage,
-      width: 280,
-      height: ratio == null ? 180 : (280 / ratio.clamp(.4, 3)).clamp(80, 320),
-      fit: BoxFit.contain,
-      errorBuilder: (_, _, _) =>
-          const Padding(padding: EdgeInsets.all(12), child: Text('图片暂时无法加载')),
-    );
-    if (!widget.preview) return image;
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: widget.label,
-      button: true,
-      child: InkWell(
-        onTap: () => showImageViewer(context, [widget.url], 0),
-        child: image,
       ),
     );
   }

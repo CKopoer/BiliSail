@@ -465,7 +465,9 @@ void main() {
     await tester.pumpAndSettle();
     expect((accountBadge(tester).label as Text).data, '3');
     repo.counts = {InboxSection.private: 1, InboxSection.likes: 0};
-    await tester.tap(find.byTooltip('刷新消息'));
+    await tester.tap(find.byTooltip('更多消息操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('重新加载消息'));
     await tester.pumpAndSettle();
     expect((accountBadge(tester).label as Text).data, '1');
     expect(repo.unreadReads, 2);
@@ -614,7 +616,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.marks, 1);
       repo.writeFailure = null;
-      await tester.tap(find.byTooltip('刷新会话'));
+      await tester.tap(find.byTooltip('聊天设置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('重新加载会话'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('关闭'));
       await tester.pumpAndSettle();
       expect(repo.marks, 2);
       expect(accountBadge(tester).isLabelVisible, isFalse);
@@ -742,7 +748,9 @@ void main() {
       expect(find.text('测试私信正文'), findsOneWidget);
       expect(find.text('另一会话'), findsOneWidget);
       expect(repo.marks, 1);
-      await tester.tap(find.byTooltip('标为已读'));
+      await tester.tap(find.byTooltip('聊天设置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('标为已读'));
       await tester.pumpAndSettle();
       expect(repo.marks, 2);
     },

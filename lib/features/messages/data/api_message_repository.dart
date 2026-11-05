@@ -6,9 +6,13 @@ import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../domain/message_repository.dart';
 import '../domain/message_management.dart';
+import '../domain/message_composer.dart';
 
 class ApiMessageRepository
-    implements MessageRepository, MessageManagementRepository {
+    implements
+        MessageRepository,
+        MessageManagementRepository,
+        MessageComposeRepository {
   const ApiMessageRepository(
     this.client,
     this.requests, {
@@ -87,6 +91,18 @@ class ApiMessageRepository
             sourceImageUrl: e.sourceImageUrl,
             pinned: e.pinned,
             muted: e.muted,
+            emotes: e.emotes,
+            replyContext: switch (e.replyContext) {
+              final context? => MessageReplyContext(
+                subjectId: context.subjectId,
+                businessId: context.businessId,
+                rootId: context.rootId,
+                parentId: context.parentId,
+                author: context.author,
+                userId: UserId.tryParse(context.userMid),
+              ),
+              _ => null,
+            },
           ),
         ),
       ),
@@ -147,6 +163,7 @@ class ApiMessageRepository
             ),
             durationSeconds: m.durationSeconds,
             imageAspectRatio: m.imageAspectRatio,
+            emotes: m.emotes,
           ),
         ),
       ),
@@ -172,6 +189,53 @@ class ApiMessageRepository
           client.sendText(sender, receiver.value, text, context: context),
       cancellation,
     );
+  }
+
+  @override
+  Future<List<MessageEmotePackage>> emotes({
+    required RequestCancellation cancellation,
+  }) => _run((context) async {
+    final packages = await client.emotes(context: context);
+    return List.unmodifiable(
+      packages.map(
+        (package) => MessageEmotePackage(
+          package.name,
+          List.unmodifiable(
+            package.items.map((item) => MessageEmote(item.text, item.imageUrl)),
+          ),
+        ),
+      ),
+    );
+  }, cancellation);
+
+  @override
+  Future<void> sendImage(
+    InboxEntry entry,
+    MessageLocalImage image, {
+    required RequestCancellation cancellation,
+  }) {
+    if (!entry.canSend) {
+      throw const AppFailure(AppFailureKind.permission, '此会话暂不支持发送');
+    }
+    final receiver = entry.userId;
+    if (receiver == null) throw ArgumentError('Missing receiver');
+    final sender = accountScope.substring('user:'.length);
+    return _run((context) async {
+      final picture = await client.api.uploadMessagePicture(
+        image.bytes,
+        image.mimeType,
+        context: context,
+      );
+      // The second write keeps the original cancellation/epoch/deadline. An
+      // account transition after upload must never send into the next account.
+      await client.sendImage(
+        sender,
+        receiver.value,
+        picture,
+        mimeType: image.mimeType,
+        context: context,
+      );
+    }, cancellation);
   }
 
   @override

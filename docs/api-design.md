@@ -1,5 +1,7 @@
 # API、鉴权与数据边界
 
+2026-11-05 消息第二轮扩展 Web IM 表情面板、`biz=im` 图片上传、内容推送／消息设置、屏蔽词、黑名单和举报。通知回复严格使用 `business_id/subject_id/source_id/root_id`，复用现有评论写端点。批量已读为用户确认范围内逐会话 `update_ack`，`ack_sessions` 仅同步已读变更；全部写入保持单次执行、账号／取消／deadline 隔离。端点与未验收边界见[消息表情、发送与管理入口](validation/messages-rich-composition-2026-11-05.md)。
+
 2026-11-05 消息管理新增 Web Cookie JSON 响应的三个单次 form-urlencoded POST，host 为 `api.vc.bilibili.com`：`/session_svr/v1/session_svr/set_top`（`talker_id/session_type=1/op_type`，0 置顶、1 取消）、`/link_setting/v1/link_setting/set_msg_dnd`（`uid/dnd_uid/setting`，1 开启、0 关闭）和 `/session_svr/v1/session_svr/remove_session`（`talker_id/session_type=1`）。均复用固定目标域 Cookie/CSRF、25 秒总 deadline、取消/epoch 与写请求不重试，不需要 App token，无分页。官方公开脚本核对到路径和参数，不等于真实账号写操作已验收；消息富内容、来源与测试见[消息中心重构](validation/messages-redesign-2026-11-05.md)。
 
 2026-11-03 会员弹幕复用现有 Web Cookie／CSRF 单次写端点 `POST https://api.bilibili.com/x/v2/dm/post`，请求为 form-urlencoded；会员样式增加 `colorful=60001` 并使用白色底色，普通样式省略该字段。读取仍走现有 HTTP Protobuf 分段，解析字段 24；权益提示来自会话验证的 `/x/web-interface/nav`。不新增重试或分页规则，写结果不明时不自动重放；字段、来源和真实账号未验收边界见 [专项记录](validation/vip-danmaku-2026-11-03.md)。

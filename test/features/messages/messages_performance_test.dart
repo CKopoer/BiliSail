@@ -123,17 +123,7 @@ void main() {
     controller.pagination(loading: true);
     await tester.pump();
     expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
-    expect(find.byTooltip('标为已读'), findsOneWidget);
-    expect(
-      tester
-          .widget<IconButton>(
-            find.byWidgetPredicate(
-              (widget) => widget is IconButton && widget.tooltip == '标为已读',
-            ),
-          )
-          .onPressed,
-      isNull,
-    );
+    expect(find.byTooltip('聊天设置'), findsOneWidget);
     controller.pagination(error: '分页失败');
     await tester.pumpAndSettle();
     expect(find.text('分页失败'), findsNWidgets(2));

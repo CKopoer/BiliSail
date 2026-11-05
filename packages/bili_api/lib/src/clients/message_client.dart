@@ -146,11 +146,12 @@ final class MessageClient {
           'end_seqno': ?cursor,
         }, context);
     if (!data.containsKey('messages')) _fail(e);
+    final emotes = _emotes(data);
     final messages = _list(
       data['messages'],
       e,
       nullable: true,
-    ).map((v) => _message(_map(v, e), e)).toList();
+    ).map((v) => _message(_map(v, e), e, emotes: emotes)).toList();
     messages.sort(
       (a, b) => BigInt.parse(a.sequence).compareTo(BigInt.parse(b.sequence)),
     );
@@ -272,6 +273,19 @@ final class MessageClient {
           item['desc'],
         ]),
         sourceTitle: _firstText([item['title'], item['business']]),
+        emotes: _matchingEmotes(
+          _joinText([
+            item['source_content'],
+            item['target_reply_content'],
+            item['root_reply_content'],
+          ]),
+          {..._emotes(data), ..._emotes(row), ..._emotes(item)},
+        ),
+        replyContext:
+            section == ApiInboxSection.replies ||
+                section == ApiInboxSection.mentions
+            ? _replyContext(item, actor, mid)
+            : null,
         sourceImageUrl: _uri(
           item['image'] ?? item['cover'] ?? item['cover_url'],
         ),
@@ -315,6 +329,86 @@ final class MessageClient {
     }, context: context);
   }
 
+  Future<List<ApiMessageEmotePackage>> emotes({
+    ApiRequestContext? context,
+  }) async {
+    final data = await _get(
+      'api.bilibili.com',
+      '/x/emote/user/panel/web',
+      'message_emotes',
+      {'business': 'im'},
+      context,
+    );
+    final packages = data['packages'];
+    if (packages is! List<Object?>) _fail('message_emotes');
+    return List.unmodifiable(
+      packages.take(50).map((value) {
+        final package = _optionalMap(value);
+        final items = package['emote'];
+        return ApiMessageEmotePackage(
+          _firstText([package['text'], '表情']),
+          List.unmodifiable([
+            if (items is List<Object?>)
+              for (final value in items.take(200))
+                if (_optionalMap(value) case final item
+                    when _text(item['text']).isNotEmpty &&
+                        _text(item['text']).length <= 100)
+                  ApiMessageEmote(
+                    _text(item['text']),
+                    item['type'] == 4
+                        ? null
+                        : _uri(item['gif_url']) ?? _uri(item['url']),
+                  ),
+          ]),
+        );
+      }),
+    );
+  }
+
+  Future<void> sendImage(
+    String sender,
+    String receiver,
+    ApiCommentPicture picture, {
+    required String mimeType,
+    ApiRequestContext? context,
+  }) async {
+    const endpoint = 'message_send_image';
+    _decimal(sender, endpoint);
+    _decimal(receiver, endpoint);
+    if (picture.width <= 0 ||
+        picture.height <= 0 ||
+        !picture.sizeKiB.isFinite ||
+        picture.sizeKiB <= 0 ||
+        picture.sizeKiB > 10240 ||
+        _uri(picture.url.toString()) == null ||
+        !{'image/jpeg', 'image/png', 'image/gif'}.contains(mimeType)) {
+      throw ArgumentError('Invalid message picture');
+    }
+    await api.submitMessageForm('/web_im/v1/web_im/send_msg', endpoint, {
+      'msg[sender_uid]': sender,
+      'msg[receiver_id]': receiver,
+      'msg[receiver_type]': '1',
+      'msg[msg_type]': '2',
+      'msg[msg_status]': '0',
+      'msg[content]': jsonEncode({
+        'url': picture.url.toString(),
+        'height': picture.height,
+        'width': picture.width,
+        'imageType': mimeType.substring('image/'.length) == 'jpeg'
+            ? 'jpg'
+            : mimeType.substring('image/'.length),
+        'original': 1,
+        'size': picture.sizeKiB,
+      }),
+      'msg[timestamp]': '${DateTime.now().millisecondsSinceEpoch ~/ 1000}',
+      'msg[dev_id]': '0',
+      'msg[new_face_version]': '1',
+      'from_firework': '0',
+      'build': '0',
+      'mobi_app': 'web',
+    }, context: context);
+  }
+
   Future<void> markRead(
     String mid,
     int type,
@@ -343,7 +437,11 @@ final class MessageClient {
     return api.acknowledgeSystemNotifications(cursor, context: context);
   }
 
-  ApiPrivateMessage _message(Map<String, Object?> row, String e) {
+  ApiPrivateMessage _message(
+    Map<String, Object?> row,
+    String e, {
+    Map<String, Uri> emotes = const {},
+  }) {
     final type = _number(row['msg_type'], e);
     final sequence = _decimal(row['msg_seqno'], e, zero: true);
     final sender = _decimal(row['sender_uid'], e);
@@ -498,7 +596,120 @@ final class MessageClient {
       links: List.unmodifiable(links),
       durationSeconds: duration,
       imageAspectRatio: _aspectRatio(content['width'], content['height']),
+      emotes: revoked
+          ? const {}
+          : _matchingEmotes(
+              _joinText([
+                text,
+                title,
+                subtitle,
+                for (final card in cards) '${card.title}\n${card.description}',
+              ]),
+              {...emotes, ..._emotes(row), ..._emotes(content)},
+            ),
     );
+  }
+
+  ApiMessageReplyContext? _replyContext(
+    Map<String, Object?> item,
+    String author,
+    String? userMid,
+  ) {
+    // The official message center uses source_id, with root_id || source_id.
+    // target_id is the older target; the notification row ID is unrelated.
+    if (_yes(item['hide_reply_button']) ||
+        item['business'] == '弹幕' ||
+        item['danmu'] is Map<String, Object?>) {
+      return null;
+    }
+    final subject = _positiveDecimal(item['subject_id']);
+    final parent = _positiveDecimal(item['source_id']);
+    final business = item['business_id'];
+    if (subject == null ||
+        parent == null ||
+        business is! int ||
+        !{1, 11, 12, 14, 17, 33}.contains(business)) {
+      return null;
+    }
+    final root = item['root_id'];
+    if (root != null &&
+        root != 0 &&
+        root != '0' &&
+        _positiveDecimal(root) == null) {
+      return null;
+    }
+    return ApiMessageReplyContext(
+      subjectId: subject,
+      businessId: business,
+      parentId: parent,
+      rootId: _positiveDecimal(item['root_id']) ?? parent,
+      author: author,
+      userMid: userMid,
+    );
+  }
+
+  Map<String, Uri> _matchingEmotes(String text, Map<String, Uri> emotes) =>
+      Map.unmodifiable({
+        for (final entry in emotes.entries.take(100))
+          if (text.contains(entry.key)) entry.key: entry.value,
+      });
+
+  Map<String, Uri> _emotes(Object? value) {
+    final result = <String, Uri>{};
+    void visit(Object? raw, int depth, {String? token}) {
+      if (depth > 4 || result.length >= 100) return;
+      if (raw is String) {
+        if (token != null) {
+          final url = _uri(raw);
+          if (url != null && token.isNotEmpty && token.length <= 100) {
+            result[token] = url;
+          }
+        } else {
+          if (raw.length <= 131072) {
+            try {
+              visit(jsonDecode(raw), depth + 1);
+            } on FormatException {
+              // Optional emoji metadata must not break the surrounding message.
+            }
+          }
+        }
+        return;
+      }
+      if (raw is List<Object?>) {
+        for (final child in raw.take(100)) {
+          visit(child, depth + 1);
+        }
+      } else if (raw is Map<String, Object?>) {
+        final text = _firstText([raw['text'], raw['emoji'], token]);
+        final url =
+            _uri(raw['gif_url']) ?? _uri(raw['url']) ?? _uri(raw['uri']);
+        if (text.isNotEmpty && text.length <= 100 && url != null) {
+          result[text] = url;
+        }
+        for (final child in raw.entries.take(100)) {
+          if (child.key.startsWith('[') && child.key.endsWith(']')) {
+            visit(child.value, depth + 1, token: child.key);
+          }
+        }
+        for (final key in ['e_infos', 'emoticon', 'emote', 'emojis', 'extra']) {
+          final nested = raw[key];
+          if (nested is Map<String, Object?>) {
+            visit(nested, depth + 1);
+            for (final child in nested.entries.take(100)) {
+              if (child.key.startsWith('[') ||
+                  child.value is Map<String, Object?>) {
+                visit(child.value, depth + 1, token: child.key);
+              }
+            }
+          } else if (nested != null) {
+            visit(nested, depth + 1);
+          }
+        }
+      }
+    }
+
+    visit(value, 0);
+    return result;
   }
 
   // Payload failure is local to one message. Identity/sequence validation above

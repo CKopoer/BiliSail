@@ -51,6 +51,21 @@ final class MessageLink {
   final Uri url;
 }
 
+final class MessageReplyContext {
+  const MessageReplyContext({
+    required this.subjectId,
+    required this.businessId,
+    this.rootId,
+    required this.parentId,
+    required this.author,
+    this.userId,
+  });
+  final String subjectId, parentId, author;
+  final int businessId;
+  final String? rootId;
+  final UserId? userId;
+}
+
 final class InboxEntry {
   const InboxEntry({
     required this.id,
@@ -70,6 +85,8 @@ final class InboxEntry {
     this.sourceImageUrl,
     this.pinned = false,
     this.muted = false,
+    this.emotes = const {},
+    this.replyContext,
   });
   final String id, title, text;
   final UserId? userId;
@@ -83,7 +100,31 @@ final class InboxEntry {
   final String sourceText, sourceTitle;
   final Uri? sourceImageUrl;
   final bool pinned, muted;
+  final Map<String, Uri> emotes;
+  final MessageReplyContext? replyContext;
   bool get canSend => sessionType == 1 && !system && userId != null;
+
+  InboxEntry withEmotes(Map<String, Uri> value) => InboxEntry(
+    id: id,
+    title: title,
+    text: text,
+    userId: userId,
+    avatarUrl: avatarUrl,
+    time: time,
+    targetUrl: targetUrl,
+    sessionType: sessionType,
+    system: system,
+    unread: unread,
+    lastSequence: lastSequence,
+    readCursor: readCursor,
+    sourceText: sourceText,
+    sourceTitle: sourceTitle,
+    sourceImageUrl: sourceImageUrl,
+    pinned: pinned,
+    muted: muted,
+    emotes: Map.unmodifiable(value),
+    replyContext: replyContext,
+  );
 }
 
 final class PrivateMessage {
@@ -104,6 +145,7 @@ final class PrivateMessage {
     this.links = const [],
     this.durationSeconds,
     this.imageAspectRatio,
+    this.emotes = const {},
   });
   final String id, sequence, text;
   final UserId senderId;
@@ -117,6 +159,27 @@ final class PrivateMessage {
   final List<MessageLink> links;
   final int? durationSeconds;
   final double? imageAspectRatio;
+  final Map<String, Uri> emotes;
+
+  PrivateMessage withEmotes(Map<String, Uri> value) => PrivateMessage(
+    id: id,
+    sequence: sequence,
+    senderId: senderId,
+    text: text,
+    type: type,
+    time: time,
+    imageUrl: imageUrl,
+    targetUrl: targetUrl,
+    kind: kind,
+    title: title,
+    subtitle: subtitle,
+    cards: cards,
+    details: details,
+    links: links,
+    durationSeconds: durationSeconds,
+    imageAspectRatio: imageAspectRatio,
+    emotes: Map.unmodifiable(value),
+  );
 }
 
 final class MessagePage<T> {

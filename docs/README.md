@@ -36,6 +36,7 @@
 | [macOS 视频全屏与播放窗关闭](validation/macos-fullscreen-playback-close-2026-11-03.md) | 视频退出保留应用全屏、原生关闭与转换屏障、标签组全屏及验证边界 |
 | [API 与会话](api-design.md) | 协议边界、接口映射、鉴权、错误、缓存和降级 |
 | [消息中心与富消息](validation/messages-redesign-2026-11-05.md) | PiliPlus 行为参考、宽窄布局、会话管理、富消息解析及验证边界 |
+| [消息表情、发送与管理入口](validation/messages-rich-composition-2026-11-05.md) | 私信表情／图片、直接回复、紧凑通知、聊天设置及外层菜单 |
 | [搜索历史与热搜](validation/search-discovery-2026-11-01.md) | 居中搜索动效、宽窄屏入口、账号历史存储、热搜协议与自动验证边界 |
 | [密码、短信与移动登录窗口](validation/password-sms-login.md) | 三种 Web 登录、交互验证码、安全会话与小屏/键盘布局 |
 | [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |

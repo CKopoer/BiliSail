@@ -39,6 +39,32 @@ final class ApiMessageLink {
   final Uri url;
 }
 
+final class ApiMessageReplyContext {
+  const ApiMessageReplyContext({
+    required this.subjectId,
+    required this.businessId,
+    this.rootId,
+    required this.parentId,
+    required this.author,
+    this.userMid,
+  });
+  final String subjectId, parentId, author;
+  final int businessId;
+  final String? rootId, userMid;
+}
+
+final class ApiMessageEmotePackage {
+  const ApiMessageEmotePackage(this.name, this.items);
+  final String name;
+  final List<ApiMessageEmote> items;
+}
+
+final class ApiMessageEmote {
+  const ApiMessageEmote(this.text, this.imageUrl);
+  final String text;
+  final Uri? imageUrl;
+}
+
 final class ApiInboxEntry {
   const ApiInboxEntry({
     required this.id,
@@ -58,6 +84,8 @@ final class ApiInboxEntry {
     this.sourceImageUrl,
     this.pinned = false,
     this.muted = false,
+    this.emotes = const {},
+    this.replyContext,
   });
   final String id, title, text;
   final String? userMid, lastSequence, readCursor;
@@ -69,6 +97,8 @@ final class ApiInboxEntry {
   final String sourceText, sourceTitle;
   final Uri? sourceImageUrl;
   final bool pinned, muted;
+  final Map<String, Uri> emotes;
+  final ApiMessageReplyContext? replyContext;
 }
 
 final class ApiPrivateMessage {
@@ -89,6 +119,7 @@ final class ApiPrivateMessage {
     this.links = const [],
     this.durationSeconds,
     this.imageAspectRatio,
+    this.emotes = const {},
   });
   final String id, sequence, senderMid, text;
   final int type;
@@ -101,6 +132,7 @@ final class ApiPrivateMessage {
   final List<ApiMessageLink> links;
   final int? durationSeconds;
   final double? imageAspectRatio;
+  final Map<String, Uri> emotes;
 }
 
 final class ApiAccountOverview {

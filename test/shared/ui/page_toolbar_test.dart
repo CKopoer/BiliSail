@@ -46,6 +46,11 @@ void main() {
                               onPressed: () => pressed.add('official'),
                               icon: const Icon(Icons.open_in_new),
                             ),
+                            IconButton(
+                              tooltip: '更多',
+                              onPressed: () => pressed.add('more'),
+                              icon: const Icon(Icons.more_horiz),
+                            ),
                           ],
                         ),
                       ),
@@ -63,7 +68,7 @@ void main() {
           scale.value = textScale;
           await tester.pumpAndSettle();
           final title = tester.getRect(find.text('我的消息'));
-          for (final label in ['返回', '刷新', '官方消息页']) {
+          for (final label in ['返回', '刷新', '官方消息页', '更多']) {
             final action = find.byTooltip(label);
             final rect = tester.getRect(action);
             expect(rect.center.dy, closeTo(title.center.dy, .01));
@@ -73,7 +78,7 @@ void main() {
             expect(action.hitTestable(), findsOneWidget);
             await tester.tap(action);
           }
-          expect(pressed, ['back', 'refresh', 'official']);
+          expect(pressed, ['back', 'refresh', 'official', 'more']);
           pressed.clear();
           expect(tester.takeException(), isNull);
         }

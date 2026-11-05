@@ -38,6 +38,10 @@ import '../features/auth/application/auth_controller.dart';
 import '../features/auth/application/account_overview_controller.dart';
 import '../features/auth/data/api_account_overview_repository.dart';
 import '../features/messages/application/messages_controller.dart';
+import '../features/messages/application/message_center_controller.dart';
+import '../features/messages/application/message_image_picker.dart';
+import '../features/messages/domain/message_composer.dart';
+import '../features/messages/data/api_message_center_repository.dart';
 import '../features/messages/data/api_message_repository.dart';
 import '../features/image_viewer/application/image_viewer_controller.dart';
 import '../features/image_viewer/data/network_original_image_repository.dart';
@@ -417,6 +421,22 @@ class AppDependencies {
             accountScope: () => session.accountScope,
           ),
         ),
+        messageCenterRepositoryProvider.overrideWithValue(
+          ApiMessageCenterRepository(
+            MessageCenterClient(api),
+            requests,
+            accountScope: () => session.accountScope,
+          ),
+        ),
+        messageImagePickerProvider.overrideWithValue(() async {
+          final images = await pickCommentImages(1);
+          if (images.isEmpty) return null;
+          final image = images.first;
+          return MessageLocalImage(
+            bytes: image.bytes,
+            mimeType: image.mimeType,
+          );
+        }),
         pgcRepositoryProvider.overrideWithValue(
           ApiPgcRepository(
             PgcClient(api),

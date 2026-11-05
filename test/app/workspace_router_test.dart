@@ -465,7 +465,12 @@ void main() {
           await dialog;
           expect(inbox.read(messagesControllerProvider).selected, isNotNull);
           if (mode == WorkspaceNavigationMode.dualTabs) {
-            await tester.tap(find.byKey(const ValueKey('workspace-back')));
+            final chatBack = find.byTooltip('返回会话列表');
+            await tester.tap(
+              chatBack.evaluate().isNotEmpty
+                  ? chatBack
+                  : find.byKey(const ValueKey('workspace-back')),
+            );
           } else {
             await tester.binding.handlePopRoute();
           }
@@ -1113,7 +1118,8 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey('profile-message')));
         await tester.pumpAndSettle();
-        expect(find.text('我的消息'), findsWidgets);
+        expect(find.byType(MessagesScreen), findsOneWidget);
+        expect(find.byTooltip('聊天设置'), findsOneWidget);
         final inbox = ProviderScope.containerOf(
           tester.element(find.byType(MessagesScreen)),
         );
