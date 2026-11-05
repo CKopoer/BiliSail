@@ -71,6 +71,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   var _replyStorage = PageStorageBucket();
   double _topOffset = 0;
   String? _shownRoot;
+  bool _loadMoreScheduled = false;
   RequestCancellation? _linkCancellation;
   @override
   void initState() {
@@ -890,6 +891,42 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     onReplyFocus: _focus.requestFocus,
   );
 
+  void _scheduleLoadMore(BuildContext context) {
+    if (_loadMoreScheduled) return;
+    _loadMoreScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadMoreScheduled = false;
+      if (!mounted ||
+          !context.mounted ||
+          widget.composerOnly ||
+          widget.target.oid.isEmpty ||
+          !WorkspaceActivity.isActive(context)) {
+        return;
+      }
+      // Read the current branch after layout: a target/account/detail switch
+      // may have replaced the list since the notification was dispatched.
+      final state = ref.read(_provider);
+      final replies = state.openRoot != null;
+      if (state.busy ||
+          (replies ? state.replyLoading : state.loading) ||
+          (replies ? state.replyLoadFailed : state.loadFailed) ||
+          !(replies ? state.replyHasMore : state.hasMore) ||
+          (replies ? state.replyPage : state.page) == 0) {
+        return;
+      }
+      final scroll = replies ? _replyScroll : _topScroll;
+      if (!scroll.hasClients ||
+          !scroll.position.hasContentDimensions ||
+          scroll.position.extentAfter > 240) {
+        return;
+      }
+      final controller = ref.read(_provider.notifier);
+      unawaited(replies ? controller.loadReplies() : controller.load());
+    });
+    // Metrics can arrive after layout. Request one check, without polling.
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
   Widget _list() => Consumer(
     builder: (context, ref, _) {
       ref.watch(
@@ -900,6 +937,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
             state.openRoot == null ? state.sort : null,
             state.openRoot == null ? state.loading : state.replyLoading,
             state.openRoot == null ? state.hasMore : state.replyHasMore,
+            state.openRoot == null ? state.loadFailed : state.replyLoadFailed,
             state.message,
             state.openRoot == null ? state.totalCount : null,
           ),
@@ -907,9 +945,13 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       );
       final state = ref.read(_provider);
       final root = state.openRoot;
+      ref.listen(_provider.select((state) => state.busy), (previous, busy) {
+        if (previous == true && !busy) _scheduleLoadMore(context);
+      });
       final active = WorkspaceActivity.isActive(context);
       _topScroll.configure(context, active: active && root == null);
       _replyScroll.configure(context, active: active && root != null);
+      _scheduleLoadMore(context);
       final comments = root == null ? state.items : state.replyItems;
       final loading = root == null ? state.loading : state.replyLoading;
       final more = root == null ? state.hasMore : state.replyHasMore;
@@ -995,9 +1037,33 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       );
       // NestedScrollView creates positions with persistence enabled itself.
       // Bound reply storage to this one detail visit despite that default.
-      return root == null
-          ? list
-          : PageStorage(bucket: _replyStorage, child: list);
+      return NotificationListener<ScrollMetricsNotification>(
+        onNotification: (notification) {
+          if (notification.depth == 0 &&
+              notification.metrics.axis == Axis.vertical) {
+            _scheduleLoadMore(context);
+          }
+          return false;
+        },
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification.depth == 0 &&
+                notification.metrics.axis == Axis.vertical &&
+                switch (notification) {
+                  ScrollUpdateNotification(:final scrollDelta) =>
+                    (scrollDelta ?? 0) > 0,
+                  OverscrollNotification(:final overscroll) => overscroll > 0,
+                  _ => false,
+                }) {
+              _scheduleLoadMore(context);
+            }
+            return false;
+          },
+          child: root == null
+              ? list
+              : PageStorage(bucket: _replyStorage, child: list),
+        ),
+      );
     },
   );
 
@@ -1012,7 +1078,11 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
               ? null
               : () =>
                     root == null ? controller.load() : controller.loadReplies(),
-          child: Text(state.message == null ? '加载更多' : '重试加载'),
+          child: Text(
+            (root == null ? state.loadFailed : state.replyLoadFailed)
+                ? '重试加载'
+                : '加载更多',
+          ),
         ),
       );
     },

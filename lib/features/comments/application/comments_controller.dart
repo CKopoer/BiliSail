@@ -47,6 +47,7 @@ final class CommentsState {
     this.totalCount,
     this.hasMore = true,
     this.loading = false,
+    this.loadFailed = false,
     this.signedIn = false,
     this.accountScope = 'guest',
     this.sessionEpoch = 0,
@@ -57,6 +58,7 @@ final class CommentsState {
     this.replyPage = 0,
     this.replyHasMore = false,
     this.replyLoading = false,
+    this.replyLoadFailed = false,
     this.replyTarget,
     this.uncertain = const {},
   });
@@ -71,6 +73,7 @@ final class CommentsState {
   final String? nextCursor;
   final int? totalCount;
   final bool hasMore, loading, signedIn, busy, replyHasMore, replyLoading;
+  final bool loadFailed, replyLoadFailed;
   final String? message;
   final CommentEntry? openRoot, replyTarget;
   final Set<String> uncertain;
@@ -86,6 +89,7 @@ final class CommentsState {
     int? totalCount,
     bool? hasMore,
     bool? loading,
+    bool? loadFailed,
     bool? busy,
     String? message,
     CommentEntry? openRoot,
@@ -94,6 +98,7 @@ final class CommentsState {
     int? replyPage,
     bool? replyHasMore,
     bool? replyLoading,
+    bool? replyLoadFailed,
     CommentEntry? replyTarget,
     bool clearTarget = false,
     Set<String>? uncertain,
@@ -108,6 +113,7 @@ final class CommentsState {
     totalCount: totalCount ?? this.totalCount,
     hasMore: hasMore ?? this.hasMore,
     loading: loading ?? this.loading,
+    loadFailed: loadFailed ?? this.loadFailed,
     signedIn: signedIn,
     accountScope: accountScope,
     sessionEpoch: sessionEpoch,
@@ -118,6 +124,7 @@ final class CommentsState {
     replyPage: replyPage ?? this.replyPage,
     replyHasMore: replyHasMore ?? this.replyHasMore,
     replyLoading: replyLoading ?? this.replyLoading,
+    replyLoadFailed: replyLoadFailed ?? this.replyLoadFailed,
     replyTarget: clearTarget ? null : replyTarget ?? this.replyTarget,
     uncertain: uncertain ?? this.uncertain,
   );
@@ -252,6 +259,7 @@ class CommentsController extends Notifier<CommentsState> {
     state = state.copy(
       sort: selected,
       loading: true,
+      loadFailed: false,
       items: reset ? [] : null,
       page: reset ? 0 : null,
       clearCursor: reset,
@@ -261,6 +269,7 @@ class CommentsController extends Notifier<CommentsState> {
       replyPage: reset ? 0 : null,
       replyHasMore: reset ? false : null,
       replyLoading: reset ? false : null,
+      replyLoadFailed: reset ? false : null,
     );
     try {
       final p = await r.load(
@@ -290,7 +299,11 @@ class CommentsController extends Notifier<CommentsState> {
       );
     } catch (e) {
       if (_current(generation, scope, epoch)) {
-        state = state.copy(loading: false, message: _error(e));
+        state = state.copy(
+          loading: false,
+          loadFailed: true,
+          message: _error(e),
+        );
       }
     }
   }
@@ -305,6 +318,7 @@ class CommentsController extends Notifier<CommentsState> {
       replyPage: 0,
       replyHasMore: true,
       replyLoading: false,
+      replyLoadFailed: false,
       clearTarget: true,
     );
     await loadReplies();
@@ -320,6 +334,7 @@ class CommentsController extends Notifier<CommentsState> {
       replyPage: 0,
       replyHasMore: false,
       replyLoading: false,
+      replyLoadFailed: false,
     );
   }
 
@@ -335,7 +350,7 @@ class CommentsController extends Notifier<CommentsState> {
     final generation = _generation, replyGeneration = ++_replyGeneration;
     final r = _repository, scope = r.accountScope, epoch = r.sessionEpoch;
     final page = state.replyPage + 1;
-    state = state.copy(replyLoading: true);
+    state = state.copy(replyLoading: true, replyLoadFailed: false);
     try {
       final p = await r.replies(oid, root.id, page, _replies);
       if (!_current(generation, scope, epoch) ||
@@ -346,7 +361,10 @@ class CommentsController extends Notifier<CommentsState> {
       state = state.copy(
         replyItems: items,
         replyPage: page,
-        replyHasMore: p.hasMore && p.items.isNotEmpty && items.length < 500,
+        replyHasMore:
+            p.hasMore &&
+            items.length > state.replyItems.length &&
+            items.length < 500,
         replyLoading: false,
         uncertain: Set.unmodifiable(
           state.uncertain.where(
@@ -357,7 +375,11 @@ class CommentsController extends Notifier<CommentsState> {
     } catch (e) {
       if (_current(generation, scope, epoch) &&
           replyGeneration == _replyGeneration) {
-        state = state.copy(replyLoading: false, message: _error(e));
+        state = state.copy(
+          replyLoading: false,
+          replyLoadFailed: true,
+          message: _error(e),
+        );
       }
     }
   }

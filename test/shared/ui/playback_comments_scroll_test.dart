@@ -56,6 +56,24 @@ final _season = PgcSeason(
 
 void main() {
   for (final pgc in [false, true]) {
+    testWidgets(
+      '${pgc ? 'PGC' : 'video'} comments automatically paginate inside the nested player layout',
+      (tester) async {
+        final comments = _Comments(paginate: true);
+        final container = await _mount(tester, pgc: pgc, comments: comments);
+        expect(comments.pages, [1]);
+        await tester.drag(_list(), const Offset(0, -16000));
+        await tester.pumpAndSettle();
+        expect(comments.pages, [1, 2]);
+        expect(
+          container.read(commentsProviderFor(_target)).items,
+          hasLength(80),
+        );
+        expect(_height(tester), 390 * 9 / 16);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     for (final (dimensions, expanded) in [
       (const VideoDimensions(1080, 1920), 520.0),
       (const VideoDimensions(1080, 1080), 390.0),
@@ -200,6 +218,7 @@ Future<ProviderContainer> _mount(
   WidgetTester tester, {
   required bool pgc,
   VideoDimensions dimensions = const VideoDimensions(1080, 1920),
+  _Comments? comments,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(390, 800);
@@ -215,7 +234,9 @@ Future<ProviderContainer> _mount(
       overrides: [
         playbackSessionProvider.overrideWithValue(session),
         authControllerProvider.overrideWith(_Guest.new),
-        videoCommentsRepositoryProvider.overrideWithValue(_Comments()),
+        videoCommentsRepositoryProvider.overrideWithValue(
+          comments ?? _Comments(),
+        ),
         videoDetailProvider(_detail.summary.id)
             .overrideWith((_) async => _detail),
         relatedVideosProvider(_detail.summary.id).overrideWith((_) async => []),
@@ -260,6 +281,9 @@ class _Guest extends AuthController {
 }
 
 class _Comments extends Fake implements CommentsRepository {
+  _Comments({this.paginate = false});
+  final bool paginate;
+  final pages = <int>[];
   @override
   String get accountScope => 'guest';
   @override
@@ -271,18 +295,21 @@ class _Comments extends Fake implements CommentsRepository {
     CommentSort sort,
     RequestCancellation cancellation, {
     String? cursor,
-  }) async => CommentPage(
-    items: List.generate(
-      40,
-      (index) => CommentEntry(
-        id: '$index',
-        author: '用户 $index',
-        message: '评论内容 $index',
-        replyCount: 40,
+  }) async {
+    pages.add(page);
+    return CommentPage(
+      items: List.generate(
+        40,
+        (index) => CommentEntry(
+          id: '$page-$index',
+          author: '用户 $index',
+          message: '评论内容 $index',
+          replyCount: 40,
+        ),
       ),
-    ),
-    hasMore: false,
-  );
+      hasMore: paginate && page == 1,
+    );
+  }
 
   @override
   Future<CommentPage> replies(

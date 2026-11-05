@@ -126,7 +126,7 @@
 | [云端观看历史](validation/cloud-watch-history.md) | 当前账号云列表、游标分页、统计补齐与观看日期、离线验证边界 |
 | [界面控件与设置](validation/ui-controls.md) | 播放配置、头像、动态/直播卡、空降助手和账户交互验证 |
 | [工作区弹窗一致性](validation/workspace-dialogs.md) | 双/多标签统一窗口内弹层、双 View 路由归属及回归验证 |
-| [播放页与评论交互](validation/video-comments.md) | 官方桌面风格双标签、折叠合集、评论与楼中楼验证 |
+| [播放页与评论交互](validation/video-comments.md) | 官方桌面风格双标签、折叠合集、评论与楼中楼触底自动加载及验证 |
 | [播放页信息区滑动](validation/playback-info-swipe.md) | 视频／影视简介评论、直播聊天／SC 共用分页、状态保留与手势验证 |
 | [评论图片与作者装扮](validation/comment-images-decorations.md) | 共用动态原图预览、右侧装扮图片与粉丝编号、验证边界 |
 | [图片查看器保存、复制与长图](validation/image-viewer-export-long-images.md) | 三端默认图片目录、图片剪贴板、长图限制原因与有界解码预览 |

@@ -1360,7 +1360,7 @@ void main() {
       repo.items = [
         const CommentEntry(id: '10', author: '修改后的作者', message: '服务端编辑后的正文'),
       ];
-      await controller.load();
+      await controller.load(refresh: true);
       await tester.pumpAndSettle();
       expect(find.text('服务端编辑后的正文'), findsOneWidget);
       expect(
