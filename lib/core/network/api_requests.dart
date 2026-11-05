@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/app_failure.dart';
 import '../../domain/request_cancellation.dart';
+import '../logging/core_diagnostic_log.dart';
 
 /// Read the current account-session generation without exposing ApiRequests.
 final sessionEpochProvider = Provider<int Function()>(
@@ -12,6 +13,8 @@ final sessionEpochProvider = Provider<int Function()>(
 
 /// Process-owned cancellation scope. Every account transition invalidates reads.
 class ApiRequests implements ApiSessionProvider {
+  ApiRequests({this.diagnostics});
+  final CoreDiagnosticLog? diagnostics;
   int _epoch = 0;
   final Set<ApiCancellation> _active = {};
   final Set<RequestCancellation> _lifetimes = {};
@@ -26,6 +29,10 @@ class ApiRequests implements ApiSessionProvider {
   int get sessionEpoch => _epoch;
 
   void advanceSession() {
+    diagnostics?.record(
+      CoreDiagnosticEvent.sessionChanged,
+      active: _active.length,
+    );
     _epoch++;
     for (final lifetime in _lifetimes.toList()) {
       lifetime.cancel();
@@ -45,6 +52,9 @@ class ApiRequests implements ApiSessionProvider {
     final signal = ApiCancellation();
     cancellation?.onCancel(signal.cancel);
     _active.add(signal);
+    final watch = Stopwatch()..start();
+    var outcome = CoreDiagnosticOutcome.success;
+    Object? failure;
     try {
       if (signal.isCancelled) {
         throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
@@ -61,12 +71,32 @@ class ApiRequests implements ApiSessionProvider {
       }
       return result;
     } on ApiFailure catch (error) {
+      failure = mapApiFailure(error);
+      outcome =
+          error.category == ApiFailureCategory.cancelled ||
+              signal.isCancelled ||
+              epoch != _epoch
+          ? CoreDiagnosticOutcome.cancelled
+          : CoreDiagnosticOutcome.failed;
       if (signal.isCancelled || epoch != _epoch) {
         throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
       }
       throw mapApiFailure(error);
+    } catch (error) {
+      failure = error;
+      outcome = error is AppFailure && error.kind == AppFailureKind.cancelled
+          ? CoreDiagnosticOutcome.cancelled
+          : CoreDiagnosticOutcome.failed;
+      rethrow;
     } finally {
       _active.remove(signal);
+      diagnostics?.record(
+        CoreDiagnosticEvent.requestFinished,
+        error: failure,
+        outcome: outcome,
+        elapsed: watch.elapsed,
+        active: _active.length,
+      );
     }
   }
 }

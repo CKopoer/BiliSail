@@ -9,6 +9,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [整体架构](architecture.md) | 产品范围、技术栈、模块依赖、目录、状态管理、存储和平台适配 |
+| [设置页日志压缩导出](validation/log-export-2026-11-06.md) | 核心与播放日志、脱敏和容量限制、各平台默认保存位置及验证边界 |
 | [项目宣传视频脚本](marketing/promotional-video-script.md) | 2026-10-30 第三版，按使用场景介绍发现、导航、播放、听视频、互动与离线，含分镜、素材和导出记录 |
 | [推荐流设置](recommendation-settings-design.md) | PiliPlus 11 项对应、查询级过滤与刷新保留、性能约束及验证 |
 | [App 推荐接入](app-recommendation-design.md) | Web/App 来源、独立设备标识、扫码授权、安全凭据及服务端反馈 |

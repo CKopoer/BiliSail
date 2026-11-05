@@ -15,6 +15,10 @@ import '../core/network/api_requests.dart';
 import '../domain/media_cdn.dart';
 import '../domain/audio_quality.dart';
 import '../core/logging/playback_diagnostic_log.dart';
+import '../core/logging/core_diagnostic_log.dart';
+import '../core/platform/log_archive_storage.dart';
+import '../features/settings/application/log_export_controller.dart';
+import '../features/settings/data/diagnostic_log_export_repository.dart';
 import '../core/platform/window_service.dart';
 import '../core/platform/app_icon_service.dart';
 import '../core/platform/audio_service_media_controls.dart';
@@ -130,6 +134,7 @@ class AppDependencies {
     this.window,
     this.sponsorTransport,
     this.playbackLog,
+    this.coreLog,
     this.images,
     this.updates,
     this.cardPreviews,
@@ -137,6 +142,7 @@ class AppDependencies {
     this.downloads,
     this.downloadSources,
     this._downloadAccountSubscription,
+    this._downloadDiagnosticSubscription,
     this._appRecommendationCredentials,
   );
 
@@ -160,6 +166,8 @@ class AppDependencies {
   final playbackWindow = DesktopPlaybackWindowController();
   final DioApiTransport sponsorTransport;
   final PlaybackDiagnosticLog? playbackLog;
+  final CoreDiagnosticLog? coreLog;
+  final StreamSubscription<Object?> _downloadDiagnosticSubscription;
   final AppImageCache images;
   final GitHubUpdateRepository updates;
   final VideoCardPreviewPlayback cardPreviews;
@@ -169,19 +177,66 @@ class AppDependencies {
   final StreamSubscription<Object?> _downloadAccountSubscription;
   final files = const FileAccessService();
   Future<void>? _closing;
+  late final logExports = DiagnosticLogExportRepository(
+    logDirectory: () async =>
+        coreLog?.directory ??
+        playbackLog?.directory ??
+        Directory(
+          path.join((await getApplicationSupportDirectory()).path, 'logs'),
+        ),
+    flush: () async {
+      await coreLog?.flush();
+      await playbackLog?.flush();
+    },
+    metadata: () async {
+      String? version;
+      try {
+        version = (await loadInstalledAppVersion().timeout(
+          const Duration(seconds: 3),
+        )).label;
+      } on Exception {
+        /* Still export available logs. */
+      }
+      return {
+        'appVersion': version,
+        'platform': Platform.operatingSystem,
+        'osVersion': Platform.operatingSystemVersion,
+        'dartVersion': Platform.version,
+        'coreLoggingAvailable': coreLog != null,
+        'playbackLoggingAvailable': playbackLog != null,
+        ...await const LogArchiveStorage().deviceInfo(),
+      };
+    },
+    save: (bytes, name) async {
+      try {
+        final location = await const LogArchiveStorage().save(bytes, name);
+        coreLog?.record(CoreDiagnosticEvent.logExported);
+        return location;
+      } catch (error, stack) {
+        coreLog?.record(
+          CoreDiagnosticEvent.logExportFailed,
+          error: error,
+          stack: stack,
+        );
+        rethrow;
+      }
+    },
+  );
 
   static Future<AppDependencies> create({
     CredentialStore? credentials,
     CredentialStore? appRecommendationCredentials,
     AppDatabase? databaseOverride,
     WindowService? windowOverride,
+    CoreDiagnosticLog? coreLog,
   }) async {
     initializePlayerBackend();
     final window = windowOverride ?? WindowService();
     await window.initialize();
     final database = databaseOverride ?? await AppDatabase.open();
     await database.readSetting('schema_probe');
-    final requests = ApiRequests();
+    coreLog ??= await CoreDiagnosticLog.create();
+    final requests = ApiRequests(diagnostics: coreLog);
     final images = AppImageCache(
       ImageByteCache(
         enabled: false,
@@ -243,6 +298,22 @@ class AppDependencies {
     final cardPreviews = VideoCardPreviewPlayback(
       createEngine: () => MediaKitEngine(onDiagnostic: playbackLog?.record),
     );
+    String? lastDownloadSummary;
+    final downloadDiagnosticSubscription = downloads.changes.listen((state) {
+      final active = state.tasks.where((task) => task.active).length;
+      final failed = state.tasks.where((task) => task.failure != null).length;
+      final queued = state.tasks.length;
+      final summary = '$active:$failed:$queued:${state.failure?.kind.name}';
+      if (summary == lastDownloadSummary) return;
+      lastDownloadSummary = summary;
+      coreLog?.record(
+        CoreDiagnosticEvent.downloadState,
+        active: active,
+        failed: failed,
+        queued: queued,
+        error: state.failure,
+      );
+    });
     final playbackRateMemory = PlaybackRateMemory();
     final playbackVolumeMemory = PlaybackVolumeMemory(
       savedVolume: await settings.loadRememberedVolume(),
@@ -350,6 +421,7 @@ class AppDependencies {
       window,
       sponsorTransport,
       playbackLog,
+      coreLog,
       images,
       GitHubUpdateRepository(versionLoader: loadInstalledAppVersion),
       cardPreviews,
@@ -357,6 +429,7 @@ class AppDependencies {
       downloads,
       downloadSources,
       downloadAccountSubscription,
+      downloadDiagnosticSubscription,
       appRecommendationCredentials ??
           SystemCredentialStore(keyPrefix: 'bilisail.app_recommendation.v1'),
     );
@@ -371,6 +444,7 @@ class AppDependencies {
     );
     return ProviderScope(
       overrides: [
+        logExportRepositoryProvider.overrideWithValue(logExports),
         commentVideoLinkRepositoryProvider.overrideWithValue(
           PublicCommentVideoLinkRepository(api, requests),
         ),
@@ -635,9 +709,11 @@ class AppDependencies {
   Future<void> close() => _closing ??= _close();
 
   Future<void> _close() async {
+    coreLog?.record(CoreDiagnosticEvent.shutdown);
     updates.close();
     try {
       await _downloadAccountSubscription.cancel();
+      await _downloadDiagnosticSubscription.cancel();
       await downloads.close();
       await cardPreviews.close();
       // Flush the final history observation while its account epoch is valid.
@@ -669,6 +745,7 @@ class AppDependencies {
             } finally {
               try {
                 await playbackLog?.close();
+                await coreLog?.close();
                 await images.close();
               } finally {
                 await window.dispose();

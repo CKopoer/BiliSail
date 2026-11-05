@@ -12,6 +12,7 @@ import 'core/presentation/bili_widgets_binding.dart';
 import 'core/presentation/window_input_focus.dart';
 import 'core/platform/macos_application_window.dart';
 import 'core/storage/app_database.dart';
+import 'core/logging/core_diagnostic_log.dart';
 
 Future<void> main(List<String> arguments) async {
   if (Platform.isMacOS && arguments.contains(ReleaseSmokeRequest.flag)) {
@@ -32,6 +33,28 @@ Future<void> main(List<String> arguments) async {
   WindowInputFocus.instance.initialize(
     nativeSnapshotTimeout: smoke == null ? null : releaseSmokeFocusTimeout,
   );
+  final coreLog = smoke == null ? await CoreDiagnosticLog.create() : null;
+  coreLog?.record(CoreDiagnosticEvent.startup);
+  if (smoke == null) {
+    final previousFrameworkError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      coreLog?.record(
+        CoreDiagnosticEvent.frameworkError,
+        error: details.exception,
+        stack: details.stack,
+      );
+      previousFrameworkError?.call(details);
+    };
+    final previousAsyncError = PlatformDispatcher.instance.onError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      coreLog?.record(
+        CoreDiagnosticEvent.unhandledError,
+        error: error,
+        stack: stack,
+      );
+      return previousAsyncError?.call(error, stack) ?? false;
+    };
+  }
   if (smoke != null) {
     // Do not log exception details, which can include plugin or network data.
     FlutterError.onError = (_) {
@@ -89,6 +112,7 @@ Future<void> main(List<String> arguments) async {
     smokeStage('window-ready');
     smokeStage('dependencies');
     final dependencies = await AppDependencies.create(
+      coreLog: coreLog,
       // Smoke launches cannot restore real accounts or modify the user's DB.
       credentials: smoke?.bootstrapCredentials(),
       appRecommendationCredentials: smoke?.recommendationCredentials(),
@@ -100,6 +124,7 @@ Future<void> main(List<String> arguments) async {
     final app = dependencies.scope(BiliApp(dependencies: dependencies));
     smokeStage('dependencies-ready');
     present(app);
+    coreLog?.record(CoreDiagnosticEvent.ready);
     if (smoke != null) {
       final mainWindow = applicationWindow;
       if (mainWindow == null) {
@@ -127,7 +152,13 @@ Future<void> main(List<String> arguments) async {
       await stdout.flush();
       exit(0);
     }
-  } catch (error) {
+  } catch (error, stack) {
+    coreLog?.record(
+      CoreDiagnosticEvent.bootstrapFailure,
+      error: error,
+      stack: stack,
+    );
+    await coreLog?.flush();
     if (smoke != null) {
       stderr.writeln(releaseSmokeErrorMarker(error));
       stderr.writeln('BILISAIL_RELEASE_SMOKE_FAILED:${smoke.phase}');

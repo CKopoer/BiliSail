@@ -9,6 +9,7 @@ import io.flutter.util.ViewUtils
 class MainActivity : AudioServiceActivity() {
     private var downloadStorage: DownloadStorageHandler? = null
     private var imageExport: ImageExportHandler? = null
+    private var logExport: LogExportHandler? = null
     private var windowBrightness: WindowBrightnessHandler? = null
     private var mobileWindow: MobileWindowHandler? = null
     private var appIcon: AppIconHandler? = null
@@ -19,6 +20,7 @@ class MainActivity : AudioServiceActivity() {
         appIcon = AppIconHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         downloadStorage = DownloadStorageHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         imageExport = ImageExportHandler(this, flutterEngine.dartExecutor.binaryMessenger)
+        logExport = LogExportHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         windowBrightness = WindowBrightnessHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         mobileWindow = MobileWindowHandler(this, flutterEngine.dartExecutor.binaryMessenger)
     }
@@ -59,6 +61,7 @@ class MainActivity : AudioServiceActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         imageExport?.onPermissionResult(requestCode, grantResults)
+        logExport?.onPermissionResult(requestCode, grantResults)
         downloadStorage?.onPermissionResult(requestCode)
     }
 
@@ -73,6 +76,8 @@ class MainActivity : AudioServiceActivity() {
         downloadStorage = null
         imageExport?.close()
         imageExport = null
+        logExport?.close()
+        logExport = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

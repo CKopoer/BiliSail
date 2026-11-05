@@ -23,6 +23,7 @@ import 'shortcut_settings_section.dart';
 import 'app_icon_settings.dart';
 import 'recommendation_settings_section.dart';
 import 'cdn_settings_tile.dart';
+import 'log_export_button.dart';
 
 const _usageNotice = <Widget>[
   Text('本应用是哔哩哔哩第三方客户端，视频、影视、直播及相关内容均来自哔哩哔哩，与官方无隶属关系。'),
@@ -133,6 +134,7 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: const Icon(Icons.restore),
                 label: const Text('恢复默认设置'),
               ),
+              const LogExportButton(),
             ],
           ),
         ),
