@@ -216,7 +216,9 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
           children: [
             action(
               Icon(
-                state.interaction.liked ? Icons.thumb_up_alt : BiliIcons.like,
+                state.interaction.liked
+                    ? Icons.thumb_up_alt
+                    : Icons.thumb_up_alt_outlined,
               ),
               state.interaction.liked
                   ? '已点赞'
