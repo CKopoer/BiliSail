@@ -324,7 +324,8 @@ final class HomeClient {
         : channel == 'guochuang'
         ? 4
         : switch (section) {
-            '电视剧' => 2,
+            '电影' => 2,
+            '电视剧' => 5,
             '纪录片' => 3,
             '综艺' => 7,
             _ => 5,

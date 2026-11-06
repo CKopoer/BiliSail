@@ -335,6 +335,54 @@ void main() {
     }
     expect(transport.requests, isEmpty);
   });
+  group('cinema section content types', () {
+    for (final (section, seasonType) in const [
+      ('推荐', '5'),
+      ('电影', '2'),
+      ('电视剧', '5'),
+      ('纪录片', '3'),
+      ('综艺', '7'),
+    ]) {
+      test('$section uses season_type=$seasonType across pages', () async {
+        final transport = Transport(
+          (uri) => {
+            'code': 0,
+            'data': {
+              'list': [
+                {'season_id': 12, 'title': '影视条目'},
+              ],
+              'has_next': uri.queryParameters['page'] == '1' ? 1 : 0,
+            },
+          },
+        );
+        final api = BiliApiClient(transport: transport);
+        addTearDown(api.close);
+        final client = HomeClient(api);
+        for (final pageNumber in [1, 2]) {
+          final result = await client.load(
+            channel: 'cinema',
+            section: section,
+            page: pageNumber,
+          );
+          final uri = transport.requests.last;
+          expect(uri.host, 'api.bilibili.com');
+          expect(uri.path, '/pgc/season/index/result');
+          expect(uri.queryParameters, {
+            'season_type': seasonType,
+            'page': '$pageNumber',
+            'pagesize': '20',
+            'type': '1',
+            'order': section == '推荐' ? '2' : '0',
+            'sort': '0',
+          });
+          expect(result.items.single.kind, ApiHomeEntryKind.season);
+          expect(result.items.single.id, '12');
+          expect(result.hasMore, pageNumber == 1);
+        }
+        expect(transport.requests, hasLength(2));
+      });
+    }
+  });
   test('PGC index uses content types and timeline result arrays', () async {
     final transport = Transport(
       (uri) => uri.path.endsWith('timeline')

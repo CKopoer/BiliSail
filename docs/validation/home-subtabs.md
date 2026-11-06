@@ -8,6 +8,14 @@
 
 直播分区列表后续固定改用已验证的 Web `/room/v3/Area/getRoomList`，按 `count` 分页；推荐首页仍使用 `index/getList`。当前端点与主/子分区在线证据见 [影视与直播弹幕修复](pgc-live-danmaku.md#分区接口)，下表保留首次接入结果。
 
+## 2026-11-06：放映厅电影与电视剧类型修正
+
+放映厅“电影”此前落入默认 `season_type=5`，而“电视剧”显式发送 `2`，导致两类内容互换。[HomeClient](../../packages/bili_api/lib/src/clients/home_client.dart) 现将电影显式映射为 `2`、电视剧映射为 `5`；推荐继续使用 `5`，纪录片 `3`、综艺 `7`，排序及分页参数保持原有行为。下表同步修正类型顺序。
+
+[协议回归](../../packages/bili_api/test/home_client_test.dart) 新增五个分类的首屏及第二页检查，覆盖类型、排序、分页参数、影视条目解析及末页判定。修复前电影和电视剧两项均复现失败，修复后 HomeClient 28 项测试及 `bili_api` 静态分析通过。
+
+`tool/check.ps1 -SkipPub` 通过，日志 `build/cinema-section-fix-check.log`：根应用 4502、bili_api 677、bili_player 170、bili_danmaku 161、bili_mux 5，共 5515 项通过；格式、静态分析及打包边界检查通过。另有 13 项 Windows 符号链接测试因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为通过。本文 17 个本地链接及 `git diff --check` 通过。未构建、在线验证或进行实机验收；未发现可连接的 Flutter 调试应用，热重载未执行。
+
 ## 端点登记
 
 全部为 Web profile、HTTPS GET、JSON，签名为无（本轮不假定 App token）。公共端点允许游客，私有端点使用当前 Web Cookie。取消、session epoch、总 deadline、只读最多额外 2 次网络/5xx 重试继承 `BiliApiClient`/`ApiRequests`；风控/鉴权/权限/协议错误不自动重试。无备用降级端点。
@@ -19,7 +27,7 @@
 | 自建收藏夹 | api.bilibili.com `/x/v3/fav/folder/created/list` | Cookie | up_mid，pn，ps=20，has_more | 未真实登录验证 |
 | 订阅收藏夹 | api.bilibili.com `/x/v3/fav/folder/collected/list` | Cookie | up_mid，pn，ps=20，has_more | 未真实登录验证 |
 | 收藏夹资源 | api.bilibili.com `/x/v3/fav/resource/list` | Cookie/收藏夹权限 | media_id，pn，ps=20，platform=web，has_more | 未真实登录验证，离线资源/失效卡测试 |
-| 番剧/国创推荐与索引；电影/电视剧/纪录片/综艺 | api.bilibili.com `/pgc/season/index/result` | 游客 | season_type=1/4/5/2/3/7，page，pagesize=20，type=1，推荐 order=2 播放量排序，索引 order=0；has_next | 游客番剧索引 code=0，真实 season_id/title/cover 字段核对 |
+| 番剧/国创推荐与索引；电影/电视剧/纪录片/综艺 | api.bilibili.com `/pgc/season/index/result` | 游客 | season_type=1/4/2/5/3/7，page，pagesize=20，type=1，推荐 order=2 播放量排序，索引 order=0；has_next | 游客番剧索引 code=0，真实 season_id/title/cover 字段核对 |
 | 番剧/国创时间表 | api.bilibili.com `/pgc/web/timeline` | 游客 | types=1/4，before=6，after=6；单次日期列表展开真实 episodes | 游客番剧时间表 code=0；result 为数组，核对 season_id/episode_id/pub_time/pub_index |
 | 我的追番 | api.bilibili.com `/x/space/bangumi/follow/list` | Cookie | vmid，type=1，pn，ps=20；total | 未真实登录验证；国创入口显示账号追番列表，不承诺服务器按国创过滤 |
 | 推荐直播/分区直播 | api.live.bilibili.com `/xlive/web-interface/v1/second/getList` | 游客，可能风控 | parent_area_id，area_id=0，platform=web，sort_type=online，page；has_more | 本机游客返回 -352 风控；界面显示可重试错误，不伪装空成功 |
