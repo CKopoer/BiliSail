@@ -2,6 +2,16 @@
 
 日期：2026-10-25；导航栏模式启停更新于 2026-10-27。
 
+## 播放页侧滑返回被状态栏通知中断（2026-11-07）
+
+- 现象：播放页左上角返回及普通系统返回键可用，系统侧滑却停留在播放页。Xiaomi 13（Android 16、手势导航）开发测试包复现：预测预览切入首页时收到窗口指标通知，原实现无条件取消已接管的手势，后续确认事件因不再处于跟踪状态被忽略。
+- 临时真机诊断确认，播放页黑色状态栏与首页状态栏样式切换期间，Android 会重新发布**值未改变**的窗口指标。修复后同样收到通知，但快照比较为未变化，手势确认正常返回首页；诊断输出未保留在代码中。
+- [共享手势区域](../../lib/core/presentation/predictive_back_region.dart)在手势开始时保存窗口物理尺寸、像素密度、padding、viewPadding 与 viewInsets 的值快照，仅在实际几何变化时取消。保留播放页黑色状态栏及首页样式；旋转、分屏、缩放、安全区和键盘变化仍使旧手势失效，不将迟到确认转交新页面。
+- [组件回归](../../test/app/predictive_back_test.dart)新增 24 组重复指标用例，覆盖单／双／多标签、视频／影视／直播／离线播放，以及拖动取消和确认动画两个阶段；旧实现全部失败，修复后通过。另增加真实尺寸、密度、padding 和 viewPadding 变化的取消验证，既有键盘／路由／模态隔离继续覆盖。
+- 定向预测返回与移动状态栏回归共 111 项通过（`build/android-back-targeted.log`）；Android 开发 Debug 构建及热重载通过。Android arm64 开发 Release 构建通过（`build/android-back-release-build.log`），APK 为 `build/development/android-arm64/BiliSail-test-arm64-release.apk`，确认测试包身份、1.2.7+0 版本、原开发签名及不可调试后覆盖安装，未清除数据或修改正式包。
+- `tool/check.ps1 -SkipPub` 通过（`build/android-back-check.log`）：格式、静态分析和打包边界通过，根应用 4545、bili_api 677、bili_player 181、bili_danmaku 161、bili_mux 5，共 5569 项通过。根应用 13 项按既有条件跳过；另有 10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计原生集成通过。本页相对链接及 `git diff --check` 通过。
+- 同一台 Xiaomi 13 使用最终 Release 产物，左右边缘各两次进入视频后侧滑返回首页均通过（`build/android-back-device-results.json`）。本轮未测性能，未对其他 Android 设备、影视／直播／离线实际播放或其他平台作原生验收；这些路由的共享返回行为由组件回归覆盖。
+
 ## 行为与边界
 
 - Android Manifest 显式开启 `android:enableOnBackInvokedCallback`。Android 14 及以上、工作区采用底栏布局时，通过 Flutter 的系统返回手势事件驱动工作区的两页横向平移：当前页沿手势方向移出，上一页从另一侧移入，两页边缘相接并保持原尺寸与垂直位置；左右边缘均支持，取消手势回到原位。侧栏布局停用工作区预测动画，确认手势直接执行普通返回。导航栏默认自动，按安全区内可用宽度 600 逻辑像素断点选择；手动固定底栏／侧边栏后，动画跟随所选布局。旧系统、实体返回键及三键导航沿用现有返回入口。

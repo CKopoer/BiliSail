@@ -604,6 +604,100 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   }
+
+  for (final mode in WorkspaceNavigationMode.values) {
+    for (final path in ['/video/A', '/pgc/1', '/live/1', '/offline/1']) {
+      for (final duringCompletion in [false, true]) {
+        testWidgets('unchanged window metrics preserve $path Back in $mode '
+            'duringCompletion=$duringCompletion', (tester) async {
+          tester.view.padding = const FakeViewPadding(top: 24);
+          tester.view.viewPadding = const FakeViewPadding(top: 24);
+          addTearDown(tester.view.resetPadding);
+          addTearDown(tester.view.resetViewPadding);
+          final router = _router(mode: mode);
+          addTearDown(router.dispose);
+          await tester.pumpWidget(InputTestApp.router(routerConfig: router));
+          await tester.pumpAndSettle();
+          final home = tester.element(find.text('page /'));
+          router.go(path);
+          await tester.pumpAndSettle();
+          final page = find.text('page $path');
+          final element = tester.element(page);
+          expect(tester.getTopLeft(page).dy, greaterThanOrEqualTo(24));
+          final edge = duringCompletion ? SwipeEdge.right : SwipeEdge.left;
+          expect(
+            await systemBackGesture(tester, 'startBackGesture', edge: edge),
+            isTrue,
+          );
+          await systemBackGesture(
+            tester,
+            'updateBackGestureProgress',
+            progress: 0.5,
+            edge: edge,
+          );
+          await tester.pump();
+          final previewBounds = tester.getRect(page);
+          if (duringCompletion) {
+            await systemBackGesture(tester, 'commitBackGesture');
+            await tester.pump(const Duration(milliseconds: 40));
+          }
+          // Android can re-publish identical metrics after applying the
+          // different system bar styles of the player and the previewed home.
+          tester.binding.handleMetricsChanged();
+          await tester.pump();
+          if (!duringCompletion) {
+            expect(tester.getRect(page), previewBounds);
+            await systemBackGesture(tester, 'cancelBackGesture');
+            await tester.pumpAndSettle();
+            expect(router.routeInformationProvider.value.uri.path, path);
+            expect(tester.element(page), same(element));
+            await systemBackGesture(tester, 'startBackGesture', edge: edge);
+            await tester.pump();
+            tester.binding.handleMetricsChanged();
+            await systemBackGesture(tester, 'commitBackGesture');
+          }
+          await tester.pumpAndSettle();
+          expect(router.routeInformationProvider.value.uri.path, '/');
+          expect(tester.element(find.text('page /')), same(home));
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox.shrink());
+        }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+      }
+    }
+  }
+
+  for (final metric in ['viewport', 'density', 'padding', 'viewPadding']) {
+    testWidgets('changed $metric invalidates a playback Back gesture', (
+      tester,
+    ) async {
+      final router = _router(mode: WorkspaceNavigationMode.singlePage);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(InputTestApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      router.go('/video/A');
+      await tester.pumpAndSettle();
+      expect(await systemBackGesture(tester, 'startBackGesture'), isTrue);
+      await tester.pump();
+      switch (metric) {
+        case 'viewport':
+          tester.view.physicalSize = const Size(390, 800);
+        case 'density':
+          tester.view.devicePixelRatio = 1.25;
+        case 'padding':
+          tester.view.padding = const FakeViewPadding(top: 24);
+          addTearDown(tester.view.resetPadding);
+        case 'viewPadding':
+          tester.view.viewPadding = const FakeViewPadding(top: 24);
+          addTearDown(tester.view.resetViewPadding);
+      }
+      await tester.pumpAndSettle();
+      await systemBackGesture(tester, 'commitBackGesture');
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, '/video/A');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+  }
   testWidgets('reduced animation keeps geometry and commits Back', (
     tester,
   ) async {
@@ -673,6 +767,9 @@ GoRouter _router({
           '/history',
           '/user/:mid',
           '/video/:bvid',
+          '/pgc/:id',
+          '/live/:id',
+          '/offline/:id',
         ])
           GoRoute(path: path, builder: (_, _) => const SizedBox.shrink()),
       ],

@@ -10,6 +10,14 @@ typedef PredictiveBackRegionBuilder = Widget Function(
   bool previewing,
 );
 
+typedef _BackGestureMetrics = ({
+  Size physicalSize,
+  double devicePixelRatio,
+  EdgeInsets padding,
+  EdgeInsets viewPadding,
+  EdgeInsets viewInsets,
+});
+
 /// Drives retained pages from Android's system gesture without popping a route.
 class PredictiveBackRegion extends StatefulWidget {
   const PredictiveBackRegion({
@@ -43,7 +51,20 @@ class _PredictiveBackRegionState extends State<PredictiveBackRegion>
   bool _tracking = false;
   bool _committing = false;
   Object? _expectedIdentity;
+  _BackGestureMetrics? _gestureMetrics;
   int _generation = 0;
+
+  _BackGestureMetrics get _windowMetrics {
+    final view = View.of(context);
+    // Compare physical inset values rather than ViewPadding object identity.
+    return (
+      physicalSize: view.physicalSize,
+      devicePixelRatio: view.devicePixelRatio,
+      padding: EdgeInsets.fromViewPadding(view.padding, 1),
+      viewPadding: EdgeInsets.fromViewPadding(view.viewPadding, 1),
+      viewInsets: EdgeInsets.fromViewPadding(view.viewInsets, 1),
+    );
+  }
 
   bool get _routeAvailable =>
       Theme.of(context).platform == TargetPlatform.android &&
@@ -77,7 +98,9 @@ class _PredictiveBackRegionState extends State<PredictiveBackRegion>
 
   @override
   void didChangeMetrics() {
-    if (_previewing) setState(_reset);
+    // Applying the previewed page's system bar style can re-publish identical
+    // metrics on Android. Cancel only when the gesture's geometry has changed.
+    if (_previewing && _gestureMetrics != _windowMetrics) setState(_reset);
   }
 
   @override
@@ -91,6 +114,7 @@ class _PredictiveBackRegionState extends State<PredictiveBackRegion>
     _tracking = _previewing = false;
     _committing = false;
     _expectedIdentity = null;
+    _gestureMetrics = null;
     _progress.stop();
     _progress.value = 0;
   }
@@ -104,6 +128,7 @@ class _PredictiveBackRegionState extends State<PredictiveBackRegion>
       _tracking = _previewing = true;
       _edge = backEvent.swipeEdge;
       _expectedIdentity = widget.destinationIdentity;
+      _gestureMetrics = _windowMetrics;
       _progress.value = backEvent.progress;
     });
     return true;
