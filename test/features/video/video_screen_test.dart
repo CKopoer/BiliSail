@@ -22,6 +22,7 @@ import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/video/domain/video_actions_repository.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/domain/playback_mode.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/application/video_author_controller.dart';
 import 'package:bilisail/features/video/domain/video_author_repository.dart';
@@ -2733,6 +2734,10 @@ final class _ProfilePagingSession extends Fake
       () => 0;
   @override
   int get sourceGeneration => 1;
+  @override
+  PlaybackMode get playbackMode => PlaybackMode.continuous;
+  @override
+  int get playbackModeRevision => 0;
   @override
   final snapshots = ValueNotifier(
     const PlaybackSnapshot(phase: PlaybackPhase.ended, generation: 1),
