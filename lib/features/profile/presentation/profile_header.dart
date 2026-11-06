@@ -294,7 +294,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                       child: Tooltip(
                         message: '查看头像',
                         child: Material(
-                          color: scheme.surfaceContainerLow,
+                          type: MaterialType.transparency,
                           shape: const CircleBorder(),
                           child: Padding(
                             padding: const EdgeInsets.all(4),
