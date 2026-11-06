@@ -1,4 +1,21 @@
 import 'player_contract.dart';
+import 'native_playback_diagnostics.dart';
+import 'flutter_playback_diagnostics.dart';
+
+export 'native_playback_diagnostics.dart' show NativePlaybackSample;
+export 'flutter_playback_diagnostics.dart' show PlayerFrameSample;
+
+enum PlayerDiagnosticMarker { temporaryRateBegin, temporaryRateEnd }
+
+enum PlayerDiagnosticCommand { play, pause, seek, volume, audioGain }
+
+/// Optional instrumentation port; playback remains independent of logging.
+abstract interface class PlaybackDiagnosticControl {
+  void markPlaybackDiagnostic(
+    PlayerDiagnosticMarker marker, {
+    double? targetRate,
+  });
+}
 
 /// Sanitized read-only evidence from the native decoder.
 /// Codec fields may be null when the backend has not reported a selected track.
@@ -56,6 +73,15 @@ enum PlayerDiagnosticKind {
   nativeError,
   recovered,
   failed,
+  performanceSample,
+  stateChanged,
+  rateRequested,
+  rateApplied,
+  temporaryRateBegin,
+  temporaryRateEnd,
+  stopped,
+  commandRequested,
+  commandApplied,
 }
 
 enum NativeErrorCause {
@@ -69,6 +95,9 @@ enum NativeErrorCause {
   inputOutput,
   openFailed,
   unsupportedProperty,
+  synchronization,
+  slowPlayback,
+  audioUnderrun,
   unknown,
 }
 
@@ -113,6 +142,11 @@ final class NativeErrorSummary {
     final status = match == null ? null : int.tryParse(match.group(1) ?? '');
     final cause = switch (value) {
       _ when status != null => NativeErrorCause.http,
+      _ when value.contains('desynchron') || value.contains('a/v desync') =>
+        NativeErrorCause.synchronization,
+      _ when value.contains('too slow') || value.contains('late frame') =>
+        NativeErrorCause.slowPlayback,
+      _ when value.contains('underrun') => NativeErrorCause.audioUnderrun,
       _ when value.contains('timed out') || value.contains('timeout') =>
         NativeErrorCause.timeout,
       _
@@ -151,6 +185,8 @@ final class NativeErrorSummary {
 }
 
 final class PlayerDiagnosticEvent {
+  static const formatVersion = 2;
+  static const sampleInterval = Duration(milliseconds: 500);
   PlayerDiagnosticEvent({
     required this.kind,
     required this.snapshot,
@@ -160,6 +196,22 @@ final class PlayerDiagnosticEvent {
     this.nativeErrorCode,
     this.readinessStage,
     this.diagnostics,
+    this.engineId,
+    this.nativeSample,
+    this.sampleAgeMs,
+    this.targetRate,
+    this.rateContext,
+    this.sourceKind,
+    this.decodingMode,
+    this.isLive,
+    this.audioOnly,
+    this.videoBandwidth,
+    this.audioBandwidth,
+    this.frameQueueActive,
+    this.colorMapping,
+    this.command,
+    this.commandValue,
+    this.flutterFrames,
   }) : timestamp = DateTime.now().toUtc();
 
   final DateTime timestamp;
@@ -171,8 +223,19 @@ final class PlayerDiagnosticEvent {
   final int? nativeErrorCode;
   final NativeReadinessStage? readinessStage;
   final PlayerDiagnostics? diagnostics;
+  final int? engineId, sampleAgeMs, videoBandwidth, audioBandwidth;
+  final NativePlaybackSample? nativeSample;
+  final double? targetRate;
+  final String? rateContext, sourceKind;
+  final VideoDecodingMode? decodingMode;
+  final bool? isLive, audioOnly, frameQueueActive, colorMapping;
+  final PlayerDiagnosticCommand? command;
+  final double? commandValue;
+  final PlayerFrameSample? flutterFrames;
 
   Map<String, Object?> toJson() => {
+    'diagnosticVersion': formatVersion,
+    'engineId': ?engineId,
     'time': timestamp.toIso8601String(),
     'event': kind.name,
     'generation': snapshot.generation,
@@ -184,6 +247,31 @@ final class PlayerDiagnosticEvent {
     'buffering': snapshot.isBuffering,
     'seeking': snapshot.isSeeking,
     'rate': snapshot.rate,
+    'volume': snapshot.volume,
+    'targetRate': ?targetRate?.isFinite == true ? targetRate : null,
+    'command': ?command?.name,
+    'commandValue': ?commandValue?.isFinite == true ? commandValue : null,
+    'rateContext': ?const {
+      'normal',
+      'held',
+      'afterRelease',
+    }.lookup(rateContext),
+    'sourceKind': ?const {
+      'dashPair',
+      'dashVideo',
+      'progressive',
+      'manifest',
+    }.lookup(sourceKind),
+    'decodingMode': ?decodingMode?.name,
+    'live': ?isLive,
+    'audioOnly': ?audioOnly,
+    'videoBandwidth': ?videoBandwidth,
+    'audioBandwidth': ?audioBandwidth,
+    'frameQueueActive': ?frameQueueActive,
+    'colorMapping': ?colorMapping,
+    'native': ?nativeSample?.toJson(),
+    'flutterFrames': ?flutterFrames?.toJson(),
+    'sampleAgeMs': ?sampleAgeMs,
     'severity': ?severity?.name,
     'nativeErrorCode': ?nativeErrorCode,
     'readinessStage': ?readinessStage?.name,
@@ -191,6 +279,14 @@ final class PlayerDiagnosticEvent {
       'hasDecodedVideo': media.hasDecodedVideo,
       'hasDecodedAudio': media.hasDecodedAudio,
       'hasVideoOutput': media.hasVideoOutput,
+      'videoWidth': ?media.videoWidth,
+      'videoHeight': ?media.videoHeight,
+      'outputWidth': ?media.outputWidth,
+      'outputHeight': ?media.outputHeight,
+      'audioChannels': ?media.audioChannels,
+      'audioSampleRate': ?media.audioSampleRate,
+      'videoCodec': ?_safeCodec(media.videoCodec),
+      'audioCodec': ?_safeCodec(media.audioCodec),
     },
     if (nativeError case final error?) ...{
       'component': error.component,
@@ -200,3 +296,24 @@ final class PlayerDiagnosticEvent {
     if (failureKind case final failure?) 'failure': failure.name,
   };
 }
+
+String? _safeCodec(String? value) => const {
+  'h264',
+  'avc1',
+  'hevc',
+  'hvc1',
+  'hev1',
+  'av1',
+  'av01',
+  'vp9',
+  'vp8',
+  'aac',
+  'mp4a',
+  'mp3',
+  'flac',
+  'opus',
+  'vorbis',
+  'ac3',
+  'eac3',
+  'alac',
+}.lookup(value);

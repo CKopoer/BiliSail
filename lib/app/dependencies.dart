@@ -204,6 +204,9 @@ class AppDependencies {
         'dartVersion': Platform.version,
         'coreLoggingAvailable': coreLog != null,
         'playbackLoggingAvailable': playbackLog != null,
+        'playbackDiagnosticVersion': PlayerDiagnosticEvent.formatVersion,
+        'playbackSamplingIntervalMs':
+            PlayerDiagnosticEvent.sampleInterval.inMilliseconds,
         ...await const LogArchiveStorage().deviceInfo(),
       };
     },

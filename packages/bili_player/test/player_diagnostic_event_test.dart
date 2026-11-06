@@ -4,6 +4,34 @@ import 'package:bili_player/bili_player.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'native desync, slow playback and audio underrun retain safe categories',
+    () {
+      for (final (message, cause) in [
+        (
+          'Audio/Video desynchronisation detected! SECRET',
+          NativeErrorCause.synchronization,
+        ),
+        (
+          'Your system is too SLOW to play this! SECRET',
+          NativeErrorCause.slowPlayback,
+        ),
+        ('Audio underrun SECRET', NativeErrorCause.audioUnderrun),
+      ]) {
+        final summary = NativeErrorSummary.classify(message, prefix: 'cplayer');
+        expect(summary.cause, cause);
+        final event = PlayerDiagnosticEvent(
+          kind: PlayerDiagnosticKind.nativeLog,
+          snapshot: const PlaybackSnapshot(
+            phase: PlaybackPhase.playing,
+            generation: 1,
+          ),
+          nativeError: summary,
+        );
+        expect(jsonEncode(event.toJson()), isNot(contains('SECRET')));
+      }
+    },
+  );
   test('readiness diagnostics expose only stage and media readiness flags', () {
     final event = PlayerDiagnosticEvent(
       kind: PlayerDiagnosticKind.failed,

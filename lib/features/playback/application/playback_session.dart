@@ -2602,6 +2602,9 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> beginTemporaryRate(double rate) {
     if (isLive) return Future.value();
+    if (!_disposed && !_closing && _temporaryRateOriginal == null) {
+      _markTemporaryRate(PlayerDiagnosticMarker.temporaryRateBegin, rate);
+    }
     _temporaryRateOriginal ??= commandRate;
     _temporaryRateGeneration = snapshots.value.generation;
     final revision = ++_temporaryRateRevision;
@@ -2619,10 +2622,19 @@ class PlaybackSession extends ChangeNotifier {
     final rate = _temporaryRateOriginal;
     final sameSource = _temporaryRateGeneration == snapshots.value.generation;
     final revision = ++_temporaryRateRevision;
-    if (rate != null && sameSource) await _applyRate(rate);
+    if (rate != null && sameSource) {
+      _markTemporaryRate(PlayerDiagnosticMarker.temporaryRateEnd, rate);
+      await _applyRate(rate);
+    }
     if (_temporaryRateRevision == revision) {
       _temporaryRateOriginal = null;
       _temporaryRateGeneration = null;
+    }
+  }
+
+  void _markTemporaryRate(PlayerDiagnosticMarker marker, double rate) {
+    if (engine case final PlaybackDiagnosticControl control) {
+      control.markPlaybackDiagnostic(marker, targetRate: rate);
     }
   }
 

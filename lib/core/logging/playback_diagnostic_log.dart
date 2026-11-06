@@ -9,7 +9,7 @@ import 'diagnostic_log_writer.dart';
 
 /// Local structured diagnostics only: no URLs, headers, account IDs or raw logs.
 final class PlaybackDiagnosticLog {
-  PlaybackDiagnosticLog(Directory directory, {int maxBytes = 256 * 1024})
+  PlaybackDiagnosticLog(Directory directory, {int maxBytes = 512 * 1024})
     : _writer = DiagnosticLogWriter(
         directory,
         DiagnosticLogChannel.playback,

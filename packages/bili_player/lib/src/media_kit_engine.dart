@@ -16,6 +16,8 @@ import 'native_audio_gain.dart';
 import 'native_rate_audio.dart';
 import 'native_video_frame_queue.dart';
 import 'native_video_color.dart';
+import 'native_playback_diagnostics.dart';
+import 'flutter_playback_diagnostics.dart';
 import 'video_dimensions.dart';
 import 'media_kit_video_output.dart';
 import 'video_output.dart';
@@ -26,7 +28,11 @@ void initializePlayerBackend() => mk.MediaKit.ensureInitialized();
 /// Owns at most one native Player. Each source change replaces it, so events
 /// retained by the previous backend cannot enter the next source generation.
 final class MediaKitEngine
-    implements PlayerEngine, VideoOutputSource, AudioGainControl {
+    implements
+        PlayerEngine,
+        VideoOutputSource,
+        AudioGainControl,
+        PlaybackDiagnosticControl {
   MediaKitEngine({this.onDiagnostic, bool? experimentalVideoFrameQueue})
     : experimentalVideoFrameQueue = resolveVideoFrameQueueEnabled(
         isAndroid: Platform.isAndroid,
@@ -43,6 +49,66 @@ final class MediaKitEngine
   }
 
   final void Function(PlayerDiagnosticEvent)? onDiagnostic;
+  static int _nextDiagnosticId = 0;
+  final int _diagnosticId = ++_nextDiagnosticId;
+  NativePlaybackDiagnostics? _performanceDiagnostics;
+  FlutterPlaybackDiagnostics? _frameDiagnostics;
+  PlayerFrameSample? _lastFrameSample;
+  Duration? _afterRateReleaseUntil;
+  bool _temporaryRateHeld = false;
+  String? _sourceKind;
+  VideoDecodingMode? _decodingMode;
+  bool? _sourceLive, _sourceAudioOnly;
+  int? _videoBandwidth, _audioBandwidth;
+
+  String get _rateContext => _temporaryRateHeld
+      ? 'held'
+      : _afterRateReleaseUntil != null &&
+            _continuityClock.elapsed < _afterRateReleaseUntil!
+      ? 'afterRelease'
+      : 'normal';
+
+  @override
+  void markPlaybackDiagnostic(
+    PlayerDiagnosticMarker marker, {
+    double? targetRate,
+  }) {
+    if (_disposed || _player == null) return;
+    _temporaryRateHeld = marker == PlayerDiagnosticMarker.temporaryRateBegin;
+    _afterRateReleaseUntil = _temporaryRateHeld
+        ? null
+        : _continuityClock.elapsed + const Duration(seconds: 10);
+    _diagnose(
+      _temporaryRateHeld
+          ? PlayerDiagnosticKind.temporaryRateBegin
+          : PlayerDiagnosticKind.temporaryRateEnd,
+      targetRate: targetRate,
+    );
+    _performanceDiagnostics?.sample();
+  }
+
+  void _startPerformanceDiagnostics(mk.Player player, int generation) {
+    if (onDiagnostic == null) return;
+    _performanceDiagnostics?.dispose();
+    _frameDiagnostics?.dispose();
+    _frameDiagnostics = FlutterPlaybackDiagnostics();
+    _performanceDiagnostics = NativePlaybackDiagnostics(
+      interval: PlayerDiagnosticEvent.sampleInterval,
+      read: player.getPropertyAsync,
+      isCurrent: () =>
+          !_disposed && generation == _generation && identical(_player, player),
+      shouldSample: () =>
+          _snapshot.desiredPlaying ||
+          _snapshot.isBuffering ||
+          _snapshot.isSeeking ||
+          _rateContext != 'normal',
+      onSample: (sample) {
+        _lastFrameSample = _frameDiagnostics?.take();
+        _diagnose(PlayerDiagnosticKind.performanceSample, nativeSample: sample);
+      },
+    )..sample();
+  }
+
   final _mediaLeases = AndroidMediaLeases();
 
   /// DASH frame queue, Android-on / desktop-off unless explicitly overridden.
@@ -68,6 +134,10 @@ final class MediaKitEngine
     PlayerFailureKind? failureKind,
     NativeLogSeverity? severity,
     int? nativeErrorCode,
+    double? targetRate,
+    NativePlaybackSample? nativeSample,
+    PlayerDiagnosticCommand? command,
+    double? commandValue,
   }) => onDiagnostic?.call(
     PlayerDiagnosticEvent(
       kind: kind,
@@ -76,6 +146,26 @@ final class MediaKitEngine
       failureKind: failureKind,
       severity: severity,
       nativeErrorCode: nativeErrorCode,
+      engineId: _diagnosticId,
+      nativeSample: nativeSample ?? _performanceDiagnostics?.latest,
+      flutterFrames: _lastFrameSample,
+      sampleAgeMs: _performanceDiagnostics?.sampleAgeMs,
+      targetRate: targetRate,
+      command: command,
+      commandValue: commandValue,
+      rateContext: _rateContext,
+      sourceKind: _sourceKind,
+      decodingMode: _decodingMode,
+      isLive: _sourceLive,
+      audioOnly: _sourceAudioOnly,
+      videoBandwidth: _videoBandwidth,
+      audioBandwidth: _audioBandwidth,
+      frameQueueActive: kind == PlayerDiagnosticKind.openStarted
+          ? null
+          : _videoFrameQueueActive,
+      colorMapping: kind == PlayerDiagnosticKind.openStarted
+          ? null
+          : _requiresVideoColorMapping,
       readinessStage: _readinessStage,
       // openStarted precedes releasing the previous native player.
       diagnostics: kind == PlayerDiagnosticKind.openStarted
@@ -234,11 +324,21 @@ final class MediaKitEngine
 
   void _publish(PlaybackSnapshot value) {
     if (_disposed || _snapshots.isClosed) return;
+    final previous = _snapshot;
     _snapshot = value;
     _videoOutput.updateVideoDimensions(value.videoDimensions);
     _nativeErrors.update(value);
     _snapshots.add(value);
     if (!identical(value, _snapshot)) return;
+    if (_performanceDiagnostics != null &&
+        previous.generation == value.generation &&
+        (previous.phase != value.phase ||
+            previous.desiredPlaying != value.desiredPlaying ||
+            previous.isBuffering != value.isBuffering ||
+            previous.isSeeking != value.isSeeking)) {
+      _diagnose(PlayerDiagnosticKind.stateChanged);
+      _performanceDiagnostics?.sample();
+    }
     final watch =
         value.desiredPlaying &&
         !value.isSeeking &&
@@ -398,6 +498,13 @@ final class MediaKitEngine
   }
 
   int _advanceGeneration() {
+    _frameDiagnostics?.dispose();
+    _frameDiagnostics = null;
+    _lastFrameSample = null;
+    _performanceDiagnostics?.dispose();
+    _performanceDiagnostics = null;
+    _temporaryRateHeld = false;
+    _afterRateReleaseUntil = null;
     _nativeErrors.reset();
     _healthTimer?.cancel();
     _healthTimer = null;
@@ -584,6 +691,21 @@ final class MediaKitEngine
   Future<void> open(ResolvedMediaSource source, OpenOptions options) {
     _requireActive();
     final generation = _advanceGeneration();
+    _sourceKind = switch (source) {
+      DashPairSource() => 'dashPair',
+      DashVideoSource() => 'dashVideo',
+      ProgressiveSource() => 'progressive',
+      ManifestSource() => 'manifest',
+    };
+    _decodingMode = options.videoDecoding;
+    _sourceLive = switch (source) {
+      ProgressiveSource(:final isLive) ||
+      ManifestSource(:final isLive) => isLive,
+      _ => false,
+    };
+    _sourceAudioOnly = source is ProgressiveSource && source.isAudioOnly;
+    _videoBandwidth = null;
+    _audioBandwidth = null;
     _publish(
       PlaybackSnapshot(
         phase: PlaybackPhase.opening,
@@ -602,6 +724,10 @@ final class MediaKitEngine
       Timer? colorPreparationDeadline;
       try {
         final (video, audio) = _validate(source, options, generation);
+        _videoBandwidth = _sourceAudioOnly == true ? null : video.bandwidth;
+        _audioBandwidth = _sourceAudioOnly == true
+            ? video.bandwidth
+            : audio?.bandwidth;
         _watchDashContinuity = source is DashPairSource && audio != null;
         final mediaTrack = await _mediaLeases.open(video);
         final audioTrack = audio == null
@@ -981,6 +1107,7 @@ final class MediaKitEngine
           ),
         );
         _diagnose(PlayerDiagnosticKind.openReady);
+        _startPerformanceDiagnostics(player, generation);
         if (options.play) {
           await player.playWithStringFlag().timeout(
             _remaining(watch, openBudget),
@@ -1310,6 +1437,11 @@ final class MediaKitEngine
   }
 
   Future<void> _releasePlayer() async {
+    _frameDiagnostics?.dispose();
+    _frameDiagnostics = null;
+    _lastFrameSample = null;
+    _performanceDiagnostics?.dispose();
+    _performanceDiagnostics = null;
     _watchDashContinuity = false;
     _dashInterruptionPending = false;
     _healthTimer?.cancel();
@@ -1342,9 +1474,18 @@ final class MediaKitEngine
   Future<void> _command(
     Future<void> Function(mk.Player) operation, {
     PlaybackSnapshot Function(PlaybackSnapshot)? optimistic,
+    PlayerDiagnosticCommand? command,
+    double? commandValue,
   }) {
     _requireActive();
     final generation = _generation;
+    if (command != null) {
+      _diagnose(
+        PlayerDiagnosticKind.commandRequested,
+        command: command,
+        commandValue: commandValue,
+      );
+    }
     return _serial(() async {
       if (generation != _generation || _disposed) return;
       final player = _player;
@@ -1352,6 +1493,17 @@ final class MediaKitEngine
       if (optimistic != null) _publish(optimistic(_snapshot));
       try {
         await operation(player).timeout(const Duration(seconds: 15));
+        if (command != null &&
+            generation == _generation &&
+            !_disposed &&
+            identical(_player, player)) {
+          _diagnose(
+            PlayerDiagnosticKind.commandApplied,
+            command: command,
+            commandValue: commandValue,
+          );
+          _performanceDiagnostics?.sample();
+        }
       } on SourceSuperseded {
         return;
       } on Object {
@@ -1380,6 +1532,7 @@ final class MediaKitEngine
   Future<void> play() {
     final generation = _generation;
     return _command(
+      command: PlayerDiagnosticCommand.play,
       (player) async {
         await player.playWithStringFlag();
         if (_requiresDecodedAudio) {
@@ -1405,6 +1558,7 @@ final class MediaKitEngine
 
   @override
   Future<void> pause() => _command(
+    command: PlayerDiagnosticCommand.pause,
     (player) => player.pauseWithStringFlag(),
     optimistic: (s) => s.copyWith(desiredPlaying: false),
   );
@@ -1413,6 +1567,8 @@ final class MediaKitEngine
     if (target < Duration.zero) throw ArgumentError.value(target, 'target');
     final generation = _generation;
     return _command(
+      command: PlayerDiagnosticCommand.seek,
+      commandValue: target.inMilliseconds.toDouble(),
       (player) async {
         await player.seek(target);
         // A command reply can precede the position event. Callers use this
@@ -1453,8 +1609,16 @@ final class MediaKitEngine
   @override
   Future<void> setRate(double rate) {
     if (!rate.isFinite || rate <= 0) throw ArgumentError.value(rate, 'rate');
+    final generation = _generation;
+    _diagnose(PlayerDiagnosticKind.rateRequested, targetRate: rate);
     return _command((player) async {
       if (player.state.rate != rate) await player.setRate(rate);
+      if (!_disposed &&
+          generation == _generation &&
+          identical(_player, player)) {
+        _diagnose(PlayerDiagnosticKind.rateApplied, targetRate: rate);
+        _performanceDiagnostics?.sample();
+      }
     }, optimistic: (s) => s.copyWith(rate: rate));
   }
 
@@ -1465,6 +1629,8 @@ final class MediaKitEngine
     }
     return _command(
       (player) => player.setVolume(volume),
+      command: PlayerDiagnosticCommand.volume,
+      commandValue: volume,
       optimistic: (s) => s.copyWith(volume: volume),
     );
   }
@@ -1474,16 +1640,21 @@ final class MediaKitEngine
     if (!NativeAudioGain.valid(gainDb)) {
       throw ArgumentError.value(gainDb, 'gainDb');
     }
-    return _command((player) async {
-      final gain = _audioGain;
-      if (gain == null) throw StateError('Native audio gain is unavailable.');
-      await gain.apply(gainDb);
-    });
+    return _command(
+      (player) async {
+        final gain = _audioGain;
+        if (gain == null) throw StateError('Native audio gain is unavailable.');
+        await gain.apply(gainDb);
+      },
+      command: PlayerDiagnosticCommand.audioGain,
+      commandValue: gainDb,
+    );
   }
 
   @override
   Future<void> stop() {
     _requireActive();
+    _diagnose(PlayerDiagnosticKind.stopped);
     final generation = _advanceGeneration();
     _publish(
       PlaybackSnapshot(phase: PlaybackPhase.idle, generation: generation),
@@ -1494,6 +1665,7 @@ final class MediaKitEngine
   @override
   Future<void> dispose() async {
     if (_disposed) return;
+    _diagnose(PlayerDiagnosticKind.stopped);
     _advanceGeneration();
     _videoOutput.cancelPendingViewport();
     await _serial(_releasePlayer);

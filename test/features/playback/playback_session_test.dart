@@ -34,6 +34,27 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('hold diagnostics bracket the native rate commands and ignore stale release', () async {
+    final engine = _FakeEngine();
+    final session = PlaybackSession(
+      engine: engine,
+      repository: _FakeRepository(autoResolve: true),
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    await session.open(_detail('one'), _part('one'));
+    await session.beginTemporaryRate(2);
+    await session.endTemporaryRate();
+    expect(engine.diagnosticMarkers, [
+      (PlayerDiagnosticMarker.temporaryRateBegin, 2.0, 1.0),
+      (PlayerDiagnosticMarker.temporaryRateEnd, 1.0, 2.0),
+    ]);
+    final oldGeneration = session.snapshots.value.generation;
+    await session.open(_detail('two'), _part('two'));
+    await session.endTemporaryRate(expectedGeneration: oldGeneration);
+    expect(engine.diagnosticMarkers, hasLength(2));
+  });
   test(
     'member echoes retain style and obey display and color filters',
     () async {
@@ -6642,9 +6663,19 @@ final class _FakeProgress implements PlaybackProgressStore {
   }
 }
 
-final class _FakeEngine implements PlayerEngine, AudioGainControl {
+final class _FakeEngine
+    implements PlayerEngine, AudioGainControl, PlaybackDiagnosticControl {
   _FakeEngine({this.openDuration = const Duration(minutes: 2)});
   final Duration openDuration;
+  final diagnosticMarkers = <(PlayerDiagnosticMarker, double?, double)>[];
+  @override
+  void markPlaybackDiagnostic(
+    PlayerDiagnosticMarker marker, {
+    double? targetRate,
+  }) {
+    diagnosticMarkers.add((marker, targetRate, _current.rate));
+  }
+
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   final _failures = StreamController<PlayerFailure>.broadcast(sync: true);
   PlaybackSnapshot _current = const PlaybackSnapshot(

@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:bilisail/core/logging/core_diagnostic_log.dart';
+import 'package:bilisail/core/logging/playback_diagnostic_log.dart';
+import 'package:bili_player/bili_player.dart';
 import 'package:bilisail/features/settings/data/diagnostic_log_export_repository.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:flutter/services.dart';
@@ -24,6 +26,93 @@ void main() {
   Map<String, Object?> manifest(Archive archive) =>
       jsonDecode(utf8.decode(archive.findFile('diagnostics.json')!.content))
           as Map<String, Object?>;
+
+  test(
+    'settings export flushes rate markers and native samples with safe context',
+    () async {
+      final log = PlaybackDiagnosticLog(directory);
+      addTearDown(log.close);
+      for (final (kind, speed, context) in [
+        (PlayerDiagnosticKind.performanceSample, 1, 'normal'),
+        (PlayerDiagnosticKind.temporaryRateBegin, 1, 'held'),
+        (PlayerDiagnosticKind.performanceSample, 2, 'held'),
+        (PlayerDiagnosticKind.temporaryRateEnd, 2, 'afterRelease'),
+        (PlayerDiagnosticKind.performanceSample, 1, 'afterRelease'),
+      ]) {
+        log.record(
+          PlayerDiagnosticEvent(
+            kind: kind,
+            engineId: 4,
+            rateContext: context,
+            sourceKind: 'dashPair',
+            decodingMode: VideoDecodingMode.automatic,
+            snapshot: PlaybackSnapshot(
+              phase: PlaybackPhase.playing,
+              generation: 3,
+              rate: speed.toDouble(),
+            ),
+            diagnostics: const PlayerDiagnostics(
+              generation: 3,
+              position: Duration.zero,
+              hasDecodedVideo: true,
+              hasDecodedAudio: true,
+              videoWidth: 2160,
+              videoHeight: 3840,
+              videoCodec: 'https://private.example/?token=SECRET',
+            ),
+            nativeSample: NativePlaybackSample.fromProperties(
+              {
+                'speed': '$speed',
+                'avsync': '0.25',
+                'hwdec-current': 'mediacodec',
+                'video-format': 'h264',
+                'frame-drop-count': '42',
+                'filename': 'SECRET',
+              },
+              elapsedMs: 1000,
+              durationMs: 7,
+            ),
+          ),
+        );
+      }
+      late Uint8List saved;
+      await DiagnosticLogExportRepository(
+        logDirectory: () async => directory,
+        flush: log.flush,
+        metadata: () async => {},
+        save: (bytes, _) async {
+          saved = bytes;
+          return 'saved.zip';
+        },
+      ).export();
+      final archive = ZipDecoder().decodeBytes(saved, verify: true);
+      final file = archive.files.singleWhere(
+        (f) => f.name.startsWith('logs/playback-'),
+      );
+      final text = utf8.decode(file.content);
+      final events = const LineSplitter()
+          .convert(text)
+          .map((line) => jsonDecode(line) as Map<String, Object?>)
+          .toList();
+      expect(events.map((e) => e['event']), [
+        'performanceSample',
+        'temporaryRateBegin',
+        'performanceSample',
+        'temporaryRateEnd',
+        'performanceSample',
+      ]);
+      expect(text, contains('mediacodec'));
+      expect(text, contains('"videoHeight":3840'));
+      expect(text, contains('"frame-drop-count":42'));
+      expect(text, isNot(contains('SECRET')));
+      expect(text, isNot(contains('private.example')));
+      expect(
+        utf8.decode(archive.findFile('README.txt')!.content),
+        contains('afterRelease'),
+      );
+      expect(manifest(archive)['logFiles'], 1);
+    },
+  );
 
   test('ZIP includes both log channels and rotations, excludes private and unrelated files', () async {
     await write('core-1-2.log', '{"event":"startup"}\n');

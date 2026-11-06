@@ -130,9 +130,16 @@ Future<Uint8List> buildDiagnosticArchive(
     ArchiveFile.string(
       'README.txt',
       'BiliSail 本地诊断日志\n包含核心运行、框架/异步异常、API 请求结果与耗时、账号切换事件、下载队列摘要和播放器事件。\n'
+          '播放日志版本 2 包含约 500 毫秒一次的后端采样、长按倍速开始/松手、调速请求/应用、暂停/缓冲/seek 状态。\n'
+          '按 engineId 和 generation 关联同一播放源；rateContext 为 normal/held/afterRelease，松手后额外观察 10 秒。\n'
+          'native.properties 包含实际硬解、编码、源/滤镜帧率、音视频时钟差、PTS、掉帧累计、缓存与同步模式。\n'
+          '时间类原生属性单位为秒，帧率为帧/秒，缓存速率为字节/秒；unavailable 表示不可用，不能当作零。\n'
+          'sampleElapsedMs/sampleDurationMs/sampleAgeMs 标明采样时间和跨度；属性分次读取，不是原子快照。\n'
+          '后端时钟和滤镜帧率不代表屏幕最终呈现或物理音画同步；没有系统 logcat、Codec 厂商统计或 GPU 跟踪。\n'
+          'flutterFrames 是应用级 Flutter 帧数、build/raster P95 和 raster 最大耗时（毫秒），不是视频帧率；多窗口不能据此归属单个视频。\n'
           '不包含账号标识、Cookie、Token、请求/响应正文、原始异常消息、完整 URL、数据库或离线媒体。\n'
           '日志有容量上限；diagnostics.json 记录导出时间、版本、平台、文件数及跳过数量。\n'
-          '无日志或日志被截减时会如实记录；系统 logcat/bugreport 和持续性能采样不在本压缩包中。\n',
+          '无日志或日志被截减时会如实记录；复现后请及时导出，以保留故障前后采样。\n',
     ),
   );
   return ZipEncoder().encodeBytes(archive);
