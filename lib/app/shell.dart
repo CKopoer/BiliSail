@@ -10,6 +10,7 @@ import '../features/feed/domain/home_channel.dart';
 import '../features/search/presentation/search_category_bar.dart';
 import '../features/search/presentation/search_entry_header.dart';
 import '../core/presentation/workspace_activity.dart';
+import '../core/presentation/mobile_playback_status_bar.dart';
 import '../core/presentation/page_back_scope.dart';
 import '../core/presentation/predictive_back_region.dart';
 import '../core/presentation/trackpad_back_region.dart';
@@ -754,7 +755,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
     Widget pages,
   ) => WorkspaceFrameTab(
     tab: tab,
-    child: Builder(
+    child: MobilePlaybackStatusBar(
+      enabled: tab.isPlayback,
       builder: (context) => Scaffold(
         backgroundColor: _android || _compactChannels
             ? Theme.of(context).colorScheme.surface
