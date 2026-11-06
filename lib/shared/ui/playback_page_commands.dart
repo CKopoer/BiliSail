@@ -16,12 +16,14 @@ class PlaybackPageCommands extends StatelessWidget {
     this.hasNext = false,
     this.onCompleted,
     this.onRelatedCompleted,
+    this.onLoopCompleted,
   });
   final VoidCallback previousPart, nextPart, toggleInfo;
   final Widget child;
   final bool hasNext;
   final VoidCallback? onCompleted;
   final VoidCallback? onRelatedCompleted;
+  final VoidCallback? onLoopCompleted;
   static PlaybackPageCommands? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<_PageCommands>()?.commands;
   @override

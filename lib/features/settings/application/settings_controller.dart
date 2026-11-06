@@ -143,6 +143,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(continuousRelatedPlayback: value));
   Future<void> setContinuousPlayback(bool value) =>
       update((current) => current.copyWith(continuousPlayback: value));
+  Future<void> setPlaybackMode(PlaybackMode value) =>
+      update((current) => current.copyWith(playbackMode: value));
   Future<void> setResumePlayback(bool value) =>
       update((current) => current.copyWith(resumePlayback: value));
   Future<void> setPreferredQuality(int value) =>

@@ -9,6 +9,7 @@ import '../../../domain/video_quality.dart';
 import '../../../domain/audio_quality.dart';
 import '../../../domain/live_stream_preference.dart';
 import '../../../domain/media_cdn.dart';
+import '../../../domain/playback_mode.dart';
 import 'shortcut_settings.dart';
 import '../../../domain/recommendation_settings.dart';
 
@@ -17,6 +18,7 @@ export '../../../domain/video_quality.dart';
 export '../../../domain/audio_quality.dart';
 export '../../../domain/live_stream_preference.dart';
 export '../../../domain/media_cdn.dart' show MediaCdnPreference;
+export '../../../domain/playback_mode.dart';
 
 enum AppThemePreference { system, light, dark }
 
@@ -82,8 +84,9 @@ final class AppSettings {
     this.autoPlay = true,
     this.defaultShowComments = false,
     this.videoCardHoverPlayback = true,
-    this.continuousPlayback = false,
+    bool? continuousPlayback,
     this.continuousRelatedPlayback = false,
+    PlaybackMode? playbackMode,
     this.resumePlayback = true,
     this.showCollapsedProgress = true,
     this.highEnergyProgressEnabled = false,
@@ -128,7 +131,14 @@ final class AppSettings {
     this.subtitleBottomPadding = 24.0,
     this.sponsorBlockMode = SponsorBlockMode.manual,
     List<String> sponsorBlockCategories = supportedSponsorCategories,
-  }) : _danmakuBlockedWords = List.unmodifiable(danmakuBlockedWords),
+  }) : playbackMode =
+           playbackMode ??
+           (continuousPlayback == true || continuousRelatedPlayback
+               ? PlaybackMode.continuous
+               : PlaybackMode.pause),
+       continuousPlayback =
+           continuousPlayback ?? playbackMode == PlaybackMode.continuous,
+       _danmakuBlockedWords = List.unmodifiable(danmakuBlockedWords),
        _sponsorBlockCategories = List.unmodifiable(sponsorBlockCategories);
 
   /// Constant defaults have no caller-owned collection inputs.
@@ -166,6 +176,7 @@ final class AppSettings {
        defaultShowComments = false,
        continuousPlayback = false,
        continuousRelatedPlayback = false,
+       playbackMode = PlaybackMode.pause,
        resumePlayback = true,
        showCollapsedProgress = true,
        preferredQuality = 80,
@@ -236,6 +247,7 @@ final class AppSettings {
   final bool videoCardHoverPlayback;
   final bool continuousPlayback;
   final bool continuousRelatedPlayback;
+  final PlaybackMode playbackMode;
   final bool resumePlayback;
   final bool showCollapsedProgress;
   final bool highEnergyProgressEnabled;
@@ -322,6 +334,7 @@ final class AppSettings {
     bool? videoCardHoverPlayback,
     bool? continuousPlayback,
     bool? continuousRelatedPlayback,
+    PlaybackMode? playbackMode,
     bool? resumePlayback,
     bool? showCollapsedProgress,
     bool? highEnergyProgressEnabled,
@@ -394,7 +407,21 @@ final class AppSettings {
     defaultShowComments: defaultShowComments ?? this.defaultShowComments,
     videoCardHoverPlayback:
         videoCardHoverPlayback ?? this.videoCardHoverPlayback,
-    continuousPlayback: continuousPlayback ?? this.continuousPlayback,
+    playbackMode:
+        playbackMode ??
+        (continuousPlayback != null
+            ? (continuousPlayback ||
+                      (continuousRelatedPlayback ??
+                          this.continuousRelatedPlayback)
+                  ? PlaybackMode.continuous
+                  : PlaybackMode.pause)
+            : continuousRelatedPlayback == true &&
+                  this.playbackMode == PlaybackMode.pause
+            ? PlaybackMode.continuous
+            : this.playbackMode),
+    continuousPlayback: playbackMode != null
+        ? playbackMode == PlaybackMode.continuous
+        : continuousPlayback ?? this.continuousPlayback,
     continuousRelatedPlayback:
         continuousRelatedPlayback ?? this.continuousRelatedPlayback,
     resumePlayback: resumePlayback ?? this.resumePlayback,

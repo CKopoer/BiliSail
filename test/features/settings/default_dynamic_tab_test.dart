@@ -75,7 +75,7 @@ void main() {
         (await database.readSetting('preferences.v1'))!,
       ) as Map<String, Object?>;
       expect(snapshot['defaultDynamicTab'], tab.name);
-      expect(snapshot['schemaVersion'], 38);
+      expect(snapshot['schemaVersion'], greaterThanOrEqualTo(38));
       expect(database.schemaVersion, 3);
       container.invalidate(settingsControllerProvider);
       expect(

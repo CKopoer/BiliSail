@@ -150,6 +150,29 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                           s.autoPlay,
                           (c, v) => c.copyWith(autoPlay: v),
                         ),
+                        ListTile(
+                          title: const Text('播放模式'),
+                          subtitle: DropdownButton<PlaybackMode>(
+                            isExpanded: true,
+                            value: s.playbackMode,
+                            items: [
+                              for (final mode in PlaybackMode.values)
+                                DropdownMenuItem(
+                                  value: mode,
+                                  child: Text(mode.label),
+                                ),
+                            ],
+                            onChanged: (mode) {
+                              if (mode != null) {
+                                unawaited(
+                                  _update(
+                                    (c) => c.copyWith(playbackMode: mode),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ),
                         _switch(
                           '双指缩小视频（0.75–2 倍）',
                           s.playerShrinkVideo,

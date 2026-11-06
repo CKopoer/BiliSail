@@ -23,11 +23,13 @@ final class PlaybackQueueState {
     this.loading = false,
     this.message,
     this.direction = 1,
+    this.restartPending = false,
   });
   final WatchLaterQueue? queue;
   final bool loading;
   final String? message;
   final int direction;
+  final bool restartPending;
   String? get nextMessage => direction > 0 ? message : null;
   String? get previousMessage => direction < 0 ? message : null;
 }
@@ -108,20 +110,36 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
     }
   }
 
+  /// Reload the true first page after the bounded page window evicts it.
+  Future<void> prepareFirst(VideoId current) async {
+    final pending = _pending;
+    if (pending != null) await pending;
+    if (!ref.mounted) return;
+    final queue = state.queue;
+    if (queue == null || queue.hasMore || !queue.hasPrevious) return;
+    await _request(1, current, 1, replace: true, restart: true);
+  }
+
   Future<void> _request(
     int page,
     VideoId current,
     int direction, {
     bool replace = false,
+    bool restart = false,
   }) {
     final pending = _pending;
     if (pending != null) return pending;
     late final Future<void> next;
-    next = _loadPage(page, current, direction, replace: replace).whenComplete(
-      () {
-        if (identical(_pending, next)) _pending = null;
-      },
-    );
+    next =
+        _loadPage(
+          page,
+          current,
+          direction,
+          replace: replace,
+          restart: restart,
+        ).whenComplete(() {
+          if (identical(_pending, next)) _pending = null;
+        });
     return _pending = next;
   }
 
@@ -130,6 +148,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
     VideoId current,
     int direction, {
     required bool replace,
+    required bool restart,
   }) async {
     final queue = state.queue;
     final source = queue?.profileSource;
@@ -162,6 +181,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
       queue: queue,
       loading: true,
       direction: direction,
+      restartPending: restart,
     );
     try {
       final result = await _readPage(source, home, page, read).timeout(
@@ -223,6 +243,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
           message: error.kind == AppFailureKind.cancelled
               ? null
               : error.message,
+          restartPending: restart,
         );
       }
     } catch (_) {
@@ -231,6 +252,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
           queue: queue,
           direction: direction,
           message: '$label暂时无法加载，请重试',
+          restartPending: restart,
         );
       }
     } finally {

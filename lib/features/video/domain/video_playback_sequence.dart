@@ -29,3 +29,26 @@ VideoSequenceTarget? adjacentVideoSource(
   final entry = entries[next];
   return (id: entry.id, cid: entry.parts.firstOrNull?.cid);
 }
+
+/// A completed outer queue wraps before the current video's own parts do.
+VideoSequenceTarget? firstVideoSource(
+  VideoDetail video, {
+  WatchLaterQueue? queue,
+}) {
+  if (queue != null) {
+    if (queue.hasPrevious) return null;
+    final first = queue.items.firstOrNull;
+    return first == null ? null : (id: first.video.id, cid: null);
+  }
+  if (video.collection case final collection?) {
+    if (!collection.entries.any((entry) => entry.id == video.summary.id)) {
+      return null;
+    }
+    final first = collection.entries.firstOrNull;
+    return first == null
+        ? null
+        : (id: first.id, cid: first.parts.firstOrNull?.cid);
+  }
+  final first = video.parts.firstOrNull;
+  return first == null ? null : (id: video.summary.id, cid: first.cid);
+}

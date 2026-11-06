@@ -507,17 +507,37 @@ final class _SettingsCategoryPageState
                             controller.setHighEnergyProgressEnabled,
                             '显示视频热度曲线；有章节时优先显示章节',
                           ),
-                          _toggle(
-                            '连续播放',
-                            s.continuousPlayback,
-                            controller.setContinuousPlayback,
-                            '播放完毕后自动播放下一 P、合集中下一个视频或影视下一集；到末尾停止',
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('播放模式'),
+                            subtitle: const Text(
+                              '列表循环按分 P、播放队列、合集或当前影视分组的原始顺序播放',
+                            ),
+                            trailing: DropdownButton<PlaybackMode>(
+                              value: s.playbackMode,
+                              items: [
+                                for (final mode in PlaybackMode.values)
+                                  DropdownMenuItem(
+                                    value: mode,
+                                    child: Text(mode.label),
+                                  ),
+                              ],
+                              onChanged: (mode) {
+                                if (mode != null) {
+                                  unawaited(
+                                    _save(
+                                      () => controller.setPlaybackMode(mode),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
                           ),
                           _toggle(
                             '连续播放相关视频',
                             s.continuousRelatedPlayback,
                             controller.setContinuousRelatedPlayback,
-                            '当前视频的分 P／合集播完后继续播放相关视频；稍后再看、播放队列和影视仍在末尾停止',
+                            '连续播放模式下，分 P／合集播完后继续播放相关视频；播放队列和影视仍在末尾停止',
                           ),
                           _toggle(
                             '允许多个标签页同时播放',

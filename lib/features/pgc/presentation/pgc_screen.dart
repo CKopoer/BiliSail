@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/input/input_stroke.dart';
 import '../../../domain/video.dart';
+import '../../../domain/playback_mode.dart';
 import '../../../core/input/shortcut_dispatcher.dart';
 import '../../../core/presentation/input_scope.dart';
 import '../../playback/application/playback_session.dart';
@@ -206,6 +207,8 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
       hasNext:
           selected != null && adjacentPgcEpisode(season, selected, 1) != null,
       onCompleted: () => _stepEpisode(season, selected, 1, completed: true),
+      onLoopCompleted: () =>
+          _stepEpisode(season, selected, 1, completed: true, loop: true),
       toggleInfo: () => setState(() => _infoVisible = !_infoVisible),
       child: WidthLayoutBuilder(
         builder: (context, width) {
@@ -393,16 +396,24 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     PgcEpisode? selected,
     int direction, {
     bool completed = false,
+    bool loop = false,
   }) {
     if (selected == null) return;
     final current = ref.read(pgcControllerProvider(_locator)).selectedEpisode;
     if (current == null) return;
-    final episode = adjacentPgcEpisode(season, current, direction);
+    final episode = adjacentPgcEpisode(season, current, direction, loop: loop);
     if (episode == null) return;
     final session = ref.exists(playbackSessionProvider)
         ? ref.read(playbackSessionProvider)
         : null;
     if (session != null) {
+      if (loop && session.playbackMode != PlaybackMode.listLoop) return;
+      if (episode.id == current.id) {
+        if (completed) {
+          unawaited(session.repeatCompleted(session.sourceGeneration));
+        }
+        return;
+      }
       final video = session.detail;
       final part = session.part;
       if (video == null ||

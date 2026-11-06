@@ -261,6 +261,38 @@ void main() {
     },
   );
 
+  test(
+    'list looping reloads the true first page after its window was evicted',
+    () async {
+      final queue = capture();
+      final last = _entry(999).video!;
+      container
+          .read(watchLaterQueueRegistryProvider)
+          .update(
+            queue.withPages([
+              PlaybackQueuePage(
+                page: 25,
+                items: [WatchLaterQueueItem(video: last)],
+                hasMore: false,
+              ),
+            ], current: last.id),
+          );
+      final controller = paging(queue);
+      repository.items = [_entry(0), _entry(1)];
+      repository.hasMore = true;
+      await controller.prepareFirst(last.id);
+      final first = container.read(playbackQueueProvider(queue.id)).queue!;
+      expect(repository.calls.single.page, 1);
+      expect(first.pages.single.page, 1);
+      expect(first.hasPrevious, isFalse);
+      expect(first.items.first.video.id, _entry(0).video?.id);
+      expect(
+        first.items.length,
+        lessThanOrEqualTo(WatchLaterQueue.maximumPagedItems),
+      );
+    },
+  );
+
   test('repeated duplicate pages stop automatic paging with an explicit retry message', () async {
     final queue = capture();
     final controller = paging(queue);

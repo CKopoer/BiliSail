@@ -14,6 +14,50 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   for (final failSave in [false, true]) {
+    testWidgets(
+      'player configuration saves playback mode or rolls back: $failSave',
+      (tester) async {
+        final repository = _SettingsRepository()..failSave = failSave;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: Builder(
+                  builder: (context) => TextButton(
+                    onPressed: () => showPlayerSettings(context),
+                    child: const Text('播放配置'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('播放配置'));
+        await tester.pumpAndSettle();
+        final dropdown = find.byType(DropdownButton<PlaybackMode>);
+        await tester.ensureVisible(dropdown);
+        await tester.pumpAndSettle();
+        await tester.tap(dropdown);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('列表循环').last);
+        await tester.pumpAndSettle();
+        expect(
+          repository.settings.playbackMode,
+          failSave ? PlaybackMode.pause : PlaybackMode.listLoop,
+        );
+        expect(
+          tester.widget<DropdownButton<PlaybackMode>>(dropdown).value,
+          repository.settings.playbackMode,
+        );
+        if (failSave) expect(find.text('设置保存失败，请重试'), findsOneWidget);
+      },
+    );
+  }
+  for (final failSave in [false, true]) {
     testWidgets('default dynamic tab saves or rolls back: $failSave', (
       tester,
     ) async {
@@ -220,6 +264,16 @@ void main() {
           final toggle = find.widgetWithText(
             SwitchListTile,
             player ? '滑动调节亮度和音量（左侧亮度，右侧音量）' : '滑动调节亮度和音量',
+          );
+          await tester.scrollUntilVisible(
+            toggle,
+            120,
+            scrollable: find
+                .descendant(
+                  of: find.byType(ListView).first,
+                  matching: find.byType(Scrollable),
+                )
+                .first,
           );
           await tester.ensureVisible(toggle);
           await tester.tap(toggle);
@@ -758,9 +812,7 @@ void main() {
     );
   }
 
-  testWidgets('continuous playback toggle saves and reloads independently', (
-    tester,
-  ) async {
+  testWidgets('playback mode saves and reloads independently', (tester) async {
     final repository = _SettingsRepository();
     await tester.pumpWidget(
       ProviderScope(
@@ -773,18 +825,25 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final toggle = find.widgetWithText(SwitchListTile, '连续播放');
-    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    final toggle = find.byType(DropdownButton<PlaybackMode>);
+    expect(
+      tester.widget<DropdownButton<PlaybackMode>>(toggle).value,
+      PlaybackMode.pause,
+    );
     await tester.ensureVisible(toggle);
     await tester.pumpAndSettle();
-    await tester.tap(toggle);
-    await tester.pumpAndSettle();
-    expect(repository.settings.continuousPlayback, isTrue);
-    expect(repository.settings.autoPlay, isTrue);
-    ProviderScope.containerOf(tester.element(toggle))
-        .invalidate(settingsControllerProvider);
-    await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    for (final mode in PlaybackMode.values) {
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(mode.label).last);
+      await tester.pumpAndSettle();
+      expect(repository.settings.playbackMode, mode);
+      expect(repository.settings.autoPlay, isTrue);
+      ProviderScope.containerOf(tester.element(toggle))
+          .invalidate(settingsControllerProvider);
+      await tester.pumpAndSettle();
+      expect(tester.widget<DropdownButton<PlaybackMode>>(toggle).value, mode);
+    }
   });
   for (final failSave in [false, true]) {
     testWidgets(

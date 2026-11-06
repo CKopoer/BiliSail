@@ -220,7 +220,6 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
           !_session.canAutoAdvance ||
           !_session.ownsPlayback(this) ||
           _session.isLive ||
-          _session.contentTarget is OfflinePlaybackTarget ||
           _session.sourceGeneration != generation ||
           _session.snapshots.value.phase != PlaybackPhase.ended ||
           _session.detail?.summary.id != widget.detail?.summary.id ||
@@ -228,12 +227,25 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
           _session.contentTarget != widget.target) {
         return;
       }
-      if (commands?.hasNext == true) {
-        if (widget.settings.continuousPlayback) {
-          commands?.onCompleted?.call();
-        }
-      } else if (widget.settings.continuousRelatedPlayback) {
-        commands?.onRelatedCompleted?.call();
+      switch (widget.settings.playbackMode) {
+        case PlaybackMode.pause:
+          break;
+        case PlaybackMode.continuous:
+          if (commands?.hasNext == true) {
+            if (widget.settings.continuousPlayback) {
+              commands?.onCompleted?.call();
+            }
+          } else if (widget.settings.continuousRelatedPlayback) {
+            commands?.onRelatedCompleted?.call();
+          }
+        case PlaybackMode.listLoop:
+          if (commands?.onLoopCompleted case final loop?) {
+            loop();
+          } else {
+            unawaited(_session.repeatCompleted(generation));
+          }
+        case PlaybackMode.singleLoop:
+          unawaited(_session.repeatCompleted(generation));
       }
     });
   }

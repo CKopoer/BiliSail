@@ -144,6 +144,12 @@ class SqliteSettingsRepository implements SettingsRepository {
       ),
       continuousPlayback: boolean('continuousPlayback', false),
       continuousRelatedPlayback: boolean('continuousRelatedPlayback', false),
+      playbackMode: decoded.containsKey('playbackMode')
+          ? PlaybackMode.values
+                    .where((mode) => mode.name == decoded['playbackMode'])
+                    .firstOrNull ??
+                PlaybackMode.pause
+          : null,
       resumePlayback: boolean('resumePlayback', true),
       showCollapsedProgress: boolean('showCollapsedProgress', true),
       highEnergyProgressEnabled: boolean(
@@ -259,7 +265,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 38,
+        'schemaVersion': 39,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -293,6 +299,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'videoCardHoverPlayback': value.videoCardHoverPlayback,
         'continuousPlayback': value.continuousPlayback,
         'continuousRelatedPlayback': value.continuousRelatedPlayback,
+        'playbackMode': value.playbackMode.name,
         'resumePlayback': value.resumePlayback,
         'showCollapsedProgress': value.showCollapsedProgress,
         'highEnergyProgressEnabled': value.highEnergyProgressEnabled,
