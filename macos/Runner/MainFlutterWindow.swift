@@ -14,6 +14,7 @@ final class MacOSApplication {
   private var desktopWindows: DesktopWindowController?
   private var mainGeometry: PersistentWindowGeometry?
   private var focusObservers: [NSObjectProtocol] = []
+  private var workspaceObservers: [NSObjectProtocol] = []
   private var focusRevision: Int64 = 0
   private let focusDiagnostics =
     ProcessInfo.processInfo.environment["BILISAIL_WINDOW_FOCUS_DIAGNOSTICS"] == "1" ||
@@ -112,6 +113,12 @@ final class MacOSApplication {
         if self.focusDiagnostics { _ = self.windowFocusSnapshot() }
       })
     }
+    for (name, event) in [(NSWorkspace.willSleepNotification, NativeLifecycleEvent.systemSleep),
+                          (NSWorkspace.didWakeNotification, NativeLifecycleEvent.systemWake)] {
+      workspaceObservers.append(NSWorkspace.shared.notificationCenter.addObserver(
+        forName: name, object: nil, queue: .main
+      ) { _ in event.record() })
+    }
 
     // These plugins use the messenger/texture registry headlessly. Main-window
     // operations go through the per-view WindowService, never window_manager's
@@ -208,18 +215,24 @@ final class MacOSApplication {
   deinit {
     mainGeometry?.detach()
     for observer in focusObservers { NotificationCenter.default.removeObserver(observer) }
+    for observer in workspaceObservers {
+      NSWorkspace.shared.notificationCenter.removeObserver(observer)
+    }
   }
 
   func start() -> Bool { engine.run(withEntrypoint: nil) }
 
-  func requestExit(_ completion: @escaping (Bool) -> Void) {
+  func requestExit(_ completion: @escaping (ApplicationExitResponse) -> Void) {
     exitChannel.invokeMethod("System.requestAppExit", arguments: nil) { result in
-      let response = result as? [String: Any]
-      completion(response?["response"] as? String == "exit")
+      completion(ApplicationExitResponse(channelReply: result))
     }
   }
 
-  func shutDown() { engine.shutDownEngine() }
+  func shutDown() {
+    NativeLifecycleEvent.engineShutdownBegin.record()
+    engine.shutDownEngine()
+    NativeLifecycleEvent.engineShutdownEnd.record()
+  }
 }
 
 private func registerImageExport(messenger: FlutterBinaryMessenger) -> FlutterMethodChannel {

@@ -35,6 +35,7 @@
 | [macOS 发布启动与安全存储](validation/macos-release-startup.md) | ad-hoc 权限约束、传统 Keychain、同产物启动／跨进程凭据验证与升级验收 |
 | [macOS 双标签播放崩溃](validation/macos-dual-playback-crash.md) | 原生 multiview 断言、窗口能力检查、应用内双标签与验证边界 |
 | [macOS 视频全屏与播放窗关闭](validation/macos-fullscreen-playback-close-2026-11-03.md) | 视频退出保留应用全屏、原生关闭与转换屏障、标签组全屏及验证边界 |
+| [macOS 灰窗与退出兜底](validation/macos-unresponsive-exit-2026-11-06.md) | #78 退出无限等待修复、原生超时／回复隔离、休眠和引擎日志及灰屏定位边界 |
 | [API 与会话](api-design.md) | 协议边界、接口映射、鉴权、错误、缓存和降级 |
 | [消息中心与富消息](validation/messages-redesign-2026-11-05.md) | PiliPlus 行为参考、宽窄布局、会话管理、富消息解析及验证边界 |
 | [消息表情、发送与管理入口](validation/messages-rich-composition-2026-11-05.md) | 私信表情／图片、直接回复、紧凑通知、聊天设置及外层菜单 |

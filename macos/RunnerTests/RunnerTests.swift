@@ -366,10 +366,10 @@ class RunnerTests: XCTestCase {
   func testRepeatedQuitWaitsForCleanupApproval() {
     var scheduled: [() -> Void] = []
     let coordinator = ApplicationTerminationCoordinator(scheduleTermination: { scheduled.append($0) })
-    var reply: ((Bool) -> Void)?
+    var reply: ((ApplicationExitResponse) -> Void)?
     var requests = 0
     var terminations = 0
-    let request: (@escaping (Bool) -> Void) -> Void = { callback in
+    let request: (@escaping (ApplicationExitResponse) -> Void) -> Void = { callback in
       requests += 1
       reply = callback
     }
@@ -378,7 +378,7 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(coordinator.requestExit(using: request, terminate: terminate), .terminateCancel)
     XCTAssertEqual(requests, 1)
     XCTAssertEqual(terminations, 0)
-    reply?(true)
+    reply?(.exit)
     XCTAssertEqual(terminations, 0)
     XCTAssertEqual(scheduled.count, 1)
     XCTAssertEqual(coordinator.requestExit(using: request, terminate: terminate), .terminateCancel)
@@ -393,18 +393,18 @@ class RunnerTests: XCTestCase {
     let coordinator = ApplicationTerminationCoordinator(scheduleTermination: { _ in
       XCTFail("Cancelled cleanup must not schedule termination")
     })
-    var reply: ((Bool) -> Void)?
+    var reply: ((ApplicationExitResponse) -> Void)?
     var requests = 0
-    let request: (@escaping (Bool) -> Void) -> Void = { callback in
+    let request: (@escaping (ApplicationExitResponse) -> Void) -> Void = { callback in
       requests += 1
       reply = callback
     }
     let terminate = { XCTFail("Cancelled cleanup must keep the application open") }
     XCTAssertEqual(coordinator.requestExit(using: request, terminate: terminate), .terminateCancel)
-    reply?(false)
+    reply?(.cancel)
     XCTAssertEqual(coordinator.requestExit(using: request, terminate: terminate), .terminateCancel)
     XCTAssertEqual(requests, 2)
-    reply?(false)
+    reply?(.cancel)
   }
 
   func testSynchronousCleanupStillDefersTermination() {
@@ -412,9 +412,9 @@ class RunnerTests: XCTestCase {
     let coordinator = ApplicationTerminationCoordinator(scheduleTermination: { scheduled.append($0) })
     var requesting = false
     var terminations = 0
-    let request: (@escaping (Bool) -> Void) -> Void = { callback in
+    let request: (@escaping (ApplicationExitResponse) -> Void) -> Void = { callback in
       requesting = true
-      callback(true)
+      callback(.exit)
       requesting = false
     }
     let terminate = {
@@ -435,7 +435,7 @@ class RunnerTests: XCTestCase {
     var replying = false
     XCTAssertEqual(coordinator.requestExit(using: { callback in
       replying = true
-      callback(true)
+      callback(.exit)
       replying = false
     }, terminate: {
       XCTAssertFalse(replying)
@@ -443,6 +443,127 @@ class RunnerTests: XCTestCase {
       terminated.fulfill()
     }), .terminateCancel)
     wait(for: [terminated], timeout: 2)
+  }
+
+  func testUnansweredQuitTimesOutWithoutWaitingForDart() {
+    var scheduled: [() -> Void] = []
+    var timeout: (() -> Void)?
+    var reply: ((ApplicationExitResponse) -> Void)?
+    var cancellations = 0
+    var terminations = 0
+    var failures: [ApplicationTerminationFailure] = []
+    let coordinator = ApplicationTerminationCoordinator(scheduleTermination: { scheduled.append($0) },
+      scheduleTimeout: { delay, action in
+        XCTAssertEqual(delay, 30)
+        timeout = action
+        return { cancellations += 1 }
+      }, onFailure: { failures.append($0) })
+    let request: (@escaping (ApplicationExitResponse) -> Void) -> Void = { reply = $0 }
+    let terminate = { terminations += 1 }
+    XCTAssertEqual(coordinator.requestExit(using: request, terminate: terminate), .terminateCancel)
+    XCTAssertEqual(terminations, 0)
+    timeout?()
+    XCTAssertEqual(cancellations, 1)
+    XCTAssertEqual(failures, [.timeout])
+    XCTAssertEqual(scheduled.count, 1)
+    XCTAssertEqual(coordinator.requestExit(using: request, terminate: terminate), .terminateCancel)
+    // Late/duplicate replies cannot undo or duplicate a timeout-approved exit.
+    reply?(.cancel)
+    reply?(.exit)
+    timeout?()
+    XCTAssertEqual(scheduled.count, 1)
+    XCTAssertEqual(failures, [.timeout])
+    scheduled.removeFirst()()
+    XCTAssertEqual(terminations, 1)
+    XCTAssertEqual(coordinator.requestExit(using: request, terminate: terminate), .terminateNow)
+  }
+
+  func testCleanupApprovalCancelsDeadlineAndIgnoresDuplicateReplies() {
+    var scheduled: [() -> Void] = []
+    var timeout: (() -> Void)?
+    var reply: ((ApplicationExitResponse) -> Void)?
+    var cancellations = 0
+    var terminations = 0
+    let coordinator = ApplicationTerminationCoordinator(scheduleTermination: { scheduled.append($0) },
+      scheduleTimeout: { _, action in
+        timeout = action
+        return { cancellations += 1 }
+      }, onFailure: { _ in XCTFail("Successful cleanup is not a fallback") })
+    XCTAssertEqual(coordinator.requestExit(using: { reply = $0 }, terminate: { terminations += 1 }),
+                   .terminateCancel)
+    reply?(.exit)
+    timeout?()
+    reply?(.exit)
+    reply?(.cancel)
+    XCTAssertEqual(cancellations, 1)
+    XCTAssertEqual(scheduled.count, 1)
+    scheduled.removeFirst()()
+    XCTAssertEqual(terminations, 1)
+  }
+
+  func testCancelledQuitInvalidatesItsTimeoutAndRepliesAcrossRetry() {
+    var scheduled: [() -> Void] = []
+    var timeouts: [() -> Void] = []
+    var replies: [(ApplicationExitResponse) -> Void] = []
+    var cancellations = 0
+    var terminations = 0
+    let coordinator = ApplicationTerminationCoordinator(scheduleTermination: { scheduled.append($0) },
+      scheduleTimeout: { _, action in
+        timeouts.append(action)
+        return { cancellations += 1 }
+      }, onFailure: { _ in XCTFail("Old attempts cannot force a later quit") })
+    let request: (@escaping (ApplicationExitResponse) -> Void) -> Void = { replies.append($0) }
+    let terminate = { terminations += 1 }
+    XCTAssertEqual(coordinator.requestExit(using: request, terminate: terminate), .terminateCancel)
+    replies[0](.cancel)
+    XCTAssertEqual(cancellations, 1)
+    timeouts[0]()
+    XCTAssertTrue(scheduled.isEmpty)
+    XCTAssertEqual(coordinator.requestExit(using: request, terminate: terminate), .terminateCancel)
+    timeouts[0]()
+    replies[0](.exit)
+    replies[0](.unavailable)
+    XCTAssertTrue(scheduled.isEmpty)
+    replies[1](.exit)
+    XCTAssertEqual(cancellations, 2)
+    XCTAssertEqual(scheduled.count, 1)
+    scheduled.removeFirst()()
+    XCTAssertEqual(terminations, 1)
+  }
+
+  func testUnavailableDartReplyAllowsDeferredNativeQuit() {
+    var scheduled: [() -> Void] = []
+    var cancellations = 0
+    var terminations = 0
+    var failures: [ApplicationTerminationFailure] = []
+    let coordinator = ApplicationTerminationCoordinator(scheduleTermination: { scheduled.append($0) },
+      scheduleTimeout: { _, _ in { cancellations += 1 } },
+      onFailure: { failures.append($0) })
+    var requesting = false
+    XCTAssertEqual(coordinator.requestExit(using: { reply in
+      requesting = true
+      reply(.unavailable)
+      requesting = false
+    }, terminate: {
+      XCTAssertFalse(requesting)
+      terminations += 1
+    }), .terminateCancel)
+    XCTAssertEqual(cancellations, 1)
+    XCTAssertEqual(failures, [.unavailable])
+    XCTAssertEqual(terminations, 0)
+    scheduled.removeFirst()()
+    XCTAssertEqual(terminations, 1)
+  }
+
+  func testExitReplyRequiresExplicitCancellation() {
+    XCTAssertEqual(ApplicationExitResponse(channelReply: ["response": "exit"]), .exit)
+    XCTAssertEqual(ApplicationExitResponse(channelReply: ["response": "cancel"]), .cancel)
+    let unavailableReplies: [Any?] = [nil, FlutterMethodNotImplemented,
+      FlutterError(code: "unavailable", message: nil, details: nil),
+      [:], ["response": "unknown"], ["response": true], "cancel"]
+    for reply in unavailableReplies {
+      XCTAssertEqual(ApplicationExitResponse(channelReply: reply), .unavailable)
+    }
   }
 
 }
