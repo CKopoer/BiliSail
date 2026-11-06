@@ -430,19 +430,15 @@ class _MessageSections extends ConsumerWidget {
                     children: [
                       Icon(_icon(tab), size: 21),
                       const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(tab.label),
-                            if ((unread[tab] ?? 0) > 0)
-                              Text(
-                                '${unread[tab]} 条未读',
-                                style: Theme.of(context).textTheme.labelSmall,
-                              ),
-                          ],
+                      Expanded(child: Text(tab.label)),
+                      if ((unread[tab] ?? 0) > 0) ...[
+                        const SizedBox(width: 8),
+                        Badge(
+                          label: Text(
+                            (unread[tab] ?? 0) > 99 ? '99+' : '${unread[tab]}',
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
