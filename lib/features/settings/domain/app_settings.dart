@@ -103,6 +103,7 @@ final class AppSettings {
     this.mediaCdn = MediaCdnPreference.automatic,
     this.videoDecoding = VideoDecodingPreference.automatic,
     this.defaultPlaybackRate = 1.0,
+    List<double> playbackRates = PlaybackRates.values,
     this.rememberPlaybackRate = true,
     this.defaultVolume = 100.0,
     this.rememberVolumeGlobally = false,
@@ -138,6 +139,7 @@ final class AppSettings {
                : PlaybackMode.pause),
        continuousPlayback =
            continuousPlayback ?? playbackMode == PlaybackMode.continuous,
+       playbackRates = PlaybackRates.normalize(playbackRates),
        _danmakuBlockedWords = List.unmodifiable(danmakuBlockedWords),
        _sponsorBlockCategories = List.unmodifiable(sponsorBlockCategories);
 
@@ -187,6 +189,7 @@ final class AppSettings {
        mediaCdn = MediaCdnPreference.automatic,
        videoDecoding = VideoDecodingPreference.automatic,
        defaultPlaybackRate = 1.0,
+       playbackRates = PlaybackRates.values,
        rememberPlaybackRate = true,
        defaultVolume = 100.0,
        rememberVolumeGlobally = false,
@@ -264,6 +267,7 @@ final class AppSettings {
   final MediaCdnPreference mediaCdn;
   final VideoDecodingPreference videoDecoding;
   final double defaultPlaybackRate;
+  final List<double> playbackRates;
   final bool rememberPlaybackRate;
   final double defaultVolume;
   final bool rememberVolumeGlobally;
@@ -351,6 +355,7 @@ final class AppSettings {
     MediaCdnPreference? mediaCdn,
     VideoDecodingPreference? videoDecoding,
     double? defaultPlaybackRate,
+    List<double>? playbackRates,
     bool? rememberPlaybackRate,
     double? defaultVolume,
     bool? rememberVolumeGlobally,
@@ -444,6 +449,7 @@ final class AppSettings {
     mediaCdn: mediaCdn ?? this.mediaCdn,
     videoDecoding: videoDecoding ?? this.videoDecoding,
     defaultPlaybackRate: defaultPlaybackRate ?? this.defaultPlaybackRate,
+    playbackRates: playbackRates ?? this.playbackRates,
     rememberPlaybackRate: rememberPlaybackRate ?? this.rememberPlaybackRate,
     defaultVolume: defaultVolume ?? this.defaultVolume,
     rememberVolumeGlobally:
@@ -529,7 +535,10 @@ final class AppSettings {
       liveStreamPreference: LiveStreamPreference.fromJson(
         liveStreamPreference.toJson(),
       ),
-      defaultPlaybackRate: PlaybackRates.nearest(defaultPlaybackRate),
+      defaultPlaybackRate: PlaybackRates.nearest(
+        defaultPlaybackRate,
+        playbackRates,
+      ),
       defaultVolume: bounded(defaultVolume, 0, 100, 100),
       danmakuOpacity: bounded(danmakuOpacity, .2, 1, .8),
       danmakuFontScale: bounded(danmakuFontScale, .2, 1.5, 1),

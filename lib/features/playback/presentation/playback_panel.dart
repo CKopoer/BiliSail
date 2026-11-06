@@ -19,7 +19,6 @@ import '../../../shared/ui/danmaku_composer_draft.dart';
 import '../../../shared/ui/player_controls_menu_scope.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../domain/video.dart';
-import '../../../domain/playback_rates.dart';
 import '../../settings/domain/app_settings.dart';
 import '../../../core/input/shortcut_dispatcher.dart';
 import '../../../core/presentation/input_scope.dart';
@@ -3302,7 +3301,7 @@ class _PlayerRateButton extends StatelessWidget {
           unawaited(session.setRate(rate));
         },
         itemBuilder: (_) => [
-          for (final rate in PlaybackRates.values)
+          for (final rate in session.playbackRates)
             PopupMenuItem(value: rate, child: Text('${rate}x')),
         ],
         child: Center(

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
 
-import '../../../domain/playback_rates.dart';
 import '../application/playback_session.dart';
 import '../domain/playback_repository.dart';
 import 'live_stream_picker.dart';
@@ -162,7 +161,7 @@ class PlayerMoreDialog extends StatelessWidget {
           title: const Text('播放速度'),
           subtitle: Text('${snapshot.rate}x'),
           children: [
-            for (final rate in PlaybackRates.values)
+            for (final rate in session.playbackRates)
               choice(
                 '${rate}x',
                 snapshot.rate == rate,

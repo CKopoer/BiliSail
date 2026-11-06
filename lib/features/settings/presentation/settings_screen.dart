@@ -13,7 +13,7 @@ import '../../../shared/ui/danmaku_settings_controls.dart';
 import '../../../shared/ui/player_controls_mode_setting.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/app_dialog.dart';
-import '../../../domain/playback_rates.dart';
+import '../../../shared/ui/playback_rate_options_setting.dart';
 import '../application/settings_controller.dart';
 import '../application/app_update_controller.dart';
 import '../domain/app_update.dart';
@@ -591,8 +591,12 @@ final class _SettingsCategoryPageState
                             '用于新打开的直播间；自动由服务端选择清晰度，权限和直播源限制仍适用。当前直播间的手动选择保持不变。',
                             style: TextStyle(fontSize: 12),
                           ),
+                          PlaybackRateOptionsSetting(
+                            rates: s.playbackRates,
+                            onChanged: controller.setPlaybackRates,
+                          ),
                           _choices('默认播放倍速', s.defaultPlaybackRate, {
-                            for (final rate in PlaybackRates.values)
+                            for (final rate in s.playbackRates)
                               rate: '${rate}x',
                           }, controller.setDefaultPlaybackRate),
                           const Text(

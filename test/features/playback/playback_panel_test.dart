@@ -62,6 +62,63 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final compact in [false, true]) {
+    testWidgets(
+      'custom rate menu and keyboard steps share options compact=$compact',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(compact ? 390 : 1400, 900);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(
+            session,
+            _FakeWindowService(),
+            AppSettings(playbackRates: [1.75, 4]),
+            width: compact ? 360 : 1200,
+          ),
+        );
+        await _pumpFrames(tester);
+        await session.pause();
+        await _showControls(tester);
+        if (compact) {
+          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.widgetWithText(ExpansionTile, '播放速度'));
+        } else {
+          await tester.tap(find.byTooltip('播放速度'));
+        }
+        await tester.pumpAndSettle();
+        expect(find.text('1.25x'), findsNothing);
+        final custom = compact
+            ? find.widgetWithText(ListTile, '1.75x')
+            : find.widgetWithText(PopupMenuItem<double>, '1.75x');
+        await tester.ensureVisible(custom);
+        await tester.tap(custom);
+        await tester.pumpAndSettle();
+        expect(engine.currentSnapshot.rate, 1.75);
+        if (compact) {
+          await tester.tapAt(const Offset(1, 1));
+          await tester.pumpAndSettle();
+        }
+        await tester.sendKeyEvent(LogicalKeyboardKey.f2);
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.rate, 2);
+        await tester.sendKeyEvent(LogicalKeyboardKey.f2);
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.rate, 4);
+        await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+        await _pumpFrames(tester);
+        expect(engine.currentSnapshot.rate, 2);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
+
   for (final (name, target) in <(String, ContentPlaybackTarget?)>[
     ('video', null),
     ('pgc', const PgcPlaybackTarget('12', cid: '123')),

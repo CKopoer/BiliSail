@@ -55,6 +55,38 @@ void main() {
   });
   tearDown(() => session.close());
 
+  testWidgets('listening uses custom rate options', (tester) async {
+    session.configureSettings(
+      AppSettings(playbackRates: [1.75, 4], resumePlayback: false),
+    );
+    await session.open(_detail, _part);
+    await session.setAudioOnly(true);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ListenableBuilder(
+          listenable: Listenable.merge([session, session.snapshots]),
+          builder: (_, _) => AudioPlaybackView(
+            session: session,
+            snapshot: session.snapshots.value,
+            fullScreen: false,
+            onFullScreen: () {},
+            navigation: const SizedBox.shrink(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('播放速度'));
+    await tester.pumpAndSettle();
+    expect(find.text('1.25x'), findsNothing);
+    await tester.tap(
+      find.widgetWithText(CheckedPopupMenuItem<double>, '1.75x'),
+    );
+    await tester.pumpAndSettle();
+    expect(engine.currentSnapshot.rate, 1.75);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   for (final manual in [false, true]) {
     for (final paused in [false, true]) {
       testWidgets(

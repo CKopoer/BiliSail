@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
 
-import '../../../domain/playback_rates.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../application/playback_session.dart';
@@ -170,7 +169,7 @@ class AudioPlaybackView extends StatelessWidget {
                         enabled: ready,
                         onSelected: (rate) => unawaited(session.setRate(rate)),
                         itemBuilder: (_) => [
-                          for (final rate in PlaybackRates.values)
+                          for (final rate in session.playbackRates)
                             CheckedPopupMenuItem(
                               value: rate,
                               checked: snapshot.rate == rate,

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/ui/app_dialog.dart';
-import '../../../domain/playback_rates.dart';
+import '../../../shared/ui/playback_rate_options_setting.dart';
 import '../../../shared/ui/danmaku_settings_controls.dart';
 import '../../../shared/ui/player_controls_mode_setting.dart';
 import '../../settings/application/settings_controller.dart';
@@ -304,13 +304,22 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                             },
                           ),
                         ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: PlaybackRateOptionsSetting(
+                            rates: s.playbackRates,
+                            onChanged: ref
+                                .read(settingsControllerProvider.notifier)
+                                .setPlaybackRates,
+                          ),
+                        ),
                         ListTile(
                           title: const Text('默认倍速'),
                           subtitle: DropdownButton<double>(
                             isExpanded: true,
                             value: s.defaultPlaybackRate,
                             items: [
-                              for (final rate in PlaybackRates.values)
+                              for (final rate in s.playbackRates)
                                 DropdownMenuItem(
                                   value: rate,
                                   child: Text('${rate}x'),

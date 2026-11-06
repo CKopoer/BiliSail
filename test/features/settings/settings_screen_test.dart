@@ -13,6 +13,83 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final player in [false, true]) {
+    testWidgets(
+      'custom rates are editable from settings entry player=$player',
+      (tester) async {
+        final repository = _SettingsRepository();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: player
+                    ? Builder(
+                        builder: (context) => TextButton(
+                          onPressed: () => showPlayerSettings(context),
+                          child: const Text('打开配置'),
+                        ),
+                      )
+                    : const SettingsScreen(category: SettingsCategory.playback),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (player) {
+          await tester.tap(find.text('打开配置'));
+          await tester.pumpAndSettle();
+        }
+        final add = find.text('添加倍速');
+        if (player) {
+          await tester.scrollUntilVisible(
+            add,
+            250,
+            scrollable: find
+                .descendant(
+                  of: find.byType(ListView).first,
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          );
+        }
+        await tester.ensureVisible(add);
+        await tester.pumpAndSettle();
+        await tester.tap(add);
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextFormField), '1.75');
+        await tester.tap(find.text('添加'));
+        await tester.pumpAndSettle();
+        expect(repository.settings.playbackRates, contains(1.75));
+        if (player) {
+          final dropdown = find.byType(DropdownButton<double>);
+          await tester.ensureVisible(dropdown);
+          await tester.pumpAndSettle();
+          await tester.tap(dropdown);
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('1.75x').last);
+        } else {
+          final choice = find.widgetWithText(ChoiceChip, '1.75x');
+          await tester.ensureVisible(choice);
+          await tester.pumpAndSettle();
+          await tester.tap(choice);
+        }
+        await tester.pumpAndSettle();
+        expect(repository.settings.defaultPlaybackRate, 1.75);
+        final remove = find.byTooltip('删除 1.75x');
+        await tester.ensureVisible(remove);
+        await tester.pumpAndSettle();
+        await tester.tap(remove);
+        await tester.pumpAndSettle();
+        expect(repository.settings.defaultPlaybackRate, 1);
+        expect(repository.settings.playbackRates, isNot(contains(1.75)));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final failSave in [false, true]) {
     testWidgets(
       'player configuration saves playback mode or rolls back: $failSave',

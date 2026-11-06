@@ -127,6 +127,7 @@ class PlaybackSession extends ChangeNotifier {
   final PlaybackRateMemory _rateMemory;
   final PlaybackVolumeMemory _volumeMemory;
   AppSettings _settings = const AppSettings.defaults();
+  List<double> get playbackRates => _settings.playbackRates;
   RequestCancellation? _sponsorCancellation;
   List<SponsorSegment> sponsorSegments = const [];
   final Set<String> _skippedSponsors = {};
@@ -1875,6 +1876,9 @@ class PlaybackSession extends ChangeNotifier {
               _settings.sponsorBlockCategories.join(',')) {
         unawaited(_loadSponsorSegments());
       }
+    }
+    if (!listEquals(previous.playbackRates, _settings.playbackRates)) {
+      notifyListeners();
     }
   }
 

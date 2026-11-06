@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../../domain/playback_rates.dart';
+
 import '../../../domain/recommendation_settings.dart';
 
 import '../../../core/storage/app_database.dart';
@@ -193,6 +195,7 @@ class SqliteSettingsRepository implements SettingsRepository {
               .firstOrNull ??
           VideoDecodingPreference.automatic,
       defaultPlaybackRate: number('defaultPlaybackRate', 1.0),
+      playbackRates: PlaybackRates.fromJson(decoded['playbackRates']),
       rememberPlaybackRate: boolean('rememberPlaybackRate', true),
       fullscreenSwipeControls: boolean('fullscreenSwipeControls', true),
       playerFullscreenGestureReverse: boolean(
@@ -265,7 +268,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 39,
+        'schemaVersion': 40,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -312,6 +315,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'mediaCdn': value.mediaCdn.name,
         'videoDecoding': value.videoDecoding.name,
         'defaultPlaybackRate': value.defaultPlaybackRate,
+        'playbackRates': value.playbackRates,
         'rememberPlaybackRate': value.rememberPlaybackRate,
         'defaultVolume': value.defaultVolume,
         'rememberVolumeGlobally': value.rememberVolumeGlobally,

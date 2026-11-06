@@ -255,9 +255,13 @@ final class PlaybackShortcutController extends ChangeNotifier {
         if (volume > 0) _savedVolume = volume;
         await session.setVolume(volume > 0 ? 0 : _savedVolume);
       case ShortcutAction.slower:
-        await session.setRate(PlaybackRates.slower(session.commandRate));
+        await session.setRate(
+          PlaybackRates.slower(session.commandRate, session.playbackRates),
+        );
       case ShortcutAction.faster:
-        await session.setRate(PlaybackRates.faster(session.commandRate));
+        await session.setRate(
+          PlaybackRates.faster(session.commandRate, session.playbackRates),
+        );
       case ShortcutAction.toggleRate:
         await session.setRate(session.commandRate == 1 ? 2 : 1);
       case ShortcutAction.danmaku:
