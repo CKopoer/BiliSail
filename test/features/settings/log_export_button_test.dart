@@ -15,52 +15,66 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/memory_settings_repository.dart';
 
 void main() {
-  testWidgets('export completes after resizing the settings header', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(1280, 800);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    addTearDown(tester.view.resetPhysicalSize);
-    final repository = _Exporter();
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          settingsRepositoryProvider.overrideWithValue(
-            MemorySettingsRepository(),
+  for (final initialWidth in [375.0, 1280.0]) {
+    testWidgets(
+      'export completes after resizing the settings header: $initialWidth',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(initialWidth, 800);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final repository = _Exporter();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(
+                MemorySettingsRepository(),
+              ),
+              logExportRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: MaterialApp(
+              builder: AppNoticeHost.builder,
+              home: const Scaffold(
+                body: SettingsScreen(category: SettingsCategory.subtitles),
+              ),
+            ),
           ),
-          logExportRepositoryProvider.overrideWithValue(repository),
-        ],
-        child: MaterialApp(
-          builder: AppNoticeHost.builder,
-          home: const Scaffold(
-            body: SettingsScreen(category: SettingsCategory.subtitles),
-          ),
-        ),
-      ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('export-logs')));
+        await tester.pump();
+        // Avoid pumpAndSettle while the export progress indicator is animating.
+        for (final width in [320.0, 600.0, 1280.0, 375.0]) {
+          tester.view.physicalSize = Size(width, 800);
+          await tester.pump();
+          final export = find.byKey(const ValueKey('export-logs'));
+          if (width < 600) {
+            expect(find.byTooltip('正在导出…'), findsOneWidget);
+            expect(tester.widget<IconButton>(export).onPressed, isNull);
+          } else {
+            expect(find.text('正在导出…'), findsOneWidget);
+            expect(tester.widget<TextButton>(export).onPressed, isNull);
+          }
+          expect(tester.getRect(export).right, width - 20);
+          expect(
+            tester.getCenter(export).dy,
+            tester
+                .getCenter(find.byKey(const ValueKey('settings-page-title')))
+                .dy,
+          );
+          expect(tester.takeException(), isNull);
+        }
+        expect(repository.calls, 1);
+        repository.pending.complete('Documents/BiliSail/exported_logs/log.zip');
+        await tester.pumpAndSettle();
+        expect(find.text('日志已导出'), findsOneWidget);
+        await tester.tap(find.text('完成'));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('导出日志').hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
     );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('导出日志'));
-    await tester.pump();
-    // Avoid pumpAndSettle while the export progress indicator is animating.
-    for (final width in [320.0, 600.0, 1280.0, 375.0]) {
-      tester.view.physicalSize = Size(width, 800);
-      await tester.pump();
-      final export = find.byKey(const ValueKey('export-logs'));
-      expect(find.text('正在导出…'), findsOneWidget);
-      expect(tester.widget<TextButton>(export).onPressed, isNull);
-      expect(tester.getRect(export).right, width - 20);
-      expect(tester.takeException(), isNull);
-    }
-    expect(repository.calls, 1);
-    repository.pending.complete('Documents/BiliSail/exported_logs/log.zip');
-    await tester.pumpAndSettle();
-    expect(find.text('日志已导出'), findsOneWidget);
-    await tester.tap(find.text('完成'));
-    await tester.pumpAndSettle();
-    expect(find.text('导出日志').hitTestable(), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  }
 
   for (final fail in [false, true]) {
     testWidgets('export reports location or error and allows retry: $fail', (

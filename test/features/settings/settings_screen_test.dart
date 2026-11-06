@@ -503,10 +503,16 @@ void main() {
       expect(resetRect.center.dy, exportRect.center.dy);
       expect(exportRect.left - resetRect.right, closeTo(8, .01));
       expect(exportRect.right, width - 20);
-      if (width >= 600) {
-        expect(resetRect.center.dy, tester.getCenter(title).dy);
+      expect(resetRect.center.dy, tester.getCenter(title).dy);
+      expect(resetRect.left, greaterThan(tester.getRect(title).right));
+      if (width < 600) {
+        expect(find.byTooltip('恢复默认设置'), findsOneWidget);
+        expect(find.byTooltip('导出日志'), findsOneWidget);
+        expect(resetRect.size, const Size(48, 48));
+        expect(exportRect.size, const Size(48, 48));
       } else {
-        expect(resetRect.top, greaterThan(tester.getBottomLeft(title).dy));
+        expect(find.text('恢复默认设置'), findsOneWidget);
+        expect(find.text('导出日志'), findsOneWidget);
       }
       expect(
         tester.getTopLeft(strip).dy,
@@ -531,6 +537,13 @@ void main() {
       expect(tester.getRect(strip), stripRect);
       expect(tester.takeException(), isNull);
     }
+    await tester.tap(reset);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<IconButton>(reset).onPressed, isNotNull);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -1473,6 +1486,13 @@ void main() {
         expect(rect.bottom, lessThanOrEqualTo(tester.getTopLeft(strip).dy));
       }
       expect(tester.getRect(reset).overlaps(tester.getRect(export)), isFalse);
+      final title = find.byKey(const ValueKey('settings-page-title'));
+      expect(tester.getCenter(reset).dy, tester.getCenter(title).dy);
+      expect(tester.getCenter(export).dy, tester.getCenter(title).dy);
+      if (width < 1200) {
+        expect(find.byTooltip('恢复默认设置'), findsOneWidget);
+        expect(find.byTooltip('导出日志'), findsOneWidget);
+      }
       expect(tester.takeException(), isNull);
     }
     final darkChoice = find.widgetWithText(ChoiceChip, '深色');
