@@ -1125,9 +1125,14 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     // Claim only the picture's wheel event so enclosing pages do not scroll.
     GestureBinding.instance.pointerSignalResolver.register(event, (_) {
       if (!mounted || !widget.active || !_appActive) return;
-      unawaited(
-        widget.shortcuts.adjustVolume(event.scrollDelta.dy < 0 ? 5 : -5),
-      );
+      final dy = event.scrollDelta.dy;
+      // macOS can split one wheel movement into many precise pixel deltas.
+      // Flutter maps a non-precise scroll line to 40 logical pixels there.
+      // Keep fractional volume so splitting the distance cannot amplify it.
+      final steps = defaultTargetPlatform == TargetPlatform.macOS
+          ? dy / 40
+          : dy.sign;
+      unawaited(widget.shortcuts.adjustVolume(-5 * steps));
     });
   }
 

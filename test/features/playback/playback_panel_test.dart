@@ -51,6 +51,7 @@ import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/application/video_extras_controller.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bili_player/bili_player.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/gestures.dart';
@@ -5191,9 +5192,74 @@ void main() {
     ('live', const LivePlaybackTarget('12')),
     ('offline', const OfflinePlaybackTarget('local-task')),
   ]) {
-    testWidgets('$content player wheel adjusts volume inline and fullscreen', (
-      tester,
-    ) async {
+    testWidgets(
+      '$content player wheel adjusts volume inline and fullscreen',
+      (tester) async {
+        final engine = _FakeEngine()..interactiveSurface = true;
+        final session = _session(engine);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(
+            session,
+            _FakeWindowService(),
+            AppSettings(shortcuts: ShortcutSettings(enabled: false)),
+            target: target,
+          ),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        await session.pause();
+        final generation = engine.currentSnapshot.generation;
+        final position = engine.currentSnapshot.position;
+        final wheelDistance = defaultTargetPlatform == TargetPlatform.macOS
+            ? 40.0
+            : 120.0;
+        for (final fullscreen in [false, true]) {
+          if (fullscreen) {
+            await tester.tap(find.byTooltip('全屏'));
+            await _pumpFrames(tester);
+          }
+          final point = tester.getCenter(
+            find.byKey(const ValueKey('player-surface-tap-target')),
+          );
+          await session.setVolume(50);
+          _wheel(tester, point, Offset(0, -wheelDistance));
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.volume, 55);
+          expect(find.text('音量 55%'), findsOneWidget);
+          _wheel(tester, point, Offset(0, wheelDistance));
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.volume, 50);
+          await session.setVolume(98);
+          _wheel(tester, point, Offset(0, -wheelDistance));
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.volume, 100);
+          await session.setVolume(2);
+          _wheel(tester, point, Offset(0, wheelDistance));
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.volume, 0);
+          expect(engine.currentSnapshot.position, position);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(engine.currentSnapshot.generation, generation);
+          expect(engine.surfaceGestures, 0);
+          expect(engine.opens, 1);
+          expect(engine.maxSurfaces, 1);
+        }
+        await tester.tap(find.byTooltip('退出全屏'));
+        await _pumpFrames(tester);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+      variant: TargetPlatformVariant({
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+      }),
+    );
+  }
+
+  testWidgets(
+    'macOS player wheel preserves distance across split events inline and fullscreen',
+    (tester) async {
       final engine = _FakeEngine()..interactiveSurface = true;
       final session = _session(engine);
       addTearDown(session.close);
@@ -5202,7 +5268,6 @@ void main() {
           session,
           _FakeWindowService(),
           AppSettings(shortcuts: ShortcutSettings(enabled: false)),
-          target: target,
         ),
       );
       await _pumpFrames(tester);
@@ -5212,41 +5277,80 @@ void main() {
       final position = engine.currentSnapshot.position;
       for (final fullscreen in [false, true]) {
         if (fullscreen) {
+          await _showControls(tester);
           await tester.tap(find.byTooltip('全屏'));
           await _pumpFrames(tester);
         }
         final point = tester.getCenter(
           find.byKey(const ValueKey('player-surface-tap-target')),
         );
-        await session.setVolume(50);
-        _wheel(tester, point, const Offset(0, -120));
-        await _pumpFrames(tester);
-        expect(engine.currentSnapshot.volume, 55);
-        expect(find.text('音量 55%'), findsOneWidget);
-        _wheel(tester, point, const Offset(0, 120));
-        await _pumpFrames(tester);
-        expect(engine.currentSnapshot.volume, 50);
-        await session.setVolume(98);
-        _wheel(tester, point, const Offset(0, -120));
-        await _pumpFrames(tester);
-        expect(engine.currentSnapshot.volume, 100);
-        await session.setVolume(2);
-        _wheel(tester, point, const Offset(0, 120));
-        await _pumpFrames(tester);
-        expect(engine.currentSnapshot.volume, 0);
-        expect(engine.currentSnapshot.position, position);
-        expect(engine.currentSnapshot.desiredPlaying, isFalse);
-        expect(engine.currentSnapshot.generation, generation);
-        expect(engine.surfaceGestures, 0);
-        expect(engine.opens, 1);
-        expect(engine.maxSurfaces, 1);
+        for (final (count, dy, expected) in <(int, double, double)>[
+          (1, -40, 55),
+          (20, -2, 55),
+          (1, -120, 65),
+          (20, -6, 65),
+          (1, 120, 35),
+          (20, 6, 35),
+          (10, -.01, 50.0125),
+          (10, .01, 49.9875),
+          (1, -400, 100),
+          (1, 400, 0),
+        ]) {
+          await session.setVolume(50);
+          for (var i = 0; i < count; i++) {
+            _wheel(tester, point, Offset(0, dy));
+          }
+          expect(session.commandVolume, closeTo(expected, .000001));
+          await _pumpFrames(tester);
+          expect(engine.currentSnapshot.volume, closeTo(expected, .000001));
+          expect(engine.currentSnapshot.position, position);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(engine.currentSnapshot.generation, generation);
+          expect(engine.surfaceGestures, 0);
+          expect(engine.opens, 1);
+          expect(engine.maxSurfaces, 1);
+        }
       }
+      await _showControls(tester);
       await tester.tap(find.byTooltip('退出全屏'));
       await _pumpFrames(tester);
       await tester.pumpWidget(const SizedBox());
       await _pumpFrames(tester);
-    });
-  }
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+  );
+
+  testWidgets(
+    'macOS player wheel accumulates split distances before engine confirmation',
+    (tester) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, _FakeWindowService(), const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      await session.pause();
+      await session.setVolume(50);
+      final gate = Completer<void>();
+      engine.nextVolume = gate;
+      final point = tester.getCenter(
+        find.byKey(const ValueKey('player-surface-tap-target')),
+      );
+      for (var i = 0; i < 20; i++) {
+        _wheel(tester, point, const Offset(0, -2));
+      }
+      expect(session.commandVolume, 55);
+      expect(engine.currentSnapshot.volume, 50);
+      gate.complete();
+      await _pumpFrames(tester);
+      expect(engine.currentSnapshot.volume, 55);
+      expect(find.text('音量 55%'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+  );
 
   testWidgets('player wheel consumes scrolling only inside the picture', (
     tester,
