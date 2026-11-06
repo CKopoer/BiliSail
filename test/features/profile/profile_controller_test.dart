@@ -5,6 +5,8 @@ import '../../support/follow_repository_fake.dart';
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/dynamic_post.dart';
+import 'package:bilisail/core/platform/external_links.dart';
 
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
@@ -51,6 +53,58 @@ void main() {
   tearDown(() {
     container.dispose();
     auth.stream.close();
+  });
+  testWidgets('space dynamic and forwarded live cards open the room callback', (
+    tester,
+  ) async {
+    final opened = <RoomId>[], browser = <Uri>[];
+    final live = DynamicPost(
+      id: '91',
+      linkTitle: '空间直播间',
+      linkUrl: Uri.parse('https://live.bilibili.com/12'),
+    );
+    for (final forwarded in [false, true]) {
+      repo.items = [
+        ProfileEntry(
+          id: '90',
+          kind: ProfileEntryKind.dynamic,
+          title: '',
+          dynamicPost: forwarded ? DynamicPost(id: '90', original: live) : live,
+        ),
+      ];
+      repo.hasMore = false;
+      controller.select(ProfileSection.dynamics);
+      await controller.load(refresh: true);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: ProviderScope(
+            overrides: [
+              externalLinkOpenerProvider.overrideWithValue((uri) async {
+                browser.add(uri);
+                return true;
+              }),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: ProfileScreen(
+                  id: id,
+                  initialSection: ProfileSection.dynamics,
+                  onOpenLiveRoom: opened.add,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('空间直播间'));
+      await tester.tap(find.text('空间直播间'));
+      await tester.pumpAndSettle();
+    }
+    expect(opened, [const RoomId('12'), const RoomId('12')]);
+    expect(browser, isEmpty);
+    expect(tester.takeException(), isNull);
   });
   test(
     'details failure preserves the basic card and list; retry recovers',

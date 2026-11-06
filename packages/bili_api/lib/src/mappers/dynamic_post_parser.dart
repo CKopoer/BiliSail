@@ -99,9 +99,12 @@ ApiDynamicPost parseDynamicPost(
       none.isNotEmpty;
   final article = _map(major['article']);
   final common = _map(major['common']);
-  final live = _map(major['live']).isNotEmpty
-      ? _map(major['live'])
-      : _liveRecommendation(major['live_rcmd']);
+  final directLive = _map(major['live']);
+  final live = directLive.isNotEmpty
+      ? _liveLink(directLive, _id(directLive['id'] ?? directLive['room_id']))
+      : _liveRecommendation(
+          major['live_rcmd'] ?? _map(major['subscription_new'])['live_rcmd'],
+        );
   final link = article.isNotEmpty
       ? article
       : common.isNotEmpty
@@ -155,11 +158,12 @@ ApiDynamicPost parseDynamicPost(
     typeLabel: switch (type) {
       'DYNAMIC_TYPE_ARTICLE' => '专栏',
       'DYNAMIC_TYPE_LIVE_RCMD' || 'DYNAMIC_TYPE_LIVE' => '直播',
+      'DYNAMIC_TYPE_SUBSCRIPTION_NEW' when live.isNotEmpty => '直播',
       'DYNAMIC_TYPE_FORWARD' => '转发',
       _ => '',
     },
-    linkTitle: _text(link['title']),
-    linkDescription: _text(link['desc']),
+    linkTitle: _text(link['title'], fallback: live.isNotEmpty ? '直播间' : ''),
+    linkDescription: _text(link['desc'] ?? link['desc_first']),
     linkCoverUrl: _uri(link['cover'] ?? (_list(article['covers']).firstOrNull)),
     linkUrl:
         _officialUri(link['jump_url']) ?? Uri.https('t.bilibili.com', '/$id'),
@@ -265,15 +269,16 @@ Map<String, Object?> _liveRecommendation(Object? v) {
   try {
     final root = _map(jsonDecode(content));
     final info = _map(root['live_play_info']);
-    final roomId = _id(info['room_id']);
-    return {
-      ...info,
-      'jump_url': roomId == null ? null : 'https://live.bilibili.com/$roomId',
-    };
+    return info.isEmpty ? const {} : _liveLink(info, _id(info['room_id']));
   } on FormatException {
     return const {};
   }
 }
+
+Map<String, Object?> _liveLink(Map<String, Object?> info, String? roomId) => {
+  ...info,
+  if (roomId != null) 'jump_url': 'https://live.bilibili.com/$roomId',
+};
 
 bool _hasReadableBody(Map<String, Object?> body) {
   if (_text(body['text']).trim().isNotEmpty) return true;

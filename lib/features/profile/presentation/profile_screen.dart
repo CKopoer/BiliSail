@@ -15,6 +15,7 @@ import '../../../shared/ui/app_dialog.dart';
 import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/image_viewer.dart';
 import '../../live/domain/live_room.dart';
+import '../../dynamic/domain/dynamic_link.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/retained_tab_view.dart';
@@ -423,6 +424,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 onOpenVideo: widget.onOpenVideo,
                 onOpenUser: widget.onOpenUser,
                 onOpenPlaylist: widget.onOpenPlaylist,
+                onOpenLiveRoom: widget.onOpenLiveRoom,
                 onOpenSeason: widget.onOpenSeason,
               ),
             ),
@@ -443,6 +445,7 @@ class _ProfileSectionPage extends ConsumerStatefulWidget {
     this.onOpenVideo,
     this.onOpenUser,
     this.onOpenPlaylist,
+    this.onOpenLiveRoom,
     this.onOpenSeason,
   });
 
@@ -452,6 +455,7 @@ class _ProfileSectionPage extends ConsumerStatefulWidget {
   final ValueChanged<VideoSummary>? onOpenVideo;
   final ValueChanged<UserId>? onOpenUser;
   final void Function(VideoSummary, String queueId)? onOpenPlaylist;
+  final ValueChanged<RoomId>? onOpenLiveRoom;
   final ValueChanged<String>? onOpenSeason;
 
   @override
@@ -493,7 +497,14 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
     widget.onOpenPlaylist?.call(queue.items[index].video, queue.id);
   }
 
-  void _openLink(Uri uri) => ref.read(externalLinkOpenerProvider)(uri);
+  void _openLink(Uri uri) {
+    final room = dynamicLiveRoom(uri);
+    if (room != null && widget.onOpenLiveRoom != null) {
+      widget.onOpenLiveRoom!(room);
+      return;
+    }
+    ref.read(externalLinkOpenerProvider)(uri);
+  }
 
   Future<void> _playAll() async {
     final queue = await ref

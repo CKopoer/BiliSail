@@ -59,6 +59,100 @@ Map<String, Object?> post({
 };
 void main() {
   for (final home in [true, false]) {
+    for (final type in [
+      'DYNAMIC_TYPE_LIVE',
+      'DYNAMIC_TYPE_LIVE_RCMD',
+      'DYNAMIC_TYPE_SUBSCRIPTION_NEW',
+    ]) {
+      for (final forwarded in [true, false]) {
+        test(
+          '${home ? 'home' : 'space'} $type ${forwarded ? 'original' : 'direct'} has a live room link',
+          () async {
+            const roomId = '900719925474099312345';
+            final recommendation = {
+              'content': jsonEncode({
+                'live_play_info': {
+                  'room_id': roomId,
+                  'cover': '//i0.hdslb.com/live.png',
+                },
+              }),
+            };
+            final live = {
+              ...post(
+                major: {
+                  if (type == 'DYNAMIC_TYPE_LIVE')
+                    'live': {'id': roomId, 'desc_first': '直播分区'}
+                  else if (type == 'DYNAMIC_TYPE_LIVE_RCMD')
+                    'live_rcmd': recommendation
+                  else
+                    'subscription_new': {'live_rcmd': recommendation},
+                },
+              ),
+              'type': type,
+            };
+            final api = BiliApiClient(
+              transport: DynamicTransport([
+                forwarded ? post(id: '1', original: live) : live,
+              ]),
+            );
+            final entry = home
+                ? (await HomeClient(api).load(
+                    channel: 'dynamic',
+                    section: '全部',
+                    page: 1,
+                  )).items.single.dynamicPost
+                : (await ProfileClient(
+                    api,
+                  ).loadDynamics('2')).items.single.dynamicPost;
+            final value = forwarded ? entry?.original : entry;
+            expect(value?.typeLabel, '直播');
+            expect(value?.linkTitle, '直播间');
+            expect(
+              value?.linkUrl.toString(),
+              'https://live.bilibili.com/$roomId',
+            );
+            if (type == 'DYNAMIC_TYPE_LIVE') {
+              expect(value?.linkDescription, '直播分区');
+            }
+          },
+        );
+      }
+    }
+  }
+  test(
+    'invalid room IDs and malformed recommendation JSON do not invent live links',
+    () async {
+      for (final major in [
+        {
+          'live': {'id': 12.0, 'title': '无效直播'},
+        },
+        {
+          'live': {'id': '0', 'title': '无效直播'},
+        },
+        {
+          'live_rcmd': {'content': 'invalid json'},
+        },
+        {
+          'live_rcmd': {
+            'content': jsonEncode({
+              'live_play_info': {'room_id': -1},
+            }),
+          },
+        },
+        {
+          'live_rcmd': {'content': 'x' * 65537},
+        },
+      ]) {
+        final value = (await ProfileClient(
+          BiliApiClient(
+            transport: DynamicTransport([post(id: '12', major: major)]),
+          ),
+        ).loadDynamics('2')).items.single.dynamicPost;
+        expect(value?.linkUrl.toString(), 'https://t.bilibili.com/12');
+      }
+    },
+  );
+  for (final home in [true, false]) {
     for (final opus in [true, false]) {
       test(
         '${home ? 'home' : 'space'} ${opus ? 'opus' : 'draw'} keeps valid picture ratios',

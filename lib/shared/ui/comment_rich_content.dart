@@ -7,6 +7,7 @@ import 'app_network_image.dart';
 import 'bili_badges.dart';
 import 'image_viewer.dart';
 import '../../features/comments/domain/comment_text.dart';
+import '../../features/comments/domain/comment_time.dart';
 import '../../features/comments/domain/comments_repository.dart';
 import 'comment_text_styles.dart';
 
@@ -244,7 +245,7 @@ class CommentAuthorHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context), c = comment;
     final styles = CommentTextStyles(theme);
-    final time = c.publishedAt?.toLocal();
+    final time = commentTimeLabel(c.publishedAt);
     final location = c.ipLocation?.trim();
     final hasLocation = location != null && location.isNotEmpty;
     final identity = Column(
@@ -293,20 +294,14 @@ class CommentAuthorHeader extends StatelessWidget {
               ),
           ],
         ),
-        if (time != null || hasLocation)
+        if (time.isNotEmpty || hasLocation)
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Wrap(
               spacing: 8,
               runSpacing: 2,
               children: [
-                if (time != null)
-                  Text(
-                    time.year == DateTime.now().year
-                        ? '${time.month}-${time.day}'
-                        : '${time.year}-${time.month}-${time.day}',
-                    style: styles.metadata,
-                  ),
+                if (time.isNotEmpty) Text(time, style: styles.metadata),
                 if (hasLocation) Text(location, style: styles.metadata),
               ],
             ),

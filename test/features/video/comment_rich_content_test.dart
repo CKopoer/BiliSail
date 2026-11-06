@@ -227,11 +227,9 @@ void main() {
   ) async {
     final year = DateTime.now().year;
     final dates = [
-      (DateTime(year, 5, 25), '5-25'),
-      (DateTime(year - 1, 5, 25), '${year - 1}-5-25'),
-      (DateTime(year + 1, 5, 25), '${year + 1}-5-25'),
-      (DateTime(year, 1, 1).toUtc(), '1-1'),
-      (DateTime(year - 1, 12, 31, 23, 59).toUtc(), '${year - 1}-12-31'),
+      (DateTime(year - 1, 5, 25), '${year - 1}-05-25'),
+      (DateTime(year + 1, 5, 25), '${year + 1}-05-25'),
+      (DateTime(year - 1, 1, 1).toUtc(), '${year - 1}-01-01'),
     ];
     for (final (publishedAt, label) in dates) {
       await tester.pumpWidget(
@@ -263,14 +261,14 @@ void main() {
               id: '1',
               author: 'reader',
               message: 'comment',
-              publishedAt: DateTime(DateTime.now().year, 10, 7),
+              publishedAt: DateTime.now().subtract(const Duration(minutes: 5)),
               ipLocation: 'IP属地：广东',
             ),
           ),
         ),
       ),
     );
-    final date = find.text('10-7');
+    final date = find.text('5分钟前');
     final location = find.text('IP属地：广东');
     expect(
       tester.widget<Text>(location).style,
@@ -292,14 +290,16 @@ void main() {
                 id: '1',
                 author: 'reader',
                 message: 'comment',
-                publishedAt: DateTime(DateTime.now().year, 10, 7),
+                publishedAt: DateTime.now().subtract(
+                  const Duration(seconds: 30),
+                ),
                 ipLocation: location,
               ),
             ),
           ),
         ),
       );
-      expect(find.text('10-7'), findsOneWidget);
+      expect(find.text('刚刚'), findsOneWidget);
       expect(find.textContaining('IP属地'), findsNothing);
       expect(find.byType(Text), findsNWidgets(2));
       expect(tester.takeException(), isNull);

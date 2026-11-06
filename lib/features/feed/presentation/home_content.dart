@@ -37,6 +37,7 @@ import '../application/favorite_playback_queue.dart';
 import '../application/watch_later_removal_controller.dart';
 import '../domain/home_channel.dart';
 import '../domain/home_repository.dart';
+import '../../dynamic/domain/dynamic_link.dart';
 
 final class HomeContent extends ConsumerStatefulWidget {
   const HomeContent({
@@ -370,7 +371,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
         ],
         onOpenUser: (id) => context.go('/user/${id.value}'),
         onOpenVideo: (video) => context.go('/video/${video.id.value}'),
-        onOpenLink: _openLink,
+        onOpenLink: _openDynamicLink,
         // Routes recreate callbacks on each navigation. Forward through this
         // State so cached cards use the latest action without a new delegate.
         onLogin: widget.onLogin == null ? null : _login,
@@ -699,6 +700,15 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
     }
     final uri = entry.url;
     if (uri == null) return;
+    await _openLink(uri);
+  }
+
+  Future<void> _openDynamicLink(Uri uri) async {
+    final room = dynamicLiveRoom(uri);
+    if (room != null) {
+      context.go('/live/${room.value}');
+      return;
+    }
     await _openLink(uri);
   }
 
