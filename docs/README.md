@@ -62,6 +62,10 @@
 | [Windows 公开 4K60 播放性能](validation/windows-4k60-playback-2026-11-05.md) | Blender 公开素材、实际硬解、弹幕／控件叠加、Profile 稳态采样与瓶颈边界 |
 | [Android 4K60 播放热点](validation/android-4k60-playback-2026-11-05.md) | 真机硬解／高刷合成、Perfetto 热点、HTTP 弱网模拟及音画同步边界 |
 | [Android 4K60 HEVC／AV1 对照](validation/android-4k60-codecs-2026-11-05.md) | 8-bit／10-bit 实际硬件组件、同片对照、合成帧率复测与解码瓶颈边界 |
+| [Android 4K60 H.264 双倍速与长按](validation/android-4k60-h264-2x-hold-2026-11-06.md) | 持续 2x、原生触摸反复切换、输出掉帧、后端时钟峰值与合成等待 |
+| [Android 倍速切换掉帧定位与优化候选](validation/android-rate-switch-optimization-2026-11-06.md) | 松手窗口归因、原生速率／音频时钟观测、视口纹理候选与离线回归 |
+| [Android 倍速切换优化实机复测](validation/android-rate-switch-device-2026-11-06.md) | H.264 4K60 同包因素对照、160 次长按、时钟平滑／纹理负载收益与残余停顿 |
+| [长按倍速与官网／原生时钟对照](validation/hold-rate-web-native-2026-11-06.md) | 官网实际调用链、Chromium／mpv／Media3 差异、回切时钟平滑与验证边界 |
 | [Windows GPU 优化结果](validation/windows-gpu-optimization-2026-10-13.md) | 非 copy-back 硬解、GPU 有序提交、空弹幕单次唤醒与同素材前后实测 |
 | [Windows 弹幕 GPU 对照](validation/windows-danmaku-gpu-analysis-2026-10-13.md) | 弹幕密度、固定文字、合成帧率与同素材测量边界 |
 | [官方弹幕合成检查](validation/official-danmaku-composition-2026-10-13.md) | 官网 DOM、图层和录制行为的参考证据 |

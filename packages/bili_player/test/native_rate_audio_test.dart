@@ -32,6 +32,8 @@ void main() {
         'read:audio-buffer',
         'write:af=scaletempo2',
         'read:af',
+        'write:autosync=30',
+        'read:autosync',
       ]);
       expect(properties['volume'], '35');
       expect(properties['replaygain-fallback'], '3');
@@ -46,6 +48,7 @@ void main() {
           'cache-pause-wait',
           'audio-buffer',
           'af',
+          'autosync',
         ]),
       );
     },
@@ -54,7 +57,12 @@ void main() {
   test('accepts normalized output buffer readback', () async {
     await configureNativeRateAudio(
       write: (_, _) async {},
-      read: (key) async => key == 'audio-buffer' ? '0.050000' : 'scaletempo2',
+      read: (key) async => switch (key) {
+        'audio-buffer' => '0.050000',
+        'af' => 'scaletempo2',
+        'autosync' => '30',
+        _ => throw StateError('Unexpected property: $key'),
+      },
       isCurrent: () => true,
       timeout: const Duration(seconds: 2),
     );
@@ -93,7 +101,27 @@ void main() {
     });
   }
 
-  for (var supersedeAfter = 0; supersedeAfter <= 4; supersedeAfter++) {
+  for (final applied in ['', '0', '1', 'NaN', 'invalid']) {
+    test('rejects unapplied audio clock smoothing: $applied', () async {
+      final writes = <String>[];
+      await expectLater(
+        configureNativeRateAudio(
+          write: (key, _) async => writes.add(key),
+          read: (key) async => switch (key) {
+            'audio-buffer' => '0.05',
+            'af' => 'scaletempo2',
+            _ => applied,
+          },
+          isCurrent: () => true,
+          timeout: const Duration(seconds: 2),
+        ),
+        throwsStateError,
+      );
+      expect(writes, ['audio-buffer', 'af', 'autosync']);
+    });
+  }
+
+  for (var supersedeAfter = 0; supersedeAfter <= 6; supersedeAfter++) {
     test(
       'source replacement stops rate preparation after operation $supersedeAfter',
       () async {
@@ -111,7 +139,12 @@ void main() {
             },
             read: (key) async {
               record('read:$key');
-              return key == 'audio-buffer' ? '0.05' : 'scaletempo2';
+              return switch (key) {
+                'audio-buffer' => '0.05',
+                'af' => 'scaletempo2',
+                'autosync' => '30',
+                _ => throw StateError('Unexpected property: $key'),
+              };
             },
             isCurrent: () => current,
             timeout: const Duration(seconds: 2),
@@ -147,7 +180,7 @@ void main() {
     expect(reads, 0);
   });
 
-  test('buffer and filter preparation share one deadline', () async {
+  test('rate audio preparation shares one deadline', () async {
     final operations = <String>[];
     await expectLater(
       configureNativeRateAudio(

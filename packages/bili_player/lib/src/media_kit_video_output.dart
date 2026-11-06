@@ -10,6 +10,7 @@ import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
 
 import 'player_contract.dart';
+import 'android_video_viewport.dart';
 import 'native_video_surface.dart';
 import 'video_composition.dart';
 import 'video_decoder_configuration.dart';
@@ -17,9 +18,15 @@ import 'video_decoder_configuration.dart';
 /// Owns the current media-kit output without issuing playback commands.
 final class MediaKitVideoOutput
     implements FlutterVideoOutput, VideoFrameReadiness {
-  MediaKitVideoOutput() {
+  MediaKitVideoOutput({bool? limitAndroidOutputToViewport})
+    : limitAndroidOutputToViewport =
+          limitAndroidOutputToViewport ??
+          const bool.fromEnvironment('BILISAIL_ANDROID_VIEWPORT') {
     _controller.addListener(_observeFrameReadiness);
   }
+
+  /// Keep this candidate opt-in until device resize/color acceptance completes.
+  final bool limitAndroidOutputToViewport;
 
   final ValueNotifier<mkv.VideoController?> _controller = ValueNotifier(null);
   final ValueNotifier<bool> _frameReady = ValueNotifier(false);
@@ -62,6 +69,10 @@ final class MediaKitVideoOutput
 
     void update() {
       if (!isCurrent()) return;
+      if (controller.rect.value case final rect?
+          when rect.width > 1 && rect.height > 1) {
+        _updateAndroidViewport();
+      }
       if (!canPresent()) {
         _frameReady.value = false;
         return;
@@ -125,8 +136,54 @@ final class MediaKitVideoOutput
   Future<void> _androidSurfaceSize = Future.value();
   bool _androidSurfaceSizeFailed = false;
   int _androidSurfaceRevision = 0;
+  AndroidVideoSurfaceSizer? _androidViewportSizer;
 
-  void enableAndroidDolbyVision() => _androidDolbyVision = true;
+  bool get _usesAndroidViewport =>
+      Platform.isAndroid &&
+      limitAndroidOutputToViewport &&
+      !_androidDolbyVision;
+
+  VideoDimensions _androidTarget(VideoDimensions source) {
+    if (!_usesAndroidViewport) return source;
+    final layout = _viewportLayout;
+    if (layout == null) return source;
+    return androidVideoViewport(
+      source,
+      physicalWidth: layout.width * layout.dpr,
+      physicalHeight: layout.height * layout.dpr,
+    );
+  }
+
+  void _updateAndroidViewport() {
+    if (!_usesAndroidViewport || _viewportOwner == null) return;
+    final source = _videoDimensions;
+    final player = _player;
+    final sizer = _androidViewportSizer;
+    if (source == null || player == null || sizer == null) return;
+    final target = _androidTarget(source);
+    // The pinned controller restores decoded-size buffers on videoParams.
+    // Its final rect notification follows that write. Repair both sizes here;
+    // our own VO resize can notify again, so first check the native value.
+    final matches =
+        player.getProperty('android-surface-size') ==
+        '${target.width}x${target.height}';
+    if (matches && sizer.applied == target) return;
+    _androidSurfaceSizeFailed = false;
+    _androidSurfaceSize = sizer.request(target, force: !matches).catchError((
+      Object error,
+    ) {
+      if (identical(_androidViewportSizer, sizer)) {
+        _androidSurfaceSizeFailed = true;
+        debugPrint('Android video viewport failed: ${error.runtimeType}');
+      }
+    });
+  }
+
+  void enableAndroidDolbyVision() {
+    _androidDolbyVision = true;
+    _androidViewportSizer?.invalidate();
+    _androidViewportSizer = null;
+  }
 
   Future<void> prepareAndroidSurface(String Function(String) read) async {
     if (!Platform.isAndroid) return;
@@ -134,14 +191,25 @@ final class MediaKitVideoOutput
     final revision = _bindingRevision;
     final dimensions = nativeVideoSurfaceDimensions(read);
     if (_disposed || player == null || dimensions == null) return;
-    await _sizeAndroidSurface(player, dimensions, revision);
+    await _sizeAndroidSurface(player, _androidTarget(dimensions), revision);
   }
 
   Future<void> _sizeAndroidSurface(
     mk.Player player,
     VideoDimensions dimensions,
-    int revision,
-  ) async {
+    int revision, {
+    bool viewport = false,
+  }) async {
+    final owner = _viewportOwner;
+    bool viewportCurrent() {
+      final source = _videoDimensions;
+      return _usesAndroidViewport &&
+          identical(owner, _viewportOwner) &&
+          source != null &&
+          _androidTarget(source) == dimensions;
+    }
+
+    if (viewport && !viewportCurrent()) return;
     // Android attaches the Surface before MediaCodec is created. Its default
     // 1x1 buffer would turn the paused first frame into a stretched solid color.
     // on_preloaded keeps decoding blocked until both sizes have been applied.
@@ -154,6 +222,7 @@ final class MediaKitVideoOutput
         .timeout(const Duration(seconds: 2));
     if (_disposed ||
         revision != _bindingRevision ||
+        (viewport && !viewportCurrent()) ||
         !identical(_player, player)) {
       return;
     }
@@ -161,9 +230,20 @@ final class MediaKitVideoOutput
       'android-surface-size',
       '${dimensions.width}x${dimensions.height}',
     );
+    if (viewport &&
+        player.getProperty('android-surface-size') !=
+            '${dimensions.width}x${dimensions.height}') {
+      throw StateError(
+        'The native backend rejected the Android viewport size.',
+      );
+    }
   }
 
   VideoDimensions? get dimensions {
+    if (_androidViewportSizer?.applied case final size?
+        when _usesAndroidViewport) {
+      return size;
+    }
     final rect = _controller.value?.rect.value;
     return rect == null
         ? null
@@ -205,6 +285,17 @@ final class MediaKitVideoOutput
     _player = player;
     _sourceGeneration = generation;
     final revision = ++_bindingRevision;
+    _androidViewportSizer?.invalidate();
+    _androidViewportSizer = _usesAndroidViewport
+        ? AndroidVideoSurfaceSizer(
+            isCurrent: () =>
+                !_disposed &&
+                revision == _bindingRevision &&
+                identical(_player, player),
+            apply: (size) =>
+                _sizeAndroidSurface(player, size, revision, viewport: true),
+          )
+        : null;
     final controller = await mkv.VideoController.create(
       player,
       configuration: videoDecoderConfiguration(
@@ -265,6 +356,7 @@ final class MediaKitVideoOutput
   }
 
   void _updateDecodedSize() {
+    _updateAndroidViewport();
     final controller = _controller.value;
     final dimensions = _videoDimensions;
     if (Platform.isAndroid &&
@@ -323,6 +415,8 @@ final class MediaKitVideoOutput
   }
 
   void clearPlayer() {
+    _androidViewportSizer?.invalidate();
+    _androidViewportSizer = null;
     _bindingRevision++;
     _sourceGeneration++;
     _viewportRevision++;
@@ -382,6 +476,7 @@ final class MediaKitVideoOutput
     _viewportOwner = owner;
     _viewportLayout = null;
     _viewportShrinkTimer?.cancel();
+    _androidViewportSizer?.invalidate();
     // An inline surface may have left a small cap. Remove it immediately when
     // a new surface claims the same player, before its first layout callback.
     if (Platform.isWindows) {
@@ -421,10 +516,15 @@ final class MediaKitVideoOutput
     _viewportOwner = null;
     _viewportLayout = null;
     _viewportShrinkTimer?.cancel();
+    _androidViewportSizer?.invalidate();
     _viewportRevision++;
   }
 
   void _updateViewportCap() {
+    if (_usesAndroidViewport) {
+      _updateAndroidViewport();
+      return;
+    }
     final layout = _viewportLayout;
     if (!Platform.isWindows || layout == null || _viewportOwner == null) return;
     final physicalWidth = (layout.width * layout.dpr).ceil().clamp(1, 16384);

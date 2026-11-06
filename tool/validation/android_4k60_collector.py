@@ -270,6 +270,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if active and active[0] == data['stage']:
                     finish(data['stage'])
                 self.reply({'ok': True})
+            elif self.path == '/touch':
+                action, x, y = data['action'], data['x'], data['y']
+                if action not in ('DOWN', 'UP') or not all(
+                        isinstance(v, int) and 0 <= v <= 8192 for v in (x, y)):
+                    raise ValueError('Invalid fixture touch')
+                adb('shell', 'input', 'touchscreen', 'motionevent', action, str(x), str(y))
+                self.reply({'ok': True})
             else:
                 self.reply({'error': 'unknown path'}, 404)
         except Exception as error:

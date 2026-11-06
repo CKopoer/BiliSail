@@ -1,0 +1,352 @@
+[
+  {
+    "run": "h264_holds_a",
+    "stage": "h264-hold-normal-panel",
+    "releaseWindowMs": 500,
+    "cycles": [
+      {
+        "cycle": 1,
+        "actualHoldMs": 1551.944,
+        "heldDrops": 24,
+        "releaseWindowDrops": 33,
+        "releasePeakAvsyncMs": 322.16,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 2,
+        "actualHoldMs": 1552.085,
+        "heldDrops": 23,
+        "releaseWindowDrops": 35,
+        "releasePeakAvsyncMs": 449.954,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 3,
+        "actualHoldMs": 1550.513,
+        "heldDrops": 26,
+        "releaseWindowDrops": 38,
+        "releasePeakAvsyncMs": 384.76700000000005,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 4,
+        "actualHoldMs": 1552.267,
+        "heldDrops": 25,
+        "releaseWindowDrops": 42,
+        "releasePeakAvsyncMs": 523.0310000000001,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 5,
+        "actualHoldMs": 1548.955,
+        "heldDrops": 24,
+        "releaseWindowDrops": 36,
+        "releasePeakAvsyncMs": 337.53499999999997,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 6,
+        "actualHoldMs": 1551.575,
+        "heldDrops": 26,
+        "releaseWindowDrops": 36,
+        "releasePeakAvsyncMs": 472.428,
+        "nativeRateAvailable": false
+      }
+    ],
+    "totalDrops": 368,
+    "heldDrops": 148,
+    "releaseWindowDrops": 220,
+    "otherDrops": 0,
+    "releaseSharePercent": 59.78260869565217,
+    "rateObservation": "snapshot-optimistic; native speed was not captured"
+  },
+  {
+    "run": "h264_holds_a",
+    "stage": "h264-hold-rapid-panel",
+    "releaseWindowMs": 500,
+    "cycles": [
+      {
+        "cycle": 1,
+        "actualHoldMs": 708.718,
+        "heldDrops": 0,
+        "releaseWindowDrops": 40,
+        "releasePeakAvsyncMs": 307.55,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 2,
+        "actualHoldMs": 703.468,
+        "heldDrops": 0,
+        "releaseWindowDrops": 33,
+        "releasePeakAvsyncMs": 259.858,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 3,
+        "actualHoldMs": 706.212,
+        "heldDrops": 0,
+        "releaseWindowDrops": 43,
+        "releasePeakAvsyncMs": 367.23499999999996,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 4,
+        "actualHoldMs": 703.655,
+        "heldDrops": 0,
+        "releaseWindowDrops": 39,
+        "releasePeakAvsyncMs": 454.024,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 5,
+        "actualHoldMs": 709.63,
+        "heldDrops": 0,
+        "releaseWindowDrops": 32,
+        "releasePeakAvsyncMs": 244.577,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 6,
+        "actualHoldMs": 709.605,
+        "heldDrops": 0,
+        "releaseWindowDrops": 40,
+        "releasePeakAvsyncMs": 304.933,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 7,
+        "actualHoldMs": 697.437,
+        "heldDrops": 0,
+        "releaseWindowDrops": 46,
+        "releasePeakAvsyncMs": 357.872,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 8,
+        "actualHoldMs": 706.063,
+        "heldDrops": 0,
+        "releaseWindowDrops": 40,
+        "releasePeakAvsyncMs": 477.03299999999996,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 9,
+        "actualHoldMs": 698.759,
+        "heldDrops": 0,
+        "releaseWindowDrops": 34,
+        "releasePeakAvsyncMs": 299.839,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 10,
+        "actualHoldMs": 709.53,
+        "heldDrops": 0,
+        "releaseWindowDrops": 41,
+        "releasePeakAvsyncMs": 348.664,
+        "nativeRateAvailable": false
+      }
+    ],
+    "totalDrops": 388,
+    "heldDrops": 0,
+    "releaseWindowDrops": 388,
+    "otherDrops": 0,
+    "releaseSharePercent": 100.0,
+    "rateObservation": "snapshot-optimistic; native speed was not captured"
+  },
+  {
+    "run": "h264_holds_a",
+    "stage": "h264-hold-normal-overlay",
+    "releaseWindowMs": 500,
+    "cycles": [
+      {
+        "cycle": 1,
+        "actualHoldMs": 1547.872,
+        "heldDrops": 27,
+        "releaseWindowDrops": 37,
+        "releasePeakAvsyncMs": 326.261,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 2,
+        "actualHoldMs": 1547.902,
+        "heldDrops": 27,
+        "releaseWindowDrops": 42,
+        "releasePeakAvsyncMs": 393.22200000000004,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 3,
+        "actualHoldMs": 1548.966,
+        "heldDrops": 26,
+        "releaseWindowDrops": 44,
+        "releasePeakAvsyncMs": 416.44599999999997,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 4,
+        "actualHoldMs": 1546.199,
+        "heldDrops": 26,
+        "releaseWindowDrops": 33,
+        "releasePeakAvsyncMs": 275.314,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 5,
+        "actualHoldMs": 1549.831,
+        "heldDrops": 25,
+        "releaseWindowDrops": 40,
+        "releasePeakAvsyncMs": 337.051,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 6,
+        "actualHoldMs": 1546.866,
+        "heldDrops": 25,
+        "releaseWindowDrops": 41,
+        "releasePeakAvsyncMs": 545.691,
+        "nativeRateAvailable": false
+      }
+    ],
+    "totalDrops": 393,
+    "heldDrops": 156,
+    "releaseWindowDrops": 237,
+    "otherDrops": 0,
+    "releaseSharePercent": 60.30534351145038,
+    "rateObservation": "snapshot-optimistic; native speed was not captured"
+  },
+  {
+    "run": "h264_holds_a",
+    "stage": "h264-hold-rapid-overlay",
+    "releaseWindowMs": 500,
+    "cycles": [
+      {
+        "cycle": 1,
+        "actualHoldMs": 696.297,
+        "heldDrops": 0,
+        "releaseWindowDrops": 37,
+        "releasePeakAvsyncMs": 438.88500000000005,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 2,
+        "actualHoldMs": 701.883,
+        "heldDrops": 0,
+        "releaseWindowDrops": 45,
+        "releasePeakAvsyncMs": 408.18,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 3,
+        "actualHoldMs": 697.566,
+        "heldDrops": 0,
+        "releaseWindowDrops": 39,
+        "releasePeakAvsyncMs": 312.397,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 4,
+        "actualHoldMs": 702.157,
+        "heldDrops": 0,
+        "releaseWindowDrops": 47,
+        "releasePeakAvsyncMs": 444.113,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 5,
+        "actualHoldMs": 695.536,
+        "heldDrops": 0,
+        "releaseWindowDrops": 43,
+        "releasePeakAvsyncMs": 499.694,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 6,
+        "actualHoldMs": 700.37,
+        "heldDrops": 0,
+        "releaseWindowDrops": 41,
+        "releasePeakAvsyncMs": 358.373,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 7,
+        "actualHoldMs": 698.21,
+        "heldDrops": 0,
+        "releaseWindowDrops": 33,
+        "releasePeakAvsyncMs": 231.706,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 8,
+        "actualHoldMs": 697.583,
+        "heldDrops": 0,
+        "releaseWindowDrops": 49,
+        "releasePeakAvsyncMs": 343.93600000000004,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 9,
+        "actualHoldMs": 695.24,
+        "heldDrops": 0,
+        "releaseWindowDrops": 37,
+        "releasePeakAvsyncMs": 307.26,
+        "nativeRateAvailable": false
+      },
+      {
+        "cycle": 10,
+        "actualHoldMs": 698.828,
+        "heldDrops": 1,
+        "releaseWindowDrops": 46,
+        "releasePeakAvsyncMs": 390.332,
+        "nativeRateAvailable": false
+      }
+    ],
+    "totalDrops": 418,
+    "heldDrops": 1,
+    "releaseWindowDrops": 417,
+    "otherDrops": 0,
+    "releaseSharePercent": 99.76076555023924,
+    "rateObservation": "snapshot-optimistic; native speed was not captured"
+  },
+  {
+    "run": "h264_holds_b",
+    "stage": "h264-hold-long-panel",
+    "releaseWindowMs": 500,
+    "cycles": [
+      {
+        "cycle": 1,
+        "actualHoldMs": 18050.272,
+        "heldDrops": 537,
+        "releaseWindowDrops": 32,
+        "releasePeakAvsyncMs": 167.55900000000003,
+        "nativeRateAvailable": false
+      }
+    ],
+    "totalDrops": 569,
+    "heldDrops": 537,
+    "releaseWindowDrops": 32,
+    "otherDrops": 0,
+    "releaseSharePercent": 5.623901581722319,
+    "rateObservation": "snapshot-optimistic; native speed was not captured"
+  },
+  {
+    "run": "h264_holds_b",
+    "stage": "h264-hold-long-overlay",
+    "releaseWindowMs": 500,
+    "cycles": [
+      {
+        "cycle": 1,
+        "actualHoldMs": 18050.047,
+        "heldDrops": 538,
+        "releaseWindowDrops": 37,
+        "releasePeakAvsyncMs": 298.119,
+        "nativeRateAvailable": false
+      }
+    ],
+    "totalDrops": 575,
+    "heldDrops": 538,
+    "releaseWindowDrops": 37,
+    "otherDrops": 0,
+    "releaseSharePercent": 6.434782608695652,
+    "rateObservation": "snapshot-optimistic; native speed was not captured"
+  }
+]

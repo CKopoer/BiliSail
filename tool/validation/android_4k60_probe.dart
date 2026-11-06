@@ -83,6 +83,11 @@ Future<void> main() async {
       final show = value['controls'] == true;
       final seconds = value['seconds'] as int? ?? 30;
       final arrivals = value['arrivals'] as int? ?? 20;
+      final rate = (value['rate'] as num? ?? 1).toDouble();
+      final seekSeconds = value['seekSeconds'] as int? ?? 37;
+      final holdCycles = value['holdCycles'] as int? ?? 0;
+      final holdMs = value['holdMs'] as int? ?? 1500;
+      final gapMs = value['gapMs'] as int? ?? 1200;
       final progressive = value['progressive'] == true;
       Uri mediaUri(String path) {
         final uri = Uri.parse(path);
@@ -94,6 +99,18 @@ Future<void> main() async {
       final duration = Duration(
         seconds: value['durationSeconds'] as int? ?? 634,
       );
+      // Leave room for trace setup after the eight-second playback warmup.
+      if (!rate.isFinite ||
+          rate <= 0 ||
+          rate > 3 ||
+          holdCycles < 0 ||
+          holdCycles > 12 ||
+          (holdCycles > 0 &&
+              (!panel || rate != 1 || holdMs < 600 || gapMs < 500)) ||
+          seekSeconds < 0 ||
+          seekSeconds + (8 + seconds + 5) * rate >= duration.inSeconds) {
+        throw StateError('Invalid rate or insufficient media duration: $name');
+      }
       final part = VideoPart(
         cid: '123',
         page: 1,
@@ -127,6 +144,8 @@ Future<void> main() async {
       );
       final engine = MediaKitEngine(
         experimentalVideoFrameQueue: value['queue'] as bool?,
+        experimentalAndroidViewport: value['viewport'] as bool?,
+        experimentalAudioAutosync: value['autosync'] as int?,
       );
       final session = PlaybackSession(
         engine: engine,
@@ -141,6 +160,7 @@ Future<void> main() async {
         resumePlayback: false,
         continuousPlayback: false,
         defaultVolume: 0,
+        defaultPlaybackRate: rate,
         danmakuEnabled: comments,
         danmakuArea: defaultDanmakuArea,
         danmakuFontScale: defaultDanmakuFontScale,
@@ -150,6 +170,26 @@ Future<void> main() async {
       void collect(List<FrameTiming> frames) => timings.addAll(frames);
       SchedulerBinding.instance.addTimingsCallback(collect);
       MouseRegion? hovered;
+      final touches = <Map<String, Object?>>[];
+      final observations = <Map<String, Object?>>[];
+      var cycle = 0;
+      var observing = false;
+      Future<void>? observer;
+      Future<void>? holds;
+      Object? holdError;
+      var exerciseActive = true;
+      Object? observationError;
+      void recordTouch(String action) {
+        if (!observing) return;
+        touches.add({
+          'action': action,
+          'cycle': cycle,
+          'monoUs': developer.Timeline.now,
+          'positionMs': engine.currentSnapshot.position.inMilliseconds,
+          'rate': engine.currentSnapshot.rate,
+        });
+      }
+
       bool controlsVisible() {
         final control = _find(
           (e) => e.widget.key == const ValueKey('player-controls'),
@@ -169,13 +209,97 @@ Future<void> main() async {
         return visible;
       }
 
-      Future<void> waitFor(bool Function() ready, String condition) async {
+      Future<void> waitFor(
+        bool Function() ready,
+        String condition, {
+        Duration timeout = const Duration(seconds: 40),
+      }) async {
         final watch = Stopwatch()..start();
         while (!ready()) {
-          if (watch.elapsed > const Duration(seconds: 40)) {
+          if (watch.elapsed > timeout) {
             throw StateError('Timed out: $condition');
           }
           await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+      }
+
+      Future<void> observeRates() async {
+        while (observing) {
+          final readStartedUs = developer.Timeline.now;
+          final native = await engine.inspectNativePlaybackTiming(
+            includeRateClocks: true,
+          );
+          final snapshot = engine.currentSnapshot;
+          observations.add({
+            'monoUs': developer.Timeline.now,
+            'nativeReadStartedUs': readStartedUs,
+            'positionMs': snapshot.position.inMilliseconds,
+            'rate': snapshot.rate,
+            'phase': snapshot.phase.name,
+            'buffering': snapshot.isBuffering,
+            'seeking': snapshot.isSeeking,
+            'frameDrops': native.frameDrops,
+            'decoderDrops': native.decoderDrops,
+            'avsyncSeconds': native.avsyncSeconds,
+            'nativeRate': native.nativeRate,
+            'audioPositionSeconds': native.audioPositionSeconds,
+            'videoPositionSeconds': native.videoPositionSeconds,
+          });
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+      }
+
+      Future<void> exerciseHolds() async {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        final element = _find(
+          (e) => e.widget.key == const ValueKey('player-surface-tap-target'),
+        );
+        final box = element?.findRenderObject();
+        if (box is! RenderBox) throw StateError('Touch surface missing');
+        final point = box.localToGlobal(
+          Offset(box.size.width * .7, box.size.height * .4),
+        );
+        final dpr = WidgetsBinding
+            .instance
+            .platformDispatcher
+            .views
+            .first
+            .devicePixelRatio;
+        Future<void> touch(String action) async {
+          await request('/touch', {
+            'action': action,
+            'x': (point.dx * dpr).round(),
+            'y': (point.dy * dpr).round(),
+          });
+        }
+
+        for (cycle = 1; cycle <= holdCycles && exerciseActive; cycle++) {
+          try {
+            await touch('DOWN');
+            await waitFor(
+              () => engine.currentSnapshot.rate == 2,
+              'long press enters 2x',
+              timeout: const Duration(seconds: 2),
+            );
+            final down = touches.lastWhere((e) => e['action'] == 'down');
+            final remaining =
+                Duration(milliseconds: holdMs) -
+                Duration(
+                  microseconds:
+                      developer.Timeline.now - (down['monoUs'] as int),
+                );
+            if (remaining > Duration.zero) {
+              await Future<void>.delayed(remaining);
+            }
+          } finally {
+            await touch('UP');
+          }
+          await waitFor(
+            () => engine.currentSnapshot.rate == 1,
+            'release restores 1x',
+            timeout: const Duration(seconds: 2),
+          );
+          await Future<void>.delayed(Duration(milliseconds: gapMs));
         }
       }
 
@@ -276,10 +400,14 @@ Future<void> main() async {
             child: MaterialApp(
               theme: BiliTheme.light(),
               navigatorObservers: [input.routes],
-              builder: (context, child) => AppInputHost<Object>(
-                dispatcher: input,
-                routes: input.routes,
-                child: child ?? const SizedBox(),
+              builder: (context, child) => Listener(
+                onPointerDown: (_) => recordTouch('down'),
+                onPointerUp: (_) => recordTouch('up'),
+                child: AppInputHost<Object>(
+                  dispatcher: input,
+                  routes: input.routes,
+                  child: child ?? const SizedBox(),
+                ),
               ),
               home: Scaffold(
                 backgroundColor: Colors.black,
@@ -345,7 +473,12 @@ Future<void> main() async {
           await waitFor(() => window.isFullScreen, 'fullscreen');
           await Future<void>.delayed(const Duration(seconds: 1));
         }
-        await engine.seek(const Duration(seconds: 37));
+        if (panel) {
+          await session.setRate(rate);
+        } else {
+          await engine.setRate(rate);
+        }
+        await engine.seek(Duration(seconds: seekSeconds));
         await waitFor(
           () =>
               (value['allowBuffering'] == true
@@ -368,13 +501,25 @@ Future<void> main() async {
             'fontScale': settings.danmakuFontScale,
             'opacity': settings.danmakuOpacity,
             'arrivals': arrivals,
+            'holdRate': settings.shortcuts.holdRate,
+            'holdDelayMs': settings.shortcuts.holdDelayMs,
           },
           'scenario': value,
+          'nativeOutput': await engine.inspectNativeOutputConfiguration(),
         });
         await request('/ready', {'stage': name, 'seconds': seconds});
         final clock = Stopwatch()..start();
         await write(await sample('phase-start', clock));
         timings.clear();
+        if (holdCycles > 0) {
+          observing = true;
+          observer = observeRates().catchError((Object error) {
+            observationError = error;
+          });
+          holds = exerciseHolds().catchError((Object error) {
+            holdError = error;
+          });
+        }
         for (var tick = 1; tick <= seconds; tick++) {
           final delay = Duration(seconds: tick) - clock.elapsed;
           if (delay > Duration.zero) await Future<void>.delayed(delay);
@@ -384,10 +529,21 @@ Future<void> main() async {
                   ? !['playing', 'buffering'].contains(row['phase'])
                   : row['phase'] != 'playing' || row['buffering'] != false) ||
               row['seeking'] != false ||
+              (holdCycles == 0 &&
+                  ((row['rate'] as double) - rate).abs() > .001) ||
+              row['audioDecoded'] != true ||
               (panel && row['controlsVisible'] != show) ||
               errors != 0) {
             throw StateError('Invalid sampled state: $name');
           }
+        }
+        await holds;
+        if (holdError != null) throw StateError('Touch exercise: $holdError');
+        if (observationError != null) {
+          throw StateError('Rate observation: $observationError');
+        }
+        if (engine.currentSnapshot.rate != rate) {
+          throw StateError('Final rate did not restore');
         }
         await write(await sample('phase-end', clock));
         await request('/finish', {'stage': name});
@@ -402,6 +558,18 @@ Future<void> main() async {
         await request('/abort', {'stage': name});
         if (value['continueOnFailure'] != true) rethrow;
       } finally {
+        exerciseActive = false;
+        await holds;
+        observing = false;
+        await observer;
+        if (holdCycles > 0) {
+          await write({
+            'type': 'hold-observations',
+            'stage': name,
+            'touches': touches,
+            'observations': observations,
+          });
+        }
         hovered?.onExit?.call(const PointerExitEvent());
         runApp(const SizedBox.shrink());
         await Future<void>.delayed(const Duration(milliseconds: 400));

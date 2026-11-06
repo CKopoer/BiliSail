@@ -34,6 +34,51 @@ def source_url(value):
     return value
 
 
+def hold_summary(events, stage, begin, end, delay_ms):
+    record = next((x for x in events if x['type'] == 'hold-observations'
+                   and x.get('stage') == stage), None)
+    if not record:
+        return None
+    samples = [x for x in record['observations'] if begin <= x['monoUs'] <= end]
+    native_samples = [x for x in samples if x.get('nativeRate') is not None]
+    rate_key = 'nativeRate' if samples and len(native_samples) == len(samples) else 'rate'
+    touches = record['touches']
+    cycles = []
+    for down in [x for x in touches if x['action'] == 'down']:
+        up = next((x for x in touches if x['action'] == 'up' and x['cycle'] == down['cycle']), None)
+        next_down = next((x for x in touches if x['action'] == 'down' and x['monoUs'] > down['monoUs']), None)
+        fast = next((x for x in samples if down['monoUs'] <= x['monoUs'] < (up['monoUs'] if up else end)
+                     and x[rate_key] == 2), None)
+        restored = next((x for x in samples if up and up['monoUs'] <= x['monoUs'] <
+                         (next_down['monoUs'] if next_down else end) and x[rate_key] == 1), None)
+        cycles.append({'cycle': down['cycle'], 'downMonoUs': down['monoUs'],
+                       'upMonoUs': up['monoUs'] if up else None,
+                       'pressTo2xMs': (fast['monoUs']-down['monoUs'])/1000 if fast else None,
+                       'afterHoldThresholdMs': (fast['monoUs']-down['monoUs'])/1000-delay_ms if fast else None,
+                       'releaseTo1xMs': (restored['monoUs']-up['monoUs'])/1000 if restored else None})
+    gaps = []
+    if samples:
+        last_change = samples[0]['monoUs']
+        previous_position = samples[0]['positionMs']
+        for row in samples[1:]:
+            if row['positionMs'] != previous_position:
+                gaps.append((row['monoUs']-last_change)/1000)
+                last_change = row['monoUs']
+                previous_position = row['positionMs']
+        gaps.append((samples[-1]['monoUs']-last_change)/1000)
+    return {'observationCount': len(samples), 'observationIntervalMs': 50,
+            'rateLatencyBasis': 'native-speed' if rate_key == 'nativeRate' else 'snapshot-optimistic',
+            'nativeRateObservationCount': len(native_samples),
+            'nativeSampledRates': sorted({x['nativeRate'] for x in native_samples}),
+            'cycles': cycles, 'completedCycles': sum(x['pressTo2xMs'] is not None and
+                x['releaseTo1xMs'] is not None for x in cycles),
+            'sampledRates': sorted({x['rate'] for x in samples}),
+            'maxPositionUpdateGapMs': max(gaps, default=None),
+            'bufferingObservations': sum(x['buffering'] for x in samples),
+            'maxAvsyncMs': max((abs(x['avsyncSeconds'])*1000 for x in samples
+                               if x.get('avsyncSeconds') is not None), default=None)}
+
+
 def trace_summary(binary, trace, begin, end, pid):
     # Dart Timeline uses MONOTONIC; Android Perfetto uses BOOTTIME. Map using
     # clock snapshots, not wall time or the host/USB command's arrival time.
@@ -133,6 +178,7 @@ def summarize(folder, binary, completed_only=False):
         paints=end['imagePaints']-begin['imagePaints']
         data={'run':folder.name,'stage':stage,'seconds':duration,'sampleCount':len(samples),
             'scenario':metadata['scenario'],'settings':metadata['settings'],
+            'nativeOutput':metadata.get('nativeOutput'),
             'firstPlayingMs':startup.get('firstPlayingMs'),
             'decoded':sorted({tuple(x['decoded']) for x in samples}),
             'output':sorted({tuple(x['output']) for x in samples}),
@@ -150,6 +196,10 @@ def summarize(folder, binary, completed_only=False):
             'bufferingSamples':sum(x['buffering'] for x in samples),
             'phaseCounts':{p:sum(x['phase']==p for x in samples) for p in {x['phase'] for x in samples}},
             'positionAdvanceSeconds':(end['positionMs']-begin['positionMs'])/1000,
+            'positionStartMs':begin['positionMs'],'positionEndMs':end['positionMs'],
+            'requestedRate':metadata['scenario'].get('rate',1),
+            'sampledRates':sorted({x['rate'] for x in samples}),
+            'mediaAdvancePerWallSecond':(end['positionMs']-begin['positionMs'])/1000/duration,
             'bufferedSampleMs':[x.get('bufferedMs') for x in samples],
             'uiP95Ms':percentile(ui,.95),'rasterP95Ms':percentile(raster,.95),
             'rasterP99Ms':percentile(raster,.99),'rasterMaxMs':max(raster,default=None),
@@ -169,7 +219,9 @@ def summarize(folder, binary, completed_only=False):
             'surfaceIntervalP95Ms':percentile(intervals,.95),
             'surfaceIntervalsOver25Ms':sum(x>25 for x in intervals),
             'surfaceIntervalsOver50Ms':sum(x>50 for x in intervals),
-            'errors':max(x['errors'] for x in samples),'perfetto':tr,'dartCpu':cpu}
+            'errors':max(x['errors'] for x in samples),'perfetto':tr,'dartCpu':cpu,
+            'longPress':hold_summary(events,stage,begin['monoUs'],end['monoUs'],
+                                    metadata['settings'].get('holdDelayMs',400))}
         rows.append(data)
         print(f"{folder.name}/{stage}: GPU={data['globalGpuBusyMean']:.1f}% raster95={data['rasterP95Ms']} "
               f"DartFrame={data['dartTimingFramesPerSecond']:.1f}/s present={data['surfacePresentFps']} "

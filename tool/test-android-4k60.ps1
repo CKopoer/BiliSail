@@ -93,18 +93,20 @@ try {
   $logcat = Start-Process -FilePath (Get-Command adb).Source -ArgumentList @('-s',$DeviceId,'logcat',"--pid=$probeId",'-T','1','-v','threadtime') -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput (Join-Path $folder 'device-logcat.log') -RedirectStandardError (Join-Path $folder 'logcat.stderr.log')
   $scenarios = @(Get-Content -LiteralPath $config -Raw | ConvertFrom-Json)
-  $deadline = [DateTimeOffset]::UtcNow.AddSeconds(100 + ($scenarios | ForEach-Object { $_.seconds + 25 } | Measure-Object -Sum).Sum)
-  while ([DateTimeOffset]::UtcNow -lt $deadline) {
+  $timeoutSeconds = 100 + ($scenarios | ForEach-Object { $_.seconds + 25 } | Measure-Object -Sum).Sum
+  $runWatch = [Diagnostics.Stopwatch]::StartNew()
+  $completed = $false
+  while ($runWatch.Elapsed.TotalSeconds -lt $timeoutSeconds) {
     if ($server.HasExited) { throw 'Collector stopped unexpectedly' }
     $events = Join-Path $folder 'events.jsonl'
     if (Test-Path -LiteralPath $events) {
       $last = Get-Content -LiteralPath $events -Tail 1 | ConvertFrom-Json
       if ($last.type -eq 'failed') { throw "Probe failed: $($last.reason)" }
-      if ($last.type -eq 'complete') { break }
+      if ($last.type -eq 'complete') { $completed = $true; break }
     }
     Start-Sleep -Milliseconds 500
   }
-  if ($last.type -ne 'complete') { throw 'Probe exceeded deadline' }
+  if (!$completed) { throw "Probe exceeded deadline after $($runWatch.Elapsed.TotalSeconds)s (budget $timeoutSeconds, last event $($last.type))" }
   Write-Output "Completed Android 4K60 run: $Label"
 } finally {
   try {

@@ -27,11 +27,26 @@ void initializePlayerBackend() => mk.MediaKit.ensureInitialized();
 /// retained by the previous backend cannot enter the next source generation.
 final class MediaKitEngine
     implements PlayerEngine, VideoOutputSource, AudioGainControl {
-  MediaKitEngine({this.onDiagnostic, bool? experimentalVideoFrameQueue})
-    : experimentalVideoFrameQueue = resolveVideoFrameQueueEnabled(
-        isAndroid: Platform.isAndroid,
-        enabledOverride: experimentalVideoFrameQueue,
-      ) {
+  MediaKitEngine({
+    this.onDiagnostic,
+    bool? experimentalVideoFrameQueue,
+    bool? experimentalAndroidViewport,
+    this.experimentalAudioAutosync,
+  }) : _videoOutput = MediaKitVideoOutput(
+         limitAndroidOutputToViewport: experimentalAndroidViewport,
+       ),
+       experimentalVideoFrameQueue = resolveVideoFrameQueueEnabled(
+         isAndroid: Platform.isAndroid,
+         enabledOverride: experimentalVideoFrameQueue,
+       ) {
+    if (experimentalAudioAutosync != null &&
+        experimentalAudioAutosync != 0 &&
+        experimentalAudioAutosync != 30) {
+      throw ArgumentError.value(
+        experimentalAudioAutosync,
+        'experimentalAudioAutosync',
+      );
+    }
     _nativeErrors = NativeErrorMonitor(
       onStalled: (generation) => _interruptPlayback(
         _snapshot.position,
@@ -48,6 +63,9 @@ final class MediaKitEngine
   /// DASH frame queue, Android-on / desktop-off unless explicitly overridden.
   /// Keeps the selected decoder; hardware-decoder compatibility is experimental.
   final bool experimentalVideoFrameQueue;
+
+  /// Validation override; null retains the production audio configuration.
+  final int? experimentalAudioAutosync;
   bool _videoFrameQueueActive = false;
 
   /// True only after the native queue properties have been read back successfully.
@@ -87,7 +105,7 @@ final class MediaKitEngine
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   final _failures = StreamController<PlayerFailure>.broadcast(sync: true);
   final _generationChanges = StreamController<int>.broadcast(sync: true);
-  final MediaKitVideoOutput _videoOutput = MediaKitVideoOutput();
+  final MediaKitVideoOutput _videoOutput;
 
   @override
   VideoOutput get videoOutput => _videoOutput;
@@ -199,13 +217,29 @@ final class MediaKitEngine
 
   /// Native clock and drop counters for bounded playback validation probes.
   /// Values are absent when mpv has not established both streams yet.
-  Future<({double? avsyncSeconds, int? frameDrops, int? decoderDrops})>
-  inspectNativePlaybackTiming() async {
+  Future<
+    ({
+      double? avsyncSeconds,
+      int? frameDrops,
+      int? decoderDrops,
+      double? nativeRate,
+      double? audioPositionSeconds,
+      double? videoPositionSeconds,
+    })
+  >
+  inspectNativePlaybackTiming({bool includeRateClocks = false}) async {
     final player = _player;
     final platform = player;
     final generation = _generation;
     if (platform == null || _disposed) {
-      return (avsyncSeconds: null, frameDrops: null, decoderDrops: null);
+      return (
+        avsyncSeconds: null,
+        frameDrops: null,
+        decoderDrops: null,
+        nativeRate: null,
+        audioPositionSeconds: null,
+        videoPositionSeconds: null,
+      );
     }
     Future<String?> read(String property) async {
       try {
@@ -222,14 +256,81 @@ final class MediaKitEngine
     final decoderDrops = int.tryParse(
       await read('decoder-frame-drop-count') ?? '',
     );
+    Future<double?> clock(String name) async {
+      final value = double.tryParse(await read(name) ?? '');
+      return value?.isFinite == true ? value : null;
+    }
+
+    final nativeRate = includeRateClocks ? await clock('speed') : null;
+    final audioPosition = includeRateClocks ? await clock('audio-pts') : null;
+    final videoPosition = includeRateClocks ? await clock('video-pts') : null;
     if (_disposed || generation != _generation || !identical(_player, player)) {
-      return (avsyncSeconds: null, frameDrops: null, decoderDrops: null);
+      return (
+        avsyncSeconds: null,
+        frameDrops: null,
+        decoderDrops: null,
+        nativeRate: null,
+        audioPositionSeconds: null,
+        videoPositionSeconds: null,
+      );
     }
     return (
       avsyncSeconds: avsync?.isFinite == true ? avsync : null,
       frameDrops: frameDrops,
       decoderDrops: decoderDrops,
+      nativeRate: nativeRate,
+      audioPositionSeconds: audioPosition,
+      videoPositionSeconds: videoPosition,
     );
+  }
+
+  /// Safe output/configuration metadata, sampled once rather than every frame.
+  /// audio-buffer is a requested minimum, not the audio device's measured delay.
+  Future<Map<String, Object?>> inspectNativeOutputConfiguration() async {
+    final player = _player;
+    final generation = _generation;
+    if (player == null || _disposed) return const {};
+    Future<String?> read(String name) async {
+      try {
+        return await player
+            .getPropertyAsync(name)
+            .timeout(const Duration(seconds: 1));
+      } on Object {
+        return null;
+      }
+    }
+
+    String? identifier(String? text) =>
+        text != null && RegExp(r'^[A-Za-z0-9_-]{1,32}$').hasMatch(text)
+        ? text
+        : null;
+    final ao = identifier(await read('current-ao'));
+    final vo = identifier(await read('current-vo'));
+    final buffer = double.tryParse(await read('audio-buffer') ?? '');
+    final autosync = int.tryParse(await read('autosync') ?? '');
+    final version = await read('mpv-version');
+    final androidSize = Platform.isAndroid
+        ? await read('android-surface-size')
+        : null;
+    if (_disposed || generation != _generation || !identical(_player, player)) {
+      return const {};
+    }
+    return {
+      'audioOutput': ao,
+      'videoOutput': vo,
+      'requestedAudioBufferSeconds': buffer?.isFinite == true ? buffer : null,
+      'autosync': autosync,
+      'androidSurfaceSize':
+          androidSize != null &&
+              RegExp(r'^[0-9]{1,5}x[0-9]{1,5}$').hasMatch(androidSize)
+          ? androidSize
+          : null,
+      'mpvVersion':
+          version != null &&
+              RegExp(r'^[A-Za-z0-9 ._+-]{1,80}$').hasMatch(version)
+          ? version
+          : null,
+    };
   }
 
   void _publish(PlaybackSnapshot value) {
@@ -679,6 +780,21 @@ final class MediaKitEngine
                 identical(_player, player),
             timeout: _remaining(watch, openBudget),
           );
+          final autosync = experimentalAudioAutosync;
+          if (autosync != null) {
+            await platform
+                .setPropertyAsync('autosync', '$autosync')
+                .timeout(_remaining(watch, openBudget));
+            final applied = await platform
+                .getPropertyAsync('autosync')
+                .timeout(_remaining(watch, openBudget));
+            if (generation != _generation || _disposed) return;
+            if (int.tryParse(applied) != autosync) {
+              throw StateError(
+                'The native backend rejected validation autosync.',
+              );
+            }
+          }
         }
         if (experimentalVideoFrameQueue && source is DashPairSource) {
           await configureNativeVideoFrameQueue(
