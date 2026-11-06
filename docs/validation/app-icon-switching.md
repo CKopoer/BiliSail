@@ -1,6 +1,6 @@
 # 应用图标切换
 
-日期：2026-10-30；2026-10-31 补充 Dock 尺寸、侧边栏与 Windows Shell 同步。
+日期：2026-10-30；2026-10-31 补充 Dock 尺寸、侧边栏与 Windows Shell 同步；2026-11-06 修复设置页选中图标的明暗覆盖。
 
 ## 行为与边界
 
@@ -21,6 +21,18 @@
 图标变更串行完成系统应用与设置保存后才发布选中值；失败时尝试恢复原生图标，后续主题等设置写入只合并已提交的图标，避免重新写入失败选择。移动端启动读取操作系统实际保留的选择并同步快照，避免 iOS 重复改图标提示，也修复原生完成而 SQLite 提交中断的状态；桌面启动按保存值重新应用。图标恢复失败保留其他设置并在选项中提示重试。
 
 Android 正式包与 `.test` 开发包使用各自 packageName，别名类名固定在生产 namespace；不访问其他包。首次从旧版本升级时，桌面对旧 MainActivity 固定入口的处理及位置保留需实机验收。
+
+## 设置页图标明暗覆盖（2026-11-06）
+
+图标预览原先放在 `ChoiceChip.avatar`。当前固定 Flutter SDK 的 Material 3 默认开启勾号，`RawChip` 在选中头像上通过 `BlendMode.srcATop` 绘制深色遮罩，再绘制勾号；因此应用图标本身参与选中动画和额外混合，打开页面、图片就绪或合成重绘时会进入改变图标明暗的绘制路径。问题位于设置页预览的绘制，与系统图标切换和偏好保存无关。
+
+[图标设置组件](../../lib/features/settings/presentation/app_icon_settings.dart)改为把 28 × 28 图片与名称放在普通内容区，保留 `ChoiceChip` 的选中背景、独立勾号和可访问选中状态。勾号不再覆盖图标，其他设置选项和各平台原生图标切换流程不变。
+
+新增[像素回归测试](../../test/features/settings/app_icon_settings_test.dart)，使用不依赖品牌素材像素分布的纯色图片，检查浅色／深色主题、320 逻辑像素宽度、两种图标往返切换、表单重新打开及后续帧的预览颜色，同时验证点击后的保存值和平台调用。修复前同一测试失败，修复后通过；最终图标专项共 8 项测试通过，两个 Dart 文件的格式、静态分析和 `git diff --check` 通过。Windows 普通入口 Debug 构建、热重载及设置页显示已验证，运行时未发现错误，验证后正常关闭本轮调试实例。
+
+全仓检查在同期自定义倍速改动过程中执行：`tool/check.ps1 -SkipPub` 完成打包边界检查后，因 `playback_rates.dart`、`sqlite_settings_repository.dart`、`app_settings.dart` 的格式检查失败退出。另行执行根测试阶段，4507 项通过、13 项 Windows 符号链接权限跳过、1 项同期新增的 `custom rates are editable from settings entry player=true` 失败（`settings_screen_test.dart` 找不到控件）；根静态分析还有 `playback_rate_options_setting.dart` 的 1 项 `curly_braces_in_flow_control_structures`。保留同期工作，不为本轮图标修复修改这些文件。四包测试阶段通过：`bili_api` 677、`bili_player` 170、`bili_danmaku` 161、`bili_mux` 5；mux 另有 10 项因未配置 `BILI_MUX_LIBRARY` 跳过，不计原生通过。日志分别在 `build/app-icon-preview-{check,root-tests,package-tests,analysis,final-tests,run}.log`。
+
+其他平台未做本轮设备视觉验收；此处验证仅针对设置页共享 Flutter 绘制，不替代系统桌面／Dock／任务栏图标验收。
 
 ## Windows Shell 同步（2026-10-31）
 

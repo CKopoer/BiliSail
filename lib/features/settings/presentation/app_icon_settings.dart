@@ -45,8 +45,16 @@ final class _AppIconSettingsState extends ConsumerState<AppIconSettings> {
             children: [
               for (final icon in AppIconPreference.values)
                 ChoiceChip(
-                  avatar: Image.asset(icon.asset, width: 28, height: 28),
-                  label: Text(icon.label),
+                  // Chip avatars receive a selection scrim and checkmark.
+                  // Keep the icon preview outside that animated overlay.
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(icon.asset, width: 28, height: 28),
+                      const SizedBox(width: 8),
+                      Text(icon.label),
+                    ],
+                  ),
                   selected: widget.value == icon,
                   onSelected: _saving ? null : (_) => _select(icon),
                 ),
