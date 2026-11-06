@@ -38,6 +38,7 @@ import 'player_swipe_controls.dart';
 import 'player_seek_controls.dart';
 import 'player_picture_controls.dart';
 import 'audio_playback_view.dart';
+import 'listening_sleep_timer_button.dart';
 import 'playback_timeline_bar.dart';
 import 'playback_snapshot_builder.dart';
 import 'live_stream_menu.dart';
@@ -1775,6 +1776,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                   child: _PlayerTopBar(
                                     navigation: widget.navigation,
                                     smallWindow: smallWindow,
+                                    showSleepTimer: !layout.compact,
+                                    onMenuChanged: _onControlsMenuChanged,
                                     onMore: _openMoreDialog,
                                     fullScreen: widget.fullScreen,
                                     onExitFullScreen: _toggleFullScreen,
@@ -2834,6 +2837,23 @@ class _ControlBar extends StatelessWidget {
       action();
     },
     itemBuilder: (_) => [
+      if (!session.isLive)
+        PopupMenuItem(
+          value: () => unawaited(
+            showPlaybackSleepTimerDialog(
+              context,
+              session,
+              onMenuChanged: onMenuChanged,
+            ),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.timer_outlined, size: 20),
+              SizedBox(width: 12),
+              Text('定时关闭'),
+            ],
+          ),
+        ),
       if (session.canListen)
         PopupMenuItem(
           value: () => unawaited(session.setAudioOnly(true)),
@@ -3294,6 +3314,8 @@ class _PlayerTopBar extends StatelessWidget {
   const _PlayerTopBar({
     required this.navigation,
     required this.smallWindow,
+    required this.showSleepTimer,
+    required this.onMenuChanged,
     required this.onMore,
     required this.fullScreen,
     required this.onExitFullScreen,
@@ -3304,6 +3326,8 @@ class _PlayerTopBar extends StatelessWidget {
   });
   final ValueListenable<PlaybackNavigation?> navigation;
   final bool smallWindow;
+  final bool showSleepTimer;
+  final ValueChanged<bool> onMenuChanged;
   final VoidCallback onMore;
   final bool fullScreen;
   final VoidCallback onExitFullScreen;
@@ -3353,6 +3377,17 @@ class _PlayerTopBar extends StatelessWidget {
               showHomeButton ||
               (fullScreen && Theme.of(context).platform == TargetPlatform.iOS);
           final buttons = <Widget>[
+            if (showSleepTimer && !session.isLive)
+              SizedBox(
+                width: _ControlsLayout.buttonWidth,
+                height: 40,
+                child: ListeningSleepTimerButton(
+                  session: session,
+                  compact: true,
+                  videoOverlay: true,
+                  onMenuChanged: onMenuChanged,
+                ),
+              ),
             if (castRequestFor(session) != null)
               _action(
                 '投屏',

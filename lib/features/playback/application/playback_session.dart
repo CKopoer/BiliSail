@@ -59,10 +59,10 @@ class PlaybackSession extends ChangeNotifier {
     sleepTimer = ListeningSleepTimer(
       now: sleepTimerNow,
       onElapsed: () {
-        if (_disposed || _closing || !_audioOnly) return;
+        if (_disposed || _closing) return;
         final next = _nextSourceIntent;
         if (next != null) {
-          // A related-video route can mount after the alarm. Keep its listening
+          // A related-video route can mount after the alarm. Keep its media
           // identity while revoking the already accepted autoplay request.
           _nextSourceIntent = (
             id: next.id,
@@ -355,7 +355,7 @@ class PlaybackSession extends ChangeNotifier {
   bool get canAutoAdvance => !sleepTimer.elapsed;
 
   void startSleepTimer(Duration duration) {
-    if (_disposed || _closing || !_audioOnly || !sourceMatchesAccount) return;
+    if (_disposed || _closing || isLive || !sourceMatchesAccount) return;
     sleepTimer.start(duration);
   }
 
@@ -853,7 +853,7 @@ class PlaybackSession extends ChangeNotifier {
     _allowColorFallback = allowColorFallback;
     final requestedAudioOnly = _foregroundAudioOnly;
     _audioOnly = requestedAudioOnly;
-    if (!requestedAudioOnly) sleepTimer.cancel();
+    if (target is LivePlaybackTarget) sleepTimer.cancel();
     sleepTimer.checkDeadline();
     _audioRecovery = null;
     // Capture source settings together; a preference change during resolution

@@ -9,6 +9,7 @@ import '../domain/playback_repository.dart';
 import 'live_stream_picker.dart';
 import 'playback_snapshot_builder.dart';
 import 'player_control_labels.dart';
+import 'listening_sleep_timer_button.dart';
 
 class PlayerMoreDialog extends StatelessWidget {
   const PlayerMoreDialog({
@@ -125,6 +126,12 @@ class PlayerMoreDialog extends StatelessWidget {
     );
 
     return [
+      if (!session.isLive)
+        ListeningSleepTimerButton(
+          session: session,
+          compact: true,
+          menuItem: true,
+        ),
       if (session.error != null)
         action(
           '重新加载',

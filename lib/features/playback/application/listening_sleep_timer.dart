@@ -7,6 +7,8 @@ class ListeningSleepTimer extends ChangeNotifier {
   ListeningSleepTimer({required this.onElapsed, DateTime Function()? now})
     : _now = now ?? DateTime.now;
 
+  static const maxDuration = Duration(minutes: 1440);
+
   final VoidCallback onElapsed;
   final DateTime Function() _now;
   DateTime? _deadline;
@@ -24,8 +26,12 @@ class ListeningSleepTimer extends ChangeNotifier {
   bool get elapsed => _elapsed || remaining == Duration.zero;
 
   void start(Duration duration) {
-    if (duration <= Duration.zero || duration > const Duration(hours: 3)) {
-      throw ArgumentError.value(duration, 'duration', 'Must be within 3 hours');
+    if (duration <= Duration.zero || duration > maxDuration) {
+      throw ArgumentError.value(
+        duration,
+        'duration',
+        'Must be within 24 hours',
+      );
     }
     _alarm?.cancel();
     _elapsed = false;

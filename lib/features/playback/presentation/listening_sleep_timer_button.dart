@@ -4,17 +4,46 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../shared/ui/app_dialog.dart';
+import '../application/listening_sleep_timer.dart';
 import '../application/playback_session.dart';
+
+Future<void> showPlaybackSleepTimerDialog(
+  BuildContext context,
+  PlaybackSession session, {
+  ValueChanged<bool>? onMenuChanged,
+}) async {
+  onMenuChanged?.call(true);
+  try {
+    final duration = await showAppDialog<Duration>(
+      context: context,
+      builder: (_) => _SleepTimerDialog(session: session),
+    );
+    if (!context.mounted || duration == null) return;
+    if (duration == Duration.zero) {
+      session.sleepTimer.cancel();
+    } else {
+      session.startSleepTimer(duration);
+    }
+  } finally {
+    onMenuChanged?.call(false);
+  }
+}
 
 class ListeningSleepTimerButton extends StatefulWidget {
   const ListeningSleepTimerButton({
     super.key,
     required this.session,
     required this.compact,
+    this.videoOverlay = false,
+    this.menuItem = false,
+    this.onMenuChanged,
   });
 
   final PlaybackSession session;
   final bool compact;
+  final bool videoOverlay;
+  final bool menuItem;
+  final ValueChanged<bool>? onMenuChanged;
 
   @override
   State<ListeningSleepTimerButton> createState() =>
@@ -76,19 +105,11 @@ class _ListeningSleepTimerButtonState extends State<ListeningSleepTimerButton>
     super.dispose();
   }
 
-  Future<void> _showOptions() async {
-    final session = widget.session;
-    final duration = await showAppDialog<Duration>(
-      context: context,
-      builder: (_) => _SleepTimerDialog(session: session),
-    );
-    if (!mounted || duration == null) return;
-    if (duration == Duration.zero) {
-      session.sleepTimer.cancel();
-    } else {
-      session.startSleepTimer(duration);
-    }
-  }
+  Future<void> _showOptions() => showPlaybackSleepTimerDialog(
+    context,
+    widget.session,
+    onMenuChanged: widget.onMenuChanged,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -105,15 +126,32 @@ class _ListeningSleepTimerButtonState extends State<ListeningSleepTimerButton>
       remaining == null ? Icons.timer_outlined : Icons.timer_rounded,
       size: 20,
     );
+    if (widget.menuItem) {
+      return ListTile(
+        key: const ValueKey('player-sleep-timer-menu'),
+        leading: icon,
+        title: const Text('定时关闭'),
+        subtitle: remaining == null ? null : Text('$text 后暂停'),
+        onTap: _showOptions,
+      );
+    }
     return Tooltip(
       message: tooltip,
-      child: remaining == null && widget.compact || largeText
+      child:
+          widget.videoOverlay ||
+              remaining == null && widget.compact ||
+              largeText
           ? IconButton(
               key: const ValueKey('listening-sleep-timer'),
               onPressed: _showOptions,
-              color: remaining == null
+              color: widget.videoOverlay
+                  ? Colors.white
+                  : remaining == null
                   ? null
                   : Theme.of(context).colorScheme.primary,
+              style: widget.videoOverlay && remaining != null
+                  ? IconButton.styleFrom(backgroundColor: Colors.white24)
+                  : null,
               icon: icon,
             )
           : TextButton.icon(
@@ -163,8 +201,10 @@ class _SleepTimerDialogState extends State<_SleepTimerDialog> {
 
   void _confirm() {
     final minutes = _custom ? int.tryParse(_minutes.text) : _selected;
-    if (minutes == null || minutes < 1 || minutes > 180) {
-      setState(() => _error = '请输入 1–180 分钟');
+    if (minutes == null ||
+        minutes < 1 ||
+        minutes > ListeningSleepTimer.maxDuration.inMinutes) {
+      setState(() => _error = '请输入 1–1440 分钟');
       return;
     }
     Navigator.of(context).pop(Duration(minutes: minutes));
@@ -189,7 +229,7 @@ class _SleepTimerDialogState extends State<_SleepTimerDialog> {
                   ? '定时已结束，播放已暂停。'
                   : widget.session.sleepTimer.remaining != null
                   ? '已开启定时，重新设置将从现在开始计时。'
-                  : '到时暂停播放，安心听一会儿。',
+                  : '到时暂停播放。',
             ),
           ),
           const SizedBox(height: 16),
@@ -223,11 +263,11 @@ class _SleepTimerDialogState extends State<_SleepTimerDialog> {
               textInputAction: TextInputAction.done,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(3),
+                LengthLimitingTextInputFormatter(4),
               ],
               decoration: InputDecoration(
                 labelText: '时长（分钟）',
-                hintText: '1–180',
+                hintText: '1–1440',
                 errorText: _error,
                 border: const OutlineInputBorder(),
               ),
@@ -236,7 +276,7 @@ class _SleepTimerDialogState extends State<_SleepTimerDialog> {
           ],
           const SizedBox(height: 16),
           Text(
-            '连续播放、暂停和缓冲时继续计时。退出听视频或退出应用后取消。',
+            '连续播放、暂停和缓冲时继续计时，切换视频或听视频保留定时。关闭播放页或退出应用后取消。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

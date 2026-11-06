@@ -40,23 +40,52 @@ void main() {
     await session.open(_detail, _parts.first);
   }
 
-  testWidgets('timer is listening-only and expiry pauses until explicit play', (
+  for (final audioOnly in [false, true]) {
+    testWidgets('expiry pauses until explicit play: audioOnly=$audioOnly', (
+      tester,
+    ) async {
+      await open(tester);
+      await session.setAudioOnly(audioOnly);
+      session.startSleepTimer(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 5));
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      expect(session.sleepTimer.elapsed, isTrue);
+      expect(session.canAutoAdvance, isFalse);
+      await session.retry();
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      await session.play();
+      expect(engine.currentSnapshot.desiredPlaying, isTrue);
+      expect(session.canAutoAdvance, isTrue);
+    });
+  }
+
+  testWidgets('video and listening mode keep one original deadline', (
     tester,
   ) async {
     await open(tester);
-    session.startSleepTimer(const Duration(seconds: 5));
-    expect(session.sleepTimer.remaining, isNull);
+    session.startSleepTimer(const Duration(seconds: 10));
+    await tester.pump(const Duration(seconds: 2));
     await session.setAudioOnly(true);
-    session.startSleepTimer(const Duration(seconds: 5));
-    await tester.pump(const Duration(seconds: 5));
+    expect(session.sleepTimer.remaining, const Duration(seconds: 8));
+    await tester.pump(const Duration(seconds: 2));
+    await session.setAudioOnly(false);
+    expect(session.sleepTimer.remaining, const Duration(seconds: 6));
+    await tester.pump(const Duration(seconds: 6));
+    expect(session.audioOnly, isFalse);
     expect(engine.currentSnapshot.desiredPlaying, isFalse);
-    expect(session.sleepTimer.elapsed, isTrue);
-    expect(session.canAutoAdvance, isFalse);
-    await session.retry();
-    expect(engine.currentSnapshot.desiredPlaying, isFalse);
-    await session.play();
-    expect(engine.currentSnapshot.desiredPlaying, isTrue);
-    expect(session.canAutoAdvance, isTrue);
+  });
+
+  testWidgets('timer accepts 1440 minutes and rejects out-of-range values', (
+    tester,
+  ) async {
+    await open(tester);
+    session.startSleepTimer(const Duration(minutes: 1440));
+    expect(session.sleepTimer.remaining, const Duration(minutes: 1440));
+    for (final invalid in [Duration.zero, const Duration(minutes: 1441)]) {
+      expect(() => session.startSleepTimer(invalid), throwsArgumentError);
+      expect(session.sleepTimer.remaining, const Duration(minutes: 1440));
+    }
+    session.sleepTimer.cancel();
   });
 
   for (final target in [
@@ -100,7 +129,7 @@ void main() {
     expect(engine.currentSnapshot.desiredPlaying, isFalse);
   });
 
-  for (final action in ['cancel', 'video', 'stop', 'close']) {
+  for (final action in ['cancel', 'stop', 'close']) {
     testWidgets('$action cancels without affecting a later listening session', (
       tester,
     ) async {
@@ -110,9 +139,6 @@ void main() {
       switch (action) {
         case 'cancel':
           session.sleepTimer.cancel();
-        case 'video':
-          await session.setAudioOnly(false);
-          await session.setAudioOnly(true);
         case 'stop':
           await session.stop();
           await session.open(_detail, _parts.first);
@@ -144,6 +170,27 @@ void main() {
     expect(session.error, isNull);
     expect(engine.currentSnapshot.desiredPlaying, isFalse);
   });
+
+  for (final audioOnly in [false, true]) {
+    testWidgets(
+      'expiry during a mode switch prevents late playback: $audioOnly',
+      (tester) async {
+        await open(tester);
+        await session.setAudioOnly(!audioOnly);
+        session.startSleepTimer(const Duration(seconds: 5));
+        repository.pending = Completer<PlaybackMedia>();
+        final changing = session.setAudioOnly(audioOnly);
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 5));
+        repository.pending!.complete(cardPreviewMedia());
+        await changing;
+        expect(session.error, isNull);
+        expect(session.audioOnly, audioOnly);
+        expect(session.sleepTimer.elapsed, isTrue);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      },
+    );
+  }
 
   testWidgets('replacing a timer revokes the old alarm', (tester) async {
     await open(tester);
@@ -228,7 +275,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('listening-sleep-timer')), findsNothing);
     await session.setAudioOnly(true);
     await tester.pumpAndSettle();
     session.startSleepTimer(const Duration(minutes: 1));
@@ -249,7 +295,7 @@ void main() {
     expect(engine.currentSnapshot.desiredPlaying, isFalse);
     await session.setAudioOnly(false);
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('listening-sleep-timer')), findsNothing);
+    expect(session.canAutoAdvance, isFalse);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
@@ -346,11 +392,16 @@ void main() {
         await tester.ensureVisible(find.text('开始计时'));
         await tester.tap(find.text('开始计时'));
         await tester.pumpAndSettle();
-        expect(find.text('请输入 1–180 分钟'), findsOneWidget);
-        await tester.enterText(find.byType(TextField), '1');
+        expect(find.text('请输入 1–1440 分钟'), findsOneWidget);
+        await tester.enterText(find.byType(TextField), '1441');
+        await tester.tap(find.text('开始计时'));
+        await tester.pumpAndSettle();
+        expect(find.text('请输入 1–1440 分钟'), findsOneWidget);
+        await tester.enterText(find.byType(TextField), '1440');
         await tester.tap(find.text('开始计时'));
         await tester.pumpAndSettle();
         expect(session.sleepTimer.remaining, isNotNull);
+        expect(session.sleepTimer.remaining!.inMinutes, 1439);
         expect(find.byType(AlertDialog), findsNothing);
         await tester.pump(const Duration(seconds: 1));
         expect(find.byTooltip(RegExp('定时关闭：')), findsOneWidget);
@@ -365,6 +416,88 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
       });
     }
+  }
+
+  for (final compact in [false, true]) {
+    testWidgets('video timer uses ${compact ? 'more menu' : 'top bar'}', (
+      tester,
+    ) async {
+      await open(tester);
+      tester.view.physicalSize = compact
+          ? const Size(320, 800)
+          : const Size(900, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [playbackSessionProvider.overrideWithValue(session)],
+          child: MaterialApp(
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  height: compact ? 220 : 506,
+                  child: PlaybackPanel(
+                    detail: _detail,
+                    part: _parts.first,
+                    settings: AppSettings(
+                      danmakuEnabled: false,
+                      resumePlayback: false,
+                      playerControlsMode: PlayerControlsMode.dynamic,
+                    ),
+                    onToggleComments: () {},
+                    window: _Window(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(session.error, isNull);
+      if (compact) {
+        expect(
+          find.byKey(const ValueKey('listening-sleep-timer')),
+          findsNothing,
+        );
+        await tester.tap(find.byTooltip('更多播放选项'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('player-sleep-timer-menu')));
+      } else {
+        final timer = find.byKey(const ValueKey('listening-sleep-timer'));
+        expect(tester.widget<IconButton>(timer).color, Colors.white);
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('player-control-title-layer')),
+            matching: timer,
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(timer);
+      }
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      // Timer setup must keep its launching controls mounted past auto-hide.
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('开始计时'));
+      await tester.pumpAndSettle();
+      expect(session.audioOnly, isFalse);
+      expect(session.sleepTimer.remaining, isNotNull);
+      if (compact) {
+        expect(
+          find.byKey(const ValueKey('player-more-dialog')),
+          findsOneWidget,
+        );
+        expect(find.textContaining('后暂停'), findsOneWidget);
+      } else {
+        expect(find.byTooltip(RegExp('定时关闭：')), findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
   }
 }
 
