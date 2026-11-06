@@ -358,14 +358,28 @@ void main() {
     final title = find.byKey(const ValueKey('settings-page-title'));
     final strip = find.byKey(const ValueKey('settings-category-strip'));
     final content = find.byKey(const PageStorageKey('settings-shortcuts'));
-    for (final width in [320.0, 600.0, 1280.0]) {
+    final reset = find.byKey(const ValueKey('reset-settings'));
+    final export = find.byKey(const ValueKey('export-logs'));
+    for (final width in [320.0, 375.0, 599.0, 600.0, 1280.0, 320.0]) {
       tester.view.physicalSize = Size(width, 800);
       await tester.pumpAndSettle();
       expect(find.text('设置'), findsOneWidget);
       expect(tester.getTopLeft(title).dx, 20);
+      final resetRect = tester.getRect(reset);
+      final exportRect = tester.getRect(export);
+      expect(reset.hitTestable(), findsOneWidget);
+      expect(export.hitTestable(), findsOneWidget);
+      expect(resetRect.center.dy, exportRect.center.dy);
+      expect(exportRect.left - resetRect.right, closeTo(8, .01));
+      expect(exportRect.right, width - 20);
+      if (width >= 600) {
+        expect(resetRect.center.dy, tester.getCenter(title).dy);
+      } else {
+        expect(resetRect.top, greaterThan(tester.getBottomLeft(title).dy));
+      }
       expect(
         tester.getTopLeft(strip).dy,
-        greaterThan(tester.getBottomLeft(title).dy),
+        greaterThanOrEqualTo(exportRect.bottom),
       );
       expect(
         tester.getTopLeft(content).dy,
@@ -1309,6 +1323,22 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+    for (final width in [320.0, 600.0, 1280.0, 400.0]) {
+      tester.view.physicalSize = Size(width, 900);
+      await tester.pumpAndSettle();
+      final reset = find.byKey(const ValueKey('reset-settings'));
+      final export = find.byKey(const ValueKey('export-logs'));
+      final strip = find.byKey(const ValueKey('settings-category-strip'));
+      for (final button in [reset, export]) {
+        final rect = tester.getRect(button);
+        expect(button.hitTestable(), findsOneWidget);
+        expect(rect.left, greaterThanOrEqualTo(20));
+        expect(rect.right, lessThanOrEqualTo(width - 20));
+        expect(rect.bottom, lessThanOrEqualTo(tester.getTopLeft(strip).dy));
+      }
+      expect(tester.getRect(reset).overlaps(tester.getRect(export)), isFalse);
+      expect(tester.takeException(), isNull);
+    }
     final darkChoice = find.widgetWithText(ChoiceChip, '深色');
     await tester.ensureVisible(darkChoice);
     await tester.pumpAndSettle();

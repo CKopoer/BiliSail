@@ -111,32 +111,56 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-          child: OverflowBar(
-            alignment: MainAxisAlignment.spaceBetween,
-            overflowAlignment: OverflowBarAlignment.start,
-            spacing: 12,
-            overflowSpacing: 4,
-            children: [
-              Text(
-                '设置',
-                key: const ValueKey('settings-page-title'),
-                style: Theme.of(context).textTheme.titleLarge,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final inline = constraints.maxWidth >= 600;
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+              // Keep the button elements mounted when resizing during export.
+              child: Flex(
+                direction: inline ? Axis.horizontal : Axis.vertical,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: inline
+                    ? CrossAxisAlignment.center
+                    : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '设置',
+                    key: const ValueKey('settings-page-title'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  SizedBox(width: inline ? 24 : 0, height: inline ? 0 : 8),
+                  Flexible(
+                    flex: inline ? 1 : 0,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Wrap(
+                        alignment: WrapAlignment.end,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          TextButton.icon(
+                            key: const ValueKey('reset-settings'),
+                            onPressed:
+                                _resetting ||
+                                    !ref
+                                        .watch(settingsControllerProvider)
+                                        .hasValue
+                                ? null
+                                : _resetSettings,
+                            icon: const Icon(Icons.restore),
+                            label: const Text('恢复默认设置'),
+                          ),
+                          const LogExportButton(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              TextButton.icon(
-                key: const ValueKey('reset-settings'),
-                onPressed:
-                    _resetting ||
-                        !ref.watch(settingsControllerProvider).hasValue
-                    ? null
-                    : _resetSettings,
-                icon: const Icon(Icons.restore),
-                label: const Text('恢复默认设置'),
-              ),
-              const LogExportButton(),
-            ],
-          ),
+            );
+          },
         ),
         SizedBox(
           height: PageTabStyle.barHeight,

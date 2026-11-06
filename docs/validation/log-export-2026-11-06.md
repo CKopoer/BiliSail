@@ -2,6 +2,12 @@
 
 日期：2026-11-06（Asia/Shanghai）。按用户要求在设置页标题栏增加“导出日志”，无需电脑或调试包。导出期间禁用重复操作，成功后显示可选择、可复制的保存位置；失败保留原始日志并允许重试。
 
+## 恢复默认与日志导出按钮布局
+
+同日按用户后续要求调整标题栏，按设置页实际可用宽度适配：600 逻辑像素及以上时标题居左，“恢复默认设置”和“导出日志”作为紧邻的操作组居右；不足 600 时，操作组移到标题下一行并继续右对齐。组内间隔 8 逻辑像素，空间不足或字号放大时自动换行，不截断按钮文案。分类栏继续位于整个标题／操作区域下方，随内容滚动时保持固定。
+
+宽窄布局切换复用同一组按钮元素，日志导出期间缩放窗口不会丢失完成弹窗；恢复默认的确认与保存、导出过程的忙碌／失败／重试行为沿用原实现。
+
 ## 内容与隐私
 
 - 压缩包为 `BiliSail-logs-<UTC 时间>-<进程号>.zip`，包含 `logs/core-*.log`、`logs/playback-*.log`（含轮转文件）、`diagnostics.json` 与中文说明。
@@ -36,3 +42,9 @@
 - Windows Debug 构建并启动隔离验证入口，调用生产导出仓储与文件保存适配器，生成含两个日志文件的实际 ZIP；使用独立 Python `zipfile` 校验 CRC、两通道、manifest 文件数及敏感测试值缺失。随后 DTD 热重载成功，未发现运行时错误，并关闭本任务启动的进程。此入口只使用构建目录内的假数据，不读取真实账号；不等于完整正式入口验收。日志与输出：`build/log-export-preview.log`、`build/validation/log-export/`。
 - `tool/build-android-development.ps1 -Mode Release -SkipMuxBuild` 复用已有 Android arm64 mux 资产构建通过，原生 Kotlin 保存通道参与编译。产物 `build/development/android-arm64/BiliSail-test-arm64-release.apk`，包名 `dev.bilisail.bilisail.test`、名称 `BiliSail 测试版`、版本 1.2.6+7／12607；脚本完成签名及不可调试等身份校验。SHA-256：`50d4e55a9ceebd860905af668658a2ff918b08c26999c7b208b5cf1313d20615`。未安装到设备。构建保留既有插件 KGP 与图标字体告警，无编译错误；日志：`build/log-export-android-build.log`。
 - 文档新增相对链接及 `git diff --check` 通过。当前无 adb 设备连接；Android 公共目录写入、旧系统授权、iOS 文件共享、macOS／Linux 实际目录访问仍需对应平台验收，不由单元测试或构建结果替代。未执行 Apple／Linux 构建、性能或真实账号测试。
+
+### 后续按钮布局验证
+
+- `tool/check.ps1 -SkipPub` 完整通过：打包边界、格式与静态分析通过，根应用 4417、bili_api 659、bili_player 148、bili_danmaku 161、bili_mux 5，共 **5390 项测试**。13 项 Windows 符号链接测试因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生集成通过。未修改依赖或锁文件。日志：`build/settings-actions-check.log`。
+- 设置页面、分类滑动与日志导出定向回归 56 项通过，覆盖 320／375／599／600／1280 逻辑像素、两倍字号、标题与分类固定、按钮可点击且不重叠，以及导出过程中反复跨断点缩放后仍展示成功弹窗。日志：`build/settings-actions-targeted.log`。
+- Windows Debug 构建并启动隔离预览入口，以内存设置渲染真实设置页，确认宽屏、窄屏、两倍字号与深色主题截图；DTD 热重载成功，运行时无错误。截图与预览源码位于 `build/validation/settings-actions/`，运行日志为 `build/settings-actions-preview.log`；已关闭该预览进程。此项不读取真实账号或偏好，不等于移动设备或完整正式入口验收。本次布局调整未执行 Android／Apple／Linux 构建、设备或性能测试。
