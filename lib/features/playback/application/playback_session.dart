@@ -409,7 +409,11 @@ class PlaybackSession extends ChangeNotifier {
       await _syncPlayback(forcePlay: true);
       if (!_disposed && generation == _generation) await _saveProgress();
     } on PlayerFailure catch (failure) {
-      if (!_disposed && generation == _generation) {
+      if (!_disposed &&
+          generation == _generation &&
+          identical(_automaticRepeat, operation) &&
+          sourceMatchesAccount &&
+          playbackModeRevision == modeRevision) {
         _desiredPlaying = false;
         error = failure.message;
         _notify();
@@ -1769,6 +1773,10 @@ class PlaybackSession extends ChangeNotifier {
   void configureSettings(AppSettings settings) {
     if (settings.playbackMode != _settings.playbackMode) {
       _playbackModeRevision++;
+      if (_automaticRepeat != null) {
+        _automaticRepeat = null;
+        _desiredPlaying = false;
+      }
     }
     final previous = _settings;
     _settings = settings.normalized();

@@ -421,6 +421,45 @@ void main() {
     expect(session.snapshots.value.desiredPlaying, isFalse);
   });
 
+  for (final manualPlay in [false, true]) {
+    test(
+      'late failed loop seek cannot overwrite manual ${manualPlay ? 'play' : 'seek'}',
+      () async {
+        final engine = _Engine();
+        final session = _session(engine);
+        addTearDown(session.close);
+        session.configureSettings(
+          AppSettings(playbackMode: PlaybackMode.singleLoop),
+        );
+        await session.open(_video(_a, _parts), _parts.first);
+        engine.end();
+        engine.playCommands = 0;
+        engine.seekFailure = const PlayerFailure(
+          PlayerFailureKind.nativePlayback,
+          'old seek failed',
+          0,
+        );
+        final pending = engine.seeking = Completer<void>();
+        final repeat = session.repeatCompleted(session.sourceGeneration);
+        await Future<void>.delayed(Duration.zero);
+        engine.seekFailure = null;
+        final manual = manualPlay
+            ? session.play()
+            : session.seek(const Duration(seconds: 7));
+        engine.seeking = null;
+        pending.complete();
+        await repeat;
+        await manual;
+        expect(session.error, isNull);
+        expect(
+          engine.snapshot.position,
+          manualPlay ? Duration.zero : const Duration(seconds: 7),
+        );
+        expect(engine.playCommands, manualPlay ? 1 : 0);
+      },
+    );
+  }
+
   for (final action in [
     'pause',
     'seek',
@@ -1279,8 +1318,9 @@ class _Engine extends CardFakeEngine {
   int playCommands = 0;
   @override
   Future<void> seek(Duration target) async {
+    final failure = seekFailure;
     await seeking?.future;
-    if (seekFailure case final failure?) throw failure;
+    if (failure != null) throw failure;
     await super.seek(target);
   }
 
