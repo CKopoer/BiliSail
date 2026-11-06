@@ -10,6 +10,9 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+// Native fault injection inspects the player's pinned transitive renderer.
+// ignore: depend_on_referenced_packages
+import 'package:media_kit_video/media_kit_video.dart' as mkv;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
@@ -27,6 +30,130 @@ void main() {
         (tester) => _runStall(tester, automatic, audioFault),
       );
     }
+  }
+
+  for (final automatic in [false, true]) {
+    testWidgets(
+      'silent buffered clock freeze; automatic=$automatic',
+      (tester) => _runSilentStall(tester, automatic: automatic),
+    );
+  }
+}
+
+Future<void> _runSilentStall(
+  WidgetTester tester, {
+  required bool automatic,
+}) async {
+  initializePlayerBackend();
+  final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
+  expect(fixtures, isNotNull);
+  final source = DashPairSource(
+    video: MediaTrack(
+      uri: File('$fixtures/video.mp4').uri,
+      requestPolicy: MediaRequestPolicy(),
+    ),
+    audio: MediaTrack(
+      uri: File('$fixtures/audio.m4a').uri,
+      requestPolicy: MediaRequestPolicy(),
+    ),
+  );
+  final events = <PlayerDiagnosticEvent>[];
+  final failures = <PlayerFailure>[];
+  final engine = MediaKitEngine(onDiagnostic: events.add);
+  final subscription = engine.failures.listen(failures.add);
+  final session = automatic
+      ? PlaybackSession(
+          engine: engine,
+          repository: _FixtureRepository(source),
+          progress: _MemoryProgress(),
+          accountScope: () => 'guest',
+        )
+      : null;
+  session?.configureSettings(
+    AppSettings(autoPlay: true, resumePlayback: false),
+  );
+  try {
+    await tester.pumpWidget(MaterialApp(home: VideoSurface(engine: engine)));
+    await _withFrames(
+      tester,
+      session == null
+          ? engine.open(source, const OpenOptions(play: true, volume: 0))
+          : session.open(_detail, _part, volume: 0),
+    );
+    final watch = Stopwatch()..start();
+    while (engine.currentSnapshot.position < const Duration(seconds: 1) &&
+        watch.elapsed < const Duration(seconds: 5)) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(
+      engine.currentSnapshot.position,
+      greaterThanOrEqualTo(const Duration(seconds: 1)),
+    );
+    expect(
+      engine.currentSnapshot.buffered - engine.currentSnapshot.position,
+      greaterThan(const Duration(seconds: 8)),
+    );
+    final generation = engine.currentSnapshot.generation;
+    final frozenAt = engine.currentSnapshot.position;
+    // Fault injection outside the engine: retain its playback intent, emit no
+    // error, and leave a full demuxer cache. This is not a GPU-driver repro.
+    final native = tester
+        .widget<mkv.Video>(find.byType(mkv.Video))
+        .controller
+        .player;
+    // The pinned core maps core-idle to buffering, including an explicit
+    // native pause. Suppress that one transition, as its pause adapter does,
+    // to model this issue's buffering=false signature.
+    native.isBufferingStateChangeAllowed = false;
+    native.setProperty('pause', 'yes');
+    watch.reset();
+    while ((failures.isEmpty ||
+            automatic &&
+                (engine.currentSnapshot.generation == generation ||
+                    engine.currentSnapshot.position <
+                        frozenAt + const Duration(seconds: 1))) &&
+        watch.elapsed < const Duration(seconds: 15)) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    debugPrint(
+      'SILENT_STALL_FINAL ${PlayerDiagnosticEvent(kind: PlayerDiagnosticKind.nativeLog, snapshot: engine.currentSnapshot).toJson()} '
+      'events=${events.map((e) => e.kind.name).toList()}',
+    );
+    expect(failures, hasLength(1));
+    expect(failures.single.kind, PlayerFailureKind.nativePlayback);
+    final stall = events.singleWhere(
+      (e) => e.kind == PlayerDiagnosticKind.playbackStalled,
+    );
+    expect(stall.stallReason, PlaybackStallReason.playbackClock);
+    expect(stall.snapshot.isBuffering, false);
+    expect(stall.snapshot.desiredPlaying, true);
+    expect(stall.stalledFor, greaterThanOrEqualTo(const Duration(seconds: 8)));
+    if (automatic) {
+      expect(engine.currentSnapshot.generation, greaterThan(generation));
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      expect(
+        engine.currentSnapshot.position,
+        greaterThanOrEqualTo(frozenAt + const Duration(seconds: 1)),
+      );
+    } else {
+      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+      final stoppedAt = engine.inspectDiagnostics().position;
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        (engine.inspectDiagnostics().position - stoppedAt).abs(),
+        lessThan(const Duration(milliseconds: 100)),
+      );
+    }
+    debugPrint(
+      'SILENT_STALL automatic=$automatic '
+      'reason=${stall.stallReason?.name} elapsedMs=${stall.stalledFor?.inMilliseconds} '
+      'reopened=${engine.currentSnapshot.generation > generation}',
+    );
+  } finally {
+    session?.dispose();
+    await subscription.cancel();
+    await _withFrames(tester, engine.dispose());
+    await tester.pumpWidget(const SizedBox.shrink());
   }
 }
 

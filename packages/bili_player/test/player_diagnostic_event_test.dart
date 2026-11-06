@@ -4,6 +4,22 @@ import 'package:bili_player/bili_player.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('stall diagnostics record safe clocks and the detection deadline', () {
+    final json = PlayerDiagnosticEvent(
+      kind: PlayerDiagnosticKind.playbackStalled,
+      snapshot: const PlaybackSnapshot(
+        phase: PlaybackPhase.playing,
+        generation: 2,
+      ),
+      stallReason: PlaybackStallReason.playbackClock,
+      stalledFor: const Duration(seconds: 8),
+      audioPosition: const Duration(seconds: 28),
+    ).toJson();
+    expect(json['stallReason'], 'playbackClock');
+    expect(json['stalledForMs'], 8000);
+    expect(json['audioPositionMs'], 28000);
+  });
+
   test('readiness diagnostics expose only stage and media readiness flags', () {
     final event = PlayerDiagnosticEvent(
       kind: PlayerDiagnosticKind.failed,

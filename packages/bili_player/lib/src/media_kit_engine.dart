@@ -77,7 +77,6 @@ final class MediaKitEngine
   bool _watchDashContinuity = false;
   bool _dashInterruptionPending = false;
   Timer? _healthTimer;
-  bool _healthSampling = false;
   NativeLoadObserver? _nativeLoad;
 
   void _diagnose(
@@ -86,6 +85,7 @@ final class MediaKitEngine
     PlayerFailureKind? failureKind,
     NativeLogSeverity? severity,
     int? nativeErrorCode,
+    NativePlaybackInterruption? interruption,
   }) => onDiagnostic?.call(
     PlayerDiagnosticEvent(
       kind: kind,
@@ -95,6 +95,9 @@ final class MediaKitEngine
       severity: severity,
       nativeErrorCode: nativeErrorCode,
       readinessStage: _readinessStage,
+      stallReason: interruption?.reason,
+      stalledFor: interruption?.stalledFor,
+      audioPosition: interruption?.audioPosition,
       // openStarted precedes releasing the previous native player.
       diagnostics: kind == PlayerDiagnosticKind.openStarted
           ? null
@@ -351,68 +354,45 @@ final class MediaKitEngine
         }.contains(value.phase);
     if (watch) {
       _healthTimer ??= Timer.periodic(
-        const Duration(milliseconds: 250),
-        (_) => unawaited(_samplePlaybackHealth()),
+        NativePlaybackHealth.sampleInterval,
+        (_) => _samplePlaybackHealth(),
       );
     } else {
       _healthTimer?.cancel();
       _healthTimer = null;
       _playbackHealth.reset();
+      _nativeLoad?.state.resetClocks();
     }
   }
 
-  Future<void> _samplePlaybackHealth() async {
-    if (_healthSampling || _healthTimer == null) return;
-    _healthSampling = true;
-    final timer = _healthTimer;
-    final generation = _generation;
-    final player = _player;
-    final before = _snapshot;
-    Duration? audioPosition;
-    try {
-      final platform = player;
-      if (_watchDashContinuity && platform != null) {
-        try {
-          final value = double.tryParse(
-            await platform
-                .getPropertyAsync('audio-pts')
-                .timeout(const Duration(seconds: 1)),
-          );
-          if (value != null && value.isFinite) {
-            audioPosition = Duration(microseconds: (value * 1000000).round());
-          }
-        } on Object {
-          // An exhausted audio track can stop exposing its clock.
-        }
-      }
-      if (_disposed ||
-          generation != _generation ||
-          !identical(player, _player) ||
-          !identical(timer, _healthTimer) ||
-          before.isSeeking != _snapshot.isSeeking ||
-          (_snapshot.position - before.position).abs() >
-              const Duration(seconds: 1)) {
-        return;
-      }
-      final failure = _playbackHealth.update(
-        _snapshot,
-        _continuityClock.elapsed,
-        paired: _watchDashContinuity,
-        audioPosition: audioPosition,
+  void _samplePlaybackHealth() {
+    if (_disposed || _healthTimer == null || _player == null) return;
+    // Cached events only: health deadlines must not wait on a blocked native
+    // decoder. The load observer is owned by this player's source generation.
+    final clocks = _nativeLoad?.state;
+    _nativeLoad?.sampleClocks();
+    final failure = _playbackHealth.update(
+      _snapshot,
+      _continuityClock.elapsed,
+      paired: _watchDashContinuity,
+      audioPosition: clocks?.audioPosition,
+    );
+    if (failure != null) {
+      _interruptPlayback(
+        failure.position,
+        _generation,
+        failure.kind,
+        interruption: failure,
       );
-      if (failure != null) {
-        _interruptPlayback(failure.position, generation, failure.kind);
-      }
-    } finally {
-      _healthSampling = false;
     }
   }
 
   void _interruptPlayback(
     Duration boundary,
     int generation,
-    PlayerFailureKind kind,
-  ) {
+    PlayerFailureKind kind, {
+    NativePlaybackInterruption? interruption,
+  }) {
     if (_disposed || generation != _generation || _dashInterruptionPending) {
       return;
     }
@@ -439,6 +419,13 @@ final class MediaKitEngine
           if (kind == PlayerFailureKind.videoInterrupted) {
             _diagnose(PlayerDiagnosticKind.videoInterrupted);
           }
+          if (interruption != null) {
+            _diagnose(
+              PlayerDiagnosticKind.playbackStalled,
+              failureKind: kind,
+              interruption: interruption,
+            );
+          }
           _publish(
             _snapshot.copyWith(
               position: boundary,
@@ -449,9 +436,8 @@ final class MediaKitEngine
           );
           try {
             // A failed phase alone does not stop mpv's external audio clock.
-            await player.pauseWithStringFlag().timeout(
-              const Duration(seconds: 2),
-            );
+            await (_nativeLoad?.pause() ?? player.pauseWithStringFlag())
+                .timeout(const Duration(seconds: 2));
           } on Object {
             if (generation != _generation || _disposed) return;
             await _releasePlayer();

@@ -132,6 +132,108 @@ void main() {
     }
   });
 
+  for (final rate in [0.25, 1.0, 4.0, 8.0]) {
+    test('cached clocks permit normal progress at rate $rate', () {
+      for (var i = 0; i < 80; i++) {
+        final position = Duration(
+          milliseconds: (10000 + i * 250 * rate).round(),
+        );
+        final cached = position - Duration(milliseconds: (250 * rate).round());
+        expect(
+          health.update(
+            playing.copyWith(
+              position: position,
+              rate: rate,
+              buffered: const Duration(seconds: 300),
+              duration: const Duration(seconds: 600),
+            ),
+            Duration(milliseconds: i * 250),
+            paired: true,
+            audioPosition: cached,
+          ),
+          isNull,
+        );
+      }
+    });
+  }
+
+  test('ample and growing buffers cannot hide a frozen playback clock', () {
+    for (var i = 0; i <= 8; i++) {
+      final result = health.update(
+        playing.copyWith(buffered: Duration(seconds: 40 + i)),
+        Duration(seconds: i),
+        paired: true,
+        audioPosition: playing.position,
+      );
+      if (i < 8) {
+        expect(result, isNull);
+      } else {
+        expect(result?.kind, PlayerFailureKind.nativePlayback);
+        expect(result?.position, playing.position);
+      }
+    }
+  });
+
+  test('small position oscillations cannot renew a stalled clock deadline', () {
+    for (var i = 0; i <= 32; i++) {
+      final result = health.update(
+        playing.copyWith(
+          position: Duration(milliseconds: 10000 + (i.isEven ? 0 : 10)),
+          buffered: const Duration(seconds: 50),
+        ),
+        Duration(milliseconds: i * 250),
+        paired: false,
+      );
+      if (i < 32) {
+        expect(result, isNull);
+      } else {
+        expect(result?.kind, PlayerFailureKind.nativePlayback);
+      }
+    }
+  });
+
+  test('buffer refill grants time to resume the silent playback clock', () {
+    final snapshot = playing.copyWith(buffered: const Duration(seconds: 50));
+    health.update(snapshot, Duration.zero, paired: false);
+    expect(
+      health.update(
+        snapshot.copyWith(isBuffering: true),
+        const Duration(seconds: 20),
+        paired: false,
+      ),
+      isNull,
+    );
+    expect(
+      health.update(snapshot, const Duration(seconds: 21), paired: false),
+      isNull,
+    );
+    expect(
+      health.update(
+        snapshot.copyWith(position: const Duration(seconds: 11)),
+        const Duration(seconds: 22),
+        paired: false,
+      ),
+      isNull,
+    );
+  });
+
+  test('buffering flag oscillations cannot keep renewing resume grace', () {
+    final snapshot = playing.copyWith(buffered: const Duration(seconds: 50));
+    health.update(snapshot, Duration.zero, paired: false);
+    for (var second = 1; second <= 10; second++) {
+      final result = health.update(
+        snapshot.copyWith(isBuffering: second.isOdd),
+        Duration(seconds: second),
+        paired: false,
+      );
+      if (second < 10) {
+        expect(result, isNull);
+      } else {
+        expect(result?.kind, PlayerFailureKind.nativePlayback);
+      }
+    }
+  });
+
   for (final snapshot in [
     playing.copyWith(phase: PlaybackPhase.opening),
     playing.copyWith(phase: PlaybackPhase.paused, desiredPlaying: false),

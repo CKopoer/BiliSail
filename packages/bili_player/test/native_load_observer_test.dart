@@ -5,6 +5,34 @@ import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('seek and pause invalidate pending clock replies', () async {
+    final state = NativeLoadState();
+    state.clockChanged(seconds: 10, epoch: 0);
+    state.resetClocks();
+    state.clockChanged(seconds: 10, epoch: 0);
+    expect(state.audioPosition, isNull);
+    state.clockChanged(seconds: 40, epoch: 1);
+    expect(state.audioPosition, const Duration(seconds: 40));
+    await state.dispose();
+  });
+
+  test(
+    'clock cache validates native samples and ignores disposed replies',
+    () async {
+      final state = NativeLoadState();
+      state.clockChanged(seconds: 12.25);
+      expect(state.audioPosition, const Duration(milliseconds: 12250));
+      for (final invalid in [null, double.nan, double.infinity, -0.1]) {
+        state.clockChanged(seconds: invalid);
+        expect(state.audioPosition, isNull);
+      }
+      state.clockChanged(seconds: 12.25);
+      await state.dispose();
+      state.clockChanged(seconds: 50);
+      expect(state.audioPosition, const Duration(milliseconds: 12250));
+    },
+  );
+
   test(
     'preparation keeps the original failure and ignores late errors',
     () async {
