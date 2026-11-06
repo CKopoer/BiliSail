@@ -291,8 +291,8 @@ test('reports installer build directories and missing files without weakening as
   await assert.rejects(verifyReleaseAssets(expected), /Missing: \[\]\. Unexpected: \["installer-artwork\/","installer-native\/"\]/);
 });
 
-test('draft uploads packages and their checksums while keeping build metadata and mux sources in Actions', async (t) => {
-  const expected = await makeAssets(t);
+async function prepareDraft(t, targets = allTargets, environment = {}) {
+  const expected = await makeAssets(t, targets);
   const directory = await mkdtemp(path.join(os.tmpdir(), 'bilisail-release-draft-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const assetsDirectory = path.join(directory, 'release-assets');
@@ -303,6 +303,11 @@ test('draft uploads packages and their checksums while keeping build metadata an
   const script = /      - name: Create preview draft with all selected packages[\s\S]*?        run: \|\r?\n([\s\S]*?)      - name: Keep the latest 15 releases/.exec(workflow)?.[1];
   assert.ok(script, 'Expected the production draft creation step.');
   const scriptPath = path.join(directory, 'create-draft.ps1');
+  const bundleName = `BiliSail-${version}-release-bundle.zip`;
+  // Include non-text bytes to catch accidental changes to the downloaded archive.
+  const bundle = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x80, 0xff, 0x0d, 0x0a]);
+  const bundleHash = createHash('sha256').update(bundle).digest('hex');
+  await writeFile(path.join(directory, 'source-bundle.zip'), bundle);
   await writeFile(scriptPath, `
 function gh {
   $global:LASTEXITCODE = 0
@@ -310,26 +315,70 @@ function gh {
   if ($args[0] -ne 'release' -or $args[1] -ne 'create') { throw 'Unexpected gh command.' }
   ConvertTo-Json -InputObject @($args) | Set-Content -LiteralPath gh-arguments.json -Encoding utf8
 }
+function Invoke-WebRequest {
+  param($Uri, $Headers, $OutFile, $TimeoutSec)
+  if ($Uri -ne 'https://api.github.com/repos/CKopoer/BiliSail/actions/artifacts/4321/zip') {
+    throw "Unexpected artifact download URI: $Uri"
+  }
+  if ($Headers.Authorization -ne 'Bearer fixture-token') { throw 'Missing artifact authorization.' }
+  if ($env:FAIL_BUNDLE_DOWNLOAD -eq 'true') { throw 'Artifact download failed.' }
+  Copy-Item -LiteralPath source-bundle.zip -Destination $OutFile
+}
 ${script.replace(/^          /gm, '')}`);
-  await promisify(execFile)('pwsh', ['-NoProfile', '-File', scriptPath], {
+  const run = () => promisify(execFile)('pwsh', ['-NoProfile', '-File', scriptPath], {
     cwd: directory,
     env: { ...process.env, RELEASE_VERSION: version, GITHUB_SHA: context.sha,
-      GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'CKopoer/BiliSail', GITHUB_RUN_ID: '1234' },
+      GITHUB_SERVER_URL: 'https://github.com', GITHUB_API_URL: 'https://api.github.com',
+      GITHUB_REPOSITORY: 'CKopoer/BiliSail', GITHUB_RUN_ID: '1234', GH_TOKEN: 'fixture-token',
+      RELEASE_BUNDLE_ID: '4321', RELEASE_BUNDLE_DIGEST: bundleHash, ...environment },
   });
+  return { directory, assetsDirectory, expected, bundleName, bundle, bundleHash, run };
+}
+
+test('draft uploads packages, the original release bundle and their checksums', async (t) => {
+  const { directory, assetsDirectory, expected, bundleName, bundle, bundleHash, run } = await prepareDraft(t);
+  await run();
 
   const args = JSON.parse((await readFile(path.join(directory, 'gh-arguments.json'), 'utf8')).replace(/^\uFEFF/, ''));
   assert.deepEqual(args.slice(0, 3), ['release', 'create', `v${version}`]);
   const packages = ['android-arm64.apk', 'windows-x64.msix', 'windows-x64.msi', 'windows-x64.exe',
     'windows-x64.cer', 'macos-arm64.dmg', 'macos-x64.dmg', 'ios-arm64-unsigned.ipa',
     'linux-x64.AppImage', 'linux-x64.flatpak'].map((suffix) => `BiliSail-${version}-${suffix}`);
-  const attachments = [...packages.flatMap((name) => [name, name + '.sha256']), 'THIRD_PARTY_NOTICES.md'];
+  const attachments = [...packages.flatMap((name) => [name, name + '.sha256']),
+    bundleName, bundleName + '.sha256', 'THIRD_PARTY_NOTICES.md'];
   assert.deepEqual(args.slice(3, args.indexOf('--repo')).map((file) => path.basename(file)).sort(), attachments.sort());
   assert.ok(args.includes('--draft'));
   assert.ok(args.includes('--prerelease'));
+  assert.deepEqual(await readFile(path.join(directory, bundleName)), bundle);
+  assert.equal((await readFile(path.join(directory, bundleName + '.sha256'), 'utf8')).replace(/^\uFEFF/, '').trim(),
+    `${bundleHash}  ${bundleName}`);
   const notes = await readFile(path.join(directory, 'release-notes.md'), 'utf8');
   assert.ok(notes.includes('[Actions 构建记录](https://github.com/CKopoer/BiliSail/actions/runs/1234)'));
   assert.ok(!notes.includes('见 build-info.json'));
+  assert.ok(notes.includes('release-bundle.zip'));
   await verifyReleaseAssets({ ...expected, directory: assetsDirectory });
+});
+
+test('draft includes the release bundle when only one platform is selected', async (t) => {
+  const { directory, bundleName, run } = await prepareDraft(t, ['android-arm64']);
+  await run();
+  const args = JSON.parse((await readFile(path.join(directory, 'gh-arguments.json'), 'utf8')).replace(/^\uFEFF/, ''));
+  assert.deepEqual(args.slice(3, args.indexOf('--repo')).map((file) => path.basename(file)).sort(),
+    [`BiliSail-${version}-android-arm64.apk`, `BiliSail-${version}-android-arm64.apk.sha256`,
+      bundleName, bundleName + '.sha256', 'THIRD_PARTY_NOTICES.md'].sort());
+});
+
+test('bundle download or checksum failure stops draft creation', async (t) => {
+  for (const [environment, message] of [
+    [{ FAIL_BUNDLE_DOWNLOAD: 'true' }, /Artifact download failed/],
+    [{ RELEASE_BUNDLE_DIGEST: '0'.repeat(64) }, /Release bundle SHA-256 does not match/],
+  ]) {
+    await t.test(message.source, async (t) => {
+      const { directory, run } = await prepareDraft(t, ['android-arm64'], environment);
+      await assert.rejects(run(), message);
+      await assert.rejects(readFile(path.join(directory, 'gh-arguments.json')), { code: 'ENOENT' });
+    });
+  }
 });
 
 test('accepts the same source lockfile checked out with Windows line endings', async (t) => {
