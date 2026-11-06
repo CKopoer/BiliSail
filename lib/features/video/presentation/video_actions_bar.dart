@@ -1,4 +1,5 @@
 import '../../../shared/ui/bili_icons.dart';
+import '../../../shared/ui/bili_coin_icon.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -194,7 +195,7 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
       );
     }
     Widget action(
-      IconData icon,
+      Widget icon,
       String label,
       VoidCallback? onTap, {
       bool selected = false,
@@ -204,7 +205,8 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
       color: selected
           ? Theme.of(context).colorScheme.primary
           : Theme.of(context).colorScheme.onSurfaceVariant,
-      icon: Icon(icon, size: 22),
+      iconSize: 22,
+      icon: icon,
     );
     return SizedBox(
       height: 42 + MediaQuery.textScalerOf(context).scale(16),
@@ -213,7 +215,9 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
         child: Row(
           children: [
             action(
-              state.interaction.liked ? BiliIcons.like : BiliIcons.like,
+              Icon(
+                state.interaction.liked ? Icons.thumb_up_alt : BiliIcons.like,
+              ),
               state.interaction.liked
                   ? '已点赞'
                   : '点赞 ${compactCount(widget.detail.likeCount)}',
@@ -223,7 +227,7 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
               selected: state.interaction.liked,
             ),
             action(
-              BiliIcons.coin,
+              BiliCoinIcon(filled: state.interaction.coins > 0),
               state.interaction.coins > 0
                   ? '已投 ${state.interaction.coins} 枚'
                   : '投币 ${compactCount(widget.detail.coinCount)}',
@@ -231,16 +235,18 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
               selected: state.interaction.coins > 0,
             ),
             action(
-              state.interaction.favorited
-                  ? BiliIcons.favoriteFilled
-                  : BiliIcons.favorite,
+              Icon(
+                state.interaction.favorited
+                    ? BiliIcons.favoriteFilled
+                    : BiliIcons.favorite,
+              ),
               state.interaction.favorited
                   ? '已收藏'
                   : '收藏 ${compactCount(widget.detail.favoriteCount)}',
               enabled('favorite') ? _favorite : null,
               selected: state.interaction.favorited,
             ),
-            action(BiliIcons.share, '分享', () async {
+            action(const Icon(BiliIcons.share), '分享', () async {
               await Clipboard.setData(
                 ClipboardData(
                   text:
@@ -249,9 +255,13 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
               );
               _notice('视频链接已复制');
             }),
-            action(Icons.open_in_new, '官方页面', _openOfficial),
+            action(const Icon(Icons.open_in_new), '官方页面', _openOfficial),
             if (widget.onDownload != null)
-              action(Icons.download_outlined, '下载视频', widget.onDownload),
+              action(
+                const Icon(Icons.download_outlined),
+                '下载视频',
+                widget.onDownload,
+              ),
             if (state.message case final String message when !state.busy)
               Tooltip(
                 message: message,

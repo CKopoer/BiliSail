@@ -1280,7 +1280,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                               ? theme.colorScheme.primary
                               : theme.colorScheme.outline,
                           icon: Icon(
-                            BiliIcons.like,
+                            c.liked ? Icons.thumb_up_alt : BiliIcons.like,
                             semanticLabel: c.liked ? '取消点赞评论' : '点赞评论',
                           ),
                         ),
