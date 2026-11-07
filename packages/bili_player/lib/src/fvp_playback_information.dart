@@ -14,6 +14,7 @@ PlayerPlaybackInformation sampleFvpPlaybackInformation({
   required bool audioDecoded,
   required bool videoRendered,
   String? videoDecoder,
+  bool directSurface = false,
   VideoDimensions? outputDimensions,
   required int generation,
   required int positionMilliseconds,
@@ -68,7 +69,11 @@ PlayerPlaybackInformation sampleFvpPlaybackInformation({
     pixelFormat: _identifier(video?.formatName),
     colorPrimaries: primaries,
     transferFunction: transfer,
-    videoOutput: outputDimensions == null ? null : 'Flutter.Texture',
+    videoOutput: outputDimensions == null
+        ? null
+        : directSurface
+        ? 'MediaCodec → Flutter.Texture (direct)'
+        : 'Flutter.Texture',
     cacheSeconds: bufferedMilliseconds < 0 ? null : bufferedMilliseconds / 1000,
     audioGainDb: audioGainDb.isFinite ? audioGainDb : null,
   );

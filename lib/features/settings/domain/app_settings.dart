@@ -60,6 +60,8 @@ enum SponsorBlockMode { disabled, manual, automatic }
 
 enum PlaybackBackendPreference { mediaKit, fvp }
 
+enum AndroidVideoOutputPreference { renderedTexture, directTexture }
+
 final class AppSettings {
   AppSettings({
     this.recommendations = const RecommendationSettings.defaults(),
@@ -105,6 +107,7 @@ final class AppSettings {
     this.mediaCdn = MediaCdnPreference.automatic,
     this.videoDecoding = VideoDecodingPreference.automatic,
     this.playbackBackend = PlaybackBackendPreference.mediaKit,
+    this.androidVideoOutput = AndroidVideoOutputPreference.renderedTexture,
     this.defaultPlaybackRate = 1.0,
     List<double> playbackRates = PlaybackRates.values,
     this.rememberPlaybackRate = true,
@@ -192,6 +195,7 @@ final class AppSettings {
        mediaCdn = MediaCdnPreference.automatic,
        videoDecoding = VideoDecodingPreference.automatic,
        playbackBackend = PlaybackBackendPreference.mediaKit,
+       androidVideoOutput = AndroidVideoOutputPreference.renderedTexture,
        defaultPlaybackRate = 1.0,
        playbackRates = PlaybackRates.values,
        rememberPlaybackRate = true,
@@ -271,6 +275,7 @@ final class AppSettings {
   final MediaCdnPreference mediaCdn;
   final VideoDecodingPreference videoDecoding;
   final PlaybackBackendPreference playbackBackend;
+  final AndroidVideoOutputPreference androidVideoOutput;
   final double defaultPlaybackRate;
   final List<double> playbackRates;
   final bool rememberPlaybackRate;
@@ -360,6 +365,7 @@ final class AppSettings {
     MediaCdnPreference? mediaCdn,
     VideoDecodingPreference? videoDecoding,
     PlaybackBackendPreference? playbackBackend,
+    AndroidVideoOutputPreference? androidVideoOutput,
     double? defaultPlaybackRate,
     List<double>? playbackRates,
     bool? rememberPlaybackRate,
@@ -455,6 +461,7 @@ final class AppSettings {
     mediaCdn: mediaCdn ?? this.mediaCdn,
     videoDecoding: videoDecoding ?? this.videoDecoding,
     playbackBackend: playbackBackend ?? this.playbackBackend,
+    androidVideoOutput: androidVideoOutput ?? this.androidVideoOutput,
     defaultPlaybackRate: defaultPlaybackRate ?? this.defaultPlaybackRate,
     playbackRates: playbackRates ?? this.playbackRates,
     rememberPlaybackRate: rememberPlaybackRate ?? this.rememberPlaybackRate,

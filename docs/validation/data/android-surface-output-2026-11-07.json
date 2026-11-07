@@ -1,0 +1,621 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-07",
+  "device": {
+    "model": "Xiaomi 13 / 2211133C",
+    "androidApi": 36,
+    "soc": "Snapdragon 8 Gen 2",
+    "landscapePixels": [
+      2400,
+      1080
+    ],
+    "renderer": "Impeller / Vulkan"
+  },
+  "toolchain": {
+    "flutter": "3.47.6",
+    "dart": "3.13.5",
+    "perfetto": "59.1"
+  },
+  "dependencies": {
+    "media_kit": "9abd8a56f24371fd8c9628b70eba5e84c29e86c8",
+    "media_kit_video": "9abd8a56f24371fd8c9628b70eba5e84c29e86c8",
+    "fvp": "e81637411c58a9ae28de246ee73ad06e3418f10e"
+  },
+  "media": {
+    "source": "https://download.blender.org/demo/movies/BBB/bbb_sunflower_2160p_60fps_normal.mp4.zip",
+    "attribution": "© 2008 Blender Foundation / www.bigbuckbunny.org",
+    "license": "CC BY 3.0",
+    "width": 3840,
+    "height": 2160,
+    "fps": 60,
+    "videoCodec": "H.264 High / yuv420p",
+    "videoBitrate": 24981946,
+    "durationSeconds": 180,
+    "rate": 3,
+    "videoSha256": "378fd9df3f23e78e78a61dded68a1903246515ccdf31f00102cdce348673172d",
+    "audioSha256": "9486acce7909a09d2d775343ec7abca8e6896017ca7e3d09ef2e46b6834f0342"
+  },
+  "protocol": {
+    "mode": "Profile / AOT",
+    "measureSecondsPerStage": 20,
+    "warmupSeconds": 8,
+    "commentArrivalsPerMediaSecond": 20,
+    "controls": "retained visible",
+    "subtitles": "Flutter cues every two media seconds",
+    "audioVolume": 0,
+    "bufferAheadSeconds": 120,
+    "gpuClockLocked": false,
+    "cpuUnit": "100 percent equals one full CPU core; application UID including fvp worker",
+    "fpsMeaning": "Flutter frame timings; not unique decoded video frames"
+  },
+  "rawRoot": "build/validation/android-surface/source/build/validation/android-4k60",
+  "results": [
+    {
+      "run": "surface_texture_formal_b",
+      "stage": "mpv_rendered_a",
+      "backend": "mpv",
+      "requestedDirect": false,
+      "presentation": "Flutter.Texture",
+      "actualOutput": "gpu",
+      "hwdec": "mediacodec",
+      "seconds": 20.000789,
+      "mediaSecondsPerWallSecond": 3.0032315225164368,
+      "gpuBusyPercent": 73.75118387601019,
+      "uiP95Ms": 1.735,
+      "rasterP95Ms": 8.826,
+      "flutterFramesPerSecond": 120.14526026948236,
+      "nativeFrameDropDelta": 59,
+      "nativeAvSyncAbsMaxMs": 6.917999999999999,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 23,
+      "observedLayerPresentHz": 120.32039903644686,
+      "observedLayerMaxGapMs": 16.529584,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 21786,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 31557.214615
+          }
+        ],
+        "cpuPercentOneCore": 157.80390477421597,
+        "coveredSeconds": 19.997740018000002,
+        "coverageFraction": 0.9998475569138797
+      }
+    },
+    {
+      "run": "surface_texture_formal_b",
+      "stage": "mpv_direct_a",
+      "backend": "mpv",
+      "requestedDirect": true,
+      "presentation": "Flutter.Texture",
+      "actualOutput": "mediacodec_embed",
+      "hwdec": "mediacodec",
+      "seconds": 19.998855,
+      "mediaSecondsPerWallSecond": 3.0034719487690675,
+      "gpuBusyPercent": 71.08267591679261,
+      "uiP95Ms": 1.556,
+      "rasterP95Ms": 9.409,
+      "flutterFramesPerSecond": 115.7066242042357,
+      "nativeFrameDropDelta": 34,
+      "nativeAvSyncAbsMaxMs": 29.976,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 23,
+      "observedLayerPresentHz": 115.95002904630731,
+      "observedLayerMaxGapMs": 16.532395,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 21786,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 26206.645183
+          }
+        ],
+        "cpuPercentOneCore": 131.04072799667782,
+        "coveredSeconds": 19.998855,
+        "coverageFraction": 1.0
+      }
+    },
+    {
+      "run": "surface_texture_formal_b",
+      "stage": "fvp_rendered_a",
+      "backend": "fvp",
+      "requestedDirect": false,
+      "presentation": "Flutter.Texture",
+      "actualOutput": "Flutter.Texture",
+      "hwdec": "AMediaCodec",
+      "seconds": 19.997408,
+      "mediaSecondsPerWallSecond": 3.0033892392454065,
+      "gpuBusyPercent": 81.58836393590137,
+      "uiP95Ms": 1.413,
+      "rasterP95Ms": 10.188,
+      "flutterFramesPerSecond": 112.81462077485241,
+      "nativeFrameDropDelta": null,
+      "nativeAvSyncAbsMaxMs": null,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 21,
+      "observedLayerPresentHz": 112.56074544619582,
+      "observedLayerMaxGapMs": 16.535365,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 21786,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 14544.710336
+          },
+          {
+            "pid": 27590,
+            "name": "dev.bilisail.bilisail.test:fvp_player",
+            "cpuMs": 12836.737091
+          }
+        ],
+        "cpuPercentOneCore": 136.92498261274662,
+        "coveredSeconds": 19.997408,
+        "coverageFraction": 1.0
+      }
+    },
+    {
+      "run": "surface_texture_formal_b",
+      "stage": "fvp_direct_a",
+      "backend": "fvp",
+      "requestedDirect": true,
+      "presentation": "Flutter.Texture",
+      "actualOutput": "MediaCodec → Flutter.Texture (direct)",
+      "hwdec": "AMediaCodec",
+      "seconds": 19.998327,
+      "mediaSecondsPerWallSecond": 3.003101209416168,
+      "gpuBusyPercent": 66.42320795495927,
+      "uiP95Ms": 1.122,
+      "rasterP95Ms": 8.0,
+      "flutterFramesPerSecond": 120.41007230254812,
+      "nativeFrameDropDelta": null,
+      "nativeAvSyncAbsMaxMs": null,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 23,
+      "observedLayerPresentHz": 120.91840137883327,
+      "observedLayerMaxGapMs": 16.535521,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 21786,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 12333.807973
+          },
+          {
+            "pid": 27590,
+            "name": "dev.bilisail.bilisail.test:fvp_player",
+            "cpuMs": 8266.243199
+          }
+        ],
+        "cpuPercentOneCore": 103.03226478036382,
+        "coveredSeconds": 19.993786622,
+        "coverageFraction": 0.9997729621082803
+      }
+    },
+    {
+      "run": "surface_texture_formal_b",
+      "stage": "fvp_direct_b",
+      "backend": "fvp",
+      "requestedDirect": true,
+      "presentation": "Flutter.Texture",
+      "actualOutput": "MediaCodec → Flutter.Texture (direct)",
+      "hwdec": "AMediaCodec",
+      "seconds": 20.001403,
+      "mediaSecondsPerWallSecond": 3.0027393578340478,
+      "gpuBusyPercent": 66.400069079903,
+      "uiP95Ms": 1.114,
+      "rasterP95Ms": 8.035,
+      "flutterFramesPerSecond": 120.94151595265592,
+      "nativeFrameDropDelta": null,
+      "nativeAvSyncAbsMaxMs": null,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 21,
+      "observedLayerPresentHz": 120.96317740896659,
+      "observedLayerMaxGapMs": 8.426355,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 21786,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 12320.485983
+          },
+          {
+            "pid": 27590,
+            "name": "dev.bilisail.bilisail.test:fvp_player",
+            "cpuMs": 8300.323973
+          }
+        ],
+        "cpuPercentOneCore": 103.09681753824971,
+        "coveredSeconds": 20.001403,
+        "coverageFraction": 1.0
+      }
+    },
+    {
+      "run": "surface_texture_formal_b",
+      "stage": "fvp_rendered_b",
+      "backend": "fvp",
+      "requestedDirect": false,
+      "presentation": "Flutter.Texture",
+      "actualOutput": "Flutter.Texture",
+      "hwdec": "AMediaCodec",
+      "seconds": 20.001361,
+      "mediaSecondsPerWallSecond": 3.004845520262346,
+      "gpuBusyPercent": 61.194182140889374,
+      "uiP95Ms": 1.386,
+      "rasterP95Ms": 11.52,
+      "flutterFramesPerSecond": 88.59397118026119,
+      "nativeFrameDropDelta": null,
+      "nativeAvSyncAbsMaxMs": null,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 22,
+      "observedLayerPresentHz": 88.86833693704122,
+      "observedLayerMaxGapMs": 16.681302,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 21786,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 12384.144522
+          },
+          {
+            "pid": 27590,
+            "name": "dev.bilisail.bilisail.test:fvp_player",
+            "cpuMs": 11103.287043
+          }
+        ],
+        "cpuPercentOneCore": 117.46738363940598,
+        "coveredSeconds": 19.994853751999997,
+        "coverageFraction": 0.9996746597394046
+      }
+    },
+    {
+      "run": "surface_texture_formal_b",
+      "stage": "mpv_direct_b",
+      "backend": "mpv",
+      "requestedDirect": true,
+      "presentation": "Flutter.Texture",
+      "actualOutput": "mediacodec_embed",
+      "hwdec": "mediacodec",
+      "seconds": 19.999579,
+      "mediaSecondsPerWallSecond": 3.003363220795798,
+      "gpuBusyPercent": 55.45229680012464,
+      "uiP95Ms": 1.577,
+      "rasterP95Ms": 11.362,
+      "flutterFramesPerSecond": 88.80186927934832,
+      "nativeFrameDropDelta": 42,
+      "nativeAvSyncAbsMaxMs": 23.514,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 22,
+      "observedLayerPresentHz": 88.91273854370976,
+      "observedLayerMaxGapMs": 16.688542,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 21786,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 23636.644698
+          },
+          {
+            "pid": 27590,
+            "name": "dev.bilisail.bilisail.test:fvp_player",
+            "cpuMs": 0.349165
+          }
+        ],
+        "cpuPercentOneCore": 118.18745716097322,
+        "coveredSeconds": 19.999579,
+        "coverageFraction": 1.0
+      }
+    },
+    {
+      "run": "surface_texture_formal_b",
+      "stage": "mpv_rendered_b",
+      "backend": "mpv",
+      "requestedDirect": false,
+      "presentation": "Flutter.Texture",
+      "actualOutput": "gpu",
+      "hwdec": "mediacodec",
+      "seconds": 19.99882,
+      "mediaSecondsPerWallSecond": 3.0034772051551046,
+      "gpuBusyPercent": 63.89659899545339,
+      "uiP95Ms": 1.757,
+      "rasterP95Ms": 11.698,
+      "flutterFramesPerSecond": 86.75511855199457,
+      "nativeFrameDropDelta": 1859,
+      "nativeAvSyncAbsMaxMs": 32.603,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 23,
+      "observedLayerPresentHz": 86.81312578763728,
+      "observedLayerMaxGapMs": 24.811302,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 21786,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 26637.948274
+          }
+        ],
+        "cpuPercentOneCore": 133.19760002840167,
+        "coveredSeconds": 19.99882,
+        "coverageFraction": 1.0
+      }
+    },
+    {
+      "run": "surface_view_formal_a",
+      "stage": "mpv_surfaceview_a",
+      "backend": "mpv",
+      "requestedDirect": true,
+      "presentation": "SurfaceView / Hybrid Composition",
+      "actualOutput": "mediacodec_embed",
+      "hwdec": "mediacodec",
+      "seconds": 20.011914,
+      "mediaSecondsPerWallSecond": 3.003210987214916,
+      "gpuBusyPercent": 46.8192749885603,
+      "uiP95Ms": 3.549,
+      "rasterP95Ms": 19.158,
+      "flutterFramesPerSecond": 58.015440202271506,
+      "nativeFrameDropDelta": 37,
+      "nativeAvSyncAbsMaxMs": 6.8180000000000005,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 23,
+      "observedLayerPresentHz": 119.38198539447366,
+      "observedLayerMaxGapMs": 115.791146,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 26663,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 28049.65549
+          }
+        ],
+        "cpuPercentOneCore": 140.16478128978568,
+        "coveredSeconds": 20.011914,
+        "coverageFraction": 1.0
+      }
+    },
+    {
+      "run": "surface_view_formal_a",
+      "stage": "fvp_surfaceview_a",
+      "backend": "fvp",
+      "requestedDirect": true,
+      "presentation": "SurfaceView / Hybrid Composition",
+      "actualOutput": "MediaCodec → Flutter.Texture (direct)",
+      "hwdec": "AMediaCodec",
+      "seconds": 20.003798,
+      "mediaSecondsPerWallSecond": 3.003479639216513,
+      "gpuBusyPercent": 34.58486629610558,
+      "uiP95Ms": 4.06,
+      "rasterP95Ms": 20.035,
+      "flutterFramesPerSecond": 43.8416744660189,
+      "nativeFrameDropDelta": null,
+      "nativeAvSyncAbsMaxMs": null,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 21,
+      "observedLayerPresentHz": 91.37289663692087,
+      "observedLayerMaxGapMs": 99.236197,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 26663,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 15825.59429
+          },
+          {
+            "pid": 31617,
+            "name": "dev.bilisail.bilisail.test:fvp_player",
+            "cpuMs": 9807.146349
+          }
+        ],
+        "cpuPercentOneCore": 128.13936952872652,
+        "coveredSeconds": 20.003798,
+        "coverageFraction": 1.0
+      }
+    },
+    {
+      "run": "surface_view_formal_a",
+      "stage": "fvp_surfaceview_b",
+      "backend": "fvp",
+      "requestedDirect": true,
+      "presentation": "SurfaceView / Hybrid Composition",
+      "actualOutput": "MediaCodec → Flutter.Texture (direct)",
+      "hwdec": "AMediaCodec",
+      "seconds": 20.004442,
+      "mediaSecondsPerWallSecond": 3.0031829930572416,
+      "gpuBusyPercent": 34.71467863287683,
+      "uiP95Ms": 4.145,
+      "rasterP95Ms": 19.984,
+      "flutterFramesPerSecond": 43.940240872502216,
+      "nativeFrameDropDelta": null,
+      "nativeAvSyncAbsMaxMs": null,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 23,
+      "observedLayerPresentHz": 90.9597671668423,
+      "observedLayerMaxGapMs": 99.26125,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 26663,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 15897.808673
+          },
+          {
+            "pid": 31617,
+            "name": "dev.bilisail.bilisail.test:fvp_player",
+            "cpuMs": 9807.96772
+          }
+        ],
+        "cpuPercentOneCore": 128.50034203903314,
+        "coveredSeconds": 20.004441999999997,
+        "coverageFraction": 1.0
+      }
+    },
+    {
+      "run": "surface_view_formal_a",
+      "stage": "mpv_surfaceview_b",
+      "backend": "mpv",
+      "requestedDirect": true,
+      "presentation": "SurfaceView / Hybrid Composition",
+      "actualOutput": "mediacodec_embed",
+      "hwdec": "mediacodec",
+      "seconds": 20.007887,
+      "mediaSecondsPerWallSecond": 3.0029657804444816,
+      "gpuBusyPercent": 34.55319703890126,
+      "uiP95Ms": 4.229,
+      "rasterP95Ms": 19.524,
+      "flutterFramesPerSecond": 43.88269485928224,
+      "nativeFrameDropDelta": 26,
+      "nativeAvSyncAbsMaxMs": 3.749,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 22,
+      "observedLayerPresentHz": 120.0216586105348,
+      "observedLayerMaxGapMs": 66.162813,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 26663,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 26203.30783
+          }
+        ],
+        "cpuPercentOneCore": 130.96489314438853,
+        "coveredSeconds": 20.007887,
+        "coverageFraction": 1.0
+      }
+    },
+    {
+      "run": "surface_view_hcpp_d",
+      "stage": "mpv_surfaceview_a_hcpp",
+      "backend": "mpv",
+      "requestedDirect": true,
+      "presentation": "SurfaceView / HCPP",
+      "actualOutput": "mediacodec_embed",
+      "hwdec": "mediacodec",
+      "seconds": 20.005294,
+      "mediaSecondsPerWallSecond": 3.0025552236323048,
+      "gpuBusyPercent": 77.70027241503368,
+      "uiP95Ms": 1.987,
+      "rasterP95Ms": 4.623,
+      "flutterFramesPerSecond": 113.86985864841577,
+      "nativeFrameDropDelta": 53,
+      "nativeAvSyncAbsMaxMs": 44.599,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 23,
+      "observedLayerPresentHz": 118.98181877574429,
+      "observedLayerMaxGapMs": 99.285365,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 8722,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 34108.694456
+          }
+        ],
+        "cpuPercentOneCore": 170.5661254400255,
+        "coveredSeconds": 19.997343768,
+        "coverageFraction": 0.9996025935934757
+      }
+    },
+    {
+      "run": "surface_view_hcpp_d",
+      "stage": "fvp_surfaceview_a_hcpp",
+      "backend": "fvp",
+      "requestedDirect": true,
+      "presentation": "SurfaceView / HCPP",
+      "actualOutput": "MediaCodec → Flutter.Texture (direct)",
+      "hwdec": "AMediaCodec",
+      "seconds": 19.999613,
+      "mediaSecondsPerWallSecond": 3.0028581053043375,
+      "gpuBusyPercent": 68.25794046970528,
+      "uiP95Ms": 1.812,
+      "rasterP95Ms": 4.947,
+      "flutterFramesPerSecond": 84.20162930152698,
+      "nativeFrameDropDelta": null,
+      "nativeAvSyncAbsMaxMs": null,
+      "allControlsVisible": true,
+      "allSubtitlesPresent": true,
+      "minimumVisibleComments": 23,
+      "observedLayerPresentHz": 91.70681884871975,
+      "observedLayerMaxGapMs": 91.004375,
+      "cpu": {
+        "processes": [
+          {
+            "pid": 8722,
+            "name": "dev.bilisail.bilisail.test",
+            "cpuMs": 17820.35957
+          },
+          {
+            "pid": 13376,
+            "name": "dev.bilisail.bilisail.test:fvp_player",
+            "cpuMs": 10955.100716
+          }
+        ],
+        "cpuPercentOneCore": 143.8800855096546,
+        "coveredSeconds": 19.999613,
+        "coverageFraction": 1.0
+      }
+    }
+  ],
+  "prototypeFailure": {
+    "run": "surface_view_hcpp_d",
+    "stage": "fvp_surfaceview_b_hcpp",
+    "phase": "opening before transfer/measurement",
+    "kind": "nativeProcessExited",
+    "androidExitReason": "APP CRASH(NATIVE)",
+    "status": 11,
+    "localTime": "2026-11-07 20:08:02",
+    "uiSurvived": true
+  },
+  "excludedRuns": {
+    "surface_quick_a": "APK version mismatch before installation",
+    "surface_quick_b": "APK version mismatch before installation",
+    "surface_quick_c": "installed version newer; installation rejected without downgrade",
+    "surface_quick_d": "collector rejected chunked request; fixed Content-Length",
+    "surface_quick_e": "controls searched before visible; probe corrected",
+    "surface_quick_f": "smoke only; one fvp direct seek failed before native pause barrier; SurfaceView geometry later corrected",
+    "surface_direct_repeat_a": "four successful fvp direct repeat smoke cases after pause barrier",
+    "surface_view_hcpp_b": "fixed buffer size caused wrong geometry; CPU trace copied before flushing",
+    "surface_view_hcpp_c": "correct geometry but incomplete CPU traces; stop/flush fixed"
+  },
+  "validation": {
+    "fullCheck": "tool/check.ps1 -SkipPub passed: root 4600 (13 skipped), bili_api 678, bili_player 225, bili_danmaku 161, bili_mux 5 (10 native skipped)",
+    "subsequentPlayerTests": 30,
+    "subsequentSettingsTests": 4,
+    "collectorRangeTests": 3,
+    "traceShutdownTests": 3,
+    "nativeMux": "not configured; skipped, not passed",
+    "hotReload": "Android ordinary Debug entry: successful; no runtime errors",
+    "taskFormatting": "19 task Dart files passed",
+    "taskStaticAnalysis": "16 task Dart sources/tests/tools passed; no issues",
+    "finalFullLint": "Blocked by concurrent formatting in test/core/platform/mini_player_window_service_test.dart; file preserved",
+    "installedFinalSha256": "b6fd29c95fe4fa687de04dc5661b7bdd397ca8d74ded42683c352f2cf7a7b776",
+    "ordinaryHcppEnabled": false,
+    "temporaryDeviceMedia": "removed; host fixtures retained"
+  },
+  "localBuildOverride": {
+    "repositoryVersion": "1.2.8+0",
+    "isolatedDevelopmentVersion": "1.2.8+1",
+    "reason": "Preserve installed test versionCode 12801; no downgrade/uninstall/data clear"
+  },
+  "delivery": {
+    "PackageId": "dev.bilisail.bilisail.test",
+    "DisplayName": "BiliSail 测试版",
+    "Version": "1.2.8+1",
+    "VersionCode": 12801,
+    "Mode": "Release",
+    "Signing": "local-development-debug-key",
+    "CertificateSha256": "1a69fd8175656b4c091bea4dda3f30772901280f193a4c774c1412679ca30d1b",
+    "Sha256": "b6fd29c95fe4fa687de04dc5661b7bdd397ca8d74ded42683c352f2cf7a7b776"
+  }
+}

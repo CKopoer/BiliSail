@@ -8,9 +8,14 @@ import 'player_contract.dart';
 mkv.VideoControllerConfiguration videoDecoderConfiguration({
   required bool isAndroid,
   required VideoDecodingMode decoding,
+  AndroidVideoOutputMode androidOutput = AndroidVideoOutputMode.renderedTexture,
   bool Function()? usesDolbyVisionRenderer,
 }) => isAndroid && usesDolbyVisionRenderer != null
-    ? _AndroidSourceVideoConfiguration(decoding, usesDolbyVisionRenderer)
+    ? _AndroidSourceVideoConfiguration(
+        decoding,
+        androidOutput,
+        usesDolbyVisionRenderer,
+      )
     : mkv.VideoControllerConfiguration(
         // Software decoding still uses the GPU video output. Desktop defaults remain
         // owned by the SDK; Android follows PiliPlus's MediaCodec preference order.
@@ -18,6 +23,12 @@ mkv.VideoControllerConfiguration videoDecoderConfiguration({
             ? 'no'
             : isAndroid
             ? 'mediacodec,auto-safe'
+            : null,
+        vo:
+            isAndroid &&
+                decoding == VideoDecodingMode.automatic &&
+                androidOutput == AndroidVideoOutputMode.directTexture
+            ? 'mediacodec_embed'
             : null,
         androidAttachSurfaceAfterVideoParameters:
             isAndroid && decoding == VideoDecodingMode.automatic ? false : null,
@@ -29,8 +40,12 @@ final class _AndroidSourceVideoConfiguration
     extends mkv.VideoControllerConfiguration {
   _AndroidSourceVideoConfiguration(
     VideoDecodingMode decoding,
+    this.androidOutput,
     this.usesDolbyVisionRenderer,
-  ) : super(
+  ) : direct =
+          decoding == VideoDecodingMode.automatic &&
+          androidOutput == AndroidVideoOutputMode.directTexture,
+      super(
         hwdec: decoding == VideoDecodingMode.software
             ? 'no'
             : 'mediacodec,auto-safe',
@@ -40,7 +55,13 @@ final class _AndroidSourceVideoConfiguration
       );
 
   final bool Function() usesDolbyVisionRenderer;
+  final AndroidVideoOutputMode androidOutput;
+  final bool direct;
 
   @override
-  String? get vo => usesDolbyVisionRenderer() ? 'gpu-next' : null;
+  String? get vo => usesDolbyVisionRenderer()
+      ? 'gpu-next'
+      : direct
+      ? 'mediacodec_embed'
+      : null;
 }

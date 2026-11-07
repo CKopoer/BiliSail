@@ -15,10 +15,12 @@ final class FvpMediaInfo {
     required this.duration,
     this.dimensions,
     required this.hasAudio,
+    this.directSurface = false,
   });
   final Duration duration;
   final VideoDimensions? dimensions;
   final bool hasAudio;
+  final bool directSurface;
 }
 
 enum FvpNativeStatus { buffering, buffered, ended, invalid, processExited }
@@ -69,11 +71,20 @@ Future<FvpPlayerPort> createFvpNativePlayer() async {
 // The Android service starts this headless entrypoint, without app bootstrap,
 // account repositories, or a second visible Flutter application.
 @pragma('vm:entry-point')
-void fvpWorkerMain() => runFvpWorker(createInProcessFvpNativePlayer, (player) {
-  final local = player as _MdkPlayerPort;
-  local._textureDimensions = local._dimensions;
-  return local._player.nativeHandle;
-});
+void fvpWorkerMain() => runFvpWorker(
+  createInProcessFvpNativePlayer,
+  (player) {
+    final local = player as _MdkPlayerPort;
+    local._textureDimensions = local._dimensions;
+    return local._player.nativeHandle;
+  },
+  (player) {
+    final local = player as _MdkPlayerPort;
+    local._videoRendered = true;
+    local._videoDecoded = true;
+    if (!local._firstFrame.isCompleted) local._firstFrame.complete(true);
+  },
+);
 
 Future<FvpPlayerPort> createInProcessFvpNativePlayer() async {
   await (_initialization ??= () async {
@@ -124,6 +135,7 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
   bool _videoDecoded = false;
   bool _audioDecoded = false;
   bool _videoRendered = false;
+  bool _directSurface = false;
   VideoDimensions? _textureDimensions;
 
   void _initializePlayer() {
@@ -220,6 +232,7 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
       positionMilliseconds: player.position,
       bufferedMilliseconds: player.buffered(),
       audioGainDb: audioGainDb,
+      directSurface: _directSurface,
     );
   }
 
@@ -326,6 +339,16 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
     final info = _player.mediaInfo;
     _live = isLive || _player.isLive;
     final video = info.video?.firstOrNull;
+    _directSurface =
+        Platform.isAndroid &&
+        options.androidVideoOutput == AndroidVideoOutputMode.directTexture &&
+        options.videoDecoding == VideoDecodingMode.automatic &&
+        video != null &&
+        !{
+          mdk.ColorSpace.bt2100PQ,
+          mdk.ColorSpace.bt2100hlg,
+          mdk.ColorSpace.scrgb,
+        }.contains(video.codec.colorSpace);
     VideoDimensions? dimensions;
     if (video != null && video.codec.width > 0 && video.codec.height > 0) {
       var width = video.codec.width;
@@ -340,6 +363,7 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
           : Duration(milliseconds: info.duration),
       dimensions: dimensions,
       hasAudio: audio != null || (!silent && info.audio?.isNotEmpty == true),
+      directSurface: _directSurface,
     );
   }
 
@@ -456,6 +480,15 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
         return _active(
           _player.seek(position: target.inMilliseconds, flags: _preciseSeek),
         );
+      }
+      if (_directSurface) {
+        // Surface-output MediaCodec can still be draining when the asynchronous
+        // pause request returns. Wait for native pause before issuing the seek.
+        _player.state = mdk.PlaybackState.paused;
+        while (!_player.waitFor(mdk.PlaybackState.paused, timeout: 0)) {
+          await _active(Future<void>.delayed(const Duration(milliseconds: 10)));
+          if (cancelled.isCompleted) return -2;
+        }
       }
       return _active(
         _player.seek(position: target.inMilliseconds, flags: _preciseSeek),

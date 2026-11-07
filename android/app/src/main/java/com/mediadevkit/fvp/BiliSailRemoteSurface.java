@@ -6,8 +6,8 @@ import android.view.Surface;
 public final class BiliSailRemoteSurface {
     private BiliSailRemoteSurface() {}
 
-    public static void attach(long handle, long id, Surface surface, int width, int height) {
-        FvpPlugin.nativeSetSurface(handle, id, surface, width, height, false);
+    public static void attach(long handle, long id, Surface surface, int width, int height, boolean direct) {
+        FvpPlugin.nativeSetSurface(handle, id, surface, width, height, direct);
     }
 
     public static void detach(long id) {

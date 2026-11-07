@@ -4,6 +4,40 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'direct texture is opt-in and software and desktop retain GPU output',
+    () {
+      for (final isAndroid in [false, true]) {
+        for (final decoding in VideoDecodingMode.values) {
+          final configuration = videoDecoderConfiguration(
+            isAndroid: isAndroid,
+            decoding: decoding,
+            androidOutput: AndroidVideoOutputMode.directTexture,
+          );
+          expect(
+            configuration.vo,
+            isAndroid && decoding == VideoDecodingMode.automatic
+                ? 'mediacodec_embed'
+                : null,
+          );
+        }
+      }
+    },
+  );
+  test('direct output yields to the per-source Dolby Vision renderer', () {
+    var dolby = false;
+    final configuration = videoDecoderConfiguration(
+      isAndroid: true,
+      decoding: VideoDecodingMode.automatic,
+      androidOutput: AndroidVideoOutputMode.directTexture,
+      usesDolbyVisionRenderer: () => dolby,
+    );
+    expect(configuration.vo, 'mediacodec_embed');
+    dolby = true;
+    expect(configuration.vo, 'gpu-next');
+    dolby = false;
+    expect(configuration.vo, 'mediacodec_embed');
+  });
+  test(
     'Android source color mode changes before late video parameter setup',
     () {
       for (final decoding in VideoDecodingMode.values) {

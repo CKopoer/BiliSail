@@ -40,6 +40,8 @@ class FvpPlaybackService : Service() {
             if (ready) sendReady()
         } else if (message.what == 2) {
             if (ready) execute(message) else if (queued.size < 64) queued.add(Message.obtain(message))
+        } else if (message.what == 5 && ready) {
+            channel.invokeMethod("frameConsumed", mapOf("player" to message.arg1))
         }
         true
     })
@@ -71,7 +73,8 @@ class FvpPlaybackService : Service() {
                     if (output == null) result.error("surface_missing", "画面不可用", null)
                     else {
                         BiliSailRemoteSurface.attach(call.argument<Number>("handle")!!.toLong(),
-                            surfaceId(id), output.surface, output.width, output.height)
+                            surfaceId(id), output.surface, output.width, output.height,
+                            call.argument<Boolean>("direct") == true)
                         result.success(null)
                     }
                 }

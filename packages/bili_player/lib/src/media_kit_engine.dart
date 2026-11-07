@@ -362,6 +362,31 @@ final class MediaKitEngine
     };
   }
 
+  /// Validation-only SurfaceView experiment. The caller must pause first and
+  /// retain the JNI Surface reference until this engine has stopped/disposed.
+  Future<void> replaceAndroidSurfaceForBenchmark(int surface) async {
+    final player = _player;
+    final generation = _generation;
+    if (!Platform.isAndroid ||
+        player == null ||
+        _disposed ||
+        surface <= 0 ||
+        _snapshot.desiredPlaying) {
+      throw StateError(
+        'The Android surface experiment requires paused playback.',
+      );
+    }
+    await player.setPropertyAsync('vo', 'null');
+    await player.setPropertyAsync('wid', '$surface');
+    await player.setPropertyAsync('vo', 'mediacodec_embed');
+    if (_disposed ||
+        generation != _generation ||
+        !identical(player, _player) ||
+        await player.getPropertyAsync('wid') != '$surface') {
+      throw StateError('The Android surface experiment was superseded.');
+    }
+  }
+
   void _publish(PlaybackSnapshot value) {
     if (_disposed || _snapshots.isClosed) return;
     _snapshot = value;
@@ -762,6 +787,7 @@ final class MediaKitEngine
               player,
               generation: generation,
               decoding: options.videoDecoding,
+              androidOutput: options.androidVideoOutput,
             ),
             superseded: () => generation != _generation || _disposed,
             changes: [_generationChanges.stream],

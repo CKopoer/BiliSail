@@ -163,6 +163,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(videoDecoding: value));
   Future<void> setPlaybackBackend(PlaybackBackendPreference value) =>
       update((current) => current.copyWith(playbackBackend: value));
+  Future<void> setAndroidVideoOutput(AndroidVideoOutputPreference value) =>
+      update((current) => current.copyWith(androidVideoOutput: value));
   Future<void> setDefaultPlaybackRate(double value) =>
       update((current) => current.copyWith(defaultPlaybackRate: value));
   Future<void> setPlaybackRates(List<double> values) => update(

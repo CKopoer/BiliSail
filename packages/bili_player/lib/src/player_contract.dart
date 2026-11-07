@@ -71,6 +71,9 @@ final class ManifestSource extends ResolvedMediaSource {
 /// Automatic uses the platform decoder preference with a safe fallback.
 enum VideoDecodingMode { automatic, software }
 
+/// Android decoder output; foreground widgets keep using Flutter composition.
+enum AndroidVideoOutputMode { renderedTexture, directTexture }
+
 final class OpenOptions {
   static const maximumBufferAhead = Duration(minutes: 2);
 
@@ -81,6 +84,7 @@ final class OpenOptions {
     this.volume = 100,
     this.audioGainDb = 0,
     this.videoDecoding = VideoDecodingMode.automatic,
+    this.androidVideoOutput = AndroidVideoOutputMode.renderedTexture,
     this.openTimeout = const Duration(seconds: 35),
     this.maxBufferAhead = maximumBufferAhead,
   });
@@ -92,6 +96,7 @@ final class OpenOptions {
   /// Source normalization gain, independent of the user's volume percentage.
   final double audioGainDb;
   final VideoDecodingMode videoDecoding;
+  final AndroidVideoOutputMode androidVideoOutput;
   final Duration openTimeout;
 
   /// Rolling forward demuxer window in media time, at most two minutes.

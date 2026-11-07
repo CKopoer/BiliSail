@@ -10,6 +10,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+from perfetto_capture import stop_and_wait
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--device', required=True)
@@ -120,10 +121,12 @@ def finish(stage):
     _, prefix, trace_pid, stop, worker = active
     stop.set()
     worker.join(timeout=6)
-    adb('shell', f'kill -INT {trace_pid}', check=False)
-    time.sleep(.4)
+    stop_and_wait(adb, trace_pid)
     adb('pull', prefix + '.trace', str(args.output / f'{stage}.perfetto-trace'), timeout=30)
     save(f'{stage}.thermal-after.txt', adb('shell', 'dumpsys thermalservice'))
+    with (args.output / f'{stage}.png').open('wb') as screenshot:
+        subprocess.run(['adb', '-s', args.device, 'exec-out', 'screencap', '-p'],
+                       stdout=screenshot, stderr=subprocess.PIPE, check=True, timeout=15)
     save(f'{stage}.meminfo.txt', adb('shell', 'dumpsys meminfo dev.bilisail.bilisail.test'))
     save(f'{stage}.codec.txt', adb('shell', 'dumpsys media.codec', check=False))
     if vm_base and isolate_id and stage in starts and starts[stage][1] is not None:

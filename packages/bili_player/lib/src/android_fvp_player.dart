@@ -144,6 +144,9 @@ final class AndroidFvpPlayer implements FvpPlayerPort, FvpInformationPort {
       'live': isLive,
       'start': options.startPosition.inMilliseconds,
       'software': options.videoDecoding == VideoDecodingMode.software,
+      'directSurface':
+          options.androidVideoOutput == AndroidVideoOutputMode.directTexture &&
+          options.videoDecoding == VideoDecodingMode.automatic,
       'rate': options.rate,
       'volume': options.volume,
       'gain': options.audioGainDb,
@@ -162,6 +165,7 @@ final class AndroidFvpPlayer implements FvpPlayerPort, FvpInformationPort {
             ? VideoDimensions(width, height)
             : null,
         hasAudio: hasAudio,
+        directSurface: result['direct'] == true,
       );
     }
     throw StateError('Invalid worker media information');

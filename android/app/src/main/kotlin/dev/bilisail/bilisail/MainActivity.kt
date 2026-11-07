@@ -11,6 +11,7 @@ class MainActivity : AudioServiceActivity() {
     private var imageExport: ImageExportHandler? = null
     private var logExport: LogExportHandler? = null
     private var fvpProcess: FvpProcessHandler? = null
+    private var surfaceBenchmarks: SurfaceBenchmarkViews? = null
     private var windowBrightness: WindowBrightnessHandler? = null
     private var mobileWindow: MobileWindowHandler? = null
     private var appIcon: AppIconHandler? = null
@@ -24,6 +25,9 @@ class MainActivity : AudioServiceActivity() {
         imageExport = ImageExportHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         logExport = LogExportHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         fvpProcess = FvpProcessHandler.attach(this, flutterEngine)
+        if (applicationContext.packageName.endsWith(".test")) {
+            surfaceBenchmarks = SurfaceBenchmarkViews(flutterEngine) { fvpProcess }
+        }
         windowBrightness = WindowBrightnessHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         mobileWindow = MobileWindowHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         pictureInPicture = PictureInPictureHandler(this, flutterEngine.dartExecutor.binaryMessenger)
@@ -76,6 +80,8 @@ class MainActivity : AudioServiceActivity() {
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         fvpProcess = null
+        surfaceBenchmarks?.close()
+        surfaceBenchmarks = null
         pictureInPicture?.close()
         pictureInPicture = null
         appIcon?.close()

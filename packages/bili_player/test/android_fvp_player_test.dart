@@ -8,6 +8,46 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'direct output crosses Binder only for automatic hardware decoding',
+    () async {
+      final messenger = binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        const MethodChannel('dev.bilisail/fvp_process/events'),
+        (_) async => null,
+      );
+      final requests = <Map<Object?, Object?>>[];
+      messenger.setMockMethodCallHandler(AndroidFvpPlayer.channel, (
+        call,
+      ) async {
+        if (call.method == 'create') return 100;
+        if (call.method == 'prepare') {
+          requests.add(call.arguments as Map<Object?, Object?>);
+          return {'duration': 5000, 'width': 320, 'height': 180, 'audio': true};
+        }
+        return null;
+      });
+      final port = await AndroidFvpPlayer.create();
+      for (final decoding in VideoDecodingMode.values) {
+        await port.prepare(
+          MediaTrack(
+            uri: Uri.parse('file:///public-fixture.mp4'),
+            requestPolicy: MediaRequestPolicy(),
+          ),
+          null,
+          OpenOptions(
+            videoDecoding: decoding,
+            androidVideoOutput: AndroidVideoOutputMode.directTexture,
+          ),
+          silent: false,
+        );
+      }
+      expect(requests[0]['directSurface'], true);
+      expect(requests[1]['directSurface'], false);
+      await port.dispose();
+      messenger.setMockMethodCallHandler(AndroidFvpPlayer.channel, null);
+    },
+  );
   test('Binder loss rejects pending preparation, retires the port, and allows a new worker', () async {
     final messenger = binding.defaultBinaryMessenger;
     const events = MethodChannel('dev.bilisail/fvp_process/events');

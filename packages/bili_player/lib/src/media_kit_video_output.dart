@@ -284,6 +284,8 @@ final class MediaKitVideoOutput
     mk.Player player, {
     required int generation,
     required VideoDecodingMode decoding,
+    AndroidVideoOutputMode androidOutput =
+        AndroidVideoOutputMode.renderedTexture,
   }) async {
     if (_disposed) throw StateError('Video output is disposed.');
     _player = player;
@@ -305,6 +307,7 @@ final class MediaKitVideoOutput
       configuration: videoDecoderConfiguration(
         isAndroid: Platform.isAndroid,
         decoding: decoding,
+        androidOutput: androidOutput,
         usesDolbyVisionRenderer: () => _androidDolbyVision,
       ),
     );

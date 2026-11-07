@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [Android 解码直出与 SurfaceView](validation/android-surface-output-2026-11-07.md) | 两后端纹理直出实验设置、4K60 H.264 约 25 Mbps／3× 实机对照、HC／HCPP 原型与限制 |
 | [迷你小窗与置顶](validation/mini-player-2026-11-07.md) | 桌面置顶、尺寸与位置恢复，Android 画中画、移动应用内浮窗和平台验证边界 |
 | [可选 fvp 播放后端](validation/fvp-backend-2026-11-07.md) | 默认 media_kit、设置切换、固定 MDK 资产、分轨与生命周期、实机对照边界 |
 | [Android fvp 原生进程隔离](validation/android-fvp-process-isolation-2026-11-07.md) | 子进程崩溃保留主界面、脱敏诊断、显式重新打开及受控故障验证 |

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -661,6 +662,24 @@ final class _SettingsCategoryPageState
                             VideoDecodingPreference.automatic: '自动（优先硬解）',
                             VideoDecodingPreference.software: '软件解码',
                           }, controller.setVideoDecoding),
+                          if (defaultTargetPlatform ==
+                              TargetPlatform.android) ...[
+                            _choices(
+                              'Android 视频输出',
+                              s.androidVideoOutput,
+                              const {
+                                AndroidVideoOutputPreference.renderedTexture:
+                                    '兼容渲染（默认）',
+                                AndroidVideoOutputPreference.directTexture:
+                                    '解码直出纹理（实验）',
+                              },
+                              controller.setAndroidVideoOutput,
+                            ),
+                            const Text(
+                              '两个播放后端均保留弹幕、字幕和控件。实验模式需要设备硬解支持；画面异常时切回兼容渲染。软件解码沿用兼容路径，下次加载播放源时生效。',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ],
                           const Text(
                             '自动模式在设备支持时使用硬件解码，不可用时使用软件解码。软件解码可能增加 CPU 占用和耗电。解码方式适用于视频、影视和直播。',
                             style: TextStyle(fontSize: 12),

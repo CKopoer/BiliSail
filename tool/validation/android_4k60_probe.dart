@@ -134,7 +134,7 @@ Future<void> main() async {
             : DeviceOrientation.landscapeLeft,
       ]);
       await Future<void>.delayed(const Duration(seconds: 1));
-      final repository = _LocalRepository(
+      final repository = Android4kRepository(
         video,
         audio,
         progressive,
@@ -150,7 +150,7 @@ Future<void> main() async {
       final session = PlaybackSession(
         engine: engine,
         repository: repository,
-        progress: _NoProgress(),
+        progress: Android4kProgress(),
         accountScope: () => 'guest',
       );
       final input = ShortcutCoordinator();
@@ -603,20 +603,22 @@ Element? _find(bool Function(Element) predicate) {
   return found;
 }
 
-final class _LocalRepository implements PlaybackRepository {
-  _LocalRepository(
+final class Android4kRepository implements PlaybackRepository {
+  Android4kRepository(
     this.video,
     this.audio,
     this.progressive,
     this.arrivals, {
     required this.codec,
     required this.duration,
+    this.withSubtitles = false,
   });
   final Uri video, audio;
   final bool progressive;
   final int arrivals;
   final String codec;
   final Duration duration;
+  final bool withSubtitles;
   @override
   Future<PlaybackMedia> resolve(
     VideoId id,
@@ -641,7 +643,7 @@ final class _LocalRepository implements PlaybackRepository {
     int segment, {
     required RequestCancellation cancellation,
   }) async => [
-    for (var i = 0; i < 120 * arrivals; i++)
+    for (var i = 0; i < duration.inSeconds * arrivals; i++)
       TimedComment(
         id: '$i',
         position: Duration(microseconds: i * 1000000 ~/ arrivals),
@@ -656,15 +658,26 @@ final class _LocalRepository implements PlaybackRepository {
     VideoId id,
     String cid, {
     required RequestCancellation cancellation,
-  }) async => [];
+  }) async => withSubtitles
+      ? [SubtitleTrack('公开测试字幕', Uri.parse('fixture:subtitles'))]
+      : [];
   @override
   Future<List<SubtitleCue>> subtitleCues(
     SubtitleTrack track, {
     required RequestCancellation cancellation,
-  }) async => [];
+  }) async => withSubtitles
+      ? [
+          for (var second = 0; second < duration.inSeconds; second += 2)
+            SubtitleCue(
+              Duration(seconds: second),
+              Duration(seconds: second + 2),
+              'Flutter 字幕叠加验证 $second',
+            ),
+        ]
+      : [];
 }
 
-final class _NoProgress implements PlaybackProgressStore {
+final class Android4kProgress implements PlaybackProgressStore {
   @override
   Future<Duration> read(String scope, VideoId video, String cid) async =>
       Duration.zero;

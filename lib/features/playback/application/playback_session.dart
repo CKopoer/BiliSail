@@ -1299,6 +1299,12 @@ class PlaybackSession extends ChangeNotifier {
                   volume: checkpoint?.volume ?? oldVolume,
                   audioGainDb: _audioGainFor(resolved),
                   videoDecoding: videoDecoding,
+                  androidVideoOutput: switch (_settings.androidVideoOutput) {
+                    AndroidVideoOutputPreference.renderedTexture =>
+                      AndroidVideoOutputMode.renderedTexture,
+                    AndroidVideoOutputPreference.directTexture =>
+                      AndroidVideoOutputMode.directTexture,
+                  },
                   openTimeout: attemptBudget,
                 ),
               ),

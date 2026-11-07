@@ -12,6 +12,7 @@ import 'player_contract.dart';
 void runFvpWorker(
   Future<FvpPlayerPort> Function() create,
   int Function(FvpPlayerPort) nativeHandle,
+  void Function(FvpPlayerPort) frameConsumed,
 ) {
   WidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('dev.bilisail/fvp_worker');
@@ -43,9 +44,13 @@ void runFvpWorker(
       return null;
     }
     final owned = players[id];
+    if (owned == null && call.method == 'frameConsumed') return null;
     if (owned == null) throw StateError('Player unavailable');
     final port = owned.port;
     switch (call.method) {
+      case 'frameConsumed':
+        if (owned.directSurface) frameConsumed(port);
+        return null;
       case 'information':
         if (port is! FvpInformationPort) return null;
         final info = await (port as FvpInformationPort)
@@ -55,6 +60,8 @@ void runFvpWorker(
             );
         return info == null ? null : encodeFvpInformation(info);
       case 'prepare':
+        owned.directSurface =
+            args['directSurface'] == true && args['software'] != true;
         MediaTrack track(Object? value) {
           final map = Map<String, Object?>.from(value as Map);
           return MediaTrack(
@@ -91,6 +98,9 @@ void runFvpWorker(
             videoDecoding: args['software'] == true
                 ? VideoDecodingMode.software
                 : VideoDecodingMode.automatic,
+            androidVideoOutput: args['directSurface'] == true
+                ? AndroidVideoOutputMode.directTexture
+                : AndroidVideoOutputMode.renderedTexture,
             maxBufferAhead: Duration(milliseconds: args['buffer'] as int),
             openTimeout: Duration(milliseconds: args['timeout'] as int),
           ),
@@ -98,16 +108,19 @@ void runFvpWorker(
           audioProbe: probe,
           isLive: args['live'] == true,
         );
+        owned.directSurface = info.directSurface;
         return {
           'duration': info.duration.inMilliseconds,
           'width': info.dimensions?.width ?? 0,
           'height': info.dimensions?.height ?? 0,
           'audio': info.hasAudio,
+          'direct': info.directSurface,
         };
       case 'surface':
         await channel.invokeMethod<void>('bindSurface', {
           'player': id,
           'handle': nativeHandle(port),
+          'direct': owned.directSurface,
         });
         return null;
       case 'confirmVideo':
@@ -156,4 +169,5 @@ final class _WorkerPlayer {
   StreamSubscription<FvpNativeStatus>? subscription;
   Timer? timer;
   bool closing = false;
+  bool directSurface = false;
 }

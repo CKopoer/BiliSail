@@ -53,7 +53,10 @@ class FvpProcessHandler private constructor(context: Context, engine: FlutterEng
         var created = false
         var texture: TextureRegistry.SurfaceTextureEntry? = null
         var surface: Surface? = null
+        var direct = false
+        var frameAcknowledged = false
         fun release() {
+            texture?.setOnFrameConsumedListener(null)
             surface?.release(); surface = null
             texture?.release(); texture = null
         }
@@ -151,16 +154,27 @@ class FvpProcessHandler private constructor(context: Context, engine: FlutterEng
             if (player.texture != null) { result.success(player.texture!!.id()); return }
             val texture = registry.createSurfaceTexture()
             texture.surfaceTexture().setDefaultBufferSize(player.width, player.height)
+            texture.setOnFrameConsumedListener {
+                handler.post {
+                    if (player.direct && !player.frameAcknowledged && !player.lost && players[id] === player) {
+                        player.frameAcknowledged = true
+                        try { remote?.send(Message.obtain(null, 5).apply { arg1 = id }) }
+                        catch (_: android.os.RemoteException) { lost() }
+                    }
+                }
+            }
             player.texture = texture
             player.surface = Surface(texture.surfaceTexture())
             request("surface", id, mapOf("player" to id), result, player.surface) { result.success(texture.id()) }
         } else {
             @Suppress("UNCHECKED_CAST")
             val args = call.arguments as? Map<String, Any?> ?: emptyMap()
+            if (call.method == "prepare") player.direct = args["directSurface"] == true && args["software"] != true
             request(call.method, id, args, result) { value ->
                 if (call.method == "prepare" && value is Map<*, *>) {
                     player.width = (value["width"] as? Number)?.toInt() ?: 0
                     player.height = (value["height"] as? Number)?.toInt() ?: 0
+                    player.direct = value["direct"] == true
                 }
                 if (call.method == "dispose") { players.remove(id)?.release() }
                 result.success(value)
@@ -200,6 +214,17 @@ class FvpProcessHandler private constructor(context: Context, engine: FlutterEng
                 }
             })
         } catch (_: android.os.RemoteException) { lost() }
+    }
+
+    /** Test-package-only experiment: retain the old texture until native detach. */
+    fun bindBenchmarkSurface(surface: Surface, result: MethodChannel.Result) {
+        val player = players.entries.singleOrNull { !it.value.lost }
+        if (closed || player == null || !player.value.direct) {
+            result.error("benchmark_unavailable", "需要单个已就绪的直出播放器", null); return
+        }
+        request("surface", player.key, mapOf("player" to player.key), result, surface) {
+            result.success(0L)
+        }
     }
 
     private fun lost(code: String = "native_process_exited", kill: Boolean = false) {
