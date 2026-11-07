@@ -10,7 +10,7 @@ MediaTrack track(String path, {Map<String, String> headers = const {}}) =>
       requestPolicy: MediaRequestPolicy(headers: headers),
     );
 
-final class _Player extends Fake implements FvpPlayerPort {
+final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
   final events = StreamController<FvpNativeStatus>.broadcast(sync: true);
   Completer<FvpMediaInfo>? preparation;
   Completer<int>? texture;
@@ -22,6 +22,19 @@ final class _Player extends Fake implements FvpPlayerPort {
   int position = 1000;
   final seeks = <(Duration, Completer<int>)>[];
   bool holdSeek = false;
+  Completer<PlayerPlaybackInformation?>? informationGate;
+  @override
+  Future<PlayerPlaybackInformation?> inspectPlaybackInformation({
+    required int generation,
+    required double audioGainDb,
+  }) async =>
+      informationGate?.future ??
+      PlayerPlaybackInformation(
+        generation: generation,
+        backend: 'fvp / MDK',
+        sourceFps: 30,
+        audioGainDb: audioGainDb,
+      );
   MediaTrack? main, sound;
   @override
   Stream<FvpNativeStatus> get statuses => events.stream;
@@ -94,6 +107,51 @@ final class _Player extends Fake implements FvpPlayerPort {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final source = DashPairSource(video: track('video'), audio: track('audio'));
+  test(
+    'information samples the native port and rejects retired source replies',
+    () async {
+      final first = _Player();
+      final second = _Player();
+      var player = first;
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      expect(await engine.inspectPlaybackInformation(), isNull);
+      await engine.open(source, const OpenOptions(audioGainDb: -4));
+      final info = await engine.inspectPlaybackInformation();
+      expect(info?.sourceFps, 30);
+      expect(info?.audioGainDb, -4);
+      expect(info?.generation, engine.currentSnapshot.generation);
+      first.informationGate = Completer<PlayerPlaybackInformation?>();
+      final pending = engine.inspectPlaybackInformation();
+      player = second;
+      await engine.open(source, const OpenOptions());
+      first.informationGate!.complete(info);
+      expect(await pending, isNull);
+      second.informationGate = Completer<PlayerPlaybackInformation?>();
+      final closing = engine.inspectPlaybackInformation();
+      await engine.dispose();
+      second.informationGate!.complete(info);
+      expect(await closing, isNull);
+      expect(await engine.inspectPlaybackInformation(), isNull);
+    },
+  );
+  test(
+    'failed or timed out optional statistics do not change playback',
+    () async {
+      final player = _Player();
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      await engine.open(source, const OpenOptions(play: true));
+      player.informationGate = Completer<PlayerPlaybackInformation?>();
+      final failed = engine.inspectPlaybackInformation();
+      player.informationGate!.completeError(StateError('native closing'));
+      expect(await failed, isNull);
+      player.informationGate = Completer<PlayerPlaybackInformation?>();
+      expect(await engine.inspectPlaybackInformation(), isNull);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      expect(player.released, false);
+    },
+  );
   test(
     'EOF survives trailing buffering events and pause until seeking',
     () async {

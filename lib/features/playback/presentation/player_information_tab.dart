@@ -114,8 +114,9 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
         final dimensions = snapshot.videoDimensions;
         final bufferAhead = snapshot.buffered - snapshot.position;
         final summary = info.hasSource ? '约每秒刷新 · 未提供的参数显示为 —' : '当前没有已加载的媒体';
-        const notes =
-            '帧率为播放器估算值；缓存速度不是总网速。音画差为音频时钟减视频时钟，正值表示音频领先。丢帧计数随媒体源重建而重置。';
+        final notes = native?.backend == 'fvp / MDK'
+            ? 'fvp 的源帧率、标称码率和色彩信息来自 MDK 媒体参数，实际硬解栏显示成功打开的解码器名称；MFT 名称不代表零复制。实时码率仅在主媒体为单流时提供。分轨音频参数及解码就绪来自首播静音探测。MDK 当前接口未提供滤镜输出帧率、独立音视频时钟、音画差、丢帧、缓存字节数和读取速度，显示为 —。'
+            : '帧率为播放器估算值；缓存速度不是总网速。音画差为音频时钟减视频时钟，正值表示音频领先。丢帧计数随媒体源重建而重置。';
         final sections = <(String, List<(String, String)>)>[
           (
             '播放状态',
@@ -169,7 +170,13 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
               ('源帧率', _number(native?.sourceFps, ' fps')),
               ('滤镜输出帧率（估算）', _number(native?.outputFps, ' fps')),
               ('视频码率（实时）', _bitrate(native?.videoBitrate)),
-              ('视频码率（标称）', _bitrate(info.videoBandwidth?.toDouble())),
+              (
+                '视频码率（标称）',
+                _nominalBitrate(
+                  info.videoBandwidth,
+                  native?.videoNominalBitrate,
+                ),
+              ),
               ('像素格式', native?.pixelFormat ?? '—'),
               ('硬解底层像素格式', native?.hardwarePixelFormat ?? '—'),
               ('色彩矩阵', native?.colorMatrix ?? '—'),
@@ -194,7 +201,13 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
                     '—',
               ),
               ('音频码率（实时）', _bitrate(native?.audioBitrate)),
-              ('音频码率（标称）', _bitrate(info.audioBandwidth?.toDouble())),
+              (
+                '音频码率（标称）',
+                _nominalBitrate(
+                  info.audioBandwidth,
+                  native?.audioNominalBitrate,
+                ),
+              ),
               (
                 '采样率',
                 diagnostics?.audioSampleRate == null
@@ -347,6 +360,9 @@ String _time(Duration duration) {
   return '${pad(seconds ~/ 3600)}:${pad(seconds ~/ 60 % 60)}:${pad(seconds % 60)}';
 }
 
+String _nominalBitrate(int? bandwidth, double? native) => _bitrate(
+  bandwidth != null && bandwidth > 0 ? bandwidth.toDouble() : native,
+);
 String _bitrate(double? value) => value == null || value <= 0
     ? '—'
     : value >= 1000000

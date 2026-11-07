@@ -77,6 +77,13 @@ void main() {
       );
       await Future<void>.delayed(const Duration(seconds: 1));
       expect(engine.currentSnapshot.position, greaterThan(Duration.zero));
+      final info = await engine.inspectPlaybackInformation();
+      expect(info?.audioCodec, 'aac');
+      expect(info?.diagnostics?.audioSampleRate, 48000);
+      expect(info?.diagnostics?.audioChannels, greaterThan(0));
+      expect(info?.diagnostics?.hasDecodedAudio, true);
+      expect(info?.audioNominalBitrate, greaterThan(0));
+      expect(info?.videoCodec, isNull);
     } finally {
       await engine.dispose();
     }
@@ -123,6 +130,25 @@ void main() {
           await tester.pump(const Duration(seconds: 1));
           await Future<void>.delayed(const Duration(milliseconds: 600));
           expect(engine.currentSnapshot.position, greaterThan(Duration.zero));
+          if (useFvp) {
+            final info = await engine.inspectPlaybackInformation();
+            expect(info?.generation, engine.currentSnapshot.generation);
+            expect(info?.videoCodec, 'h264');
+            expect(info?.audioCodec, 'aac');
+            expect(info?.hardwareDecoder, isNotNull);
+            expect(info?.sourceFps, greaterThan(0));
+            expect(info?.pixelFormat, isNotNull);
+            expect(info?.diagnostics?.videoWidth, 320);
+            expect(info?.diagnostics?.outputWidth, 320);
+            expect(info?.diagnostics?.audioSampleRate, 48000);
+            expect(info?.diagnostics?.hasDecodedVideo, true);
+            expect(info?.diagnostics?.hasVideoOutput, true);
+            expect(info?.diagnostics?.hasDecodedAudio, true);
+            expect(info?.cacheSeconds, greaterThanOrEqualTo(0));
+            expect(info?.audioNominalBitrate, greaterThan(0));
+            expect(info?.avSyncSeconds, isNull);
+            expect(info?.frameDrops, isNull);
+          }
           await engine.setRate(2);
           await engine.pause();
           await engine.seek(const Duration(seconds: 3));

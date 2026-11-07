@@ -18,10 +18,14 @@ import '../../support/video_card_fake_engine.dart';
 final class _Engine extends CardFakeEngine implements PlayerInformationSource {
   int samples = 0;
   Completer<PlayerPlaybackInformation?>? pending;
+  PlayerPlaybackInformation? information;
   @override
   Future<PlayerPlaybackInformation?> inspectPlaybackInformation() async {
     samples++;
     if (pending case final gate?) return gate.future;
+    if (information case final info?) {
+      return info.withGeneration(currentSnapshot.generation);
+    }
     return PlayerPlaybackInformation(
       generation: currentSnapshot.generation,
       backend: 'media_kit / libmpv',
@@ -91,6 +95,79 @@ Future<void> _show(
 }
 
 void main() {
+  testWidgets(
+    'fvp copies native fields, nominal bitrate fallback and limitations',
+    (tester) async {
+      String? copied;
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          if (call.arguments case {'text': final String text}) copied = text;
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      final engine = _Engine()
+        ..information = const PlayerPlaybackInformation(
+          generation: 1,
+          backend: 'fvp / MDK',
+          videoCodec: 'h264',
+          audioCodec: 'aac',
+          hardwareDecoder: 'MFT',
+          sourceFps: 24,
+          videoNominalBitrate: 2000000,
+          audioNominalBitrate: 128000,
+          cacheSeconds: 2.5,
+          diagnostics: PlayerDiagnostics(
+            generation: 1,
+            position: Duration.zero,
+            hasDecodedVideo: true,
+            hasDecodedAudio: true,
+            hasVideoOutput: true,
+            videoWidth: 320,
+            videoHeight: 180,
+            outputWidth: 320,
+            outputHeight: 180,
+            audioSampleRate: 48000,
+            audioChannels: 2,
+          ),
+        );
+      final session = _session(engine);
+      session.media = PlaybackMedia(
+        video: PlaybackTrack(
+          urls: [Uri.parse('https://example.com/video')],
+          codec: '',
+          bandwidth: 0,
+        ),
+        audio: PlaybackTrack(
+          urls: [Uri.parse('https://example.com/audio')],
+          codec: '',
+          bandwidth: 0,
+        ),
+        quality: 16,
+        qualities: const [16],
+        duration: const Duration(seconds: 20),
+        headers: const {},
+      );
+      addTearDown(session.close);
+      await _show(tester, session: session);
+      await tester.tap(find.text('复制全部信息'));
+      await tester.pump();
+      expect(copied, contains('播放后端：fvp / MDK'));
+      expect(copied, contains('源帧率：24.00 fps'));
+      expect(copied, contains('解码尺寸：320 × 180'));
+      expect(copied, contains('采样率：48000 Hz'));
+      expect(copied, contains('声道数：2'));
+      expect(copied, contains('视频码率（标称）：2.00 Mbps'));
+      expect(copied, contains('音频码率（标称）：128.00 kbps'));
+      expect(copied, contains('原生缓存时长：2.50 s'));
+      expect(copied, contains('音画差（A−V）：—'));
+      expect(copied, contains('输出丢帧（累计）：—'));
+      expect(copied, contains('MDK 当前接口未提供'));
+    },
+  );
   testWidgets(
     'copy includes all fields, offscreen sections and the displayed sample',
     (tester) async {

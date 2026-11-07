@@ -5,6 +5,8 @@ import 'package:fvp/fvp.dart' as fvp;
 import 'package:fvp/mdk.dart' as mdk;
 
 import 'player_contract.dart';
+import 'fvp_playback_information.dart';
+import 'player_playback_information.dart';
 
 final class FvpMediaInfo {
   const FvpMediaInfo({
@@ -46,6 +48,15 @@ abstract interface class FvpPlayerPort {
   Future<void> dispose();
 }
 
+/// Optional statistics capability, independent of playback commands so remote
+/// or test adapters can be introduced without inventing native observations.
+abstract interface class FvpInformationPort {
+  Future<PlayerPlaybackInformation?> inspectPlaybackInformation({
+    required int generation,
+    required double audioGainDb,
+  });
+}
+
 Future<void>? _initialization;
 
 Future<FvpPlayerPort> createFvpNativePlayer() async {
@@ -64,7 +75,7 @@ Future<FvpPlayerPort> createFvpNativePlayer() async {
   return _MdkPlayerPort();
 }
 
-final class _MdkPlayerPort implements FvpPlayerPort {
+final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
   mdk.Player? _native;
   mdk.Player get _player => _native!;
   _MdkPlayerPort? _audioProbe;
@@ -92,17 +103,39 @@ final class _MdkPlayerPort implements FvpPlayerPort {
   String _mediaUri = '';
   String? _audioUri;
   bool _silent = false;
+  mdk.AudioCodecParameters? _externalAudio;
+  String? _videoDecoder;
+  bool _videoDecoded = false;
+  bool _audioDecoded = false;
+  bool _videoRendered = false;
+  VideoDimensions? _textureDimensions;
 
   void _initializePlayer() {
     _native = mdk.Player();
     _eventSubscription = _player.onEvent.listen((event) {
       if (_closed) return;
+      if (event.category == 'decoder.video') {
+        if (event.detail == 'open' && event.error < 0) {
+          _videoDecoded = false;
+          _videoDecoder = null;
+        } else if (event.error == 0 && fvpDecoderName(event.detail) != null) {
+          _videoDecoder = event.detail;
+          _videoDecoded = true;
+        }
+      }
+      if (event.category == 'decoder.audio' &&
+          event.error >= 0 &&
+          event.detail != 'decode error') {
+        _audioDecoded = true;
+      }
       if (event.category == 'decoder.audio' && !_audioOpened.isCompleted) {
         _audioOpened.complete(event.error >= 0);
       }
       if (event.category == 'render.video' &&
           event.detail == '1st_frame' &&
           !_firstFrame.isCompleted) {
+        _videoRendered = event.error >= 0;
+        _videoDecoded = _videoRendered;
         _firstFrame.complete(event.error >= 0);
       }
     });
@@ -144,6 +177,36 @@ final class _MdkPlayerPort implements FvpPlayerPort {
   @override
   int get bufferedMilliseconds => _closed ? 0 : _native?.buffered() ?? 0;
 
+  @override
+  Future<PlayerPlaybackInformation?> inspectPlaybackInformation({
+    required int generation,
+    required double audioGainDb,
+  }) async {
+    final player = _native;
+    if (_closed ||
+        _closing ||
+        _repreparing ||
+        player == null ||
+        _interrupted.isCompleted ||
+        !player.mediaStatus.test(mdk.MediaStatus.loaded)) {
+      return null;
+    }
+    return sampleFvpPlaybackInformation(
+      media: player.mediaInfo,
+      externalAudio: _externalAudio,
+      silent: _silent,
+      videoDecoded: _videoDecoded,
+      audioDecoded: _audioDecoded,
+      videoRendered: _videoRendered,
+      videoDecoder: _videoDecoder,
+      outputDimensions: _textureDimensions,
+      generation: generation,
+      positionMilliseconds: player.position,
+      bufferedMilliseconds: player.buffered(),
+      audioGainDb: audioGainDb,
+    );
+  }
+
   Future<T> _active<T>(Future<T> operation) => Future.any<T>([
     operation,
     _interrupted.future.then<T>((_) => throw StateError('MDK interrupted')),
@@ -176,6 +239,17 @@ final class _MdkPlayerPort implements FvpPlayerPort {
         if (!await _active(probe.confirmAudio())) {
           throw StateError('Companion audio decoder failed');
         }
+        // The probe is about to be released. Retain owned scalars only, not
+        // MediaInfo metadata, codec extra-data views or its native handle.
+        final codec = probe._player.mediaInfo.audio?.firstOrNull?.codec;
+        if (codec != null) {
+          _externalAudio = mdk.AudioCodecParameters()
+            ..codec = codec.codec
+            ..bitRate = codec.bitRate
+            ..channels = codec.channels
+            ..sampleRate = codec.sampleRate;
+        }
+        _audioDecoded = true;
       } finally {
         await probe.dispose();
         _audioProbe = null;
@@ -261,11 +335,15 @@ final class _MdkPlayerPort implements FvpPlayerPort {
   };
 
   @override
-  Future<int> createTexture() => _textureCreation = _player.updateTexture(
-    width: _dimensions?.width,
-    height: _dimensions?.height,
-    fit: false,
-  );
+  Future<int> createTexture() => _textureCreation = () async {
+    final texture = await _player.updateTexture(
+      width: _dimensions?.width,
+      height: _dimensions?.height,
+      fit: false,
+    );
+    if (!_closing && !_closed && texture >= 0) _textureDimensions = _dimensions;
+    return texture;
+  }();
   @override
   Future<bool> confirmVideoFrame() async {
     if (_live) {

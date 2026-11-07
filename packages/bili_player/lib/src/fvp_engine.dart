@@ -74,14 +74,38 @@ final class FvpEngine
   );
 
   @override
-  Future<PlayerPlaybackInformation?> inspectPlaybackInformation() async =>
-      _disposed || _player == null
-      ? null
-      : PlayerPlaybackInformation(
-          generation: _generation,
-          backend: 'fvp / MDK',
-          audioGainDb: _gainDb,
-        );
+  Future<PlayerPlaybackInformation?> inspectPlaybackInformation() async {
+    final player = _player;
+    final generation = _generation;
+    if (_disposed || _opening || player == null || _cancelled.isCompleted) {
+      return null;
+    }
+    if (player is! FvpInformationPort) {
+      return PlayerPlaybackInformation(
+        generation: generation,
+        backend: 'fvp / MDK',
+        audioGainDb: _gainDb,
+      );
+    }
+    try {
+      final information = await (player as FvpInformationPort)
+          .inspectPlaybackInformation(
+            generation: generation,
+            audioGainDb: _gainDb,
+          )
+          .timeout(const Duration(seconds: 1));
+      return !_disposed &&
+              !_cancelled.isCompleted &&
+              generation == _generation &&
+              information?.generation == generation &&
+              identical(player, _player)
+          ? information
+          : null;
+    } on Object {
+      // Optional native statistics must not interrupt playback or disposal.
+      return null;
+    }
+  }
 
   Future<void> _enqueue(Future<void> Function() action) {
     final next = _commands.then((_) => action());

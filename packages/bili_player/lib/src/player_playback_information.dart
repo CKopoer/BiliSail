@@ -19,6 +19,8 @@ final class PlayerPlaybackInformation {
     this.outputFps,
     this.videoBitrate,
     this.audioBitrate,
+    this.videoNominalBitrate,
+    this.audioNominalBitrate,
     this.pixelFormat,
     this.hardwarePixelFormat,
     this.colorMatrix,
@@ -44,11 +46,14 @@ final class PlayerPlaybackInformation {
   final String? hardwareDecoder, videoCodec, audioCodec;
   final double? sourceFps, outputFps;
   final double? videoBitrate, audioBitrate;
+
+  /// Native stream metadata, distinct from measured demuxer bitrates.
+  final double? videoNominalBitrate, audioNominalBitrate;
   final String? pixelFormat, colorMatrix, colorPrimaries, transferFunction;
   final String? hardwarePixelFormat, colorLevels;
   final String? videoOutput, audioOutput;
 
-  /// Native mpv A−V difference and per-track timestamps, in seconds.
+  /// Native A−V difference and per-track timestamps, in seconds.
   final double? avSyncSeconds, audioPositionSeconds, videoPositionSeconds;
   final int? frameDrops, decoderDrops;
 
@@ -86,6 +91,8 @@ final class PlayerPlaybackInformation {
         outputFps: outputFps,
         videoBitrate: videoBitrate,
         audioBitrate: audioBitrate,
+        videoNominalBitrate: videoNominalBitrate,
+        audioNominalBitrate: audioNominalBitrate,
         pixelFormat: pixelFormat,
         hardwarePixelFormat: hardwarePixelFormat,
         colorMatrix: colorMatrix,
