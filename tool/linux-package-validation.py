@@ -1,6 +1,7 @@
 """Check staged Linux dependencies and retain their distro license metadata."""
 
 import json
+import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import shutil
@@ -87,7 +88,31 @@ def main() -> None:
         if "not found" in dependencies:
             raise RuntimeError(f"Unresolved dependencies: {binary}\n{dependencies}")
 
-    packages = find_distro_packages(libraries)
+    mpv_source = appdir / "usr/bin/data/licenses/mpv/SOURCE.json"
+    if not mpv_source.is_file():
+        raise RuntimeError("Missing personal libmpv source provenance")
+    source = json.loads(mpv_source.read_text(encoding="utf-8"))
+    if source.get("repository") != "https://github.com/CKopoer/mpv":
+        raise RuntimeError("Linux libmpv must come from the maintained personal fork")
+    native_libraries = [
+        path for path in libraries if path.name.startswith("libmpv.so")
+    ]
+    native_records = [
+        {
+            "path": str(path.relative_to(appdir)),
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+        for path in native_libraries
+    ]
+    native_notice = appdir / "usr/share/doc/bilisail/native-mpv.json"
+    native_notice.parent.mkdir(parents=True, exist_ok=True)
+    native_notice.write_text(
+        json.dumps({"source": source, "libraries": native_records}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    packages = find_distro_packages(
+        [path for path in libraries if not path.name.startswith("libmpv.so")]
+    )
     write_distro_notices(packages, appdir / "usr/share/doc/bilisail/dependencies")
     # Flutter/Linux stores application version data here; reject stale bundles.
     version_file = appdir / "usr/bin/data/flutter_assets/version.json"

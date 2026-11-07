@@ -7,7 +7,15 @@ $configUri = [Uri]::new((Join-Path $repoRoot '.dart_tool/package_config.json'))
 $source = [Uri]::new($configUri, $package.rootUri).LocalPath
 $output = Join-Path $repoRoot 'build/gpu-queue-test'
 $patched = Join-Path $output 'patched'
-$angle = Join-Path $repoRoot 'build/windows/x64/ANGLE'
+$nativeCache = Join-Path $repoRoot 'build/windows/x64/CMakeCache.txt'
+function Get-NativeSdk([string]$Name) {
+  $entries = @(Select-String -LiteralPath $nativeCache -Pattern "^${Name}:INTERNAL=(.+)$")
+  if ($entries.Count -ne 1) { throw "Build Windows before testing: missing $Name." }
+  $path = $entries[0].Matches.Groups[1].Value.Trim()
+  if (!(Test-Path -LiteralPath $path -PathType Container)) { throw "Missing native SDK: $path" }
+  return $path
+}
+$angle = Get-NativeSdk 'MEDIA_KIT_ANGLE_SDK'
 $patch = Join-Path $repoRoot 'windows/patches/media_kit_video'
 & cmake "-DBILISAIL_VIDEO_TEST_SOURCE=$source/windows" "-DBILISAIL_VIDEO_TEST_OUTPUT=$patched" -P "$patch/apply.cmake"
 if ($LASTEXITCODE -ne 0) { throw 'Native source patch validation failed.' }
@@ -18,7 +26,7 @@ $environment = Join-Path $visualStudio 'VC/Auxiliary/Build/vcvars64.bat'
 $test = Join-Path $PSScriptRoot 'native_tests/angle_gpu_queue_test.cpp'
 $resizeTest = Join-Path $PSScriptRoot 'native_tests/video_output_resize_test.cpp'
 $flutterHeaders = Join-Path $repoRoot 'windows/flutter/ephemeral'
-$mpvHeaders = Join-Path $repoRoot 'build/windows/x64/libmpv/include'
+$mpvHeaders = Join-Path (Get-NativeSdk 'MEDIA_KIT_MPV_SDK') 'include/mpv'
 $compile = Join-Path $output 'compile-test.cmd'
 @"
 @echo off

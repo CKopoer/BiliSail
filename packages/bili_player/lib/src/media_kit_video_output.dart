@@ -12,6 +12,7 @@ import 'package:media_kit_video/media_kit_video.dart' as mkv;
 import 'player_contract.dart';
 import 'android_video_viewport.dart';
 import 'native_video_surface.dart';
+import 'native_player_properties.dart';
 import 'video_composition.dart';
 import 'video_decoder_configuration.dart';
 
@@ -63,8 +64,8 @@ final class MediaKitVideoOutput
           rect.width > 0 &&
           rect.height > 0 &&
           (rect.width > 1 || rect.height > 1) &&
-          state.width > 0 &&
-          state.height > 0;
+          (state.width ?? 0) > 0 &&
+          (state.height ?? 0) > 0;
     }
 
     void update() {
@@ -90,18 +91,21 @@ final class MediaKitVideoOutput
 
     controller.id.addListener(update);
     controller.rect.addListener(update);
-    final size = controller.player.stream.size.listen((_) => update());
+    final width = controller.player.stream.width.listen((_) => update());
+    final height = controller.player.stream.height.listen((_) => update());
     _readinessCleanup.addAll([
       () => controller.id.removeListener(update),
       () => controller.rect.removeListener(update),
-      () => unawaited(size.cancel()),
+      () => unawaited(width.cancel()),
+      () => unawaited(height.cancel()),
     ]);
     // Android's SDK signal also finishes paused preparation. Presentation
     // must wait for a sized video buffer without blocking that preparation.
     final presentation = Platform.isAndroid
-        ? _viewportChannel.invokeMethod<void>('BiliSail.WaitForVideoFrame', {
-            'handle': controller.player.handle.toString(),
-          })
+        ? _viewportChannel.invokeMethod<void>(
+            'VideoOutputManager.WaitForVideoFrame',
+            {'handle': controller.player.nativeHandle.toString()},
+          )
         : controller.waitUntilFirstFrameRendered;
     _presentation = presentation;
     unawaited(
@@ -215,7 +219,7 @@ final class MediaKitVideoOutput
     // on_preloaded keeps decoding blocked until both sizes have been applied.
     await _viewportChannel
         .invokeMethod<void>('VideoOutputManager.SetSurfaceTextureSize', {
-          'handle': player.handle.toString(),
+          'handle': player.nativeHandle.toString(),
           'width': dimensions.width.toString(),
           'height': dimensions.height.toString(),
         })
@@ -296,7 +300,7 @@ final class MediaKitVideoOutput
                 _sizeAndroidSurface(player, size, revision, viewport: true),
           )
         : null;
-    final controller = await mkv.VideoController.create(
+    final controller = mkv.VideoController(
       player,
       configuration: videoDecoderConfiguration(
         isAndroid: Platform.isAndroid,
@@ -304,6 +308,8 @@ final class MediaKitVideoOutput
         usesDolbyVisionRenderer: () => _androidDolbyVision,
       ),
     );
+    WidgetsBinding.instance.ensureVisualUpdate();
+    await controller.platform.future;
     if (_disposed ||
         revision != _bindingRevision ||
         !identical(_player, player)) {
@@ -359,9 +365,7 @@ final class MediaKitVideoOutput
     _updateAndroidViewport();
     final controller = _controller.value;
     final dimensions = _videoDimensions;
-    if (Platform.isAndroid &&
-        controller?.configuration.vo == 'gpu-next' &&
-        dimensions != null) {
+    if (Platform.isAndroid && _androidDolbyVision && dimensions != null) {
       final player = _player;
       if (player == null) return;
       final revision = _bindingRevision;
@@ -376,7 +380,7 @@ final class MediaKitVideoOutput
         try {
           await _viewportChannel
               .invokeMethod<void>('VideoOutputManager.SetSurfaceTextureSize', {
-                'handle': player.handle.toString(),
+                'handle': player.nativeHandle.toString(),
                 'width': dimensions.width.toString(),
                 'height': dimensions.height.toString(),
               })
@@ -403,7 +407,7 @@ final class MediaKitVideoOutput
       height: dimensions.height,
     );
     unawaited(
-      result?.catchError((Object error) {
+      result.catchError((Object error) {
         debugPrint('Windows decoded video size failed: ${error.runtimeType}');
       }),
     );
@@ -592,7 +596,7 @@ final class MediaKitVideoOutput
   ) async {
     try {
       const deadline = Duration(seconds: 5);
-      final handle = player.handle;
+      final handle = player.nativeHandle;
       if (_disposed ||
           generation != _sourceGeneration ||
           revision != _viewportRevision ||

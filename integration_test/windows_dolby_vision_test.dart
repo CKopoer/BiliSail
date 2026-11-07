@@ -18,7 +18,11 @@ void main() {
   ) async {
     final fixtures = Platform.environment['BILI_TEST_DOVI_DIR'];
     expect(fixtures, isNotNull);
-    final engine = MediaKitEngine();
+    final engine = MediaKitEngine(
+      onDiagnostic: (event) {
+        debugPrint('DOVI_DIAGNOSTIC ${event.toJson()}');
+      },
+    );
     final policy = MediaRequestPolicy();
     DashPairSource source(Uri video) => DashPairSource(
       video: MediaTrack(uri: video, requestPolicy: policy),
@@ -73,7 +77,11 @@ void main() {
       isNotNull,
       reason: 'Use tool/test-windows-dolby-vision.ps1',
     );
-    final engine = MediaKitEngine();
+    final engine = MediaKitEngine(
+      onDiagnostic: (event) {
+        debugPrint('DOVI_DIAGNOSTIC ${event.toJson()}');
+      },
+    );
     final boundaryKey = GlobalKey();
     final policy = MediaRequestPolicy();
     final audio = File('test/fixtures/media/audio.m4a').absolute.uri;

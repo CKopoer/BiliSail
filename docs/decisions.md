@@ -531,3 +531,9 @@ Android 复用既有媒体服务，暂停／换源期间不撤下前台服务，
 **决定（2026-11-06）**：设置页提供日志 ZIP 导出，收集核心运行、异常、请求结果和下载队列摘要及已有播放器日志。统一限制磁盘与等待队列容量，只记录结构化允许字段和脱敏栈位置，不保存凭据、完整 URL、账号标识或原始异常／网络正文，不自动上传。
 
 导出先刷新已排队写入，在 worker isolate 生成有容量限制的日志快照，并按默认下载目录的平台根目录保存。Android 使用公共 Downloads 发布，桌面／iOS／Linux 使用默认离线目录相邻位置；成功显示实际位置，失败保留原日志。iOS 通过系统文件共享取出文档目录中的压缩包。内容、依赖许可、平台路径及验收边界见[日志导出记录](validation/log-export-2026-11-06.md)。
+
+## D72：媒体依赖以官方为基线，在个人 fork 统一维护
+
+**决定（2026-11-07）**：按用户要求，media_kit、media_kit_video、media_kit_libs_video 及全部平台库插件统一来自 `CKopoer/media-kit` 的固定完整提交，libmpv 源码与对应构建材料由个人 mpv／构建仓库维护。以官方主线为合并基线，平台修复进入依赖，应用只保留播放器契约、源代次、业务设置与构建契约核对；不再由应用修改第三方视频源码。
+
+Windows 保留经过验证的 ANGLE 与 EGL device-query 修正 SDK，Android 保留有源代次和释放屏障的 SurfaceTexture，Linux 从固定个人源码构建并随应用交付 libmpv。首批 Windows／Android／Apple 二进制保留上游摘要并镜像到个人 Release，明确区分镜像与个人重构建；不因版本升级声称性能提升。来源、补丁、回归与设备未测项见[实施记录](validation/media-kit-personal-fork-2026-11-07.md)。

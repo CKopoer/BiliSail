@@ -39,7 +39,7 @@ dependencies:
     path: packages/bili_mux
   flutter_inappwebview: 6.2.0-beta.3
 
-# Match PiliPlus resolved media-kit sources, including native library plugins.
+# Keep core, video output and native library manifests on one reviewed fork commit.
 dependency_overrides:
   # Retain the existing wakelock API and package_info_plus compatibility.
   wakelock_plus: 1.8.1
@@ -49,41 +49,44 @@ dependency_overrides:
     path: linux/plugins/flutter_inappwebview_linux
   media_kit:
     git:
-      url: https://github.com/My-Responsitories/media-kit.git
+      url: https://github.com/CKopoer/media-kit.git
       path: media_kit
-      ref: 73771ec38176be2d984a3049c28177bce23b54a0
-  media_kit_libs_video:
-    git:
-      url: https://github.com/My-Responsitories/media-kit.git
-      path: libs/universal/media_kit_libs_video
-      ref: 73771ec38176be2d984a3049c28177bce23b54a0
-  media_kit_libs_android_video:
-    git:
-      url: https://github.com/My-Responsitories/media-kit.git
-      path: libs/android/media_kit_libs_android_video
-      ref: 73771ec38176be2d984a3049c28177bce23b54a0
-  media_kit_libs_ios_video:
-    git:
-      url: https://github.com/My-Responsitories/media-kit.git
-      path: libs/ios/media_kit_libs_ios_video
-      ref: 73771ec38176be2d984a3049c28177bce23b54a0
-  media_kit_libs_windows_video:
-    git:
-      url: https://github.com/My-Responsitories/media-kit.git
-      path: libs/windows/media_kit_libs_windows_video
-      ref: 73771ec38176be2d984a3049c28177bce23b54a0
-  media_kit_native_event_loop:
-    git:
-      url: https://github.com/My-Responsitories/media-kit.git
-      path: media_kit_native_event_loop
-      ref: 73771ec38176be2d984a3049c28177bce23b54a0
+      ref: 7034784f960be84339ed6d87849ad2cef23c50b7
   media_kit_video:
     git:
-      url: https://github.com/bggRGjQaUbCoE/media-kit.git
+      url: https://github.com/CKopoer/media-kit.git
       path: media_kit_video
-      ref: fd8421d21eade4d6d12de137fa7df902fec20292
-  media_kit_libs_macos_video: 1.1.4
-  media_kit_libs_linux: 1.2.1
+      ref: 7034784f960be84339ed6d87849ad2cef23c50b7
+  media_kit_libs_video:
+    git:
+      url: https://github.com/CKopoer/media-kit.git
+      path: libs/universal/media_kit_libs_video
+      ref: 7034784f960be84339ed6d87849ad2cef23c50b7
+  media_kit_libs_android_video:
+    git:
+      url: https://github.com/CKopoer/media-kit.git
+      path: libs/android/media_kit_libs_android_video
+      ref: 7034784f960be84339ed6d87849ad2cef23c50b7
+  media_kit_libs_windows_video:
+    git:
+      url: https://github.com/CKopoer/media-kit.git
+      path: libs/windows/media_kit_libs_windows_video
+      ref: 7034784f960be84339ed6d87849ad2cef23c50b7
+  media_kit_libs_macos_video:
+    git:
+      url: https://github.com/CKopoer/media-kit.git
+      path: libs/macos/media_kit_libs_macos_video
+      ref: 7034784f960be84339ed6d87849ad2cef23c50b7
+  media_kit_libs_ios_video:
+    git:
+      url: https://github.com/CKopoer/media-kit.git
+      path: libs/ios/media_kit_libs_ios_video
+      ref: 7034784f960be84339ed6d87849ad2cef23c50b7
+  media_kit_libs_linux:
+    git:
+      url: https://github.com/CKopoer/media-kit.git
+      path: libs/linux/media_kit_libs_linux
+      ref: 7034784f960be84339ed6d87849ad2cef23c50b7
 
 dev_dependencies:
   flutter_driver:

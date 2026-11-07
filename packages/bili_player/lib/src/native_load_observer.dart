@@ -8,6 +8,8 @@ import 'package:ffi/ffi.dart';
 
 import 'native_readiness.dart';
 
+enum NativeOutputProperty { colorMatrix, driver }
+
 /// Only an error END_FILE for the matching START_FILE ends a load. Logs, EOF,
 /// stop, shutdown and playlist redirects are not terminal load failures.
 final class NativeLoadState {
@@ -18,6 +20,20 @@ final class NativeLoadState {
   Object? _preparationError;
   bool _disposed = false;
   Duration? audioPosition;
+  String? videoOutputMatrix;
+  String? videoOutputDriver;
+
+  void outputChanged(NativeOutputProperty property, String? value) {
+    if (_disposed) return;
+    switch (property) {
+      case NativeOutputProperty.colorMatrix:
+        videoOutputMatrix = value;
+      case NativeOutputProperty.driver:
+        videoOutputDriver = value;
+    }
+    _changes.add(null);
+  }
+
   int _clockEpoch = 0;
 
   void resetClocks() {
@@ -97,9 +113,9 @@ final class NativeLoadObserver {
     void Function(String filename)? onExternalAudio,
     FutureOr<void> Function()? onPreloaded,
   }) async {
-    final handle = platform.handle;
+    final handle = platform.ctx.address;
     if (!isCurrent()) throw const SourceSuperseded();
-    final mpv = mk.NativePlayer.mpv;
+    final mpv = platform.mpv;
     final client = mpv.mpv_create_weak_client(
       Pointer.fromAddress(handle),
       nullptr,
@@ -212,6 +228,17 @@ final class NativeLoadObserver {
           unawaited(prepare(hookId));
         } else if (event.event_id == 22) {
           final property = event.data.cast<mpv_event_property>().ref;
+          if (event.reply_userdata == 6 || event.reply_userdata == 7) {
+            final value = property.format == 1 && property.data != nullptr
+                ? property.data.cast<Pointer<Utf8>>().value
+                : nullptr;
+            state.outputChanged(
+              event.reply_userdata == 6
+                  ? NativeOutputProperty.colorMatrix
+                  : NativeOutputProperty.driver,
+              value == nullptr ? null : value.toDartString(),
+            );
+          }
           if (event.reply_userdata == 1 &&
               onExternalAudio != null &&
               property.format == 1 &&
@@ -238,6 +265,21 @@ final class NativeLoadObserver {
     final wakeup = NativeCallable<Void Function(Pointer<Void>)>.listener(drain);
     try {
       if (onPreloaded != null) {
+        // Output color/VO confirmation can follow decoded dimensions. Keep a
+        // source-owned event cache instead of polling the core during startup.
+        for (final (id, property) in [
+          (6, 'video-out-params/colormatrix'),
+          (7, 'current-vo'),
+        ]) {
+          final name = property.toNativeUtf8();
+          try {
+            if (mpv.mpv_observe_property(client, id, name.cast(), 1) < 0) {
+              throw StateError('Native video output observation unavailable.');
+            }
+          } finally {
+            calloc.free(name);
+          }
+        }
         final name = 'on_preloaded'.toNativeUtf8();
         try {
           if (mpv.mpv_hook_add(client, 2, name.cast(), 0) < 0) {

@@ -1,3 +1,5 @@
+// Retired 2026-11-07: the personal media-kit fork owns this implementation.
+// Preserved only as historical source; android/build.gradle.kts does not apply it.
 import java.security.MessageDigest
 
 // Pinned media_kit_video (MIT): patch verified build copies, never Pub's cache.

@@ -30,7 +30,11 @@ apt_options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::http
 run_stage 'APT index update' sudo apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
 run_stage 'APT dependency install' sudo apt-get "${apt_options[@]}" -o "Dir::Cache::archives=$cache_root/apt" \
   -o APT::Keep-Downloaded-Packages=true install -y \
-  clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libmpv-dev libva-wayland2 \
+  clang cmake ninja-build meson pkg-config libgtk-3-dev libsecret-1-dev libmpv-dev libva-wayland2 \
+  libavcodec-dev libavfilter-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev \
+  libass-dev libplacebo-dev libegl1-mesa-dev libgl-dev libva-dev libvdpau-dev libdrm-dev libgbm-dev \
+  libx11-dev libxrandr-dev libxpresent-dev libxss-dev libpulse-dev libasound2-dev \
+  libwayland-dev wayland-protocols libxkbcommon-dev \
   gobject-introspection libgirepository1.0-dev librsvg2-common glib-networking \
   patchelf desktop-file-utils flatpak flatpak-builder
 

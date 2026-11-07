@@ -436,8 +436,9 @@ final class MediaKitEngine
           );
           try {
             // A failed phase alone does not stop mpv's external audio clock.
-            await (_nativeLoad?.pause() ?? player.pauseWithStringFlag())
-                .timeout(const Duration(seconds: 2));
+            await (_nativeLoad?.pause() ?? player.pause()).timeout(
+              const Duration(seconds: 2),
+            );
           } on Object {
             if (generation != _generation || _disposed) return;
             await _releasePlayer();
@@ -702,11 +703,7 @@ final class MediaKitEngine
         final openBudget = options.openTimeout;
         initializePlayerBackend();
         final player = await waitForNativeResource(
-          creating: mk.Player.create(
-            configuration: const mk.PlayerConfiguration(
-              logLevel: mk.MPVLogLevel.warn,
-            ),
-          ),
+          creating: createNativePlayer(),
           dispose: (player) => player.dispose(),
           superseded: () => generation != _generation || _disposed,
           changes: [_generationChanges.stream],
@@ -720,8 +717,8 @@ final class MediaKitEngine
         final platform = player;
 
         _audioGain = NativeAudioGain(
-          write: platform.setPropertyAsync,
-          read: platform.getPropertyAsync,
+          write: player.setPropertyAsync,
+          read: player.getPropertyAsync,
           isCurrent: () =>
               generation == _generation &&
               !_disposed &&
@@ -758,8 +755,8 @@ final class MediaKitEngine
         };
         if (rateAdjustable) {
           await configureNativeRateAudio(
-            write: platform.setPropertyAsync,
-            read: platform.getPropertyAsync,
+            write: player.setPropertyAsync,
+            read: player.getPropertyAsync,
             isCurrent: () =>
                 generation == _generation &&
                 !_disposed &&
@@ -784,8 +781,8 @@ final class MediaKitEngine
         }
         if (experimentalVideoFrameQueue && source is DashPairSource) {
           await configureNativeVideoFrameQueue(
-            write: platform.setPropertyAsync,
-            read: platform.getPropertyAsync,
+            write: player.setPropertyAsync,
+            read: player.getPropertyAsync,
             isCurrent: () =>
                 generation == _generation &&
                 !_disposed &&
@@ -811,7 +808,7 @@ final class MediaKitEngine
         if (generation != _generation || _disposed) return;
 
         final load = await NativeLoadObserver.attach(
-          platform,
+          player.native,
           isCurrent: () =>
               generation == _generation &&
               !_disposed &&
@@ -824,8 +821,8 @@ final class MediaKitEngine
                     return;
                   }
                   _requiresVideoColorMapping = configureNativeVideoColor(
-                    read: platform.getProperty,
-                    write: platform.setProperty,
+                    read: player.getProperty,
+                    write: player.setProperty,
                     isAndroid: Platform.isAndroid,
                     onAndroidDolbyVision: _videoOutput.enableAndroidDolbyVision,
                     codecHint: video.codec,
@@ -848,7 +845,7 @@ final class MediaKitEngine
                     // Size the active renderer after any source-specific
                     // switch, including Android's Dolby Vision output.
                     await _videoOutput.prepareAndroidSurface(
-                      platform.getProperty,
+                      player.getProperty,
                     );
                   } on Object {
                     throw PlayerFailure(
@@ -877,16 +874,11 @@ final class MediaKitEngine
         _nativeLoad = load;
 
         if (generation != _generation || _disposed) return;
-        final headers = nativeMediaHeaders(mediaTrack.requestPolicy.headers);
-        player.setMediaHeader(
-          userAgent: headers.userAgent,
-          referer: headers.referer,
-          headers: headers.fields,
-        );
         await player
-            .openPausedMedia(
+            .open(
               mk.Media(
                 mediaTrack.uri.toString(),
+                httpHeaders: mediaTrack.requestPolicy.headers,
                 // Resume as part of loading, before decoding the first frame.
                 // Opening at zero and seeking afterward buffers twice when
                 // returning from audio-only playback.
@@ -894,6 +886,7 @@ final class MediaKitEngine
                     ? options.startPosition
                     : null,
               ),
+              play: false,
             )
             .timeout(_remaining(watch, openBudget));
         if (generation != _generation || _disposed) return;
@@ -1002,10 +995,25 @@ final class MediaKitEngine
           // Decoder metadata alone does not establish a native video output.
           // mpv renders a video frame while paused; no audio probe is needed.
           await waitForOutput();
-          final profile = platform.getProperty(
+          if (_requiresVideoColorMapping) {
+            // The official controller may publish dimensions before the
+            // filtered frame's output parameters. Confirm conversion through
+            // this source's native events before inspecting its final matrix.
+            await _waitReady(
+              player,
+              generation,
+              () => Platform.isAndroid
+                  ? load.state.videoOutputDriver == 'gpu-next'
+                  : load.state.videoOutputMatrix == 'bt.709',
+              const [],
+              _remaining(watch, openBudget),
+              'Video color conversion did not become ready.',
+            );
+          }
+          final profile = player.getProperty(
             'current-tracks/video/dolby-vision-profile',
           );
-          final outputMatrix = platform.getProperty(
+          final outputMatrix = player.getProperty(
             'video-out-params/colormatrix',
           );
           final unmappedDolby =
@@ -1015,7 +1023,7 @@ final class MediaKitEngine
           final mappingFailed =
               _requiresVideoColorMapping &&
               (Platform.isAndroid
-                  ? platform.getProperty('current-vo') != 'gpu-next'
+                  ? player.getProperty('current-vo') != 'gpu-next'
                   : outputMatrix != 'bt.709');
           if (unmappedDolby || mappingFailed) {
             throw PlayerFailure(
@@ -1084,9 +1092,7 @@ final class MediaKitEngine
         );
         _diagnose(PlayerDiagnosticKind.openReady);
         if (options.play) {
-          await player.playWithStringFlag().timeout(
-            _remaining(watch, openBudget),
-          );
+          await player.play().timeout(_remaining(watch, openBudget));
           if (_requiresDecodedAudio) {
             await _waitForDecodedAudio(
               player,
@@ -1113,9 +1119,7 @@ final class MediaKitEngine
             );
           }
         } else {
-          await player.pauseWithStringFlag().timeout(
-            _remaining(watch, openBudget),
-          );
+          await player.pause().timeout(_remaining(watch, openBudget));
           if (generation == _generation && !_disposed) {
             _publish(_snapshot.copyWith(phase: PlaybackPhase.paused));
           }
@@ -1464,9 +1468,7 @@ final class MediaKitEngine
           generation,
         );
         try {
-          await player.pauseWithStringFlag().timeout(
-            const Duration(seconds: 2),
-          );
+          await player.pause().timeout(const Duration(seconds: 2));
         } on Object {
           if (generation == _generation && !_disposed) await _releasePlayer();
         }
@@ -1483,7 +1485,7 @@ final class MediaKitEngine
     final generation = _generation;
     return _command(
       (player) async {
-        await player.playWithStringFlag();
+        await player.play();
         if (_requiresDecodedAudio) {
           try {
             await _waitForDecodedAudio(
@@ -1493,7 +1495,7 @@ final class MediaKitEngine
             );
           } on PlayerFailure {
             // A video-only result is not a successful DASH playback session.
-            await player.pauseWithStringFlag();
+            await player.pause();
             rethrow;
           }
         }
@@ -1507,7 +1509,7 @@ final class MediaKitEngine
 
   @override
   Future<void> pause() => _command(
-    (player) => player.pauseWithStringFlag(),
+    (player) => player.pause(),
     optimistic: (s) => s.copyWith(desiredPlaying: false),
   );
   @override
