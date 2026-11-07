@@ -17,14 +17,21 @@ mkdir -p "$pod_parent"
 }
 pod_framework="$pod_parent/BiliMux.framework"
 rm -rf -- "$pod_framework"
-mkdir -p "$pod_framework"
-cp "$prebuilt/BiliMux.framework/BiliMux" "$pod_framework/BiliMux"
-cp "$prebuilt/BiliMux.framework/Info.plist" "$pod_framework/Info.plist"
-resources="$pod_framework/Resources"
-# iOS frameworks are flat. A Resources directory selects the macOS bundle
-# layout, whose Info.plist lookup does not use our root-level iOS plist.
-if [[ "$apple_platform" == ios ]]; then resources="$pod_framework"; fi
+binary_dir="$pod_framework"
+resources="$pod_framework"
+if [[ "$apple_platform" == macos ]]; then
+  # macOS uses versioned frameworks; Xcode rejects a root-level Info.plist.
+  binary_dir="$pod_framework/Versions/A"
+  resources="$binary_dir/Resources"
+  mkdir -p "$binary_dir"
+  ln -s A "$pod_framework/Versions/Current"
+  ln -s Versions/Current/BiliMux "$pod_framework/BiliMux"
+  ln -s Versions/Current/Resources "$pod_framework/Resources"
+fi
+# iOS keeps its shallow bundle, with the plist and records beside the binary.
 mkdir -p "$resources"
+cp "$prebuilt/BiliMux.framework/BiliMux" "$binary_dir/BiliMux"
+cp "$prebuilt/BiliMux.framework/Info.plist" "$resources/Info.plist"
 for record in COPYING.LGPLv2.1 source.txt configure.log; do
   cp "$prebuilt/$record" "$resources/$record"
 done

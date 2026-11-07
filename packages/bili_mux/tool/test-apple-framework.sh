@@ -23,18 +23,27 @@ for target in ios-arm64 macos-arm64 macos-x64; do
   framework="$fixture/$platform/Frameworks/BiliMux.framework"
   # Reproduce the old output, then rebuild twice to cover retained build dirs.
   mkdir -p "$framework/Resources" "$framework/_CodeSignature"
+  printf 'stale\n' > "$framework/Info.plist"
   printf 'stale\n' > "$framework/Resources/configure.log"
   printf 'stale\n' > "$framework/_CodeSignature/CodeResources"
   for attempt in 1 2; do
     bash "$fixture/tool/package-apple-framework.sh" "$target"
     cmp "$prebuilt/BiliMux.framework/BiliMux" "$framework/BiliMux"
-    cmp "$info" "$framework/Info.plist"
-    [[ ! -e "$framework/_CodeSignature" && ! -e "$framework/Versions" ]]
+    [[ ! -e "$framework/_CodeSignature" ]]
     resources="$framework/Resources"
     if [[ "$platform" == ios ]]; then
-      [[ ! -e "$resources" ]]
+      [[ ! -e "$resources" && ! -e "$framework/Versions" ]]
       resources="$framework"
+    else
+      # Xcode validates macOS frameworks as versioned (non-shallow) bundles.
+      [[ ! -e "$framework/Info.plist" ]]
+      [[ -L "$framework/Versions/Current" && "$(readlink "$framework/Versions/Current")" == A ]]
+      [[ -L "$framework/BiliMux" && "$(readlink "$framework/BiliMux")" == Versions/Current/BiliMux ]]
+      [[ -L "$resources" && "$(readlink "$resources")" == Versions/Current/Resources ]]
+      cmp "$prebuilt/BiliMux.framework/BiliMux" "$framework/Versions/A/BiliMux"
+      cmp "$info" "$framework/Versions/Current/Resources/Info.plist"
     fi
+    cmp "$info" "$resources/Info.plist"
     for record in COPYING.LGPLv2.1 source.txt configure.log; do
       cmp "$prebuilt/$record" "$resources/$record"
     done

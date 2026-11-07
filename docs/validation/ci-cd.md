@@ -210,6 +210,18 @@ PR 不接收长期签名 Secrets，仅通过 `-AndroidPreviewSigning` 显式启�
 
 ## macOS DMG 安装
 
+### BiliMux framework 版本化布局修复（2026-11-07）
+
+[CI 42354013460 的 macOS arm64 job](https://github.com/CKopoer/BiliSail/actions/runs/42354013460/job/128350423542) 构建提交 `b410d075c7f95ba22d19483dc2cb205ea7f68467` 时，已成功选择 Xcode 26.2／Swift 6.2.3，但在 Runner 的 framework 校验阶段失败：`BiliMux.framework` 的根目录包含 `Info.plist`，Xcode 要求非扁平 macOS bundle 的 plist 位于 `Versions/Current/Resources/Info.plist`。原[打包脚本](../../packages/bili_mux/tool/package-apple-framework.sh)对 macOS 仅增加 `Resources/` 存放许可与来源，二进制和 plist 仍在根目录；原目录测试也错误地要求所有平台都不存在 `Versions/`，因此未发现布局问题。
+
+macOS 两种架构的 CocoaPods framework 现在采用 [Apple 版本化结构](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPFrameworks/Concepts/FrameworkAnatomy.html)：二进制位于 `Versions/A/BiliMux`，plist 和许可／来源／构建配置位于 `Versions/A/Resources/`，`Versions/Current` 链接到 `A`，根目录 `BiliMux`／`Resources` 链接到当前版本；不生成根目录 plist。原有 FFI 加载入口仍可通过二进制链接访问。iOS 保持扁平 bundle。打包时继续完整替换本包输出，清除旧目录和签名，兼容重复构建及 macOS 架构切换；不修改 Pub 缓存或播放器原生依赖。
+
+[目录回归](../../packages/bili_mux/tool/test-apple-framework.sh)先在旧脚本上复现失败，再在修复后通过，覆盖 iOS arm64、macOS arm64／x64、旧目录清理、两次重复打包、三个相对符号链接、plist 位置及二进制／许可／来源内容。WSL 的 Bash 语法检查和两项 Apple media-kit 准备脚本回归通过，日志分别为 `build/ci-macos-framework-before.log`、`build/ci-macos-framework-after.log` 和 `build/ci-macos-framework-apple-check.log`。
+
+Windows／Flutter 3.47.6 的 `tool/check.ps1 -SkipPub` 通过打包边界、格式、静态分析及 5628 项 Dart／Flutter 测试（根应用 4572、API 678、播放器 212、弹幕 161、封装 5），日志为 `build/ci-macos-framework-check.log`。13 项 Windows 符号链接测试因权限不足、10 项 mux 原生测试因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。两份工作流通过 actionlint 1.7.12，两份变更文档的 55 条本地链接及 `git diff --check` 通过，五份锁文件未变化。本机为 Windows，未执行 Xcode 构建、签名、DMG 打包或设备验收；修复提交的远端 macOS 构建结果仍待确认，重跑原 run 会继续使用旧提交。
+
+### 打包与历史验证
+
 macOS 分别生成 `BiliSail-<version>-macos-arm64.dmg` 和 `BiliSail-<version>-macos-x64.dmg`，按 Apple Silicon／Intel 芯片选择。脚本用 `lipo -verify_arch` 核对主程序、App、FlutterMacOS 与 BiliMux framework 的目标架构，再使用 `ditto` 复制完整 `BiliSail.app`，调用 [macOS 发布验证](../../tool/macos-release-validation.ps1) 校验签名、最终权限和可执行文件。arm64 继续启动待打包的 Release 应用验证首帧、窗口交互和跨进程 Keychain 读写／删除；2026-11-02 起按用户要求，x64 不运行这些 smoke，明确记录跳过。通过所选门槛后在镜像根目录加入指向 `/Applications` 的符号链接与 `THIRD_PARTY_NOTICES.md`，使用 `hdiutil create -srcfolder ... -fs HFS+ -format UDZO` 创建压缩只读镜像并执行 `hdiutil verify`；任一保留步骤失败均停止，不上传产物。CI 与 Release 共用此脚本，现有上传通配符同时覆盖两种架构的 DMG、metadata、mux 源码和 SHA-256 文件。
 
 2026-10-29 增加 Intel macOS 构建：下载封装组件新增 `macos-x64` 目标，FFmpeg 与 C++ 包装均以 `x86_64`、最低 macOS 12 编译，并沿用独立目标目录、来源归档和 framework 打包流程。最终 [CI #221](https://github.com/CKopoer/BiliSail/actions/runs/40804720827)（代码提交 `64acaa709315b9c91e15c67ae173f56b05689570`）的 Intel／arm64 hosted 构建、签名校验、待打包应用首帧、跨进程合成 Keychain 读写／删除和 DMG 校验均通过。该次运行全部检查及六个平台构建通过，产物均已上传；实际 DMG 安装升级、Gatekeeper、真实账号、音视频播放与设备操作仍待验收。兼容修复与本地检查见 [Native Assets 迁移记录](../predidit-media-migration.md#ci-构建兼容修复2026-10-29)。

@@ -39,7 +39,7 @@
 macOS、iOS、Linux 也可直接执行 `bash packages/bili_mux/tool/build.sh <target>`。
 组件构建完成后按通常方式执行 Flutter 构建。Windows／Linux CMake、Android Gradle 和 Apple CocoaPods 打包对应 DLL/SO/framework；各端随组件保留许可与来源/配置。iOS 与 macOS 使用各自的 framework 构建目录，FFI 按各自的 app bundle 布局加载；Linux 按可执行文件旁的 `lib/libbili_mux.so` 加载，兼容 AppImage 挂载目录与 Flatpak 沙盒。
 macOS 的两种架构分别保存在 `native/prebuilt/macos-arm64` 和 `native/prebuilt/macos-x64`，构建后将所选架构复制到同一个 CocoaPods framework 目录；切换架构必须重建组件，并让应用的 Xcode `ARCHS` 与之匹配。发布入口 `tool/build-release.ps1` 自动完成这一流程，生成两份独立 DMG。
-iOS framework 使用扁平布局，`BiliMux`、`Info.plist`、`COPYING.LGPLv2.1`、`source.txt` 和 `configure.log` 均位于根目录；不能创建 macOS 式的 `Resources/`。Apple [打包步骤](tool/package-apple-framework.sh)每次重新生成 CocoaPods 使用的 framework，移除旧构建遗留目录；macOS 继续将许可与来源/配置放在 `Resources/`。无需 Xcode 的目录回归可运行 `bash packages/bili_mux/tool/test-apple-framework.sh`。
+iOS framework 使用扁平布局，`BiliMux`、`Info.plist`、`COPYING.LGPLv2.1`、`source.txt` 和 `configure.log` 均位于根目录；不能创建 macOS 式的 `Resources/`。macOS 的 CocoaPods framework 按 [Apple 版本化布局](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPFrameworks/Concepts/FrameworkAnatomy.html)生成：二进制位于 `Versions/A/BiliMux`，plist、许可与来源/配置位于 `Versions/A/Resources/`；`Versions/Current -> A`，根目录的 `BiliMux` 和 `Resources` 分别链接到 `Versions/Current` 下的对应项，不保留根目录 `Info.plist`。Apple [打包步骤](tool/package-apple-framework.sh)每次重新生成 CocoaPods 使用的 framework，移除旧构建目录和签名；`native/prebuilt/<target>/BiliMux.framework` 只作为该步骤的编译中间输入。无需 Xcode 的目录回归可运行 `bash packages/bili_mux/tool/test-apple-framework.sh`，覆盖 iOS、两种 macOS 架构及重复打包。
 `tool/build-release.ps1` 已自动先构建组件，并在安装包旁生成对应的 `.mux-source.zip`，包含 FFmpeg 原始归档、本项目包装源码与构建说明，便于重建与替换动态组件。
 缺失原生资产时 Windows/Android 构建会提示准备命令；非目标 ABI 的运行时能力为不可用。
 
