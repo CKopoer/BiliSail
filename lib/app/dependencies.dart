@@ -93,6 +93,7 @@ import '../features/playback/application/playback_session.dart';
 import '../features/playback/application/playback_manager.dart';
 import '../features/playback/application/playback_rate_memory.dart';
 import '../features/playback/application/playback_volume_memory.dart';
+import '../features/playback/application/playback_listening_mode.dart';
 import '../features/playback/data/api_playback_repository.dart';
 import '../features/playback/data/api_video_preview_repository.dart';
 import '../features/playback/data/api_playback_history_repository.dart';
@@ -334,6 +335,7 @@ class AppDependencies {
       );
     });
     final playbackRateMemory = PlaybackRateMemory();
+    final playbackListeningMode = PlaybackListeningMode();
     final playbackVolumeMemory = PlaybackVolumeMemory(
       savedVolume: await settings.loadRememberedVolume(),
       saveVolume: settings.saveRememberedVolume,
@@ -369,6 +371,7 @@ class AppDependencies {
         return PlaybackSession(
           rateMemory: playbackRateMemory,
           volumeMemory: playbackVolumeMemory,
+          listeningMode: playbackListeningMode,
           sponsorRepository: ApiSponsorRepository(
             SponsorBlockClient(sponsorTransport),
           ),

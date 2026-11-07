@@ -23,6 +23,7 @@ import '../domain/playback_history_repository.dart';
 import 'playback_history_reporter.dart';
 import 'playback_rate_memory.dart';
 import 'playback_volume_memory.dart';
+import 'playback_listening_mode.dart';
 import 'playback_startup_diagnostics.dart';
 import '../../settings/domain/app_settings.dart';
 
@@ -50,11 +51,14 @@ class PlaybackSession extends ChangeNotifier {
     this.startupNow,
     PlaybackRateMemory? rateMemory,
     PlaybackVolumeMemory? volumeMemory,
+    PlaybackListeningMode? listeningMode,
     PlaybackStartupDiagnostics? startupDiagnostics,
   }) : sessionEpoch = sessionEpoch ?? _zeroEpoch,
        startupDiagnostics = startupDiagnostics ?? PlaybackStartupDiagnostics(),
        _rateMemory = rateMemory ?? PlaybackRateMemory(),
-       _volumeMemory = volumeMemory ?? PlaybackVolumeMemory() {
+       _volumeMemory = volumeMemory ?? PlaybackVolumeMemory(),
+       _listeningMode = listeningMode ?? PlaybackListeningMode() {
+    _listeningMode.addListener(_applyListeningMode);
     _clock.start();
     sleepTimer = ListeningSleepTimer(
       now: sleepTimerNow,
@@ -128,6 +132,7 @@ class PlaybackSession extends ChangeNotifier {
   final SponsorRepository? sponsorRepository;
   final PlaybackRateMemory _rateMemory;
   final PlaybackVolumeMemory _volumeMemory;
+  final PlaybackListeningMode _listeningMode;
   AppSettings _settings = const AppSettings.defaults();
   List<double> get playbackRates => _settings.playbackRates;
   RequestCancellation? _sponsorCancellation;
@@ -351,7 +356,6 @@ class PlaybackSession extends ChangeNotifier {
   String? contentTitle;
   bool get isLive => contentTarget is LivePlaybackTarget;
   bool _audioOnly = false;
-  bool _foregroundAudioOnly = false;
   bool _allowColorFallback = true;
   bool get audioOnly => _audioOnly;
   late final ListeningSleepTimer sleepTimer;
@@ -645,7 +649,6 @@ class PlaybackSession extends ChangeNotifier {
       subtitleLabel: _subtitlePreference,
       voice: _voice,
       audioQuality: _audioQuality,
-      audioOnly: _foregroundAudioOnly,
     );
     _checkpoints[owner] = checkpoint;
     if (_settings.navigationMode != WorkspaceNavigationMode.multipleTabs) {
@@ -751,10 +754,6 @@ class PlaybackSession extends ChangeNotifier {
       title: title,
       voice: restored?.voice ?? const PlaybackVoice.original(),
       audioQuality: restored?.audioQuality,
-      audioOnly: nextPlaying != null
-          ? _foregroundAudioOnly
-          : restored?.audioOnly ??
-                (sameOwner && sameKind && _foregroundAudioOnly),
     );
   }
 
@@ -856,7 +855,6 @@ class PlaybackSession extends ChangeNotifier {
     AudioQualityPreference? audioQuality,
     int? liveLine,
     LiveStreamPreference? liveStream,
-    bool? audioOnly,
   }) => _open(
     video,
     selected,
@@ -872,7 +870,6 @@ class PlaybackSession extends ChangeNotifier {
     audioQuality: audioQuality,
     liveLine: liveLine,
     liveStream: liveStream,
-    audioOnly: audioOnly,
   );
 
   Future<void> _open(
@@ -890,14 +887,14 @@ class PlaybackSession extends ChangeNotifier {
     AudioQualityPreference? audioQuality,
     int? liveLine,
     LiveStreamPreference? liveStream,
-    bool? audioOnly,
     bool allowColorFallback = true,
     Duration? startupBudget,
   }) async {
     if (_disposed || _closing) return;
     if (target == null && (video == null || selected == null)) return;
     if (!force &&
-        (audioOnly == null || audioOnly == _audioOnly) &&
+        _audioOnly ==
+            (_listeningMode.enabled && target is! LivePlaybackTarget) &&
         detail?.summary.id == video?.summary.id &&
         part?.cid == selected?.cid &&
         contentTarget == target &&
@@ -914,9 +911,9 @@ class PlaybackSession extends ChangeNotifier {
       _remainingRecoveryBudget =
           startupBudget ?? _PlaybackStartupRecovery.totalBudget;
     }
-    _foregroundAudioOnly = audioOnly ?? _foregroundAudioOnly;
     _allowColorFallback = allowColorFallback;
-    final requestedAudioOnly = _foregroundAudioOnly;
+    final requestedAudioOnly =
+        _listeningMode.enabled && target is! LivePlaybackTarget;
     _audioOnly = requestedAudioOnly;
     if (target is LivePlaybackTarget) sleepTimer.cancel();
     sleepTimer.checkDeadline();
@@ -1433,7 +1430,6 @@ class PlaybackSession extends ChangeNotifier {
             title: title,
             voice: _voice,
             audioQuality: requestedAudioQuality,
-            audioOnly: requestedAudioOnly,
             allowColorFallback: false,
             startupBudget:
                 preparingRecovery?.totalRemaining ?? _remainingRecoveryBudget,
@@ -2866,11 +2862,23 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> setAudioOnly(bool enabled) async {
     if (_disposed ||
         _closing ||
-        enabled == _foregroundAudioOnly ||
+        enabled == _listeningMode.enabled ||
         (enabled && (!canListen || _resolving))) {
       return;
     }
-    _foregroundAudioOnly = enabled;
+    await _listeningMode.select(enabled);
+  }
+
+  Future<void> _applyListeningMode() async {
+    if (_disposed ||
+        _closing ||
+        _sourceCancellation?.isCancelled != false ||
+        !sourceMatchesAccount ||
+        isLive ||
+        _audioOnly == _listeningMode.enabled ||
+        (contentTarget == null && (detail == null || part == null))) {
+      return;
+    }
     await open(
       detail,
       part,
@@ -2878,7 +2886,6 @@ class PlaybackSession extends ChangeNotifier {
       title: contentTitle,
       quality: _quality,
       force: true,
-      audioOnly: enabled,
       position: media == null ? _openingPosition : snapshots.value.position,
       rate:
           _temporaryRateOriginal ??
@@ -2993,7 +3000,6 @@ class PlaybackSession extends ChangeNotifier {
     _audioRecovery = null;
     _audioOnly = false;
     _audioQuality = null;
-    _foregroundAudioOnly = false;
     _nextSourceIntent = null;
     if (clearCheckpoints) {
       _checkpoints.clear();
@@ -3048,6 +3054,7 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> close() async {
     if (_disposed || _closing) return;
     _closing = true;
+    _listeningMode.removeListener(_applyListeningMode);
     Object? firstError;
     StackTrace? firstStack;
     Future<void> attempt(Future<void> Function() action) async {
@@ -3143,7 +3150,6 @@ final class _PlaybackCheckpoint {
     this.target,
     this.voice = const PlaybackVoice.original(),
     this.audioQuality,
-    this.audioOnly = false,
   });
   final VideoId? videoId;
   final String? cid;
@@ -3160,7 +3166,6 @@ final class _PlaybackCheckpoint {
   final String? subtitleLabel;
   final PlaybackVoice voice;
   final AudioQualityPreference? audioQuality;
-  final bool audioOnly;
 }
 
 String sponsorCategoryLabel(String category) => switch (category) {

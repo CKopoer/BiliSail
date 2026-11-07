@@ -8,6 +8,7 @@ import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/application/playback_listening_mode.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/audio_playback_view.dart';
@@ -38,20 +39,13 @@ void main() {
   late _Engine engine;
   late _Repository repository;
   late PlaybackSession session;
+  late PlaybackListeningMode listeningMode;
 
   setUp(() {
     engine = _Engine();
     repository = _Repository();
-    session = PlaybackSession(
-      engine: engine,
-      repository: repository,
-      contentRepository: _Content(repository),
-      progress: _Progress(),
-      accountScope: () => 'guest',
-    );
-    session.configureSettings(
-      AppSettings(resumePlayback: false, autoPlay: true),
-    );
+    listeningMode = PlaybackListeningMode();
+    session = _session(engine, repository, listeningMode);
   });
   tearDown(() => session.close());
 
@@ -317,54 +311,197 @@ void main() {
     },
   );
 
+  test('navigation and next parts follow the global choice instead of old checkpoints', () async {
+    final first = Object(), second = Object();
+    session.attach(first);
+    session.attach(second);
+    await session.activate(first, _detail, _part);
+    await session.setAudioOnly(true);
+    await session.activate(
+      first,
+      _detail,
+      const VideoPart(
+        cid: 'two',
+        page: 2,
+        title: '第二集',
+        duration: Duration(minutes: 10),
+      ),
+    );
+    expect(session.audioOnly, isTrue);
+    await session.activate(
+      second,
+      const VideoDetail(
+        summary: VideoSummary(
+          id: VideoId('BV1other12345'),
+          title: '其他视频',
+          coverUrl: '',
+          author: 'UP',
+          duration: Duration(minutes: 10),
+        ),
+        description: '',
+        parts: [_part],
+      ),
+      _part,
+    );
+    expect(session.audioOnly, isTrue);
+    await session.setAudioOnly(false);
+    await session.activate(
+      first,
+      _detail,
+      const VideoPart(
+        cid: 'two',
+        page: 2,
+        title: '第二集',
+        duration: Duration(minutes: 10),
+      ),
+    );
+    expect(session.audioOnly, isFalse);
+    await session.stop();
+    expect(session.audioOnly, isFalse);
+  });
+
+  test('listening synchronizes existing and newly created sessions', () async {
+    final secondEngine = _Engine();
+    final second = _session(secondEngine, _Repository(), listeningMode);
+    addTearDown(second.close);
+    await session.open(_detail, _part);
+    await second.open(
+      _detail,
+      _part,
+      target: const PgcPlaybackTarget('42', cid: 'one'),
+    );
+    await session.seek(const Duration(seconds: 35));
+    await second.seek(const Duration(seconds: 65));
+    await second.pause();
+    await second.setRate(1.5);
+    await second.setVolume(31);
+    await session.setAudioOnly(true);
+    expect(second.audioOnly, isTrue);
+    expect(secondEngine.sources.last, isA<ProgressiveSource>());
+    expect(secondEngine.currentSnapshot.position, const Duration(seconds: 65));
+    expect(secondEngine.currentSnapshot.desiredPlaying, isFalse);
+    expect(secondEngine.currentSnapshot.rate, 1.5);
+    expect(secondEngine.currentSnapshot.volume, 31);
+    expect(engine.currentSnapshot.position, const Duration(seconds: 35));
+    expect(engine.currentSnapshot.desiredPlaying, isTrue);
+
+    final thirdEngine = _Engine();
+    final third = _session(thirdEngine, _Repository(), listeningMode);
+    addTearDown(third.close);
+    await third.open(
+      _detail,
+      _part,
+      target: const OfflinePlaybackTarget('local'),
+    );
+    expect(third.audioOnly, isTrue);
+    expect(thirdEngine.sources.last, isA<ProgressiveSource>());
+    await second.setAudioOnly(false);
+    for (final current in [session, second, third]) {
+      expect(current.audioOnly, isFalse);
+    }
+    for (final current in [engine, secondEngine, thirdEngine]) {
+      expect(current.sources.last, isA<DashPairSource>());
+    }
+  });
+
   test(
-    'navigation restores listening per owner and next part inherits it',
+    'stop and close retain the choice, while a new run starts in video',
     () async {
-      final first = Object(), second = Object();
-      session.attach(first);
-      session.attach(second);
-      await session.activate(first, _detail, _part);
+      await session.open(_detail, _part);
       await session.setAudioOnly(true);
-      await session.activate(
-        first,
-        _detail,
-        const VideoPart(
-          cid: 'two',
-          page: 2,
-          title: '第二集',
-          duration: Duration(minutes: 10),
-        ),
-      );
-      expect(session.audioOnly, isTrue);
-      await session.activate(
-        second,
-        const VideoDetail(
-          summary: VideoSummary(
-            id: VideoId('BV1other12345'),
-            title: '其他视频',
-            coverUrl: '',
-            author: 'UP',
-            duration: Duration(minutes: 10),
-          ),
-          description: '',
-          parts: [_part],
-        ),
-        _part,
-      );
-      expect(session.audioOnly, isFalse);
-      await session.activate(
-        first,
-        _detail,
-        const VideoPart(
-          cid: 'two',
-          page: 2,
-          title: '第二集',
-          duration: Duration(minutes: 10),
-        ),
-      );
-      expect(session.audioOnly, isTrue);
       await session.stop();
+      final stoppedOpens = engine.sources.length;
+      await listeningMode.select(false);
+      await listeningMode.select(true);
+      expect(engine.sources.length, stoppedOpens);
+      await session.open(_detail, _part);
+      expect(session.audioOnly, isTrue);
+      await session.close();
+      final opens = engine.sources.length;
+      final next = _session(_Engine(), _Repository(), listeningMode);
+      addTearDown(next.close);
+      await next.open(_detail, _part);
+      expect(next.audioOnly, isTrue);
+      await next.setAudioOnly(false);
+      expect(engine.sources.length, opens);
+
+      // An independent application lifetime gets its own default mode.
+      await next.setAudioOnly(true);
+      final restarted = _session(
+        _Engine(),
+        _Repository(),
+        PlaybackListeningMode(),
+      );
+      addTearDown(restarted.close);
+      await restarted.open(_detail, _part);
+      expect(restarted.audioOnly, isFalse);
+    },
+  );
+
+  test(
+    'late listening responses cannot replace a newer global video choice',
+    () async {
+      final otherRepository = _Repository();
+      final otherEngine = _Engine();
+      final other = _session(otherEngine, otherRepository, listeningMode);
+      addTearDown(other.close);
+      await session.open(_detail, _part);
+      await other.open(_detail, _part);
+      final first = repository.pending = Completer<PlaybackMedia>();
+      final second = otherRepository.pending = Completer<PlaybackMedia>();
+      final listening = session.setAudioOnly(true);
+      await Future<void>.delayed(Duration.zero);
+      await other.setAudioOnly(false);
+      first.complete(repository.media);
+      second.complete(otherRepository.media);
+      await listening;
+      for (final current in [session, other]) {
+        expect(current.audioOnly, isFalse);
+        expect(current.error, isNull);
+      }
+      expect(engine.sources.whereType<ProgressiveSource>(), isEmpty);
+      expect(otherEngine.sources.whereType<ProgressiveSource>(), isEmpty);
+    },
+  );
+
+  test('global choices cannot reopen a source from an old account', () async {
+    var scope = 'guest';
+    final oldEngine = _Engine();
+    final oldRepository = _Repository();
+    final old = PlaybackSession(
+      engine: oldEngine,
+      repository: oldRepository,
+      progress: _Progress(),
+      accountScope: () => scope,
+      listeningMode: listeningMode,
+    );
+    addTearDown(old.close);
+    await old.open(_detail, _part);
+    final opens = oldEngine.sources.length;
+    scope = 'next';
+    await session.open(_detail, _part);
+    await session.setAudioOnly(true);
+    expect(oldEngine.sources.length, opens);
+    expect(old.audioOnly, isFalse);
+    await old.stop();
+    await old.open(_detail, _part);
+    expect(old.audioOnly, isTrue);
+  });
+
+  test(
+    'live playback preserves the global choice for the next video',
+    () async {
+      await session.open(_detail, _part);
+      await session.setAudioOnly(true);
+      repository.media = _media(kind: PlaybackMediaKind.liveHls, audio: false);
+      await session.open(null, null, target: const LivePlaybackTarget('1'));
+      expect(session.error, isNull);
       expect(session.audioOnly, isFalse);
+      expect(listeningMode.enabled, isTrue);
+      expect(engine.sources.last, isA<ManifestSource>());
+      repository.media = _media();
+      await session.open(_detail, _part);
+      expect(session.audioOnly, isTrue);
     },
   );
 
@@ -598,6 +735,19 @@ void main() {
     },
   );
 }
+
+PlaybackSession _session(
+  _Engine engine,
+  _Repository repository,
+  PlaybackListeningMode listeningMode,
+) => PlaybackSession(
+  engine: engine,
+  repository: repository,
+  contentRepository: _Content(repository),
+  progress: _Progress(),
+  accountScope: () => 'guest',
+  listeningMode: listeningMode,
+)..configureSettings(AppSettings(resumePlayback: false, autoPlay: true));
 
 const _part = VideoPart(
   cid: 'one',

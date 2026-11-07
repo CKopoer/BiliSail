@@ -4,6 +4,7 @@ import 'package:bili_player/bili_player.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/application/playback_listening_mode.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter/material.dart';
@@ -21,12 +22,14 @@ void main() {
         (tester) async {
           initializePlayerBackend();
           final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR']!;
+          final listeningMode = PlaybackListeningMode();
           final engine = ConfigurablePlayerEngine(
             createEngine: () async =>
                 backend == 'fvp' ? FvpEngine() : MediaKitEngine(),
           );
           final session = PlaybackSession(
             engine: engine,
+            listeningMode: listeningMode,
             repository: _Repository(Directory(fixtures).uri),
             progress: _Progress(),
             accountScope: () => 'guest',
@@ -84,6 +87,40 @@ void main() {
               if (!paused) {
                 expect(engine.currentSnapshot.position, greaterThan(before));
               }
+            }
+            final nextEngine = ConfigurablePlayerEngine(
+              createEngine: () async =>
+                  backend == 'fvp' ? FvpEngine() : MediaKitEngine(),
+            );
+            final next = PlaybackSession(
+              engine: nextEngine,
+              listeningMode: listeningMode,
+              repository: _Repository(Directory(fixtures).uri),
+              progress: _Progress(),
+              accountScope: () => 'guest',
+            );
+            try {
+              await _withFrames(
+                tester,
+                next.open(
+                  _detail,
+                  _part,
+                  desiredPlaying: false,
+                  position: const Duration(seconds: 2),
+                  volume: 0,
+                ),
+              );
+              await tester.pump(const Duration(milliseconds: 350));
+              expect(next.error, isNull);
+              expect(next.audioOnly, isTrue);
+              final info = await nextEngine.inspectPlaybackInformation();
+              expect(info?.diagnostics?.hasDecodedVideo, isFalse);
+              expect(
+                info?.diagnostics?.position.inMilliseconds,
+                closeTo(2000, 250),
+              );
+            } finally {
+              await _withFrames(tester, next.close());
             }
             if (paused) {
               // A confirmed paused position must also survive a seek to zero,
