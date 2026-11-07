@@ -4,7 +4,9 @@
 
 ## 使用与架构
 
-设置 → 播放 → 视频编解码 → 播放后端选择 `fsplayer（实验性）`，仅在 Android／iOS／macOS 显示。保存后下次打开或重新加载源生效，当前会话不替换。失败明确报错，不隐式换后端；默认、非法值回退与恢复默认仍为 media_kit，不改数据库表。
+2026-11-08：当前版本暂不对外开放 fsplayer，设置 → 播放 → 视频编解码 → 播放后端仅显示 media_kit 和 fvp，各平台均隐藏 `fsplayer（实验性）` 选项。后端实现及已有 fsplayer 设置保留，旧配置仍可切换到其他后端。
+
+后端设置保存后下次打开或重新加载源生效，当前会话不替换。失败明确报错，不隐式换后端；默认、非法值回退与恢复默认仍为 media_kit，不改数据库表。
 
 `bili_player` 提供三平台插件与 `FsPlayerEngine`，沿用 `PlayerEngine`／`VideoOutput`、现有 `PlaybackSession` 和 Flutter 弹幕、字幕、手势及控件。fvp／fsplayer 共用有首帧门槛的 `NativeTextureVideoOutput`。业务身份和账号留在主应用。
 

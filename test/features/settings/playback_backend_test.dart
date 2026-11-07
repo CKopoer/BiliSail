@@ -107,6 +107,11 @@ void main() {
       );
       expect(directChip().selected, isTrue);
       expect(directChip().onSelected, isNull);
+      expect(find.text('fsplayer（实验性）'), findsNothing);
+      expect(
+        repository.value.playbackBackend,
+        PlaybackBackendPreference.fsplayer,
+      );
       expect(find.textContaining('fsplayer 使用自身的视频输出'), findsOneWidget);
       await tester.ensureVisible(find.text('fvp（实验性）'));
       await tester.pumpAndSettle();
@@ -271,6 +276,8 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
+    expect(find.text('media_kit（默认）'), findsOneWidget);
+    expect(find.text('fsplayer（实验性）'), findsNothing);
     await tester.tap(fvp);
     await tester.pumpAndSettle();
     expect(repository.value.playbackBackend, PlaybackBackendPreference.fvp);
@@ -282,7 +289,7 @@ void main() {
       find.ancestor(of: fvp, matching: find.byType(ChoiceChip)),
     );
     expect(chip.selected, true);
-  });
+  }, variant: TargetPlatformVariant.all());
   test('backend defaults, migration, persistence and reset retain unrelated settings', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);

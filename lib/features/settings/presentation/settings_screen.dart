@@ -653,15 +653,9 @@ final class _SettingsCategoryPageState
                                 : '使用所选后端进行软件解码，可能增加 CPU 占用和耗电。',
                             style: const TextStyle(fontSize: 12),
                           ),
-                          _choices('播放后端', s.playbackBackend, {
+                          _choices('播放后端', s.playbackBackend, const {
                             PlaybackBackendPreference.mediaKit: 'media_kit（默认）',
                             PlaybackBackendPreference.fvp: 'fvp（实验性）',
-                            if (defaultTargetPlatform ==
-                                    TargetPlatform.android ||
-                                defaultTargetPlatform == TargetPlatform.iOS ||
-                                defaultTargetPlatform == TargetPlatform.macOS)
-                              PlaybackBackendPreference.fsplayer:
-                                  'fsplayer（实验性）',
                           }, controller.setPlaybackBackend),
                           if (defaultTargetPlatform == TargetPlatform.android &&
                               s.playbackBackend ==
