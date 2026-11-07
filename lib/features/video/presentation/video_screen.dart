@@ -374,11 +374,11 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                 ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 4),
                           if (video.summary.access.kind !=
                               VideoAccessKind.normal) ...[
                             VideoAccessNotice(video: video.summary),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 4),
                           ],
                           if (widget.actionsBuilder != null)
                             widget.actionsBuilder!(context, video, selected),
@@ -388,7 +388,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 4),
                                 SelectionArea(
                                   child: Text(
                                     video.description.isEmpty
@@ -407,7 +407,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                               ],
                             ),
                           ),
-                          _separator('intro'),
+                          _separator('intro', height: 16),
                           if (video.parts.length > 1 ||
                               video.collection != null) ...[
                             VideoCollectionPanel(
@@ -971,9 +971,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     }
   }
 
-  Widget _separator(String section) => Divider(
+  Widget _separator(String section, {double height = 36}) => Divider(
     key: ValueKey('video-info-separator-$section'),
-    height: 36,
+    height: height,
     thickness: 0.7,
     color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.55),
   );

@@ -206,10 +206,11 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
           ? Theme.of(context).colorScheme.primary
           : Theme.of(context).colorScheme.onSurfaceVariant,
       iconSize: 22,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       icon: icon,
     );
     return SizedBox(
-      height: kMinInteractiveDimension,
+      height: 36,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
