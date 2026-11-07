@@ -37,15 +37,17 @@ Future<void> main() async {
     }
     await engine.play();
     await Future<void>.delayed(const Duration(seconds: 2));
-    if (engine.currentSnapshot.position < const Duration(seconds: 1))
+    if (engine.currentSnapshot.position < const Duration(seconds: 1)) {
       throw StateError('Clock stalled');
+    }
     await engine.setRate(2);
     await engine.seek(const Duration(seconds: 5));
     await engine.pause();
     await engine.seek(const Duration(seconds: 2));
     if (engine.currentSnapshot.desiredPlaying ||
-        engine.currentSnapshot.isSeeking)
+        engine.currentSnapshot.isSeeking) {
       throw StateError('Paused seek');
+    }
     await engine.stop();
     await engine.open(
       ProgressiveSource(track('audio.m4a'), isAudioOnly: true),
