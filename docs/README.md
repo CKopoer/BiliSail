@@ -47,6 +47,7 @@
 | [搜索历史与热搜](validation/search-discovery-2026-11-01.md) | 居中搜索动效、宽窄屏入口、账号历史存储、热搜协议与自动验证边界 |
 | [密码、短信与移动登录窗口](validation/password-sms-login.md) | 三种 Web 登录、交互验证码、安全会话与小屏/键盘布局 |
 | [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |
+| [播放器实时播放信息](validation/player-information-tab-2026-11-07.md) | 设置内实时参数、当前后端、解码／输出／缓存／同步观测与采样生命周期 |
 | [缓冲充足时的播放冻结检测](validation/buffered-playback-stall-2026-11-06.md) | #83 非阻塞时钟采样、静默停滞、抖动保护与恢复验证 |
 | [缓冲停帧与误恢复修复](validation/buffering-frame-retention-2026-11-07.md) | 缓存／音频时钟落后的误判、最后一帧保持与连续网络 seek 验证 |
 | [Android 视频灰黑首帧](validation/android-video-first-frame-2026-11-03.md) | Surface 初始尺寸、首帧通知、加载纹理过滤与硬解／软件解码真机回归 |

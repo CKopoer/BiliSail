@@ -1,13 +1,18 @@
 import 'dart:async';
 
 import 'player_contract.dart';
+import 'player_playback_information.dart';
 import 'switching_video_output.dart';
 import 'video_output.dart';
 
 /// Resolves the saved backend on each open, after the old runtime is released.
 /// A settings change never replaces the runtime of an already playing source.
 final class ConfigurablePlayerEngine
-    implements PlayerEngine, VideoOutputSource, AudioGainControl {
+    implements
+        PlayerEngine,
+        VideoOutputSource,
+        AudioGainControl,
+        PlayerInformationSource {
   ConfigurablePlayerEngine({required this.createEngine});
 
   final Future<PlayerEngine> Function() createEngine;
@@ -41,6 +46,22 @@ final class ConfigurablePlayerEngine
   void _publish(PlaybackSnapshot snapshot) {
     _snapshot = snapshot;
     _snapshots.add(snapshot);
+  }
+
+  @override
+  Future<PlayerPlaybackInformation?> inspectPlaybackInformation() async {
+    final engine = _engine;
+    final generation = _generation;
+    final source = switch (engine) {
+      PlayerInformationSource source => source,
+      _ => null,
+    };
+    if (_disposed || source == null) return null;
+    final information = await source.inspectPlaybackInformation();
+    if (_disposed || generation != _generation || !identical(engine, _engine)) {
+      return null;
+    }
+    return information?.withGeneration(generation);
   }
 
   Future<void> _release() async {

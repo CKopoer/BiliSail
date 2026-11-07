@@ -6,6 +6,8 @@ import 'package:media_kit/media_kit.dart' as mk;
 import 'player_contract.dart';
 import 'android_media_leases.dart';
 import 'player_diagnostics.dart';
+import 'player_playback_information.dart';
+import 'native_playback_information.dart';
 import 'native_readiness.dart';
 import 'native_media_options.dart';
 import 'native_player_properties.dart';
@@ -26,7 +28,11 @@ void initializePlayerBackend() => mk.MediaKit.ensureInitialized();
 /// Owns at most one native Player. Each source change replaces it, so events
 /// retained by the previous backend cannot enter the next source generation.
 final class MediaKitEngine
-    implements PlayerEngine, VideoOutputSource, AudioGainControl {
+    implements
+        PlayerEngine,
+        VideoOutputSource,
+        AudioGainControl,
+        PlayerInformationSource {
   MediaKitEngine({
     this.onDiagnostic,
     bool? experimentalVideoFrameQueue,
@@ -194,6 +200,22 @@ final class MediaKitEngine
       videoCodec: videoCodec,
       audioCodec: audioCodec,
     );
+  }
+
+  @override
+  Future<PlayerPlaybackInformation?> inspectPlaybackInformation() async {
+    final player = _player;
+    final generation = _generation;
+    if (player == null || _disposed) return null;
+    final information = await sampleNativePlaybackInformation(
+      read: player.getPropertyAsync,
+      diagnostics: inspectDiagnostics(),
+      audioGainDb: appliedAudioGainDb,
+    );
+    if (_disposed || generation != _generation || !identical(player, _player)) {
+      return null;
+    }
+    return information;
   }
 
   /// Actual native hardware decoder, e.g. d3d11va or "no" for software.

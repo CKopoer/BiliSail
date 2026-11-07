@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-final class _Engine extends Fake implements PlayerEngine {
+final class _Engine extends Fake
+    implements PlayerEngine, PlayerInformationSource {
   final events = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   final errors = StreamController<PlayerFailure>.broadcast(sync: true);
   bool disposed = false;
@@ -11,6 +12,11 @@ final class _Engine extends Fake implements PlayerEngine {
   bool failRelease = false;
   bool failStop = false;
   Completer<void>? playGate;
+  Completer<PlayerPlaybackInformation?>? informationGate;
+  @override
+  Future<PlayerPlaybackInformation?> inspectPlaybackInformation() async =>
+      informationGate?.future ??
+      const PlayerPlaybackInformation(generation: 1, backend: 'test');
   @override
   Future<void> play() async => await playGate?.future;
   @override
@@ -54,6 +60,49 @@ final class _Engine extends Fake implements PlayerEngine {
 void main() {
   final source = ProgressiveSource(
     MediaTrack(uri: Uri.file('video.mp4'), requestPolicy: MediaRequestPolicy()),
+  );
+  test(
+    'information uses the wrapper generation after switching backends',
+    () async {
+      final child = _Engine();
+      final engine = ConfigurablePlayerEngine(createEngine: () async => child);
+      await engine.open(source, const OpenOptions());
+      await engine.stop();
+      await engine.open(source, const OpenOptions());
+      final info = await engine.inspectPlaybackInformation();
+      expect(info?.backend, 'test');
+      expect(info?.generation, engine.currentSnapshot.generation);
+      expect(info?.generation, greaterThan(1));
+      await engine.dispose();
+      await child.closeStreams();
+    },
+  );
+  test(
+    'pending information cannot survive a backend replacement or disposal',
+    () async {
+      final first = _Engine()
+        ..informationGate = Completer<PlayerPlaybackInformation?>();
+      final second = _Engine();
+      var child = first;
+      final engine = ConfigurablePlayerEngine(createEngine: () async => child);
+      await engine.open(source, const OpenOptions());
+      final old = engine.inspectPlaybackInformation();
+      child = second;
+      await engine.open(source, const OpenOptions());
+      first.informationGate!.complete(
+        const PlayerPlaybackInformation(generation: 1, backend: 'old'),
+      );
+      expect(await old, isNull);
+      second.informationGate = Completer<PlayerPlaybackInformation?>();
+      final closing = engine.inspectPlaybackInformation();
+      await engine.dispose();
+      second.informationGate!.complete(
+        const PlayerPlaybackInformation(generation: 1, backend: 'closed'),
+      );
+      expect(await closing, isNull);
+      await first.closeStreams();
+      await second.closeStreams();
+    },
   );
   test(
     'failed stop still reaches confirmed disposal before switching',

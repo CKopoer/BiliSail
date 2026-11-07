@@ -9,16 +9,22 @@ import '../../../shared/ui/danmaku_settings_controls.dart';
 import '../../../shared/ui/player_controls_mode_setting.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../settings/domain/app_settings.dart';
+import '../application/playback_session.dart';
+import 'player_information_tab.dart';
 
-Future<void> showPlayerSettings(BuildContext context, {int tab = 0}) =>
-    showAppDialog<void>(
-      context: context,
-      builder: (_) => _PlayerSettingsDialog(tab: tab),
-    );
+Future<void> showPlayerSettings(
+  BuildContext context, {
+  int tab = 0,
+  PlaybackSession? session,
+}) => showAppDialog<void>(
+  context: context,
+  builder: (_) => _PlayerSettingsDialog(tab: tab, session: session),
+);
 
 class _PlayerSettingsDialog extends ConsumerStatefulWidget {
-  const _PlayerSettingsDialog({required this.tab});
+  const _PlayerSettingsDialog({required this.tab, this.session});
   final int tab;
+  final PlaybackSession? session;
   @override
   ConsumerState<_PlayerSettingsDialog> createState() =>
       _PlayerSettingsDialogState();
@@ -86,7 +92,7 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
     }
     final s = settings;
     return DefaultTabController(
-      length: 4,
+      length: 5,
       initialIndex: widget.tab,
       child: Dialog(
         child: SizedBox(
@@ -117,6 +123,7 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                   Tab(text: '弹幕'),
                   Tab(text: '字幕'),
                   Tab(text: '空降助手'),
+                  Tab(text: '实时播放信息'),
                 ],
               ),
               if (_error != null)
@@ -491,6 +498,7 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                         ),
                       ],
                     ),
+                    PlayerInformationTab(session: widget.session),
                   ],
                 ),
               ),

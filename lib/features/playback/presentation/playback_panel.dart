@@ -1152,7 +1152,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     widget.shortcuts.cancel();
     _onControlsMenuChanged(true);
     try {
-      await showPlayerSettings(context, tab: tab);
+      await showPlayerSettings(context, tab: tab, session: widget.session);
     } finally {
       widget.shortcuts.cancel();
       _onControlsMenuChanged(false);

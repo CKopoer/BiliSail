@@ -8,11 +8,16 @@ import 'native_audio_gain.dart';
 import 'native_playback_health.dart';
 import 'player_contract.dart';
 import 'player_diagnostics.dart';
+import 'player_playback_information.dart';
 import 'video_output.dart';
 
 /// Experimental single-clock MDK runtime. Every source owns one native player.
 final class FvpEngine
-    implements PlayerEngine, VideoOutputSource, AudioGainControl {
+    implements
+        PlayerEngine,
+        VideoOutputSource,
+        AudioGainControl,
+        PlayerInformationSource {
   FvpEngine({this.onDiagnostic, Future<FvpPlayerPort> Function()? createPlayer})
     : _createPlayer = createPlayer ?? createFvpNativePlayer;
 
@@ -65,6 +70,16 @@ final class FvpEngine
   void _diagnose(PlayerDiagnosticKind kind) => onDiagnostic?.call(
     PlayerDiagnosticEvent(kind: kind, snapshot: _snapshot),
   );
+
+  @override
+  Future<PlayerPlaybackInformation?> inspectPlaybackInformation() async =>
+      _disposed || _player == null
+      ? null
+      : PlayerPlaybackInformation(
+          generation: _generation,
+          backend: 'fvp / MDK',
+          audioGainDb: _gainDb,
+        );
 
   Future<void> _enqueue(Future<void> Function() action) {
     final next = _commands.then((_) => action());
