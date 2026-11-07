@@ -5,6 +5,21 @@ import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('replacement loads require their own playback restart', () async {
+    final state = NativeLoadState();
+    addTearDown(state.dispose);
+    state.started(1);
+    state.playbackRestarted();
+    final previous = state.loadCount;
+    state.started(2);
+    expect(state.loadCount, greaterThan(previous));
+    expect(state.restartedLoadCount, lessThan(state.loadCount));
+    state.playbackRestarted();
+    expect(state.restartedLoadCount, state.loadCount);
+    await state.dispose();
+    state.started(3);
+    expect(state.loadCount, 2);
+  });
   test('seek readiness requires a new seek and its playback restart', () async {
     final state = NativeLoadState();
     addTearDown(state.dispose);

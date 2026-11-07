@@ -20,6 +20,9 @@ void main() {
     'pauseRequested',
     'stop',
     'superseded',
+    'supersededAgain',
+    'supersededAgainPaused',
+    'supersededAgainStopped',
   ]) {
     final playing = scenario != 'paused';
     testWidgets(
@@ -31,6 +34,8 @@ void main() {
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         final blocked = Completer<void>();
         final resumeVideo = Completer<void>();
+        final secondBlocked = Completer<void>();
+        var blockedRequests = 0;
         var delayVideo = false;
         server.listen((request) async {
           final range = request.headers.value(HttpHeaders.rangeHeader);
@@ -48,6 +53,8 @@ void main() {
             );
           }
           if (delayVideo) {
+            blockedRequests++;
+            if (blockedRequests == 2) secondBlocked.complete();
             if (!blocked.isCompleted) blocked.complete();
             await resumeVideo.future;
           }
@@ -146,24 +153,67 @@ void main() {
             expect(failures, isEmpty);
             return;
           }
-          final Future<void>? next = switch (scenario) {
+          if (scenario == 'superseded') delayVideo = false;
+          Future<void>? next = switch (scenario) {
             'immediatePause' => immediatePause,
             'pauseRequested' => engine.pause(),
-            'superseded' => engine.seek(const Duration(seconds: 2)),
+            'superseded' ||
+            'supersededAgain' ||
+            'supersededAgainPaused' ||
+            'supersededAgainStopped' => engine.seek(const Duration(seconds: 2)),
             _ => null,
           };
+          if (scenario.startsWith('supersededAgain')) {
+            await _withFrames(
+              tester,
+              secondBlocked.future.timeout(const Duration(seconds: 3)),
+            );
+            await _pixels(boundaryKey);
+            if (scenario.endsWith('Stopped')) {
+              await _withFrames(tester, engine.stop());
+              await _withFrames(tester, Future.wait([seeking, next!]));
+              expect(engine.currentSnapshot.phase, PlaybackPhase.idle);
+              expect(engine.currentSnapshot.desiredPlaying, false);
+              expect(failures, isEmpty);
+              return;
+            }
+            delayVideo = false;
+            final intermediate = next!;
+            next = Future.wait([
+              intermediate,
+              engine.seek(const Duration(milliseconds: 375)),
+              if (scenario.endsWith('Paused')) engine.pause(),
+            ]);
+          }
+          if (scenario.startsWith('superseded')) {
+            // The old response stays blocked while the new target prepares.
+            await _withFrames(
+              tester,
+              seeking.timeout(const Duration(milliseconds: 500)),
+            );
+            await _withFrames(
+              tester,
+              next!.timeout(const Duration(seconds: 3)),
+            );
+            expect(resumeVideo.isCompleted, false);
+          }
           resumeVideo.complete();
           await _withFrames(tester, Future.wait([seeking, ?next]));
           final shouldPlay =
               playing &&
               scenario != 'pauseRequested' &&
-              scenario != 'immediatePause';
+              scenario != 'immediatePause' &&
+              !scenario.endsWith('Paused');
           expect(engine.currentSnapshot.isSeeking, isFalse);
           expect(engine.currentSnapshot.desiredPlaying, shouldPlay);
           expect(engine.currentSnapshot.generation, generation);
           expect(failures, isEmpty);
           expect(native.playing, shouldPlay);
-          final target = scenario == 'superseded' ? 2000 : 9375;
+          final target = switch (scenario) {
+            'superseded' => 2000,
+            'supersededAgain' || 'supersededAgainPaused' => 375,
+            _ => 9375,
+          };
           expect(
             (engine.currentSnapshot.position - Duration(milliseconds: target))
                 .abs(),
@@ -182,6 +232,7 @@ void main() {
             reason: 'The target video must replace the old frame when audio resumes',
           );
           expect(native.maxPendingSeeks, 1);
+          expect(native.textureCreations, 1);
           expect(tester.takeException(), isNull);
         } finally {
           if (!resumeVideo.isCompleted) resumeVideo.complete();
@@ -219,11 +270,21 @@ Future<List<int>> _pixels(GlobalKey key) async {
 
 Future<void> _withFrames(WidgetTester tester, Future<void> operation) async {
   var done = false;
-  final result = operation.whenComplete(() => done = true);
+  Object? failure;
+  StackTrace? stack;
+  final result = operation.then<void>(
+    (_) => done = true,
+    onError: (Object error, StackTrace trace) {
+      failure = error;
+      stack = trace;
+      done = true;
+    },
+  );
   while (!done) {
     await tester.pump(const Duration(milliseconds: 20));
   }
   await result;
+  if (failure != null) Error.throwWithStackTrace(failure!, stack!);
 }
 
 // Observe the real port's commands without replacing MDK decoding or its seek
@@ -234,6 +295,7 @@ final class _ObservedPlayer implements FvpPlayerPort {
   bool playing = false;
   int pendingSeeks = 0;
   int maxPendingSeeks = 0;
+  int textureCreations = 0;
   @override
   Stream<FvpNativeStatus> get statuses => delegate.statuses;
   @override
@@ -257,7 +319,11 @@ final class _ObservedPlayer implements FvpPlayerPort {
     isLive: isLive,
   );
   @override
-  Future<int> createTexture() => delegate.createTexture();
+  Future<int> createTexture() {
+    textureCreations++;
+    return delegate.createTexture();
+  }
+
   @override
   Future<bool> confirmVideoFrame() => delegate.confirmVideoFrame();
   @override
@@ -290,6 +356,9 @@ final class _ObservedPlayer implements FvpPlayerPort {
       pendingSeeks--;
     }
   }
+
+  @override
+  void cancelSeek() => delegate.cancelSeek();
 
   @override
   void setRate(double rate) => delegate.setRate(rate);

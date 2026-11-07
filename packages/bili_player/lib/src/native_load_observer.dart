@@ -23,9 +23,12 @@ final class NativeLoadState {
   String? videoOutputMatrix;
   String? videoOutputDriver;
   int _seekCount = 0, _restartedSeekCount = 0;
+  int _loadCount = 0, _restartedLoadCount = 0;
 
   int get seekCount => _seekCount;
   int get restartedSeekCount => _restartedSeekCount;
+  int get loadCount => _loadCount;
+  int get restartedLoadCount => _restartedLoadCount;
 
   void seekStarted() {
     if (_disposed) return;
@@ -37,6 +40,7 @@ final class NativeLoadState {
   void playbackRestarted() {
     if (_disposed) return;
     _restartedSeekCount = _seekCount;
+    _restartedLoadCount = _loadCount;
     _changes.add(null);
   }
 
@@ -78,7 +82,11 @@ final class NativeLoadState {
   }
 
   void started(int entryId) {
-    if (!_disposed) _entryId = entryId;
+    if (_disposed) return;
+    _entryId = entryId;
+    _loadCount++;
+    resetClocks();
+    _changes.add(null);
   }
 
   bool ended({required int entryId, required int reason, required int error}) {

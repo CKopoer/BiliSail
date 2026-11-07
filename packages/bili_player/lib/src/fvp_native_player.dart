@@ -39,6 +39,8 @@ abstract interface class FvpPlayerPort {
   void pause();
   void interrupt();
   Future<int> seek(Duration target);
+  // Cancels only in-flight preparation; the next seek restores this source.
+  void cancelSeek();
   void setRate(double rate);
   void setVolume(double volume, double gainDb);
   Future<void> dispose();
@@ -57,6 +59,7 @@ Future<FvpPlayerPort> createFvpNativePlayer() async {
     await Future<void>.delayed(Duration.zero);
     mdk.setLogHandler((_, _) {});
     mdk.setGlobalOption('logLevel', mdk.LogLevel.off);
+    mdk.setGlobalOption('videoout.clear_on_stop', 0);
   }());
   return _MdkPlayerPort();
 }
@@ -82,6 +85,13 @@ final class _MdkPlayerPort implements FvpPlayerPort {
   Duration _startPosition = Duration.zero;
   VideoDimensions? _dimensions;
   Future<void>? _disposal;
+  Completer<int>? _seekCancelled;
+  Future<void>? _retiringSeek;
+  bool _repreparing = false;
+  int _nativeSeekRevision = 0;
+  String _mediaUri = '';
+  String? _audioUri;
+  bool _silent = false;
 
   void _initializePlayer() {
     _native = mdk.Player();
@@ -97,7 +107,7 @@ final class _MdkPlayerPort implements FvpPlayerPort {
       }
     });
     _statusSubscription = _player.onMediaStatus.listen((event) {
-      if (_closed) return;
+      if (_closed || _repreparing) return;
       final status = event.newValue;
       if (status.test(mdk.MediaStatus.invalid)) {
         if (!_prepared.isCompleted) _prepared.complete(false);
@@ -114,7 +124,7 @@ final class _MdkPlayerPort implements FvpPlayerPort {
       }
     });
     _stateSubscription = _player.onStateChanged.listen((event) {
-      if (_closed) return;
+      if (_closed || _repreparing) return;
       if (event.newValue == mdk.PlaybackState.paused && !_paused.isCompleted) {
         _paused.complete();
       }
@@ -202,7 +212,10 @@ final class _MdkPlayerPort implements FvpPlayerPort {
     setRate(options.rate);
     _startPosition = options.startPosition;
     setVolume(options.volume, options.audioGainDb);
-    _player.media = _uri(media.uri);
+    _mediaUri = _uri(media.uri);
+    _audioUri = audio == null ? null : _uri(audio.uri);
+    _silent = silent;
+    _player.media = _mediaUri;
     _player.activeSubtitleTracks = const [];
     if (silent) _player.activeAudioTracks = const [];
     final result = await _active(_player.prepare());
@@ -286,13 +299,15 @@ final class _MdkPlayerPort implements FvpPlayerPort {
     // Re-apply even when the main player's cached state is already paused:
     // a newly attached external audio pipeline must receive this request too.
     // Keep EOF stopped so replay can prepare it before requesting a pause.
-    if (!_closed && !_ended) {
+    if (!_closed && !_ended && !_repreparing) {
       _native?.state = mdk.PlaybackState.paused;
     }
   }
 
   @override
   void interrupt() {
+    final cancelled = _seekCancelled;
+    if (cancelled != null && !cancelled.isCompleted) cancelled.complete(-2);
     if (!_interrupted.isCompleted) _interrupted.complete();
     _audioProbe?.interrupt();
     if (!_closed) _native?.state = mdk.PlaybackState.stopped;
@@ -300,24 +315,85 @@ final class _MdkPlayerPort implements FvpPlayerPort {
 
   @override
   Future<int> seek(Duration target) async {
-    // MDK releases the decoding pipelines on EOF. A stopped source must be
-    // prepared again; seek alone fails and leaves the old end position intact.
-    if (_ended) {
-      _prepared = Completer<bool>();
-      _paused = Completer<void>();
-      final position = await _active(
-        _player.prepare(position: target.inMilliseconds, flags: _preciseSeek),
+    final revision = ++_nativeSeekRevision;
+    final cancelled = _seekCancelled = Completer<int>();
+    Future<int> prepareTarget() async {
+      await _retiringSeek;
+      if (cancelled.isCompleted) return -2;
+      // MDK releases the decoding pipelines on EOF. Prepare again before the
+      // ordinary seek, whose callback confirms the decoded target frame.
+      if (_ended && !_repreparing) {
+        _prepared = Completer<bool>();
+        _paused = Completer<void>();
+        final position = await _active(
+          _player.prepare(position: target.inMilliseconds, flags: _preciseSeek),
+        );
+        if (cancelled.isCompleted || position < 0) return position;
+        if (!await _active(_prepared.future)) return -1;
+        await _active(_paused.future);
+        _ended = false;
+      }
+      if (_repreparing) {
+        _player.media = _mediaUri;
+        _player.activeSubtitleTracks = const [];
+        if (_silent) _player.activeAudioTracks = const [];
+        final result = await _active(
+          _player.prepare(position: target.inMilliseconds, flags: _preciseSeek),
+        );
+        if (cancelled.isCompleted || result < 0) return result;
+        _ended = false;
+        if (_audioUri case final audio?) {
+          _player.setMedia(audio, mdk.MediaType.audio);
+        }
+        _player.state = mdk.PlaybackState.paused;
+        return _active(
+          _player.seek(position: target.inMilliseconds, flags: _preciseSeek),
+        );
+      }
+      return _active(
+        _player.seek(position: target.inMilliseconds, flags: _preciseSeek),
       );
-      if (position < 0) return position;
-      if (!await _active(_prepared.future)) return -1;
-      await _active(_paused.future);
-      _ended = false;
     }
-    // At zero prepare only confirms loading. Seek also waits for its decoded
-    // target frame, preserving the same readiness barrier as ordinary seeks.
-    return _active(
-      _player.seek(position: target.inMilliseconds, flags: _preciseSeek),
+
+    try {
+      return await _active(Future.any([prepareTarget(), cancelled.future]));
+    } finally {
+      if (revision == _nativeSeekRevision) {
+        _seekCancelled = null;
+        _repreparing = false;
+      }
+    }
+  }
+
+  @override
+  void cancelSeek() {
+    final cancelled = _seekCancelled;
+    if (cancelled == null || cancelled.isCompleted) return;
+    ++_nativeSeekRevision;
+    _repreparing = true;
+    cancelled.complete(-2);
+    _retiringSeek ??= _retireSeek().whenComplete(() => _retiringSeek = null);
+    // Stop/dispose can supersede the replacement before anyone awaits it.
+    unawaited(
+      _retiringSeek!.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
     );
+  }
+
+  Future<void> _retireSeek() async {
+    // Changing media also aborts an in-flight prepare, whose playback state
+    // can already be Stopped while its network open is still pending.
+    _player.media = '';
+    _player.state = mdk.PlaybackState.stopped;
+    while (true) {
+      if (_closed || _closing || _interrupted.isCompleted) {
+        throw StateError('MDK seek retirement cancelled');
+      }
+      if (_player.waitFor(mdk.PlaybackState.stopped, timeout: 0)) break;
+      await _active(Future<void>.delayed(const Duration(milliseconds: 10)));
+    }
+    // Native teardown has retired its callbacks. Drain queued Dart replies
+    // before reusing fvp's single prepare-completion slot.
+    await _active(Future<void>.delayed(Duration.zero));
   }
 
   static const _preciseSeek = mdk.SeekFlag(

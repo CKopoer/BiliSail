@@ -579,6 +579,7 @@ final class FvpEngine
     final generation = _generation;
     final revision = ++_seekRevision;
     final pauseRevision = _pauseRevision;
+    if (_snapshot.isSeeking) _player?.cancelSeek();
     return _enqueue(() async {
       final player = _player;
       if (_disposed ||
@@ -599,22 +600,21 @@ final class FvpEngine
         ),
       );
       try {
-        // MDK's Dart wrapper owns one seek callback slot. Finish the active
-        // native seek before issuing the latest queued target, keeping both
-        // tracks paused throughout; never overlap native callbacks.
+        // Superseding cancels the old native read. The adapter retires its
+        // callbacks before preparing the latest target on the same texture.
         final result = await _wait(
           player.seek(target < Duration.zero ? Duration.zero : target),
           _cancelled,
           Stopwatch()..start(),
           const Duration(seconds: 15),
         );
-        if (result < 0) throw StateError('MDK seek failed');
         if (_disposed ||
             generation != _generation ||
             revision != _seekRevision ||
             _snapshot.phase == PlaybackPhase.failed) {
           return;
         }
+        if (result < 0) throw StateError('MDK seek failed');
         final resume = shouldPlay && pauseRevision == _pauseRevision;
         if (resume) player.play();
         _health.reset();

@@ -128,6 +128,8 @@ final class MediaKitEngine
   int _seekRevision = 0, _pauseRevision = 0;
   Future<void> _commands = Future.value();
   mk.Player? _player;
+  MediaTrack? _seekMedia;
+  Duration? _restartSeekTarget;
   NativeAudioGain? _audioGain;
 
   /// Last verified native normalization gain, for playback diagnostics.
@@ -718,6 +720,7 @@ final class MediaKitEngine
         final (video, audio) = _validate(source, options, generation);
         _watchDashContinuity = source is DashPairSource && audio != null;
         final mediaTrack = await _mediaLeases.open(video);
+        _seekMedia = mediaTrack;
         final audioTrack = audio == null
             ? null
             : await _mediaLeases.open(audio);
@@ -846,6 +849,12 @@ final class MediaKitEngine
                       !identical(_player, player)) {
                     return;
                   }
+                  if (_restartSeekTarget case final target?) {
+                    player.setProperty(
+                      'start',
+                      (target.inMicroseconds / 1000000).toStringAsFixed(6),
+                    );
+                  }
                   _requiresVideoColorMapping = configureNativeVideoColor(
                     read: player.getProperty,
                     write: player.setProperty,
@@ -853,7 +862,8 @@ final class MediaKitEngine
                     onAndroidDolbyVision: _videoOutput.enableAndroidDolbyVision,
                     codecHint: video.codec,
                   );
-                  if (_requiresVideoColorMapping) {
+                  if (_requiresVideoColorMapping &&
+                      _snapshot.phase == PlaybackPhase.opening) {
                     // A converter/VO may accept its options but never produce
                     // a frame. Leave time for the caller's compatible source.
                     colorPreparationDeadline = Timer(
@@ -1464,6 +1474,8 @@ final class MediaKitEngine
     _videoOutput.clearPlayer();
     final old = _player;
     _player = null;
+    _seekMedia = null;
+    _restartSeekTarget = null;
     try {
       if (old != null) await old.dispose();
     } finally {
@@ -1547,6 +1559,8 @@ final class MediaKitEngine
     if (target < Duration.zero) throw ArgumentError.value(target, 'target');
     _requireActive();
     final revision = ++_seekRevision;
+    final replacePending =
+        _snapshot.isSeeking && _snapshot.videoDimensions != null;
     final pauseRevision = _pauseRevision;
     _seekChanges.add(revision);
     final generation = _generation;
@@ -1556,9 +1570,14 @@ final class MediaKitEngine
         final watch = Stopwatch()..start();
         const budget = Duration(seconds: 12);
         final resume = _snapshot.desiredPlaying;
-        final video = _hasRealTrack(player.state.tracks.video);
+        // During an in-place reload, native tracks can temporarily be empty.
+        // Keep the confirmed source's video barrier and playback intent.
+        final video =
+            _snapshot.videoDimensions != null ||
+            _hasRealTrack(player.state.tracks.video);
         final load = _nativeLoad;
         final previousSeek = load?.state.seekCount ?? 0;
+        final previousLoad = load?.state.loadCount ?? 0;
         // Keep audio from advancing while video fetches/decodes its target.
         // Paused seeking still renders a video frame. Audio-only playback does
         // not need this barrier and may not restart decoding until played.
@@ -1566,7 +1585,19 @@ final class MediaKitEngine
         if (revision != _seekRevision || generation != _generation) {
           throw const SourceSuperseded();
         }
-        await player.seek(target);
+        final media = _seekMedia;
+        if (replacePending && media != null) {
+          _restartSeekTarget = target;
+          await player.native.command([
+            'loadfile',
+            media.uri.toString(),
+            'replace',
+            '-1',
+            'start=${(target.inMicroseconds / 1000000).toStringAsFixed(6)}',
+          ]);
+        } else {
+          await player.seek(target);
+        }
         // time-pos may jump before any target video data has arrived. Require
         // SEEK -> PLAYBACK_RESTART as well as the confirmed paused position.
         final duration = player.state.duration;
@@ -1579,8 +1610,13 @@ final class MediaKitEngine
           () =>
               (!video ||
                   load != null &&
-                      load.state.seekCount > previousSeek &&
-                      load.state.restartedSeekCount == load.state.seekCount) &&
+                      (replacePending
+                          ? load.state.loadCount > previousLoad &&
+                                load.state.restartedLoadCount ==
+                                    load.state.loadCount
+                          : load.state.seekCount > previousSeek &&
+                                load.state.restartedSeekCount ==
+                                    load.state.seekCount)) &&
               (player.state.position - expected).abs() <=
                   const Duration(milliseconds: 250),
           [player.stream.position, _seekChanges.stream],
@@ -1594,6 +1630,7 @@ final class MediaKitEngine
           final shouldResume = resume && pauseRevision == _pauseRevision;
           if (video && shouldResume) await player.play();
           if (revision != _seekRevision || generation != _generation) return;
+          _restartSeekTarget = null;
           _publish(
             _snapshot.copyWith(
               position: player.state.position,

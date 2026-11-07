@@ -74,6 +74,13 @@ final class _Player extends Fake implements FvpPlayerPort {
   }
 
   @override
+  void cancelSeek() {
+    if (seeks.isNotEmpty && !seeks.last.$2.isCompleted) {
+      seeks.last.$2.complete(-2);
+    }
+  }
+
+  @override
   void setRate(double rate) {}
   @override
   void setVolume(double volume, double gainDb) {}
@@ -166,7 +173,7 @@ void main() {
   }
 
   test(
-    'rapid seeks serialize MDK callbacks and only resume the latest target',
+    'rapid seeks cancel old preparation and only resume the latest target',
     () async {
       final player = _Player()..holdSeek = true;
       final engine = FvpEngine(createPlayer: () async => player);
@@ -176,9 +183,9 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       final obsolete = engine.seek(const Duration(seconds: 5));
       final latest = engine.seek(const Duration(seconds: 2));
-      expect(player.seeks, hasLength(1));
-      player.seeks.first.$2.complete(9000);
       await Future<void>.delayed(Duration.zero);
+      await first.timeout(const Duration(milliseconds: 500));
+      expect(player.seeks.first.$2.isCompleted, true);
       expect(player.seeks.map((seek) => seek.$1.inSeconds), [9, 2]);
       expect(player.playing, false);
       expect(engine.currentSnapshot.position, Duration.zero);

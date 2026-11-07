@@ -23,6 +23,9 @@ void main() {
     'pauseRequested',
     'stop',
     'superseded',
+    'supersededAgain',
+    'supersededAgainPaused',
+    'supersededAgainStopped',
   ]) {
     final playing = scenario != 'paused';
     testWidgets('seek waits for delayed video before resuming audio: $scenario', (
@@ -34,6 +37,8 @@ void main() {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       final blocked = Completer<void>();
       final resumeVideo = Completer<void>();
+      final secondBlocked = Completer<void>();
+      var blockedRequests = 0;
       var delayVideo = false;
       server.listen((request) async {
         final range = request.headers.value(HttpHeaders.rangeHeader);
@@ -51,6 +56,8 @@ void main() {
           );
         }
         if (delayVideo) {
+          blockedRequests++;
+          if (blockedRequests == 2) secondBlocked.complete();
           if (!blocked.isCompleted) blocked.complete();
           await resumeVideo.future;
         }
@@ -152,25 +159,52 @@ void main() {
           expect(failures, isEmpty);
           return;
         }
-        final Future<void>? next = switch (scenario) {
+        if (scenario == 'superseded') delayVideo = false;
+        Future<void>? next = switch (scenario) {
           'immediatePause' => immediatePause,
           'pauseRequested' => engine.pause(),
-          'superseded' => engine.seek(const Duration(seconds: 2)),
+          'superseded' ||
+          'supersededAgain' ||
+          'supersededAgainPaused' ||
+          'supersededAgainStopped' => engine.seek(const Duration(seconds: 2)),
           _ => null,
         };
-        if (scenario == 'superseded') {
+        if (scenario.startsWith('supersededAgain')) {
+          await _withFrames(
+            tester,
+            secondBlocked.future.timeout(const Duration(seconds: 3)),
+          );
+          await _pixels(boundaryKey);
+          if (scenario.endsWith('Stopped')) {
+            await _withFrames(tester, engine.stop());
+            await _withFrames(tester, Future.wait([seeking, next!]));
+            expect(engine.currentSnapshot.phase, PlaybackPhase.idle);
+            expect(failures, isEmpty);
+            return;
+          }
+          delayVideo = false;
+          next = Future.wait([
+            next!,
+            engine.seek(const Duration(seconds: 1)),
+            if (scenario.endsWith('Paused')) engine.pause(),
+          ]);
+        }
+        if (scenario.startsWith('superseded')) {
           // A newer target cancels the obsolete wait before video refills.
           await _withFrames(
             tester,
             seeking.timeout(const Duration(milliseconds: 500)),
           );
+          await _withFrames(tester, next!.timeout(const Duration(seconds: 3)));
+          expect(resumeVideo.isCompleted, false);
         }
         resumeVideo.complete();
         await _withFrames(tester, Future.wait([seeking, ?next]));
         final shouldPlay =
             playing &&
             scenario != 'pauseRequested' &&
-            scenario != 'immediatePause';
+            scenario != 'immediatePause' &&
+            !scenario.endsWith('Paused');
         expect(engine.currentSnapshot.isSeeking, isFalse);
         expect(engine.currentSnapshot.desiredPlaying, shouldPlay);
         expect(engine.currentSnapshot.generation, generation);
@@ -179,7 +213,11 @@ void main() {
           await native.getPropertyAsync('pause'),
           shouldPlay ? 'no' : 'yes',
         );
-        final target = scenario == 'superseded' ? 2 : 9;
+        final target = scenario == 'superseded'
+            ? 2
+            : scenario.startsWith('supersededAgain')
+            ? 1
+            : 9;
         expect(
           (engine.currentSnapshot.position - Duration(seconds: target)).abs(),
           lessThan(const Duration(milliseconds: 300)),
@@ -235,9 +273,19 @@ Future<List<int>> _pixels(GlobalKey key) async {
 
 Future<void> _withFrames(WidgetTester tester, Future<void> operation) async {
   var done = false;
-  final result = operation.whenComplete(() => done = true);
+  Object? failure;
+  StackTrace? stack;
+  final result = operation.then<void>(
+    (_) => done = true,
+    onError: (Object error, StackTrace trace) {
+      failure = error;
+      stack = trace;
+      done = true;
+    },
+  );
   while (!done) {
     await tester.pump(const Duration(milliseconds: 20));
   }
   await result;
+  if (failure != null) Error.throwWithStackTrace(failure!, stack!);
 }
