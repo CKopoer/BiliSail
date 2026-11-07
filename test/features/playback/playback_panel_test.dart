@@ -458,7 +458,7 @@ void main() {
         await _pumpFrames(tester);
         expect(window.fullScreen, isTrue);
         expect(back.hitTestable(), findsOneWidget);
-        expect(tester.getTopLeft(back).dx, greaterThanOrEqualTo(47));
+        expect(tester.getTopLeft(back).dx, 47);
         expect(tester.getTopLeft(back).dy, lessThan(52));
         await tester.tapAt(_surfacePoint(tester));
         await _pumpSurfaceTap(tester);
@@ -2809,7 +2809,7 @@ void main() {
           lessThan(tester.getTopLeft(top).dy + 52),
         );
       }
-      expect(tester.getTopLeft(back).dx, tester.getTopLeft(top).dx + 6);
+      expect(tester.getTopLeft(back).dx, tester.getTopLeft(top).dx);
       expect(tester.getTopLeft(home).dx, tester.getTopRight(back).dx);
       final opens = engine.opens;
       await tester.tap(back);

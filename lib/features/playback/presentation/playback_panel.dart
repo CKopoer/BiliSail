@@ -3402,7 +3402,7 @@ class _PlayerTopBar extends StatelessWidget {
         colors: [Colors.black54, Colors.transparent],
       ),
     ),
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    padding: const EdgeInsets.only(top: 2, right: 6, bottom: 2),
     constraints: const BoxConstraints(minHeight: 52),
     child: SafeArea(
       top: fullScreen,
