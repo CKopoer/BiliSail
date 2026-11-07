@@ -3,6 +3,8 @@ import 'package:bilisail/features/search/application/search_discovery_controller
 import 'package:bilisail/features/search/domain/search_discovery_repository.dart';
 import 'package:bilisail/features/search/presentation/search_entry_header.dart';
 import 'package:bilisail/features/search/presentation/search_history_chip.dart';
+import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
+import 'package:bilisail/shared/ui/scroll_collapsing_header.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +13,99 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final width in [390.0, 700.0, 1200.0]) {
+    testWidgets('opening search preserves page scroll at width $width', (
+      tester,
+    ) async {
+      final mobile = width < 600;
+      late ScrollController listController;
+      await _mount(
+        tester,
+        width: width,
+        inline: width >= 760,
+        calls: [],
+        bodyBuilder: (header) => ScrollHeaderLayout(
+          enabled: mobile,
+          header: mobile ? header : const SizedBox.shrink(),
+          child: Column(
+            children: [
+              if (!mobile) header,
+              Expanded(
+                child: PagedScrollViewport(
+                  active: true,
+                  canLoadMore: false,
+                  contentVersion: 0,
+                  onLoadMore: () async {},
+                  builder: (controller) {
+                    listController = controller;
+                    return ListView.builder(
+                      controller: controller,
+                      itemExtent: 60,
+                      itemCount: 100,
+                      itemBuilder: (_, index) => Text('row $index'),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      final nested = tester.state<NestedScrollViewState>(
+        find.byType(NestedScrollView),
+      );
+      // Leave the narrow header partly visible so its field can be tapped.
+      if (mobile) {
+        nested.outerController.jumpTo(12);
+      } else {
+        listController.jumpTo(480);
+      }
+      await tester.pumpAndSettle();
+      final outerOffset = nested.outerController.offset;
+      final innerOffset = listController.offset;
+      final row = find.text(mobile ? 'row 0' : 'row 10');
+      final rowRect = tester.getRect(row);
+      final field = find.byKey(const ValueKey('workspace-search'));
+      final fieldTop = tester.getTopLeft(field).dy;
+
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      expect(nested.outerController.offset, outerOffset);
+      expect(listController.offset, innerOffset);
+      if (mobile) {
+        expect(
+          find.byKey(const ValueKey('search-discovery-page')),
+          findsOneWidget,
+        );
+        tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+        await tester.enterText(
+          find.byKey(const ValueKey('search-page-input')),
+          '搜索草稿',
+        );
+        await tester.pumpAndSettle();
+        expect(nested.outerController.offset, outerOffset);
+        expect(listController.offset, innerOffset);
+        tester.view.resetViewInsets();
+        await tester.pageBack();
+      } else {
+        expect(find.text('搜索历史'), findsOneWidget);
+        expect(tester.getRect(row), rowRect);
+        expect(tester.getTopLeft(field).dy, fieldTop);
+        await tester.enterText(field, '保留页面位置' * 20);
+        await tester.pumpAndSettle();
+        expect(nested.outerController.offset, outerOffset);
+        expect(listController.offset, innerOffset);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      }
+      await tester.pumpAndSettle();
+      expect(nested.outerController.offset, outerOffset);
+      expect(listController.offset, innerOffset);
+      expect(tester.getRect(row), rowRect);
+      expect(tester.getTopLeft(field).dy, fieldTop);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'inline search slides to center, blurs tabs, follows field and closes with Escape',
     (tester) async {
@@ -322,6 +417,7 @@ Future<void> _mount(
   double scale = 1,
   double leadingWidth = 44,
   VoidCallback? onAccountTap,
+  Widget Function(Widget header)? bodyBuilder,
 }) async {
   tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1;
@@ -334,6 +430,21 @@ Future<void> _mount(
   final text = TextEditingController();
   final recording = StateProvider<bool>((ref) => true);
   addTearDown(text.dispose);
+  final header = SearchEntryHeader(
+    leading: SizedBox(
+      width: leadingWidth,
+      child: IconButton(
+        key: const ValueKey('search-account'),
+        onPressed: onAccountTap ?? () {},
+        icon: const Icon(Icons.person),
+      ),
+    ),
+    trailing: const SizedBox(width: 8),
+    controller: text,
+    onSearch: calls.add,
+    inlineNavigation: inline,
+    navigation: const Text('推荐分类'),
+  );
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -353,31 +464,19 @@ Future<void> _mount(
           child: child!,
         ),
         home: Scaffold(
-          body: Column(
-            children: [
-              SearchEntryHeader(
-                leading: SizedBox(
-                  width: leadingWidth,
-                  child: IconButton(
-                    key: const ValueKey('search-account'),
-                    onPressed: onAccountTap ?? () {},
-                    icon: const Icon(Icons.person),
+          body:
+              bodyBuilder?.call(header) ??
+              Column(
+                children: [
+                  header,
+                  const Expanded(child: SizedBox()),
+                  TextButton(
+                    key: const ValueKey('outside'),
+                    onPressed: () {},
+                    child: const Text('其他内容'),
                   ),
-                ),
-                trailing: const SizedBox(width: 8),
-                controller: text,
-                onSearch: calls.add,
-                inlineNavigation: inline,
-                navigation: const Text('推荐分类'),
+                ],
               ),
-              const Expanded(child: SizedBox()),
-              TextButton(
-                key: const ValueKey('outside'),
-                onPressed: () {},
-                child: const Text('其他内容'),
-              ),
-            ],
-          ),
         ),
       ),
     ),

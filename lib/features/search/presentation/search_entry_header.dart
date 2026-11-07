@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -140,29 +141,31 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
                     bindings: {
                       const SingleActivator(LogicalKeyboardKey.escape): _close,
                     },
-                    child: TextField(
-                      key: const ValueKey('workspace-search'),
-                      controller: widget.controller,
-                      focusNode: _focus,
-                      readOnly: mobile,
-                      onTap: mobile ? _openMobile : _show,
-                      textInputAction: TextInputAction.search,
-                      style: const TextStyle(fontSize: 13),
-                      onSubmitted: _submit,
-                      decoration: InputDecoration(
-                        hintText: '搜索视频、UP 主、番剧',
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                        ),
-                        suffixIcon: IconButton(
-                          tooltip: '搜索',
-                          onPressed: mobile
-                              ? _openMobile
-                              : () => widget.controller.text.trim().isEmpty
-                                    ? _show()
-                                    : _submit(widget.controller.text),
-                          icon: const Icon(BiliIcons.search, size: 18),
+                    child: _SearchFieldScrollBoundary(
+                      child: TextField(
+                        key: const ValueKey('workspace-search'),
+                        controller: widget.controller,
+                        focusNode: _focus,
+                        readOnly: mobile,
+                        onTap: mobile ? _openMobile : _show,
+                        textInputAction: TextInputAction.search,
+                        style: const TextStyle(fontSize: 13),
+                        onSubmitted: _submit,
+                        decoration: InputDecoration(
+                          hintText: '搜索视频、UP 主、番剧',
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                          ),
+                          suffixIcon: IconButton(
+                            tooltip: '搜索',
+                            onPressed: mobile
+                                ? _openMobile
+                                : () => widget.controller.text.trim().isEmpty
+                                      ? _show()
+                                      : _submit(widget.controller.text),
+                            icon: const Icon(BiliIcons.search, size: 18),
+                          ),
                         ),
                       ),
                     ),
@@ -325,6 +328,27 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
       ),
     ),
   );
+}
+
+final class _SearchFieldScrollBoundary extends SingleChildRenderObjectWidget {
+  const _SearchFieldScrollBoundary({required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderSearchFieldScrollBoundary();
+}
+
+final class _RenderSearchFieldScrollBoundary extends RenderProxyBox {
+  @override
+  void showOnScreen({
+    RenderObject? descendant,
+    Rect? rect,
+    Duration duration = Duration.zero,
+    Curve curve = Curves.ease,
+  }) {
+    // The entry is already visible when tapped. Let the field scroll its own
+    // text, but keep caret reveal requests out of the page's nested scroll view.
+  }
 }
 
 final class _SearchPage extends StatefulWidget {
