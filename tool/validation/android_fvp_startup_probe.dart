@@ -39,7 +39,9 @@ Future<void> main() async {
         uri: Uri.parse(config[name] as String),
         requestPolicy: MediaRequestPolicy(),
       );
-      final engine = FvpEngine();
+      final fsplayer = config['backend'] == 'fsplayer';
+      final PlayerEngine engine = fsplayer ? FsPlayerEngine() : FvpEngine();
+      final information = engine as PlayerInformationSource;
       try {
         runApp(
           MaterialApp(
@@ -55,7 +57,13 @@ Future<void> main() async {
           ),
         );
         await engine.open(
-          DashPairSource(video: track('video'), audio: track('audio')),
+          DashPairSource(
+            video: track('video'),
+            audio: track('audio'),
+            duration: Duration(
+              seconds: config['durationSeconds'] as int? ?? 180,
+            ),
+          ),
           OpenOptions(
             play: play,
             volume: 0,
@@ -66,7 +74,7 @@ Future<void> main() async {
                 : AndroidVideoOutputMode.renderedTexture,
           ),
         );
-        final info = await engine.inspectPlaybackInformation();
+        final info = await information.inspectPlaybackInformation();
         if (info?.diagnostics?.hasVideoOutput != true ||
             info?.diagnostics?.hasDecodedAudio != true ||
             info?.videoOutput?.contains('(direct)') != direct ||

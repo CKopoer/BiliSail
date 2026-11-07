@@ -73,6 +73,8 @@ def summarize(folder, binary):
             'flutterFramesPerSecond': sum(row['dartFrames'] for row in samples)/elapsed,
             'nativeFrameDropDelta': drops[-1]-drops[0] if drops else None,
             'nativeAvSyncAbsMaxMs': max(av)*1000 if av else None,
+            'cacheBytesMax': max((row['cacheBytes'] for row in samples if row.get('cacheBytes') is not None), default=None),
+            'cacheSecondsMax': max((row['cacheSeconds'] for row in samples if row.get('cacheSeconds') is not None), default=None),
             'allControlsVisible': all(row.get('controlsVisible') is True for row in samples),
             'allSubtitlesPresent': all(bool(row.get('subtitle')) for row in samples),
             'minimumVisibleComments': min(row['visible'] for row in samples),

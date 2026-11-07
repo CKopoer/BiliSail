@@ -47,11 +47,15 @@ final class DashPairSource extends ResolvedMediaSource {
     required this.video,
     required this.audio,
     this.isIntentionallySilent = false,
+    this.duration,
   });
 
   final MediaTrack video;
   final MediaTrack? audio;
   final bool isIntentionallySilent;
+
+  /// Resolver duration for backends that synthesize an in-memory DASH manifest.
+  final Duration? duration;
 }
 
 /// A video representation with audio deliberately omitted for a muted preview.

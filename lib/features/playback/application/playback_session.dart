@@ -1277,6 +1277,7 @@ class PlaybackSession extends ChangeNotifier {
                         isLive: isLive,
                       )
                     : DashPairSource(
+                        duration: resolved.duration,
                         video: MediaTrack(
                           uri: videoUri,
                           requestPolicy: policy,

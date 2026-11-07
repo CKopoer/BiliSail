@@ -1,5 +1,5 @@
 name: bili_player
-description: Generic playback contracts and media_kit/fvp adapters for BiliSail.
+description: Generic playback contracts and native playback adapters for BiliSail.
 version: 0.1.0
 publish_to: none
 environment:
@@ -76,3 +76,16 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: 6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: dev.bilisail.bili_player
+        pluginClass: BiliPlayerPlugin
+      ios:
+        pluginClass: BiliPlayerPlugin
+        sharedDarwinSource: true
+      macos:
+        pluginClass: BiliPlayerPlugin
+        sharedDarwinSource: true

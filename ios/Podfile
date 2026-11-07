@@ -23,6 +23,7 @@ flutter_ios_podfile_setup
 target 'Runner' do
   use_frameworks!
   pod 'mdk', :podspec => '../native/fvp/mdk.podspec'
+  pod 'FSPlayer', :podspec => '../packages/bili_player/native/FSPlayer.podspec'
   flutter_install_all_ios_pods __dir__
   target 'RunnerTests' do
     inherit! :search_paths
