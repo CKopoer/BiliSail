@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../../shared/ui/app_notice.dart';
 import '../application/playback_information_controller.dart';
 import '../application/playback_session.dart';
 
@@ -73,6 +77,21 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
     }
   }
 
+  Future<void> _copyInformation(String text) async {
+    var message = '播放信息已复制';
+    try {
+      await Clipboard.setData(ClipboardData(text: text))
+          .timeout(const Duration(seconds: 3));
+    } on PlatformException {
+      message = '复制失败，请重试';
+    } on MissingPluginException {
+      message = '复制失败，请重试';
+    } on TimeoutException {
+      message = '复制失败，请重试';
+    }
+    if (mounted) showAppNotice(context, message);
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -94,15 +113,13 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
         final diagnostics = native?.diagnostics;
         final dimensions = snapshot.videoDimensions;
         final bufferAhead = snapshot.buffered - snapshot.position;
-        return ListView(
-          key: const PageStorageKey('player-information-scroll'),
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              info.hasSource ? '约每秒刷新 · 未提供的参数显示为 —' : '当前没有已加载的媒体',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            _section(context, '播放状态', [
+        final summary = info.hasSource ? '约每秒刷新 · 未提供的参数显示为 —' : '当前没有已加载的媒体';
+        const notes =
+            '帧率为播放器估算值；缓存速度不是总网速。音画差为音频时钟减视频时钟，正值表示音频领先。丢帧计数随媒体源重建而重置。';
+        final sections = <(String, List<(String, String)>)>[
+          (
+            '播放状态',
+            [
               ('播放后端', native?.backend ?? '—'),
               ('状态', _phase(snapshot.phase)),
               ('播放意图', snapshot.desiredPlaying ? '播放' : '暂停'),
@@ -117,8 +134,11 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
                 '缓冲 / 跳转',
                 '${_yes(snapshot.isBuffering)} / ${_yes(snapshot.isSeeking)}',
               ),
-            ]),
-            _section(context, '视频与输出', [
+            ],
+          ),
+          (
+            '视频与输出',
+            [
               (
                 '视频编码',
                 native?.videoCodec ??
@@ -161,8 +181,11 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
                 '视频已解码 / 已输出',
                 '${_optionalYes(diagnostics?.hasDecodedVideo)} / ${_optionalYes(diagnostics?.hasVideoOutput)}',
               ),
-            ]),
-            _section(context, '音频', [
+            ],
+          ),
+          (
+            '音频',
+            [
               (
                 '音频编码',
                 native?.audioCodec ??
@@ -182,8 +205,11 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
               ('均衡增益', _number(native?.audioGainDb, ' dB')),
               ('音频输出', native?.audioOutput ?? '—'),
               ('音频已解码', _optionalYes(diagnostics?.hasDecodedAudio)),
-            ]),
-            _section(context, '缓存与同步', [
+            ],
+          ),
+          (
+            '缓存与同步',
+            [
               ('缓冲至', _time(snapshot.buffered)),
               (
                 '前向缓冲（播放进度）',
@@ -210,10 +236,50 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
               ('视频时钟', _number(native?.videoPositionSeconds, ' s')),
               ('输出丢帧（累计）', native?.frameDrops?.toString() ?? '—'),
               ('解码丢帧（累计）', native?.decoderDrops?.toString() ?? '—'),
-            ]),
-            Text(
-              '帧率为播放器估算值；缓存速度不是总网速。音画差为音频时钟减视频时钟，正值表示音频领先。丢帧计数随媒体源重建而重置。',
-              style: Theme.of(context).textTheme.bodySmall,
+            ],
+          ),
+        ];
+        final text = [
+          '实时播放信息',
+          summary,
+          for (final (title, rows) in sections) ...[
+            '',
+            title,
+            for (final (label, value) in rows) '$label：$value',
+          ],
+          '',
+          notes,
+        ].join('\n');
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 4,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(summary, style: Theme.of(context).textTheme.bodySmall),
+                  TextButton.icon(
+                    onPressed: () => _copyInformation(text),
+                    icon: const Icon(Icons.copy_outlined),
+                    label: const Text('复制全部信息'),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                key: const PageStorageKey('player-information-scroll'),
+                padding: const EdgeInsets.all(16),
+                children: [
+                  for (final (title, rows) in sections)
+                    _section(context, title, rows),
+                  Text(notes, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
             ),
           ],
         );

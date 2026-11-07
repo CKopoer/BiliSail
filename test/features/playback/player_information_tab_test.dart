@@ -6,7 +6,9 @@ import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/player_settings_dialog.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
+import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -71,6 +73,7 @@ Future<void> _show(
         ),
       ],
       child: MaterialApp(
+        builder: AppNoticeHost.builder,
         home: Builder(
           builder: (context) => Scaffold(
             body: TextButton(
@@ -88,6 +91,96 @@ Future<void> _show(
 }
 
 void main() {
+  testWidgets(
+    'copy includes all fields, offscreen sections and the displayed sample',
+    (tester) async {
+      final copies = <String>[];
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          if (call.arguments case {'text': final String text}) copies.add(text);
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      final engine = _Engine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      await _show(tester, session: session);
+      final samples = engine.samples;
+      await tester.tap(find.text('复制全部信息'));
+      await tester.pump();
+      expect(engine.samples, samples);
+      expect(copies, hasLength(1));
+      final first = copies.single;
+      expect(first, startsWith('实时播放信息\n'));
+      expect(first, contains('播放状态\n播放后端：media_kit / libmpv'));
+      expect(first, contains('播放位置：00:00:10'));
+      expect(first, contains('视频与输出\n视频编码：avc1'));
+      expect(first, contains('实际硬解：d3d11va'));
+      expect(first, contains('视频码率（实时）：12.00 Mbps'));
+      expect(first, contains('音频\n音频编码：mp4a'));
+      expect(first, contains('缓存与同步\n缓冲至：00:00:30'));
+      expect(first, contains('音画差（A−V）：-25.00 ms'));
+      expect(first, contains('解码丢帧（累计）：—'));
+      expect(
+        first.split('\n').where((line) => line.contains('：')),
+        hasLength(46),
+      );
+      expect(first, endsWith('丢帧计数随媒体源重建而重置。'));
+      expect(find.text('播放信息已复制'), findsOneWidget);
+
+      engine.advance(const Duration(seconds: 42));
+      await tester.pump(const Duration(seconds: 1));
+      final list = find.byKey(
+        const PageStorageKey('player-information-scroll'),
+      );
+      final scrollable = find
+          .descendant(of: list, matching: find.byType(Scrollable))
+          .first;
+      await tester.scrollUntilVisible(
+        find.text('解码丢帧（累计）'),
+        300,
+        scrollable: scrollable,
+      );
+      await tester.tap(find.text('复制全部信息'));
+      await tester.pump();
+      expect(copies, hasLength(2));
+      expect(copies.last, contains('播放位置：00:00:42'));
+      expect(copies.last, contains('输出丢帧（累计）：${engine.samples}'));
+      expect(first, contains('播放位置：00:00:10'));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets('clipboard failure reports failure without claiming success', (
+    tester,
+  ) async {
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        throw PlatformException(code: 'clipboard_unavailable');
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    final engine = _Engine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    await _show(tester, session: session);
+    await tester.tap(find.text('复制全部信息'));
+    await tester.pump();
+    expect(find.text('复制失败，请重试'), findsOneWidget);
+    expect(find.text('播放信息已复制'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets(
     'information tab samples only while selected and stops on close',
     (tester) async {
