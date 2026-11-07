@@ -209,7 +209,7 @@ class _VideoActionsBarState extends ConsumerState<VideoActionsBar> {
       icon: icon,
     );
     return SizedBox(
-      height: 42 + MediaQuery.textScalerOf(context).scale(16),
+      height: kMinInteractiveDimension,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
