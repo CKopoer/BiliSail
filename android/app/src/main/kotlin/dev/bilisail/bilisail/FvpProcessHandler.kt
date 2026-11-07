@@ -157,6 +157,10 @@ class FvpProcessHandler private constructor(context: Context, engine: FlutterEng
             texture.setOnFrameConsumedListener {
                 handler.post {
                     if (player.direct && !player.frameAcknowledged && !player.lost && players[id] === player) {
+                        // Flutter can consume the initial empty texture (timestamp 0)
+                        // before MediaCodec reopens against this Surface. Keep the
+                        // muted preroll running until a video buffer was acquired.
+                        if (texture.surfaceTexture().timestamp <= 0L) return@post
                         player.frameAcknowledged = true
                         try { remote?.send(Message.obtain(null, 5).apply { arg1 = id }) }
                         catch (_: android.os.RemoteException) { lost() }

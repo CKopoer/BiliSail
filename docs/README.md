@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [fvp 直出启动黑屏修复](validation/android-fvp-direct-black-2026-11-07.md) | 空纹理消费误报、原生暂停屏障、连续打开及截图像素回归 |
 | [Android 解码直出与 SurfaceView](validation/android-surface-output-2026-11-07.md) | 两后端纹理直出实验设置、4K60 H.264 约 25 Mbps／3× 实机对照、HC／HCPP 原型与限制 |
 | [迷你小窗与置顶](validation/mini-player-2026-11-07.md) | 桌面置顶、尺寸与位置恢复，Android 画中画、移动应用内浮窗和平台验证边界 |
 | [可选 fvp 播放后端](validation/fvp-backend-2026-11-07.md) | 默认 media_kit、设置切换、固定 MDK 资产、分轨与生命周期、实机对照边界 |

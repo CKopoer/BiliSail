@@ -8,6 +8,7 @@ import 'android_fvp_player.dart';
 import 'android_fvp_worker.dart';
 import 'player_contract.dart';
 import 'fvp_playback_information.dart';
+import 'fvp_surface_preroll.dart';
 import 'player_playback_information.dart';
 
 final class FvpMediaInfo {
@@ -82,7 +83,7 @@ void fvpWorkerMain() => runFvpWorker(
     final local = player as _MdkPlayerPort;
     local._videoRendered = true;
     local._videoDecoded = true;
-    if (!local._firstFrame.isCompleted) local._firstFrame.complete(true);
+    local._firstFrame.surfaceConsumed();
   },
 );
 
@@ -112,7 +113,7 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
   StreamSubscription<Object?>? _eventSubscription;
   StreamSubscription<Object?>? _stateSubscription;
   final _audioOpened = Completer<bool>();
-  final _firstFrame = Completer<bool>();
+  final _firstFrame = FvpFirstVideoFrame();
   var _prepared = Completer<bool>();
   var _paused = Completer<void>();
   Future<int>? _textureCreation;
@@ -159,12 +160,12 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
       if (event.category == 'decoder.audio' && !_audioOpened.isCompleted) {
         _audioOpened.complete(event.error >= 0);
       }
-      if (event.category == 'render.video' &&
-          event.detail == '1st_frame' &&
-          !_firstFrame.isCompleted) {
-        _videoRendered = event.error >= 0;
-        _videoDecoded = _videoRendered;
-        _firstFrame.complete(event.error >= 0);
+      if (event.category == 'render.video' && event.detail == '1st_frame') {
+        if (!_directSurface) {
+          _videoRendered = event.error >= 0;
+          _videoDecoded = _videoRendered;
+        }
+        _firstFrame.rendered(event.error >= 0);
       }
     });
     _statusSubscription = _player.onMediaStatus.listen((event) {
@@ -394,6 +395,20 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
       _player.volume = 0;
       _player.state = mdk.PlaybackState.playing;
       try {
+        if (_directSurface) {
+          return await confirmFvpSurfacePreroll(
+            firstFrame: _active(_firstFrame.ready(directSurface: true)),
+            pauseAndWait: _pauseDirectSurface,
+            seek: _live
+                ? null
+                : () => _active(
+                    _player.seek(
+                      position: _startPosition.inMilliseconds,
+                      flags: _preciseSeek,
+                    ),
+                  ),
+          );
+        }
         if (!_live) {
           final target = await _active(
             _player.seek(
@@ -403,10 +418,14 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
           );
           if (target < 0) return false;
         }
-        return await _active(_firstFrame.future);
+        return await _active(_firstFrame.ready(directSurface: false));
       } finally {
         if (!_closed && !_closing && !_interrupted.isCompleted) {
-          _player.state = mdk.PlaybackState.paused;
+          if (_directSurface) {
+            await _pauseDirectSurface();
+          } else {
+            _player.state = mdk.PlaybackState.paused;
+          }
           _player.volume = volume;
         }
       }
@@ -418,7 +437,14 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
       ),
     );
     if (result < 0) return false;
-    return _active(_firstFrame.future);
+    return _active(_firstFrame.ready(directSurface: false));
+  }
+
+  Future<void> _pauseDirectSurface() async {
+    _player.state = mdk.PlaybackState.paused;
+    while (!_player.waitFor(mdk.PlaybackState.paused, timeout: 0)) {
+      await _active(Future<void>.delayed(const Duration(milliseconds: 10)));
+    }
   }
 
   @override

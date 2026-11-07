@@ -4,6 +4,7 @@ import http.server
 import json
 import pathlib
 import re
+import statistics
 import shlex
 import subprocess
 import threading
@@ -266,6 +267,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif self.path == '/ready':
                 ready(data['stage'], data['seconds'])
                 self.reply({'ok': True})
+            elif self.path == '/startup':
+                stage, phase = data['stage'], data['phase']
+                scenario = next(x for x in config if x['name'] == stage)
+                if phase not in ('opened', 'resumed'):
+                    raise ValueError('Invalid startup phase')
+                screenshot = args.output / f'{stage}-{phase}.png'
+                with screenshot.open('wb') as file:
+                    subprocess.run(['adb', '-s', args.device, 'exec-out', 'screencap', '-p'],
+                                   stdout=file, check=True, timeout=15)
+                # Only explicitly selected, known nonblack fixtures use this
+                # assertion. A naturally black scene is valid video content.
+                pixels = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(screenshot),
+                    '-vf', 'crop=iw/3:ih/3:iw/3:ih/3,scale=64:64,format=gray',
+                    '-f', 'rawvideo', '-'], capture_output=True, check=True, timeout=15).stdout
+                if len(pixels) != 64 * 64:
+                    raise ValueError('Startup screenshot could not be sampled')
+                stats = {'mean': statistics.mean(pixels), 'stddev': statistics.pstdev(pixels)}
+                save(f'{stage}-{phase}-pixels.json', json.dumps(stats))
+                if scenario.get('verifyStartupPixels') and (stats['mean'] < 10 or stats['stddev'] < 8):
+                    raise ValueError('Known nonblack fixture has no visible video')
+                self.reply(stats)
             elif self.path == '/finish':
                 finish(data['stage'])
                 self.reply({'ok': True})
