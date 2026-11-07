@@ -12,7 +12,7 @@ void main() {
         const OpenOptions(volume: 0, maxBufferAhead: Duration(seconds: -1)),
         const OpenOptions(
           volume: 0,
-          maxBufferAhead: Duration(minutes: 5, microseconds: 1),
+          maxBufferAhead: Duration(minutes: 2, microseconds: 1),
         ),
       ]) {
         final engine = MediaKitEngine();

@@ -76,7 +76,7 @@
 
 同日官网加载对照后，悬停改为独立 `DashVideoSource` 无音轨预览，自动模式优先服务端常规 CDN，每地址外层/原生统一 3 秒、最多三个地址；有效 cid 直传。普通点播/影视继续验证音视频分轨，预览不作为完整点播验收；现行预览策略与原因见 [悬停加载验证](validation/video-preview-loading.md)，覆盖上段早期策略。
 
-2026-10-07 所有播放器打开默认采用最多 5 分钟媒体时间的向前预读窗口，悬停预览继续显式采用 5 秒（由最初的 15 秒按用户要求缩短）。`OpenOptions.maxBufferAhead` 必须大于 0 且不超过 5 分钟；适配器在打开媒体之前设置 `cache-secs` 和 `demuxer-readahead-secs`，关闭临时磁盘缓存。2026-11-01 起，直播采用 64 MiB 前向／0 后向及约 3 秒首次／恢复预缓冲；点播保留 32 MiB 前向／32 MiB 后向，缓冲后约 2 秒恢复；悬停保留约 1 秒恢复门槛。取舍与验证见[弱网缓存调整](validation/network-playback-buffering-2026-11-01.md)。窗口随当前位置推进，不截断视频或限制总播放时长；原生分包、解码和网络 I/O 边界有少量超出，内存配额也可能让预读早于 5 分钟停止。普通播放实现与 Windows 证据见 [播放器预读窗口](validation/player-buffer-ahead.md)，预览另见 [悬停加载验证](validation/video-preview-loading.md#5-秒向前预读窗口)。
+2026-10-07 默认前向预读窗口最初为 5 分钟；2026-11-07 按用户后续要求，media_kit／fvp 统一改为普通播放最多 **2 分钟**，悬停预览继续显式采用 **5 秒**（由最初的 15 秒按用户要求缩短）。`OpenOptions.maxBufferAhead` 必须大于 0 且不超过 2 分钟；media_kit 在打开媒体之前设置 `cache-secs` 和 `demuxer-readahead-secs` 并关闭临时磁盘缓存，fvp 将实际窗口传给 MDK `setBufferRange`，不再额外压到 4 秒。2026-11-01 起，media_kit 直播采用 64 MiB 前向／0 后向及约 3 秒首次／恢复预缓冲；点播保留 32 MiB 前向／32 MiB 后向，缓冲后约 2 秒恢复；悬停保留约 1 秒恢复门槛。取舍与验证见[弱网缓存调整](validation/network-playback-buffering-2026-11-01.md)。窗口随当前位置推进，不截断视频或限制总播放时长；原生分包、解码和网络 I/O 边界有少量超出，内存配额也可能让预读提前停止。现行两后端对照见 [统一缓冲窗口](validation/unified-buffer-window-2026-11-07.md)，历史实现见 [播放器预读窗口](validation/player-buffer-ahead.md)，预览另见 [悬停加载验证](validation/video-preview-loading.md#5-秒向前预读窗口)。
 
 | 组件 | 所属位置 | 职责 |
 | --- | --- | --- |

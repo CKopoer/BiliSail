@@ -4453,7 +4453,7 @@ void main() {
         expect(content.codecs, [VideoCodecPreference.av1]);
         expect(
           engine.openOptions.single.maxBufferAhead,
-          const Duration(minutes: 5),
+          const Duration(minutes: 2),
         );
         expect(
           engine.openOptions.single.videoDecoding,
@@ -5140,7 +5140,7 @@ void main() {
     expect(engine.openOptions.single.volume, 35);
     expect(
       engine.openOptions.single.maxBufferAhead,
-      const Duration(minutes: 5),
+      const Duration(minutes: 2),
     );
     expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
     expect(sponsor.pending, isEmpty);

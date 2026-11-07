@@ -72,7 +72,7 @@ final class ManifestSource extends ResolvedMediaSource {
 enum VideoDecodingMode { automatic, software }
 
 final class OpenOptions {
-  static const maximumBufferAhead = Duration(minutes: 5);
+  static const maximumBufferAhead = Duration(minutes: 2);
 
   const OpenOptions({
     this.startPosition = Duration.zero,
@@ -94,7 +94,7 @@ final class OpenOptions {
   final VideoDecodingMode videoDecoding;
   final Duration openTimeout;
 
-  /// Rolling forward demuxer window in media time, at most five minutes.
+  /// Rolling forward demuxer window in media time, at most two minutes.
   /// Must be positive. Memory capacity may stop buffering earlier, and
   /// packet/I/O boundaries may slightly overshoot the time window.
   final Duration maxBufferAhead;

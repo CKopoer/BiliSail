@@ -207,7 +207,10 @@ final class _MdkPlayerPort implements FvpPlayerPort {
     _player.setProperty('avio.rw_timeout', '30000000');
     _player.setBufferRange(
       min: options.maxBufferAhead.inMilliseconds.clamp(1, 1000),
-      max: options.maxBufferAhead.inMilliseconds.clamp(1, 4000),
+      max: options.maxBufferAhead.inMilliseconds.clamp(
+        1,
+        OpenOptions.maximumBufferAhead.inMilliseconds,
+      ),
     );
     setRate(options.rate);
     _startPosition = options.startPosition;

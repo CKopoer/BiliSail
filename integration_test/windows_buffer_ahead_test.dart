@@ -9,7 +9,13 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  testWidgets('Windows DASH keeps a rolling five-minute forward buffer', (
+  for (final useFvp in [false, true]) {
+    _testBackend(useFvp);
+  }
+}
+
+void _testBackend(bool useFvp) {
+  testWidgets('${useFvp ? 'fvp' : 'media_kit'} rolling two-minute forward buffer', (
     tester,
   ) async {
     initializePlayerBackend();
@@ -67,7 +73,7 @@ void main() {
         // Native buffering can stop reading before the response completes.
       }
     });
-    final engine = MediaKitEngine();
+    final PlayerEngine engine = useFvp ? FvpEngine() : MediaKitEngine();
     addTearDown(() async {
       await engine.dispose();
       await server.close(force: true);
@@ -86,7 +92,10 @@ void main() {
       audio: track('/audio.m4a'),
     );
     await engine.open(source, const OpenOptions(play: true, volume: 0));
-    expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
+    if (engine case final MediaKitEngine native) {
+      expect(native.inspectDiagnostics().hasDecodedAudio, isTrue);
+    }
+    expect(engine.currentSnapshot.videoDimensions, isNotNull);
     await _until(
       tester,
       () =>
@@ -99,16 +108,16 @@ void main() {
         tester,
         () =>
             engine.currentSnapshot.buffered - engine.currentSnapshot.position >=
-            const Duration(seconds: 299),
+            const Duration(seconds: 119),
       );
       await tester.pump(const Duration(milliseconds: 600));
       final snapshot = engine.currentSnapshot;
       final ahead = snapshot.buffered - snapshot.position;
       // The window bounds demuxed timestamps; allow decoder/frame rounding.
-      expect(ahead, lessThanOrEqualTo(const Duration(milliseconds: 300500)));
+      expect(ahead, lessThanOrEqualTo(const Duration(milliseconds: 120500)));
       expect(snapshot.buffered, lessThan(snapshot.duration));
       debugPrint(
-        'PLAYER_BUFFER $stage positionMs=${snapshot.position.inMilliseconds} '
+        'PLAYER_BUFFER backend=${useFvp ? 'fvp' : 'media_kit'} $stage positionMs=${snapshot.position.inMilliseconds} '
         'bufferedMs=${snapshot.buffered.inMilliseconds} aheadMs=${ahead.inMilliseconds}',
       );
       return snapshot.buffered;
@@ -138,8 +147,13 @@ void main() {
     );
     await engine.pause();
     await checkWindow('seek');
-    expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
-    expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
+    if (engine case final MediaKitEngine native) {
+      expect(native.inspectDiagnostics().hasDecodedVideo, isTrue);
+    }
+    if (engine case final MediaKitEngine native) {
+      expect(native.inspectDiagnostics().hasDecodedAudio, isTrue);
+    }
+    expect(engine.currentSnapshot.videoDimensions, isNotNull);
     expect(rangeRequests, containsAll(['/video.mp4', '/audio.m4a']));
 
     await engine.open(
@@ -152,7 +166,7 @@ void main() {
     );
     expect(
       engine.currentSnapshot.duration,
-      lessThan(const Duration(minutes: 5)),
+      lessThan(const Duration(minutes: 2)),
     );
     expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
     expect(tester.takeException(), isNull);

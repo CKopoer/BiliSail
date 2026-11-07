@@ -314,7 +314,12 @@ void main() {
         const OpenOptions(),
       ),
       (source, const OpenOptions(openTimeout: Duration.zero)),
-      (source, const OpenOptions(maxBufferAhead: Duration(minutes: 6))),
+      (
+        source,
+        const OpenOptions(
+          maxBufferAhead: Duration(minutes: 2, microseconds: 1),
+        ),
+      ),
       (
         DashVideoSource(track('video', headers: {'Referer': 'bad\r\nvalue'})),
         const OpenOptions(volume: 0),

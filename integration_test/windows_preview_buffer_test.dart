@@ -9,8 +9,14 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
+  for (final useFvp in [false, true]) {
+    _testBackend(useFvp);
+  }
+}
+
+void _testBackend(bool useFvp) {
   testWidgets(
-    'Windows preview keeps a rolling 5-second buffer and regular opens allow longer buffering',
+    '${useFvp ? 'fvp' : 'media_kit'} Windows preview keeps a rolling 5-second buffer and regular opens allow longer buffering',
     (tester) async {
       initializePlayerBackend();
       final fixturePath = Platform.environment['BILI_TEST_MEDIA_DIR'];
@@ -54,7 +60,7 @@ void main() {
           // A stopped native reader can close the response before completion.
         }
       });
-      final engine = MediaKitEngine();
+      final PlayerEngine engine = useFvp ? FvpEngine() : MediaKitEngine();
       addTearDown(() async {
         await engine.dispose();
         await server.close(force: true);
@@ -79,8 +85,11 @@ void main() {
           maxBufferAhead: Duration(seconds: 5),
         ),
       );
-      expect(engine.inspectDiagnostics().hasVideoOutput, isTrue);
-      expect(engine.inspectDiagnostics().hasDecodedAudio, isFalse);
+      if (engine case final MediaKitEngine native) {
+        expect(native.inspectDiagnostics().hasVideoOutput, isTrue);
+        expect(native.inspectDiagnostics().hasDecodedAudio, isFalse);
+      }
+      expect(engine.currentSnapshot.videoDimensions, isNotNull);
       await _until(
         tester,
         () =>
@@ -104,7 +113,7 @@ void main() {
         expect(ahead, lessThanOrEqualTo(const Duration(milliseconds: 5500)));
         expect(snapshot.buffered, lessThan(snapshot.duration));
         debugPrint(
-          'PREVIEW_BUFFER $stage positionMs=${snapshot.position.inMilliseconds} '
+          'PREVIEW_BUFFER backend=${useFvp ? 'fvp' : 'media_kit'} $stage positionMs=${snapshot.position.inMilliseconds} '
           'bufferedMs=${snapshot.buffered.inMilliseconds} aheadMs=${ahead.inMilliseconds}',
         );
         return snapshot.buffered;
@@ -134,16 +143,18 @@ void main() {
       await checkWindow('seek');
       expect(rangeRequests, greaterThan(0));
 
-      // A regular open restores the five-minute window, covering this short file.
+      // A regular open restores the two-minute window, covering this short file.
       await engine.open(source, const OpenOptions(volume: 0));
       await _until(
         tester,
         () => engine.currentSnapshot.buffered >= const Duration(seconds: 58),
       );
       debugPrint(
-        'PREVIEW_BUFFER regular bufferedMs=${engine.currentSnapshot.buffered.inMilliseconds}',
+        'PREVIEW_BUFFER backend=${useFvp ? 'fvp' : 'media_kit'} regular bufferedMs=${engine.currentSnapshot.buffered.inMilliseconds}',
       );
       expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     },
   );
 }
