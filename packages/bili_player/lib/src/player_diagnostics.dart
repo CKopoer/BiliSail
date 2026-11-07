@@ -50,6 +50,8 @@ final class PlayerDiagnostics {
 enum PlayerDiagnosticKind {
   openStarted,
   openReady,
+  openStageChanged,
+  nativeProcessExited,
   openTerminated,
   videoInterrupted,
   playbackStalled,

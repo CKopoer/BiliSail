@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:fvp/fvp.dart' as fvp;
 import 'package:fvp/mdk.dart' as mdk;
 
+import 'android_fvp_player.dart';
+import 'android_fvp_worker.dart';
 import 'player_contract.dart';
 import 'fvp_playback_information.dart';
 import 'player_playback_information.dart';
@@ -19,7 +21,7 @@ final class FvpMediaInfo {
   final bool hasAudio;
 }
 
-enum FvpNativeStatus { buffering, buffered, ended, invalid }
+enum FvpNativeStatus { buffering, buffered, ended, invalid, processExited }
 
 /// Small native boundary for deterministic cancellation and failure tests.
 abstract interface class FvpPlayerPort {
@@ -60,6 +62,20 @@ abstract interface class FvpInformationPort {
 Future<void>? _initialization;
 
 Future<FvpPlayerPort> createFvpNativePlayer() async {
+  if (Platform.isAndroid) return AndroidFvpPlayer.create();
+  return createInProcessFvpNativePlayer();
+}
+
+// The Android service starts this headless entrypoint, without app bootstrap,
+// account repositories, or a second visible Flutter application.
+@pragma('vm:entry-point')
+void fvpWorkerMain() => runFvpWorker(createInProcessFvpNativePlayer, (player) {
+  final local = player as _MdkPlayerPort;
+  local._textureDimensions = local._dimensions;
+  return local._player.nativeHandle;
+});
+
+Future<FvpPlayerPort> createInProcessFvpNativePlayer() async {
   await (_initialization ??= () async {
     // Install fvp's bundled Flutter key without forwarding raw URL/header logs.
     fvp.registerWith(
@@ -346,13 +362,23 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
   }();
   @override
   Future<bool> confirmVideoFrame() async {
-    if (_live) {
-      // A live source cannot seek to re-present the prepared frame. Advance
-      // its pipeline silently until the new texture has rendered one frame.
+    if (_live || Platform.isAndroid) {
+      // Android's new cross-process Surface needs the pipeline to advance
+      // before it can present the paused prepared frame. Keep this preroll
+      // muted and restore the caller's pause intent after confirmation.
       final volume = _player.volume;
       _player.volume = 0;
       _player.state = mdk.PlaybackState.playing;
       try {
+        if (!_live) {
+          final target = await _active(
+            _player.seek(
+              position: _startPosition.inMilliseconds,
+              flags: _preciseSeek,
+            ),
+          );
+          if (target < 0) return false;
+        }
         return await _active(_firstFrame.future);
       } finally {
         if (!_closed && !_closing && !_interrupted.isCompleted) {

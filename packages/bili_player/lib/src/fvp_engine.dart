@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'android_media_leases.dart';
+import 'android_fvp_player.dart';
 import 'fvp_native_player.dart';
 import 'fvp_video_output.dart';
 import 'native_audio_gain.dart';
@@ -19,10 +20,14 @@ final class FvpEngine
         AudioGainControl,
         PlayerInformationSource {
   FvpEngine({this.onDiagnostic, Future<FvpPlayerPort> Function()? createPlayer})
-    : _createPlayer = createPlayer ?? createFvpNativePlayer;
+    : _createPlayer = createPlayer ?? createFvpNativePlayer,
+      _isolated = createPlayer == null && Platform.isAndroid;
 
   final void Function(PlayerDiagnosticEvent)? onDiagnostic;
   final Future<FvpPlayerPort> Function() _createPlayer;
+  final bool _isolated;
+  NativeReadinessStage? _stage;
+  bool _processLost = false;
   final _output = FvpVideoOutput();
   AndroidMediaLeases? _leases;
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
@@ -70,8 +75,23 @@ final class FvpEngine
   }
 
   void _diagnose(PlayerDiagnosticKind kind) => onDiagnostic?.call(
-    PlayerDiagnosticEvent(kind: kind, snapshot: _snapshot),
+    PlayerDiagnosticEvent(
+      kind: kind,
+      snapshot: _snapshot,
+      readinessStage: _stage,
+      nativeErrorCode: kind == PlayerDiagnosticKind.nativeProcessExited
+          ? switch (_player) {
+              final AndroidFvpPlayer player => player.exitStatus,
+              _ => null,
+            }
+          : null,
+    ),
   );
+
+  void _openingStage(NativeReadinessStage stage) {
+    _stage = stage;
+    _diagnose(PlayerDiagnosticKind.openStageChanged);
+  }
 
   @override
   Future<PlayerPlaybackInformation?> inspectPlaybackInformation() async {
@@ -160,6 +180,8 @@ final class FvpEngine
       if (_disposed || generation != _generation) return;
       final watch = Stopwatch()..start();
       _opening = true;
+      _stage = null;
+      _processLost = false;
       _live = switch (source) {
         ManifestSource(:final isLive) ||
         ProgressiveSource(:final isLive) => isLive,
@@ -178,6 +200,8 @@ final class FvpEngine
       var stage = '初始化';
       final leases = _leases = AndroidMediaLeases();
       Future<MediaTrack> lease(MediaTrack track) async {
+        // Descriptor numbers are process-local. The worker owns its leases.
+        if (_isolated) return track;
         final opened = await leases.open(track);
         if (cancellation.isCompleted ||
             generation != _generation ||
@@ -223,6 +247,19 @@ final class FvpEngine
         _player = player;
         if (_disposed || generation != _generation) throw const _Cancelled();
         _statusSubscription = player.statuses.listen((status) {
+          if (!_disposed &&
+              generation == _generation &&
+              status == FvpNativeStatus.processExited) {
+            if (_processLost) return;
+            _processLost = true;
+            _diagnose(PlayerDiagnosticKind.nativeProcessExited);
+            _fail(
+              '播放器异常退出，请退出播放页后重新打开',
+              kind: PlayerFailureKind.nativeProcessExited,
+            );
+            _output.clear();
+            return;
+          }
           if (_disposed ||
               generation != _generation ||
               _opening ||
@@ -236,6 +273,8 @@ final class FvpEngine
             return;
           }
           switch (status) {
+            case FvpNativeStatus.processExited:
+              return;
             case FvpNativeStatus.invalid:
               _fail('fvp 无法继续播放此媒体');
             case FvpNativeStatus.ended:
@@ -271,6 +310,7 @@ final class FvpEngine
           }
         });
         stage = '准备音视频';
+        _openingStage(NativeReadinessStage.tracks);
         final info = await _wait(
           player.prepare(
             main,
@@ -297,6 +337,7 @@ final class FvpEngine
         }
         if (video) {
           stage = '创建画面';
+          _openingStage(NativeReadinessStage.videoOutput);
           final texture = await _wait(
             player.createTexture(),
             cancellation,
@@ -306,6 +347,7 @@ final class FvpEngine
           if (texture < 0) throw StateError('No video texture');
           _output.bind(texture, info.dimensions!);
           stage = '确认首帧';
+          _openingStage(NativeReadinessStage.videoDecode);
           if (!await _wait(
             player.confirmVideoFrame(),
             cancellation,
@@ -323,6 +365,7 @@ final class FvpEngine
         if (options.play) {
           player.play();
           stage = '验证音轨';
+          _openingStage(NativeReadinessStage.externalAudio);
           if (_requiresAudio &&
               !await _wait(
                 player.confirmAudio(),
@@ -359,7 +402,17 @@ final class FvpEngine
           await _release();
           return;
         }
-        final failure = error is PlayerFailure
+        if (error is FvpProcessException && !_processLost) {
+          _processLost = true;
+          _diagnose(PlayerDiagnosticKind.nativeProcessExited);
+        }
+        final failure = error is FvpProcessException
+            ? PlayerFailure(
+                PlayerFailureKind.nativeProcessExited,
+                '播放器异常退出，请退出播放页后重新打开',
+                generation,
+              )
+            : error is PlayerFailure
             ? error
             : PlayerFailure(
                 PlayerFailureKind.nativePlayback,
