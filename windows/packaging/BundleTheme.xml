@@ -8,6 +8,8 @@
   <Font Id="2" Height="-14" Weight="400" Foreground="7e6b58">Microsoft YaHei UI</Font>
   <Font Id="3" Height="-30" Weight="600" Foreground="433325">Segoe UI</Font>
   <Font Id="4" Height="-18" Weight="400" Foreground="433325">Microsoft YaHei UI</Font>
+  <!-- Updated status text must erase old glyphs; keep sidebar fonts transparent. -->
+  <Font Id="5" Height="-14" Weight="400" Foreground="7e6b58" Background="ffffff">Microsoft YaHei UI</Font>
   <Window Width="720" Height="480" HexStyle="100a0000" FontId="0" Caption="#(loc.Caption)">
     <ImageControl X="0" Y="0" Width="220" Height="480" ImageFile="logo.png" Visible="yes" />
     <Label X="28" Y="143" Width="172" Height="44" FontId="3" Visible="yes" DisablePrefix="yes">BiliSail</Label>
@@ -53,7 +55,7 @@
     <Page Name="Progress">
       <Label X="252" Y="40" Width="436" Height="44" FontId="1" DisablePrefix="yes">正在为你准备</Label>
       <Label X="254" Y="112" Width="430" Height="56" FontId="0" DisablePrefix="yes">正在应用更改，请稍候。&#10;这可能需要几分钟时间。</Label>
-      <Label Name="OverallProgressPackageText" X="254" Y="220" Width="430" Height="48" FontId="2" DisablePrefix="yes">正在初始化…</Label>
+      <Label Name="OverallProgressPackageText" X="254" Y="220" Width="430" Height="48" FontId="5" DisablePrefix="yes">正在初始化…</Label>
       <Progressbar Name="OverallCalculatedProgressbar" X="254" Y="282" Width="434" Height="12" />
       <Button Name="ProgressCancelButton" X="602" Y="420" Width="86" Height="36" TabStop="yes" FontId="0">取消(&amp;C)</Button>
     </Page>

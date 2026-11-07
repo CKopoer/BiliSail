@@ -41,3 +41,9 @@ MSI 的 WiX `BrowseDlg` 与 EXE 的旧 `BrowseDirectoryAction` 均替换为共�
 - EXE 的用户范围注册未在本机系统设置列表中显示，不能将注册表可见性检查当成该界面的通过记录。生产安装包仍为 `perMachine`，本轮没有执行需管理员权限的生产范围生命周期；只确认其编译产物包含可卸载的 ARP 注册。独立 MSI 的真实系统列表检查与上述用户范围回归分别记录。
 
 最终原生辅助库通过 MSVC `/W4 /WX` Release 编译，两种完整载荷安装包编译并通过 67 项产物检查。PowerShell 语法、71 条相对文档链接及本任务差异检查通过。完整根检查的打包边界、格式与静态分析通过；根测试 3348 项通过、4 项失败、13 项 symlink 因权限跳过，失败为同期正在修改的 `playback_panel_test.dart` 的四项 `picture seek holds its target until confirmed`，预期 seek 54000 ms／进度 0.3，实际为 31000 ms／0.172222。未为本任务修改这些播放文件；四个包另行通过 709 项测试（492／96／116／5）。10 项 mux 原生用例仍因未配置库而跳过。本节不替代生产管理员安装、Windows 10 或多 DPI 验收。
+
+## 2026-11-07：进度文字刷新残影
+
+EXE 进度页的 `OverallProgressPackageText` 原先复用透明的侧栏字体，状态更新时旧字没有清除，导致多条进度文字叠在一起。[WiX 6.0.2 的颜色处理](https://github.com/wixtoolset/wix/blob/b3f340393117094a75ea8ced77f2357e4aa095e7/src/libs/dutil/WixToolset.DUtil/thmutil.cpp#L1434-L1473)在字体未指定背景时使用透明模式和空画刷。现在只为该标签增加同字号、同颜色且带白色背景的字体，刷新时覆盖旧字；侧栏继续使用透明字体。普通和 passive 模式共用此进度页。
+
+按用户要求仅做安装器定向验证：复用已有 `1.2.3+1` Windows 载荷，通过生产入口重新生成 MSI／EXE，67 项产物检查、版本及发布目录边界检查通过；从实际 EXE 提取主题，确认进度标签引用白色背景字体且侧栏字体仍透明。完整界面的 `/layout` 本地副本模式成功完成，日志确认 MSI 的执行动作为 `None`，完成页显示正常。产物位于 `build/installer-progress-text-fix/`，没有重编译 Flutter 或运行全套应用测试，也没有执行真实安装／升级及其连续状态文字切换验收。
