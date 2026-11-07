@@ -14,15 +14,15 @@
 | 版本解析、静态检查、根测试分片与包测试 | `ubuntu-24.04` | 无需真实账号；独立 mux 任务覆盖封装原生测试，不自动运行在线或原生播放集成测试 |
 | Android | `ubuntu-24.04`，Temurin JDK 17 | 仅 arm64 的 release APK；正常构建复用固定 keystore，PR 使用临时预览签名 |
 | Windows | `windows-2022`，Visual Studio C++ / Windows SDK / .NET 8 / WiX 6.0.2 | 同时提供 x64 MSIX、MSI 和 EXE 安装包；全部包含完整原生 DLL/data 及 VC++ runtime |
-| macOS | `macos-15`，Apple Silicon / Xcode | arm64 DMG；先验证签名／最终权限、同一 Release 应用首帧和跨进程 Keychain 读写删除，再由 `hdiutil` 打包校验；仅 ad-hoc 签名，未 notarize |
-| macOS Intel | `macos-15-intel`，Intel x64 / Xcode | x64 DMG；校验架构、版本、签名、权限和镜像；不运行启动／窗口／Keychain smoke，metadata 明确记录跳过 |
-| iOS | `macos-15`，Apple Silicon / Xcode / CocoaPods | arm64 未签名 IPA；核对应用版本、bundle ID、arm64 framework 及 Payload 布局；安装前需自行 Apple 签名 |
+| macOS | `macos-15`，Apple Silicon / Xcode 26.2 | arm64 DMG；先验证签名／最终权限、同一 Release 应用首帧和跨进程 Keychain 读写删除，再由 `hdiutil` 打包校验；仅 ad-hoc 签名，未 notarize |
+| macOS Intel | `macos-15-intel`，Intel x64 / Xcode 26.2 | x64 DMG；校验架构、版本、签名、权限和镜像；不运行启动／窗口／Keychain smoke，metadata 明确记录跳过 |
+| iOS | `macos-15`，Apple Silicon / Xcode 26.2 / CocoaPods | arm64 未签名 IPA；核对应用版本、bundle ID、arm64 framework 及 Payload 布局；安装前需自行 Apple 签名 |
 | Linux | `ubuntu-24.04`，GTK / libsecret / libmpv / Flatpak SDK | x64 AppImage 与 Flatpak；携带媒体依赖，核对版本及主机／实际 Flatpak Runtime 内动态依赖；X11／XWayland |
 | Release 上传 | `ubuntu-24.04` | 合并并校验本次所选平台的 Actions artifacts，上传汇总 ZIP artifact 后创建草稿 |
 
 PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要 Windows 主机与 Visual Studio 工具链，macOS 原生构建需要对应架构的 macOS/Xcode 主机。现有 `enable_macos` 开关同时控制 arm64 和 x64 两项矩阵；两项分别安装对应架构的 Flutter SDK，产物与缓存按架构隔离。arm64 启用 `--enable-macos-arm64-only`，x64 显式关闭该选项；两者均通过固定 SDK 支持的 `FLUTTER_XCODE_ARCHS` 指定单一架构（`arm64`／`x86_64`），与对应的 mux framework 一致。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 
-Flutter 固定 **3.47.6 stable / Dart 3.13.5**；升级需同时调整工作流、检查/构建脚本并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Xcode/系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
+Flutter 固定 **3.47.6 stable / Dart 3.13.5**；升级需同时调整工作流、检查/构建脚本并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Apple 构建在 Flutter 和 mux 编译前通过 `DEVELOPER_DIR` 显式选择 runner 中的 Xcode 26.2，并打印 Xcode、Swift 和 SDK 版本，缺少该版本立即失败。系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
 
 SDK 缓存沿用 `flutter-action` 的默认键，按系统、SDK 架构、版本和 revision 隔离。Pub 缓存键只配置系统、架构和版本前缀，由当前固定的 Action 追加所有 `pubspec.lock` 的哈希，避免重复追加。Gradle 缓存键覆盖 Android Gradle 脚本、`android/gradle.properties`、Wrapper 配置、所有 Pub 锁文件和 `.flutter-version`，使插件、SDK 或构建配置变化后保存新的依赖缓存。Release 新建构建沿用同一套缓存配置；开启产物复用时直接读取匹配 CI 的 artifacts。
 
@@ -497,3 +497,15 @@ CI 现在并行运行以下任务，全部完成后由原名 `Analyze and test` 
 - 同期导航工作随后将相关播放测试改为系统返回操作，对应四项定向测试通过。最后一次 `tool/check.ps1 -SkipPub` 完整通过格式、统一分析、打包边界检查和 3232 项测试（根应用 2600、API 456、播放器 81、弹幕 93、封装 2）；10 项 mux 原生用例按配置跳过。没有为 CI 提速删除上述回归或改动同期导航实现，五份锁文件保持原值。
 
 上述分片数量对应同期导航修改前的测试快照；工作区原有及同期修改均保留。此轮未提交或推送，未运行新工作流、客户端构建、安装、在线或实机验证；远端检查耗时仍待新 CI 实测。
+
+## 2026-11-07：Apple 构建显式选择 Xcode 26.2
+
+[CI #309](https://github.com/CKopoer/BiliSail/actions/runs/42349410990) 对应提交 `d777e06e2a1c46fc217bd05e3510dbf17cc5d1c1`。格式／分析、两份根测试分片、包测试、原生 mux 回归，以及 Windows／Android／Linux 构建通过；[macOS x64](https://github.com/CKopoer/BiliSail/actions/runs/42349410990/job/128336700736)、[macOS arm64](https://github.com/CKopoer/BiliSail/actions/runs/42349410990/job/128336700776) 和 [iOS arm64](https://github.com/CKopoer/BiliSail/actions/runs/42349410990/job/128336700765) 均在编译 `video_player_avfoundation 2.12.3` 时失败。首个错误为 `AVFactory.swift` 中 `AVAsset.load(_:isolation:)` 的 `extra argument 'isolation' in call`；`VideoPlayer.swift` 的同类错误与泛型推导错误也是这个 SDK 不匹配的结果。
+
+依赖由固定的 `fvp` 经 `video_player` 引入，仍由 Flutter 注册和编译 Apple 原生插件。该版本调用了带 actor isolation 参数的 AVFoundation API，但三个失败任务实际使用 Xcode 16.4／macOS 15.5 或 iOS 18.5 SDK。Apple 的 [API 声明](https://developer.apple.com/documentation/avfoundation/avasynchronouskeyvalueloading/load(_:isolation:))包含 `@backDeployed(before: macOS 26.0, iOS 26.0, ...)`；新 SDK 的编译接口和应用最低运行版本是不同约束。
+
+对应运行的 [Intel 镜像清单](https://github.com/actions/runner-images/blob/macos-15/20260824.0482/images/macos/macos-15-Readme.md)和 [arm64 镜像清单](https://github.com/actions/runner-images/blob/macos-15-arm64/20261104.0514/images/macos/macos-15-arm64-Readme.md)均列出 Xcode 26.2，同时默认版本仍为 16.4。CI 现在对三个 Apple 目标，在 Flutter 初始化和 mux／应用构建前设置并持久化 `DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer`；检查目录存在后打印 Xcode、Swift、macOS SDK 和 iOS SDK 版本。指定工具链缺失或诊断命令失败时立即停止，避免静默使用默认版本。Release 补建复用同一 CI 工作流，因此采用相同选择。
+
+本轮 Windows x64／Flutter 3.47.6 验证：`tool/check.ps1 -EnforceLockfile` 完整通过打包边界、五份锁文件严格解析、格式、静态分析和 5628 项 Dart／Flutter 测试（根应用 4572、API 678、播放器 212、弹幕 161、封装 5）。根应用 13 项按原有条件跳过；未配置 `BILI_MUX_LIBRARY`，mux 的 10 项原生测试跳过，不计作原生通过。五份锁文件无修改，日志为 `build/ci-42349410990-fix-check.log`。
+
+CI／Release 工作流通过 actionlint 1.7.12；直接执行新增的生产 Bash 步骤，以模拟 Apple 命令验证工具链路径传递至当前及后续步骤、缺少指定目录时停止，以及 Xcode 命令失败时停止。本文 45 条本地链接及 `git diff --check` 通过。本机为 Windows，无法执行真实 Xcode／Apple SDK 编译、DMG／IPA 打包或 Apple 设备验证；修复后的三个远端构建结果仍待新 CI 确认。

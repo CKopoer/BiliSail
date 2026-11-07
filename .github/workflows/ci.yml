@@ -237,6 +237,19 @@ jobs:
             android/gradle/wrapper/gradle-wrapper.properties
             **/pubspec.lock
             .flutter-version
+      - name: Select Apple toolchain
+        if: startsWith(matrix.target, 'macos-') || matrix.target == 'ios-arm64'
+        shell: bash
+        run: |
+          # video_player_avfoundation uses AVFoundation's isolation-aware load API.
+          # Both macOS runner architectures default to the incompatible Xcode 16.4.
+          export DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer
+          test -d "$DEVELOPER_DIR"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+          xcodebuild -version
+          xcrun swift --version
+          xcrun --sdk macosx --show-sdk-version
+          xcrun --sdk iphoneos --show-sdk-version
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.47.6'
