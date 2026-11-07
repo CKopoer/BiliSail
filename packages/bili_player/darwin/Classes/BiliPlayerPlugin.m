@@ -10,6 +10,7 @@
 @property(nonatomic) BOOL video, videoFrame, audioDecoded, seekDone, closed;
 @property(nonatomic) BOOL unsupportedColor;
 @property(nonatomic) int64_t durationMs;
+@property(nonatomic) uint64_t audioFrames, videoFrames;
 @property(nonatomic) CVPixelBufferRef pixel;
 - (void)audioReady:(NSNotification *)notification;
 - (void)seekReady:(NSNotification *)notification;
@@ -34,6 +35,7 @@
         if (self.pixel) CVPixelBufferRelease(self.pixel);
         self.pixel = pixel;
         self.videoFrame = YES;
+        self.videoFrames++;
     }
     // Notification is cheap and carries no pixel copies or media identifiers.
     [self.textures textureFrameAvailable:self.textureId];
@@ -61,6 +63,7 @@
 - (void)closeRuntime:(BSFsRuntime *)r completion:(dispatch_block_t)completion {
     [[NSNotificationCenter defaultCenter] removeObserver:r];
     @synchronized(r) { r.closed = YES; }
+    r.player.audioSamplesCallback = nil;
     [r.player pause];
     // Join native threads away from Flutter's platform thread, then retire its texture.
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
@@ -120,6 +123,13 @@
         view.displayDelegate = r;
         view.preventDisplay = YES;
         __weak BSFsRuntime *weakRuntime = r;
+        r.player.audioSamplesCallback = ^(int16_t *samples, int sampleSize, int sampleRate, int channels) {
+            BSFsRuntime *runtime = weakRuntime;
+            if (!runtime || !samples || sampleSize <= 0) return;
+            @synchronized(runtime) {
+                if (!runtime.closed) runtime.audioFrames++;
+            }
+        };
         NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
         // Use selector observers so releasing a runtime removes every subscription.
         [center addObserver:r selector:@selector(audioReady:)
@@ -150,9 +160,12 @@
     } else if ([call.method isEqualToString:@"status"]) {
         FSPlayer *p = r.player;
         FSMonitor *m = p.monitor;
+        uint64_t audioFrames, videoFrames;
+        @synchronized(r) { audioFrames = r.audioFrames; videoFrames = r.videoFrames; }
         NSMutableDictionary *s = [@{
             @"prepared": @(p.isPreparedToPlay), @"videoFrame": @(r.videoFrame),
             @"audioDecoded": @(r.audioDecoded), @"seekDone": @(r.seekDone),
+            @"audioFrames": @(audioFrames), @"videoFrames": @(videoFrames),
             @"unsupportedColor": @(r.unsupportedColor),
             @"ended": @(p.playbackSchedule == FSPlayerPlaybackScheduleCompleted),
             @"buffering": @((p.loadState & FSPlayerLoadStateStalled) != 0),

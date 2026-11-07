@@ -37,8 +37,9 @@ void main() {
     tester,
   ) async {
     monitor.report(playing);
-    await tester.pump(const Duration(seconds: 7));
+    await tester.pump(const Duration(seconds: 1));
     monitor.report(playing);
+    expect(failures, isEmpty);
     await tester.pump(const Duration(seconds: 1));
     expect(failures, [1]);
     expect(recoveries, isEmpty);
@@ -54,7 +55,7 @@ void main() {
     await tester.pump(const Duration(seconds: 20));
     expect(failures, isEmpty);
     monitor.update(playing);
-    await tester.pump(const Duration(seconds: 8));
+    await tester.pump(const Duration(seconds: 2));
     expect(failures, [1]);
   });
 
@@ -95,7 +96,7 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
     monitor.update(playing.copyWith(position: const Duration(seconds: 40)));
     expect(recoveries, isEmpty);
-    await tester.pump(const Duration(seconds: 8));
+    await tester.pump(const Duration(seconds: 2));
     expect(failures, [1]);
   });
 

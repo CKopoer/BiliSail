@@ -22,11 +22,17 @@ void main() {
   late Map<String, Object?> status;
   late FsPlayerEngine engine;
   Completer<void>? creation, seek;
+  bool playing = false;
+  int samples = 0;
+  String? fault;
   int id = 0;
 
   setUp(() {
     calls = [];
     creation = seek = null;
+    playing = false;
+    samples = 0;
+    fault = null;
     status = {
       'prepared': true,
       'videoFrame': true,
@@ -46,8 +52,15 @@ void main() {
       }
       if (call.method == 'status') {
         if (seek != null) await seek!.future;
+        if (playing && fault != null) {
+          status['positionMs'] = 1000 + ++samples * 250;
+          status['audioFrames'] = fault == 'audio' ? 100 : 100 + samples;
+          status['videoStarved'] = fault == 'video';
+        }
         return status;
       }
+      if (call.method == 'play') playing = true;
+      if (call.method == 'pause') playing = false;
       return null;
     });
     engine = FsPlayerEngine(channel: channel);
@@ -123,6 +136,29 @@ void main() {
     expect(calls, contains('dispose'));
     expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
   });
+  for (final missing in ['audio', 'video']) {
+    test(
+      'a missing $missing pauses the single native pair in at most 2s',
+      () async {
+        fault = missing;
+        final failures = <PlayerFailure>[];
+        final subscription = engine.failures.listen(failures.add);
+        addTearDown(subscription.cancel);
+        await engine.open(source, const OpenOptions(play: true));
+        final watch = Stopwatch()..start();
+        while (failures.isEmpty && watch.elapsed < const Duration(seconds: 4)) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(failures, hasLength(1));
+        expect(playing, isFalse);
+        expect(calls, contains('pause'));
+        expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+        // Includes the first 250ms sampling period and native pause dispatch.
+        expect(watch.elapsedMilliseconds, lessThan(2250));
+      },
+    );
+  }
   test(
     'dispose is idempotent and invalid source creates no native player',
     () async {

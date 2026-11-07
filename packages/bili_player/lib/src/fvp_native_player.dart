@@ -498,7 +498,12 @@ final class _MdkPlayerPort
     if (cancelled != null && !cancelled.isCompleted) cancelled.complete(-2);
     if (!_interrupted.isCompleted) _interrupted.complete();
     _audioProbe?.interrupt();
-    if (!_closed) _native?.state = mdk.PlaybackState.stopped;
+    if (!_closed && _native != null) {
+      // The main video may already be Stopped at premature EOF while external
+      // audio survives. Clearing the source also retires that companion pipe.
+      _native!.media = '';
+      _native!.state = mdk.PlaybackState.stopped;
+    }
   }
 
   @override

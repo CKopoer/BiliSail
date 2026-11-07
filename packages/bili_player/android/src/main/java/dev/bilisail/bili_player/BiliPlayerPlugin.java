@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Off-main native commands. Raw source strings and native messages never leave this bridge. */
 public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.MethodCallHandler {
@@ -33,6 +34,7 @@ public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
         long duration;
         boolean video;
         FSMeta meta;
+        final AtomicLong audioFrames = new AtomicLong();
         void close(Handler main) {
             // release() joins the native player before the Surface and descriptor leases go away.
             player.setOnPreparedListener(null);
@@ -40,6 +42,7 @@ public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
             player.setOnErrorListener(null);
             player.setOnCompletionListener(null);
             player.setOnSeekCompleteListener(null);
+            player.setOnAudioSamplesListener(null);
             player.release();
             surface.release();
             main.post(texture::release);
@@ -90,6 +93,10 @@ public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
                 r.player.setLogEnabled(false);
                 r.player.setAllowHDRDirectDisplay(false);
                 r.player.setOnPreparedListener(mp -> r.prepared = true);
+                r.player.setOnAudioSamplesListener((samples, sampleRate, channels) -> {
+                    // Observe activity only; never copy or forward PCM to Dart.
+                    if (samples != null && samples.length > 0) r.audioFrames.incrementAndGet();
+                });
                 r.player.setOnCompletionListener(mp -> r.ended = true);
                 r.player.setOnErrorListener((mp, what, extra) -> { r.error = what; return true; });
                 r.player.setOnVideoSizeChangedListener((mp, w, h, sn, sd) -> {
@@ -170,6 +177,10 @@ public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
         Map<String, Object> s = new HashMap<>();
         s.put("prepared", r.prepared); s.put("videoFrame", r.videoFrame);
         s.put("audioDecoded", r.audioDecoded); s.put("ended", r.ended);
+        s.put("audioFrames", r.audioFrames.get());
+        s.put("videoStarved", r.video && r.videoFrame &&
+            p.getVideoCachedPackets() == 0 &&
+            p.getFrameCacheRemaining(FSPlayer.FRAME_CACHE_TYPE_VIDEO) == 0);
         s.put("buffering", r.buffering); s.put("seekDone", r.seekDone);
         if (r.error != null) s.put("error", r.error);
         s.put("positionMs", p.getCurrentPosition());

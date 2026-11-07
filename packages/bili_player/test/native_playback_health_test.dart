@@ -123,7 +123,9 @@ void main() {
           isBuffering: buffering,
           phase: buffering ? PlaybackPhase.buffering : PlaybackPhase.playing,
         );
-        final deadline = Duration(seconds: buffering ? 30 : 8);
+        final deadline = buffering
+            ? NativePlaybackHealth.bufferingTimeout
+            : NativePlaybackHealth.stallTimeout;
         health.update(snapshot, Duration.zero, paired: false);
         expect(
           health.update(
@@ -223,14 +225,14 @@ void main() {
   }
 
   test('ample and growing buffers cannot hide a frozen playback clock', () {
-    for (var i = 0; i <= 8; i++) {
+    for (var i = 0; i <= 2; i++) {
       final result = health.update(
         playing.copyWith(buffered: Duration(seconds: 40 + i)),
         Duration(seconds: i),
         paired: true,
         audioPosition: playing.position,
       );
-      if (i < 8) {
+      if (i < 2) {
         expect(result, isNull);
       } else {
         expect(result?.kind, PlayerFailureKind.nativePlayback);
@@ -240,7 +242,7 @@ void main() {
   });
 
   test('small position oscillations cannot renew a stalled clock deadline', () {
-    for (var i = 0; i <= 32; i++) {
+    for (var i = 0; i <= 8; i++) {
       final result = health.update(
         playing.copyWith(
           position: Duration(milliseconds: 10000 + (i.isEven ? 0 : 10)),
@@ -249,7 +251,7 @@ void main() {
         Duration(milliseconds: i * 250),
         paired: false,
       );
-      if (i < 32) {
+      if (i < 8) {
         expect(result, isNull);
       } else {
         expect(result?.kind, PlayerFailureKind.nativePlayback);
@@ -285,13 +287,13 @@ void main() {
   test('buffering flag oscillations cannot keep renewing resume grace', () {
     final snapshot = playing.copyWith(buffered: const Duration(seconds: 50));
     health.update(snapshot, Duration.zero, paired: false);
-    for (var second = 1; second <= 10; second++) {
+    for (var second = 1; second <= 4; second++) {
       final result = health.update(
         snapshot.copyWith(isBuffering: second.isOdd),
         Duration(seconds: second),
         paired: false,
       );
-      if (second < 10) {
+      if (second < 4) {
         expect(result, isNull);
       } else {
         expect(result?.kind, PlayerFailureKind.nativePlayback);

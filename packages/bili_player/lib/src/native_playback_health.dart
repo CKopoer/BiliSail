@@ -1,14 +1,16 @@
 import 'player_contract.dart';
 import 'player_diagnostics.dart';
+import 'native_track_health.dart';
 
 /// Playback position alone can be driven by just one surviving DASH track.
 /// Sample both the main video buffer and the external audio clock. The native
 /// cache handles ordinary underruns; this also catches premature per-track EOF
 /// and buffering that never reports an error or another position event.
 final class NativePlaybackHealth {
-  static const stallTimeout = Duration(seconds: 8);
+  static const stallTimeout = NativeTrackHealth.maximumUnpairedPlayback;
   static const bufferingTimeout = Duration(seconds: 30);
-  static const sampleInterval = Duration(milliseconds: 250);
+  static const sampleInterval = NativeTrackHealth.sampleInterval;
+  final _tracks = NativeTrackHealth();
 
   PlaybackSnapshot? _last;
   Duration? _progressAt;
@@ -22,6 +24,11 @@ final class NativePlaybackHealth {
     Duration now, {
     required bool paired,
     Duration? audioPosition,
+    int? audioFrames,
+    int? videoFrames,
+    bool? videoStarved,
+    bool requiresAudio = true,
+    bool requiresVideo = true,
   }) {
     final previous = _last;
     _last = snapshot;
@@ -38,10 +45,49 @@ final class NativePlaybackHealth {
       _progressAt = now;
       _positionHighWater = snapshot.position;
       _resumeGraceAt = null;
+      _tracks.reset();
       _audioPosition = audioPosition != null && audioPosition >= Duration.zero
           ? audioPosition
           : null;
+      _tracks.update(
+        snapshot,
+        now,
+        requiresAudio: requiresAudio,
+        requiresVideo: requiresVideo,
+        audioPosition: _audioPosition,
+        audioFrames: audioFrames,
+        videoPosition: videoFrames == null ? snapshot.position : null,
+        videoFrames: videoFrames,
+        videoStarved: videoStarved,
+      );
       return null;
+    }
+    final trackStall =
+        paired ||
+            audioFrames != null ||
+            videoFrames != null ||
+            audioPosition != null ||
+            videoStarved != null
+        ? _tracks.update(
+            snapshot,
+            now,
+            requiresAudio: requiresAudio,
+            requiresVideo: requiresVideo,
+            audioFrames: audioFrames,
+            audioPosition: audioPosition ?? _audioPosition,
+            videoPosition: videoFrames == null ? snapshot.position : null,
+            videoFrames: videoFrames,
+            videoStarved: videoStarved,
+          )
+        : null;
+    if (trackStall != null) {
+      return NativePlaybackInterruption(
+        kind: trackStall.kind,
+        reason: trackStall.reason,
+        position: snapshot.position,
+        stalledFor: trackStall.stalledFor,
+        audioPosition: audioPosition ?? _audioPosition,
+      );
     }
     // Cache endpoints and the sampled audio clock can trail the final position
     // at an underrun. While native playback is buffering, retain its paused
@@ -127,6 +173,7 @@ final class NativePlaybackHealth {
     _audioPosition = null;
     _positionHighWater = null;
     _resumeGraceAt = null;
+    _tracks.reset();
   }
 }
 

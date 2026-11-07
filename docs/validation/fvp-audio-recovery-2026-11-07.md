@@ -2,6 +2,8 @@
 
 日期：2026-11-07。
 
+同日后续修订：下面的 8 秒阈值和对应测量记录属于首次断音修复。现行实现由[双轨两秒同步](paired-stall-synchronization-2026-11-07.md)覆盖，双向轨道检测复用 `NativeTrackHealth`，新增视频提前结束的原生回归。
+
 ## 现场证据与原因边界
 
 本机运行的是商店 MSIX `JerryHsu.BiliSail` 1.2.8.0；版本号不能反推出其精确构建提交。用户描述音频开始正常、播放到中途突然消失，视频继续，重新打开后声音恢复。本轮只读该进程已有的结构化日志，没有替换安装包、修改账号或操作现场播放状态。
@@ -19,14 +21,14 @@
 使用固定 MDK 0.39 的公开 C API `mdkPlayerAPI::onAudio`。本机原生探针确认它会为实际外部音轨持续调用，即使主播放器未转发其 decoder 事件。回调只在原生线程递增一个原子计数，不读取、复制或保存 PCM，不逐音频帧调用 Dart。
 
 - 实际播放时确认当前 native player 确实产生音频帧，不能只接受启动探针结果。暂停打开仍保留“首次播放才确认”语义。
-- [FvpAudioHealth](../../packages/bili_player/lib/src/fvp_audio_health.dart) 每 250ms 观察计数；活动播放连续约 8 秒没有新音频帧时记录 `playbackStalled / audioFrames`，暂停同一个 native player，并发出原有 `nativePlayback` 故障。会话按既有预算恢复，保留当前位置、音量、速率和用户意图，不另起无限重试。
+- 首次修复中的 `FvpAudioHealth` 每 250ms 观察计数；当时活动播放连续约 8 秒没有新音频帧时记录 `playbackStalled / audioFrames`，暂停同一个 native player，并发出原有 `nativePlayback` 故障。该类现已并入 [NativeTrackHealth](../../packages/bili_player/lib/src/native_track_health.dart)，按两秒上限判断。会话按既有预算恢复，保留当前位置、音量、速率和用户意图，不另起无限重试。
 - 暂停、seek、明确 buffering、结束、换源与倍速改变重置或避开音频停滞判断。音量为零、编码内容是静默，仍会正常解码出帧，不会据此判断断音。视频末尾保留已有 500ms 容差。
 - Android worker 在原有 250ms 样本中携带计数，不增加逐帧 Binder 事件；关闭／换源后忽略旧实例样本。
 - 原生计数状态一直保留到 MDK 实例销毁并等待其线程退出之后，再释放内存。源码由 package build hook 编译，三个 Dart 绑定由 ffigen 23.0.0 生成。SDK 头文件来源、完整摘要及许可范围见 [SOURCE.md](../../packages/bili_player/third_party/mdk/SOURCE.md)；没有增加另一套 MDK／FFmpeg，也没有修改 Pub 缓存。
 
 ## 验证
 
-[状态测试](../../packages/bili_player/test/fvp_audio_health_test.dart) 覆盖视频继续而音频停止、静音／静默内容、0.25／1／4／8 倍速、暂停／seek／缓冲宽限、源代次和计数重置、正常片尾。Android 端口测试补充 worker 音频样本传输。
+首次修复的状态测试现已并入[双轨状态测试](../../packages/bili_player/test/native_track_health_test.dart)，覆盖视频继续而音频停止、静音／静默内容、0.25／1／4／8 倍速、暂停／seek／缓冲宽限、源代次和计数重置、正常片尾。Android 端口测试补充 worker 音频样本传输。
 
 [Windows 原生回归](../../integration_test/windows_fvp_audio_recovery_test.dart) 使用无账号本地 30 秒视频和带完整时长元数据、但中途截断媒体数据的 AAC 音轨。先确认实际音轨持续出帧，随后检查视频继续时的故障检出；自动分支通过真实 PlaybackSession 重解析为完整音轨，验证从中断位置继续并重新产生音频帧。回归已经加入 [Windows fvp 脚本](../../tool/test-windows-fvp.ps1)。
 

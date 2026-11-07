@@ -228,7 +228,7 @@ Future<void> _runSilentStall(
     expect(stall.stallReason, PlaybackStallReason.playbackClock);
     expect(stall.snapshot.isBuffering, false);
     expect(stall.snapshot.desiredPlaying, true);
-    expect(stall.stalledFor, greaterThanOrEqualTo(const Duration(seconds: 8)));
+    expect(stall.stalledFor!.inMilliseconds, inInclusiveRange(2000, 2250));
     if (automatic) {
       expect(engine.currentSnapshot.generation, greaterThan(generation));
       expect(engine.currentSnapshot.phase, PlaybackPhase.playing);

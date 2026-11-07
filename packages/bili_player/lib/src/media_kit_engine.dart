@@ -427,6 +427,10 @@ final class MediaKitEngine
       _continuityClock.elapsed,
       paired: _watchDashContinuity,
       audioPosition: clocks?.audioPosition,
+      requiresAudio:
+          _requiresDecodedAudio ||
+          (_player?.state.audioParams.channelCount ?? 0) > 0,
+      requiresVideo: _snapshot.videoDimensions != null,
     );
     if (failure != null) {
       _interruptPlayback(

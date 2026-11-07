@@ -159,6 +159,7 @@ void main() {
       final engine = FvpEngine(createPlayer: () async => player);
       addTearDown(engine.dispose);
       await engine.open(source, const OpenOptions(play: true));
+      player.position = 12000;
       player.events.add(FvpNativeStatus.ended);
       player.events.add(FvpNativeStatus.buffering);
       player.events.add(FvpNativeStatus.buffered);
@@ -177,6 +178,7 @@ void main() {
     addTearDown(engine.dispose);
     await engine.open(source, const OpenOptions(play: true));
     for (var replay = 0; replay < 2; replay++) {
+      player.position = 12000;
       player.events.add(FvpNativeStatus.ended);
       await engine.seek(Duration.zero);
       await engine.play();
@@ -185,6 +187,24 @@ void main() {
       expect(engine.currentSnapshot.position, const Duration(seconds: 1));
     }
   });
+
+  test(
+    'premature main-video EOF pauses the surviving external audio',
+    () async {
+      final player = _Player();
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      final failures = <PlayerFailure>[];
+      final subscription = engine.failures.listen(failures.add);
+      addTearDown(subscription.cancel);
+      await engine.open(source, const OpenOptions(play: true));
+      player.position = 4000;
+      player.events.add(FvpNativeStatus.ended);
+      expect(player.playing, isFalse);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+      expect(failures.single.kind, PlayerFailureKind.videoInterrupted);
+    },
+  );
 
   test(
     'seek pauses both tracks until the target video frame is decoded',

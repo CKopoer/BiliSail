@@ -43,6 +43,7 @@ final class FsPlayerEngine
   int? _id, _texture;
   int _generation = 0, _seekRevision = 0;
   bool _disposed = false, _sampling = false, _live = false;
+  bool _requiresAudio = false, _requiresVideo = false;
   bool _desiredPlaying = false;
   double _gain = 0;
   Map<String, Object?> _native = {};
@@ -69,8 +70,17 @@ final class FsPlayerEngine
     _snapshots.add(value);
   }
 
-  void _diagnose(PlayerDiagnosticKind kind) => onDiagnostic?.call(
-    PlayerDiagnosticEvent(kind: kind, snapshot: _snapshot),
+  void _diagnose(
+    PlayerDiagnosticKind kind, {
+    NativePlaybackInterruption? interruption,
+  }) => onDiagnostic?.call(
+    PlayerDiagnosticEvent(
+      kind: kind,
+      snapshot: _snapshot,
+      failureKind: interruption?.kind,
+      stallReason: interruption?.reason,
+      stalledFor: interruption?.stalledFor,
+    ),
   );
 
   Future<void> _enqueue(Future<void> Function() operation) {
@@ -202,6 +212,8 @@ final class FsPlayerEngine
           ),
         };
         final input = fsPlayerInput(leased, options);
+        _requiresAudio = input.audio;
+        _requiresVideo = input.video;
         if (Platform.isAndroid && options.rate != 1) {
           throw const PlayerFailure(
             PlayerFailureKind.invalidSource,
@@ -341,17 +353,28 @@ final class FsPlayerEngine
   }
 
   Future<void> _sample(int generation) async {
-    if (_sampling ||
-        _disposed ||
+    if (_disposed ||
         generation != _generation ||
         _id == null ||
+        _snapshot.phase == PlaybackPhase.failed ||
+        _snapshot.phase == PlaybackPhase.ended ||
         _snapshot.isSeeking) {
+      return;
+    }
+    if (_sampling) {
+      // A slow native status reply must not suspend the synchronization deadline.
+      _checkHealth(generation);
       return;
     }
     _sampling = true;
     try {
       final status = await _status();
-      if (_disposed || generation != _generation || _snapshot.isSeeking) return;
+      if (_disposed ||
+          generation != _generation ||
+          _snapshot.isSeeking ||
+          _snapshot.phase == PlaybackPhase.failed) {
+        return;
+      }
       _native = status;
       if (status['error'] != null) {
         _fail('fsplayer 播放失败');
@@ -377,14 +400,29 @@ final class FsPlayerEngine
               : PlaybackPhase.paused,
         ),
       );
-      if (_health.update(_snapshot, _clock.elapsed, paired: false) != null) {
-        _fail('fsplayer 播放停滞，正在尝试恢复');
-      }
+      _checkHealth(generation);
     } on Object {
       if (!_disposed && generation == _generation) _fail('fsplayer 状态读取失败');
     } finally {
       _sampling = false;
     }
+  }
+
+  void _checkHealth(int generation) {
+    if (_disposed || generation != _generation || _id == null) return;
+    final failure = _health.update(
+      _snapshot,
+      _clock.elapsed,
+      paired: false,
+      audioFrames: (_native['audioFrames'] as num?)?.toInt(),
+      videoFrames: (_native['videoFrames'] as num?)?.toInt(),
+      videoStarved: _native['videoStarved'] as bool?,
+      requiresAudio: _requiresAudio,
+      requiresVideo: _requiresVideo,
+    );
+    if (failure == null) return;
+    _diagnose(PlayerDiagnosticKind.playbackStalled, interruption: failure);
+    _fail('fsplayer 音视频中断，正在尝试恢复', failure.kind);
   }
 
   void _fail(

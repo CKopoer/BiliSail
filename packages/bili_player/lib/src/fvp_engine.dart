@@ -4,7 +4,6 @@ import 'dart:io';
 import 'android_media_leases.dart';
 import 'android_fvp_player.dart';
 import 'fvp_native_player.dart';
-import 'fvp_audio_health.dart';
 import 'fvp_video_output.dart';
 import 'native_audio_gain.dart';
 import 'native_playback_health.dart';
@@ -40,7 +39,6 @@ final class FvpEngine
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   final _failures = StreamController<PlayerFailure>.broadcast(sync: true);
   final _health = NativePlaybackHealth();
-  final _audioHealth = FvpAudioHealth();
   final _clock = Stopwatch()..start();
   Future<void> _commands = Future.value();
   FvpPlayerPort? _player;
@@ -178,7 +176,6 @@ final class FvpEngine
     await _leases?.close();
     _leases = null;
     _health.reset();
-    _audioHealth.reset();
   }
 
   @override
@@ -294,6 +291,35 @@ final class FvpEngine
             case FvpNativeStatus.invalid:
               _fail('fvp 无法继续播放此媒体');
             case FvpNativeStatus.ended:
+              final position = Duration(
+                milliseconds: player.positionMilliseconds,
+              );
+              if (!_live &&
+                  _snapshot.desiredPlaying &&
+                  !_snapshot.isSeeking &&
+                  _snapshot.duration > Duration.zero &&
+                  _snapshot.duration - position >
+                      const Duration(milliseconds: 500)) {
+                // Main-video EOF must not be mistaken for the end of a longer
+                // pair while the external audio pipeline is still playing.
+                _publish(_snapshot.copyWith(position: position));
+                _diagnose(
+                  PlayerDiagnosticKind.playbackStalled,
+                  failureKind: PlayerFailureKind.videoInterrupted,
+                  interruption: NativePlaybackInterruption(
+                    kind: PlayerFailureKind.videoInterrupted,
+                    position: position,
+                    reason: PlaybackStallReason.videoBuffer,
+                    stalledFor: Duration.zero,
+                  ),
+                );
+                _fail(
+                  'fvp 媒体提前中断，正在尝试恢复',
+                  kind: PlayerFailureKind.videoInterrupted,
+                  interruptNative: true,
+                );
+                return;
+              }
               _timer?.cancel();
               _publish(
                 _snapshot.copyWith(
@@ -474,33 +500,38 @@ final class FvpEngine
     if (_disposed || generation != _generation || !identical(player, _player)) {
       return;
     }
-    final audioFailure = _requiresAudio && player is FvpAudioActivityPort
-        ? _audioHealth.update(
-            _snapshot,
-            _clock.elapsed,
-            (player as FvpAudioActivityPort).decodedAudioFrames,
-          )
-        : null;
-    final failure =
-        audioFailure ??
-        _health.update(_snapshot, _clock.elapsed, paired: false);
+    final failure = _health.update(
+      _snapshot,
+      _clock.elapsed,
+      paired: false,
+      audioFrames: _requiresAudio && player is FvpAudioActivityPort
+          ? (player as FvpAudioActivityPort).decodedAudioFrames
+          : null,
+      requiresAudio: _requiresAudio,
+      requiresVideo: _snapshot.videoDimensions != null,
+    );
     if (failure != null) {
       _diagnose(
         PlayerDiagnosticKind.playbackStalled,
         interruption: failure,
         failureKind: failure.kind,
       );
-      _fail('fvp 播放停滞，正在尝试恢复');
+      _fail('fvp 播放停滞，正在尝试恢复', kind: failure.kind);
     }
   }
 
   void _fail(
     String message, {
     PlayerFailureKind kind = PlayerFailureKind.nativePlayback,
+    bool interruptNative = false,
   }) {
     if (_disposed || _snapshot.phase == PlaybackPhase.failed) return;
     _timer?.cancel();
-    _player?.pause();
+    if (interruptNative) {
+      _player?.interrupt();
+    } else {
+      _player?.pause();
+    }
     _publish(
       _snapshot.copyWith(
         phase: PlaybackPhase.failed,
@@ -636,7 +667,6 @@ final class FvpEngine
           _audioConfirmed = true;
         }
         _health.reset();
-        _audioHealth.reset();
         _publish(
           _snapshot.copyWith(
             phase: PlaybackPhase.playing,
@@ -676,7 +706,6 @@ final class FvpEngine
       if (_snapshot.phase == PlaybackPhase.failed) return;
       player.pause();
       _health.reset();
-      _audioHealth.reset();
       _publish(
         _snapshot.copyWith(
           phase: _snapshot.phase == PlaybackPhase.ended
@@ -707,7 +736,6 @@ final class FvpEngine
       final shouldPlay = _snapshot.desiredPlaying;
       player.pause();
       _health.reset();
-      _audioHealth.reset();
       _publish(
         _snapshot.copyWith(
           isSeeking: true,
@@ -733,7 +761,6 @@ final class FvpEngine
         final resume = shouldPlay && pauseRevision == _pauseRevision;
         if (resume) player.play();
         _health.reset();
-        _audioHealth.reset();
         _publish(
           _snapshot.copyWith(
             position: Duration(milliseconds: result),
@@ -761,7 +788,6 @@ final class FvpEngine
     if (!rate.isFinite || rate <= 0) throw ArgumentError.value(rate);
     player.setRate(rate);
     _health.reset();
-    _audioHealth.reset();
     _publish(_snapshot.copyWith(rate: rate));
   });
   @override
