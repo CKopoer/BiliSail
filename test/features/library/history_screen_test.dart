@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/core/platform/external_links.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/video.dart';
@@ -17,6 +18,91 @@ import 'package:flutter/gestures.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  for (final width in [320.0, 1280.0]) {
+    testWidgets(
+      'mixed histories open live rooms and official articles at $width',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 1400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final browser = <Uri>[];
+        final repository = _HistoryRepository([
+          for (final type in [
+            HistoryContentType.live,
+            HistoryContentType.article,
+          ])
+            WatchHistoryEntry.content(
+              type: type,
+              id: '12',
+              title: '${type.label}历史',
+              coverUrl: '',
+              author: '作者',
+              watchedAt: DateTime(2026, 11, 7),
+              deletionKey: type == HistoryContentType.live
+                  ? 'live_42'
+                  : 'article_42',
+              isLive: type == HistoryContentType.live,
+            ),
+        ]);
+        final router = GoRouter(
+          initialLocation: '/history',
+          routes: [
+            GoRoute(
+              path: '/history',
+              builder: (_, _) => const Scaffold(body: HistoryScreen()),
+            ),
+            GoRoute(
+              path: '/live/:id',
+              builder: (_, state) => Text('房间 ${state.pathParameters['id']}'),
+            ),
+          ],
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              libraryRepositoryProvider.overrideWithValue(repository),
+              externalLinkOpenerProvider.overrideWithValue((uri) async {
+                browser.add(uri);
+                return true;
+              }),
+            ],
+            child: MaterialApp.router(
+              routerConfig: router,
+              builder: (context, child) => AppNoticeHost(
+                child: MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    textScaler: TextScaler.linear(width == 320 ? 2 : 1),
+                  ),
+                  child: child!,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(VideoCard), findsNothing);
+        expect(find.text('直播中'), findsOneWidget);
+        await tester.ensureVisible(find.text('专栏历史'));
+        await tester.tap(find.text('专栏历史'));
+        await tester.pumpAndSettle();
+        expect(browser.single.toString(), 'https://www.bilibili.com/read/cv12');
+        await tester.tap(find.byTooltip('历史记录操作').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('删除记录'));
+        await tester.pumpAndSettle();
+        expect(repository.deleted, ['article_42']);
+        expect(find.text('专栏历史'), findsNothing);
+        await tester.ensureVisible(find.text('直播历史'));
+        await tester.tap(find.text('直播历史'));
+        await tester.pumpAndSettle();
+        expect(find.text('房间 12'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
   for (final config in [
     (width: 320.0, scale: 2.0, platform: TargetPlatform.android),
     (width: 390.0, scale: 1.0, platform: TargetPlatform.iOS),

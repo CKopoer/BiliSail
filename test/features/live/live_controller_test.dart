@@ -52,6 +52,64 @@ void main() {
 
   LiveState current() => container.read(liveControllerProvider(requested));
 
+  test('room entry requires an active authenticated page and reports the canonical ID once', () async {
+    controller.setActive(true);
+    await Future<void>.delayed(Duration.zero);
+    expect(repository.entries, isEmpty);
+    controller.setActive(false);
+    repository.scope = 'user:1';
+    await controller.load();
+    expect(repository.entries, isEmpty);
+    controller.setActive(true);
+    await Future<void>.delayed(Duration.zero);
+    expect(repository.entries, [canonical]);
+    controller.setActive(false);
+    controller.setActive(true);
+    await controller.load();
+    expect(repository.entries, [canonical]);
+    repository.epoch++;
+    await controller.load();
+    expect(repository.entries, [canonical, canonical]);
+  });
+
+  test(
+    'entry failure stays separate from room loading and never auto-replays',
+    () async {
+      repository.scope = 'user:1';
+      repository.entryFailure = const AppFailure(
+        AppFailureKind.timeout,
+        'fixture',
+      );
+      controller.setActive(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(current().room, room);
+      expect(current().roomMessage, isNull);
+      expect(current().historyMessage, isNotNull);
+      await controller.load();
+      expect(repository.entries, [canonical]);
+    },
+  );
+
+  test(
+    'account reset cancels an in-flight entry and discards its late failure',
+    () async {
+      repository.scope = 'user:1';
+      repository.pendingEntry = Completer<void>();
+      controller.setActive(true);
+      final old = repository.entryCancellation;
+      repository.scope = 'guest';
+      repository.epoch++;
+      auth.emit(const AuthState(status: AuthStatus.signedIn));
+      await Future<void>.delayed(Duration.zero);
+      expect(old?.isCancelled, true);
+      repository.pendingEntry!.completeError(
+        const AppFailure(AppFailureKind.timeout, 'fixture'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(current().historyMessage, isNull);
+    },
+  );
+
   test('unchanged background history is silent and manual refresh reports progress', () async {
     repository.messages = List.generate(
       500,
@@ -320,7 +378,22 @@ void main() {
   });
 }
 
-final class _Repository implements LiveRepository {
+final class _Repository implements LiveRepository, LiveHistoryRepository {
+  final entries = <RoomId>[];
+  AppFailure? entryFailure;
+  Completer<void>? pendingEntry;
+  RequestCancellation? entryCancellation;
+  @override
+  Future<void> reportEntry(
+    RoomId id, {
+    required RequestCancellation cancellation,
+  }) async {
+    entries.add(id);
+    entryCancellation = cancellation;
+    if (entryFailure case final failure?) throw failure;
+    await pendingEntry?.future;
+  }
+
   String scope = 'guest';
   int epoch = 0;
   Completer<LiveRoom>? pendingRoom;

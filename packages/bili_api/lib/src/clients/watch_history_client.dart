@@ -18,11 +18,19 @@ final class ApiWatchHistoryEntry {
     this.authorAvatarUrl,
     this.episodeId,
     this.deletionKey,
+    this.business = 'archive',
+    this.contentId,
+    this.isLive = false,
+    this.courseSeason = false,
   });
   final String bvid, title, author, cid, partTitle;
   final Uri? coverUrl, authorAvatarUrl;
   final String? authorMid, episodeId;
   final String? deletionKey;
+  final String business;
+  final String? contentId;
+  final bool isLive;
+  final bool courseSeason;
   final int page;
   final Duration duration, position;
   final DateTime watchedAt;
@@ -47,7 +55,7 @@ final class WatchHistoryClient {
         (parts.length != 3 ||
             !_decimal.hasMatch(parts[0]) ||
             !_decimal.hasMatch(parts[1]) ||
-            !RegExp(r'^[a-z_]*$').hasMatch(parts[2]))) {
+            !RegExp(r'^[a-z_-]*$').hasMatch(parts[2]))) {
       throw ArgumentError.value(cursor, 'cursor');
     }
     final data = await api.requestJson(
@@ -71,7 +79,7 @@ final class WatchHistoryClient {
     if (max == null ||
         viewAt == null ||
         business is! String ||
-        !RegExp(r'^[a-z_]*$').hasMatch(business)) {
+        !RegExp(r'^[a-z_-]*$').hasMatch(business)) {
       _protocol();
     }
     final nextCursor = '$max:$viewAt:$business';
@@ -123,19 +131,38 @@ final class WatchHistoryClient {
       final item = _map(raw);
       final history = _map(item['history']);
       final business = history['business'];
-      // Live/article histories have their own destinations, outside this page.
-      if (business != 'archive' && business != 'pgc') continue;
+      if (business is! String ||
+          !const {
+            'archive',
+            'pgc',
+            'live',
+            'article',
+            'article-list',
+            'cheese',
+          }.contains(business)) {
+        continue;
+      }
+      final video = business == 'archive' || business == 'pgc';
+      final course = business == 'cheese' ? _courseTarget(item['uri']) : null;
+      final courseEpisode = _id(history['epid']);
+      final contentId = switch (business) {
+        'live' || 'article' => _id(history['oid']),
+        'article-list' => _id(history['cid']),
+        'cheese' => courseEpisode ?? course?.id,
+        _ => null,
+      };
       final bvid = history['bvid'] is String ? history['bvid'] as String : '';
       final episodeId = business == 'pgc' ? _id(history['epid']) : null;
-      if (business == 'pgc' && episodeId == null ||
+      if (!video && contentId == null ||
+          business == 'pgc' && episodeId == null ||
           business == 'archive' &&
               !RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid)) {
         _protocol();
       }
       final title = item['title'];
       final timestamp = _integer(item['view_at']);
-      final seconds = _integer(item['duration']);
-      final progress = _integer(item['progress']);
+      final seconds = video ? _integer(item['duration']) : 0;
+      final progress = video ? _integer(item['progress']) : 0;
       if (title is! String ||
           title.trim().isEmpty ||
           timestamp == null ||
@@ -154,7 +181,7 @@ final class WatchHistoryClient {
         ApiWatchHistoryEntry(
           bvid: bvid,
           title: title,
-          coverUrl: _uri(item['cover']),
+          coverUrl: _uri(item['cover']) ?? _firstCover(item['covers']),
           author: item['author_name'] is String
               ? item['author_name'] as String
               : '',
@@ -173,6 +200,13 @@ final class WatchHistoryClient {
           ),
           episodeId: episodeId,
           deletionKey: kid == null ? null : '${business}_$kid',
+          business: business,
+          contentId: contentId,
+          isLive: _integer(item['live_status']) == 1,
+          courseSeason:
+              business == 'cheese' &&
+              courseEpisode == null &&
+              course?.season == true,
         ),
       );
     }
@@ -180,7 +214,9 @@ final class WatchHistoryClient {
   }
 
   Future<void> delete(String deletionKey, {ApiRequestContext? context}) async {
-    if (!RegExp(r'^(archive|pgc)_[1-9][0-9]*$').hasMatch(deletionKey)) {
+    if (!RegExp(
+      r'^(archive|pgc|live|article|article-list|cheese)_[1-9][0-9]*$',
+    ).hasMatch(deletionKey)) {
       throw ArgumentError.value(deletionKey, 'deletionKey');
     }
     await api.submitForm('/x/v2/history/delete', 'watch_history_delete', {
@@ -196,6 +232,21 @@ final class WatchHistoryClient {
   }
 
   static final _decimal = RegExp(r'^(0|[1-9][0-9]*)$');
+  static Uri? _firstCover(Object? value) =>
+      value is List<Object?> && value.isNotEmpty ? _uri(value.first) : null;
+
+  static ({String id, bool season})? _courseTarget(Object? value) {
+    if (value is! String) return null;
+    final uri = Uri.tryParse(value);
+    if (uri == null) return null;
+    // Only the content identity is retained; no remote URL or query is opened.
+    final match = RegExp(
+      r'(?:^|/)(ep|ss)([1-9][0-9]*)(?:/|$)',
+    ).firstMatch(uri.path);
+    final id = match?.group(2);
+    return id == null ? null : (id: id, season: match?.group(1) == 'ss');
+  }
+
   static String? _decimalId(Object? value) {
     final text = value is String
         ? value

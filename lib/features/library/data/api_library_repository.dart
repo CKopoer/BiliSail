@@ -54,6 +54,7 @@ final class ApiLibraryRepository
       // Detail failures affect optional metadata only, never the history list.
       final details = <String, ApiVideoDetail>{};
       final ids = page.items
+          .where((item) => item.business == 'archive' || item.business == 'pgc')
           .map((item) => item.bvid)
           .where((id) => VideoId(id).isValid)
           .toSet()
@@ -84,6 +85,25 @@ final class ApiLibraryRepository
       return WatchHistoryPage(
         List.unmodifiable(
           page.items.map((item) {
+            if (item.contentId case final id?) {
+              return WatchHistoryEntry.content(
+                type: switch (item.business) {
+                  'live' => HistoryContentType.live,
+                  'article' => HistoryContentType.article,
+                  'article-list' => HistoryContentType.articleList,
+                  _ => HistoryContentType.course,
+                },
+                id: id,
+                title: item.title,
+                coverUrl: item.coverUrl?.toString() ?? '',
+                author: item.author,
+                authorId: UserId.tryParse(item.authorMid),
+                watchedAt: item.watchedAt,
+                deletionKey: item.deletionKey,
+                isLive: item.isLive,
+                courseSeason: item.courseSeason,
+              );
+            }
             final detail = details[item.bvid];
             return WatchHistoryEntry(
               video: VideoSummary(

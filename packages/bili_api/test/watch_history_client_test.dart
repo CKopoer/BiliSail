@@ -138,7 +138,7 @@ void main() {
     'unsupported business still advances the mixed history cursor',
     () async {
       final page = await client({
-        'list': [entry(business: 'live')],
+        'list': [entry(business: 'future_kind')],
         'cursor': {'max': 42, 'view_at': 1791324000, 'business': 'live'},
       }).load();
       expect(page.items, isEmpty);

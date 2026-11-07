@@ -37,6 +37,13 @@ abstract interface class LiveViewerRepository {
   });
 }
 
+abstract interface class LiveHistoryRepository {
+  Future<void> reportEntry(
+    RoomId id, {
+    required RequestCancellation cancellation,
+  });
+}
+
 final class UnavailableLiveViewerRepository implements LiveViewerRepository {
   const UnavailableLiveViewerRepository();
   @override

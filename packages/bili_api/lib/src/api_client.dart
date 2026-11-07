@@ -464,6 +464,27 @@ final class BiliApiClient {
     );
   }
 
+  /// Web room entry uses JSON with CSRF in the query, sent only once.
+  Future<void> reportLiveEntry(
+    String roomId, {
+    ApiRequestContext? context,
+  }) async {
+    final id = int.tryParse(roomId);
+    if (id == null || id <= 0 || !RegExp(r'^[1-9][0-9]*$').hasMatch(roomId)) {
+      throw ArgumentError.value(roomId, 'roomId');
+    }
+    await _submitForm(
+      Uri.https(
+        'api.live.bilibili.com',
+        '/xlive/web-room/v1/index/roomEntryAction',
+      ),
+      'live_history_report',
+      const {},
+      context,
+      jsonBody: {'room_id': id, 'platform': 'pc'},
+    );
+  }
+
   /// Web IM writes are single attempts and use the destination's Cookie scope.
   Future<Object?> submitMessageForm(
     String path,

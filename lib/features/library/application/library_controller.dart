@@ -82,9 +82,10 @@ final class HistoryController extends Notifier<HistoryState> {
     List<WatchHistoryEntry> before,
     List<WatchHistoryEntry> incoming,
   ) {
-    final entries = <(String, String, String?), WatchHistoryEntry>{};
+    final entries =
+        <(HistoryContentType, String, String?), WatchHistoryEntry>{};
     for (final entry in [...before, ...incoming]) {
-      final key = (entry.video.id.value, entry.part.cid, entry.episodeId);
+      final key = entry.identity;
       final old = entries[key];
       if (old == null || entry.watchedAt.isAfter(old.watchedAt)) {
         entries[key] = entry;
@@ -108,7 +109,7 @@ final class HistoryController extends Notifier<HistoryState> {
       hasMore: page.hasMore && !limit,
       limitReached: limit,
       pageError: page.hasMore && !limit && _emptyPages >= 3
-          ? const AppFailure(AppFailureKind.protocol, '连续多页没有视频记录，可重试继续加载')
+          ? const AppFailure(AppFailureKind.protocol, '连续多页没有新增记录，可重试继续加载')
           : null,
     );
   }
@@ -199,7 +200,9 @@ final class HistoryController extends Notifier<HistoryState> {
 
   Future<bool> delete(WatchHistoryEntry entry) async {
     final key = entry.deletionKey;
-    if (key == null || !RegExp(r'^(archive|pgc)_[1-9][0-9]*$').hasMatch(key)) {
+    if (key == null ||
+        !RegExp(r'^(archive|pgc|live|article|article-list|cheese)_[1-9][0-9]*$')
+            .hasMatch(key)) {
       throw const AppFailure(AppFailureKind.protocol, '该记录缺少历史标识，请刷新后重试');
     }
     if (!(state.items.asData?.value.contains(entry) ?? false)) return false;

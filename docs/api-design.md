@@ -251,3 +251,6 @@ Protobuf 只引入所需消息及传递依赖，记录源提交、生成器版�
 
 首轮至少取得 guest 与 signed-in 的详情、搜索、playurl、弹幕响应对照；建立“参考实现 → fixture → Dart 测试 → 真实烟测”的证据链后再宣称接入完成。[Dio 的能力和配置](https://pub.dev/packages/dio) 仅支撑传输选型，具体鉴权策略以本项目验证为准。
 
+## 直播进房与多类型历史（2026-11-07）
+
+直播进入已激活房间后使用 `api.live.bilibili.com` POST `/xlive/web-room/v1/index/roomEntryAction`，Web Cookie、查询参数 CSRF、JSON `room_id/platform`，单次上报不重放。关注直播使用同域 GET `/xlive/web-ucenter/user/following`，按 `totalPage` 显式分页、只展示在播主播。历史列表与搜索增加直播、专栏、文集和课程，保留真实业务身份与删除键；视频统计仅补齐点播条目。协议字段、PiliPlus 固定来源、账号与生命周期边界及未测项见[直播与多类型历史](validation/live-history-types-2026-11-07.md)。

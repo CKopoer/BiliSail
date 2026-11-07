@@ -9,7 +9,11 @@ import '../domain/live_chat_repository.dart';
 import '../domain/live_room.dart';
 
 class ApiLiveRepository
-    implements LiveRepository, LiveChatRepository, LiveViewerRepository {
+    implements
+        LiveRepository,
+        LiveChatRepository,
+        LiveViewerRepository,
+        LiveHistoryRepository {
   ApiLiveRepository(
     this.client,
     this.requests, {
@@ -24,6 +28,31 @@ class ApiLiveRepository
   String get accountScope => _scope();
   @override
   int get sessionEpoch => requests.sessionEpoch;
+
+  @override
+  Future<void> reportEntry(
+    RoomId id, {
+    required RequestCancellation cancellation,
+  }) {
+    final scope = accountScope, epoch = sessionEpoch;
+    return requests.run((context) async {
+      _validate(id);
+      void checkCurrent() {
+        if (cancellation.isCancelled ||
+            scope != accountScope ||
+            epoch != sessionEpoch) {
+          throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
+        }
+      }
+
+      checkCurrent();
+      if (!scope.startsWith('user:')) {
+        throw const AppFailure(AppFailureKind.authentication, '请先登录');
+      }
+      await client.reportEntry(id.value, context: context);
+      checkCurrent();
+    }, cancellation: cancellation);
+  }
 
   @override
   Future<int?> loadViewerCount(

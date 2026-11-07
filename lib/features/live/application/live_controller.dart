@@ -51,6 +51,7 @@ final class LiveState {
     this.connectionMessage,
     this.viewerCountText,
     this.watchedCountText,
+    this.historyMessage,
   });
 
   final LiveRoom? room;
@@ -65,6 +66,7 @@ final class LiveState {
   final String? connectionMessage;
   final String? viewerCountText;
   final String? watchedCountText;
+  final String? historyMessage;
 
   LiveState copyWith({
     LiveRoom? room,
@@ -85,6 +87,7 @@ final class LiveState {
     bool clearConnectionMessage = false,
     String? viewerCountText,
     String? watchedCountText,
+    String? historyMessage,
   }) => LiveState(
     room: room ?? this.room,
     loading: loading ?? this.loading,
@@ -104,6 +107,7 @@ final class LiveState {
         : connectionMessage ?? this.connectionMessage,
     viewerCountText: viewerCountText ?? this.viewerCountText,
     watchedCountText: watchedCountText ?? this.watchedCountText,
+    historyMessage: historyMessage ?? this.historyMessage,
   );
 }
 
@@ -138,6 +142,8 @@ class LiveController extends Notifier<LiveState> {
   Stream<List<LiveChatMessage>> get receivedDanmaku =>
       _danmakuEmitter?.stream ?? const Stream.empty();
   bool _active = false;
+  RequestCancellation? _historyWrite;
+  (String, int, RoomId)? _reportedEntry;
   bool get isMounted => ref.mounted;
 
   @override
@@ -160,6 +166,8 @@ class LiveController extends Notifier<LiveState> {
   }
 
   void _cancel() {
+    _historyWrite?.cancel();
+    _historyWrite = null;
     _stopRealtime();
     _realtimeSuperChats.clear();
     _deletedSuperChats.clear();
@@ -220,6 +228,7 @@ class LiveController extends Notifier<LiveState> {
     _startChatTimer();
     _pruneExpiredSuperChats();
     if (state.room != null) {
+      unawaited(_reportEntry());
       _startRealtime();
       refreshChat();
       refreshSuperChats();
@@ -274,6 +283,7 @@ class LiveController extends Notifier<LiveState> {
       }
       state = LiveState(room: room);
       if (_active) {
+        unawaited(_reportEntry());
         _startRealtime();
         await Future.wait([
           refreshChat(),
@@ -301,6 +311,39 @@ class LiveController extends Notifier<LiveState> {
     ++_viewerVersion;
     _viewerRead?.cancel();
     _viewerRead = null;
+  }
+
+  Future<void> _reportEntry() async {
+    final room = state.room;
+    final repository = ref.read(liveRepositoryProvider);
+    if (!_active ||
+        room == null ||
+        repository is! LiveHistoryRepository ||
+        !repository.accountScope.startsWith('user:')) {
+      return;
+    }
+    final scope = repository.accountScope, epoch = repository.sessionEpoch;
+    final key = (scope, epoch, room.id);
+    if (_reportedEntry == key) return;
+    _reportedEntry = key;
+    final write = RequestCancellation();
+    _historyWrite?.cancel();
+    _historyWrite = write;
+    final generation = _generation;
+    try {
+      await (repository as LiveHistoryRepository).reportEntry(
+        room.id,
+        cancellation: write,
+      );
+    } catch (error) {
+      if (!write.isCancelled &&
+          _current(generation, scope, epoch) &&
+          !(error is AppFailure && error.kind == AppFailureKind.cancelled)) {
+        state = state.copyWith(historyMessage: '直播观看记录上报失败');
+      }
+    } finally {
+      if (identical(_historyWrite, write)) _historyWrite = null;
+    }
   }
 
   /// Refresh once per active-page interval; never overlap or replace a newer

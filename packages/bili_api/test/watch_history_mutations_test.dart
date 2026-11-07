@@ -30,7 +30,14 @@ void main() {
   });
   tearDown(() => api.close());
 
-  for (final business in ['archive', 'pgc']) {
+  for (final business in [
+    'archive',
+    'pgc',
+    'live',
+    'article',
+    'article-list',
+    'cheese',
+  ]) {
     test('delete $business uses the root kid and scoped CSRF once', () async {
       await WatchHistoryClient(api).delete('${business}_9007199254740993123');
       expect(
@@ -58,7 +65,7 @@ void main() {
       'archive_0',
       'pgc_1.5',
       'archive_1&kid=2',
-      'live_1',
+      'future_1',
     ]) {
       await expectLater(
         WatchHistoryClient(api).delete(key),

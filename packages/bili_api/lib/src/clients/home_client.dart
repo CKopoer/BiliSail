@@ -265,13 +265,26 @@ final class HomeClient {
         );
       }
       if (section == '我的关注') {
-        final data = await get('/xlive/web-ucenter/v1/xfetter/GetWebList', {
+        final data = await get('/xlive/web-ucenter/user/following', {
           'page': '$page',
           'page_size': '20',
+          'ignoreRecord': '1',
+          'hit_ab': 'true',
         }, live: true);
+        final rooms = _list(data['list'], nullable: true);
+        final totalPage = _number(data['totalPage']);
+        if (rooms.length > 100 || totalPage == null || totalPage < 0) {
+          throw const ApiFailure(ApiFailureCategory.protocol, 'home_live');
+        }
         return ApiPage(
-          List.unmodifiable(_list(data['rooms'], nullable: true).map(_live)),
-          hasMore: page * 20 < (_number(data['count']) ?? 0),
+          List.unmodifiable(
+            rooms
+                .where((room) => _number(_map(room)['live_status']) == 1)
+                .map(_live),
+          ),
+          // Pagination describes the raw mixed online/offline page. Filtering
+          // must not hide later live rooms or stop on a partial response.
+          hasMore: page < totalPage,
         );
       }
       if (folderId == null && (section == '推荐直播' || section == '推荐')) {
@@ -533,6 +546,7 @@ final class HomeClient {
       title: _required(m['title']),
       kind: ApiHomeEntryKind.live,
       coverUrl:
+          _uri(m['room_cover']) ??
           _uri(m['cover']) ??
           _uri(m['user_cover']) ??
           _uri(m['keyframe']) ??

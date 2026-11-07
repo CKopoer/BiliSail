@@ -89,6 +89,56 @@ final class _Transport implements ApiTransport, ApiFormTransport {
 }
 
 void main() {
+  test('mixed history maps destinations without fetching video details for other types', () async {
+    final transport = _Transport(
+      (_) => {
+        'code': 0,
+        'data': historyData([
+          for (final business in ['live', 'article', 'article-list', 'cheese'])
+            {
+              'kid': 99,
+              'title': business,
+              'author_name': '作者',
+              'view_at': 1791324000,
+              'live_status': 1,
+              'history': {
+                'business': business,
+                'oid': 12,
+                'cid': 13,
+                'epid': 14,
+              },
+            },
+        ]),
+      },
+    );
+    final requests = ApiRequests();
+    final api = BiliApiClient(transport: transport, sessionProvider: requests);
+    addTearDown(api.close);
+    final repository = ApiLibraryRepository(
+      WatchHistoryClient(api),
+      requests,
+      accountScope: () => 'user:1',
+    );
+    final result = await repository.loadHistory(
+      cancellation: RequestCancellation(),
+    );
+    expect(transport.requests, hasLength(1));
+    expect(result.items.map((e) => e.location.toString()), [
+      '/live/12',
+      'https://www.bilibili.com/read/cv12',
+      'https://www.bilibili.com/read/readlist/rl13',
+      'https://www.bilibili.com/cheese/play/ep14',
+    ]);
+    expect(result.items.map((e) => e.type), [
+      HistoryContentType.live,
+      HistoryContentType.article,
+      HistoryContentType.articleList,
+      HistoryContentType.course,
+    ]);
+    expect(result.items.every((e) => e.video == null && e.part == null), true);
+    expect(result.items.first.isLive, true);
+    expect(result.items.last.deletionKey, 'cheese_99');
+  });
   test(
     'search forwards keyword and page while keeping enriched history metadata',
     () async {
@@ -125,7 +175,7 @@ void main() {
         'business': 'all',
       });
       expect(page.nextCursor, '3');
-      expect(page.items.single.video.playCount, 12345);
+      expect(page.items.single.video!.playCount, 12345);
       expect(
         page.items.single.location.toString(),
         '/video/BV1234567890?cid=1',
@@ -231,13 +281,13 @@ void main() {
       hasLength(1),
     );
     final entry = page.items.first;
-    expect(entry.video.title, '云端 BV1234567890');
+    expect(entry.video!.title, '云端 BV1234567890');
     expect(entry.deletionKey, 'archive_9007199254740997');
-    expect(entry.video.playCount, 12345);
-    expect(entry.video.danmakuCount, 0);
-    expect(entry.video.authorId?.value, '123');
-    expect(entry.video.publishedAt, isNull);
-    expect(entry.video.duration.inSeconds, 100);
+    expect(entry.video!.playCount, 12345);
+    expect(entry.video!.danmakuCount, 0);
+    expect(entry.video!.authorId?.value, '123');
+    expect(entry.video!.publishedAt, isNull);
+    expect(entry.video!.duration.inSeconds, 100);
     expect(entry.location.toString(), '/video/BV1234567890?cid=1');
     expect(page.items.last.location.queryParameters['cid'], '2');
     expect(page.items.last.position.inSeconds, 100);
@@ -277,7 +327,8 @@ void main() {
       expect(
         page.items.every(
           (entry) =>
-              entry.video.playCount == null && entry.video.danmakuCount == null,
+              entry.video!.playCount == null &&
+              entry.video!.danmakuCount == null,
         ),
         true,
       );

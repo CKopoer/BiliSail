@@ -13,6 +13,12 @@ final class LiveClient {
   final BiliApiClient api;
   Future<String>? _deviceInFlight;
 
+  /// Entering a room records history once; uncertain writes are never replayed.
+  Future<void> reportEntry(String roomId, {ApiRequestContext? context}) async {
+    _validateId(roomId);
+    await api.reportLiveEntry(roomId, context: context);
+  }
+
   /// The room audience is separate from room `online`/heartbeat popularity.
   /// The Web rank snapshot exposes an integer even when WS display text is capped.
   Future<int> getViewerCount(

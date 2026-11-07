@@ -18,6 +18,88 @@ ApiHttpResponse _response({int code = 0, String message = '', Object? data}) =>
 
 void main() {
   test(
+    'room entry rejects missing live credentials, cancellation and expired deadlines before posting',
+    () async {
+      final transport = _Transport();
+      final cookies = ApiCookieJar()
+        ..receive(Uri.https('api.bilibili.com', '/'), [
+          'SESSDATA=fixture; Path=/; Secure',
+          'bili_jct=fixture-csrf; Path=/; Secure',
+        ]);
+      final client = LiveClient(
+        BiliApiClient(transport: transport, cookieJar: cookies),
+      );
+      await expectLater(
+        client.reportEntry('12'),
+        throwsA(
+          isA<ApiFailure>().having(
+            (e) => e.category,
+            'category',
+            ApiFailureCategory.authentication,
+          ),
+        ),
+      );
+      cookies.receive(Uri.https('api.live.bilibili.com', '/'), [
+        'SESSDATA=fixture; Path=/; Secure',
+        'bili_jct=fixture-csrf; Path=/; Secure',
+      ]);
+      final cancellation = ApiCancellation()..cancel();
+      await expectLater(
+        client.reportEntry(
+          '12',
+          context: ApiRequestContext(cancellation: cancellation),
+        ),
+        throwsA(
+          isA<ApiFailure>().having(
+            (e) => e.category,
+            'category',
+            ApiFailureCategory.cancelled,
+          ),
+        ),
+      );
+      await expectLater(
+        client.reportEntry(
+          '12',
+          context: ApiRequestContext(deadline: DateTime.utc(2000)),
+        ),
+        throwsA(
+          isA<ApiFailure>().having(
+            (e) => e.category,
+            'category',
+            ApiFailureCategory.timeout,
+          ),
+        ),
+      );
+      expect(transport.posts, 0);
+    },
+  );
+  test(
+    'room entry posts once with live Cookie/CSRF and does not replay timeout',
+    () async {
+      final transport = _Transport();
+      final cookies = ApiCookieJar()
+        ..receive(Uri.https('api.live.bilibili.com', '/'), [
+          'SESSDATA=fixture; Path=/; Secure',
+          'bili_jct=fixture-csrf; Path=/; Secure',
+        ]);
+      final client = LiveClient(
+        BiliApiClient(transport: transport, cookieJar: cookies),
+      );
+      await client.reportEntry('9007199254740993');
+      expect(transport.uri?.host, 'api.live.bilibili.com');
+      expect(transport.uri?.path, '/xlive/web-room/v1/index/roomEntryAction');
+      expect(transport.body, {'room_id': 9007199254740993, 'platform': 'pc'});
+      expect(transport.uri?.queryParameters, {'csrf': 'fixture-csrf'});
+      expect(transport.headers['Cookie'], contains('SESSDATA=fixture'));
+      expect(transport.headers['Origin'], 'https://live.bilibili.com');
+      transport.error = TimeoutException('fixture');
+      await expectLater(client.reportEntry('12'), throwsA(isA<ApiFailure>()));
+      expect(transport.posts, 2);
+      await expectLater(client.reportEntry('invalid'), throwsArgumentError);
+      expect(transport.posts, 2);
+    },
+  );
+  test(
     'live writes use host-scoped cookies, raw fields and one CSRF post',
     () async {
       final transport = _Transport();
@@ -191,12 +273,30 @@ void main() {
   );
 }
 
-final class _Transport implements ApiTransport, ApiFormTransport {
+final class _Transport
+    implements ApiTransport, ApiFormTransport, ApiJsonTransport {
   Uri? uri;
+  Map<String, Object?> body = {};
   Map<String, String> fields = {}, headers = {};
   int posts = 0;
   Object? error;
   ApiHttpResponse result = _response();
+  @override
+  Future<ApiHttpResponse> postJson(
+    Uri uri, {
+    required Map<String, Object?> body,
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  }) async {
+    posts++;
+    this.uri = uri;
+    this.body = body;
+    this.headers = headers;
+    if (error case final error?) throw error;
+    return result;
+  }
+
   @override
   Future<ApiHttpResponse> get(
     Uri uri, {

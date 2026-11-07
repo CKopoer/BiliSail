@@ -124,6 +124,48 @@ void main() {
   }
 
   test(
+    'mixed business identities stay distinct and delete by server kid',
+    () async {
+      WatchHistoryEntry content(HistoryContentType type, String key) =>
+          WatchHistoryEntry.content(
+            type: type,
+            id: '12',
+            title: type.label,
+            coverUrl: '',
+            author: '',
+            watchedAt: DateTime(2026, 11, 7),
+            deletionKey: key,
+          );
+      final live = content(HistoryContentType.live, 'live_99');
+      final article = content(HistoryContentType.article, 'article_99');
+      await settle();
+      repository.calls.first.result.complete(
+        WatchHistoryPage(
+          [live, article, entry('12')],
+          hasMore: true,
+          nextCursor: 'next',
+        ),
+      );
+      await settle();
+      final controller = container.read(historyProvider.notifier);
+      final more = controller.loadMore();
+      repository.calls.last.result.complete(
+        WatchHistoryPage([live], hasMore: false),
+      );
+      await more;
+      expect(container.read(historyProvider).items.requireValue, hasLength(3));
+      final deletion = controller.delete(live);
+      expect(repository.writes.single.key, 'live_99');
+      repository.writes.single.result.complete();
+      expect(await deletion, true);
+      expect(container.read(historyProvider).items.requireValue, [
+        article,
+        isA<WatchHistoryEntry>(),
+      ]);
+    },
+  );
+
+  test(
     'search cancels old paging, resets the cursor and discards late responses',
     () async {
       await loaded();
@@ -148,7 +190,7 @@ void main() {
       await Future.wait([oldPage, first]);
       expect(container.read(historyProvider).keyword, 'Dart');
       expect(
-        container.read(historyProvider).items.requireValue.single.part.cid,
+        container.read(historyProvider).items.requireValue.single.part!.cid,
         '4',
       );
       final more = controller.loadMore();
@@ -268,7 +310,7 @@ void main() {
               .read(historyProvider)
               .items
               .requireValue
-              .map((e) => e.part.cid),
+              .map((e) => e.part!.cid),
           clear ? isEmpty : ['1'],
         );
         expect(container.read(historyProvider).writeBusy, false);
@@ -285,7 +327,7 @@ void main() {
                 .read(historyProvider)
                 .items
                 .requireValue
-                .map((e) => e.part.cid),
+                .map((e) => e.part!.cid),
             ['1', '4'],
           );
         }
@@ -393,7 +435,11 @@ void main() {
     );
     await more;
     expect(
-      container.read(historyProvider).items.requireValue.map((e) => e.part.cid),
+      container
+          .read(historyProvider)
+          .items
+          .requireValue
+          .map((e) => e.part!.cid),
       ['1', '2', '3'],
     );
     await container.read(historyProvider.notifier).loadMore();
@@ -413,7 +459,7 @@ void main() {
     );
     await settle();
     expect(
-      container.read(historyProvider).items.requireValue.single.part.cid,
+      container.read(historyProvider).items.requireValue.single.part!.cid,
       'new',
     );
   });
@@ -498,7 +544,7 @@ void main() {
         );
         await refresh;
         expect(
-          container.read(historyProvider).items.requireValue.single.part.cid,
+          container.read(historyProvider).items.requireValue.single.part!.cid,
           'new',
         );
       },

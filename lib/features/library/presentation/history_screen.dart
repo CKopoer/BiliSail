@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../domain/app_failure.dart';
+import '../../../core/platform/external_links.dart';
 import '../../../core/network/api_requests.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/app_dialog.dart';
@@ -10,8 +11,8 @@ import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/state_view.dart';
-import '../../../shared/ui/video_grid.dart';
 import '../../../shared/ui/video_card.dart';
+import 'history_content_card.dart';
 import '../application/library_controller.dart';
 import '../domain/library_repository.dart';
 
@@ -60,7 +61,9 @@ final class HistoryScreen extends ConsumerStatefulWidget {
       builder: (context) => AlertDialog(
         scrollable: true,
         title: const Text('清空观看历史？'),
-        content: const Text('将清空当前账号在所有设备上的全部云端观看历史，包括本页未显示的直播、专栏等记录。此操作无法撤销。'),
+        content: const Text(
+          '将清空当前账号在所有设备上的全部云端观看历史，包括视频、影视、直播、专栏和课程等记录。此操作无法撤销。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -479,32 +482,70 @@ final class _HistoryEntriesSliver extends ConsumerWidget {
                 ),
               ),
             )
-          : SliverVideoGrid.indexed(
-              onOpenUser: (id) => context.go('/user/${id.value}'),
-              items: [for (final entry in entries) entry.video],
-              menuAt: (index) => VideoCardMenu(
-                actions: const [VideoCardMenuAction.removeHistory],
-                busy: writeBlocked,
-                onSelected: (_) => HistoryScreen._perform(
+          : SliverResponsiveCardGrid(
+              itemCount: entries.length,
+              itemBuilder: (context, index) {
+                final entry = entries[index];
+                void open() async {
+                  if (!WorkspaceActivity.isActive(context)) return;
+                  final location = entry.location;
+                  if (!location.hasScheme) {
+                    context.go(location.toString());
+                    return;
+                  }
+                  var opened = false;
+                  try {
+                    opened = await ref.read(externalLinkOpenerProvider)(
+                      location,
+                    );
+                  } on Exception {
+                    // Platform launch failures use the same local feedback as
+                    // a rejected launch; the history list remains available.
+                  }
+                  if (!opened &&
+                      context.mounted &&
+                      WorkspaceActivity.isActive(context)) {
+                    showAppNotice(context, '无法打开官网页面');
+                  }
+                }
+
+                void remove() => HistoryScreen._perform(
                   context,
                   ref,
-                  (controller) => controller.delete(entries[index]),
+                  (controller) => controller.delete(entry),
                   '已删除观看记录',
-                ),
-              ),
-              onOpen: (index) => context.go(entries[index].location.toString()),
-              publishTextAt: (index) =>
-                  HistoryScreen._watchDate(entries[index].watchedAt),
-              publishTooltipAt: (index) =>
-                  HistoryScreen._watchedAt(entries[index].watchedAt),
-              progressAt: (index) {
-                final entry = entries[index];
-                if (entry.part.duration.inMilliseconds <= 0) {
-                  return null;
+                );
+                final video = entry.video;
+                if (video == null) {
+                  return HistoryContentCard(
+                    key: ValueKey(entry.identity),
+                    entry: entry,
+                    date: HistoryScreen._watchDate(entry.watchedAt),
+                    dateTooltip: HistoryScreen._watchedAt(entry.watchedAt),
+                    onOpen: open,
+                    onDelete: writeBlocked ? null : remove,
+                    onOpenAuthor: entry.authorId == null
+                        ? null
+                        : () => context.go('/user/${entry.authorId?.value}'),
+                  );
                 }
-                return (entry.position.inMilliseconds /
-                        entry.part.duration.inMilliseconds)
-                    .clamp(0, 1);
+                final duration = entry.part?.duration.inMilliseconds ?? 0;
+                return VideoCard(
+                  key: ValueKey(entry.identity),
+                  video: video,
+                  onOpenUser: (id) => context.go('/user/${id.value}'),
+                  menu: VideoCardMenu(
+                    actions: const [VideoCardMenuAction.removeHistory],
+                    busy: writeBlocked,
+                    onSelected: (_) => remove(),
+                  ),
+                  onTap: open,
+                  publishText: HistoryScreen._watchDate(entry.watchedAt),
+                  publishTooltip: HistoryScreen._watchedAt(entry.watchedAt),
+                  progress: duration <= 0
+                      ? null
+                      : (entry.position.inMilliseconds / duration).clamp(0, 1),
+                );
               },
             ),
     );

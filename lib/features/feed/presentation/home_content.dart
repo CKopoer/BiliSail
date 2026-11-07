@@ -179,6 +179,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
         key: ValueKey(query),
         active: widget.active,
         canLoadMore:
+            !(widget.channel == HomeChannel.live && widget.section == '我的关注') &&
             feed.hasMore &&
             !feed.loadingMore &&
             feed.items.asData != null &&
