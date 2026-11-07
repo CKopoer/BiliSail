@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 project(BiliSailInstallerUI LANGUAGES CXX)
 
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-  message(FATAL_ERROR "The installer UI requires Windows x64.")
+  message(FATAL_ERROR "The installer UI requires 64-bit Windows.")
 endif()
 if(NOT BILISAIL_WIX_SDK_DIR)
   message(FATAL_ERROR "Pass the hash-verified WiX SDK directory.")

@@ -36,7 +36,7 @@ try {
     $targets = @(($plan.matrix | ConvertFrom-Json).include.target)
     $expected = @(
       if ($mask -band 1) { 'android-arm64' }
-      if ($mask -band 2) { 'windows-x64' }
+      if ($mask -band 2) { 'windows-x64'; 'windows-arm64' }
       if ($mask -band 4) { 'macos-arm64'; 'macos-x64' }
       if ($mask -band 8) { 'ios-arm64' }
       if ($mask -band 16) { 'linux-x64' }
@@ -58,9 +58,13 @@ try {
   Assert-Rejected '1.2.65+999' 2
   if ((Invoke-Plan '256.10.5+1000' 16).version -cne '256.10.5+1000') { throw 'Unselected platform constrained version.' }
   $checks++
-  $allTargets = @('android-arm64', 'windows-x64', 'macos-arm64', 'macos-x64', 'ios-arm64', 'linux-x64')
-  for ($mask = 1; $mask -lt 64; $mask++) {
-    $expected = @(for ($index = 0; $index -lt 6; $index++) {
+  $windows = ((Invoke-Plan '1.2.5+0' 2).matrix | ConvertFrom-Json).include
+  $arm64 = $windows | Where-Object target -eq 'windows-arm64'
+  if ($arm64.runner -cne 'windows-11-arm' -or $arm64.arch -cne 'x64') { throw 'Windows ARM64 requires an ARM64 host with the x64 Flutter SDK.' }
+  $checks++
+  $allTargets = @('android-arm64', 'windows-x64', 'windows-arm64', 'macos-arm64', 'macos-x64', 'ios-arm64', 'linux-x64')
+  for ($mask = 1; $mask -lt (1 -shl $allTargets.Count); $mask++) {
+    $expected = @(for ($index = 0; $index -lt $allTargets.Count; $index++) {
       if ($mask -band (1 -shl $index)) { $allTargets[$index] }
     })
     $plan = Invoke-Plan '1.2.5+0' 31 (ConvertTo-Json -InputObject $expected -Compress)

@@ -17,7 +17,7 @@ on:
         type: boolean
         default: true
       enable_windows:
-        description: Windows x64 MSIX / MSI / EXE 安装包
+        description: Windows x64 / ARM64 MSIX / MSI / EXE 安装包
         type: boolean
         default: true
       enable_macos:

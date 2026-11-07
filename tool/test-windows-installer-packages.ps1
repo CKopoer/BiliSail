@@ -2,12 +2,14 @@ param(
   [Parameter(Mandatory)][string]$Wix,
   [Parameter(Mandatory)][string]$Msi,
   [Parameter(Mandatory)][string]$Bundle,
-  [Parameter(Mandatory)][string]$WorkingDirectory
+  [Parameter(Mandatory)][string]$WorkingDirectory,
+  [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64'
 )
 
 $ErrorActionPreference = 'Stop'
 if (!$IsWindows) { throw 'Windows installer package checks require a Windows host.' }
 . (Join-Path $PSScriptRoot 'windows-installers.ps1')
+. (Join-Path $PSScriptRoot 'windows-architecture.ps1')
 
 # Inspect the compiled packages, not just source XML. Never install the app or
 # change machine registration during CI; UI/device acceptance remains separate.
@@ -22,6 +24,7 @@ Invoke-WixCommand $Wix @('burn', 'extract', $Bundle, '-oba', $baDirectory)
 [xml]$burnXml = Get-Content -LiteralPath (Join-Path $baDirectory 'manifest.xml') -Raw
 [xml]$baXml = Get-Content -LiteralPath (Join-Path $baDirectory 'BootstrapperApplicationData.xml') -Raw
 [xml]$themeXml = Get-Content -LiteralPath (Join-Path $baDirectory 'thm.xml') -Raw
+Confirm-WindowsPayloadArchitecture $baDirectory $Architecture
 $checks = 0
 function Assert-PackageNode([xml]$Document, [string]$XPath, [string]$Message) {
   if (!$Document.SelectSingleNode($XPath)) { throw $Message }
@@ -95,6 +98,11 @@ $installer = New-Object -ComObject WindowsInstaller.Installer
 $database = $null
 try {
   $database = $installer.OpenDatabase($Msi, 0)
+  $summary = $database.SummaryInformation(0)
+  try {
+    $expectedTemplate = if ($Architecture -eq 'arm64') { 'Arm64;1033' } else { 'x64;1033' }
+    if ($summary.Property(7) -cne $expectedTemplate) { throw "MSI platform does not match $Architecture." }
+  } finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($summary) | Out-Null }
   foreach ($action in @('RegisterProduct', 'RemoveFiles')) {
     $view = $database.OpenView(('SELECT `Action` FROM `InstallExecuteSequence` WHERE `Action` = ''{0}''' -f $action))
     $record = $null

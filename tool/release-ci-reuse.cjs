@@ -8,6 +8,7 @@ const path = require('node:path');
 const packageSuffixes = {
   'android-arm64': ['.apk'],
   'windows-x64': ['.msix', '.msi', '.exe', '.cer'],
+  'windows-arm64': ['.msix', '.msi', '.exe', '.cer'],
   'macos-arm64': ['.dmg'],
   'macos-x64': ['.dmg'],
   'ios-arm64': ['-unsigned.ipa'],

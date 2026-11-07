@@ -277,8 +277,8 @@ packages:
     dependency: "direct main"
     description:
       path: media_kit
-      ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
-      resolved-ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
+      ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
+      resolved-ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "1.2.6"
@@ -286,8 +286,8 @@ packages:
     dependency: "direct overridden"
     description:
       path: "libs/android/media_kit_libs_android_video"
-      ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
-      resolved-ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
+      ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
+      resolved-ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "1.3.8"
@@ -295,8 +295,8 @@ packages:
     dependency: "direct overridden"
     description:
       path: "libs/ios/media_kit_libs_ios_video"
-      ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
-      resolved-ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
+      ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
+      resolved-ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "1.1.5"
@@ -304,8 +304,8 @@ packages:
     dependency: "direct overridden"
     description:
       path: "libs/linux/media_kit_libs_linux"
-      ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
-      resolved-ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
+      ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
+      resolved-ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "1.2.1"
@@ -313,8 +313,8 @@ packages:
     dependency: "direct overridden"
     description:
       path: "libs/macos/media_kit_libs_macos_video"
-      ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
-      resolved-ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
+      ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
+      resolved-ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "1.1.5"
@@ -322,8 +322,8 @@ packages:
     dependency: "direct main"
     description:
       path: "libs/universal/media_kit_libs_video"
-      ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
-      resolved-ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
+      ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
+      resolved-ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "1.0.8"
@@ -331,8 +331,8 @@ packages:
     dependency: "direct overridden"
     description:
       path: "libs/windows/media_kit_libs_windows_video"
-      ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
-      resolved-ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
+      ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
+      resolved-ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "1.0.12"
@@ -340,8 +340,8 @@ packages:
     dependency: "direct main"
     description:
       path: media_kit_video
-      ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
-      resolved-ref: "7034784f960be84339ed6d87849ad2cef23c50b7"
+      ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
+      resolved-ref: "9abd8a56f24371fd8c9628b70eba5e84c29e86c8"
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "2.0.1"

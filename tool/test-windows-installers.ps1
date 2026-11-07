@@ -31,7 +31,9 @@ try {
     New-Item -ItemType Directory -Path (Split-Path $file -Parent) -Force | Out-Null
     Set-Content -LiteralPath $file -Value 'test payload'
   }
-  function Build-WindowsInstallerNative([string]$WorkingDirectory) {
+  $expectedArchitecture = 'x64'
+  function Build-WindowsInstallerNative([string]$WorkingDirectory, [string]$Architecture) {
+    if ($Architecture -cne $expectedArchitecture) { throw 'Native installer helper architecture was lost.' }
     $headers = Join-Path $WorkingDirectory 'sdk/wixtoolset.bootstrapperapplicationapi/build/native/include'
     $binary = Join-Path $WorkingDirectory 'build/Release/BiliSailInstallerUI.dll'
     New-Item -ItemType Directory -Path $headers, (Split-Path $binary -Parent) -Force | Out-Null
@@ -44,6 +46,7 @@ try {
     Set-Content -LiteralPath (Join-Path $Destination 'dialog.bmp') -Value 'test artwork'
   }
   function Invoke-WixCommand([string]$Wix, [string[]]$Parameters) {
+    if ($Parameters[[Array]::IndexOf($Parameters, '-arch') + 1] -cne $expectedArchitecture) { throw 'WiX package architecture was lost.' }
     $helper = Join-Path $work 'installer-native/build/Release/BiliSailInstallerUI.dll'
     $artwork = Join-Path $work 'installer-artwork'
     if ("InstallerUIHelper=$helper" -cnotin $Parameters -or "InstallerArtwork=$artwork" -cnotin $Parameters) {
@@ -64,6 +67,13 @@ try {
   }
   if (!(Test-Path -LiteralPath (Join-Path $staging 'data/licenses/wix/installer-ui/BootstrapperApplicationTypes.h') -PathType Leaf)) {
     throw 'Moving build files must preserve the SDK header supplied with the adapted UI source.'
+  }
+  $expectedArchitecture = 'arm64'
+  $armMsi = Join-Path $release 'BiliSail-1.2.6+0-windows-arm64.msi'
+  New-WindowsMsi 'test-wix' $staging $armMsi '1.2.6+0' $work 'arm64'
+  New-WindowsBundle 'test-wix' $armMsi (Join-Path $work 'unsigned-arm64-setup.exe') '1.2.6+0' 'arm64'
+  if (@(Get-ChildItem -LiteralPath $release -Directory).Count -or !(Test-Path -LiteralPath $armMsi)) {
+    throw 'ARM64 installer packaging violated the release boundary.'
   }
   Write-Output 'Windows installer release-directory boundary checks passed.'
 } finally {

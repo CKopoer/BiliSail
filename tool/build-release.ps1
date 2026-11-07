@@ -1,5 +1,5 @@
 param(
-  [Parameter(Mandatory)][ValidateSet('android-arm64', 'windows-x64', 'macos-arm64', 'macos-x64', 'ios-arm64', 'linux-x64')][string]$Target,
+  [Parameter(Mandatory)][ValidateSet('android-arm64', 'windows-x64', 'windows-arm64', 'macos-arm64', 'macos-x64', 'ios-arm64', 'linux-x64')][string]$Target,
   [Parameter(Mandatory)][string]$Version,
   [switch]$AndroidPreviewSigning
 )
@@ -10,6 +10,7 @@ $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'android-version.ps1')
 . (Join-Path $PSScriptRoot 'android-media-notification.ps1')
 . (Join-Path $PSScriptRoot 'windows-installers.ps1')
+. (Join-Path $PSScriptRoot 'windows-architecture.ps1')
 . (Join-Path $PSScriptRoot 'windows-msix-identity.ps1')
 . (Join-Path $PSScriptRoot 'macos-release-validation.ps1')
 . (Join-Path $PSScriptRoot 'ios-package-validation.ps1')
@@ -19,10 +20,10 @@ function Invoke-BuildCommand([string]$Executable, [string[]]$Parameters) {
   if ($LASTEXITCODE -ne 0) { throw "$Executable failed: $LASTEXITCODE" }
 }
 
-function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [string]$Version, [string]$Wix, [string]$WorkingDirectory) {
+function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [string]$Version, [string]$Wix, [string]$WorkingDirectory, [ValidateSet('x64', 'arm64')][string]$Architecture) {
   $msi = [System.IO.Path]::ChangeExtension($Destination, '.msi')
   $setup = [System.IO.Path]::ChangeExtension($Destination, '.exe')
-  New-WindowsMsi $Wix $Staging $msi $Version $WorkingDirectory
+  New-WindowsMsi $Wix $Staging $msi $Version $WorkingDirectory $Architecture
   $sdkTool = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/makeappx.exe" |
     Sort-Object FullName -Descending | Select-Object -First 1
   if (!$sdkTool) { throw 'Windows SDK MakeAppx.exe was not found.' }
@@ -31,7 +32,9 @@ function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [stri
   if (!(Test-Path -LiteralPath $makePri)) { throw 'Windows SDK MakePri.exe was not found.' }
   [xml]$manifest = Get-Content 'windows/packaging/AppxManifest.xml' -Raw
   $manifest.Package.Identity.Version = $Version.Replace('+', '.')
-  Confirm-WindowsMsixIdentity $manifest $Version | Out-Null
+  $manifest.Package.Identity.ProcessorArchitecture = $Architecture
+  if ($Architecture -eq 'arm64') { $manifest.Package.Dependencies.TargetDeviceFamily.MinVersion = '10.0.22000.0' }
+  Confirm-WindowsMsixIdentity $manifest $Version $Architecture | Out-Null
   $publisher = [string]$manifest.Package.Identity.Publisher
   $manifest.Save((Join-Path $Staging 'AppxManifest.xml'))
 
@@ -78,7 +81,7 @@ function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [stri
   try {
     $reader = [System.IO.StreamReader]::new($archive.GetEntry('AppxManifest.xml').Open())
     try { [xml]$packedManifest = $reader.ReadToEnd() } finally { $reader.Dispose() }
-    $script:windowsMsixIdentity = Confirm-WindowsMsixIdentity $packedManifest $Version
+    $script:windowsMsixIdentity = Confirm-WindowsMsixIdentity $packedManifest $Version $Architecture
     $familyName = Get-WindowsMsixFamilyName $script:windowsMsixIdentity.name $script:windowsMsixIdentity.publisher
     if ($familyName -cne 'JerryHsu.BiliSail_e5wcspfxwa6kj') { throw "Unexpected MSIX package family: $familyName" }
     $script:windowsMsixIdentity['packageFamilyName'] = $familyName
@@ -112,12 +115,12 @@ function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [stri
     Confirm-WindowsMsixSignature $Destination $certificate.Thumbprint
     Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $msi) | Out-Host
     $unsignedBundle = Join-Path $WorkingDirectory 'unsigned-setup.exe'
-    New-WindowsBundle $Wix $msi $unsignedBundle $Version
+    New-WindowsBundle $Wix $msi $unsignedBundle $Version $Architecture
     Complete-WindowsBundleSigning $Wix $unsignedBundle $setup $WorkingDirectory {
       param($file)
       Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $file)
     }
-    & (Join-Path $PSScriptRoot 'test-windows-installer-packages.ps1') -Wix $Wix -Msi $msi -Bundle $setup -WorkingDirectory $WorkingDirectory | Out-Host
+    & (Join-Path $PSScriptRoot 'test-windows-installer-packages.ps1') -Wix $Wix -Msi $msi -Bundle $setup -WorkingDirectory $WorkingDirectory -Architecture $Architecture | Out-Host
     Export-Certificate -Cert $certificate -FilePath ([System.IO.Path]::ChangeExtension($Destination, '.cer')) | Out-Null
     return $signing
   } finally {
@@ -133,15 +136,17 @@ if ($Version -cnotmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\+(0|[1-9]\d*)
   throw 'Version must be x.y.z+N, for example 0.1.0+1.'
 }
 $buildName, $buildNumber = $Version.Split('+')
+$isWindowsTarget = $Target -in @('windows-x64', 'windows-arm64')
+$windowsArch = if ($isWindowsTarget) { $Target.Substring(8) } else { $null }
 $isMacOSTarget = $Target -in @('macos-arm64', 'macos-x64')
 $macosArch = if ($Target -eq 'macos-arm64') { 'arm64' } elseif ($Target -eq 'macos-x64') { 'x86_64' } else { $null }
 $androidVersionCode = if ($Target -eq 'android-arm64') { Get-AndroidVersionCode $Version } else { $null }
-if ($Target -eq 'windows-x64' -and @(($Version -split '[.+]') | Where-Object { [long]$_ -gt 65535 }).Count) {
+if ($isWindowsTarget -and @(($Version -split '[.+]') | Where-Object { [long]$_ -gt 65535 }).Count) {
   throw 'MSIX version components must be at most 65535.'
 }
-if ($Target -eq 'windows-x64') { $msiVersion = Get-WindowsMsiVersion $Version }
-if ($Target -eq 'windows-x64' -and (!$IsWindows -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64')) {
-  throw 'windows-x64 requires a Windows x64 host.'
+if ($isWindowsTarget) { $msiVersion = Get-WindowsMsiVersion $Version }
+if ($isWindowsTarget -and (!$IsWindows -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant() -ne $windowsArch)) {
+  throw "$Target requires a matching Windows $windowsArch host (Flutter 3.47.6 selects the target from the host)."
 }
 if ($Target -eq 'macos-arm64' -and (!$IsMacOS -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'Arm64')) {
   throw 'macos-arm64 requires an Apple Silicon macOS host.'
@@ -176,6 +181,13 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Could not read Flutter SDK version.' }
   $sdk = $sdkJson | ConvertFrom-Json
   if ($sdk.frameworkVersion -ne '3.47.6') { throw 'This checkout is verified with Flutter 3.47.6.' }
+  if ($isWindowsTarget) {
+    $flutterRoot = Split-Path (Split-Path (Get-Command flutter).Source -Parent) -Parent
+    $dartBinary = Join-Path $flutterRoot 'bin/cache/dart-sdk/bin/dart.exe'
+    if ((Get-WindowsBinaryArchitecture $dartBinary) -cne $windowsArch) {
+      throw "Flutter uses the wrong Dart ABI for $Target. Prepare the native Dart SDK before building."
+    }
+  }
   $revision = & git rev-parse HEAD
   if ($LASTEXITCODE -ne 0) { throw 'Could not read source revision.' }
   $sourceChanges = & git status --porcelain
@@ -183,8 +195,8 @@ try {
   $sourceDirty = [bool]$sourceChanges
   $lockHash = (Get-FileHash -LiteralPath 'pubspec.lock' -Algorithm SHA256).Hash
   Invoke-BuildCommand flutter @('pub', 'get', '--enforce-lockfile')
-  if ($Target -eq 'windows-x64') {
-    & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1')
+  if ($isWindowsTarget) {
+    & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1') -Architecture $windowsArch
   }
   & (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Target $Target
   # Release builds must regenerate native registrants without dev-only plugins.
@@ -280,7 +292,7 @@ try {
       $androidCertificateSha256 = Confirm-AndroidApkSigning $package $androidSigning
       $signing = $androidSigning.Signing
     }
-    'windows-x64' {
+    { $_ -in @('windows-x64', 'windows-arm64') } {
       $installerWork = Join-Path $outputRoot 'installer-work'
       New-Item -ItemType Directory -Path $installerWork | Out-Null
       $wix = Initialize-WindowsInstallerTools (Join-Path $installerWork 'tools')
@@ -297,26 +309,28 @@ try {
         $env:MSIX_CERTIFICATE_PASSWORD = $msixPassword
       }
       $staging = Join-Path $outputRoot $name
-      Copy-Item -LiteralPath 'build/windows/x64/runner/Release' -Destination $staging -Recurse
+      Copy-Item -LiteralPath "build/windows/$windowsArch/runner/Release" -Destination $staging -Recurse
       if (!(Test-Path -LiteralPath (Join-Path $staging 'bilisail.exe'))) { throw 'Windows executable is missing.' }
       # An existing local build directory can still contain the pre-rename EXE.
       $oldExecutable = Join-Path $staging 'bili_lite.exe'
       if (Test-Path -LiteralPath $oldExecutable) { Remove-Item -LiteralPath $oldExecutable }
       # Bundle the application-local VC++ runtime required on a clean machine.
       $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-      $visualStudio = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+      $vcComponent = if ($windowsArch -eq 'arm64') { 'Microsoft.VisualStudio.Component.VC.Tools.ARM64' } else { 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' }
+      $visualStudio = & $vswhere -latest -products '*' -requires $vcComponent -property installationPath
       if ($LASTEXITCODE -ne 0 -or !$visualStudio) { throw 'Visual Studio C++ installation was not found.' }
-      $runtime = Get-ChildItem "$visualStudio/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT" -Directory | Sort-Object FullName -Descending | Select-Object -First 1
-      if (!$runtime) { throw 'Visual C++ x64 redistributable DLLs were not found.' }
-      foreach ($dll in @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
-        Copy-Item -LiteralPath (Join-Path $runtime.FullName $dll) -Destination $staging
+      $runtime = Get-ChildItem "$visualStudio/VC/Redist/MSVC/*/$windowsArch/Microsoft.VC*.CRT" -Directory | Sort-Object FullName -Descending | Select-Object -First 1
+      if (!$runtime) { throw "Visual C++ $windowsArch redistributable DLLs were not found." }
+      foreach ($dll in Get-ChildItem -LiteralPath $runtime.FullName -Filter '*.dll' -File) {
+        Copy-Item -LiteralPath $dll.FullName -Destination $staging
       }
+      Confirm-WindowsPayloadArchitecture $staging $windowsArch
       Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination $staging
       $wixLicenseDir = Join-Path $staging 'data/licenses/wix'
       New-Item -ItemType Directory -Path $wixLicenseDir -Force | Out-Null
       Copy-Item -Path 'windows/licenses/wix/*' -Destination $wixLicenseDir
       $package = Join-Path $releaseDir "$name.msix"
-      $signing = New-SignedWindowsPackages $staging $package $Version $wix $installerWork
+      $signing = New-SignedWindowsPackages $staging $package $Version $wix $installerWork $windowsArch
     }
     { $_ -in @('macos-arm64', 'macos-x64') } {
       $arm64Only = if ($Target -eq 'macos-arm64') { '--enable-macos-arm64-only' } else { '--no-enable-macos-arm64-only' }
@@ -369,16 +383,16 @@ try {
     dartVersion = $sdk.dartSdkVersion
     signing = $signing
     macosValidation = $macosValidation
-    windowsMsiVersion = if ($Target -eq 'windows-x64') { $msiVersion } else { $null }
-    windowsMsixVersion = if ($Target -eq 'windows-x64') { $Version.Replace('+', '.') } else { $null }
-    windowsMsixIdentity = if ($Target -eq 'windows-x64') { $script:windowsMsixIdentity } else { $null }
+    windowsMsiVersion = if ($isWindowsTarget) { $msiVersion } else { $null }
+    windowsMsixVersion = if ($isWindowsTarget) { $Version.Replace('+', '.') } else { $null }
+    windowsMsixIdentity = if ($isWindowsTarget) { $script:windowsMsixIdentity } else { $null }
     macosVersionName = if ($isMacOSTarget) { $macosVersionName } else { $null }
     macosBuildNumber = if ($isMacOSTarget) { $macosBuildNumber } else { $null }
     iosVersionName = if ($Target -eq 'ios-arm64') { $iosVersionName } else { $null }
     iosBuildNumber = if ($Target -eq 'ios-arm64') { $iosBuildNumber } else { $null }
     iosBundleIdentifier = if ($Target -eq 'ios-arm64') { $iosBundleId } else { $null }
     linuxPackaging = if ($Target -eq 'linux-x64') { Get-Content (Join-Path $outputRoot 'linux-packaging.json') -Raw | ConvertFrom-Json } else { $null }
-    windowsInstallerToolVersion = if ($Target -eq 'windows-x64') { $script:WindowsWixVersion } else { $null }
+    windowsInstallerToolVersion = if ($isWindowsTarget) { $script:WindowsWixVersion } else { $null }
     runnerImage = $env:ImageVersion
     pubspecLockSha256 = $lockHash.ToLowerInvariant()
   }
@@ -389,7 +403,7 @@ try {
     "$hash  $([System.IO.Path]::GetFileName($file))" | Set-Content -LiteralPath "$file.sha256" -Encoding ascii
   }
   Write-Output "Packaged $package"
-  if ($Target -eq 'windows-x64') { Write-Output "Also packaged $name.msi and $name.exe" }
+  if ($isWindowsTarget) { Write-Output "Also packaged $name.msi and $name.exe" }
 } finally {
   Clear-AndroidSigning $androidSigning
   if ($isMacOSTarget) {

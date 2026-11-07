@@ -6,13 +6,15 @@
 
 ## 2026-11-07 个人媒体 fork
 
-当前核心、视频和全部平台库插件统一来自 MIT 的 [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/7034784f960be84339ed6d87849ad2cef23c50b7)，官方基线为 `c533e446755f51cf53c7e57aea873f2aa5355f81`。mpv 源码由 [CKopoer/mpv](https://github.com/CKopoer/mpv) 维护；固定资产与原来源见 [native-2026-11-07](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)。Windows、Android、Apple 的首批资产为原摘要不变的上游镜像；Linux 从个人固定源码构建，子依赖继续记录发行版来源。MIT 不替代 mpv、FFmpeg、ANGLE 或其他子依赖的许可。当前入口及验证见[实施记录](docs/validation/media-kit-personal-fork-2026-11-07.md)；下列各次切换记录保留为历史。
+当前核心、视频和全部平台库插件统一来自 MIT 的 [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/9abd8a56f24371fd8c9628b70eba5e84c29e86c8)，官方基线为 `c533e446755f51cf53c7e57aea873f2aa5355f81`。mpv 源码由 [CKopoer/mpv](https://github.com/CKopoer/mpv) 维护；固定资产与原来源见 [native-2026-11-07](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)。Windows、Android、Apple 的首批资产为原摘要不变的上游镜像；Linux 从个人固定源码构建，子依赖继续记录发行版来源。MIT 不替代 mpv、FFmpeg、ANGLE 或其他子依赖的许可。当前入口及验证见[实施记录](docs/validation/media-kit-personal-fork-2026-11-07.md)；下列各次切换记录保留为历史。
 
 
 
 记录日期：2026-10-05。本文件用于本地 0.1.0 预览的来源追踪，不表示已经完成对外发行所需的全部原生许可证归档。项目尚未确定自己的开源许可证。
 
 ## 2026-11-01 Windows ANGLE 硬解回退修复
+
+2026-11-07 新增 Windows ARM64：libmpv 使用同一 `88eb9f2e73945d8bc9c133a2f67babaa9af34680` 的 LGPL aarch64 SDK；ANGLE 使用 BSD-3-Clause 的 `a96fca8d5ee2ca61e8de419e38cd577579281c9e`，构建材料为 [yorickreum/angle-libs](https://github.com/yorickreum/angle-libs/tree/485758dd4baf87570c2aac3cc47577a9514d3429)。两份原始归档逐字节镜像到个人媒体 fork；摘要、对应源码与分发许可见 [Windows 来源](windows/native/mpv/SOURCE.md)。ARM64 包附原始 ANGLE LICENSE 与来源记录，MIT 包装许可不替代其子依赖许可。
 
 Windows 保留以下 PiliPlus 核心／视频／库插件和 ANGLE 来源，完整 libmpv SDK 改用固定的 [zhongfly LGPL x86_64 构建 88eb9f2e73](https://github.com/zhongfly/mpv-winbuild/releases/tag/2026-10-12-88eb9f2e73)，包含 mpv 的 EGL device-query 修复。当前清单为 [media-assets.cmake](windows/native/media-assets.cmake)，归档、SDK 逐文件摘要、源码、构建记录及许可边界见 [SOURCE.md](windows/native/mpv/SOURCE.md)。许可、来源与清单随 Windows bundle 一并保留，动态链接方式不变。没有采用 DXGI 扩展、修改 Pub 缓存或切换其他平台。LGPL 标签不代替静态子依赖各自的许可与对应源码分发要求。
 

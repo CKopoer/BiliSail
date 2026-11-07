@@ -7,9 +7,9 @@
 | 层次 | 现行来源 |
 | --- | --- |
 | 官方基线 | media-kit/media-kit `c533e446755f51cf53c7e57aea873f2aa5355f81` |
-| 核心、视频、aggregate 及 Android/Windows/macOS/iOS/Linux 库插件 | [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/7034784f960be84339ed6d87849ad2cef23c50b7)，统一固定 `7034784f960be84339ed6d87849ad2cef23c50b7` |
+| 核心、视频、aggregate 及 Android/Windows/macOS/iOS/Linux 库插件 | [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/9abd8a56f24371fd8c9628b70eba5e84c29e86c8)，统一固定 `9abd8a56f24371fd8c9628b70eba5e84c29e86c8` |
 | mpv 源码 | [CKopoer/mpv](https://github.com/CKopoer/mpv)；Windows `88eb9f2e73945d8bc9c133a2f67babaa9af34680`，Android `9fda3e12a57a7b3ebd627a3c1b37561709d4ffee`，Apple 官方基线 `f4210f84906c3b00a65fba198c8127b6757b9350`，Linux `41f6a645068483470267271e1d09966ca3b9f413` |
-| 资产与构建材料 | [固定原生 Release](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)、[资产摘要](https://github.com/CKopoer/media-kit/blob/7034784f960be84339ed6d87849ad2cef23c50b7/native/assets.lock.json)、[构建分支提交](https://github.com/CKopoer/media-kit/blob/7034784f960be84339ed6d87849ad2cef23c50b7/native/builds.lock.json) |
+| 资产与构建材料 | [固定原生 Release](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)、[资产摘要](https://github.com/CKopoer/media-kit/blob/9abd8a56f24371fd8c9628b70eba5e84c29e86c8/native/assets.lock.json)、[构建分支提交](https://github.com/CKopoer/media-kit/blob/9abd8a56f24371fd8c9628b70eba5e84c29e86c8/native/builds.lock.json) |
 
 根应用和 `bili_player` 保留必要的 overrides，八个媒体包统一来自同一完整 Git 提交。最终无 path override、相邻仓库依赖或 Pub 缓存修改。canvas_danmaku 的现行提交不变。
 
@@ -58,3 +58,17 @@ Windows、Android 和 Apple 首批资产是保留原 SHA-256 的上游二进制�
 ## 设备与平台边界
 
 本轮开始时无 Android ADB 设备，开发 Release 仅构建，不安装、不卸载、不清数据或复制正式包凭据。Apple 本平台构建与设备不可用。Linux CI 为 native 构建／ABI 检查，完整应用构建、安装及图形播放待对应主机验证。mux 与播放器的 FFmpeg 保持独立。
+
+## 2026-11-07：Windows ARM64 扩展
+
+应用与 `bili_player` 的八个媒体包及两份锁文件统一更新到 `9abd8a56f24371fd8c9628b70eba5e84c29e86c8`。该次修改集中在 Windows 库插件、视频链接和验证工具；其他平台的媒体实现与原固定资产继续沿用。
+
+- libmpv ARM64 使用同一 `88eb9f2e73945d8bc9c133a2f67babaa9af34680` 的 LGPL aarch64 SDK；归档摘要 `bdffd1f6c2ce4f083bea6fd8c0dec845065468ba7d0426c23cb9b09c8b540b86`，DLL 摘要 `6139b27ac410fc2535161e3e11969bbc8b27c2b6850a61e0550266f9a08c8c52`。
+- ANGLE ARM64 固定 `a96fca8d5ee2ca61e8de419e38cd577579281c9e` 的 D3D11/OpenGL 构建，归档摘要 `f7f122533644ec0dd1f52f0117b9fa57ceb3f69dff3359579028ff4008f74f69`。上游包缺少动态导入库，fork 从已校验 DLL 的 115／1809 个具名导出记录生成 `.def`，使用目标 MSVC `lib /machine:arm64` 生成动态导入库，不链接附带的静态 ANGLE。
+- mpv 的 `vulkan-1.dll` 是硬导入，不能仅靠无 Vulkan 的 ANGLE 包满足。另镜像 MSYS2 的 Khronos Vulkan Loader 1.4.357.0 ARM64 包，归档 SHA-256 为 `1a5e4c82fc568b83b2e2cbb1e9145d61bda15ed6e2d9f6fdfb96e674aaed49b9`；DLL 和 Apache-2.0 许可分别校验、随包保留，不依赖开发机系统安装的 loader。
+- 三份归档逐字节镜像到 [ARM64 原生 Release](https://github.com/CKopoer/media-kit/releases/tag/native-windows-arm64-2026-11-07)，原始二进制未修改；新版本不是个人重新编译。原始 ANGLE LICENSE、源码／构建材料与导出定义随来源记录保留。
+- 库插件按目标选择 SDK、头文件、导入库和运行时 DLL，归档及解压文件分别校验。ARM64 mpv 的 BCJ 过滤器使用 7-Zip 23.01+ 解压，不能由 CMake 内置 libarchive 代替。x64 原有 SDK 和 ANGLE 路径保持独立。
+
+本机通过两种架构的 CMake 资产准备与逐文件校验，验证 ARM64 mpv／ANGLE 的 PE 头及动态导入库生成；可选 MDK 0.39.0 完整 Windows SDK 的 SHA-256 与 20 个 ARM64 EXE／DLL 的 PE 架构也已核对。原生 CI、应用打包及设备验收边界见 [CI/CD](ci-cd.md#windows-arm64-构建)，不从静态检查推导硬解性能或实际音画体验。
+
+最终 [Windows 原生 CI 42366829360](https://github.com/CKopoer/media-kit/actions/runs/42366829360) 的 x64／ARM64 Flutter Release fixture 编译、插件链接、实际 DLL 加载、PE 架构和 mpv client ABI／创建销毁检查通过。ARM64 由固定 Flutter 自带引导器安装原生 Dart 3.13.5，生成 ARM64 应用；许可证按应用输出目标展开安装，避免 Flutter 的生成器表达式前缀被当成字面路径。此项不代表完整 BiliSail 安装包、真实安装 UI、视频纹理或硬解性能已经通过。

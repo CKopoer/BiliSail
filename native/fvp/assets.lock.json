@@ -6,6 +6,10 @@
       "archive": "mdk-sdk-windows-x64-vs2026.7z",
       "sha256": "e492fd45f3a6828e44f75ce665708c9040abaa60602605437b71c95c714808e3"
     },
+    "windows-arm64": {
+      "archive": "mdk-sdk-windows-vs2026.7z",
+      "sha256": "c3fe4c8f5b2ac6622040678a9d5665bfa54f6434a0bb2ac29c27295eeb9c9a96"
+    },
     "android": {
       "archive": "mdk-sdk-android.7z",
       "sha256": "cd196c9f6fb1872c4f35184848522ca3ab9c91196da47ca9761d8fb50e3e9cf3"

@@ -11,7 +11,7 @@ const { planReleaseBuilds, downloadReusedArtifacts, verifyReleaseAssets } = requ
 const version = '1.2.5+0';
 const context = { repo: { owner: 'CKopoer', repo: 'BiliSail' }, sha: 'a'.repeat(40) };
 const now = Date.parse('2026-10-31T00:00:00Z');
-const allTargets = ['android-arm64', 'windows-x64', 'macos-arm64', 'macos-x64', 'ios-arm64', 'linux-x64'];
+const allTargets = ['android-arm64', 'windows-x64', 'windows-arm64', 'macos-arm64', 'macos-x64', 'ios-arm64', 'linux-x64'];
 
 function makeRun(id, overrides = {}) {
   return { id, status: 'completed', conclusion: 'success', event: 'push',
@@ -152,7 +152,7 @@ test('combines targets from multiple CI runs and builds only missing targets', a
   });
   const selected = await plan({ github });
   assert.deepEqual(selected.reused.map(({ target, runId }) => [target, runId]), [['macos-arm64', 20], ['macos-x64', 10]]);
-  assert.deepEqual(selected.buildTargets, ['android-arm64', 'windows-x64', 'ios-arm64', 'linux-x64']);
+  assert.deepEqual(selected.buildTargets, ['android-arm64', 'windows-x64', 'windows-arm64', 'ios-arm64', 'linux-x64']);
   const empty = fakeGitHub([], {});
   assert.deepEqual(await plan({ github: empty.github }), { reused: [], buildTargets: allTargets });
 });
@@ -167,8 +167,8 @@ test('keeps an already matched target while searching older runs for missing tar
   assert.deepEqual(selected.buildTargets, []);
 });
 
-test('partitions all 64 reuse combinations without omitting or rebuilding a reusable target', async () => {
-  for (let mask = 0; mask < 64; mask++) {
+test('partitions all target reuse combinations without omitting or rebuilding a reusable target', async () => {
+  for (let mask = 0; mask < (1 << allTargets.length); mask++) {
     const available = allTargets.filter((_, index) => mask & (1 << index));
     const { github } = fakeGitHub([[makeRun(10)]], { 10: makeArtifacts(available) });
     const selected = await plan({ github });
@@ -188,7 +188,7 @@ test('reuses successful platform jobs even when another platform failed or was c
         { 10: makeJobs({ 'Build windows-x64': { conclusion } }) });
       const selected = await plan({ github });
       assert.deepEqual(selected.buildTargets, ['windows-x64']);
-      assert.equal(selected.reused.length, 5);
+      assert.equal(selected.reused.length, allTargets.length - 1);
     });
   }
 });
@@ -255,7 +255,7 @@ async function makeAssets(t, targets = allTargets) {
   t.after(() => rm(directory, { recursive: true, force: true }));
   const expected = { directory, version, targets, sourceRevision: context.sha,
     flutterVersion: '3.47.6', pubspecLockSha256s: ['c'.repeat(64), 'f'.repeat(64)] };
-  const suffixes = [['.apk'], ['.msix', '.msi', '.exe', '.cer'], ['.dmg'], ['.dmg'],
+  const suffixes = [['.apk'], ['.msix', '.msi', '.exe', '.cer'], ['.msix', '.msi', '.exe', '.cer'], ['.dmg'], ['.dmg'],
     ['-unsigned.ipa'], ['.AppImage', '.flatpak']];
   for (const target of targets) {
     const prefix = `BiliSail-${version}-${target}`;
@@ -270,7 +270,7 @@ async function makeAssets(t, targets = allTargets) {
   return expected;
 }
 
-test('accepts complete packages for all six targets including BOM metadata and CRLF checksums', async (t) => {
+test('accepts complete packages for all seven targets including BOM metadata and CRLF checksums', async (t) => {
   await verifyReleaseAssets(await makeAssets(t));
 });
 
@@ -342,7 +342,8 @@ test('draft uploads packages, the original release bundle and their checksums', 
   const args = JSON.parse((await readFile(path.join(directory, 'gh-arguments.json'), 'utf8')).replace(/^\uFEFF/, ''));
   assert.deepEqual(args.slice(0, 3), ['release', 'create', `v${version}`]);
   const packages = ['android-arm64.apk', 'windows-x64.msix', 'windows-x64.msi', 'windows-x64.exe',
-    'windows-x64.cer', 'macos-arm64.dmg', 'macos-x64.dmg', 'ios-arm64-unsigned.ipa',
+    'windows-x64.cer', 'windows-arm64.msix', 'windows-arm64.msi', 'windows-arm64.exe',
+    'windows-arm64.cer', 'macos-arm64.dmg', 'macos-x64.dmg', 'ios-arm64-unsigned.ipa',
     'linux-x64.AppImage', 'linux-x64.flatpak'].map((suffix) => `BiliSail-${version}-${suffix}`);
   const attachments = [...packages.flatMap((name) => [name, name + '.sha256']),
     bundleName, bundleName + '.sha256', 'THIRD_PARTY_NOTICES.md'];

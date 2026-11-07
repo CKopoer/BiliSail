@@ -2,9 +2,10 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { updateReadmeDownloads, syncReadmeDownloads } = require('./update-readme-downloads.cjs');
 
-const platforms = ['Windows x64', 'Android arm64', 'macOS arm64 / Intel x64', 'iOS arm64', 'Linux x64'];
+const platforms = ['Windows x64', 'Windows ARM64', 'Android arm64', 'macOS arm64 / Intel x64', 'iOS arm64', 'Linux x64'];
 const suffixes = [
   'windows-x64.exe', 'windows-x64.msi', 'windows-x64.msix', 'windows-x64.cer',
+  'windows-arm64.exe', 'windows-arm64.msi', 'windows-arm64.msix', 'windows-arm64.cer',
   'android-arm64.apk', 'macos-arm64.dmg', 'macos-x64.dmg', 'ios-arm64-unsigned.ipa',
   'linux-x64.flatpak', 'linux-x64.AppImage',
 ];
@@ -46,7 +47,7 @@ test('partial releases clear obsolete links and do not infer unavailable platfor
   assert.ok(updated.includes(release.assets[0].browser_download_url));
   assert.ok(!updated.includes('.sha256'));
   assert.ok(!updated.includes('1.2.3'));
-  assert.equal((updated.match(/暂未提供/g) ?? []).length, 9);
+  assert.equal((updated.match(/暂未提供/g) ?? []).length, suffixes.length - 1);
 });
 
 test('ignores attachments from another version and incomplete uploads', () => {
@@ -55,7 +56,7 @@ test('ignores attachments from another version and incomplete uploads', () => {
     ...makeRelease('1.3.0+1', ['android-arm64.apk']).assets.map((asset) => ({ ...asset, state: 'starter' })),
   ] };
   const updated = updateReadmeDownloads(readme, release);
-  assert.equal((updated.match(/暂未提供/g) ?? []).length, 10);
+  assert.equal((updated.match(/暂未提供/g) ?? []).length, suffixes.length);
   assert.ok(!updated.includes('/download/'));
 });
 

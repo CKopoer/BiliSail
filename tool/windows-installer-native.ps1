@@ -1,5 +1,5 @@
 # Native, static-CRT UI helper shared by MSI and Burn. SDKs are build-only.
-function Build-WindowsInstallerNative([string]$WorkingDirectory) {
+function Build-WindowsInstallerNative([string]$WorkingDirectory, [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64') {
   if (!$IsWindows) { throw 'Installer native UI requires Windows.' }
   $sdk = Join-Path $WorkingDirectory 'sdk'
   New-Item -ItemType Directory -Path $sdk -Force | Out-Null
@@ -19,7 +19,8 @@ function Build-WindowsInstallerNative([string]$WorkingDirectory) {
   }
   $source = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../windows/packaging/native'))
   $build = Join-Path $WorkingDirectory 'build'
-  & cmake -S $source -B $build -A x64 "-DBILISAIL_WIX_SDK_DIR=$sdk" | Out-Host
+  $cmakeArchitecture = if ($Architecture -eq 'arm64') { 'ARM64' } else { 'x64' }
+  & cmake -S $source -B $build -A $cmakeArchitecture "-DBILISAIL_WIX_SDK_DIR=$sdk" | Out-Host
   if ($LASTEXITCODE -ne 0) { throw 'Installer native UI configuration failed.' }
   & cmake --build $build --config Release | Out-Host
   if ($LASTEXITCODE -ne 0) { throw 'Installer native UI compilation failed.' }

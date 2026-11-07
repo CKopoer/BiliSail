@@ -14,7 +14,12 @@ if ($env:ENABLE_ANDROID -eq 'true') {
 }
 $platforms = @(
   if ($env:ENABLE_ANDROID -eq 'true') { @{ target = 'android-arm64'; runner = 'ubuntu-24.04'; arch = 'x64' } }
-  if ($env:ENABLE_WINDOWS -eq 'true') { @{ target = 'windows-x64'; runner = 'windows-2022'; arch = 'x64' } }
+  if ($env:ENABLE_WINDOWS -eq 'true') {
+    @{ target = 'windows-x64'; runner = 'windows-2022'; arch = 'x64' }
+    # Use the x64 Flutter distribution, then require native ARM64 Dart using
+    # the SDK's own bootstrap script. The target follows the Dart process ABI.
+    @{ target = 'windows-arm64'; runner = 'windows-11-arm'; arch = 'x64' }
+  }
   if ($env:ENABLE_MACOS -eq 'true') {
     @{ target = 'macos-arm64'; runner = 'macos-15'; arch = 'arm64' }
     @{ target = 'macos-x64'; runner = 'macos-15-intel'; arch = 'x64' }

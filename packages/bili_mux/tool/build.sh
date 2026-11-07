@@ -8,7 +8,7 @@ if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == mingw* ]]; then
   [[ -x "$make_tool" ]] || { echo 'Install the MSYS2 make package in this MSYS root' >&2; exit 1; }
 fi
 
-target="${1:?usage: build.sh windows-x64|android-arm64|macos-arm64|macos-x64|ios-arm64|linux-x64}"
+target="${1:?usage: build.sh windows-x64|windows-arm64|android-arm64|macos-arm64|macos-x64|ios-arm64|linux-x64}"
 package_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_dir="$(cd "$package_dir/../.." && pwd)"
 cache="$repo_dir/build/download_mux"
@@ -45,6 +45,16 @@ case "$target" in
     cc=gcc
     cxx=g++
     configure_flags+=(--target-os=mingw32 --arch=x86_64 --cc=gcc)
+    link_flags+=(-static -Wl,--exclude-all-symbols)
+    output_name=bili_mux.dll
+    ;;
+  windows-arm64)
+    export PATH="/clangarm64/bin:/usr/bin:$PATH"
+    cc=clang
+    cxx=clang++
+    strip_tool=llvm-strip
+    configure_flags+=(--target-os=mingw32 --arch=aarch64 --cc=clang --cxx=clang++
+      --ar=llvm-ar --ranlib=llvm-ranlib)
     link_flags+=(-static -Wl,--exclude-all-symbols)
     output_name=bili_mux.dll
     ;;
@@ -158,7 +168,7 @@ fi
 cp configure.log "$package_dir/native/prebuilt/$target/configure.log"
 cp "$cache/source/COPYING.LGPLv2.1" "$package_dir/native/prebuilt/$target/COPYING.LGPLv2.1"
 echo "$version $archive_sha" > "$package_dir/native/prebuilt/$target/source.txt"
-if [[ "$target" == windows-x64 ]]; then
+if [[ "$target" == windows-* ]]; then
   cp "$package_dir/native/prebuilt/$target/COPYING.LGPLv2.1" "$package_dir/native/prebuilt/$target/bili_mux.LGPL.txt"
   cp "$package_dir/native/prebuilt/$target/source.txt" "$package_dir/native/prebuilt/$target/bili_mux.source.txt"
   cp "$package_dir/native/prebuilt/$target/configure.log" "$package_dir/native/prebuilt/$target/bili_mux.configuration.txt"

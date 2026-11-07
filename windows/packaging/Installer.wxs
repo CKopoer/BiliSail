@@ -14,8 +14,13 @@
                       Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
                       Name="CurrentBuildNumber" Type="raw" Bitness="always64" />
     </Property>
+    <?if $(sys.BUILDARCH) = arm64 ?>
+    <Launch Condition="Installed OR (VersionNT64 AND BILISAIL_WINDOWS_BUILD &gt;= 22000)"
+            Message="BiliSail 哔帆需要 Windows 11 或更高版本（ARM64）。" />
+    <?else?>
     <Launch Condition="Installed OR (VersionNT64 AND BILISAIL_WINDOWS_BUILD &gt;= 17763)"
             Message="BiliSail 哔帆需要 Windows 10 1809 或更高版本（x64）。" />
+    <?endif?>
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
     <Icon Id="AppIcon" SourceFile="$(AppIcon)" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />

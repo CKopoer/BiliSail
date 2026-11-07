@@ -1,6 +1,6 @@
 # Public identity confirmed in Microsoft Partner Center. Never derive it from
 # a signing certificate or an environment override.
-function Confirm-WindowsMsixIdentity([xml]$Manifest, [string]$Version) {
+function Confirm-WindowsMsixIdentity([xml]$Manifest, [string]$Version, [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64') {
   $identity = $Manifest.Package.Identity
   $displayName = $Manifest.Package.Properties.PublisherDisplayName
   if ($identity.Name -cne 'JerryHsu.BiliSail' -or
@@ -11,11 +11,15 @@ function Confirm-WindowsMsixIdentity([xml]$Manifest, [string]$Version) {
   if ($identity.Version -cne $Version.Replace('+', '.')) {
     throw 'Packaged MSIX version does not match the requested version.'
   }
+  if ($identity.ProcessorArchitecture -cne $Architecture) {
+    throw 'Packaged MSIX architecture does not match the requested target.'
+  }
   return [ordered]@{
     name = [string]$identity.Name
     publisher = [string]$identity.Publisher
     publisherDisplayName = [string]$displayName
     version = [string]$identity.Version
+    architecture = [string]$identity.ProcessorArchitecture
   }
 }
 

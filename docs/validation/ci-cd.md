@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD 与安装包
 
-更新日期：2026-11-07。配置覆盖 Android arm64、Windows x64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
+更新日期：2026-11-07。配置覆盖 Android arm64、Windows x64／ARM64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
 
 ## 入口与分工
 
@@ -13,7 +13,8 @@
 | --- | --- | --- |
 | 版本解析、静态检查、根测试分片与包测试 | `ubuntu-24.04` | 无需真实账号；独立 mux 任务覆盖封装原生测试，不自动运行在线或原生播放集成测试 |
 | Android | `ubuntu-24.04`，Temurin JDK 17 | 仅 arm64 的 release APK；正常构建复用固定 keystore，PR 使用临时预览签名 |
-| Windows | `windows-2022`，Visual Studio C++ / Windows SDK / .NET 8 / WiX 6.0.2 | 同时提供 x64 MSIX、MSI 和 EXE 安装包；全部包含完整原生 DLL/data 及 VC++ runtime |
+| Windows x64 | `windows-2022`，Visual Studio C++ / Windows SDK / .NET 8 / WiX 6.0.2 | 同时提供 x64 MSIX、MSI 和 EXE 安装包；全部包含完整原生 DLL/data 及 VC++ runtime |
+| Windows ARM64 | `windows-11-arm`，Visual Studio ARM64 / Windows SDK / WiX 6.0.2 | ARM64 MSIX、MSI 和 EXE，独立 mux／媒体 SDK／VC++ runtime；打包前检查全部 EXE／DLL 的 PE 架构 |
 | macOS | `macos-15`，Apple Silicon / Xcode 26.2 | arm64 DMG；先验证签名／最终权限、同一 Release 应用首帧和跨进程 Keychain 读写删除，再由 `hdiutil` 打包校验；仅 ad-hoc 签名，未 notarize |
 | macOS Intel | `macos-15-intel`，Intel x64 / Xcode 26.2 | x64 DMG；校验架构、版本、签名、权限和镜像；不运行启动／窗口／Keychain smoke，metadata 明确记录跳过 |
 | iOS | `macos-15`，Apple Silicon / Xcode 26.2 / CocoaPods | arm64 未签名 IPA；核对应用版本、bundle ID、arm64 framework 及 Payload 布局；安装前需自行 Apple 签名 |
@@ -37,6 +38,26 @@ macOS 原生插件按根 `pubspec.yaml` 的项目级开关统一使用 CocoaPods
 本地临时使用镜像运行 `pub get` 可能改写锁文件中的 hosted URL；不要将这类改动混入提交。恢复官方源后重新验证五份锁文件，并确认依赖版本、约束、内容哈希没有意外变化。`FLUTTER_STORAGE_BASE_URL` 控制 Flutter SDK 下载，与 Pub 包源是不同设置。
 
 Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d10a7fa0f6c6ec005340fb9ad29f3b012d0/lib/src/source/hosted.dart#L40) 会将官方旧域名 `https://pub.dartlang.org` 规范化为 `https://pub.dev`，再用于 hosted 来源身份比较；两者的文本差异不等于来源冲突。`pub.flutter-io.cn` 是另一来源，不能依赖这种官方别名规范化消除镜像冲突。验证以固定 Flutter 3.47.6 的实际解析、内容哈希与 `--enforce-lockfile` 为准。
+
+## Windows ARM64 构建
+
+2026-11-07 新增 `windows-arm64`。现有 `enable_windows` 同时选择 x64 和 ARM64；push／PR 默认构建两种架构，复用调用方的 `build_targets` 可单独选择其中一种。目标、产物名、诊断目录、Release 缺失目标重建和 SHA-256 校验均独立。
+
+固定 Flutter 3.47.6 的 `build windows` 根据 Dart 进程 ABI 选择目标，没有可用的 Windows 交叉编译参数，因此 ARM64 使用 `windows-11-arm` runner。Flutter Action 先取得 x64 发行配置，再通过 [ARM64 引导脚本](../../tool/setup-windows-arm64-flutter.ps1) 检查 Dart PE 架构；必要时调用该固定 SDK 自带的 `update_dart_sdk.ps1` 下载对应 engine 的原生 ARM64 Dart 并重建工具 snapshot。拒绝 x64 回退，SDK 缓存按目标隔离。不能将 matrix 的发行 `arch: x64` 当成应用目标架构。入口在非匹配 Windows 主机上立即拒绝构建，避免把 x64 包重命名为 ARM64。
+
+- mux 使用 MSYS2 CLANGARM64 的 Clang／LLVM，从既定 FFmpeg n9.0.2 源码构建，输出到 `native/prebuilt/windows-arm64`。
+- media-kit 的库插件按 `FLUTTER_TARGET_PLATFORM` 选择完整 SDK 和 ANGLE，镜像、归档和逐文件 SHA-256 均由个人 fork 维护，详见[媒体来源](media-kit-personal-fork-2026-11-07.md)。ARM64 mpv 使用 7-Zip 解压 ARM64 BCJ 过滤器，保留标准 OpenGL render API。
+- 可选 fvp 后端使用固定 MDK 0.39.0 的完整 Windows SDK，从中选择 ARM64 slice；x64 继续使用原独立 SDK。
+- 应用 staging 中所有 EXE／DLL 的 PE 架构必须匹配目标；VC++ runtime、原生安装器辅助 DLL、WiX MSI／Burn EXE、MSIX ProcessorArchitecture 均跟随目标。ARM64 MSIX 和 MSI 要求 Windows 11；身份、Publisher 和证书边界保持一致。
+- 打包后再次解包检查安装器辅助文件架构、MSI SummaryInformation 平台及原有 UI／升级目录语义。安装器检查不执行实际安装或卸载。
+
+普通入口：在 Windows 11 ARM64 主机准备 MSYS2 CLANGARM64、Visual Studio ARM64 C++、Windows SDK 和 7-Zip 后执行 `./tool/build-release.ps1 -Target windows-arm64 -Version x.y.z+N`。产物为 `artifacts/windows-arm64/release/BiliSail-<version>-windows-arm64.{msix,msi,exe,cer}` 及来源、元信息和各自 SHA-256。
+
+本轮在独立检出执行根检查：格式、静态分析、182 项构建计划检查、74 项 Release／README 回归及 Windows 安装器／PE／MSIX 专项通过。四个包合计 1,056 项离线测试通过；mux 原生 10 项因未配置 `BILI_MUX_LIBRARY` 跳过。根测试批次 4,582 项通过、13 项跳过，日志轮转与下载用例共 9 项在并发负载下失败；两个相关测试文件串行重跑 36 项全部通过；随后以 `flutter test --no-pub --concurrency=2` 完整重跑根应用，4,591 项通过、13 项环境跳过，未修改断言或产品逻辑。根应用与四个包最终合计 5,647 项离线测试通过。完整重跑日志为 `build/windows-arm64-root-low-concurrency.log`，其余日志为 `build/windows-arm64-{final-lint,isolated-root-tests,isolated-package-tests,rerun-existing-io-tests,packaging-tests}.log`。两份媒体锁文件通过 Pub 严格解析，其他三份锁文件未改。真实 WiX 6.0.2 使用受控 ARM64 占位 payload 完成 MSI／EXE 编译与 67 项解包／SummaryInformation 平台检查（`build/windows-arm64-installer-validation.log`）；它验证打包结构，不代表真实安装 UI 或完整应用启动。
+
+个人媒体 fork 的 [Windows 原生 CI 42366829360](https://github.com/CKopoer/media-kit/actions/runs/42366829360) 已在 Windows x64／ARM64 完成 Flutter Release fixture 编译、插件链接、DLL PE 架构与加载校验、mpv client ABI 和创建／销毁验证；ARM64 job 使用原生 Dart 3.13.5。该 fixture 不是 BiliSail 完整应用，没有执行视频纹理绘制或硬解性能验收。
+
+新增配置不代表设备播放、硬解性能、账号、实际安装或覆盖升级已经通过。Windows ARM64 完整应用包仍需在本次主仓库提交进入远端后由 CI 构建，不能用原生插件 smoke 代替完整应用验收。
 
 ## 版本与产物
 
