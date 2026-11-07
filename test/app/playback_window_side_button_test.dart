@@ -56,7 +56,7 @@ void main() {
         await tester.tap(toggle, kind: PointerDeviceKind.mouse);
         await tester.pumpAndSettle();
         expect(tester.getSize(sidebar).width, 0);
-        expect(find.byTooltip('展开侧栏'), findsOneWidget);
+        expect(find.byTooltip('展开侧栏（Ctrl+B）'), findsOneWidget);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.keyW);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
         await tester.tap(toggle, kind: PointerDeviceKind.mouse);

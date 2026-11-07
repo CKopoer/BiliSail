@@ -17,6 +17,7 @@ enum ShortcutAction {
   toggleRate('切换 1 / 2 倍速', ['Ctrl+1'], appleKeys: ['Meta+1']),
   previousPart('上一分 P', ['Z', 'N', 'Comma']),
   nextPart('下一分 P', ['X', 'M', 'Period']),
+  toggleSidebar('收起 / 展开侧边栏', ['Ctrl+B'], appleKeys: ['Meta+B']),
   newTab('新建浏览标签', ['Ctrl+T'], appleKeys: ['Meta+T']),
   closeTab(
     '关闭当前标签页',

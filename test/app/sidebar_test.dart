@@ -1,3 +1,5 @@
+import '../support/input_test_app.dart';
+
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/theme.dart';
@@ -7,6 +9,7 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -166,7 +169,7 @@ void main() {
       await tester.tap(_toggle);
       await tester.pumpAndSettle();
       expect(tester.getSize(_region).width, 0);
-      expect(find.byTooltip('展开侧栏'), findsOneWidget);
+      expect(find.byTooltip('展开侧栏（Ctrl+B）'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('workspace-nav-home')).hitTestable(),
         findsNothing,
@@ -245,7 +248,7 @@ void main() {
               overrides: [
                 settingsRepositoryProvider.overrideWithValue(repository),
               ],
-              child: MaterialApp.router(
+              child: InputTestApp.router(
                 theme: BiliTheme.light(),
                 builder: AppNoticeHost.builder,
                 routerConfig: router,
@@ -268,6 +271,12 @@ void main() {
           expect(tester.getSize(_region).width, failSave ? 76 : 0);
           if (failSave) {
             expect(find.text('侧栏设置保存失败，请重试'), findsOneWidget);
+            await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+            await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+            await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+            await tester.pumpAndSettle();
+            expect(repository.settings.sidebarCollapsed, isFalse);
+            expect(tester.getSize(_region).width, 76);
           } else {
             final container = ProviderScope.containerOf(
               tester.element(_toggle),
@@ -278,6 +287,15 @@ void main() {
             await tester.tap(_toggle);
             await tester.pumpAndSettle();
             expect(tester.getSize(_region).width, 164);
+            await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+            await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+            await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+            await tester.pumpAndSettle();
+            expect(repository.settings.sidebarCollapsed, isTrue);
+            expect(tester.getSize(_region).width, 0);
+            container.invalidate(settingsControllerProvider);
+            await tester.pumpAndSettle();
+            expect(tester.getSize(_region).width, 0);
           }
           expect(tester.takeException(), isNull);
         },

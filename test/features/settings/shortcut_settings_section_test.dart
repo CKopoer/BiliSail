@@ -8,7 +8,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  for (final action in [ShortcutAction.nextTab, ShortcutAction.previousTab]) {
+  for (final action in [
+    ShortcutAction.nextTab,
+    ShortcutAction.previousTab,
+    ShortcutAction.toggleSidebar,
+  ]) {
     testWidgets(
       'Apple ${action.name} can be recorded and persisted',
       (tester) async {
@@ -27,6 +31,9 @@ void main() {
           ),
         );
         expect(find.textContaining('⌘ Command+W'), findsOneWidget);
+        if (action == ShortcutAction.toggleSidebar) {
+          expect(find.text('⌘ Command+B'), findsOneWidget);
+        }
         await tester.ensureVisible(find.widgetWithText(ListTile, action.label));
         await tester.tap(find.widgetWithText(ListTile, action.label));
         await tester.pumpAndSettle();
@@ -59,6 +66,7 @@ void main() {
   testWidgets('shortcut-only reset preserves Apple defaults', (tester) async {
     var saved = const ShortcutSettings.defaults(useAppleDefaults: true)
         .withKeys(ShortcutAction.closeTab, ['Ctrl+Q'])
+        .withKeys(ShortcutAction.toggleSidebar, [])
         .withKeys(ShortcutAction.nextTab, []);
     await tester.pumpWidget(
       InputTestApp(
@@ -76,6 +84,7 @@ void main() {
     await tester.tap(find.text('恢复默认快捷键'));
     await tester.pumpAndSettle();
     expect(saved.actionFor('Meta+W'), ShortcutAction.closeTab);
+    expect(saved.actionFor('Meta+B'), ShortcutAction.toggleSidebar);
     expect(saved.actionFor('Shift+Meta+BracketRight'), ShortcutAction.nextTab);
     expect(saved.actionFor('Ctrl+Q'), isNull);
   });

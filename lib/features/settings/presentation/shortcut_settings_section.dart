@@ -93,6 +93,7 @@ class ShortcutSettingsSection extends StatelessWidget {
         ShortcutAction.nextTab,
         ShortcutAction.previousTab,
         ShortcutAction.refresh,
+        ShortcutAction.toggleSidebar,
       ])
         _binding(context, action),
       const ListTile(contentPadding: EdgeInsets.zero, title: Text('播放控制')),
@@ -138,6 +139,7 @@ class ShortcutSettingsSection extends StatelessWidget {
           ShortcutAction.nextTab,
           ShortcutAction.previousTab,
           ShortcutAction.refresh,
+          ShortcutAction.toggleSidebar,
         ].contains(action),
       ))
         _binding(context, action),

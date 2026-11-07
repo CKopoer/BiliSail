@@ -100,7 +100,8 @@ final class ShortcutSettings {
       final introduced = {
         ...defaults.where((key) => !action.defaultKeys.contains(key)),
         if (action == ShortcutAction.nextTab ||
-            action == ShortcutAction.previousTab)
+            action == ShortcutAction.previousTab ||
+            action == ShortcutAction.toggleSidebar)
           ...defaults,
         if (action == ShortcutAction.closeTab) 'MouseBack',
       };

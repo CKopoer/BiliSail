@@ -1275,6 +1275,14 @@ final class _BiliAppShellState extends State<BiliAppShell>
         WorkspaceSection.settings => Icons.tune_rounded,
       };
 
+  void _toggleSidebar() {
+    final collapsed = !_sidebarCollapsed;
+    if (widget.sidebarCollapsed == null) {
+      setState(() => _localSidebarCollapsed = collapsed);
+    }
+    widget.onSidebarCollapsedChanged?.call(collapsed);
+  }
+
   Widget _sidebarToggle(BuildContext context, {bool caption = false}) {
     final colors = Theme.of(context).colorScheme;
     return Padding(
@@ -1283,7 +1291,11 @@ final class _BiliAppShellState extends State<BiliAppShell>
           : const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: IconButton(
         key: const ValueKey('workspace-sidebar-toggle'),
-        tooltip: _sidebarCollapsed ? '展开侧栏' : '收起侧栏',
+        tooltip: shortcutHint(
+          widget.shortcuts,
+          ShortcutAction.toggleSidebar,
+          _sidebarCollapsed ? '展开侧栏' : '收起侧栏',
+        ),
         style: caption
             ? desktopCaptionButtonStyle
             : IconButton.styleFrom(
@@ -1296,13 +1308,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
                   side: BorderSide(color: colors.outlineVariant),
                 ),
               ),
-        onPressed: () {
-          final collapsed = !_sidebarCollapsed;
-          if (widget.sidebarCollapsed == null) {
-            setState(() => _localSidebarCollapsed = collapsed);
-          }
-          widget.onSidebarCollapsedChanged?.call(collapsed);
-        },
+        onPressed: _toggleSidebar,
         icon: AnimatedRotation(
           turns: _sidebarCollapsed ? .5 : 0,
           duration: MediaQuery.disableAnimationsOf(context)
@@ -1358,7 +1364,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
     final width = extended ? 164.0 : 76.0;
     final target = visible ? width : 0.0;
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    return TweenAnimationBuilder<double>(
+    final region = TweenAnimationBuilder<double>(
       tween: Tween(begin: target, end: target),
       duration: compact || reduceMotion
           ? Duration.zero
@@ -1395,6 +1401,18 @@ final class _BiliAppShellState extends State<BiliAppShell>
           ),
         );
       },
+    );
+    return CommandTargetScope<Object>(
+      scope: CommandScope.workspace,
+      active: !compact && WorkspaceActivity.isActive(context),
+      commands: {
+        ShortcutAction.toggleSidebar: (stroke) {
+          if (stroke.phase == InputPhase.up) return CommandOutcome.noOp;
+          _toggleSidebar();
+          return CommandOutcome.completed;
+        },
+      },
+      child: region,
     );
   }
 

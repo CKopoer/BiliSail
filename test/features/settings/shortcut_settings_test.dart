@@ -4,6 +4,59 @@ import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final apple in [false, true]) {
+    final key = apple ? 'Meta+B' : 'Ctrl+B';
+    test('sidebar defaults and custom bindings survive JSON: apple=$apple', () {
+      final defaults = ShortcutSettings.fromJson({}, useAppleDefaults: apple);
+      expect(defaults.actionFor(key), ShortcutAction.toggleSidebar);
+      expect(defaults.conflict, isNull);
+      expect(defaults.withEnabled(false).actionFor(key), isNull);
+      for (final keys in <List<String>>[
+        ['Alt+B'],
+        [],
+      ]) {
+        final settings = defaults
+            .withKeys(ShortcutAction.toggleSidebar, keys)
+            .withActionEnabled(ShortcutAction.toggleSidebar, false);
+        final restored = ShortcutSettings.fromJson(
+          jsonDecode(jsonEncode(settings.toJson())),
+          useAppleDefaults: apple,
+        );
+        expect(restored.keysFor(ShortcutAction.toggleSidebar), keys);
+        expect(restored.isEnabled(ShortcutAction.toggleSidebar), isFalse);
+        expect(restored.actionFor(key), isNull);
+        expect(restored.actionFor('Alt+B'), isNull);
+        if (keys.isNotEmpty) {
+          expect(
+            restored
+                .withActionEnabled(ShortcutAction.toggleSidebar, true)
+                .actionFor('Alt+B'),
+            ShortcutAction.toggleSidebar,
+          );
+        }
+        expect(restored.issues, isEmpty);
+      }
+    });
+    test('new sidebar default preserves older assignments: apple=$apple', () {
+      final legacy = ShortcutSettings.fromJson({
+        'bindings': {
+          'playPause': [key],
+        },
+      }, useAppleDefaults: apple);
+      expect(legacy.actionFor(key), ShortcutAction.playPause);
+      expect(legacy.keysFor(ShortcutAction.toggleSidebar), isEmpty);
+      expect(legacy.issues, isEmpty);
+      expect(legacy.conflict, isNull);
+      final conflict = ShortcutSettings.fromJson({
+        'bindings': {
+          'playPause': [key],
+          'toggleSidebar': [key],
+        },
+      }, useAppleDefaults: apple);
+      expect(conflict.actionFor(key), isNull);
+      expect(conflict.issues, isNotEmpty);
+    });
+  }
   test('Apple defaults apply only to missing bindings and survive edits', () {
     for (final snapshot in [
       null,

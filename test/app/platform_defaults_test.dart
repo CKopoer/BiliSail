@@ -15,6 +15,9 @@ void main() {
             platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
         final settings = shortcutSettingsForPlatform(platform);
         expect(defaultShortcuts.useAppleDefaults, apple);
+        expect(settings.keysFor(ShortcutAction.toggleSidebar), [
+          apple ? 'Meta+B' : 'Ctrl+B',
+        ]);
         expect(settings.keysFor(ShortcutAction.closeTab), [
           apple ? 'Meta+W' : 'Ctrl+W',
           'MouseBack',

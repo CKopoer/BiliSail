@@ -12,7 +12,8 @@ final class ShortcutCoordinator extends ShortcutDispatcher<Object> {
           ShortcutAction.newTab ||
           ShortcutAction.closeTab ||
           ShortcutAction.nextTab ||
-          ShortcutAction.previousTab => CommandScope.workspace,
+          ShortcutAction.previousTab ||
+          ShortcutAction.toggleSidebar => CommandScope.workspace,
           ShortcutAction.refresh ||
           ShortcutAction.previousPart ||
           ShortcutAction.nextPart ||
