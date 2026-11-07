@@ -1,0 +1,16 @@
+import groovy.json.JsonSlurper
+
+// Configure the plugin through AGP; never rewrite files in the Pub cache.
+subprojects { subproject ->
+    subproject.plugins.withId('com.android.library') {
+        if (subproject.name != 'fvp') return
+        def manifest = new JsonSlurper().parse(rootProject.file('../native/fvp/assets.lock.json'))
+        subproject.afterEvaluate {
+            def android = subproject.extensions.getByName('android')
+            android.defaultConfig.externalNativeBuild.cmake.arguments.addAll([
+                "-DFVP_DEPS_URL=${manifest.baseUrl}",
+                "-DFVP_DEPS_SHA256=${manifest.assets.android.sha256}"
+            ])
+        }
+    }
+}

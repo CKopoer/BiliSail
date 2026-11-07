@@ -115,6 +115,8 @@ import '../features/settings/data/installed_app_version.dart';
 import '../features/settings/data/sqlite_update_check_store.dart';
 import '../features/settings/application/system_fonts_controller.dart';
 import '../features/settings/data/sqlite_settings_repository.dart';
+import '../features/settings/domain/app_settings.dart'
+    show PlaybackBackendPreference;
 import 'platform_defaults.dart';
 import '../features/playback/application/playback_viewers_controller.dart';
 import '../features/playback/application/casting_controller.dart';
@@ -295,8 +297,20 @@ class AppDependencies {
             const FileAccessService().trustedDownloadDocumentsDirectory,
       ),
     );
+    PlayerEngine createPlayerEngine() => ConfigurablePlayerEngine(
+      createEngine: () async =>
+          switch ((await settings.load()).playbackBackend) {
+            PlaybackBackendPreference.mediaKit => MediaKitEngine(
+              onDiagnostic: playbackLog?.record,
+            ),
+            PlaybackBackendPreference.fvp => FvpEngine(
+              onDiagnostic: (event) =>
+                  playbackLog?.record(event, backend: 'fvp'),
+            ),
+          },
+    );
     final cardPreviews = VideoCardPreviewPlayback(
-      createEngine: () => MediaKitEngine(onDiagnostic: playbackLog?.record),
+      createEngine: createPlayerEngine,
     );
     String? lastDownloadSummary;
     final downloadDiagnosticSubscription = downloads.changes.listen((state) {
@@ -353,7 +367,7 @@ class AppDependencies {
           sponsorRepository: ApiSponsorRepository(
             SponsorBlockClient(sponsorTransport),
           ),
-          engine: MediaKitEngine(onDiagnostic: playbackLog?.record),
+          engine: createPlayerEngine(),
           repository: repository,
           historyRepository: ApiPlaybackHistoryRepository(
             PlaybackHistoryClient(api),

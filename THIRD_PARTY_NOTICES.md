@@ -1,5 +1,9 @@
 # 第三方来源与分发检查
 
+## 2026-11-07 可选 fvp 后端
+
+实验后端新增 BSD-3-Clause 的 [wang-bin/fvp](https://github.com/wang-bin/fvp/tree/e81637411c58a9ae28de246ee73ad06e3418f10e)，固定完整提交 `e81637411c58a9ae28de246ee73ad06e3418f10e`；其 MDK 核心固定官方 v0.39.0，逐平台 URL／SHA-256 见 `native/fvp/assets.lock.json`。MDK 的 SDK 授权与 Flutter 插件分别处理，官方说明 Flutter 用户可免费商用；原 SDK 许可保留在 `native/fvp/mdk.podspec`，SDK 附带 FFmpeg、libass 和可选专业解码插件的许可不能被插件 BSD 许可覆盖。接入方式、验证与分发边界见[可选 fvp 记录](docs/validation/fvp-backend-2026-11-07.md)。media_kit 和 bili_mux 的既有来源及许可继续独立保留。
+
 ## 2026-11-07 个人媒体 fork
 
 当前核心、视频和全部平台库插件统一来自 MIT 的 [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/7034784f960be84339ed6d87849ad2cef23c50b7)，官方基线为 `c533e446755f51cf53c7e57aea873f2aa5355f81`。mpv 源码由 [CKopoer/mpv](https://github.com/CKopoer/mpv) 维护；固定资产与原来源见 [native-2026-11-07](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)。Windows、Android、Apple 的首批资产为原摘要不变的上游镜像；Linux 从个人固定源码构建，子依赖继续记录发行版来源。MIT 不替代 mpv、FFmpeg、ANGLE 或其他子依赖的许可。当前入口及验证见[实施记录](docs/validation/media-kit-personal-fork-2026-11-07.md)；下列各次切换记录保留为历史。

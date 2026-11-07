@@ -58,6 +58,8 @@ enum DanmakuStylePreference { shadow, stroke, plain }
 
 enum SponsorBlockMode { disabled, manual, automatic }
 
+enum PlaybackBackendPreference { mediaKit, fvp }
+
 final class AppSettings {
   AppSettings({
     this.recommendations = const RecommendationSettings.defaults(),
@@ -102,6 +104,7 @@ final class AppSettings {
     this.preferredVideoCodec = VideoCodecPreference.h264,
     this.mediaCdn = MediaCdnPreference.automatic,
     this.videoDecoding = VideoDecodingPreference.automatic,
+    this.playbackBackend = PlaybackBackendPreference.mediaKit,
     this.defaultPlaybackRate = 1.0,
     List<double> playbackRates = PlaybackRates.values,
     this.rememberPlaybackRate = true,
@@ -188,6 +191,7 @@ final class AppSettings {
        preferredVideoCodec = VideoCodecPreference.h264,
        mediaCdn = MediaCdnPreference.automatic,
        videoDecoding = VideoDecodingPreference.automatic,
+       playbackBackend = PlaybackBackendPreference.mediaKit,
        defaultPlaybackRate = 1.0,
        playbackRates = PlaybackRates.values,
        rememberPlaybackRate = true,
@@ -266,6 +270,7 @@ final class AppSettings {
   final VideoCodecPreference preferredVideoCodec;
   final MediaCdnPreference mediaCdn;
   final VideoDecodingPreference videoDecoding;
+  final PlaybackBackendPreference playbackBackend;
   final double defaultPlaybackRate;
   final List<double> playbackRates;
   final bool rememberPlaybackRate;
@@ -354,6 +359,7 @@ final class AppSettings {
     VideoCodecPreference? preferredVideoCodec,
     MediaCdnPreference? mediaCdn,
     VideoDecodingPreference? videoDecoding,
+    PlaybackBackendPreference? playbackBackend,
     double? defaultPlaybackRate,
     List<double>? playbackRates,
     bool? rememberPlaybackRate,
@@ -448,6 +454,7 @@ final class AppSettings {
     preferredVideoCodec: preferredVideoCodec ?? this.preferredVideoCodec,
     mediaCdn: mediaCdn ?? this.mediaCdn,
     videoDecoding: videoDecoding ?? this.videoDecoding,
+    playbackBackend: playbackBackend ?? this.playbackBackend,
     defaultPlaybackRate: defaultPlaybackRate ?? this.defaultPlaybackRate,
     playbackRates: playbackRates ?? this.playbackRates,
     rememberPlaybackRate: rememberPlaybackRate ?? this.rememberPlaybackRate,

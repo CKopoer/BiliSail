@@ -22,6 +22,7 @@ subprojects {
 }
 
 apply(from = "patches/audio_service/apply.gradle")
+apply(from = "patches/fvp/apply.gradle")
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)

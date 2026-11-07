@@ -55,7 +55,9 @@ add_subdirectory("runner")
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
+include(../native/fvp/configure.cmake)
 include(flutter/generated_plugins.cmake)
+list(FILTER PLUGIN_BUNDLED_LIBRARIES EXCLUDE REGEX "[/\\\\]mdk-(braw|r3d|nvjp2k)\\.dll$")
 include(native/media-assets.cmake)
 bilisail_verify_media_assets()
 

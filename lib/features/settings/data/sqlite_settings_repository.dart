@@ -194,6 +194,11 @@ class SqliteSettingsRepository implements SettingsRepository {
               .where((item) => item.name == decoded['videoDecoding'])
               .firstOrNull ??
           VideoDecodingPreference.automatic,
+      playbackBackend:
+          PlaybackBackendPreference.values
+              .where((item) => item.name == decoded['playbackBackend'])
+              .firstOrNull ??
+          PlaybackBackendPreference.mediaKit,
       defaultPlaybackRate: number('defaultPlaybackRate', 1.0),
       playbackRates: PlaybackRates.fromJson(decoded['playbackRates']),
       rememberPlaybackRate: boolean('rememberPlaybackRate', true),
@@ -268,7 +273,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 40,
+        'schemaVersion': 41,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -314,6 +319,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'preferredVideoCodec': value.preferredVideoCodec.name,
         'mediaCdn': value.mediaCdn.name,
         'videoDecoding': value.videoDecoding.name,
+        'playbackBackend': value.playbackBackend.name,
         'defaultPlaybackRate': value.defaultPlaybackRate,
         'playbackRates': value.playbackRates,
         'rememberPlaybackRate': value.rememberPlaybackRate,

@@ -29,6 +29,11 @@ dependencies:
   package_info_plus: 10.2.2
   audio_service: 0.18.19
   audio_service_mpris: 1.0.0-beta.3
+  # Direct plugin dependency is required by Flutter's plugin registration.
+  fvp:
+    git:
+      url: https://github.com/wang-bin/fvp.git
+      ref: e81637411c58a9ae28de246ee73ad06e3418f10e
   bili_api:
     path: packages/bili_api
   bili_player:
@@ -103,6 +108,12 @@ flutter:
     enable-swift-package-manager: false
   uses-material-design: true
   assets:
+    - native/fvp/assets.lock.json
+    - native/fvp/NOTICE.md
+    - native/fvp/LICENSE-fvp.txt
+    - native/fvp/LICENSE-libass.txt
+    - native/fvp/mdk.podspec
+    - packages/bili_mux/LICENSE-FFmpeg.txt
     - assets/icons/
     - assets/branding/app_icon.png
     - assets/branding/bilibili_pink.png

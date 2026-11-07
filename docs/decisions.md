@@ -537,3 +537,9 @@ Android 复用既有媒体服务，暂停／换源期间不撤下前台服务，
 **决定（2026-11-07）**：按用户要求，media_kit、media_kit_video、media_kit_libs_video 及全部平台库插件统一来自 `CKopoer/media-kit` 的固定完整提交，libmpv 源码与对应构建材料由个人 mpv／构建仓库维护。以官方主线为合并基线，平台修复进入依赖，应用只保留播放器契约、源代次、业务设置与构建契约核对；不再由应用修改第三方视频源码。
 
 Windows 保留经过验证的 ANGLE 与 EGL device-query 修正 SDK，Android 保留有源代次和释放屏障的 SurfaceTexture，Linux 从固定个人源码构建并随应用交付 libmpv。首批 Windows／Android／Apple 二进制保留上游摘要并镜像到个人 Release，明确区分镜像与个人重构建；不因版本升级声称性能提升。来源、补丁、回归与设备未测项见[实施记录](validation/media-kit-personal-fork-2026-11-07.md)。
+
+## D73：保留 media_kit 默认，允许按保存设置选择 fvp
+
+**决定（2026-11-07）**：按用户要求接入可选 fvp／MDK 后端用于同包实机对比，media_kit 默认值及既有依赖来源保持。选择在下一次打开或重新加载播放源时生效，旧源继续使用原后端；后端释放确认后才创建新实例，对外保留 PlaybackSession、稳定视频输出及唯一会话。fvp 失败明确报错，不自动回退混淆测量。
+
+插件固定官方完整提交，MDK 原生 archive 按平台固定 Release 与 SHA-256，授权、FFmpeg 来源和未测平台单独登记。Flutter 合成和弹幕路径保留，不能从后端的硬解／零复制宣传推导应用性能。实施、分轨与首帧门槛、测试和对照方法见[可选 fvp 后端](validation/fvp-backend-2026-11-07.md)。

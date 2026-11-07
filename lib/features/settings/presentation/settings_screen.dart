@@ -639,6 +639,14 @@ final class _SettingsCategoryPageState
                         ]),
                       if (widget.category == SettingsCategory.playback)
                         _section('视频编解码', [
+                          _choices('播放后端', s.playbackBackend, const {
+                            PlaybackBackendPreference.mediaKit: 'media_kit（默认）',
+                            PlaybackBackendPreference.fvp: 'fvp（实验性）',
+                          }, controller.setPlaybackBackend),
+                          const Text(
+                            '适用于视频、影视、直播、离线播放和悬停预览。下次打开或重新加载播放源时生效，正在播放的内容继续使用原后端。',
+                            style: TextStyle(fontSize: 12),
+                          ),
                           _choices('优先视频编码', s.preferredVideoCodec, const {
                             VideoCodecPreference.h264: 'H.264 / AVC（默认）',
                             VideoCodecPreference.hevc: 'H.265 / HEVC',
