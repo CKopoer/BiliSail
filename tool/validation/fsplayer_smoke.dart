@@ -2,19 +2,26 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
+import 'package:bilisail/core/platform/macos_application_window.dart';
 import 'package:flutter/material.dart';
 
 /// Native Apple smoke; fixed public fixtures, no account or product settings.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  stdout.writeln('FSPLAYER_SMOKE_STAGE=window');
+  final window = await MacOSApplicationWindow.create();
   final engine = FsPlayerEngine();
-  runApp(
-    MaterialApp(
-      home: Scaffold(body: VideoSurface(engine: engine)),
-    ),
+  final app = MaterialApp(
+    home: Scaffold(body: VideoSurface(engine: engine)),
   );
+  if (window == null) {
+    runApp(app);
+  } else {
+    window.present(app);
+  }
   var result = 1;
   try {
+    stdout.writeln('FSPLAYER_SMOKE_STAGE=dash');
     const root = String.fromEnvironment('FSPLAYER_FIXTURE_ROOT');
     if (root.isEmpty) throw StateError('Fixture root is required');
     MediaTrack track(String name) => MediaTrack(

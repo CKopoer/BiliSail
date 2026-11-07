@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
@@ -21,8 +22,17 @@ final class FsPlayerEngine
         VideoOutputSource,
         AudioGainControl,
         PlayerInformationSource {
-  FsPlayerEngine({this.onDiagnostic, MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel('dev.bilisail/fsplayer');
+  FsPlayerEngine({
+    this.onDiagnostic,
+    MethodChannel? channel,
+    Future<Uint8List> Function()? loadCertificates,
+  }) : _channel = channel ?? const MethodChannel('dev.bilisail/fsplayer'),
+       _loadCertificates = loadCertificates ?? _defaultCertificates;
+
+  static Future<Uint8List> _defaultCertificates() async =>
+      (await rootBundle.load('packages/bili_player/native/cacert.pem')).buffer
+          .asUint8List();
+  final Future<Uint8List> Function() _loadCertificates;
 
   static bool get supported =>
       Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
@@ -207,6 +217,10 @@ final class FsPlayerEngine
         _gain = options.audioGainDb;
         final inputLease = _inputLease = await FsPlayerInputLease.open(input);
         if (cancel.isCompleted) throw const _Superseded();
+        final certificates = await _loadCertificates().timeout(
+          const Duration(seconds: 5),
+        );
+        if (cancel.isCompleted) throw const _Superseded();
         final creation = _channel.invokeMethod<Map<Object?, Object?>>(
           'create',
           {
@@ -216,6 +230,7 @@ final class FsPlayerEngine
             'software': options.videoDecoding == VideoDecodingMode.software,
             'bufferMs': options.maxBufferAhead.inMilliseconds,
             'durationMs': input.duration?.inMilliseconds ?? 0,
+            'caPem': certificates,
           },
         );
         Map<Object?, Object?>? created;

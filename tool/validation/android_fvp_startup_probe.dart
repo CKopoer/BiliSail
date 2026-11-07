@@ -37,7 +37,12 @@ Future<void> main() async {
       final start = Duration(seconds: config['startSeconds'] as int? ?? 0);
       MediaTrack track(String name) => MediaTrack(
         uri: Uri.parse(config[name] as String),
-        requestPolicy: MediaRequestPolicy(),
+        requestPolicy: MediaRequestPolicy(
+          headers: switch (config['headers']) {
+            final Map values => Map<String, String>.from(values),
+            _ => const {},
+          },
+        ),
       );
       final fsplayer = config['backend'] == 'fsplayer';
       final PlayerEngine engine = fsplayer ? FsPlayerEngine() : FvpEngine();
@@ -99,6 +104,7 @@ Future<void> main() async {
             'phase': phase,
             'positionMs': engine.currentSnapshot.position.inMilliseconds,
             'videoOutput': info?.videoOutput,
+            'hardwareDecoder': info?.hardwareDecoder,
             'pixels': pixels,
           });
         }

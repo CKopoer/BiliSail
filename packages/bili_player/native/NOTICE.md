@@ -7,3 +7,4 @@
 - 可重建材料位于固定提交的 `FFToolChain` 子模块、`android/fsplayer/src/main/cpp/CMakeLists.txt`、Apple XcodeGen yml 和各平台 build-framework 脚本。构建步骤见上游 README；子模块固定提交见锁文件。
 - FFmpeg 与 OpenSSL、libass、libxml2、dav1d、uavs3d 等组件保留各自许可。固定工具链的默认 FFmpeg 配置明确 `--disable-gpl`／`--disable-nonfree`，并关闭 version3；这不代表其他组件统一采用 LGPL-2.1。原始 AAR 未附完整子组件 notices，本项目保留来源和 LGPL 文本；发布前仍须补齐实际二进制对应的第三方许可清单。Apple archive 的 LICENSE／README／CHANGELOG 由 podspec 保留；资产本身不提交 Git。
 - 公开版本的包数／字节缓存限制不等价于精确的媒体时间窗口；性能验证须记录实际缓存量。Apple Flutter Texture 输出不承诺 HDR／杜比屏幕直通。
+- HTTPS 显式开启 FFmpeg 证书和主机名验证。公开根证书取自固定 certifi 提交，来源和摘要见锁文件，保留 `LICENSE-certifi.txt` 的 MPL-2.0；不含任何客户端凭据。未使用无条件证书接受回调。

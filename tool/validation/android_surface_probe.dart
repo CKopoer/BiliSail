@@ -90,7 +90,7 @@ Future<void> main() async {
       );
       if (seconds < 5 ||
           seconds > 60 ||
-          rate != 3 ||
+          !{1.0, 3.0}.contains(rate) ||
           duration.inSeconds < (seconds + 15) * rate + 15) {
         throw StateError('Invalid benchmark duration or rate');
       }

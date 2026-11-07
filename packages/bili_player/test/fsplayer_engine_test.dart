@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/services.dart';
@@ -50,7 +51,10 @@ void main() {
       }
       return null;
     });
-    engine = FsPlayerEngine(channel: channel);
+    engine = FsPlayerEngine(
+      channel: channel,
+      loadCertificates: () async => Uint8List(0),
+    );
   });
   tearDown(() async {
     if (creation != null && !creation!.isCompleted) creation!.complete();

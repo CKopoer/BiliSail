@@ -4,6 +4,12 @@
   "commit": "f00c9e12b7304eca70b6ac27b09e915c24550898",
   "toolchainCommit": "d4f1431be8e6da3738e70cc98abed61f3c69e7c8",
   "baseUrl": "https://github.com/debugly/fsplayer/releases/download/1.1.2",
+  "caBundle": {
+    "source": "https://github.com/certifi/python-certifi",
+    "commit": "b71b898632759b30c6c309aa663f0b8f53bbe13a",
+    "path": "certifi/cacert.pem",
+    "sha256": "9750573e9d11895912c193f50bb290cf7217de828bd9d6afa0c2fdaff6057b57"
+  },
   "android": {
     "archive": "fsplayer-1.1.2.aar",
     "sha256": "ab8c439a0f456c03feb0bfa3b3bce9fc467cb55984c13d187a728a36fdde336d"

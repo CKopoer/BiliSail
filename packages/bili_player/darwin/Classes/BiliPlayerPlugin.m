@@ -83,6 +83,17 @@
         [options setFormatOptionValue:@"file,data,http,https,tcp,tls,crypto" forKey:@"protocol_whitelist"];
         [options setFormatOptionValue:@"ALL" forKey:@"allowed_extensions"];
         [options setFormatOptionIntValue:15000000 forKey:@"rw_timeout"];
+        FlutterStandardTypedData *caPem = args[@"caPem"];
+        NSString *cache = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
+        NSString *caPath = [cache stringByAppendingPathComponent:@"fsplayer-ca.pem"];
+        NSError *caError;
+        [[NSFileManager defaultManager] createDirectoryAtPath:cache withIntermediateDirectories:YES attributes:nil error:&caError];
+        if (caPem.data.length < 1000 || caPem.data.length > 1048576 ||
+            ![caPem.data writeToFile:caPath options:NSDataWritingAtomic error:&caError]) {
+            result([FlutterError errorWithCode:@"fsplayer" message:@"Cannot prepare CA bundle" details:nil]); return;
+        }
+        [options setFormatOptionIntValue:1 forKey:@"tls_verify"];
+        [options setFormatOptionValue:caPath forKey:@"ca_file"];
         [options setPlayerOptionIntValue:0 forKey:@"start-on-prepared"];
         [options setPlayerOptionIntValue:1 forKey:@"enable-accurate-seek"];
         [options setPlayerOptionIntValue:10000 forKey:@"accurate-seek-timeout"];

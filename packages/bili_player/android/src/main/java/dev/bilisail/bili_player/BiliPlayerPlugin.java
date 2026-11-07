@@ -14,11 +14,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.io.File;
+import android.content.Context;
+import android.util.AtomicFile;
+import java.io.FileOutputStream;
 
 /** Off-main native commands. Raw source strings and native messages never leave this bridge. */
 public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.MethodCallHandler {
     private MethodChannel channel;
     private TextureRegistry textures;
+    private Context context;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Map<Long, Runtime> players = new HashMap<>();
@@ -48,6 +53,7 @@ public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
 
     @Override public void onAttachedToEngine(FlutterPluginBinding binding) {
         textures = binding.getTextureRegistry();
+        context = binding.getApplicationContext();
         channel = new MethodChannel(binding.getBinaryMessenger(), "dev.bilisail/fsplayer");
         channel.setMethodCallHandler(this);
     }
@@ -109,7 +115,10 @@ public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
                 r.player.setOption(FSPlayer.OPT_CATEGORY_PLAYER, "mediacodec-all-videos", software ? 0 : 1);
                 r.player.setOption(FSPlayer.OPT_CATEGORY_PLAYER, "enable-accurate-seek", 1);
                 r.player.setOption(FSPlayer.OPT_CATEGORY_PLAYER, "accurate-seek-timeout", 10000);
-                r.player.setOption(FSPlayer.OPT_CATEGORY_PLAYER, "soundtouch", 1);
+                // Android's AudioTrack PlaybackParams supplies tempo and pitch.
+                // The optional legacy SoundTouch path does not preserve the
+                // requested media-clock rate reliably in this published SDK.
+                r.player.setOption(FSPlayer.OPT_CATEGORY_PLAYER, "soundtouch", 0);
                 r.player.setOption(FSPlayer.OPT_CATEGORY_PLAYER, "max-fps", 0);
                 r.player.setOption(FSPlayer.OPT_CATEGORY_PLAYER, "framedrop", 1);
                 r.player.setOption(FSPlayer.OPT_CATEGORY_PLAYER, "subtitle_mix", 0);
@@ -122,6 +131,15 @@ public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
                 r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "allowed_extensions", "ALL");
                 r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "rw_timeout", 15000000);
                 r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "reconnect", 0);
+                byte[] caPem = call.argument("caPem");
+                if (caPem == null || caPem.length < 1000 || caPem.length > 1048576)
+                    throw new IllegalArgumentException("Missing CA bundle");
+                AtomicFile caFile = new AtomicFile(new File(context.getCacheDir(), "fsplayer-ca.pem"));
+                FileOutputStream caOutput = caFile.startWrite();
+                try { caOutput.write(caPem); caFile.finishWrite(caOutput); }
+                catch (Exception error) { caFile.failWrite(caOutput); throw error; }
+                r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "tls_verify", 1);
+                r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "ca_file", caFile.getBaseFile().getAbsolutePath());
                 Map<String, String> headers = call.argument("headers");
                 StringBuilder headerText = new StringBuilder();
                 for (Map.Entry<String, String> entry : headers.entrySet()) {
