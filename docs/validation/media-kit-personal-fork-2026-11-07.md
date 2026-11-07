@@ -2,14 +2,16 @@
 
 日期：2026-11-07（Asia/Shanghai）。本轮将播放器核心、视频插件、平台库插件与 libmpv 的维护入口统一到个人 fork；保持当前 Flutter Texture 合成、弹幕调度和产品容量设置。依赖迁移不作为新的性能提升结论。
 
+Windows x64 后续更新：个人 mpv 已修复有填充的 D3D11 解码表面经 EGL／ANGLE 产生的边缘绿线，使用重建 SDK 与补充原始许可后的固定资产；[专项记录](windows-amd-hwdec-edges-2026-11-07.md)列出像素对照、构建与未测边界。以下首批镜像与旧产物数据保留为迁移当时的历史记录，当前 x64 不再使用首批镜像 DLL。Windows ARM64、Android、Apple、Linux 的原生内容未因本次修复改变。
+
 ## 固定来源
 
 | 层次 | 现行来源 |
 | --- | --- |
 | 官方基线 | media-kit/media-kit `c533e446755f51cf53c7e57aea873f2aa5355f81` |
-| 核心、视频、aggregate 及 Android/Windows/macOS/iOS/Linux 库插件 | [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/9abd8a56f24371fd8c9628b70eba5e84c29e86c8)，统一固定 `9abd8a56f24371fd8c9628b70eba5e84c29e86c8` |
-| mpv 源码 | [CKopoer/mpv](https://github.com/CKopoer/mpv)；Windows `88eb9f2e73945d8bc9c133a2f67babaa9af34680`，Android `9fda3e12a57a7b3ebd627a3c1b37561709d4ffee`，Apple 官方基线 `f4210f84906c3b00a65fba198c8127b6757b9350`，Linux `41f6a645068483470267271e1d09966ca3b9f413` |
-| 资产与构建材料 | [固定原生 Release](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)、[资产摘要](https://github.com/CKopoer/media-kit/blob/9abd8a56f24371fd8c9628b70eba5e84c29e86c8/native/assets.lock.json)、[构建分支提交](https://github.com/CKopoer/media-kit/blob/9abd8a56f24371fd8c9628b70eba5e84c29e86c8/native/builds.lock.json) |
+| 核心、视频、aggregate 及 Android/Windows/macOS/iOS/Linux 库插件 | [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/f57d7c5ffd564d7a91c45769943831d468caeb2f)，统一固定 `f57d7c5ffd564d7a91c45769943831d468caeb2f` |
+| mpv 源码 | [CKopoer/mpv](https://github.com/CKopoer/mpv)；Windows x64 `afd6da8843a07f463ba4c736a2ea636b1a92e23e`、ARM64 `88eb9f2e73945d8bc9c133a2f67babaa9af34680`，Android `9fda3e12a57a7b3ebd627a3c1b37561709d4ffee`，Apple 官方基线 `f4210f84906c3b00a65fba198c8127b6757b9350`，Linux `41f6a645068483470267271e1d09966ca3b9f413` |
+| 资产与构建材料 | [Windows x64 修复 SDK](https://github.com/CKopoer/media-kit/releases/tag/native-windows-hwdec-edges-2026-11-07)、[其余平台固定资产](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)、[资产摘要](https://github.com/CKopoer/media-kit/blob/f57d7c5ffd564d7a91c45769943831d468caeb2f/native/assets.lock.json)、[构建分支提交](https://github.com/CKopoer/media-kit/blob/f57d7c5ffd564d7a91c45769943831d468caeb2f/native/builds.lock.json) |
 
 根应用和 `bili_player` 保留必要的 overrides，八个媒体包统一来自同一完整 Git 提交。最终无 path override、相邻仓库依赖或 Pub 缓存修改。canvas_danmaku 的现行提交不变。
 
@@ -61,7 +63,7 @@ Windows、Android 和 Apple 首批资产是保留原 SHA-256 的上游二进制�
 
 ## 2026-11-07：Windows ARM64 扩展
 
-应用与 `bili_player` 的八个媒体包及两份锁文件统一更新到 `9abd8a56f24371fd8c9628b70eba5e84c29e86c8`。该次修改集中在 Windows 库插件、视频链接和验证工具；其他平台的媒体实现与原固定资产继续沿用。
+应用与 `bili_player` 的八个媒体包及两份锁文件统一更新到 `f57d7c5ffd564d7a91c45769943831d468caeb2f`。该次修改集中在 Windows 库插件、视频链接和验证工具；其他平台的媒体实现与原固定资产继续沿用。
 
 - libmpv ARM64 使用同一 `88eb9f2e73945d8bc9c133a2f67babaa9af34680` 的 LGPL aarch64 SDK；归档摘要 `bdffd1f6c2ce4f083bea6fd8c0dec845065468ba7d0426c23cb9b09c8b540b86`，DLL 摘要 `6139b27ac410fc2535161e3e11969bbc8b27c2b6850a61e0550266f9a08c8c52`。
 - ANGLE ARM64 固定 `a96fca8d5ee2ca61e8de419e38cd577579281c9e` 的 D3D11/OpenGL 构建，归档摘要 `f7f122533644ec0dd1f52f0117b9fa57ceb3f69dff3359579028ff4008f74f69`。上游包缺少动态导入库，fork 从已校验 DLL 的 115／1809 个具名导出记录生成 `.def`，使用目标 MSVC `lib /machine:arm64` 生成动态导入库，不链接附带的静态 ANGLE。

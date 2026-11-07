@@ -10,6 +10,7 @@
 | --- | --- |
 | [fvp 中途断音检测与恢复](validation/fvp-audio-recovery-2026-11-07.md) | 本机 1.2.8 证据边界、实际外部音频解码活动、停滞恢复与原生回归 |
 | [可选 fsplayer 与三后端对照](validation/fsplayer-backend-2026-11-07.md) | Android／iOS／macOS 接入、内存 DASH、固定原生资产、功能回归和 Android 同条件对照 |
+| [Windows 硬解边缘绿线](validation/windows-amd-hwdec-edges-2026-11-07.md) | mpv D3D11/EGL 正式修复、AMD／NVIDIA 新旧 mapper 的 392 次抓图及 HEVC 未复现边界 |
 | [连续跳转只保留最新目标](validation/rapid-seek-latest-target-2026-11-07.md) | 应用后端包装层的命令分发修复、两后端原生取消、兼容／直出与暂停边界 |
 | [解码方式与 GPU 设备](validation/gpu-device-settings-2026-11-07.md) | 软硬解分层、后端／平台能力、Windows fvp 指定 GPU、持久化与验证边界 |
 | [fvp 直出启动黑屏修复](validation/android-fvp-direct-black-2026-11-07.md) | 空纹理消费误报、原生暂停屏障、连续打开及截图像素回归 |

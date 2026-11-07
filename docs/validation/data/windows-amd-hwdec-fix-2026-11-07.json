@@ -1,0 +1,3009 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-07",
+  "mpvSource": "afd6da8843a07f463ba4c736a2ea636b1a92e23e",
+  "mediaKitSource": "f57d7c5ffd564d7a91c45769943831d468caeb2f",
+  "buildRun": "https://github.com/CKopoer/mpv/actions/runs/42387266918",
+  "releaseArchiveSha256": "6739acd7529400cc877ea84e417714bf043769ef088cd1b248d3de2467417ced",
+  "probeSha256": "ad72c6da3045a6e3bf70ed1454fa3884873217dd922a71a492b6d0219f1398dd",
+  "scriptSha256": "d2414e9a107dba8173ee3581f35c196e3afa2dceaa91c691ca3ac4dbb60c968a",
+  "toleranceRgbMean": 2,
+  "devices": {
+    "1002": {
+      "device": "164e",
+      "driver": "32.0.21042.62"
+    },
+    "10de": {
+      "name": "RTX 4070 Ti SUPER",
+      "driver": "32.0.16.1742"
+    }
+  },
+  "runs": [
+    {
+      "VendorHex": "1002",
+      "LibmpvSha256": "8fa6af29a94623d7d1e16bc6db48668f321e3fc9f1eaa86a8df8d61ec57f00e3",
+      "AngleEglSha256": "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac",
+      "AngleGlesSha256": "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39",
+      "RequireCleanDirect": true,
+      "IncludeTransforms": true,
+      "name": "amd-hwdec-native-fixed",
+      "captures": 200,
+      "rawResultsSha256": "dfe970939b67f3db7e51e23119c023c3d16f8f928a146739edff517bae843697",
+      "families": [
+        {
+          "fixture": "hevc-landscape-8",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "4089db0747df017fcde6bb02c32ff35737932aacdb082ddc1fb699e621779663",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "4089db0747df017fcde6bb02c32ff35737932aacdb082ddc1fb699e621779663",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-landscape-10",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "f71cfe35aad71e0a5f99913605d775e467ee431b0665b02ed5b9ba6d86914be6",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-landscape-10",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "f71cfe35aad71e0a5f99913605d775e467ee431b0665b02ed5b9ba6d86914be6",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-8",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "86d8af29bff200a50213bfa8181ed970791cbcc9521068e4b0956851d55c4778",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "86d8af29bff200a50213bfa8181ed970791cbcc9521068e4b0956851d55c4778",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.095
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-10",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "896f57a3c4ffa5c766dfe2ffb6c089703f975ed8bf032b89645b86ea06bdaa7b",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-10",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "896f57a3c4ffa5c766dfe2ffb6c089703f975ed8bf032b89645b86ea06bdaa7b",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.095
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "rotate-90",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "rotate-180",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "rotate-270",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            640,
+            360
+          ],
+          "transform": "crop-edge",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "cscale-lanczos",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "cscale-spline36",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "rotate-90",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "rotate-180",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "rotate-270",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            640,
+            360
+          ],
+          "transform": "crop-edge",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "cscale-lanczos",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "cscale-spline36",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.095
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "rotate-90",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "rotate-180",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "rotate-270",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            360,
+            640
+          ],
+          "transform": "crop-edge",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "cscale-lanczos",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "cscale-spline36",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.095
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "rotate-90",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "rotate-180",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "rotate-270",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            360,
+            640
+          ],
+          "transform": "crop-edge",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "cscale-lanczos",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "cscale-spline36",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1
+          }
+        },
+        {
+          "fixture": "h264-landscape-8",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "703e1ce9097fcb46f758a234cf1a7a8a059aa410107044c21db4eeefbc85d369",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "h264-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "703e1ce9097fcb46f758a234cf1a7a8a059aa410107044c21db4eeefbc85d369",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "h264-portrait-8",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "3a0c1fb00bcce01b6c6d992863dd60381ac1ab67f987f2661e78285d2303abcf",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "h264-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "3a0c1fb00bcce01b6c6d992863dd60381ac1ab67f987f2661e78285d2303abcf",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.095
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-aligned",
+          "output": [
+            1920,
+            1152
+          ],
+          "transform": "",
+          "fixtureSha256": "28180f81ab67da933ecf930e8f6233d2b84c1dcf784d211cf66fc3fbfa93c2aa",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-aligned",
+          "output": [
+            960,
+            576
+          ],
+          "transform": "",
+          "fixtureSha256": "28180f81ab67da933ecf930e8f6233d2b84c1dcf784d211cf66fc3fbfa93c2aa",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-aligned",
+          "output": [
+            1152,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "c5fd921b134344a2b2c99fc687ca5766de002f90b7db46547d85186b48c122e1",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-aligned",
+          "output": [
+            576,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "c5fd921b134344a2b2c99fc687ca5766de002f90b7db46547d85186b48c122e1",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-color",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "2f3b994226dd2927dfcebc0f5627b35097d3cd666421b39e49156d32fe94f456",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0754,
+            "copy": 0.0754,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-color",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "2f3b994226dd2927dfcebc0f5627b35097d3cd666421b39e49156d32fe94f456",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.126,
+            "copy": 0.126,
+            "software": 0.0,
+            "plane-bounds": 0.126
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-color",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "c16244e9303b25386f8b4a6b05657089743c38e0d64f8c29438651cf2ca235ed",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.151,
+            "copy": 0.151,
+            "software": 0.0,
+            "plane-bounds": 0.157
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-color",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "c16244e9303b25386f8b4a6b05657089743c38e0d64f8c29438651cf2ca235ed",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.1099,
+            "copy": 0.1099,
+            "software": 0.0,
+            "plane-bounds": 0.067
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-4k",
+          "output": [
+            3840,
+            2160
+          ],
+          "transform": "",
+          "fixtureSha256": "b48fd2acd96f8cdcebf9df6118c3d147595b5ff3e9610e94ab3f70c6947635b9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-4k",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "b48fd2acd96f8cdcebf9df6118c3d147595b5ff3e9610e94ab3f70c6947635b9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-4k",
+          "output": [
+            2160,
+            3840
+          ],
+          "transform": "",
+          "fixtureSha256": "8a0ce6b7d6c753bf250035f0df80bb8a33d9ba1d96549c474613963310db84c5",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-4k",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "8a0ce6b7d6c753bf250035f0df80bb8a33d9ba1d96549c474613963310db84c5",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.093
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        }
+      ],
+      "maximumDirectRgbMeanError": 0.151
+    },
+    {
+      "VendorHex": "10de",
+      "LibmpvSha256": "8fa6af29a94623d7d1e16bc6db48668f321e3fc9f1eaa86a8df8d61ec57f00e3",
+      "AngleEglSha256": "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac",
+      "AngleGlesSha256": "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39",
+      "RequireCleanDirect": true,
+      "IncludeTransforms": false,
+      "name": "nvidia-hwdec-native-fixed",
+      "captures": 96,
+      "rawResultsSha256": "346a9d9fb9a3f70d07a7ea9a1301924fe7bcfa3b4390c503deea4039f75e2017",
+      "families": [
+        {
+          "fixture": "hevc-landscape-8",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "4089db0747df017fcde6bb02c32ff35737932aacdb082ddc1fb699e621779663",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.042
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "4089db0747df017fcde6bb02c32ff35737932aacdb082ddc1fb699e621779663",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-landscape-10",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "f71cfe35aad71e0a5f99913605d775e467ee431b0665b02ed5b9ba6d86914be6",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.042
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-landscape-10",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "f71cfe35aad71e0a5f99913605d775e467ee431b0665b02ed5b9ba6d86914be6",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-8",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "86d8af29bff200a50213bfa8181ed970791cbcc9521068e4b0956851d55c4778",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.071
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "86d8af29bff200a50213bfa8181ed970791cbcc9521068e4b0956851d55c4778",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.089
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-10",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "896f57a3c4ffa5c766dfe2ffb6c089703f975ed8bf032b89645b86ea06bdaa7b",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.071
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-10",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "896f57a3c4ffa5c766dfe2ffb6c089703f975ed8bf032b89645b86ea06bdaa7b",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.089
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.042
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.042
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.071
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.089
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.071
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.089
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "h264-landscape-8",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "703e1ce9097fcb46f758a234cf1a7a8a059aa410107044c21db4eeefbc85d369",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.042
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "h264-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "703e1ce9097fcb46f758a234cf1a7a8a059aa410107044c21db4eeefbc85d369",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "h264-portrait-8",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "3a0c1fb00bcce01b6c6d992863dd60381ac1ab67f987f2661e78285d2303abcf",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.071
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "h264-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "3a0c1fb00bcce01b6c6d992863dd60381ac1ab67f987f2661e78285d2303abcf",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.089
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-aligned",
+          "output": [
+            1920,
+            1152
+          ],
+          "transform": "",
+          "fixtureSha256": "28180f81ab67da933ecf930e8f6233d2b84c1dcf784d211cf66fc3fbfa93c2aa",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.066
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-aligned",
+          "output": [
+            960,
+            576
+          ],
+          "transform": "",
+          "fixtureSha256": "28180f81ab67da933ecf930e8f6233d2b84c1dcf784d211cf66fc3fbfa93c2aa",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.092
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-aligned",
+          "output": [
+            1152,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "c5fd921b134344a2b2c99fc687ca5766de002f90b7db46547d85186b48c122e1",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.071
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-aligned",
+          "output": [
+            576,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "c5fd921b134344a2b2c99fc687ca5766de002f90b7db46547d85186b48c122e1",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.089
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        }
+      ],
+      "maximumDirectRgbMeanError": 0.0
+    },
+    {
+      "VendorHex": "1002",
+      "LibmpvSha256": "41835b77521837d0626b537d1b07c55083b4de4cfe0dba828a6a50bab878f7bc",
+      "AngleEglSha256": "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac",
+      "AngleGlesSha256": "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39",
+      "RequireCleanDirect": false,
+      "IncludeTransforms": false,
+      "name": "amd-hwdec-native-control",
+      "captures": 96,
+      "rawResultsSha256": "7c9914b37a200a6f71cc12e46b0d2f270fd807f744242bc24a0f8792159e76b9",
+      "families": [
+        {
+          "fixture": "hevc-landscape-8",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "4089db0747df017fcde6bb02c32ff35737932aacdb082ddc1fb699e621779663",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "4089db0747df017fcde6bb02c32ff35737932aacdb082ddc1fb699e621779663",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.004,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-landscape-10",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "f71cfe35aad71e0a5f99913605d775e467ee431b0665b02ed5b9ba6d86914be6",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-landscape-10",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "f71cfe35aad71e0a5f99913605d775e467ee431b0665b02ed5b9ba6d86914be6",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.004,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-8",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "86d8af29bff200a50213bfa8181ed970791cbcc9521068e4b0956851d55c4778",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "86d8af29bff200a50213bfa8181ed970791cbcc9521068e4b0956851d55c4778",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.007,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.095
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-10",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "896f57a3c4ffa5c766dfe2ffb6c089703f975ed8bf032b89645b86ea06bdaa7b",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "hevc-portrait-10",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "896f57a3c4ffa5c766dfe2ffb6c089703f975ed8bf032b89645b86ea06bdaa7b",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 0.007,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.095
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 56.6702,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 69,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 7.032,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 8,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 56.6702,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 69,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-10",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 7.032,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 8,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 127.781,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 163,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 28.5976,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.095
+          },
+          "maximumGreenExcess": {
+            "direct": 49,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 127.781,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 163,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-10",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "p010",
+          "maximumRgbMeanError": {
+            "direct": 28.5976,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.095
+          },
+          "maximumGreenExcess": {
+            "direct": 49,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "h264-landscape-8",
+          "output": [
+            1920,
+            1080
+          ],
+          "transform": "",
+          "fixtureSha256": "703e1ce9097fcb46f758a234cf1a7a8a059aa410107044c21db4eeefbc85d369",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.156
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "h264-landscape-8",
+          "output": [
+            960,
+            540
+          ],
+          "transform": "",
+          "fixtureSha256": "703e1ce9097fcb46f758a234cf1a7a8a059aa410107044c21db4eeefbc85d369",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.006,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "h264-portrait-8",
+          "output": [
+            1080,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "3a0c1fb00bcce01b6c6d992863dd60381ac1ab67f987f2661e78285d2303abcf",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "h264-portrait-8",
+          "output": [
+            540,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "3a0c1fb00bcce01b6c6d992863dd60381ac1ab67f987f2661e78285d2303abcf",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.095
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-aligned",
+          "output": [
+            1920,
+            1152
+          ],
+          "transform": "",
+          "fixtureSha256": "28180f81ab67da933ecf930e8f6233d2b84c1dcf784d211cf66fc3fbfa93c2aa",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-landscape-aligned",
+          "output": [
+            960,
+            576
+          ],
+          "transform": "",
+          "fixtureSha256": "28180f81ab67da933ecf930e8f6233d2b84c1dcf784d211cf66fc3fbfa93c2aa",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-aligned",
+          "output": [
+            1152,
+            1920
+          ],
+          "transform": "",
+          "fixtureSha256": "c5fd921b134344a2b2c99fc687ca5766de002f90b7db46547d85186b48c122e1",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.188
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        },
+        {
+          "fixture": "av1-portrait-aligned",
+          "output": [
+            576,
+            960
+          ],
+          "transform": "",
+          "fixtureSha256": "c5fd921b134344a2b2c99fc687ca5766de002f90b7db46547d85186b48c122e1",
+          "actualDecoders": {
+            "direct": "d3d11va",
+            "copy": "d3d11va-copy",
+            "software": "no",
+            "plane-bounds": "d3d11va"
+          },
+          "directOutputFormat": "d3d11",
+          "hardwareFormat": "nv12",
+          "maximumRgbMeanError": {
+            "direct": 0.0,
+            "copy": 0.0,
+            "software": 0.0,
+            "plane-bounds": 0.094
+          },
+          "maximumGreenExcess": {
+            "direct": 1,
+            "copy": 1,
+            "software": 1,
+            "plane-bounds": 1
+          }
+        }
+      ],
+      "maximumDirectRgbMeanError": 127.781
+    }
+  ]
+}

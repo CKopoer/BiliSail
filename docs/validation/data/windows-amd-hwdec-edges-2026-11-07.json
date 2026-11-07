@@ -1,0 +1,3242 @@
+{
+  "date": "2026-11-07",
+  "timezone": "Asia/Shanghai",
+  "hardware": "AMD Radeon(TM) Graphics, PCI 1002:164e",
+  "driver": "32.0.21042.62",
+  "actualRenderer": "ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11-32.0.21042.62)",
+  "mpvVersion": "mpv v0.41.0-1150-g88eb9f2e7",
+  "ffmpegVersion": "N-127388-g615b07170",
+  "libmpvSha256": "222da57d12a47680df84a8d0ad06f713fbbce4da923784ddeebe9d666135e943",
+  "angleEglSha256": "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac",
+  "angleGlesSha256": "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39",
+  "shaderSha256": "e0b489400e12f1146ef2cd7e26cb134493a2811dfd69db4e776bf62d3b36a040",
+  "sourceSha256": "93c38a26b68328c8058f1540b796f935a04b604084ea4ea3e260e25ff59ca053",
+  "captures": 96,
+  "softwareReferenceTolerance": 2.0,
+  "maximumMeanRgbErrorForCopyAndCandidate": 0.18799999999998818,
+  "groups": [
+    {
+      "fixture": "av1-landscape-10",
+      "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+      "sourceWidth": 1920,
+      "sourceHeight": 1080,
+      "outputWidth": 960,
+      "outputHeight": 540,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 8.0,
+          "edgeRgb": {
+            "bottom": [
+              120.907,
+              129.501,
+              121.658
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.803,
+              128.156,
+              127.78
+            ],
+            "right": [
+              127.844,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.832,
+              128.148,
+              127.789
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.805,
+              128.156,
+              127.778
+            ],
+            "right": [
+              127.846,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.828,
+              128.148,
+              127.785
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.805,
+              128.156,
+              127.778
+            ],
+            "right": [
+              127.846,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.828,
+              128.148,
+              127.785
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.907,
+              128.109,
+              127.831
+            ],
+            "top": [
+              127.78,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.75,
+              128.124,
+              127.734
+            ],
+            "right": [
+              127.77,
+              128.108,
+              127.752
+            ],
+            "center": [
+              127.762,
+              128.109,
+              127.742
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "av1-landscape-10",
+      "fixtureSha256": "639e35861518c95216cfc8bb899665409d0090992e0cd06f83c1365f701bbde9",
+      "sourceWidth": 1920,
+      "sourceHeight": 1080,
+      "outputWidth": 1920,
+      "outputHeight": 1080,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 69.0,
+          "edgeRgb": {
+            "bottom": [
+              79.7643,
+              148.14,
+              71.0938
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.0,
+              127.764
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.732,
+              127.984,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.0,
+              127.769
+            ],
+            "center": [
+              127.75,
+              127.996,
+              127.75
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "av1-landscape-8",
+      "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+      "sourceWidth": 1920,
+      "sourceHeight": 1080,
+      "outputWidth": 960,
+      "outputHeight": 540,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 8.0,
+          "edgeRgb": {
+            "bottom": [
+              120.907,
+              129.501,
+              121.658
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.803,
+              128.156,
+              127.78
+            ],
+            "right": [
+              127.844,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.832,
+              128.148,
+              127.789
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.805,
+              128.156,
+              127.778
+            ],
+            "right": [
+              127.846,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.828,
+              128.148,
+              127.785
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.805,
+              128.156,
+              127.778
+            ],
+            "right": [
+              127.846,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.828,
+              128.148,
+              127.785
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.907,
+              128.109,
+              127.831
+            ],
+            "top": [
+              127.78,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.75,
+              128.124,
+              127.734
+            ],
+            "right": [
+              127.77,
+              128.108,
+              127.752
+            ],
+            "center": [
+              127.762,
+              128.109,
+              127.742
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "av1-landscape-8",
+      "fixtureSha256": "2e81b31cf408a079eb312ede2cf929fc62b09a757c57a09d6a83d81654b906c7",
+      "sourceWidth": 1920,
+      "sourceHeight": 1080,
+      "outputWidth": 1920,
+      "outputHeight": 1080,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 69.0,
+          "edgeRgb": {
+            "bottom": [
+              79.7643,
+              148.14,
+              71.0938
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.0,
+              127.764
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.732,
+              127.984,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.0,
+              127.769
+            ],
+            "center": [
+              127.75,
+              127.996,
+              127.75
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "av1-landscape-aligned",
+      "fixtureSha256": "28180f81ab67da933ecf930e8f6233d2b84c1dcf784d211cf66fc3fbfa93c2aa",
+      "sourceWidth": 1920,
+      "sourceHeight": 1152,
+      "outputWidth": 960,
+      "outputHeight": 576,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.844,
+              128.189,
+              127.796
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.8,
+              128.156,
+              127.779
+            ],
+            "right": [
+              127.838,
+              128.14,
+              127.803
+            ],
+            "center": [
+              127.824,
+              128.141,
+              127.789
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.844,
+              128.189,
+              127.796
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.8,
+              128.156,
+              127.779
+            ],
+            "right": [
+              127.838,
+              128.14,
+              127.803
+            ],
+            "center": [
+              127.824,
+              128.141,
+              127.789
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.844,
+              128.189,
+              127.796
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.8,
+              128.156,
+              127.779
+            ],
+            "right": [
+              127.838,
+              128.14,
+              127.803
+            ],
+            "center": [
+              127.824,
+              128.141,
+              127.789
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.766,
+              128.173,
+              127.736
+            ],
+            "top": [
+              127.78,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.746,
+              128.125,
+              127.73
+            ],
+            "right": [
+              127.768,
+              128.108,
+              127.75
+            ],
+            "center": [
+              127.754,
+              128.105,
+              127.734
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "av1-landscape-aligned",
+      "fixtureSha256": "28180f81ab67da933ecf930e8f6233d2b84c1dcf784d211cf66fc3fbfa93c2aa",
+      "sourceWidth": 1920,
+      "sourceHeight": 1152,
+      "outputWidth": 1920,
+      "outputHeight": 1152,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.141,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.109,
+              127.769
+            ],
+            "center": [
+              127.742,
+              128.117,
+              127.742
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.141,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.109,
+              127.769
+            ],
+            "center": [
+              127.742,
+              128.117,
+              127.742
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.141,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.109,
+              127.769
+            ],
+            "center": [
+              127.742,
+              128.117,
+              127.742
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.0,
+              127.751
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.732,
+              127.984,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.0,
+              127.769
+            ],
+            "center": [
+              127.742,
+              127.996,
+              127.742
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "av1-portrait-10",
+      "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+      "sourceWidth": 1080,
+      "sourceHeight": 1920,
+      "outputWidth": 540,
+      "outputHeight": 960,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 49.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              99.1994,
+              147.844,
+              99.75
+            ],
+            "center": [
+              127.816,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.809,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.809,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.766,
+              128.173,
+              127.734
+            ],
+            "top": [
+              127.781,
+              128.079,
+              127.734
+            ],
+            "left": [
+              127.748,
+              128.125,
+              127.732
+            ],
+            "right": [
+              127.776,
+              128.105,
+              127.75
+            ],
+            "center": [
+              127.77,
+              128.105,
+              127.723
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "av1-portrait-10",
+      "fixtureSha256": "ad443d22b3d4179f0cd0e02f0a38c085a01b3d010c7a9e5655df8d5368658d58",
+      "sourceWidth": 1080,
+      "sourceHeight": 1920,
+      "outputWidth": 1080,
+      "outputHeight": 1920,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 163.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              13.1552,
+              175.827,
+              0.0
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.0,
+              127.751
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.733,
+              127.984,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.0,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.0,
+              127.738
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "av1-portrait-8",
+      "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+      "sourceWidth": 1080,
+      "sourceHeight": 1920,
+      "outputWidth": 540,
+      "outputHeight": 960,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 49.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              99.1994,
+              147.844,
+              99.75
+            ],
+            "center": [
+              127.816,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.809,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.809,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.766,
+              128.173,
+              127.734
+            ],
+            "top": [
+              127.781,
+              128.079,
+              127.734
+            ],
+            "left": [
+              127.748,
+              128.125,
+              127.732
+            ],
+            "right": [
+              127.776,
+              128.105,
+              127.75
+            ],
+            "center": [
+              127.77,
+              128.105,
+              127.723
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "av1-portrait-8",
+      "fixtureSha256": "91e4fd875dfc0aff131372473f064aa453be1acb4fd56b71c692ecf788956724",
+      "sourceWidth": 1080,
+      "sourceHeight": 1920,
+      "outputWidth": 1080,
+      "outputHeight": 1920,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 163.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              13.1552,
+              175.827,
+              0.0
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.0,
+              127.751
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.733,
+              127.984,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.0,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.0,
+              127.738
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "av1-portrait-aligned",
+      "fixtureSha256": "c5fd921b134344a2b2c99fc687ca5766de002f90b7db46547d85186b48c122e1",
+      "sourceWidth": 1152,
+      "sourceHeight": 1920,
+      "outputWidth": 576,
+      "outputHeight": 960,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.844,
+              128.189,
+              127.796
+            ],
+            "top": [
+              127.844,
+              128.077,
+              127.827
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.823,
+              128.14,
+              127.801
+            ],
+            "center": [
+              127.82,
+              128.141,
+              127.789
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.844,
+              128.189,
+              127.796
+            ],
+            "top": [
+              127.844,
+              128.077,
+              127.827
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.823,
+              128.14,
+              127.801
+            ],
+            "center": [
+              127.82,
+              128.141,
+              127.789
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.844,
+              128.189,
+              127.796
+            ],
+            "top": [
+              127.844,
+              128.077,
+              127.827
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.823,
+              128.14,
+              127.801
+            ],
+            "center": [
+              127.82,
+              128.141,
+              127.789
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.767,
+              128.175,
+              127.737
+            ],
+            "top": [
+              127.779,
+              128.077,
+              127.733
+            ],
+            "left": [
+              127.748,
+              128.125,
+              127.732
+            ],
+            "right": [
+              127.781,
+              128.107,
+              127.737
+            ],
+            "center": [
+              127.762,
+              128.105,
+              127.73
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "av1-portrait-aligned",
+      "fixtureSha256": "c5fd921b134344a2b2c99fc687ca5766de002f90b7db46547d85186b48c122e1",
+      "sourceWidth": 1152,
+      "sourceHeight": 1920,
+      "outputWidth": 1152,
+      "outputHeight": 1920,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.767,
+              128.109,
+              127.767
+            ],
+            "center": [
+              127.742,
+              128.117,
+              127.742
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.767,
+              128.109,
+              127.767
+            ],
+            "center": [
+              127.742,
+              128.117,
+              127.742
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.767,
+              128.109,
+              127.767
+            ],
+            "center": [
+              127.742,
+              128.117,
+              127.742
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.0,
+              127.751
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.733,
+              127.984,
+              127.733
+            ],
+            "right": [
+              127.767,
+              128.0,
+              127.767
+            ],
+            "center": [
+              127.742,
+              127.996,
+              127.742
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "h264-landscape-8",
+      "fixtureSha256": "703e1ce9097fcb46f758a234cf1a7a8a059aa410107044c21db4eeefbc85d369",
+      "sourceWidth": 1920,
+      "sourceHeight": 1080,
+      "outputWidth": 960,
+      "outputHeight": 540,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.809,
+              128.156,
+              127.772
+            ],
+            "right": [
+              127.843,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.828,
+              128.148,
+              127.785
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.805,
+              128.156,
+              127.778
+            ],
+            "right": [
+              127.846,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.828,
+              128.148,
+              127.785
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.805,
+              128.156,
+              127.778
+            ],
+            "right": [
+              127.846,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.828,
+              128.148,
+              127.785
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.907,
+              128.109,
+              127.831
+            ],
+            "top": [
+              127.78,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.75,
+              128.124,
+              127.734
+            ],
+            "right": [
+              127.774,
+              128.11,
+              127.752
+            ],
+            "center": [
+              127.77,
+              128.109,
+              127.742
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "h264-landscape-8",
+      "fixtureSha256": "703e1ce9097fcb46f758a234cf1a7a8a059aa410107044c21db4eeefbc85d369",
+      "sourceWidth": 1920,
+      "sourceHeight": 1080,
+      "outputWidth": 1920,
+      "outputHeight": 1080,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.0,
+              127.764
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.732,
+              127.984,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.0,
+              127.769
+            ],
+            "center": [
+              127.75,
+              127.996,
+              127.75
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "h264-portrait-8",
+      "fixtureSha256": "3a0c1fb00bcce01b6c6d992863dd60381ac1ab67f987f2661e78285d2303abcf",
+      "sourceWidth": 1080,
+      "sourceHeight": 1920,
+      "outputWidth": 540,
+      "outputHeight": 960,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.809,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.809,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.809,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.766,
+              128.173,
+              127.734
+            ],
+            "top": [
+              127.781,
+              128.079,
+              127.734
+            ],
+            "left": [
+              127.748,
+              128.125,
+              127.732
+            ],
+            "right": [
+              127.776,
+              128.105,
+              127.75
+            ],
+            "center": [
+              127.77,
+              128.105,
+              127.73
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "h264-portrait-8",
+      "fixtureSha256": "3a0c1fb00bcce01b6c6d992863dd60381ac1ab67f987f2661e78285d2303abcf",
+      "sourceWidth": 1080,
+      "sourceHeight": 1920,
+      "outputWidth": 1080,
+      "outputHeight": 1920,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.0,
+              127.751
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.733,
+              127.984,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.0,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.0,
+              127.738
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "hevc-landscape-10",
+      "fixtureSha256": "f71cfe35aad71e0a5f99913605d775e467ee431b0665b02ed5b9ba6d86914be6",
+      "sourceWidth": 1920,
+      "sourceHeight": 1080,
+      "outputWidth": 960,
+      "outputHeight": 540,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.803,
+              128.156,
+              127.78
+            ],
+            "right": [
+              127.844,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.832,
+              128.148,
+              127.789
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.805,
+              128.156,
+              127.778
+            ],
+            "right": [
+              127.846,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.828,
+              128.148,
+              127.785
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.805,
+              128.156,
+              127.778
+            ],
+            "right": [
+              127.846,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.828,
+              128.148,
+              127.785
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.907,
+              128.109,
+              127.831
+            ],
+            "top": [
+              127.78,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.75,
+              128.124,
+              127.734
+            ],
+            "right": [
+              127.77,
+              128.108,
+              127.752
+            ],
+            "center": [
+              127.762,
+              128.109,
+              127.742
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "hevc-landscape-10",
+      "fixtureSha256": "f71cfe35aad71e0a5f99913605d775e467ee431b0665b02ed5b9ba6d86914be6",
+      "sourceWidth": 1920,
+      "sourceHeight": 1080,
+      "outputWidth": 1920,
+      "outputHeight": 1080,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.0,
+              127.764
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.732,
+              127.984,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.0,
+              127.769
+            ],
+            "center": [
+              127.75,
+              127.996,
+              127.75
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "hevc-landscape-8",
+      "fixtureSha256": "4089db0747df017fcde6bb02c32ff35737932aacdb082ddc1fb699e621779663",
+      "sourceWidth": 1920,
+      "sourceHeight": 1080,
+      "outputWidth": 960,
+      "outputHeight": 540,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.803,
+              128.156,
+              127.78
+            ],
+            "right": [
+              127.844,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.832,
+              128.148,
+              127.789
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.805,
+              128.156,
+              127.778
+            ],
+            "right": [
+              127.846,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.828,
+              128.148,
+              127.785
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.939,
+              128.157,
+              127.923
+            ],
+            "top": [
+              127.844,
+              128.078,
+              127.828
+            ],
+            "left": [
+              127.805,
+              128.156,
+              127.778
+            ],
+            "right": [
+              127.846,
+              128.142,
+              127.797
+            ],
+            "center": [
+              127.828,
+              128.148,
+              127.785
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.907,
+              128.109,
+              127.831
+            ],
+            "top": [
+              127.78,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.75,
+              128.124,
+              127.734
+            ],
+            "right": [
+              127.77,
+              128.108,
+              127.752
+            ],
+            "center": [
+              127.762,
+              128.109,
+              127.742
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "hevc-landscape-8",
+      "fixtureSha256": "4089db0747df017fcde6bb02c32ff35737932aacdb082ddc1fb699e621779663",
+      "sourceWidth": 1920,
+      "sourceHeight": 1080,
+      "outputWidth": 1920,
+      "outputHeight": 1080,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.125,
+              127.764
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.732,
+              128.14,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.11,
+              127.769
+            ],
+            "center": [
+              127.75,
+              128.129,
+              127.75
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.764,
+              128.0,
+              127.764
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.732,
+              127.984,
+              127.732
+            ],
+            "right": [
+              127.769,
+              128.0,
+              127.769
+            ],
+            "center": [
+              127.75,
+              127.996,
+              127.75
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "hevc-portrait-10",
+      "fixtureSha256": "896f57a3c4ffa5c766dfe2ffb6c089703f975ed8bf032b89645b86ea06bdaa7b",
+      "sourceWidth": 1080,
+      "sourceHeight": 1920,
+      "outputWidth": 540,
+      "outputHeight": 960,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.816,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.809,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.809,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.766,
+              128.173,
+              127.734
+            ],
+            "top": [
+              127.781,
+              128.079,
+              127.734
+            ],
+            "left": [
+              127.748,
+              128.125,
+              127.732
+            ],
+            "right": [
+              127.776,
+              128.105,
+              127.75
+            ],
+            "center": [
+              127.77,
+              128.105,
+              127.723
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "hevc-portrait-10",
+      "fixtureSha256": "896f57a3c4ffa5c766dfe2ffb6c089703f975ed8bf032b89645b86ea06bdaa7b",
+      "sourceWidth": 1080,
+      "sourceHeight": 1920,
+      "outputWidth": 1080,
+      "outputHeight": 1920,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.0,
+              127.751
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.733,
+              127.984,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.0,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.0,
+              127.738
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "hevc-portrait-8",
+      "fixtureSha256": "86d8af29bff200a50213bfa8181ed970791cbcc9521068e4b0956851d55c4778",
+      "sourceWidth": 1080,
+      "sourceHeight": 1920,
+      "outputWidth": 540,
+      "outputHeight": 960,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.816,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.809,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.843,
+              128.189,
+              127.795
+            ],
+            "top": [
+              127.844,
+              128.079,
+              127.829
+            ],
+            "left": [
+              127.807,
+              128.156,
+              127.792
+            ],
+            "right": [
+              127.797,
+              128.125,
+              127.797
+            ],
+            "center": [
+              127.809,
+              128.137,
+              127.797
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.766,
+              128.173,
+              127.734
+            ],
+            "top": [
+              127.781,
+              128.079,
+              127.734
+            ],
+            "left": [
+              127.748,
+              128.125,
+              127.732
+            ],
+            "right": [
+              127.776,
+              128.105,
+              127.75
+            ],
+            "center": [
+              127.77,
+              128.105,
+              127.723
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fixture": "hevc-portrait-8",
+      "fixtureSha256": "86d8af29bff200a50213bfa8181ed970791cbcc9521068e4b0956851d55c4778",
+      "sourceWidth": 1080,
+      "sourceHeight": 1920,
+      "outputWidth": 1080,
+      "outputHeight": 1920,
+      "modes": {
+        "direct": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "copy": {
+          "actualDecoder": "d3d11va-copy",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "software": {
+          "actualDecoder": "no",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.188,
+              127.751
+            ],
+            "top": [
+              127.734,
+              128.078,
+              127.734
+            ],
+            "left": [
+              127.733,
+              128.141,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.046,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.117,
+              127.738
+            ]
+          }
+        },
+        "plane-bounds": {
+          "actualDecoder": "d3d11va",
+          "maximumGreenExcess": 1.0,
+          "edgeRgb": {
+            "bottom": [
+              127.751,
+              128.0,
+              127.751
+            ],
+            "top": [
+              127.734,
+              127.985,
+              127.734
+            ],
+            "left": [
+              127.733,
+              127.984,
+              127.733
+            ],
+            "right": [
+              127.781,
+              128.0,
+              127.781
+            ],
+            "center": [
+              127.738,
+              128.0,
+              127.738
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Synthetic static gray, no original reported HEVC file",
+    "Native renderer only; not full Flutter application acceptance",
+    "Shader candidate only accepts unrotated uncropped 4:2:0 inputs",
+    "No performance or power measurement",
+    "Production player and dependencies unchanged"
+  ]
+}

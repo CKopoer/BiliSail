@@ -4,6 +4,8 @@
 
 2026-11-07 增加 Android／iOS／macOS 的可选 fsplayer 后端，media_kit 仍是默认，fvp 保留。三种后端共用会话与 Flutter 前景；固定原生资产、内存 DASH、生命周期、缓存差异及逐平台验证见[fsplayer 接入与对照](validation/fsplayer-backend-2026-11-07.md)。
 
+2026-11-07／08 修复 Windows x64 的 AV1 硬解底部／右缘绿线：个人 mpv 的 D3D11/EGL mapper 对有对齐填充的表面在 GPU 内复制可见区域，media-kit 分发固定 SDK，应用只升级统一依赖并保留硬解。AMD 新库 200 次、NVIDIA 新库 96 次像素抓图通过，另有同构建旧 mapper 的 96 次故障对照。合成 HEVC 未复现原问题；详见[Windows 硬解边缘绿线](validation/windows-amd-hwdec-edges-2026-11-07.md)。
+
 2026-11-07 修复应用实际使用的 `ConfigurablePlayerEngine` 将完整 seek 加载排队的问题。包装层只串行下发控制命令，新目标及时进入 media_kit／fvp 的既有取消路径；打开、换源及释放仍等待生命周期屏障，未下发的连续目标只保留最新一个。原因、兼容／直出及原生验证见[连续跳转优化](validation/rapid-seek-latest-target-2026-11-07.md)。
 
 2026-11-07 设置先选择软件／硬件解码，硬解下显示后端、GPU 和 Android 输出；Windows fvp 可选择 DXGI 解码设备，其他组合说明自动选择的能力边界。软件模式保留后端与设备偏好，详见[GPU 设备设置](validation/gpu-device-settings-2026-11-07.md)。
