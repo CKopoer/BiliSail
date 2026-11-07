@@ -107,7 +107,6 @@ final class AppSettings {
     this.mediaCdn = MediaCdnPreference.automatic,
     this.videoDecoding = VideoDecodingPreference.automatic,
     this.playbackBackend = PlaybackBackendPreference.mediaKit,
-    this.fvpGpuDeviceId = '',
     this.androidVideoOutput = AndroidVideoOutputPreference.renderedTexture,
     this.defaultPlaybackRate = 1.0,
     List<double> playbackRates = PlaybackRates.values,
@@ -196,7 +195,6 @@ final class AppSettings {
        mediaCdn = MediaCdnPreference.automatic,
        videoDecoding = VideoDecodingPreference.automatic,
        playbackBackend = PlaybackBackendPreference.mediaKit,
-       fvpGpuDeviceId = '',
        androidVideoOutput = AndroidVideoOutputPreference.renderedTexture,
        defaultPlaybackRate = 1.0,
        playbackRates = PlaybackRates.values,
@@ -278,8 +276,6 @@ final class AppSettings {
   final VideoDecodingPreference videoDecoding;
   final PlaybackBackendPreference playbackBackend;
 
-  /// Empty selects the backend default. This preference applies to fvp on Windows.
-  final String fvpGpuDeviceId;
   final AndroidVideoOutputPreference androidVideoOutput;
   final double defaultPlaybackRate;
   final List<double> playbackRates;
@@ -370,7 +366,6 @@ final class AppSettings {
     MediaCdnPreference? mediaCdn,
     VideoDecodingPreference? videoDecoding,
     PlaybackBackendPreference? playbackBackend,
-    String? fvpGpuDeviceId,
     AndroidVideoOutputPreference? androidVideoOutput,
     double? defaultPlaybackRate,
     List<double>? playbackRates,
@@ -467,7 +462,6 @@ final class AppSettings {
     mediaCdn: mediaCdn ?? this.mediaCdn,
     videoDecoding: videoDecoding ?? this.videoDecoding,
     playbackBackend: playbackBackend ?? this.playbackBackend,
-    fvpGpuDeviceId: fvpGpuDeviceId ?? this.fvpGpuDeviceId,
     androidVideoOutput: androidVideoOutput ?? this.androidVideoOutput,
     defaultPlaybackRate: defaultPlaybackRate ?? this.defaultPlaybackRate,
     playbackRates: playbackRates ?? this.playbackRates,

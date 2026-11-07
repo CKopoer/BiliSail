@@ -12,7 +12,7 @@
 | [可选 fsplayer 与三后端对照](validation/fsplayer-backend-2026-11-07.md) | Android／iOS／macOS 接入、内存 DASH、固定原生资产、功能回归和 Android 同条件对照 |
 | [Windows 硬解边缘绿线](validation/windows-amd-hwdec-edges-2026-11-07.md) | mpv D3D11/EGL 正式修复、AMD／NVIDIA 新旧 mapper 的 392 次抓图及 HEVC 未复现边界 |
 | [连续跳转只保留最新目标](validation/rapid-seek-latest-target-2026-11-07.md) | 应用后端包装层的命令分发修复、两后端原生取消、兼容／直出与暂停边界 |
-| [解码方式与 GPU 设备](validation/gpu-device-settings-2026-11-07.md) | 软硬解分层、后端／平台能力、Windows fvp 指定 GPU、持久化与验证边界 |
+| [解码与输出设置](validation/gpu-device-settings-2026-11-07.md) | Android 直出入口常驻、后端切换、GPU 选择移除、旧设置兼容与验证边界 |
 | [fvp 直出启动黑屏修复](validation/android-fvp-direct-black-2026-11-07.md) | 空纹理消费误报、原生暂停屏障、连续打开及截图像素回归 |
 | [Android 解码直出与 SurfaceView](validation/android-surface-output-2026-11-07.md) | 两后端纹理直出实验设置、4K60 H.264 约 25 Mbps／3× 实机对照、HC／HCPP 原型与限制 |
 | [迷你小窗与置顶](validation/mini-player-2026-11-07.md) | 桌面置顶、尺寸与位置恢复，Android 画中画、移动应用内浮窗和平台验证边界 |

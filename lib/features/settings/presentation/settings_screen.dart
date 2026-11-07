@@ -25,7 +25,6 @@ import 'app_icon_settings.dart';
 import 'recommendation_settings_section.dart';
 import 'cdn_settings_tile.dart';
 import 'log_export_button.dart';
-import 'gpu_device_setting.dart';
 
 const _usageNotice = <Widget>[
   Text('本应用是哔哩哔哩第三方客户端，视频、影视、直播及相关内容均来自哔哩哔哩，与官方无隶属关系。'),
@@ -239,8 +238,9 @@ final class _SettingsCategoryPageState
     String title,
     T value,
     Map<T, String> choices,
-    Future<void> Function(T) save,
-  ) => Padding(
+    Future<void> Function(T) save, {
+    bool enabled = true,
+  }) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 8),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,7 +255,9 @@ final class _SettingsCategoryPageState
               ChoiceChip(
                 label: Text(entry.value),
                 selected: value == entry.key,
-                onSelected: (_) => _save(() => save(entry.key)),
+                onSelected: enabled
+                    ? (_) => _save(() => save(entry.key))
+                    : null,
               ),
           ],
         ),
@@ -645,61 +647,58 @@ final class _SettingsCategoryPageState
                             VideoDecodingPreference.software: '软件解码',
                             VideoDecodingPreference.automatic: '硬件解码（优先）',
                           }, controller.setVideoDecoding),
-                          if (s.videoDecoding ==
-                              VideoDecodingPreference.automatic) ...[
+                          Text(
+                            s.videoDecoding == VideoDecodingPreference.automatic
+                                ? '优先使用硬件解码，不支持当前编码时回退软件解码。'
+                                : '使用所选后端进行软件解码，可能增加 CPU 占用和耗电。',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          _choices('播放后端', s.playbackBackend, {
+                            PlaybackBackendPreference.mediaKit: 'media_kit（默认）',
+                            PlaybackBackendPreference.fvp: 'fvp（实验性）',
+                            if (defaultTargetPlatform ==
+                                    TargetPlatform.android ||
+                                defaultTargetPlatform == TargetPlatform.iOS ||
+                                defaultTargetPlatform == TargetPlatform.macOS)
+                              PlaybackBackendPreference.fsplayer:
+                                  'fsplayer（实验性）',
+                          }, controller.setPlaybackBackend),
+                          if (defaultTargetPlatform == TargetPlatform.android &&
+                              s.playbackBackend ==
+                                  PlaybackBackendPreference.fsplayer)
                             const Text(
-                              '优先使用硬件解码，不支持当前编码时回退软件解码。',
+                              '当前 fsplayer 公开版本仅验证支持 1×；需要倍速时请选择其他后端。',
                               style: TextStyle(fontSize: 12),
                             ),
-                            _choices('播放后端', s.playbackBackend, {
-                              PlaybackBackendPreference.mediaKit:
-                                  'media_kit（默认）',
-                              PlaybackBackendPreference.fvp: 'fvp（实验性）',
-                              if (defaultTargetPlatform ==
-                                      TargetPlatform.android ||
-                                  defaultTargetPlatform == TargetPlatform.iOS ||
-                                  defaultTargetPlatform == TargetPlatform.macOS)
-                                PlaybackBackendPreference.fsplayer:
-                                    'fsplayer（实验性）',
-                            }, controller.setPlaybackBackend),
-                            GpuDeviceSetting(settings: s),
-                            if (defaultTargetPlatform ==
-                                    TargetPlatform.android &&
-                                s.playbackBackend ==
-                                    PlaybackBackendPreference.fsplayer)
-                              const Text(
-                                '当前 fsplayer 公开版本仅验证支持 1×；需要倍速时请选择其他后端。',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                            if (defaultTargetPlatform ==
-                                    TargetPlatform.android &&
-                                s.playbackBackend !=
-                                    PlaybackBackendPreference.fsplayer) ...[
-                              _choices(
-                                'Android 视频输出',
-                                s.androidVideoOutput,
-                                const {
-                                  AndroidVideoOutputPreference.renderedTexture:
-                                      '兼容渲染（默认）',
-                                  AndroidVideoOutputPreference.directTexture:
-                                      '解码直出纹理（实验）',
-                                },
-                                controller.setAndroidVideoOutput,
-                              ),
-                              const Text(
-                                '两个播放后端均保留弹幕、字幕和控件。实验模式需要设备硬解支持；画面异常时切回兼容渲染。',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                            ],
-                          ] else
+                          if (defaultTargetPlatform ==
+                              TargetPlatform.android) ...[
+                            _choices(
+                              'Android 视频输出',
+                              s.androidVideoOutput,
+                              const {
+                                AndroidVideoOutputPreference.renderedTexture:
+                                    '兼容渲染（默认）',
+                                AndroidVideoOutputPreference.directTexture:
+                                    '解码直出纹理（实验）',
+                              },
+                              controller.setAndroidVideoOutput,
+                              enabled:
+                                  s.videoDecoding ==
+                                      VideoDecodingPreference.automatic &&
+                                  s.playbackBackend !=
+                                      PlaybackBackendPreference.fsplayer,
+                            ),
                             Text(
-                              '使用 ${switch (s.playbackBackend) {
-                                PlaybackBackendPreference.mediaKit => 'media_kit',
-                                PlaybackBackendPreference.fvp => 'fvp',
-                                PlaybackBackendPreference.fsplayer => 'fsplayer',
-                              }} 后端进行软件解码，可能增加 CPU 占用和耗电。切回硬件解码后恢复后端、GPU 和输出偏好。',
+                              s.playbackBackend ==
+                                      PlaybackBackendPreference.fsplayer
+                                  ? 'fsplayer 使用自身的视频输出，此选项适用于 media_kit 和 fvp；切换后恢复已保存的输出偏好。'
+                                  : s.videoDecoding ==
+                                        VideoDecodingPreference.software
+                                  ? '软件解码使用兼容渲染；切回硬件解码后恢复已保存的输出偏好。'
+                                  : 'media_kit 和 fvp 均保留弹幕、字幕和控件。解码直出需要设备硬解支持；画面异常时切回兼容渲染。',
                               style: const TextStyle(fontSize: 12),
                             ),
+                          ],
                           const Text(
                             '解码设置适用于视频、影视、直播、离线播放和悬停预览，下次打开或重新加载播放源时生效。',
                             style: TextStyle(fontSize: 12),

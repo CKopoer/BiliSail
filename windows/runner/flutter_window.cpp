@@ -41,8 +41,6 @@ bool FlutterWindow::OnCreate() {
       flutter_controller_->engine()->messenger(), GetHandle());
   system_fonts_channel_ =
       RegisterSystemFonts(flutter_controller_->engine()->messenger());
-  gpu_devices_channel_ =
-      RegisterGpuDevices(flutter_controller_->engine()->messenger());
   image_export_channel_ = std::make_unique<ImageExportChannel>(
       flutter_controller_->engine()->messenger(),
       flutter_controller_->view()->GetNativeWindow());
@@ -105,7 +103,6 @@ void FlutterWindow::OnDestroy() {
   app_icon_channel_.reset();
   text_input_channel_.reset();
   system_fonts_channel_.reset();
-  gpu_devices_channel_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

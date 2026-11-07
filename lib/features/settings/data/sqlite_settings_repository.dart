@@ -199,10 +199,6 @@ class SqliteSettingsRepository implements SettingsRepository {
               .where((item) => item.name == decoded['playbackBackend'])
               .firstOrNull ??
           PlaybackBackendPreference.mediaKit,
-      fvpGpuDeviceId: switch (decoded['fvpGpuDeviceId']) {
-        final String id when id.length <= 256 => id,
-        _ => '',
-      },
       androidVideoOutput:
           AndroidVideoOutputPreference.values
               .where((item) => item.name == decoded['androidVideoOutput'])
@@ -282,7 +278,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 43,
+        'schemaVersion': 44,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -330,7 +326,6 @@ class SqliteSettingsRepository implements SettingsRepository {
         'videoDecoding': value.videoDecoding.name,
         'androidVideoOutput': value.androidVideoOutput.name,
         'playbackBackend': value.playbackBackend.name,
-        'fvpGpuDeviceId': value.fvpGpuDeviceId,
         'defaultPlaybackRate': value.defaultPlaybackRate,
         'playbackRates': value.playbackRates,
         'rememberPlaybackRate': value.rememberPlaybackRate,
