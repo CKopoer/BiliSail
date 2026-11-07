@@ -156,6 +156,10 @@ void main() {
     );
     expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
     expect(tester.takeException(), isNull);
+    // Release the real Video/Focus subtree before the integration binding
+    // verifies that no semantics handles remain alive.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }
 

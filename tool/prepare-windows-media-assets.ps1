@@ -9,4 +9,4 @@ if (!$cache.StartsWith($repoRoot + [IO.Path]::DirectorySeparatorChar, [StringCom
 }
 & cmake "-DBILISAIL_MEDIA_ASSET_CACHE=$cache" -P (Join-Path $repoRoot 'windows/native/media-assets.cmake')
 if ($LASTEXITCODE -ne 0) { throw 'Windows media asset preparation failed.' }
-Write-Output 'Verified Windows media archives against windows/native/media-assets.cmake.'
+Write-Output 'Verified Windows media assets against the personal media-kit library manifest.'

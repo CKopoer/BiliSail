@@ -1,39 +1,66 @@
+import 'dart:ffi';
+
+import 'package:ffi/ffi.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 
-/// Keep the engine's async port while using PiliPlus's synchronous properties.
-extension NativePlayerProperties on mk.NativePlayer {
-  Future<void> setPropertyAsync(String name, String value) async {
-    setProperty(name, value);
-  }
+/// Source hooks require synchronous calls so they never await a reply on the
+/// event loop they are holding. Native access stays within this adapter.
+extension NativePlayerProperties on mk.Player {
+  mk.NativePlayer get native => platform as mk.NativePlayer;
+  int get nativeHandle => native.ctx.address;
 
-  Future<String> getPropertyAsync(String name) async => getProperty(name);
+  Future<void> setPropertyAsync(String name, String value) =>
+      native.setProperty(name, value);
 
-  /// The pinned core allocates one byte for MPV_FORMAT_FLAG, which requires a
-  /// C int. Use its public playlist and string APIs to avoid that unsafe path.
-  Future<void> openPausedMedia(mk.Media media) async {
-    current.clear();
-    await stop(open: true);
-    setProperty('pause', 'yes');
-    await add(media);
-    await command(const ['playlist-play-index', '0']);
-  }
+  Future<String> getPropertyAsync(String name) => native.getProperty(name);
 
-  Future<void> playWithStringFlag() async {
-    throwIfDisposed();
-    // Let the core publish its own property confirmation. Its stream
-    // controllers are protected; the engine already owns the user's intent.
-    isPlayingStateChangeAllowed = true;
-    if (state.completed) {
-      await seek(Duration.zero);
-      await command(const ['playlist-play-index', '0']);
+  void setProperty(String name, String value) {
+    final player = native;
+    if (player.disposed) throw StateError('Native player is disposed.');
+    final key = name.toNativeUtf8();
+    final data = value.toNativeUtf8();
+    try {
+      final result = player.mpv.mpv_set_property_string(
+        player.ctx,
+        key.cast(),
+        data.cast(),
+      );
+      if (result < 0) {
+        throw StateError('Native property $name failed ($result).');
+      }
+    } finally {
+      calloc.free(key);
+      calloc.free(data);
     }
-    setProperty('pause', 'no');
   }
 
-  Future<void> pauseWithStringFlag() async {
-    throwIfDisposed();
-    isPlayingStateChangeAllowed = true;
-    isBufferingStateChangeAllowed = false;
-    setProperty('pause', 'yes');
+  String getProperty(String name) {
+    final player = native;
+    if (player.disposed) throw StateError('Native player is disposed.');
+    final key = name.toNativeUtf8();
+    try {
+      final data = player.mpv.mpv_get_property_string(player.ctx, key.cast());
+      if (data == nullptr) return '';
+      try {
+        return data.cast<Utf8>().toDartString();
+      } finally {
+        player.mpv.mpv_free(data.cast());
+      }
+    } finally {
+      calloc.free(key);
+    }
+  }
+}
+
+Future<mk.Player> createNativePlayer() async {
+  final player = mk.Player(
+    configuration: const mk.PlayerConfiguration(logLevel: mk.MPVLogLevel.warn),
+  );
+  try {
+    await player.handle;
+    return player;
+  } on Object {
+    await player.dispose();
+    rethrow;
   }
 }

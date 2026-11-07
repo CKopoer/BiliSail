@@ -19,7 +19,7 @@
 | 评论与动态共享交互 | [动态互动](docs/validation/dynamic-interactions.md) |
 | 快捷键、焦点与 Windows 输入法 | [快捷键实施记录](docs/shortcut-system/implementation-results.md) |
 | 滚轮与持久化阻尼设置 | [平滑滚动](docs/validation/smooth-scrolling.md) |
-| media-kit 依赖与 Android Surface | [fork 移植与验证](docs/validation/piliplus-media-kit-port.md) |
+| media-kit 依赖与 Android Surface | [个人媒体 fork](docs/validation/media-kit-personal-fork-2026-11-07.md)、[历史移植记录](docs/validation/piliplus-media-kit-port.md) |
 | 构建、签名与安装包 | [CI/CD](docs/validation/ci-cd.md)、[macOS 启动与安全存储](docs/validation/macos-release-startup.md) |
 
 ## 参考仓库
@@ -27,7 +27,7 @@
 - 相邻 `../biliuwp-lite` 提供功能和交互/模块划分参考；`../bili-kernel` 提供 C#/.NET API 实现参考，后者不是 Rust 项目。
 - `../PiliPlus` 用于协议、播放器与弹幕行为参考；采用前核对实际 Git overrides、锁文件和精确提交。PiliPlus 应用的 GPLv3 与其所用 media-kit 分支的 MIT 许可分别处理，不能将应用源码按 MIT 使用。
 - 定位源码、提交与采用限制见 [参考文档](docs/references.md)。除用户明确要求外，不修改相邻仓库，不将它们作为需要发布的运行时依赖。
-- 当前播放器和弹幕依赖与 PiliPlus 锁文件一致：核心／库插件使用 `My-Responsitories/media-kit`，视频插件与弹幕使用 `bggRGjQaUbCoE` 对应分支，均固定完整提交。不是相邻仓库的 path 依赖；来源、适配及验证见 [依赖切换](docs/validation/piliplus-dependencies-2026-11-01.md)。需要修改 fork 时遵循用户授权范围，应用只依赖已固定、可获取的源码。
+- 当前播放器核心、视频和全部平台库插件统一使用个人 `CKopoer/media-kit`，以官方代码为基线并固定完整提交；mpv 源码与原生构建材料也由个人 fork 维护。弹幕依赖仍沿用原固定来源。不存在相邻仓库 path 依赖；现行来源、修复和验证见 [个人媒体 fork](docs/validation/media-kit-personal-fork-2026-11-07.md)。应用只依赖已固定、可获取的源码，不修改 Pub 缓存。
 - 借鉴职责、协议和模型，避免机械翻译 UWP 控件、静态全局服务或整仓导入。引用代码/schema/资源前记录来源与明确的许可范围。
 - 参考 API 不等于在线可用；未做在线验证必须注明。不要把对话中的性能概括当作测量结果。
 
@@ -102,8 +102,8 @@
 - 下载队列由进程级仓储持有，页面关闭不停止任务；账号变化暂停旧任务，重启等待用户显式继续。校验 206/Content-Range、文件完整性及 URL 刷新后的资源身份，不将带签名 URL 或凭据落盘。
 - 下载文件、manifest 与 SQLite 按可恢复的提交顺序处理；分轨/MP4/MKV 均需兼容已有任务及离线打开。封装在 worker isolate 执行，取消、临时文件清理、校验和原子发布由下载仓储负责，离线媒体不受普通缓存清理影响。
 - 工程固定 Flutter **3.47.6 stable / Dart 3.13.5**，以 `.flutter-version`、检查脚本和 CI 配置共同约束；升级须同步这些入口及验证记录。直接依赖使用精确版本，提交根应用和四个包的五份 `pubspec.lock`。
-- media-kit fork 的 Git ref 必须固定完整提交；更新时同步根应用与 `bili_player` 的核心／视频／库插件及 overrides，以及两处锁文件。当前使用 PiliPlus 的 `media_kit_libs_*` 和原生事件桥，核心与视频插件分别固定来源。保留根应用的 overrides，Pub 不会采纳传递依赖包的 overrides；弹幕依赖更新同步根应用与 `bili_danmaku` 锁文件。
-- 原生 libmpv 沿用固定 `media_kit_libs_*` 与原生事件桥。Windows 保留 PiliPlus 的 ANGLE，按 `windows/native/media-assets.cmake` 统一预取、校验并整体选择包含 EGL device-query 修复的标准 libmpv SDK；归档、DLL、import library 和 headers 均校验 SHA-256，最终 bundle 不混入旧 DLL。来源与验证见 [Windows ANGLE 直通硬解](docs/validation/windows-angle-direct-hwdec-2026-11-01.md)。不启用历史 `windows/native/mpv.cmake`，不混用 DXGI 扩展。渲染／释放／平台线程补丁由 `windows/patches/media_kit_video/apply.cmake` 校验源码并应用到构建副本。Apple 走匹配库插件的 CocoaPods，Linux 打包发行版 libmpv；不再调用 Predidit Native Assets 修补入口。不得修改 Pub 缓存或绕过来源／哈希校验；依赖升级需重新审查补丁兼容性。
+- media-kit fork 的 Git ref 必须固定完整提交；更新时同步根应用与 `bili_player` 的核心／视频／库插件及 overrides，以及两处锁文件。全部媒体包固定到同一 `CKopoer/media-kit` 提交，沿用官方事件路由，不再依赖旧 native_event_loop 包。保留根应用的 overrides，Pub 不会采纳传递依赖包的 overrides；弹幕依赖更新同步根应用与 `bili_danmaku` 锁文件。
+- 原生 libmpv、库插件与视频实现统一由个人 media-kit/mpv fork 维护。Windows 保留 ANGLE 和标准 OpenGL render API，库插件统一下载并逐项校验 SDK／ANGLE，不混用 DXGI 扩展或旧 DLL；应用不再执行历史视频源码变换或替换 SDK。Android 保留按源 Surface 生命周期和公开首帧回调；Apple 使用匹配的 CocoaPods／SPM 固定资产；Linux 从个人固定 mpv 源码构建并保留发行版子依赖 notices。来源与验证见 [个人媒体 fork](docs/validation/media-kit-personal-fork-2026-11-07.md)。历史 `windows/native/mpv.cmake` 与 Predidit Native Assets 入口不启用。依赖升级须审查原生契约、生命周期、许可及完整摘要。
 - `bili_mux` 原生资产按其 README 从固定源码构建，不能借用系统 FFmpeg 或播放器私有库；预构建资产不提交 Git，分发保留许可、来源和可重建材料。
 - 新依赖先确认目标平台、维护接口、二进制依赖和许可；选择能满足具体需求的最小组合。
 - 生成器/schema 记录版本、命令和来源；提交项目需要的生成物，改源后重生成，不手修输出。

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
+import 'package:bili_player/src/native_player_properties.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
@@ -104,7 +105,7 @@ Future<void> _runSilentStall(
     // The pinned core maps core-idle to buffering, including an explicit
     // native pause. Suppress that one transition, as its pause adapter does,
     // to model this issue's buffering=false signature.
-    native.isBufferingStateChangeAllowed = false;
+    native.native.isBufferingStateChangeAllowed = false;
     native.setProperty('pause', 'yes');
     watch.reset();
     while ((failures.isEmpty ||

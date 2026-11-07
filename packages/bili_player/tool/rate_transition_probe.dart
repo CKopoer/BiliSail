@@ -55,11 +55,7 @@ Future<void> main() async {
   };
   for (final config in cases) {
     final bufferSeconds = config.buffer;
-    final player = await mk.Player.create(
-      configuration: const mk.PlayerConfiguration(
-        logLevel: mk.MPVLogLevel.warn,
-      ),
-    );
+    final player = await createNativePlayer();
     final output = MediaKitVideoOutput();
     final dimensions = player.stream.videoParams.listen((value) {
       output.updateVideoDimensions(videoDisplayDimensions(value));
@@ -99,9 +95,9 @@ Future<void> main() async {
         'audio-files',
         mpvPathListEntry(audio.uri, windows: Platform.isWindows),
       );
-      await player.openPausedMedia(mk.Media(video.uri.toString()));
+      await player.open(mk.Media(video.uri.toString()), play: false);
       await player.setVolume(0);
-      await player.playWithStringFlag();
+      await player.play();
       await output.firstFrameRendered.timeout(const Duration(seconds: 10));
       await Future<void>.delayed(const Duration(seconds: 1));
       final run = <String, Object?>{

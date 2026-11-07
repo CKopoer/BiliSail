@@ -57,13 +57,10 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 include(native/media-assets.cmake)
-bilisail_use_media_assets()
+bilisail_verify_media_assets()
 
-# Keep the pinned library/event plugins and ANGLE. The selected Windows SDK
-# includes mpv's EGL device-query fix; headers, import lib and DLL match.
+# The personal media-kit fork owns the renderer and complete native SDK.
 
-include(patches/media_kit_video/apply.cmake)
-bilisail_patch_video_target()
 
 include(patches/window_manager/apply.cmake)
 bilisail_patch_window_manager_target()
@@ -88,6 +85,7 @@ install(CODE "file(REMOVE
   \"${INSTALL_BUNDLE_LIB_DIR}/media_kit_event_loop.dll\"
   \"${INSTALL_BUNDLE_LIB_DIR}/media_kit_native_event_loop.dll\"
   \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/PREDIDIT_SOURCE.md\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/PILIPLUS_SOURCE.md\"
   \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/SOURCE.md\"
   \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/COPYING.LGPLv2.1\")"
   COMPONENT Runtime)
@@ -96,7 +94,7 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/patches/media_kit_video/LICENSE"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/media_kit_video"
   COMPONENT Runtime)
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/PILIPLUS_SOURCE.md"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/FORK_SOURCE.md"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/mpv"
   COMPONENT Runtime)
 

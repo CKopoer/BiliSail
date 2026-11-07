@@ -5,6 +5,38 @@ import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('output color confirmation can follow decoded dimensions', () async {
+    final state = NativeLoadState();
+    addTearDown(state.dispose);
+    var ready = false;
+    final waiting = waitForNativeState(
+      ready: () => state.videoOutputMatrix == 'bt.709',
+      superseded: () => false,
+      changes: [state.changes],
+      timeout: const Duration(seconds: 1),
+    ).then((_) => ready = true);
+    state.outputChanged(NativeOutputProperty.colorMatrix, 'dolbyvision');
+    await Future<void>.delayed(Duration.zero);
+    expect(ready, isFalse);
+    state.outputChanged(NativeOutputProperty.colorMatrix, 'bt.709');
+    await waiting;
+    expect(ready, isTrue);
+  });
+
+  test(
+    'source replacement and disposal cannot inherit output confirmation',
+    () async {
+      final old = NativeLoadState();
+      old.outputChanged(NativeOutputProperty.driver, 'gpu-next');
+      final next = NativeLoadState();
+      addTearDown(next.dispose);
+      expect(next.videoOutputDriver, isNull);
+      expect(next.videoOutputMatrix, isNull);
+      await old.dispose();
+      old.outputChanged(NativeOutputProperty.driver, 'gpu');
+      expect(old.videoOutputDriver, 'gpu-next');
+    },
+  );
   test('seek and pause invalidate pending clock replies', () async {
     final state = NativeLoadState();
     state.clockChanged(seconds: 10, epoch: 0);

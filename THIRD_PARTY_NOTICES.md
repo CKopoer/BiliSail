@@ -1,5 +1,11 @@
 # 第三方来源与分发检查
 
+## 2026-11-07 个人媒体 fork
+
+当前核心、视频和全部平台库插件统一来自 MIT 的 [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/7034784f960be84339ed6d87849ad2cef23c50b7)，官方基线为 `c533e446755f51cf53c7e57aea873f2aa5355f81`。mpv 源码由 [CKopoer/mpv](https://github.com/CKopoer/mpv) 维护；固定资产与原来源见 [native-2026-11-07](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)。Windows、Android、Apple 的首批资产为原摘要不变的上游镜像；Linux 从个人固定源码构建，子依赖继续记录发行版来源。MIT 不替代 mpv、FFmpeg、ANGLE 或其他子依赖的许可。当前入口及验证见[实施记录](docs/validation/media-kit-personal-fork-2026-11-07.md)；下列各次切换记录保留为历史。
+
+
+
 记录日期：2026-10-05。本文件用于本地 0.1.0 预览的来源追踪，不表示已经完成对外发行所需的全部原生许可证归档。项目尚未确定自己的开源许可证。
 
 ## 2026-11-01 Windows ANGLE 硬解回退修复
