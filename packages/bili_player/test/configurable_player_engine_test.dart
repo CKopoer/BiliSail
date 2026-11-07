@@ -12,6 +12,9 @@ final class _Engine extends Fake
   bool failRelease = false;
   bool failStop = false;
   Completer<void>? playGate;
+  Completer<void>? openGate;
+  Future<void> Function(Duration)? onSeek;
+  final seekTargets = <Duration>[];
   Completer<PlayerPlaybackInformation?>? informationGate;
   @override
   Future<PlayerPlaybackInformation?> inspectPlaybackInformation() async =>
@@ -31,12 +34,19 @@ final class _Engine extends Fake
   Stream<PlayerFailure> get failures => errors.stream;
   @override
   Future<void> open(ResolvedMediaSource source, OpenOptions options) async {
+    await openGate?.future;
     events.add(
       PlaybackSnapshot(
         phase: options.play ? PlaybackPhase.playing : PlaybackPhase.paused,
         generation: 1,
       ),
     );
+  }
+
+  @override
+  Future<void> seek(Duration target) {
+    seekTargets.add(target);
+    return onSeek?.call(target) ?? Future<void>.value();
   }
 
   @override
@@ -61,6 +71,75 @@ void main() {
   final source = ProgressiveSource(
     MediaTrack(uri: Uri.file('video.mp4'), requestPolicy: MediaRequestPolicy()),
   );
+  test(
+    'seeks during open wait for readiness and discard obsolete targets',
+    () async {
+      final child = _Engine()..openGate = Completer<void>();
+      final engine = ConfigurablePlayerEngine(createEngine: () async => child);
+      final opening = engine.open(source, const OpenOptions());
+      await Future<void>.delayed(Duration.zero);
+      final old = engine.seek(const Duration(seconds: 9));
+      final latest = engine.seek(const Duration(seconds: 2));
+      await Future<void>.delayed(Duration.zero);
+      expect(child.seekTargets, isEmpty);
+      child.openGate!.complete();
+      await Future.wait([opening, old, latest]);
+      expect(child.seekTargets, [const Duration(seconds: 2)]);
+      await engine.dispose();
+      await child.closeStreams();
+    },
+  );
+
+  test('queued seek cannot cross a source replacement', () async {
+    final first = _Engine()..openGate = Completer<void>();
+    final second = _Engine();
+    var child = first;
+    final engine = ConfigurablePlayerEngine(createEngine: () async => child);
+    final opening = engine.open(source, const OpenOptions());
+    await Future<void>.delayed(Duration.zero);
+    final old = engine.seek(const Duration(seconds: 9));
+    child = second;
+    final replacement = engine.open(source, const OpenOptions());
+    first.openGate!.complete();
+    await Future.wait([opening, old, replacement]);
+    expect(first.seekTargets, isEmpty);
+    expect(second.seekTargets, isEmpty);
+    expect(first.disposed, true);
+    await engine.seek(const Duration(seconds: 2));
+    expect(second.seekTargets, [const Duration(seconds: 2)]);
+    await engine.dispose();
+    await first.closeStreams();
+    await second.closeStreams();
+  });
+
+  for (final synchronous in [false, true]) {
+    test(
+      'command failures propagate and allow later dispatch: sync=$synchronous',
+      () async {
+        final child = _Engine()
+          ..onSeek = (_) {
+            if (synchronous) throw StateError('seek failed');
+            return Future<void>.error(StateError('seek failed'));
+          };
+        final engine = ConfigurablePlayerEngine(
+          createEngine: () async => child,
+        );
+        await engine.open(source, const OpenOptions());
+        await expectLater(
+          engine.seek(const Duration(seconds: 9)),
+          throwsStateError,
+        );
+        child.onSeek = null;
+        await engine.seek(const Duration(seconds: 2));
+        expect(child.seekTargets, [
+          const Duration(seconds: 9),
+          const Duration(seconds: 2),
+        ]);
+        await engine.dispose();
+        await child.closeStreams();
+      },
+    );
+  }
   test(
     'information uses the wrapper generation after switching backends',
     () async {

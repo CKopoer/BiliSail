@@ -23,6 +23,7 @@ final class ConfigurablePlayerEngine
   Future<void> _commands = Future.value();
   PlayerEngine? _engine;
   int _generation = 0;
+  int _seekRevision = 0;
   bool _disposed = false;
   Future<void>? _disposal;
   PlaybackSnapshot _snapshot = const PlaybackSnapshot(
@@ -155,10 +156,21 @@ final class ConfigurablePlayerEngine
 
   Future<void> _command(Future<void> Function(PlayerEngine) operation) {
     final generation = _generation;
-    return _enqueue(() async {
-      if (_disposed || generation != _generation) return;
-      if (_engine case final engine?) await operation(engine);
-    });
+    final completed = Completer<void>();
+    // Serialize dispatch with open/release, not the backend's readiness waits.
+    // Each backend owns its command queue; it must receive a newer seek while
+    // the old target is still loading so it can cancel that native read.
+    unawaited(
+      _enqueue(() async {
+        final engine = _engine;
+        if (_disposed || generation != _generation || engine == null) {
+          completed.complete();
+          return;
+        }
+        completed.complete(Future<void>.sync(() => operation(engine)));
+      }),
+    );
+    return completed.future;
   }
 
   @override
@@ -166,13 +178,19 @@ final class ConfigurablePlayerEngine
   @override
   Future<void> pause() {
     // Revoke an in-flight play/audio-readiness wait before our queue drains.
-    final paused = _engine?.pause() ?? Future<void>.value();
-    return _enqueue(() => paused);
+    // Its completion must not block dispatch of a later superseding seek.
+    return Future<void>.sync(() => _engine?.pause());
   }
 
   @override
-  Future<void> seek(Duration target) =>
-      _command((engine) => engine.seek(target));
+  Future<void> seek(Duration target) {
+    final revision = ++_seekRevision;
+    return _command((engine) async {
+      if (revision != _seekRevision) return;
+      await engine.seek(target);
+    });
+  }
+
   @override
   Future<void> setRate(double rate) =>
       _command((engine) => engine.setRate(rate));

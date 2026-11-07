@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-11-07 修复应用实际使用的 `ConfigurablePlayerEngine` 将完整 seek 加载排队的问题。包装层只串行下发控制命令，新目标及时进入 media_kit／fvp 的既有取消路径；打开、换源及释放仍等待生命周期屏障，未下发的连续目标只保留最新一个。原因、兼容／直出及原生验证见[连续跳转优化](validation/rapid-seek-latest-target-2026-11-07.md)。
+
 2026-11-07 设置先选择软件／硬件解码，硬解下显示后端、GPU 和 Android 输出；Windows fvp 可选择 DXGI 解码设备，其他组合说明自动选择的能力边界。软件模式保留后端与设备偏好，详见[GPU 设备设置](validation/gpu-device-settings-2026-11-07.md)。
 
 2026-11-07 新增 Android「解码直出纹理」实验设置，media_kit／fvp 均保留现有 Flutter 弹幕、字幕和控件，默认兼容输出。4K60 H.264 约 25 Mbps／3× 真机性能、SurfaceView HC／HCPP 原型及逐项未测边界见[直出验证](validation/android-surface-output-2026-11-07.md)。

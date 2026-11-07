@@ -12,7 +12,13 @@ import 'package:integration_test/integration_test.dart';
 // ignore: depend_on_referenced_packages
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
 
-void main() {
+void main() => registerMediaKitSeekSynchronizationTests();
+
+void registerMediaKitSeekSynchronizationTests({
+  String? mediaDirectory,
+  AndroidVideoOutputMode androidVideoOutput =
+      AndroidVideoOutputMode.renderedTexture,
+}) {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
@@ -28,11 +34,12 @@ void main() {
     'supersededAgainStopped',
   ]) {
     final playing = scenario != 'paused';
-    testWidgets('seek waits for delayed video before resuming audio: $scenario', (
-      tester,
-    ) async {
+    final label =
+        'seek waits for delayed video before resuming audio: $scenario, ${androidVideoOutput.name}';
+    testWidgets(label, (tester) async {
       initializePlayerBackend();
-      final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR']!;
+      final fixtures =
+          mediaDirectory ?? Platform.environment['BILI_TEST_MEDIA_DIR']!;
       final video = await File('$fixtures/video.mp4').readAsBytes();
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       final blocked = Completer<void>();
@@ -68,7 +75,10 @@ void main() {
           // Cancelled seeks and teardown close the old range request.
         }
       });
-      final engine = MediaKitEngine();
+      final backend = MediaKitEngine();
+      final engine = ConfigurablePlayerEngine(
+        createEngine: () async => backend,
+      );
       final failures = <PlayerFailure>[];
       final subscription = engine.failures.listen(failures.add);
       final boundaryKey = GlobalKey();
@@ -96,6 +106,7 @@ void main() {
             ),
             OpenOptions(
               play: playing,
+              androidVideoOutput: androidVideoOutput,
               volume: 0,
               maxBufferAhead: const Duration(seconds: 1),
             ),
@@ -174,7 +185,10 @@ void main() {
             tester,
             secondBlocked.future.timeout(const Duration(seconds: 3)),
           );
-          await _pixels(boundaryKey);
+          // Android's decoder Surface is flushed during a native source
+          // replacement. Check the decoded final frame below; retaining the
+          // old texture's pixels while reloading is a desktop guarantee.
+          if (!Platform.isAndroid) await _pixels(boundaryKey);
           if (scenario.endsWith('Stopped')) {
             await _withFrames(tester, engine.stop());
             await _withFrames(tester, Future.wait([seeking, next!]));
@@ -229,7 +243,7 @@ void main() {
           reason:
               'The target video must replace the old frame when audio resumes',
         );
-        final timing = await engine.inspectNativePlaybackTiming();
+        final timing = await backend.inspectNativePlaybackTiming();
         if (shouldPlay) {
           expect(timing.avsyncSeconds, isNotNull);
           expect(timing.avsyncSeconds?.abs(), lessThan(.15));
@@ -244,6 +258,10 @@ void main() {
         await _withFrames(tester, engine.dispose());
         await tester.pumpWidget(const SizedBox.shrink());
         await server.close(force: true);
+        if (Platform.isAndroid) {
+          // Separate source teardown stress from the same-player seek burst.
+          await Future<void>.delayed(const Duration(seconds: 2));
+        }
       }
     });
   }

@@ -255,6 +255,47 @@ void main() {
     },
   );
 
+  for (final output in AndroidVideoOutputMode.values) {
+    for (final intent in ['playing', 'paused', 'pauseDuringSeek']) {
+      test(
+        'configured fvp replaces pending seeks: ${output.name}, $intent',
+        () async {
+          final player = _Player()..holdSeek = true;
+          final engine = ConfigurablePlayerEngine(
+            createEngine: () async =>
+                FvpEngine(createPlayer: () async => player),
+          );
+          addTearDown(engine.dispose);
+          await engine.open(
+            source,
+            OpenOptions(play: intent != 'paused', androidVideoOutput: output),
+          );
+          final first = engine.seek(const Duration(seconds: 9));
+          await Future<void>.delayed(Duration.zero);
+          // An ordinary control queued behind the first seek must not prevent
+          // the next target from reaching the backend's cancellation path.
+          final volume = engine.setVolume(30);
+          final rate = engine.setRate(1.5);
+          final pausing = intent == 'pauseDuringSeek' ? engine.pause() : null;
+          final obsolete = engine.seek(const Duration(seconds: 5));
+          final latest = engine.seek(const Duration(seconds: 2));
+          await Future<void>.delayed(Duration.zero);
+          expect(player.seeks.map((seek) => seek.$1.inSeconds), [9, 2]);
+          await first.timeout(const Duration(milliseconds: 500));
+          expect(player.playing, false);
+          expect(engine.currentSnapshot.isSeeking, true);
+          player.seeks.last.$2.complete(2000);
+          await Future.wait([first, volume, rate, ?pausing, obsolete, latest]);
+          expect(player.playing, intent == 'playing');
+          expect(engine.currentSnapshot.position.inSeconds, 2);
+          expect(engine.currentSnapshot.isSeeking, false);
+          expect(engine.currentSnapshot.rate, 1.5);
+          expect(engine.currentSnapshot.volume, 30);
+        },
+      );
+    }
+  }
+
   test('stop cancels a blocked seek and ignores its late completion', () async {
     final player = _Player()..holdSeek = true;
     final engine = FvpEngine(createPlayer: () async => player);

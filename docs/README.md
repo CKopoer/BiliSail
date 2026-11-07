@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [连续跳转只保留最新目标](validation/rapid-seek-latest-target-2026-11-07.md) | 应用后端包装层的命令分发修复、两后端原生取消、兼容／直出与暂停边界 |
 | [解码方式与 GPU 设备](validation/gpu-device-settings-2026-11-07.md) | 软硬解分层、后端／平台能力、Windows fvp 指定 GPU、持久化与验证边界 |
 | [fvp 直出启动黑屏修复](validation/android-fvp-direct-black-2026-11-07.md) | 空纹理消费误报、原生暂停屏障、连续打开及截图像素回归 |
 | [Android 解码直出与 SurfaceView](validation/android-surface-output-2026-11-07.md) | 两后端纹理直出实验设置、4K60 H.264 约 25 Mbps／3× 实机对照、HC／HCPP 原型与限制 |
