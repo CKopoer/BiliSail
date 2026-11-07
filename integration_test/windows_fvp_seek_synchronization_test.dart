@@ -366,6 +366,12 @@ final class _ObservedPlayer implements FvpPlayerPort {
   }
 
   @override
+  Future<void> pauseAndWait() {
+    playing = false;
+    return delegate.pauseAndWait();
+  }
+
+  @override
   void interrupt() {
     playing = false;
     delegate.interrupt();

@@ -47,6 +47,7 @@ abstract interface class FvpPlayerPort {
   Future<bool> confirmAudio();
   void play();
   void pause();
+  Future<void> pauseAndWait();
   void interrupt();
   Future<int> seek(Duration target);
   // Cancels only in-flight preparation; the next seek restores this source.
@@ -351,7 +352,9 @@ final class _MdkPlayerPort
     );
     setRate(options.rate);
     _startPosition = options.startPosition;
-    setVolume(options.volume, options.audioGainDb);
+    // External audio can start independently while the video Surface prepares.
+    // The engine restores the user's volume only after the shared startup gate.
+    setVolume(0, options.audioGainDb);
     _mediaUri = _uri(media.uri);
     _audioUri = audio == null ? null : _uri(audio.uri);
     _silent = silent;
@@ -438,14 +441,13 @@ final class _MdkPlayerPort
       // Android's new cross-process Surface needs the pipeline to advance
       // before it can present the paused prepared frame. Keep this preroll
       // muted and restore the caller's pause intent after confirmation.
-      final volume = _player.volume;
       _player.volume = 0;
       _player.state = mdk.PlaybackState.playing;
       try {
         if (_directSurface) {
           return await confirmFvpSurfacePreroll(
             firstFrame: _active(_firstFrame.ready(directSurface: true)),
-            pauseAndWait: _pauseDirectSurface,
+            pauseAndWait: _pauseAndWait,
             seek: _live
                 ? null
                 : () => _active(
@@ -468,12 +470,7 @@ final class _MdkPlayerPort
         return await _active(_firstFrame.ready(directSurface: false));
       } finally {
         if (!_closed && !_closing && !_interrupted.isCompleted) {
-          if (_directSurface) {
-            await _pauseDirectSurface();
-          } else {
-            _player.state = mdk.PlaybackState.paused;
-          }
-          _player.volume = volume;
+          await _pauseAndWait();
         }
       }
     }
@@ -487,7 +484,7 @@ final class _MdkPlayerPort
     return _active(_firstFrame.ready(directSurface: false));
   }
 
-  Future<void> _pauseDirectSurface() async {
+  Future<void> _pauseAndWait() async {
     _player.state = mdk.PlaybackState.paused;
     while (!_player.waitFor(mdk.PlaybackState.paused, timeout: 0)) {
       await _active(Future<void>.delayed(const Duration(milliseconds: 10)));
@@ -516,6 +513,13 @@ final class _MdkPlayerPort
     // Keep EOF stopped so replay can prepare it before requesting a pause.
     if (!_closed && !_ended && !_repreparing) {
       _native?.state = mdk.PlaybackState.paused;
+    }
+  }
+
+  @override
+  Future<void> pauseAndWait() async {
+    if (!_closed && !_closing && !_ended && !_repreparing) {
+      await _pauseAndWait();
     }
   }
 

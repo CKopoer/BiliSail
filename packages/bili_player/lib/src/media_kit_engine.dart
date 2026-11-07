@@ -9,6 +9,7 @@ import 'player_diagnostics.dart';
 import 'player_playback_information.dart';
 import 'native_playback_information.dart';
 import 'native_readiness.dart';
+import 'playback_startup.dart';
 import 'native_media_options.dart';
 import 'native_player_properties.dart';
 import 'native_error_monitor.dart';
@@ -729,6 +730,7 @@ final class MediaKitEngine
   Future<void> open(ResolvedMediaSource source, OpenOptions options) {
     _requireActive();
     final generation = _advanceGeneration();
+    final pauseRevision = _pauseRevision;
     _publish(
       PlaybackSnapshot(
         phase: PlaybackPhase.opening,
@@ -1109,9 +1111,7 @@ final class MediaKitEngine
         await player
             .setRate(options.rate)
             .timeout(_remaining(watch, openBudget));
-        await player
-            .setVolume(options.volume)
-            .timeout(_remaining(watch, openBudget));
+        await player.setVolume(0).timeout(_remaining(watch, openBudget));
         if (options.audioGainDb != 0) {
           final gain = _audioGain;
           if (gain == null) {
@@ -1157,38 +1157,48 @@ final class MediaKitEngine
           ),
         );
         _diagnose(PlayerDiagnosticKind.openReady);
-        if (options.play) {
-          await player.play().timeout(_remaining(watch, openBudget));
-          if (_requiresDecodedAudio) {
-            await _waitForDecodedAudio(
-              player,
-              generation,
-              _remaining(watch, openBudget),
-            );
-          }
-          if (requireVideoOutput) {
-            // gpu-next may only submit a video buffer after play. Confirm it
-            // here, rather than using the SDK's early preparation buffer as
-            // proof of presentation or blocking the start that produces it.
-            _readinessStage = NativeReadinessStage.videoOutput;
-            await waitForOutput(presentation: true);
-            _readinessStage = null;
-          }
-          if (generation == _generation && !_disposed) {
-            _publish(
-              _snapshot.copyWith(
-                phase: player.state.buffering
-                    ? PlaybackPhase.buffering
-                    : PlaybackPhase.playing,
-                isBuffering: player.state.buffering,
-              ),
-            );
-          }
-        } else {
-          await player.pause().timeout(_remaining(watch, openBudget));
-          if (generation == _generation && !_disposed) {
-            _publish(_snapshot.copyWith(phase: PlaybackPhase.paused));
-          }
+        bool shouldPlay() => options.play && pauseRevision == _pauseRevision;
+        await finishSynchronizedStartup(
+          shouldPlay: shouldPlay,
+          play: () => player.play().timeout(_remaining(watch, openBudget)),
+          pause: () => player.pause().timeout(_remaining(watch, openBudget)),
+          confirmReady: () async {
+            if (shouldPlay() && _requiresDecodedAudio) {
+              await _waitForDecodedAudio(
+                player,
+                generation,
+                _remaining(watch, openBudget),
+              );
+            }
+            if (requireVideoOutput) {
+              // Some outputs only submit a buffer after play; advance muted.
+              _readinessStage = NativeReadinessStage.videoOutput;
+              await waitForOutput(presentation: true);
+              _readinessStage = null;
+            }
+          },
+          restoreVolume: () => player
+              .setVolume(options.volume)
+              .timeout(_remaining(watch, openBudget)),
+          checkActive: () {
+            if (generation != _generation || _disposed) {
+              throw const SourceSuperseded();
+            }
+            if (_loadFailure(generation) case final failure?) throw failure;
+          },
+        );
+        if (generation == _generation && !_disposed) {
+          _publish(
+            _snapshot.copyWith(
+              desiredPlaying: shouldPlay(),
+              phase: !shouldPlay()
+                  ? PlaybackPhase.paused
+                  : player.state.buffering
+                  ? PlaybackPhase.buffering
+                  : PlaybackPhase.playing,
+              isBuffering: player.state.buffering,
+            ),
+          );
         }
         if (generation != _generation || _disposed) return;
         if (_loadFailure(generation) case final failure?) throw failure;

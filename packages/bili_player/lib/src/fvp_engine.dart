@@ -7,6 +7,7 @@ import 'fvp_native_player.dart';
 import 'fvp_video_output.dart';
 import 'native_audio_gain.dart';
 import 'native_playback_health.dart';
+import 'playback_startup.dart';
 import 'player_contract.dart';
 import 'player_diagnostics.dart';
 import 'player_playback_information.dart';
@@ -187,6 +188,7 @@ final class FvpEngine
     }
     _invalidate();
     final generation = _generation;
+    final pauseRevision = _pauseRevision;
     final cancellation = _cancelled = Completer<void>();
     return _enqueue(() async {
       await _release();
@@ -398,37 +400,64 @@ final class FvpEngine
           )) {
             throw StateError('No rendered video frame');
           }
-          _output.confirmFrame();
         }
         _requiresAudio = audio != null || !video || info.hasAudio;
         _audioConfirmed = false;
         _gainDb = options.audioGainDb;
-        _opening = false;
-        if (options.play) {
-          player.play();
-          stage = '验证音轨';
-          _openingStage(NativeReadinessStage.externalAudio);
-          if (_requiresAudio &&
-              !await _wait(
+        bool shouldPlay() => options.play && pauseRevision == _pauseRevision;
+        await finishSynchronizedStartup(
+          shouldPlay: shouldPlay,
+          play: player.play,
+          pause: () => _wait(
+            player.pauseAndWait(),
+            cancellation,
+            watch,
+            options.openTimeout,
+          ),
+          confirmReady: () async {
+            if (shouldPlay() && _requiresAudio) {
+              stage = '验证音轨';
+              _openingStage(NativeReadinessStage.externalAudio);
+              if (!await _wait(
                 player.confirmAudio(),
                 cancellation,
                 watch,
                 options.openTimeout,
               )) {
-            throw StateError('No decoded audio');
-          }
-          _audioConfirmed = true;
-        } else {
-          player.pause();
-        }
+                throw StateError('No decoded audio');
+              }
+              _audioConfirmed = true;
+            }
+            if (video) {
+              stage = '呈现首帧';
+              _openingStage(NativeReadinessStage.videoOutput);
+              await _wait(
+                _output.confirmFrame(),
+                cancellation,
+                watch,
+                options.openTimeout,
+              );
+            }
+          },
+          restoreVolume: () => player.setVolume(options.volume, _gainDb),
+          checkActive: () {
+            if (_disposed ||
+                cancellation.isCompleted ||
+                generation != _generation) {
+              throw const _Cancelled();
+            }
+            if (_processLost) throw const FvpProcessException();
+          },
+        );
+        _opening = false;
         _audioBudget = options.openTimeout - watch.elapsed;
         _publish(
           PlaybackSnapshot(
-            phase: options.play ? PlaybackPhase.playing : PlaybackPhase.paused,
+            phase: shouldPlay() ? PlaybackPhase.playing : PlaybackPhase.paused,
             generation: generation,
             position: options.startPosition,
             duration: info.duration,
-            desiredPlaying: options.play,
+            desiredPlaying: shouldPlay(),
             rate: options.rate,
             volume: options.volume,
             videoDimensions: info.dimensions,
@@ -651,20 +680,39 @@ final class FvpEngine
         return;
       }
       final watch = Stopwatch()..start();
-      player.play();
       try {
         if (_requiresAudio && !_audioConfirmed) {
-          final ready = await _wait(
-            Future.any<bool>([
-              player.confirmAudio(),
-              cancelled.future.then<bool>((_) => throw const _Cancelled()),
-            ]),
-            _cancelled,
-            watch,
-            _audioBudget,
+          player.setVolume(0, _gainDb);
+          await finishSynchronizedStartup(
+            shouldPlay: () => !cancelled.isCompleted,
+            play: player.play,
+            pause: () =>
+                _wait(player.pauseAndWait(), _cancelled, watch, _audioBudget),
+            confirmReady: () async {
+              final ready = await _wait(
+                Future.any<bool>([
+                  player.confirmAudio(),
+                  cancelled.future.then<bool>((_) => throw const _Cancelled()),
+                ]),
+                _cancelled,
+                watch,
+                _audioBudget,
+              );
+              if (!ready) throw StateError('No decoded audio');
+            },
+            restoreVolume: () => player.setVolume(_snapshot.volume, _gainDb),
+            checkActive: () {
+              if (_disposed ||
+                  generation != _generation ||
+                  cancelled.isCompleted ||
+                  _cancelled.isCompleted) {
+                throw const _Cancelled();
+              }
+            },
           );
-          if (!ready) throw StateError('No decoded audio');
           _audioConfirmed = true;
+        } else {
+          player.play();
         }
         _health.reset();
         _publish(

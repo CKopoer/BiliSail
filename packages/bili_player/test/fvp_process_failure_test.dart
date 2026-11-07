@@ -42,6 +42,10 @@ class _Port extends Fake implements FvpPlayerPort {
   @override
   void pause() {}
   @override
+  Future<void> pauseAndWait() async {}
+  @override
+  void setVolume(double volume, double gainDb) {}
+  @override
   void interrupt() {}
   @override
   Future<int> seek(Duration target) async =>

@@ -10,6 +10,7 @@ import 'native_audio_gain.dart';
 import 'native_playback_health.dart';
 import 'native_texture_video_output.dart';
 import 'player_contract.dart';
+import 'playback_startup.dart';
 import 'player_diagnostics.dart';
 import 'player_playback_information.dart';
 import 'video_output.dart';
@@ -303,10 +304,26 @@ final class FsPlayerEngine
             throw StateError('No native video output');
           }
           _output.bind(_texture!, dimensions);
-          _output.confirmFrame();
         }
-        await _applyVolume(options.volume);
-        if (_desiredPlaying) await _call<void>('play');
+        await finishSynchronizedStartup(
+          shouldPlay: () => _desiredPlaying,
+          play: () => _call<void>('play'),
+          pause: () => _call<void>('pause'),
+          confirmReady: () async {
+            if (input.video) {
+              await Future.any<void>([
+                _output.confirmFrame(),
+                cancel.future.then<void>((_) => throw const _Superseded()),
+              ]).timeout(options.openTimeout - watch.elapsed);
+            }
+          },
+          restoreVolume: () => _applyVolume(options.volume),
+          checkActive: () {
+            if (cancel.isCompleted || generation != _generation || _disposed) {
+              throw const _Superseded();
+            }
+          },
+        );
         if (cancel.isCompleted) throw const _Superseded();
         _publish(
           PlaybackSnapshot(

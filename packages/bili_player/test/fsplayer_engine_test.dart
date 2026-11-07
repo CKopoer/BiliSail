@@ -108,6 +108,25 @@ void main() {
     expect(calls.where((s) => s == 'dispose'), hasLength(1));
     expect(engine.currentSnapshot.phase, PlaybackPhase.idle);
   });
+  test(
+    'stop cancels presentation even when Flutter produces no frames',
+    () async {
+      final owner = Object();
+      engine.videoOutput.attach(owner);
+      final opening = engine.open(source, const OpenOptions(play: true));
+      final watch = Stopwatch()..start();
+      while (calls.where((call) => call == 'play').length < 2 &&
+          watch.elapsed < const Duration(seconds: 2)) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(calls.where((call) => call == 'play'), hasLength(2));
+      await engine.stop().timeout(const Duration(milliseconds: 500));
+      await opening;
+      expect(engine.currentSnapshot.phase, PlaybackPhase.idle);
+      expect(calls, contains('dispose'));
+      engine.videoOutput.detach(owner);
+    },
+  );
   test('manual pause during seek prevents automatic resume', () async {
     await engine.open(source, const OpenOptions(play: true));
     seek = Completer<void>();

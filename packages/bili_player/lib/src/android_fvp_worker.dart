@@ -132,7 +132,7 @@ void runFvpWorker(
       case 'play':
         port.play();
       case 'pause':
-        port.pause();
+        await port.pauseAndWait();
       case 'interrupt':
         port.interrupt();
       case 'cancelSeek':

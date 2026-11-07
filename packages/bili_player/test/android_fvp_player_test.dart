@@ -64,6 +64,25 @@ void main() {
       messenger.setMockMethodCallHandler(AndroidFvpPlayer.channel, null);
     },
   );
+  test('startup pause waits for the worker acknowledgement', () async {
+    final messenger = binding.defaultBinaryMessenger;
+    final paused = Completer<void>();
+    messenger.setMockMethodCallHandler(AndroidFvpPlayer.channel, (call) async {
+      if (call.method == 'create') return 100;
+      if (call.method == 'pause') await paused.future;
+      return null;
+    });
+    final port = await AndroidFvpPlayer.create();
+    var done = false;
+    final waiting = port.pauseAndWait().then((_) => done = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(done, false);
+    paused.complete();
+    await waiting;
+    expect(done, true);
+    await port.dispose();
+    messenger.setMockMethodCallHandler(AndroidFvpPlayer.channel, null);
+  });
   test('Binder loss rejects pending preparation, retires the port, and allows a new worker', () async {
     final messenger = binding.defaultBinaryMessenger;
     const events = MethodChannel('dev.bilisail/fvp_process/events');

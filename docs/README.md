@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [跨后端起播同步](validation/synchronized-playback-startup-2026-11-08.md) | 共享静音起播门槛、fvp 原生暂停与 Flutter 首帧、取消／暂停和延迟双轨验证 |
 | [fvp 中途断音检测与恢复](validation/fvp-audio-recovery-2026-11-07.md) | 本机 1.2.8 证据边界、实际外部音频解码活动、停滞恢复与原生回归 |
 | [可选 fsplayer 与三后端对照](validation/fsplayer-backend-2026-11-07.md) | Android／iOS／macOS 接入、内存 DASH、固定原生资产、功能回归和 Android 同条件对照 |
 | [Windows 硬解边缘绿线](validation/windows-amd-hwdec-edges-2026-11-07.md) | mpv D3D11/EGL 正式修复、AMD／NVIDIA 新旧 mapper 的 392 次抓图及 HEVC 未复现边界 |

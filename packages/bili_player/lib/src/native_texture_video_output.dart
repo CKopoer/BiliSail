@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -10,6 +12,8 @@ final class NativeTextureVideoOutput
   final _ready = ValueNotifier(false);
   bool _disposed = false;
   int _revision = 0;
+  Object? _owner;
+  Completer<void>? _presentation;
 
   @override
   ValueListenable<bool> get frameReady => _ready;
@@ -19,18 +23,30 @@ final class NativeTextureVideoOutput
     _texture.value = (id: texture, dimensions: dimensions);
   }
 
-  void confirmFrame() {
+  Future<void> confirmFrame() {
     final revision = _revision;
+    final presented = _presentation = Completer<void>();
+    void complete() {
+      if (!presented.isCompleted) presented.complete();
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_disposed && revision == _revision && _texture.value != null) {
         _ready.value = true;
       }
+      // The frame above still painted the black preparation filter. Wait for
+      // the following frame to paint the revealed texture before audio escapes.
+      WidgetsBinding.instance.addPostFrameCallback((_) => complete());
+      WidgetsBinding.instance.scheduleFrame();
     });
     WidgetsBinding.instance.scheduleFrame();
+    // Headless playback and detached views must not require Flutter frames.
+    return _owner == null ? Future<void>.value() : presented.future;
   }
 
   void clear() {
     ++_revision;
+    _completePresentation();
     _ready.value = false;
     _texture.value = null;
   }
@@ -38,9 +54,23 @@ final class NativeTextureVideoOutput
   // Texture output keeps native frame dimensions. Attachment only controls
   // presentation; Flutter must never create a second native player on fullscreen.
   @override
-  void attach(Object owner) {}
+  void attach(Object owner) => _owner = owner;
   @override
-  void detach(Object owner) {}
+  void detach(Object owner) {
+    if (identical(owner, _owner)) {
+      _owner = null;
+      _completePresentation();
+    }
+  }
+
+  void _completePresentation() {
+    final presentation = _presentation;
+    if (presentation != null && !presentation.isCompleted) {
+      presentation.complete();
+    }
+    _presentation = null;
+  }
+
   @override
   void updateViewport(
     Object owner, {

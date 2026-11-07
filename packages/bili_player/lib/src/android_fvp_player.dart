@@ -189,6 +189,8 @@ final class AndroidFvpPlayer
   @override
   void pause() => _command('pause');
   @override
+  Future<void> pauseAndWait() async => await _call('pause');
+  @override
   void interrupt() => _command('interrupt');
   @override
   Future<int> seek(Duration target) async =>

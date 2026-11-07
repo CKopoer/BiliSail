@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bili_player/bili_player.dart';
 import 'package:bili_player/src/fvp_native_player.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 
 MediaTrack track(String path, {Map<String, String> headers = const {}}) =>
     MediaTrack(
@@ -18,6 +19,9 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
   Completer<bool>? audioGate;
   bool released = false;
   bool playing = false;
+  double volume = 0;
+  Completer<bool>? videoGate;
+  Completer<void>? pauseGate;
   int interrupts = 0;
   int position = 1000;
   final seeks = <(Duration, Completer<int>)>[];
@@ -64,13 +68,19 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
   @override
   Future<int> createTexture() async => await texture?.future ?? 1;
   @override
-  Future<bool> confirmVideoFrame() async => true;
+  Future<bool> confirmVideoFrame() async => await videoGate?.future ?? true;
   @override
   Future<bool> confirmAudio() async => await audioGate?.future ?? audio;
   @override
   void play() => playing = true;
   @override
   void pause() => playing = false;
+  @override
+  Future<void> pauseAndWait() async {
+    pause();
+    await pauseGate?.future;
+  }
+
   @override
   void interrupt() {
     interrupts++;
@@ -96,7 +106,7 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
   @override
   void setRate(double rate) {}
   @override
-  void setVolume(double volume, double gainDb) {}
+  void setVolume(double volume, double gainDb) => this.volume = volume;
   @override
   Future<void> dispose() async {
     released = true;
@@ -107,6 +117,103 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final source = DashPairSource(video: track('video'), audio: track('audio'));
+  testWidgets(
+    'autoplay stays muted until native A/V and revealed Flutter frame',
+    (tester) async {
+      final player = _Player()
+        ..videoGate = Completer<bool>()
+        ..audioGate = Completer<bool>();
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: VideoSurface(engine: engine),
+        ),
+      );
+      final opening = engine.open(
+        source,
+        const OpenOptions(play: true, volume: 37),
+      );
+      await tester.pump();
+      expect(player.volume, 0);
+      expect(player.playing, false);
+      player.videoGate!.complete(true);
+      await tester.pump();
+      expect(player.playing, true);
+      expect(player.volume, 0);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.opening);
+      player.audioGate!.complete(true);
+      await tester.pump();
+      expect(player.volume, 0, reason: 'This frame still painted black');
+      await tester.pumpAndSettle();
+      await opening;
+      expect(player.volume, 37);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      await tester.runAsync(engine.dispose);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  for (final action in ['stop', 'pause', 'timeout']) {
+    test(
+      'startup $action never releases audio before video readiness',
+      () async {
+        final player = _Player()..videoGate = Completer<bool>();
+        final engine = FvpEngine(createPlayer: () async => player);
+        addTearDown(engine.dispose);
+        final opening = engine.open(
+          source,
+          OpenOptions(
+            play: true,
+            volume: 37,
+            openTimeout: const Duration(milliseconds: 100),
+          ),
+        );
+        final result = action == 'timeout'
+            ? expectLater(opening, throwsA(isA<PlayerFailure>()))
+            : opening;
+        await Future<void>.delayed(Duration.zero);
+        if (action == 'stop') await engine.stop();
+        if (action == 'pause') {
+          final pausing = engine.pause();
+          player.videoGate!.complete(true);
+          await pausing;
+        }
+        await result;
+        expect(player.playing, false);
+        expect(player.volume, action == 'pause' ? 37 : 0);
+        if (action != 'pause') player.videoGate!.complete(true);
+        await Future<void>.delayed(Duration.zero);
+        expect(player.playing, false);
+      },
+    );
+  }
+  test(
+    'pause acknowledgement keeps startup muted after a user pause',
+    () async {
+      final player = _Player()
+        ..audioGate = Completer<bool>()
+        ..pauseGate = Completer<void>();
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      final opening = engine.open(
+        source,
+        const OpenOptions(play: true, volume: 37),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(player.playing, true);
+      final pausing = engine.pause();
+      player.audioGate!.complete(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(player.volume, 0);
+      player.pauseGate!.complete();
+      await Future.wait([opening, pausing]);
+      expect(player.playing, false);
+      expect(engine.currentSnapshot.desiredPlaying, false);
+      expect(player.volume, 37);
+    },
+  );
   test(
     'information samples the native port and rejects retired source replies',
     () async {
