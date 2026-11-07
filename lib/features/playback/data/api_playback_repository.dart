@@ -268,6 +268,7 @@ class ApiPlaybackRepository
                 if (identities.add((track.id, track.codecs))) track,
             ]),
             dashAudio: info.dashAudio,
+            isIntentionallySilent: info.isIntentionallySilent,
             acceptQuality: info.acceptQuality,
             loudness: info.loudness,
             voices: info.voices,

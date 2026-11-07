@@ -7,6 +7,53 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final silent in [true, false]) {
+    test('video without audio requires confirmed silence=$silent', () {
+      PlaybackMedia select() => selectDashMedia(
+        ApiPlayInfo(
+          duration: const Duration(seconds: 60),
+          dashVideo: [_track(80, 'avc1')],
+          dashAudio: const [],
+          acceptQuality: const [80],
+          isIntentionallySilent: silent,
+        ),
+        quality: 80,
+        preferredCodec: VideoCodecPreference.h264,
+        headers: const {},
+      );
+      if (!silent) {
+        expect(select, throwsA(isA<AppFailure>()));
+        return;
+      }
+      final media = select();
+      expect(media.isIntentionallySilent, isTrue);
+      expect(media.audio, isNull);
+      expect(media.audioTracks, isEmpty);
+      expect(
+        media.selectAudioQuality(AudioQualityPreference.lossless),
+        same(media),
+      );
+    });
+  }
+
+  test('unsupported supplied audio cannot be treated as a silent upload', () {
+    expect(
+      () => selectDashMedia(
+        ApiPlayInfo(
+          duration: const Duration(seconds: 60),
+          dashVideo: [_track(80, 'avc1')],
+          dashAudio: [_track(999, 'unknown')],
+          acceptQuality: const [80],
+          isIntentionallySilent: true,
+        ),
+        quality: 80,
+        preferredCodec: VideoCodecPreference.h264,
+        headers: const {},
+      ),
+      throwsA(isA<AppFailure>()),
+    );
+  });
+
   test('audio menu contains only playable distinct formats and keeps media metadata', () {
     final media = selectDashMedia(
       ApiPlayInfo(

@@ -1159,7 +1159,9 @@ class PlaybackSession extends ChangeNotifier {
       _openingPosition = resume;
       PlayerFailure? lastFailure;
       final audio = resolved.audio;
-      if (resolved.kind == PlaybackMediaKind.dash && audio == null) {
+      if (resolved.kind == PlaybackMediaKind.dash &&
+          audio == null &&
+          !resolved.isIntentionallySilent) {
         throw const AppFailure(AppFailureKind.playback, '未取得点播音频轨道');
       }
       if (requestedAudioOnly &&
@@ -1277,6 +1279,7 @@ class PlaybackSession extends ChangeNotifier {
                         isLive: isLive,
                       )
                     : DashPairSource(
+                        isIntentionallySilent: resolved.isIntentionallySilent,
                         duration: resolved.duration,
                         video: MediaTrack(
                           uri: videoUri,

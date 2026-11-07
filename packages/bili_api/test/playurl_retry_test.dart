@@ -28,8 +28,94 @@ const _dash = <String, Object?>{
   'accept_quality': [80],
   'dash': _dashTracks,
 };
+final _silentDash = <String, Object?>{
+  ..._dash,
+  'dash': {
+    ..._dashTracks,
+    'audio': null,
+    'dolby': {'type': 0, 'audio': null},
+    'flac': null,
+  },
+};
 
 void main() {
+  test(
+    'explicit silent DASH is complete media, not a missing audio retry',
+    () async {
+      final transport = _Transport((_) => _response(_silentDash));
+      final info = await _client(transport).getPlayInfo(_bvid, _cid);
+      expect(info.dashVideo, hasLength(1));
+      expect(info.dashAudio, isEmpty);
+      expect(info.isIntentionallySilent, isTrue);
+      expect(transport.plays, hasLength(1));
+      expect(transport.details, 1);
+    },
+  );
+
+  for (final access in [
+    {'is_upower_exclusive': true, 'is_upower_play': false},
+    {
+      'rights': {'ugc_pay': 1},
+    },
+  ]) {
+    test('silent DASH preserves blocked entitlement $access', () async {
+      final transport = _Transport(
+        (_) => _response(_silentDash),
+        access: access,
+      );
+      await expectLater(
+        _client(transport).getPlayInfo(_bvid, _cid),
+        throwsA(_failure(ApiFailureCategory.permission)),
+      );
+      expect(transport.plays, hasLength(1));
+    });
+  }
+
+  test('silent DASH cannot turn a trial into full playback', () async {
+    final transport = _Transport(
+      (_) => _response({..._silentDash, 'is_preview': 1}),
+    );
+    await expectLater(
+      _client(transport).getPlayInfo(_bvid, _cid),
+      throwsA(_failure(ApiFailureCategory.permission)),
+    );
+    expect(transport.plays, hasLength(1));
+  });
+
+  for (final variant in ['flac', 'dolby']) {
+    test(
+      'null normal audio still selects $variant instead of marking silence',
+      () async {
+        final audio = (_dashTracks['audio'] as List<Object?>).first;
+        final transport = _Transport(
+          (_) => _response({
+            ..._dash,
+            'dash': {
+              ..._dashTracks,
+              'audio': null,
+              'flac': variant == 'flac' ? {'audio': audio} : null,
+              'dolby': {
+                'type': variant == 'dolby' ? 1 : 0,
+                'audio': variant == 'dolby' ? [audio] : null,
+              },
+            },
+          }),
+        );
+        final info = await _client(transport).getPlayInfo(_bvid, _cid);
+        expect(info.isIntentionallySilent, isFalse);
+        expect(info.dashAudio, hasLength(1));
+        expect(transport.details, 0);
+      },
+    );
+  }
+
+  test('muted hover audio omission is not a confirmed silent upload', () async {
+    final transport = _Transport((_) => _response(_dash));
+    final info = await _client(transport).getVideoPreviewInfo(_bvid, _cid);
+    expect(info.dashAudio, isEmpty);
+    expect(info.isIntentionallySilent, isFalse);
+  });
+
   test('complete DASH does not retry or read entitlement', () async {
     final transport = _Transport((_) => _response(_dash));
     final api = _client(transport);
@@ -54,6 +140,28 @@ void main() {
     },
     {
       'dash': {'video': _dashTracks['video']},
+    },
+    {
+      'dash': {..._dashTracks, 'audio': null},
+    },
+    {
+      'dash': {..._dashTracks, 'audio': null, 'flac': null},
+    },
+    {
+      'dash': {
+        ..._dashTracks,
+        'audio': null,
+        'flac': null,
+        'dolby': {'type': 1, 'audio': null},
+      },
+    },
+    {
+      'dash': {
+        ..._dashTracks,
+        'audio': <Object?>[],
+        'flac': null,
+        'dolby': {'type': 0, 'audio': null},
+      },
     },
   ];
   for (var i = 0; i < missingStreams.length; i++) {

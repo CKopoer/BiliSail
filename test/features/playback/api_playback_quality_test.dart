@@ -11,6 +11,24 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final supplement in [false, true]) {
+    test(
+      'silent UGC retains its marker through quality supplement=$supplement',
+      () async {
+        final transport = _Transport(silent: true, missingLower: supplement);
+        final media = await _repository(transport).resolve(
+          const VideoId('BV1fTnZ6LEvr'),
+          '43074848375',
+          quality: 80,
+          cancellation: RequestCancellation(),
+        );
+        expect(media.isIntentionallySilent, isTrue);
+        expect(media.audio, isNull);
+        expect(media.quality, 80);
+        expect(transport.qualities, supplement ? [129, 80] : [129]);
+      },
+    );
+  }
   for (final codec in VideoCodecPreference.values.take(3)) {
     test('1080P60 discovers the ladder before selecting $codec', () async {
       final transport = _Transport();
@@ -138,12 +156,14 @@ final class _Transport implements ApiTransport {
     this.supplementFailure,
     this.cancelSupplement = false,
     this.wrongVoice = false,
+    this.silent = false,
   });
   final bool missingLower;
   final bool entitled;
   final int? supplementFailure;
   final bool cancelSupplement;
   final bool wrongVoice;
+  final bool silent;
   final qualities = <int>[];
 
   @override
@@ -155,6 +175,15 @@ final class _Transport implements ApiTransport {
   }) async {
     final Map<String, Object?> data;
     switch (uri.path) {
+      case '/x/web-interface/view':
+        data = {
+          'aid': '117258244656600',
+          'bvid': 'BV1fTnZ6LEvr',
+          'title': 'Silent fixture',
+          'pages': [
+            {'cid': '43074848375', 'page': 1, 'part': 'P1'},
+          ],
+        };
       case '/x/web-interface/nav':
         data = {
           'wbi_img': {
@@ -200,13 +229,18 @@ final class _Transport implements ApiTransport {
                     'frame_rate': quality == 116 ? '60.000' : '30.000',
                   },
             ],
-            'audio': [
-              {
-                'id': 30280,
-                'baseUrl': 'https://cdn.example/audio',
-                'codecs': 'mp4a.40.2',
-              },
-            ],
+            if (silent) ...{
+              'audio': null,
+              'dolby': {'type': 0, 'audio': null},
+              'flac': null,
+            } else
+              'audio': [
+                {
+                  'id': 30280,
+                  'baseUrl': 'https://cdn.example/audio',
+                  'codecs': 'mp4a.40.2',
+                },
+              ],
           },
         };
       default:

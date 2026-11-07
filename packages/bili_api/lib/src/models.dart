@@ -331,6 +331,7 @@ final class ApiPlayInfo {
     required this.dashVideo,
     required this.dashAudio,
     required this.acceptQuality,
+    this.isIntentionallySilent = false,
     this.isPreview = false,
     this.voices = const [],
     this.currentLanguage = '',
@@ -342,6 +343,9 @@ final class ApiPlayInfo {
   final List<ApiMediaTrack> dashAudio;
   final ApiAudioLoudness? loudness;
   final List<int> acceptQuality;
+
+  /// Whether all DASH audio variants were explicitly absent in the response.
+  final bool isIntentionallySilent;
 
   /// The server supplied only a preview clip, not a complete episode.
   final bool isPreview;

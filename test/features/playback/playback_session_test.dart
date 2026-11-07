@@ -965,6 +965,49 @@ void main() {
     );
   }
 
+  for (final playing in [false, true]) {
+    test(
+      'confirmed silent DASH preserves playback intent=$playing and seek',
+      () async {
+        final engine = _FakeEngine();
+        final repository = _FakeRepository(autoResolve: true)
+          ..resolvedMedia = PlaybackMedia(
+            video: PlaybackTrack(
+              urls: [Uri.https('cdn.example', '/silent.mp4')],
+              codec: 'avc1',
+              bandwidth: 1000,
+            ),
+            audio: null,
+            isIntentionallySilent: true,
+            quality: 80,
+            qualities: const [80],
+            duration: const Duration(minutes: 2),
+            headers: const {},
+          );
+        final session = PlaybackSession(
+          engine: engine,
+          repository: repository,
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+        );
+        addTearDown(session.close);
+        await session.open(
+          _detail('one'),
+          _part('one'),
+          desiredPlaying: playing,
+        );
+        expect(session.error, isNull);
+        final source = engine.sources.single as DashPairSource;
+        expect(source.isIntentionallySilent, isTrue);
+        expect(source.audio, isNull);
+        expect(session.canListen, isFalse);
+        expect(engine.currentSnapshot.desiredPlaying, playing);
+        await session.seek(const Duration(seconds: 5));
+        expect(engine.currentSnapshot.position, const Duration(seconds: 5));
+      },
+    );
+  }
+
   for (final cause in [
     'chapters',
     'chapterFailure',

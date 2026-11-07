@@ -1838,13 +1838,31 @@ final class BiliApiClient {
     final audios = preview
         ? const <ApiMediaTrack>[]
         : dashAudioEntries(dash, 'playurl').map(_track).toList();
-    if (videos.isEmpty || !preview && audios.isEmpty) {
+    // Silent uploads explicitly declare every audio variant absent. Missing
+    // fields or empty arrays alone can also be an incomplete response.
+    final dolby = _optionalMap(dash['dolby']);
+    final silent =
+        !preview &&
+        audios.isEmpty &&
+        dash.containsKey('audio') &&
+        dash['audio'] == null &&
+        dash.containsKey('flac') &&
+        dash['flac'] == null &&
+        _int(dolby?['type']) == 0 &&
+        dolby?.containsKey('audio') == true &&
+        dolby?['audio'] == null;
+    if (videos.isEmpty || !preview && audios.isEmpty && !silent) {
       throw await _videoPlaybackFailure(readAccess, trial: trial);
     }
     // A trial must never be treated as the complete video by downloads,
     // progress reporting or automatic queue advancement.
     if (trial) {
       throw await _videoPlaybackFailure(readAccess, trial: true);
+    }
+    if (silent) {
+      // Explicit silence must not turn restricted content into full playback.
+      final failure = await _videoPlaybackFailure(readAccess);
+      if (failure.category == ApiFailureCategory.permission) throw failure;
     }
     final dashSeconds = _num(dash['duration']);
     final durationMs = dashSeconds == null
@@ -1855,6 +1873,7 @@ final class BiliApiClient {
       dashVideo: List.unmodifiable(videos),
       loudness: ApiAudioLoudness.parse(data['volume']),
       dashAudio: List.unmodifiable(audios),
+      isIntentionallySilent: silent,
       acceptQuality: List.unmodifiable(
         (_list(
           data['accept_quality'],

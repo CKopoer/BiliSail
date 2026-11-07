@@ -46,7 +46,9 @@ PlaybackMedia selectDashMedia(
               );
           return rank != 0 ? rank : b.bandwidth.compareTo(a.bandwidth);
         });
-  if (videos.isEmpty || !videoOnly && audios.isEmpty) {
+  final silent =
+      !videoOnly && info.isIntentionallySilent && info.dashAudio.isEmpty;
+  if (videos.isEmpty || !videoOnly && audios.isEmpty && !silent) {
     throw AppFailure(
       AppFailureKind.playback,
       videoOnly ? '未取得可用的预览视频轨道' : '未取得可用的视频和音频轨道',
@@ -109,6 +111,7 @@ PlaybackMedia selectDashMedia(
           ),
     video: map(candidates.first),
     audio: audioTracks.firstOrNull?.track,
+    isIntentionallySilent: silent,
     audioTracks: List.unmodifiable(audioTracks),
     quality: selectedQuality,
     qualities: videos.map((track) => track.id).toSet().toList()..sort(),

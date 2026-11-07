@@ -49,9 +49,13 @@ final class PlaybackMedia {
     this.liveStreams = const [],
     this.liveStream,
     this.audioTracks = const [],
+    this.isIntentionallySilent = false,
   });
   final PlaybackTrack video;
   final PlaybackTrack? audio;
+
+  /// Whether the resolver confirmed a complete video with no audio resource.
+  final bool isIntentionallySilent;
   final List<PlaybackAudioTrack> audioTracks;
   AudioQualityPreference? get audioQuality => audioTracks
       .where((option) => identical(option.track, audio))
