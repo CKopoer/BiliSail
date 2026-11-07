@@ -236,6 +236,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             with lock, (args.output / 'http-requests.jsonl').open('a', encoding='utf-8') as output:
                 output.write(json.dumps({'profile': profile, 'track': track, 'rangeStart': start,
                     'rangeEnd': end, 'rangeRequested': bool(range_header), 'head': head,
+                    'headerChecks': {name: self.headers.get(name) == value
+                                     for name, value in config[0].get('verifyRequestHeaders', {}).items()},
                     'bytesSent': sent, 'durationSeconds': time.monotonic()-started,
                     'complete': complete}) + '\n')
             media_limit.release()

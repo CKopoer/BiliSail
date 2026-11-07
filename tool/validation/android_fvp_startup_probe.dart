@@ -37,9 +37,16 @@ Future<void> main() async {
       final start = Duration(seconds: config['startSeconds'] as int? ?? 0);
       MediaTrack track(String name) => MediaTrack(
         uri: Uri.parse(config[name] as String),
-        requestPolicy: MediaRequestPolicy(),
+        requestPolicy: MediaRequestPolicy(
+          headers: switch (config['headers']) {
+            final Map values => Map<String, String>.from(values),
+            _ => const {},
+          },
+        ),
       );
-      final engine = FvpEngine();
+      final fsplayer = config['backend'] == 'fsplayer';
+      final PlayerEngine engine = fsplayer ? FsPlayerEngine() : FvpEngine();
+      final information = engine as PlayerInformationSource;
       try {
         runApp(
           MaterialApp(
@@ -55,7 +62,15 @@ Future<void> main() async {
           ),
         );
         await engine.open(
-          DashPairSource(video: track('video'), audio: track('audio')),
+          config['progressive'] == true
+              ? ProgressiveSource(track('video'))
+              : DashPairSource(
+                  video: track('video'),
+                  audio: track('audio'),
+                  duration: Duration(
+                    seconds: config['durationSeconds'] as int? ?? 180,
+                  ),
+                ),
           OpenOptions(
             play: play,
             volume: 0,
@@ -66,7 +81,7 @@ Future<void> main() async {
                 : AndroidVideoOutputMode.renderedTexture,
           ),
         );
-        final info = await engine.inspectPlaybackInformation();
+        final info = await information.inspectPlaybackInformation();
         if (info?.diagnostics?.hasVideoOutput != true ||
             info?.diagnostics?.hasDecodedAudio != true ||
             info?.videoOutput?.contains('(direct)') != direct ||
@@ -91,6 +106,7 @@ Future<void> main() async {
             'phase': phase,
             'positionMs': engine.currentSnapshot.position.inMilliseconds,
             'videoOutput': info?.videoOutput,
+            'hardwareDecoder': info?.hardwareDecoder,
             'pixels': pixels,
           });
         }

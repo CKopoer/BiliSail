@@ -651,14 +651,30 @@ final class _SettingsCategoryPageState
                               '优先使用硬件解码，不支持当前编码时回退软件解码。',
                               style: TextStyle(fontSize: 12),
                             ),
-                            _choices('播放后端', s.playbackBackend, const {
+                            _choices('播放后端', s.playbackBackend, {
                               PlaybackBackendPreference.mediaKit:
                                   'media_kit（默认）',
                               PlaybackBackendPreference.fvp: 'fvp（实验性）',
+                              if (defaultTargetPlatform ==
+                                      TargetPlatform.android ||
+                                  defaultTargetPlatform == TargetPlatform.iOS ||
+                                  defaultTargetPlatform == TargetPlatform.macOS)
+                                PlaybackBackendPreference.fsplayer:
+                                    'fsplayer（实验性）',
                             }, controller.setPlaybackBackend),
                             GpuDeviceSetting(settings: s),
                             if (defaultTargetPlatform ==
-                                TargetPlatform.android) ...[
+                                    TargetPlatform.android &&
+                                s.playbackBackend ==
+                                    PlaybackBackendPreference.fsplayer)
+                              const Text(
+                                '当前 fsplayer 公开版本仅验证支持 1×；需要倍速时请选择其他后端。',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            if (defaultTargetPlatform ==
+                                    TargetPlatform.android &&
+                                s.playbackBackend !=
+                                    PlaybackBackendPreference.fsplayer) ...[
                               _choices(
                                 'Android 视频输出',
                                 s.androidVideoOutput,
@@ -677,7 +693,11 @@ final class _SettingsCategoryPageState
                             ],
                           ] else
                             Text(
-                              '使用 ${s.playbackBackend == PlaybackBackendPreference.fvp ? 'fvp' : 'media_kit'} 后端进行软件解码，可能增加 CPU 占用和耗电。切回硬件解码后恢复后端、GPU 和输出偏好。',
+                              '使用 ${switch (s.playbackBackend) {
+                                PlaybackBackendPreference.mediaKit => 'media_kit',
+                                PlaybackBackendPreference.fvp => 'fvp',
+                                PlaybackBackendPreference.fsplayer => 'fsplayer',
+                              }} 后端进行软件解码，可能增加 CPU 占用和耗电。切回硬件解码后恢复后端、GPU 和输出偏好。',
                               style: const TextStyle(fontSize: 12),
                             ),
                           const Text(

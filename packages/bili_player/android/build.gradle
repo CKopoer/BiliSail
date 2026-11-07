@@ -1,0 +1,51 @@
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
+group 'dev.bilisail.bili_player'
+version '0.1.0'
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'dev.bilisail.bili_player'
+    compileSdk 36
+    defaultConfig { minSdk 24 }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// The published release AAR is authoritative; Maven Central does not currently
+// contain this version. Publish only this verified file into a build-local repo.
+def lock = new JsonSlurper().parse(file('../native/assets.lock.json'))
+def asset = lock.android
+def vendorRepo = new File(layout.buildDirectory.get().asFile, 'fsplayer-maven')
+def coordinate = new File(vendorRepo, "dev/bilisail/vendor/fsplayer/${lock.version}")
+def archive = new File(coordinate, "fsplayer-${lock.version}.aar")
+def digest = { File f ->
+    def md = MessageDigest.getInstance('SHA-256')
+    f.withInputStream { input ->
+        byte[] buffer = new byte[65536]
+        int count
+        while ((count = input.read(buffer)) > 0) md.update(buffer, 0, count)
+    }
+    md.digest().encodeHex().toString()
+}
+if (!archive.exists() || digest(archive) != asset.sha256) {
+    coordinate.mkdirs()
+    def partial = new File(coordinate, 'download.partial')
+    try {
+        def connection = new URI("${lock.baseUrl}/${asset.archive}").toURL().openConnection()
+        connection.connectTimeout = 30000
+        connection.readTimeout = 60000
+        connection.getInputStream().withCloseable { input -> partial.withOutputStream { it << input } }
+        if (digest(partial) != asset.sha256) throw new GradleException('FSPlayer AAR SHA-256 mismatch')
+        java.nio.file.Files.move(partial.toPath(), archive.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    } finally { partial.delete() }
+}
+new File(coordinate, "fsplayer-${lock.version}.pom").text = """<project><modelVersion>4.0.0</modelVersion><groupId>dev.bilisail.vendor</groupId><artifactId>fsplayer</artifactId><version>${lock.version}</version><packaging>aar</packaging></project>"""
+rootProject.allprojects {
+    repositories { maven { url = uri(vendorRepo) } }
+}
+dependencies { implementation "dev.bilisail.vendor:fsplayer:${lock.version}" }

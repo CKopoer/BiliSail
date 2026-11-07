@@ -5,9 +5,19 @@ param(
   [switch]$SkipReleaseBuild,
   [switch]$EnableHcpp,
   [switch]$StartupOnly,
+  [switch]$Online,
   [switch]$SkipMuxBuild
 )
 $ErrorActionPreference = 'Stop'
+if (!$Online) {
+  foreach ($scenario in @(Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json)) {
+    foreach ($source in @($scenario.video, $scenario.audio)) {
+      if ($source -and ([Uri]$source).Scheme -in @('http','https') -and !([Uri]$source).IsLoopback) {
+        throw 'Public network fixtures require -Online.'
+      }
+    }
+  }
+}
 if ($StartupOnly -and $EnableHcpp) { throw 'Startup regression uses Flutter Texture, not HCPP.' }
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'android-development.ps1')

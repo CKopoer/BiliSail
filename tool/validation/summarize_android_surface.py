@@ -64,6 +64,8 @@ def summarize(folder, binary):
         av = [abs(row['avsyncSeconds']) for row in samples if row.get('avsyncSeconds') is not None]
         output.append({
             'run': folder.name, 'stage': stage, 'backend': config['backend'],
+            'requestedRate': config.get('rate', 3),
+            'requestedRateAchieved': abs((end['positionMs']-start['positionMs'])/1000/elapsed - config.get('rate', 3)) <= max(.1, config.get('rate', 3)*.05),
             'requestedDirect': config['direct'], 'presentation': metadata.get('presentation', 'Flutter.Texture'),
             'actualOutput': metadata['videoOutput'], 'hwdec': metadata['hwdec'],
             'seconds': elapsed,
@@ -73,6 +75,8 @@ def summarize(folder, binary):
             'flutterFramesPerSecond': sum(row['dartFrames'] for row in samples)/elapsed,
             'nativeFrameDropDelta': drops[-1]-drops[0] if drops else None,
             'nativeAvSyncAbsMaxMs': max(av)*1000 if av else None,
+            'cacheBytesMax': max((row['cacheBytes'] for row in samples if row.get('cacheBytes') is not None), default=None),
+            'cacheSecondsMax': max((row['cacheSeconds'] for row in samples if row.get('cacheSeconds') is not None), default=None),
             'allControlsVisible': all(row.get('controlsVisible') is True for row in samples),
             'allSubtitlesPresent': all(bool(row.get('subtitle')) for row in samples),
             'minimumVisibleComments': min(row['visible'] for row in samples),

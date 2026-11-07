@@ -113,6 +113,10 @@ flutter:
     - native/fvp/LICENSE-fvp.txt
     - native/fvp/LICENSE-libass.txt
     - native/fvp/mdk.podspec
+    - packages/bili_player/native/assets.lock.json
+    - packages/bili_player/native/NOTICE.md
+    - packages/bili_player/native/LICENSE-fsplayer.txt
+    - packages/bili_player/native/FSPlayer.podspec
     - packages/bili_mux/LICENSE-FFmpeg.txt
     - assets/icons/
     - assets/branding/app_icon.png

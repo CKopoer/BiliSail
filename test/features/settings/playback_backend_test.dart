@@ -173,6 +173,11 @@ void main() {
       PlaybackBackendPreference.fvp,
     );
     expect((await repository.load()).defaultVolume, 37);
+    await controller.setPlaybackBackend(PlaybackBackendPreference.fsplayer);
+    expect(
+      (await SqliteSettingsRepository(database).load()).playbackBackend,
+      PlaybackBackendPreference.fsplayer,
+    );
     await controller.resetToDefaults();
     expect(
       (await repository.load()).playbackBackend,
