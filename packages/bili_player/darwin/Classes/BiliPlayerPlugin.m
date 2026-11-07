@@ -8,6 +8,7 @@
 @property(nonatomic) NSObject<FlutterTextureRegistry> *textures;
 @property(nonatomic) int64_t textureId;
 @property(nonatomic) BOOL video, videoFrame, audioDecoded, seekDone, closed;
+@property(nonatomic) BOOL unsupportedColor;
 @property(nonatomic) int64_t durationMs;
 @property(nonatomic) CVPixelBufferRef pixel;
 - (void)audioReady:(NSNotification *)notification;
@@ -23,6 +24,12 @@
                                   videoFrame:(CVPixelBufferRef)pixel {
     @synchronized(self) {
         if (self.closed) return pixel;
+        CFTypeRef transfer = CVBufferGetAttachment(pixel, kCVImageBufferTransferFunctionKey, NULL);
+        if (transfer && (CFEqual(transfer, kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ) ||
+                         CFEqual(transfer, kCVImageBufferTransferFunction_ITU_R_2100_HLG))) {
+            self.unsupportedColor = YES;
+            return pixel;
+        }
         CVPixelBufferRetain(pixel);
         if (self.pixel) CVPixelBufferRelease(self.pixel);
         self.pixel = pixel;
@@ -143,6 +150,7 @@
         NSMutableDictionary *s = [@{
             @"prepared": @(p.isPreparedToPlay), @"videoFrame": @(r.videoFrame),
             @"audioDecoded": @(r.audioDecoded), @"seekDone": @(r.seekDone),
+            @"unsupportedColor": @(r.unsupportedColor),
             @"ended": @(p.playbackSchedule == FSPlayerPlaybackScheduleCompleted),
             @"buffering": @((p.loadState & FSPlayerLoadStateStalled) != 0),
             @"positionMs": @((int64_t)(p.currentPlaybackTime * 1000)),

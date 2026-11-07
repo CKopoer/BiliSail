@@ -48,6 +48,16 @@ FsPlayerInput fsPlayerInput(ResolvedMediaSource source, OpenOptions options) {
     ),
     ManifestSource(:final media, :final isLive) => (media, null, true, isLive),
   };
+  if (RegExp(
+    r'^(dvh1|dvhe)\.0?5\.',
+    caseSensitive: false,
+  ).hasMatch(main.codec ?? '')) {
+    throw const PlayerFailure(
+      PlayerFailureKind.unsupportedVideoColor,
+      'fsplayer 开源版不支持杜比视界 Profile 5',
+      0,
+    );
+  }
   if (source is DashPairSource &&
       audio == null &&
       !source.isIntentionallySilent) {
@@ -122,6 +132,11 @@ FsPlayerInput fsPlayerInput(ResolvedMediaSource source, OpenOptions options) {
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&apos;');
+  String manifestUrl(MediaTrack track) => switch (track.uri.scheme) {
+    'file' => track.uri.toString(),
+    'fd' => 'file://${url(track)}',
+    _ => url(track),
+  };
   final manifest =
       '<?xml version="1.0"?>'
       '<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" '
@@ -129,11 +144,11 @@ FsPlayerInput fsPlayerInput(ResolvedMediaSource source, OpenOptions options) {
       'minBufferTime="PT1S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">'
       '<Period><AdaptationSet contentType="video" mimeType="video/mp4">'
       '<Representation id="v" bandwidth="${main.bandwidth ?? 1}">'
-      '<BaseURL>${xml(mainUrl)}</BaseURL><SegmentBase/>'
+      '<BaseURL>${xml(manifestUrl(main))}</BaseURL><SegmentBase/>'
       '</Representation></AdaptationSet>'
       '<AdaptationSet contentType="audio" mimeType="audio/mp4">'
       '<Representation id="a" bandwidth="${audio.bandwidth ?? 1}">'
-      '<BaseURL>${xml(url(audio))}</BaseURL><SegmentBase/>'
+      '<BaseURL>${xml(manifestUrl(audio))}</BaseURL><SegmentBase/>'
       '</Representation></AdaptationSet></Period></MPD>';
   return FsPlayerInput(
     'data:application/dash+xml;base64,${base64Encode(utf8.encode(manifest))}',

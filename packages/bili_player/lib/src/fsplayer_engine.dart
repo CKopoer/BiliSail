@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'android_media_leases.dart';
 import 'fsplayer_source.dart';
+import 'fsplayer_input_lease.dart';
 import 'native_audio_gain.dart';
 import 'native_playback_health.dart';
 import 'native_texture_video_output.dart';
@@ -34,7 +35,9 @@ final class FsPlayerEngine
   final _clock = Stopwatch()..start();
   Future<void> _commands = Future.value();
   Future<void>? _disposal;
+  Future<void>? _lateCreationRelease;
   AndroidMediaLeases? _leases;
+  FsPlayerInputLease? _inputLease;
   Completer<void> _cancel = Completer<void>();
   Timer? _timer;
   int? _id, _texture;
@@ -90,10 +93,14 @@ final class FsPlayerEngine
   Future<void> _release() async {
     _timer?.cancel();
     _output.clear();
+    await _lateCreationRelease;
+    _lateCreationRelease = null;
     final id = _id;
     // Preserve a failed release as a barrier: no new runtime may overlap it.
     if (id != null) await _call<void>('dispose');
     _id = _texture = null;
+    await _inputLease?.close();
+    _inputLease = null;
     await _leases?.close();
     _leases = null;
     _native = {};
@@ -123,6 +130,13 @@ final class FsPlayerEngine
         ),
       ]).timeout(remaining);
       if (cancel.isCompleted) throw const _Superseded();
+      if (status['unsupportedColor'] == true) {
+        throw const PlayerFailure(
+          PlayerFailureKind.unsupportedVideoColor,
+          'fsplayer 当前纹理输出不支持此 HDR 色彩空间',
+          0,
+        );
+      }
       if (status['error'] != null) throw StateError('Native playback failed');
       _native = status;
       if (condition(status)) return;
@@ -189,14 +203,35 @@ final class FsPlayerEngine
         if (cancel.isCompleted) throw const _Superseded();
         _live = input.live;
         _gain = options.audioGainDb;
-        final created = await _call<Map<Object?, Object?>>('create', {
-          'url': input.url,
-          'headers': input.headers,
-          'video': input.video,
-          'software': options.videoDecoding == VideoDecodingMode.software,
-          'bufferMs': options.maxBufferAhead.inMilliseconds,
-          'durationMs': input.duration?.inMilliseconds ?? 0,
-        });
+        final inputLease = _inputLease = await FsPlayerInputLease.open(input);
+        if (cancel.isCompleted) throw const _Superseded();
+        final creation = _channel.invokeMethod<Map<Object?, Object?>>(
+          'create',
+          {
+            'url': inputLease.url,
+            'headers': input.headers,
+            'video': input.video,
+            'software': options.videoDecoding == VideoDecodingMode.software,
+            'bufferMs': options.maxBufferAhead.inMilliseconds,
+            'durationMs': input.duration?.inMilliseconds ?? 0,
+          },
+        );
+        Map<Object?, Object?>? created;
+        try {
+          created = await creation.timeout(const Duration(seconds: 10));
+        } on Object {
+          // A platform invocation cannot be cancelled. Retire any runtime that
+          // returns after our timeout before another source may be opened.
+          _lateCreationRelease = creation
+              .then((late) async {
+                final id = late?['id'];
+                if (id is int) {
+                  await _channel.invokeMethod<void>('dispose', {'id': id});
+                }
+              })
+              .timeout(const Duration(seconds: 10));
+          rethrow;
+        }
         _id = created?['id'] as int?;
         _texture = created?['texture'] as int?;
         if (_id == null) throw StateError('No native player');

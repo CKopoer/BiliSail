@@ -86,7 +86,9 @@ void main() {
   test('stop during native creation releases the late runtime', () async {
     creation = Completer<void>();
     final opening = engine.open(source, const OpenOptions(play: true));
-    await Future<void>.delayed(Duration.zero);
+    while (!calls.contains('create')) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
     final stopping = engine.stop();
     creation!.complete();
     await Future.wait([opening, stopping]);

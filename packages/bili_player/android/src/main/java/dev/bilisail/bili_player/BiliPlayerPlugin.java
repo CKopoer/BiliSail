@@ -88,6 +88,7 @@ public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
             try {
                 FSPlayer.native_setLogLevel(8); // AV_LOG_QUIET / IJK_LOG_SILENT
                 r.player.setLogEnabled(false);
+                r.player.setAllowHDRDirectDisplay(false);
                 r.player.setOnPreparedListener(mp -> r.prepared = true);
                 r.player.setOnCompletionListener(mp -> r.ended = true);
                 r.player.setOnErrorListener((mp, what, extra) -> { r.error = what; return true; });
@@ -175,7 +176,9 @@ public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
         s.put("cacheMs", cache);
         s.put("cacheBytes", p.getVideoCachedBytes() + p.getAudioCachedBytes());
         s.put("cacheSpeed", p.getTcpSpeed());
-        s.put("decoder", p.getVideoDecoder() == FSPlayer.FFP_PROPV_DECODER_MEDIACODEC ? "mediacodec" : "no");
+        int decoder = p.getVideoDecoder();
+        s.put("decoder", decoder == FSPlayer.FFP_PROPV_DECODER_MEDIACODEC ||
+            decoder == FSPlayer.FFP_PROPV_DECODER_AVCODEC_HW ? "mediacodec" : "no");
         s.put("output", "Vulkan / Flutter.Texture");
         s.put("outputFps", (double)p.getVideoOutputFramesPerSecond());
         s.put("frameDrops", p.getDropFrameCount());
