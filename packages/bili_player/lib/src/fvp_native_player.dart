@@ -8,6 +8,7 @@ import 'android_fvp_player.dart';
 import 'android_fvp_worker.dart';
 import 'player_contract.dart';
 import 'fvp_playback_information.dart';
+import 'fvp_video_decoders.dart';
 import 'fvp_surface_preroll.dart';
 import 'player_playback_information.dart';
 
@@ -64,9 +65,11 @@ abstract interface class FvpInformationPort {
 
 Future<void>? _initialization;
 
-Future<FvpPlayerPort> createFvpNativePlayer() async {
+Future<FvpPlayerPort> createFvpNativePlayer({int? windowsAdapterIndex}) async {
   if (Platform.isAndroid) return AndroidFvpPlayer.create();
-  return createInProcessFvpNativePlayer();
+  return createInProcessFvpNativePlayer(
+    windowsAdapterIndex: windowsAdapterIndex,
+  );
 }
 
 // The Android service starts this headless entrypoint, without app bootstrap,
@@ -87,7 +90,9 @@ void fvpWorkerMain() => runFvpWorker(
   },
 );
 
-Future<FvpPlayerPort> createInProcessFvpNativePlayer() async {
+Future<FvpPlayerPort> createInProcessFvpNativePlayer({
+  int? windowsAdapterIndex,
+}) async {
   await (_initialization ??= () async {
     // Install fvp's bundled Flutter key without forwarding raw URL/header logs.
     fvp.registerWith(
@@ -100,10 +105,13 @@ Future<FvpPlayerPort> createInProcessFvpNativePlayer() async {
     mdk.setGlobalOption('logLevel', mdk.LogLevel.off);
     mdk.setGlobalOption('videoout.clear_on_stop', 0);
   }());
-  return _MdkPlayerPort();
+  return _MdkPlayerPort(windowsAdapterIndex: windowsAdapterIndex);
 }
 
 final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
+  _MdkPlayerPort({this.windowsAdapterIndex});
+
+  final int? windowsAdapterIndex;
   mdk.Player? _native;
   mdk.Player get _player => _native!;
   _MdkPlayerPort? _audioProbe;
@@ -290,15 +298,11 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
       throw StateError('MDK preparation cancelled');
     }
     _initializePlayer();
-    _player.videoDecoders = options.videoDecoding == VideoDecodingMode.software
-        ? ['FFmpeg', 'dav1d']
-        : switch (Platform.operatingSystem) {
-            'windows' => ['MFT:d3d=11', 'D3D11', 'DXVA', 'FFmpeg', 'dav1d'],
-            'android' => ['AMediaCodec', 'FFmpeg', 'dav1d'],
-            'macos' || 'ios' => ['VT', 'FFmpeg', 'dav1d'],
-            'linux' => ['VAAPI', 'CUDA', 'VDPAU', 'FFmpeg', 'dav1d'],
-            _ => ['FFmpeg', 'dav1d'],
-          };
+    _player.videoDecoders = fvpVideoDecoders(
+      operatingSystem: Platform.operatingSystem,
+      decoding: options.videoDecoding,
+      windowsAdapterIndex: windowsAdapterIndex,
+    );
     _player.setProperty('subtitle', '0');
     _player.setProperty(
       'avio.headers',

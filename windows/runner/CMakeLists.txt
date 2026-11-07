@@ -11,6 +11,7 @@ add_executable(${BINARY_NAME} WIN32
   "app_icon.cpp"
   "shell_app_icon.cpp"
   "system_fonts.cpp"
+  "gpu_devices.cpp"
   "image_export.cpp"
   "text_input.cpp"
   "desktop_window.cpp"
@@ -45,6 +46,7 @@ target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "advapi32.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "gdi32.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "dwrite.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "dxgi.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "windowscodecs.lib" "shlwapi.lib" "shell32.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "imm32.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "propsys.lib")

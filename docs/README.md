@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [解码方式与 GPU 设备](validation/gpu-device-settings-2026-11-07.md) | 软硬解分层、后端／平台能力、Windows fvp 指定 GPU、持久化与验证边界 |
 | [fvp 直出启动黑屏修复](validation/android-fvp-direct-black-2026-11-07.md) | 空纹理消费误报、原生暂停屏障、连续打开及截图像素回归 |
 | [Android 解码直出与 SurfaceView](validation/android-surface-output-2026-11-07.md) | 两后端纹理直出实验设置、4K60 H.264 约 25 Mbps／3× 实机对照、HC／HCPP 原型与限制 |
 | [迷你小窗与置顶](validation/mini-player-2026-11-07.md) | 桌面置顶、尺寸与位置恢复，Android 画中画、移动应用内浮窗和平台验证边界 |

@@ -19,9 +19,15 @@ final class FvpEngine
         VideoOutputSource,
         AudioGainControl,
         PlayerInformationSource {
-  FvpEngine({this.onDiagnostic, Future<FvpPlayerPort> Function()? createPlayer})
-    : _createPlayer = createPlayer ?? createFvpNativePlayer,
-      _isolated = createPlayer == null && Platform.isAndroid;
+  FvpEngine({
+    this.onDiagnostic,
+    int? windowsAdapterIndex,
+    Future<FvpPlayerPort> Function()? createPlayer,
+  }) : _createPlayer =
+           createPlayer ??
+           (() =>
+               createFvpNativePlayer(windowsAdapterIndex: windowsAdapterIndex)),
+       _isolated = createPlayer == null && Platform.isAndroid;
 
   final void Function(PlayerDiagnosticEvent)? onDiagnostic;
   final Future<FvpPlayerPort> Function() _createPlayer;

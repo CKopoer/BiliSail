@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-11-07 设置先选择软件／硬件解码，硬解下显示后端、GPU 和 Android 输出；Windows fvp 可选择 DXGI 解码设备，其他组合说明自动选择的能力边界。软件模式保留后端与设备偏好，详见[GPU 设备设置](validation/gpu-device-settings-2026-11-07.md)。
+
 2026-11-07 新增 Android「解码直出纹理」实验设置，media_kit／fvp 均保留现有 Flutter 弹幕、字幕和控件，默认兼容输出。4K60 H.264 约 25 Mbps／3× 真机性能、SurfaceView HC／HCPP 原型及逐项未测边界见[直出验证](validation/android-surface-output-2026-11-07.md)。
 
 2026-11-07 新增桌面置顶／迷你小窗及移动端小窗入口。呈现沿用原播放会话，普通／小窗 surface 分帧交接，桌面小窗几何独立持久化；Android 使用系统画中画，iOS 使用应用内浮窗。样式、所有权、来源和逐平台验证见[迷你小窗与置顶](validation/mini-player-2026-11-07.md)。

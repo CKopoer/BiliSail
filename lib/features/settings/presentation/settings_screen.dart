@@ -25,6 +25,7 @@ import 'app_icon_settings.dart';
 import 'recommendation_settings_section.dart';
 import 'cdn_settings_tile.dart';
 import 'log_export_button.dart';
+import 'gpu_device_setting.dart';
 
 const _usageNotice = <Widget>[
   Text('本应用是哔哩哔哩第三方客户端，视频、影视、直播及相关内容均来自哔哩哔哩，与官方无隶属关系。'),
@@ -640,12 +641,47 @@ final class _SettingsCategoryPageState
                         ]),
                       if (widget.category == SettingsCategory.playback)
                         _section('视频编解码', [
-                          _choices('播放后端', s.playbackBackend, const {
-                            PlaybackBackendPreference.mediaKit: 'media_kit（默认）',
-                            PlaybackBackendPreference.fvp: 'fvp（实验性）',
-                          }, controller.setPlaybackBackend),
+                          _choices('视频解码方式', s.videoDecoding, const {
+                            VideoDecodingPreference.software: '软件解码',
+                            VideoDecodingPreference.automatic: '硬件解码（优先）',
+                          }, controller.setVideoDecoding),
+                          if (s.videoDecoding ==
+                              VideoDecodingPreference.automatic) ...[
+                            const Text(
+                              '优先使用硬件解码，不支持当前编码时回退软件解码。',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            _choices('播放后端', s.playbackBackend, const {
+                              PlaybackBackendPreference.mediaKit:
+                                  'media_kit（默认）',
+                              PlaybackBackendPreference.fvp: 'fvp（实验性）',
+                            }, controller.setPlaybackBackend),
+                            GpuDeviceSetting(settings: s),
+                            if (defaultTargetPlatform ==
+                                TargetPlatform.android) ...[
+                              _choices(
+                                'Android 视频输出',
+                                s.androidVideoOutput,
+                                const {
+                                  AndroidVideoOutputPreference.renderedTexture:
+                                      '兼容渲染（默认）',
+                                  AndroidVideoOutputPreference.directTexture:
+                                      '解码直出纹理（实验）',
+                                },
+                                controller.setAndroidVideoOutput,
+                              ),
+                              const Text(
+                                '两个播放后端均保留弹幕、字幕和控件。实验模式需要设备硬解支持；画面异常时切回兼容渲染。',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ] else
+                            Text(
+                              '使用 ${s.playbackBackend == PlaybackBackendPreference.fvp ? 'fvp' : 'media_kit'} 后端进行软件解码，可能增加 CPU 占用和耗电。切回硬件解码后恢复后端、GPU 和输出偏好。',
+                              style: const TextStyle(fontSize: 12),
+                            ),
                           const Text(
-                            '适用于视频、影视、直播、离线播放和悬停预览。下次打开或重新加载播放源时生效，正在播放的内容继续使用原后端。',
+                            '解码设置适用于视频、影视、直播、离线播放和悬停预览，下次打开或重新加载播放源时生效。',
                             style: TextStyle(fontSize: 12),
                           ),
                           _choices('优先视频编码', s.preferredVideoCodec, const {
@@ -658,34 +694,6 @@ final class _SettingsCategoryPageState
                             '用于视频和影视：先选择可用清晰度，再选择编码。直播在播放页独立选择协议、格式与编码；杜比实际显示效果取决于设备和输出。',
                             style: TextStyle(fontSize: 12),
                           ),
-                          _choices('视频解码方式', s.videoDecoding, const {
-                            VideoDecodingPreference.automatic: '自动（优先硬解）',
-                            VideoDecodingPreference.software: '软件解码',
-                          }, controller.setVideoDecoding),
-                          if (defaultTargetPlatform ==
-                              TargetPlatform.android) ...[
-                            _choices(
-                              'Android 视频输出',
-                              s.androidVideoOutput,
-                              const {
-                                AndroidVideoOutputPreference.renderedTexture:
-                                    '兼容渲染（默认）',
-                                AndroidVideoOutputPreference.directTexture:
-                                    '解码直出纹理（实验）',
-                              },
-                              controller.setAndroidVideoOutput,
-                            ),
-                            const Text(
-                              '两个播放后端均保留弹幕、字幕和控件。实验模式需要设备硬解支持；画面异常时切回兼容渲染。软件解码沿用兼容路径，下次加载播放源时生效。',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ],
-                          const Text(
-                            '自动模式在设备支持时使用硬件解码，不可用时使用软件解码。软件解码可能增加 CPU 占用和耗电。解码方式适用于视频、影视和直播。',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text('下次打开或重新加载播放源时生效。'),
                           _choices('优先音质', s.preferredAudioQuality, {
                             for (final quality in AudioQualityPreference.values)
                               quality: quality.label,

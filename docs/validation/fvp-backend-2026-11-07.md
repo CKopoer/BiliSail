@@ -4,6 +4,8 @@
 
 ## 使用与状态
 
+同日后续设置改为先选软件／硬件解码，硬解下显示播放后端与 GPU；Windows fvp 可独立指定视频解码设备。当前快照 schemaVersion 为 43，迁移与逐平台边界见 [GPU 设备设置](gpu-device-settings-2026-11-07.md)。下段 schemaVersion 41 为初版记录。
+
 在「设置 → 播放 → 视频编解码 → 播放后端」选择 `media_kit（默认）` 或 `fvp（实验性）`。保存成功后，下次打开或重新加载播放源时生效；已打开的源继续使用原后端，暂停、倍速或普通／全屏切换不更换播放器。不需要重启应用。设置沿用 `preferences.v1`，快照 schemaVersion 为 41，不修改数据库表。旧配置、缺失／非法值和恢复默认均选择 media_kit；有效旧设置保留，保存失败回退。
 
 视频、影视、直播、离线播放、听视频和悬停预览统一经过 `ConfigurablePlayerEngine`。它只在打开源时读取已保存设置，等待旧 engine 完成 stop／dispose 后创建目标后端；对外保持同一个 `VideoOutput`、独立递增的源代次和现有 `PlaybackSession`。不会因切换后端创建第二个音频会话，也不会在 fvp 失败时偷偷回退，影响对比结论。

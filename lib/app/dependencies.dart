@@ -34,6 +34,7 @@ import '../features/downloads/data/native_download_muxer.dart';
 import '../features/playback/data/offline_playback_repository.dart';
 import '../core/platform/external_links.dart';
 import '../core/platform/system_font_catalog.dart';
+import '../core/platform/gpu_device_catalog.dart';
 import '../core/storage/app_database.dart';
 import '../core/storage/credential_store.dart';
 import '../core/storage/image_byte_cache.dart';
@@ -114,9 +115,10 @@ import '../features/settings/data/github_update_repository.dart';
 import '../features/settings/data/installed_app_version.dart';
 import '../features/settings/data/sqlite_update_check_store.dart';
 import '../features/settings/application/system_fonts_controller.dart';
+import '../features/settings/application/gpu_devices_controller.dart';
 import '../features/settings/data/sqlite_settings_repository.dart';
 import '../features/settings/domain/app_settings.dart'
-    show PlaybackBackendPreference;
+    show PlaybackBackendPreference, VideoDecodingPreference;
 import 'platform_defaults.dart';
 import '../features/playback/application/playback_viewers_controller.dart';
 import '../features/playback/application/casting_controller.dart';
@@ -298,16 +300,24 @@ class AppDependencies {
       ),
     );
     PlayerEngine createPlayerEngine() => ConfigurablePlayerEngine(
-      createEngine: () async =>
-          switch ((await settings.load()).playbackBackend) {
-            PlaybackBackendPreference.mediaKit => MediaKitEngine(
-              onDiagnostic: playbackLog?.record,
-            ),
-            PlaybackBackendPreference.fvp => FvpEngine(
-              onDiagnostic: (event) =>
-                  playbackLog?.record(event, backend: 'fvp'),
-            ),
-          },
+      createEngine: () async {
+        final saved = await settings.load();
+        return switch (saved.playbackBackend) {
+          PlaybackBackendPreference.mediaKit => MediaKitEngine(
+            onDiagnostic: playbackLog?.record,
+          ),
+          PlaybackBackendPreference.fvp => FvpEngine(
+            windowsAdapterIndex:
+                saved.videoDecoding == VideoDecodingPreference.software
+                ? null
+                : await resolveFvpGpuDevice(
+                    const NativeGpuDeviceCatalog(),
+                    saved.fvpGpuDeviceId,
+                  ),
+            onDiagnostic: (event) => playbackLog?.record(event, backend: 'fvp'),
+          ),
+        };
+      },
     );
     final cardPreviews = VideoCardPreviewPlayback(
       createEngine: createPlayerEngine,
@@ -701,6 +711,9 @@ class AppDependencies {
         settingsDefaultsProvider.overrideWithValue(settings.defaults),
         systemFontCatalogProvider.overrideWithValue(
           const NativeSystemFontCatalog(),
+        ),
+        gpuDeviceCatalogProvider.overrideWithValue(
+          const NativeGpuDeviceCatalog(),
         ),
         authRepositoryProvider.overrideWithValue(session),
         originalImageRepositoryProvider.overrideWithValue(
