@@ -3903,7 +3903,14 @@ void main() {
     },
   );
 
-  for (final action in ['seek', 'stop', 'close', 'disable', 'account']) {
+  for (final action in [
+    'seek',
+    'replay',
+    'stop',
+    'close',
+    'disable',
+    'account',
+  ]) {
     test('late cloud progress is discarded after $action', () async {
       var scope = 'user:1';
       final engine = _FakeEngine();
@@ -3921,6 +3928,14 @@ void main() {
       switch (action) {
         case 'seek':
           await session.seek(const Duration(seconds: 10));
+        case 'replay':
+          engine.emit(
+            engine.currentSnapshot.copyWith(
+              phase: PlaybackPhase.ended,
+              position: engine.currentSnapshot.duration,
+            ),
+          );
+          await session.togglePlaying();
         case 'stop':
           await session.stop();
         case 'close':
@@ -3936,10 +3951,11 @@ void main() {
       }
       gate.complete(const Duration(seconds: 42));
       await _flush();
-      expect(
-        engine.seekTargets,
-        action == 'seek' ? [const Duration(seconds: 10)] : isEmpty,
-      );
+      expect(engine.seekTargets, switch (action) {
+        'seek' => [const Duration(seconds: 10)],
+        'replay' => [Duration.zero],
+        _ => isEmpty,
+      });
       expect(session.error, isNull);
       if (action == 'stop' || action == 'close' || action == 'account') {
         expect(history.reports, isEmpty);

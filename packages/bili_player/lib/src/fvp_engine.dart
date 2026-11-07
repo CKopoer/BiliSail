@@ -205,6 +205,12 @@ final class FvpEngine
               _snapshot.phase == PlaybackPhase.failed) {
             return;
           }
+          // EOF remains observable until an explicit seek/play. Trailing
+          // buffer notifications must not turn replay into a normal resume.
+          if (_snapshot.phase == PlaybackPhase.ended &&
+              status != FvpNativeStatus.invalid) {
+            return;
+          }
           switch (status) {
             case FvpNativeStatus.invalid:
               _fail('fvp 无法继续播放此媒体');
@@ -215,6 +221,7 @@ final class FvpEngine
                   phase: PlaybackPhase.ended,
                   desiredPlaying: false,
                   isBuffering: false,
+                  isSeeking: false,
                 ),
               );
             case FvpNativeStatus.buffering:
@@ -318,10 +325,7 @@ final class FvpEngine
             videoDimensions: info.dimensions,
           ),
         );
-        _timer = Timer.periodic(
-          NativePlaybackHealth.sampleInterval,
-          (_) => _sample(generation),
-        );
+        _startSampling(generation);
         _diagnose(PlayerDiagnosticKind.openReady);
       } on _Cancelled {
         await _release();
@@ -345,6 +349,14 @@ final class FvpEngine
         if (generation == _generation) _opening = false;
       }
     });
+  }
+
+  void _startSampling(int generation) {
+    if (_timer?.isActive ?? false) return;
+    _timer = Timer.periodic(
+      NativePlaybackHealth.sampleInterval,
+      (_) => _sample(generation),
+    );
   }
 
   void _sample(int generation) {
@@ -518,6 +530,7 @@ final class FvpEngine
             desiredPlaying: true,
           ),
         );
+        _startSampling(generation);
       } on _Cancelled {
         return;
       } on Object {
@@ -551,7 +564,12 @@ final class FvpEngine
       player.pause();
       _health.reset();
       _publish(
-        _snapshot.copyWith(phase: PlaybackPhase.paused, desiredPlaying: false),
+        _snapshot.copyWith(
+          phase: _snapshot.phase == PlaybackPhase.ended
+              ? PlaybackPhase.ended
+              : PlaybackPhase.paused,
+          desiredPlaying: false,
+        ),
       );
     });
   }
@@ -609,6 +627,7 @@ final class FvpEngine
             phase: resume ? PlaybackPhase.playing : PlaybackPhase.paused,
           ),
         );
+        _startSampling(generation);
       } on _Cancelled {
         return;
       } on Object {

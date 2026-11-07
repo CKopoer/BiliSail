@@ -88,6 +88,40 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final source = DashPairSource(video: track('video'), audio: track('audio'));
   test(
+    'EOF survives trailing buffering events and pause until seeking',
+    () async {
+      final player = _Player();
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      await engine.open(source, const OpenOptions(play: true));
+      player.events.add(FvpNativeStatus.ended);
+      player.events.add(FvpNativeStatus.buffering);
+      player.events.add(FvpNativeStatus.buffered);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.ended);
+      expect(engine.currentSnapshot.isBuffering, false);
+      await engine.pause();
+      expect(engine.currentSnapshot.phase, PlaybackPhase.ended);
+      await engine.seek(Duration.zero);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+    },
+  );
+
+  test('replay restarts position sampling after each EOF', () async {
+    final player = _Player();
+    final engine = FvpEngine(createPlayer: () async => player);
+    addTearDown(engine.dispose);
+    await engine.open(source, const OpenOptions(play: true));
+    for (var replay = 0; replay < 2; replay++) {
+      player.events.add(FvpNativeStatus.ended);
+      await engine.seek(Duration.zero);
+      await engine.play();
+      player.position = 1000;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(engine.currentSnapshot.position, const Duration(seconds: 1));
+    }
+  });
+
+  test(
     'seek pauses both tracks until the target video frame is decoded',
     () async {
       final player = _Player()..holdSeek = true;

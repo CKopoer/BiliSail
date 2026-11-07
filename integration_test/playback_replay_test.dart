@@ -4,6 +4,7 @@ import 'package:bili_player/bili_player.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/domain/playback_history_repository.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter/material.dart';
@@ -14,60 +15,100 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  testWidgets('native EOF can replay the same DASH source from zero', (
-    tester,
-  ) async {
-    initializePlayerBackend();
-    final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
-    expect(fixtures, isNotNull, reason: 'Use tool/test-windows-media.ps1');
-    final engine = MediaKitEngine();
-    final session = PlaybackSession(
-      engine: engine,
-      repository: _Repository(fixtures!),
-      progress: _Progress(),
-      accountScope: () => 'guest',
-    );
-    session.configureSettings(AppSettings(resumePlayback: false));
-    try {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: VideoSurface(engine: engine)),
-        ),
-      );
-      await session.open(_detail, _part, volume: 0);
-      await _until(
+  for (final backend in ['media_kit', 'fvp']) {
+    for (final resume in ['none', 'local', 'cloud']) {
+      testWidgets('$backend EOF replays DASH from zero after $resume resume', (
         tester,
-        () => engine.currentSnapshot.phase == PlaybackPhase.ended,
-      );
-      final generation = engine.currentSnapshot.generation;
-      await session.togglePlaying();
-      expect(session.error, isNull);
-      await _until(
-        tester,
-        () =>
-            engine.currentSnapshot.phase == PlaybackPhase.playing &&
-            engine.currentSnapshot.position >
-                const Duration(milliseconds: 250) &&
-            engine.currentSnapshot.position < const Duration(seconds: 3),
-      );
-      expect(engine.currentSnapshot.generation, generation);
-      expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
-      expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
-      await session.pause();
-      final paused = engine.currentSnapshot.position;
-      await session.togglePlaying();
-      await _until(tester, () => engine.currentSnapshot.position > paused);
-      expect(engine.currentSnapshot.generation, generation);
-      expect(session.error, isNull);
-    } finally {
-      await tester.pumpWidget(const SizedBox.shrink());
-      await session.close();
+      ) async {
+        initializePlayerBackend();
+        final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
+        expect(fixtures, isNotNull, reason: 'Use tool/test-windows-media.ps1');
+        final PlayerEngine engine = backend == 'fvp'
+            ? FvpEngine()
+            : MediaKitEngine();
+        final history = _History();
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _Repository(fixtures!),
+          progress: _Progress(
+            resume == 'local' ? const Duration(seconds: 6) : null,
+          ),
+          historyRepository: resume == 'cloud' ? history : null,
+          accountScope: () => resume == 'cloud' ? 'user:1' : 'guest',
+        );
+        session.configureSettings(
+          AppSettings(resumePlayback: resume != 'none'),
+        );
+        try {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(body: VideoSurface(engine: engine)),
+            ),
+          );
+          await session.open(_detail, _part, volume: 0);
+          if (resume != 'none') {
+            await _until(
+              tester,
+              () =>
+                  engine.currentSnapshot.position >= const Duration(seconds: 6),
+            );
+          }
+          await _until(
+            tester,
+            () => engine.currentSnapshot.phase == PlaybackPhase.ended,
+          );
+          final generation = engine.currentSnapshot.generation;
+          await session.togglePlaying();
+          expect(session.error, isNull);
+          if (resume == 'cloud') expect(history.reads, 1);
+          await _until(
+            tester,
+            () =>
+                engine.currentSnapshot.phase == PlaybackPhase.playing &&
+                engine.currentSnapshot.position >
+                    const Duration(milliseconds: 250) &&
+                engine.currentSnapshot.position < const Duration(seconds: 3),
+          );
+          expect(engine.currentSnapshot.generation, generation);
+          if (engine is MediaKitEngine) {
+            expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
+            expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
+          }
+          await session.pause();
+          final paused = engine.currentSnapshot.position;
+          await session.togglePlaying();
+          await _until(tester, () => engine.currentSnapshot.position > paused);
+          expect(engine.currentSnapshot.generation, generation);
+          expect(session.error, isNull);
+          if (backend == 'fvp') {
+            await _until(
+              tester,
+              () => engine.currentSnapshot.phase == PlaybackPhase.ended,
+            );
+            await session.play();
+            await _until(
+              tester,
+              () =>
+                  engine.currentSnapshot.phase == PlaybackPhase.playing &&
+                  engine.currentSnapshot.position >
+                      const Duration(milliseconds: 250) &&
+                  engine.currentSnapshot.position < const Duration(seconds: 3),
+            );
+            expect(engine.currentSnapshot.generation, generation);
+            expect(session.error, isNull);
+            if (resume == 'cloud') expect(history.reads, 1);
+          }
+        } finally {
+          await tester.pumpWidget(const SizedBox.shrink());
+          await session.close();
+        }
+      });
     }
-  });
+  }
 }
 
 const _part = VideoPart(
-  cid: 'replay',
+  cid: '101',
   page: 1,
   title: 'Replay fixture',
   duration: Duration(seconds: 12),
@@ -128,6 +169,13 @@ class _Repository extends Fake implements PlaybackRepository {
 }
 
 class _Progress extends Fake implements PlaybackProgressStore {
+  _Progress(this.position);
+  final Duration? position;
+
+  @override
+  Future<Duration?> read(String scope, VideoId video, String cid) async =>
+      position;
+
   @override
   Future<void> write(
     String scope,
@@ -136,6 +184,27 @@ class _Progress extends Fake implements PlaybackProgressStore {
     Duration position,
     Duration duration, {
     String? episodeId,
+  }) async {}
+}
+
+class _History extends Fake implements PlaybackHistoryRepository {
+  int reads = 0;
+
+  @override
+  Future<Duration?> read(
+    PlaybackHistoryTarget target, {
+    required String scope,
+    required RequestCancellation cancellation,
+  }) async {
+    reads++;
+    return const Duration(seconds: 6);
+  }
+
+  @override
+  Future<void> report(
+    PlaybackHistoryRecord record, {
+    required String scope,
+    required RequestCancellation cancellation,
   }) async {}
 }
 

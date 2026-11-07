@@ -72,12 +72,13 @@ final class _MdkPlayerPort implements FvpPlayerPort {
   StreamSubscription<Object?>? _stateSubscription;
   final _audioOpened = Completer<bool>();
   final _firstFrame = Completer<bool>();
-  final _prepared = Completer<bool>();
-  final _paused = Completer<void>();
+  var _prepared = Completer<bool>();
+  var _paused = Completer<void>();
   Future<int>? _textureCreation;
   bool _closed = false;
   bool _closing = false;
   bool _live = false;
+  bool _ended = false;
   Duration _startPosition = Duration.zero;
   VideoDimensions? _dimensions;
   Future<void>? _disposal;
@@ -120,11 +121,8 @@ final class _MdkPlayerPort implements FvpPlayerPort {
       if (event.newValue == mdk.PlaybackState.stopped &&
           event.oldValue != mdk.PlaybackState.stopped) {
         // Demux EOF can precede completion while decoded data remains buffered.
-        _statuses.add(
-          _player.mediaStatus.test(mdk.MediaStatus.end)
-              ? FvpNativeStatus.ended
-              : FvpNativeStatus.invalid,
-        );
+        _ended = _player.mediaStatus.test(mdk.MediaStatus.end);
+        _statuses.add(_ended ? FvpNativeStatus.ended : FvpNativeStatus.invalid);
       }
     });
   }
@@ -287,7 +285,8 @@ final class _MdkPlayerPort implements FvpPlayerPort {
   void pause() {
     // Re-apply even when the main player's cached state is already paused:
     // a newly attached external audio pipeline must receive this request too.
-    if (!_closed) {
+    // Keep EOF stopped so replay can prepare it before requesting a pause.
+    if (!_closed && !_ended) {
       _native?.state = mdk.PlaybackState.paused;
     }
   }
@@ -300,9 +299,26 @@ final class _MdkPlayerPort implements FvpPlayerPort {
   }
 
   @override
-  Future<int> seek(Duration target) => _active(
-    _player.seek(position: target.inMilliseconds, flags: _preciseSeek),
-  );
+  Future<int> seek(Duration target) async {
+    // MDK releases the decoding pipelines on EOF. A stopped source must be
+    // prepared again; seek alone fails and leaves the old end position intact.
+    if (_ended) {
+      _prepared = Completer<bool>();
+      _paused = Completer<void>();
+      final position = await _active(
+        _player.prepare(position: target.inMilliseconds, flags: _preciseSeek),
+      );
+      if (position < 0) return position;
+      if (!await _active(_prepared.future)) return -1;
+      await _active(_paused.future);
+      _ended = false;
+    }
+    // At zero prepare only confirms loading. Seek also waits for its decoded
+    // target frame, preserving the same readiness barrier as ordinary seeks.
+    return _active(
+      _player.seek(position: target.inMilliseconds, flags: _preciseSeek),
+    );
+  }
 
   static const _preciseSeek = mdk.SeekFlag(
     mdk.SeekFlag.fromStart | mdk.SeekFlag.inCache,
