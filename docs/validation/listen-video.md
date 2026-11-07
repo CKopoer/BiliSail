@@ -74,6 +74,19 @@ Android、macOS、iOS、Linux 原生构建／设备验收、真实在线内容�
 - 独立的本地合成分轨调试入口热重载成功，运行时错误查询为空；验证后已退出，没有打开用户数据库或真实账号。
 - 本次未执行 Android、macOS、iOS、Linux 原生构建／设备验收，也未进行真实在线内容、长期播放或 Profile／Release 性能测量。
 
+## 两后端切换进度复查（2026-11-08）
+
+- `PlaybackSession.setAudioOnly` 已向两种后端传入当前确认进度；media_kit 使用 `Media.start` 在加载阶段定位，本轮没有修改该实现。
+- fvp 原先将进度保存在适配器中，却以默认零点调用 MDK `prepare`，只在视频首帧确认时执行定位。独立音轨不进入视频确认路径，因此切到听视频会从头播放，初始快照还可能短暂显示原进度。
+- 纯音频现于打开源的准备阶段、保持暂停时，按 `OpenOptions.startPosition` 执行精确定位并等待原生确认，再发布就绪状态。MDK 纯音频的暂停时钟在首次播放前仍可能为零，因此暂存原生 prepare／seek 回调确认的位置，直到原生时钟首次非零后丢弃；跳到零点也会替换这份确认位置。这个值不是未经确认的请求目标。视频原有准备／输出路径、暂停、倍速、音量与源代次隔离沿用原流程。Android 子进程也使用此适配器，进程间已有进度传递契约不变；没有修改依赖或 Pub 缓存。
+- [原生听视频测试](../../integration_test/audio_only_playback_test.dart)新增 media_kit／fvp × 播放／暂停四项对照，经过实际 `PlaybackSession` 和 `ConfigurablePlayerEngine`，连续验证视频 → 听视频 → 视频 → 听视频，读取后端诊断位置及后续采样快照，同时检查暂停意图、进度推进、倍速、音量和视频解码状态；暂停场景另验证跳到零点、再次跳转和启动后实际音频时钟推进。素材是本地受控分轨，全程静音，不访问用户数据库或账号。
+- 修复前新增用例为 media_kit 两项通过、fvp 两项失败；fvp 从约 2 秒切换后原生位置落在 0～0.55 秒，日志 `build/listening-progress-native-before.log`。最终版本 Windows 原生听视频 **5 项通过**，包含上述四项及原有 HTTP 请求头／只请求音轨／返回视频回归，日志 `build/listening-progress-native-final.log`。
+- `tool/check.ps1 -SkipPub` 全量通过：根应用 4669、bili_api 714、bili_player 278、bili_danmaku 161、bili_mux 5，共 **5827 项通过**；格式、静态分析及打包边界检查通过，日志 `build/listening-progress-check.log`。根应用 13 项既有条件跳过，mux 另有 10 项因未设置 `BILI_MUX_LIBRARY` 跳过，不计作封装原生通过。
+- Windows fvp 扩展原生回归：音／视频中断恢复 4 项、分轨／后端切换／直播 3 项通过；跳转同步 9 项中首轮 8 项通过，`supersededAgainStopped` 在尚未开始跳转的初始画面像素检查失败，未改代码单独复跑通过。日志 `build/listening-progress-fvp-final.log`、`build/listening-progress-fvp-seek-recheck.log`。前一次扩展回归在 MSBuild 阶段失败，随后串行构建成功。
+- 最终 `flutter analyze --no-pub` 与改动文件格式复查通过，日志 `build/listening-progress-analyze-final.log`；本地静音音轨独立调试入口启动、热重载成功，运行时错误查询为空，验证后已退出。
+
+本轮原生回归使用 Windows Debug，仅验证功能，不作性能结论。Android、macOS、iOS、Linux 实机、普通 Release 界面、真实 CDN 与长期播放未在本轮验证。
+
 ## 关闭超时复验（2026-10-30）
 
 用户要求处理剩余四个关闭超时并重跑完整检查。当前工作区起点为 `d65f5c2`，已包含 `aa81d10` 的关闭流程调整；本次复查时四项已不再复现，没有新增关闭实现改动。四个用例仍保留原有的 `manager.close().timeout(2s)` 检查，覆盖 Android 应用内、Windows 应用内／独立窗口、macOS 独立窗口。

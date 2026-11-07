@@ -138,6 +138,7 @@ final class _MdkPlayerPort
   bool _live = false;
   bool _ended = false;
   Duration _startPosition = Duration.zero;
+  int? _preparedAudioPosition;
   VideoDimensions? _dimensions;
   Future<void>? _disposal;
   Completer<int>? _seekCancelled;
@@ -227,7 +228,19 @@ final class _MdkPlayerPort
   @override
   Stream<FvpNativeStatus> get statuses => _statuses.stream;
   @override
-  int get positionMilliseconds => _closed ? 0 : _native?.position ?? 0;
+  int get positionMilliseconds {
+    if (_closed) return 0;
+    final position = _native?.position ?? 0;
+    // Pure audio has no presentation clock until first play. Use the native
+    // prepare/seek confirmation while paused, then retire it on the first tick.
+    final prepared = _preparedAudioPosition;
+    if (position == 0 && prepared != null) {
+      return prepared;
+    }
+    _preparedAudioPosition = null;
+    return position;
+  }
+
   @override
   int get bufferedMilliseconds => _closed ? 0 : _native?.buffered() ?? 0;
 
@@ -255,7 +268,7 @@ final class _MdkPlayerPort
       videoDecoder: _videoDecoder,
       outputDimensions: _textureDimensions,
       generation: generation,
-      positionMilliseconds: player.position,
+      positionMilliseconds: positionMilliseconds,
       bufferedMilliseconds: player.buffered(),
       audioGainDb: audioGainDb,
       directSurface: _directSurface,
@@ -360,6 +373,20 @@ final class _MdkPlayerPort
     final info = _player.mediaInfo;
     _live = isLive || _player.isLive;
     final video = info.video?.firstOrNull;
+    if (video == null && !_live) {
+      // Pure audio never enters confirmVideoFrame. Confirm its resume target
+      // here, while still paused, before publishing a ready source.
+      final position = options.startPosition > Duration.zero
+          ? await _active(
+              _player.seek(
+                position: options.startPosition.inMilliseconds,
+                flags: _preciseSeek,
+              ),
+            )
+          : result;
+      if (position < 0) throw StateError('MDK audio position did not prepare');
+      _preparedAudioPosition = position;
+    }
     _directSurface =
         Platform.isAndroid &&
         options.androidVideoOutput == AndroidVideoOutputMode.directTexture &&
@@ -558,7 +585,15 @@ final class _MdkPlayerPort
     }
 
     try {
-      return await _active(Future.any([prepareTarget(), cancelled.future]));
+      final result = await _active(
+        Future.any([prepareTarget(), cancelled.future]),
+      );
+      if (result >= 0 &&
+          revision == _nativeSeekRevision &&
+          _dimensions == null) {
+        _preparedAudioPosition = result;
+      }
+      return result;
     } finally {
       if (revision == _nativeSeekRevision) {
         _seekCancelled = null;
