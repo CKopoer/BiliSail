@@ -87,6 +87,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   int? _handledCompletionGeneration;
   // Inline and fullscreen views are recreated, but share the page's intent.
   late final ValueNotifier<bool> _controlsVisible;
+  final _fullScreenExitCover = ValueNotifier(false);
   final _picture = PlayerPictureController();
   late int _pictureGeneration;
   bool _fullScreen = false;
@@ -94,9 +95,10 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   bool _active = false;
   bool _surfaceReady = false;
   Object? _activityRequest;
-  Route<void>? _fullScreenRoute;
+  _PlayerFullScreenRoute<void>? _fullScreenRoute;
   NavigatorState? _fullScreenNavigator;
   Object? _fullScreenRequest;
+  Completer<void>? _browseLayoutReady;
   FullScreenOrientation? _fullScreenOrientation;
   StreamSubscription<FullScreenOrientation?>? _deviceOrientationSubscription;
   bool? _viewLandscape;
@@ -321,6 +323,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _session.detach(this);
     _settings.dispose();
     _controlsVisible.dispose();
+    _fullScreenExitCover.dispose();
     _pageCommands.dispose();
     _navigation.dispose();
     _danmakuDraft.dispose();
@@ -328,6 +331,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   }
 
   void _dismissFullScreen() {
+    _completeBrowseLayoutWait();
     _shortcuts.cancel();
     _portraitExitRequest = null;
     _stopDeviceOrientation();
@@ -345,27 +349,82 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     }
   }
 
-  bool _exitingShortcutFullScreen = false;
+  bool _exitingFullScreen = false;
   Future<void> _exitFullScreen() async {
-    if (_exitingShortcutFullScreen) return;
-    _exitingShortcutFullScreen = true;
-    _shortcuts.cancel();
-    final route = _fullScreenRoute;
-    final navigator = _fullScreenNavigator;
-    FocusManager.instance.primaryFocus?.unfocus(
-      disposition: UnfocusDisposition.scope,
-    );
-    await WidgetsBinding.instance.endOfFrame;
-    if (mounted &&
-        navigator != null &&
-        navigator.mounted &&
-        route != null &&
-        route.isCurrent) {
-      navigator.pop();
-    } else if (route == null) {
-      _dismissFullScreen();
+    if (_exitingFullScreen) return;
+    _exitingFullScreen = true;
+    _fullScreenExitCover.value =
+        !widget.window.hasDesktopWindow && _isPhoneDisplay;
+    _fullScreenPresented = false;
+    _stopDeviceOrientation();
+    try {
+      _shortcuts.cancel();
+      final route = _fullScreenRoute;
+      final navigator = _fullScreenNavigator;
+      final request = _fullScreenRequest;
+      FocusManager.instance.primaryFocus?.unfocus(
+        disposition: UnfocusDisposition.scope,
+      );
+      // Flush focus/semantics before removing the fullscreen subtree.
+      await WidgetsBinding.instance.endOfFrame;
+      if (mounted &&
+          navigator != null &&
+          navigator.mounted &&
+          route != null &&
+          route.isCurrent) {
+        if (!widget.window.hasDesktopWindow && request != null) {
+          // Keep the black route over the workspace while native rotation and
+          // system-bar insets are restored. The platform reply is not a frame.
+          await _setWindowFullScreen(request, false);
+          if (!mounted ||
+              !_active ||
+              !identical(request, _fullScreenRequest) ||
+              !route.isCurrent) {
+            return;
+          }
+          await _waitForBrowseFrame();
+        }
+        if (mounted && navigator.mounted && route.isCurrent) {
+          route.allowPop = true;
+          navigator.pop();
+        }
+      } else if (route == null) {
+        _dismissFullScreen();
+      }
+    } finally {
+      _exitingFullScreen = false;
+      if (mounted && (_fullScreenRoute?.isCurrent ?? false)) {
+        _fullScreenExitCover.value = false;
+      }
     }
-    _exitingShortcutFullScreen = false;
+  }
+
+  bool get _browseLayoutRestored =>
+      !widget.window.keepsBrowsePortrait ||
+      !_isPhoneDisplay ||
+      (!_isViewLandscape && _view.padding.top > 0);
+
+  void _completeBrowseLayoutWait() {
+    final ready = _browseLayoutReady;
+    if (ready != null && !ready.isCompleted) ready.complete();
+  }
+
+  Future<void> _waitForBrowseFrame() async {
+    if (!_browseLayoutRestored) {
+      final ready = Completer<void>();
+      _browseLayoutReady = ready;
+      // An OS that refuses rotation must not trap the user in fullscreen.
+      final timeout = Timer(const Duration(seconds: 2), () {
+        if (!ready.isCompleted) ready.complete();
+      });
+      try {
+        await ready.future;
+      } finally {
+        timeout.cancel();
+        if (identical(_browseLayoutReady, ready)) _browseLayoutReady = null;
+      }
+    }
+    await WidgetsBinding.instance.endOfFrame;
   }
 
   Future<void> _setWindowFullScreen(Object request, bool enabled) {
@@ -447,6 +506,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
 
   @override
   void didChangeMetrics() {
+    if (_browseLayoutRestored) _completeBrowseLayoutWait();
     final landscape = _isRotationLandscape;
     final compact = _usesCompactRotation;
     final phone = _isPhoneDisplay;
@@ -552,6 +612,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   void _syncDeviceOrientation() {
     final watch =
         mounted &&
+        !_exitingFullScreen &&
         _active &&
         _appResumed &&
         _isPhoneDisplay &&
@@ -675,47 +736,68 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       // The detached view remains below the browser's Navigator in the widget
       // tree. Use this window's Navigator so its route fills the playback view.
       final navigator = Navigator.of(context);
-      final route = RawDialogRoute<void>(
+      final route = _PlayerFullScreenRoute<void>(
+        onPopRequested: widget.window.hasDesktopWindow
+            ? null
+            : () => unawaited(_exitFullScreen()),
         requestFocus: false,
         barrierDismissible: false,
         barrierLabel: '全屏播放器',
         transitionDuration: Duration.zero,
         pageBuilder: (dialogContext, _, _) => UncontrolledProviderScope(
           container: providerContainer,
-          child: MobilePlaybackStatusBar(
-            enabled: true,
-            builder: (_) => AndroidSystemUi(
-              backgroundColor: Colors.black,
-              brightness: Brightness.dark,
-              child: Dialog.fullscreen(
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _fullScreenExitCover,
+            // The OS can show bars before Flutter receives their new insets.
+            // Cover bright video frames too, while retaining the same surface.
+            builder: (_, covered, child) => Stack(
+              fit: StackFit.expand,
+              children: [
+                child!,
+                if (covered)
+                  const Positioned.fill(
+                    child: IgnorePointer(
+                      child: ColoredBox(color: Colors.black),
+                    ),
+                  ),
+              ],
+            ),
+            child: MobilePlaybackStatusBar(
+              enabled: true,
+              builder: (_) => AndroidSystemUi(
                 backgroundColor: Colors.black,
-                child: _PlayerView(
-                  session: _session,
-                  settings: _settings,
-                  controlsVisible: _controlsVisible,
-                  picture: _picture,
-                  shortcuts: _shortcuts,
-                  onToggleComments: () => widget.onToggleComments(),
-                  danmakuComposerBuilder: widget.danmakuComposerBuilder == null
-                      ? null
-                      : (context) => _buildDanmakuComposer(context),
-                  danmakuOverlayBuilder: widget.danmakuOverlayBuilder == null
-                      ? null
-                      : (context) =>
-                            widget.danmakuOverlayBuilder?.call(context) ??
-                            const SizedBox.shrink(),
-                  pageCommands: _pageCommands,
-                  navigation: _navigation,
-                  onNavigate: _navigateFromPlayer,
-                  fullScreen: true,
-                  onFullScreen: () {
-                    if (identical(
-                      _fullScreenRoute,
-                      ModalRoute.of(dialogContext),
-                    )) {
-                      navigator.pop();
-                    }
-                  },
+                brightness: Brightness.dark,
+                child: Dialog.fullscreen(
+                  backgroundColor: Colors.black,
+                  child: _PlayerView(
+                    session: _session,
+                    settings: _settings,
+                    controlsVisible: _controlsVisible,
+                    picture: _picture,
+                    shortcuts: _shortcuts,
+                    onToggleComments: () => widget.onToggleComments(),
+                    danmakuComposerBuilder:
+                        widget.danmakuComposerBuilder == null
+                        ? null
+                        : (context) => _buildDanmakuComposer(context),
+                    danmakuOverlayBuilder: widget.danmakuOverlayBuilder == null
+                        ? null
+                        : (context) =>
+                              widget.danmakuOverlayBuilder?.call(context) ??
+                              const SizedBox.shrink(),
+                    pageCommands: _pageCommands,
+                    navigation: _navigation,
+                    onNavigate: _navigateFromPlayer,
+                    fullScreen: true,
+                    onFullScreen: () {
+                      if (identical(
+                        _fullScreenRoute,
+                        ModalRoute.of(dialogContext),
+                      )) {
+                        unawaited(_exitFullScreen());
+                      }
+                    },
+                  ),
                 ),
               ),
             ),
@@ -753,6 +835,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       await _setWindowFullScreen(request, false);
       _fullScreenOrientation = null;
       if (mounted) {
+        _fullScreenExitCover.value = false;
         setState(() => _fullScreen = false);
         _syncDeviceOrientation();
       }
@@ -860,7 +943,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   final _swipeSeekPreview = ValueNotifier<Duration?>(null);
   final FocusNode _focusNode = FocusNode(debugLabel: 'video player');
   final GlobalKey _playerBoundsKey = GlobalKey();
-  bool _exitingFullScreen = false;
   bool _composeExpanded = false;
   final GlobalKey _composerKey = GlobalKey();
   Timer? _controlsHideTimer;
@@ -1296,22 +1378,11 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   );
 
   void _toggleFullScreen() {
-    if (!widget.fullScreen) {
-      widget.onFullScreen();
-      return;
+    if (widget.fullScreen) {
+      _focusNode.unfocus(disposition: UnfocusDisposition.scope);
+      FocusScope.of(context).unfocus(disposition: UnfocusDisposition.scope);
     }
-    if (_exitingFullScreen) return;
-    _exitingFullScreen = true;
-    _focusNode.unfocus(disposition: UnfocusDisposition.scope);
-    FocusScope.of(context).unfocus(disposition: UnfocusDisposition.scope);
-    unawaited(_finishFullScreenExit());
-  }
-
-  Future<void> _finishFullScreenExit() async {
-    // Let focus and semantics updates reach the engine before removing the
-    // fullscreen route's focused subtree.
-    await WidgetsBinding.instance.endOfFrame;
-    if (mounted) widget.onFullScreen();
+    widget.onFullScreen();
   }
 
   @override
@@ -3258,6 +3329,30 @@ String _time(Duration value) {
   final seconds = value.inSeconds.clamp(0, 999999);
   final minutes = seconds ~/ 60;
   return '${minutes.toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+}
+
+class _PlayerFullScreenRoute<T> extends RawDialogRoute<T> {
+  _PlayerFullScreenRoute({
+    required super.pageBuilder,
+    required super.requestFocus,
+    required super.barrierDismissible,
+    required super.barrierLabel,
+    required super.transitionDuration,
+    required this.onPopRequested,
+  });
+
+  final VoidCallback? onPopRequested;
+  bool allowPop = false;
+
+  @override
+  bool didPop(T? result) {
+    if (!allowPop && !willHandlePopInternally && onPopRequested != null) {
+      // Imperative pop and system Back both restore mobile presentation first.
+      onPopRequested?.call();
+      return false;
+    }
+    return super.didPop(result);
+  }
 }
 
 class _WindowFullScreenState {

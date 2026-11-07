@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
 import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/core/platform/window_brightness_service.dart';
+import 'package:bilisail/core/presentation/mobile_playback_status_bar.dart';
+import 'package:bilisail/core/presentation/window_orientation_host.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
@@ -261,6 +264,153 @@ void main() {
       }
     },
   );
+  testWidgets(
+    'Android fullscreen exit covers native portrait rotation and restored status inset',
+    (tester) async {
+      if (!Platform.isAndroid) return;
+      for (final systemBack in [false, true]) {
+        final engine = _Engine();
+        var coveredBeforeRestore = false;
+        final window = _ObservedExitWindow(
+          onRestore: () {
+            coveredBeforeRestore = find.byType(Dialog).evaluate().length == 1;
+          },
+        );
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _Repository(),
+          progress: _Progress(),
+          accountScope: () => 'guest',
+        );
+        final boundary = GlobalKey();
+        try {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [playbackSessionProvider.overrideWithValue(session)],
+              child: InputTestApp(
+                builder: (_, child) => WindowOrientationHost(
+                  window: window,
+                  child: RepaintBoundary(key: boundary, child: child!),
+                ),
+                home: MobilePlaybackStatusBar(
+                  enabled: true,
+                  builder: (_) => Scaffold(
+                    body: SafeArea(
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: PlaybackPanel(
+                          detail: _detail,
+                          part: _detail.parts.first,
+                          settings: const AppSettings.defaults(),
+                          onToggleComments: () {},
+                          window: window,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await _until(
+            tester,
+            () => engine.currentSnapshot.phase == PlaybackPhase.playing,
+          );
+          await session.pause();
+          engine.publish(
+            engine.currentSnapshot.copyWith(
+              videoDimensions: const VideoDimensions(1920, 1080),
+            ),
+          );
+          await tester.tapAt(
+            tester.getCenter(
+              find.byKey(const ValueKey('player-surface-tap-target')),
+            ),
+          );
+          await _until(
+            tester,
+            () => find.byTooltip('全屏（F）').evaluate().isNotEmpty,
+          );
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _until(
+            tester,
+            () => window.isFullScreen && _isLandscape(tester),
+          );
+          final opens = engine.opens;
+          final generation = session.sourceGeneration;
+          window.observeExit = true;
+          if (systemBack) {
+            await tester.binding.handlePopRoute();
+          } else {
+            await tester.tap(find.byTooltip('退出全屏（Esc）'));
+          }
+          await _until(
+            tester,
+            () =>
+                !window.isFullScreen &&
+                !_isLandscape(tester) &&
+                tester.view.padding.top > 0,
+          );
+          expect(coveredBeforeRestore, isTrue);
+          expect(find.byType(Dialog), findsOneWidget);
+          await _expectBlackStatus(tester, boundary);
+          window.restoreGate.complete();
+          await _until(tester, () => find.byType(Dialog).evaluate().isEmpty);
+          await _expectBlackStatus(tester, boundary);
+          expect(engine.opens, opens);
+          expect(session.sourceGeneration, generation);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(tester.takeException(), isNull);
+        } finally {
+          window.observeExit = false;
+          if (!window.restoreGate.isCompleted) window.restoreGate.complete();
+          await tester.pumpWidget(const SizedBox());
+          await session.close();
+          await window.setFullScreen(false);
+        }
+      }
+      final binding = IntegrationTestWidgetsFlutterBinding.instance;
+      binding.reportData = {
+        ...?binding.reportData,
+        'fullscreenExit': {
+          'buttonAndSystemBack': true,
+          'coveredBeforeNativeRestore': true,
+          'portraitStatusPixelsBlack': true,
+          'inlineStatusPixelsBlack': true,
+        },
+      };
+    },
+  );
+}
+
+Future<void> _expectBlackStatus(WidgetTester tester, GlobalKey boundary) async {
+  final render =
+      boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  final image = (await tester.runAsync(() => render.toImage()))!;
+  try {
+    final pixels = (await tester.runAsync(image.toByteData))!;
+    final offset = (12 * image.width + image.width ~/ 2) * 4;
+    expect(pixels.getUint32(offset), 0x000000ff);
+  } finally {
+    image.dispose();
+  }
+}
+
+class _ObservedExitWindow extends WindowService {
+  _ObservedExitWindow({required this.onRestore});
+  final VoidCallback onRestore;
+  final restoreGate = Completer<void>();
+  bool observeExit = false;
+
+  @override
+  Future<void> setFullScreen(
+    bool value, {
+    FullScreenOrientation? orientation,
+  }) async {
+    if (!value && observeExit) onRestore();
+    await super.setFullScreen(value, orientation: orientation);
+    if (!value && observeExit) await restoreGate.future;
+  }
 }
 
 bool _isLandscape(WidgetTester tester) =>

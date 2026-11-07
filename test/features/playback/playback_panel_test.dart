@@ -4687,6 +4687,183 @@ void main() {
     );
   }
 
+  for (final action in ['button', 'back', 'escape', 'swipe']) {
+    for (final dark in [false, true]) {
+      testWidgets(
+        'mobile fullscreen exit waits for portrait insets action=$action dark=$dark',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = const Size(390, 844);
+          tester.view.display.size = const Size(390, 844);
+          tester.view.padding = const FakeViewPadding(top: 24);
+          tester.view.viewPadding = const FakeViewPadding(top: 24);
+          addTearDown(tester.view.reset);
+          addTearDown(tester.view.display.resetSize);
+          final engine = _FakeEngine()..surfaceColor = Colors.white;
+          final session = _session(engine);
+          final exitGate = Completer<void>();
+          final window = _DelayedWindow(
+            desktop: false,
+            keepPortrait: true,
+            exitGate: exitGate,
+          )..gate.complete();
+          addTearDown(() async {
+            if (!exitGate.isCompleted) exitGate.complete();
+            await session.close();
+          });
+          final boundary = GlobalKey();
+          Future<void> expectBlackFrame() async {
+            final render =
+                boundary.currentContext!.findRenderObject()!
+                    as RenderRepaintBoundary;
+            final image = (await tester.runAsync(() => render.toImage()))!;
+            try {
+              final pixels = (await tester.runAsync(
+                () => image.toByteData(format: ImageByteFormat.rawRgba),
+              ))!;
+              final offset = (12 * image.width + image.width ~/ 2) * 4;
+              expect(pixels.getUint32(offset), 0x000000ff);
+            } finally {
+              image.dispose();
+            }
+          }
+
+          await tester.pumpWidget(
+            RepaintBoundary(
+              key: boundary,
+              child: _app(
+                session,
+                window,
+                const AppSettings.defaults(),
+                theme: dark ? BiliTheme.dark() : BiliTheme.light(),
+              ),
+            ),
+          );
+          await _pumpFrames(tester);
+          await _showControls(tester);
+          await session.pause();
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              videoDimensions: const VideoDimensions(1920, 1080),
+            ),
+          );
+          final opens = engine.opens;
+          final generation = session.sourceGeneration;
+          await tester.tap(find.byTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+          tester.view.physicalSize = const Size(844, 390);
+          tester.view.display.size = const Size(844, 390);
+          tester.view.padding = const FakeViewPadding();
+          tester.view.viewPadding = const FakeViewPadding();
+          await _pumpFrames(tester);
+          switch (action) {
+            case 'button':
+              await tester.tap(find.byTooltip('退出全屏（Esc）'));
+            case 'back':
+              await tester.binding.handlePopRoute();
+            case 'escape':
+              await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+            case 'swipe':
+              await tester.dragFrom(
+                tester.getCenter(
+                  find.byKey(const ValueKey('player-surface-tap-target')),
+                ),
+                const Offset(0, 65),
+              );
+          }
+          await _pumpFrames(tester);
+          expect(window.exitCalls, 1);
+          expect(window.fullScreen, isTrue);
+          expect(find.byType(Dialog), findsOneWidget);
+          await expectBlackFrame();
+          // A second Back cannot remove the cover or enqueue another restore.
+          await tester.binding.handlePopRoute();
+          await _pumpFrames(tester);
+          expect(window.exitCalls, 1);
+          exitGate.complete();
+          await _pumpFrames(tester);
+          expect(window.fullScreen, isFalse);
+          expect(find.byType(Dialog), findsOneWidget);
+          // Native method completion, portrait metrics and status-bar insets
+          // arrive separately. Every intermediate frame must stay covered.
+          tester.view.physicalSize = const Size(390, 844);
+          tester.view.display.size = const Size(390, 844);
+          await _pumpFrames(tester);
+          expect(find.byType(Dialog), findsOneWidget);
+          var portraitPainted = false;
+          tester.binding.addPostFrameCallback((_) {
+            expect(find.byType(Dialog), findsOneWidget);
+            portraitPainted = true;
+          });
+          tester.view.padding = const FakeViewPadding(top: 24);
+          tester.view.viewPadding = const FakeViewPadding(top: 24);
+          await tester.pump();
+          expect(portraitPainted, isTrue);
+          await expectBlackFrame();
+          await _pumpFrames(tester);
+          expect(find.byType(Dialog), findsNothing);
+          expect(window.exitCalls, 1);
+          expect(engine.opens, opens);
+          expect(session.sourceGeneration, generation);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(engine.maxSurfaces, 1);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+        variant: TargetPlatformVariant({
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+        }),
+      );
+    }
+  }
+
+  for (final finish in ['timeout', 'hidden', 'disposed']) {
+    testWidgets('mobile fullscreen exit releases layout wait when $finish', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(844, 390);
+      tester.view.display.size = const Size(844, 390);
+      addTearDown(tester.view.reset);
+      addTearDown(tester.view.display.resetSize);
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _DelayedWindow(desktop: false, keepPortrait: true)
+        ..gate.complete();
+      addTearDown(session.close);
+      await tester.pumpWidget(
+        _app(session, window, const AppSettings.defaults()),
+      );
+      await _pumpFrames(tester);
+      await _showControls(tester);
+      await tester.tap(find.byTooltip('全屏（F）'));
+      await _pumpFrames(tester);
+      await tester.binding.handlePopRoute();
+      await _pumpFrames(tester);
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(window.fullScreen, isFalse);
+      switch (finish) {
+        case 'timeout':
+          await tester.pump(const Duration(seconds: 2));
+        case 'hidden':
+          await tester.pumpWidget(
+            _app(session, window, const AppSettings.defaults(), active: false),
+          );
+        case 'disposed':
+          await tester.pumpWidget(const SizedBox());
+      }
+      await _pumpFrames(tester);
+      expect(find.byType(Dialog), findsNothing);
+      expect(window.exitCalls, 1);
+      expect(engine.maxSurfaces, 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    });
+  }
+
   testWidgets('cancelled mobile fullscreen drops queued orientation updates', (
     tester,
   ) async {
@@ -10426,6 +10603,7 @@ final class _RecordingComposition implements VideoCompositionAdapter {
 }
 
 final class _FakeEngine implements PlayerEngine, VideoOutputSource {
+  Color surfaceColor = Colors.black;
   bool interactiveSurface = false;
   int surfaceGestures = 0;
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
@@ -10583,7 +10761,7 @@ final class _FakeSurfaceState extends State<_FakeSurface> {
             child: const ColoredBox(color: Colors.black),
           ),
         )
-      : const ColoredBox(color: Colors.black);
+      : ColoredBox(color: widget.engine.surfaceColor);
 }
 
 final class _FakePlaybackRepository implements PlaybackRepository {
@@ -10760,14 +10938,24 @@ final class _FakeProgressStore implements PlaybackProgressStore {
 }
 
 final class _DelayedWindow extends WindowService {
-  _DelayedWindow({this.desktop = true, this.onEnter});
+  _DelayedWindow({
+    this.desktop = true,
+    this.onEnter,
+    this.keepPortrait = false,
+    this.exitGate,
+  });
   final bool desktop;
   final VoidCallback? onEnter;
+  final bool keepPortrait;
+  final Completer<void>? exitGate;
   final gate = Completer<void>();
+  int exitCalls = 0;
   bool fullScreen = false;
   final orientations = <FullScreenOrientation?>[];
   @override
   bool get hasDesktopWindow => desktop;
+  @override
+  bool get keepsBrowsePortrait => keepPortrait;
   @override
   Future<void> setFullScreen(
     bool value, {
@@ -10776,6 +10964,9 @@ final class _DelayedWindow extends WindowService {
     if (value) {
       onEnter?.call();
       await gate.future;
+    } else {
+      exitCalls++;
+      await exitGate?.future;
     }
     fullScreen = value;
     orientations.add(value ? orientation : null);
