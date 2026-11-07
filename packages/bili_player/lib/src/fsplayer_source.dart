@@ -144,11 +144,15 @@ FsPlayerInput fsPlayerInput(ResolvedMediaSource source, OpenOptions options) {
       'minBufferTime="PT1S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">'
       '<Period><AdaptationSet contentType="video" mimeType="video/mp4">'
       '<Representation id="v" bandwidth="${main.bandwidth ?? 1}">'
-      '<BaseURL>${xml(manifestUrl(main))}</BaseURL><SegmentBase/>'
+      '<BaseURL>${xml(manifestUrl(main))}</BaseURL>'
+      '<SegmentList timescale="1000" duration="${duration.inMilliseconds}">'
+      '<SegmentURL media="${xml(manifestUrl(main))}"/></SegmentList>'
       '</Representation></AdaptationSet>'
       '<AdaptationSet contentType="audio" mimeType="audio/mp4">'
       '<Representation id="a" bandwidth="${audio.bandwidth ?? 1}">'
-      '<BaseURL>${xml(manifestUrl(audio))}</BaseURL><SegmentBase/>'
+      '<BaseURL>${xml(manifestUrl(audio))}</BaseURL>'
+      '<SegmentList timescale="1000" duration="${duration.inMilliseconds}">'
+      '<SegmentURL media="${xml(manifestUrl(audio))}"/></SegmentList>'
       '</Representation></AdaptationSet></Period></MPD>';
   return FsPlayerInput(
     'data:application/dash+xml;base64,${base64Encode(utf8.encode(manifest))}',

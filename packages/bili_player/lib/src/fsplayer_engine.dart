@@ -43,6 +43,7 @@ final class FsPlayerEngine
   int? _id, _texture;
   int _generation = 0, _seekRevision = 0;
   bool _disposed = false, _sampling = false, _live = false;
+  bool _desiredPlaying = false;
   double _gain = 0;
   Map<String, Object?> _native = {};
   PlaybackSnapshot _snapshot = const PlaybackSnapshot(
@@ -155,6 +156,7 @@ final class FsPlayerEngine
       );
     }
     _invalidate();
+    _desiredPlaying = options.play;
     final generation = _generation;
     final cancel = _cancel = Completer<void>();
     return _enqueue(() async {
@@ -285,11 +287,13 @@ final class FsPlayerEngine
           _output.confirmFrame();
         }
         await _applyVolume(options.volume);
-        if (options.play) await _call<void>('play');
+        if (_desiredPlaying) await _call<void>('play');
         if (cancel.isCompleted) throw const _Superseded();
         _publish(
           PlaybackSnapshot(
-            phase: options.play ? PlaybackPhase.playing : PlaybackPhase.paused,
+            phase: _desiredPlaying
+                ? PlaybackPhase.playing
+                : PlaybackPhase.paused,
             generation: generation,
             duration:
                 input.duration ??
@@ -297,7 +301,7 @@ final class FsPlayerEngine
                   milliseconds: (_native['durationMs'] as num?)?.toInt() ?? 0,
                 ),
             position: options.startPosition,
-            desiredPlaying: options.play,
+            desiredPlaying: _desiredPlaying,
             rate: options.rate,
             volume: options.volume,
             videoDimensions: dimensions,
@@ -408,6 +412,8 @@ final class FsPlayerEngine
 
   @override
   Future<void> play() async {
+    if (_disposed || _snapshot.phase == PlaybackPhase.failed) return;
+    _desiredPlaying = true;
     _publish(_snapshot.copyWith(desiredPlaying: true));
     if (_snapshot.isSeeking) return;
     await _command('play');
@@ -416,6 +422,7 @@ final class FsPlayerEngine
 
   @override
   Future<void> pause() async {
+    _desiredPlaying = false;
     _publish(_snapshot.copyWith(desiredPlaying: false));
     // Pause is allowed while a queued seek is awaiting native confirmation.
     if (_id != null) await _call<void>('pause');
@@ -551,6 +558,7 @@ final class FsPlayerEngine
   Future<void> stop() {
     if (_disposed) return _disposal ?? Future.value();
     _invalidate();
+    _desiredPlaying = false;
     return _enqueue(() async {
       await _release();
       _publish(

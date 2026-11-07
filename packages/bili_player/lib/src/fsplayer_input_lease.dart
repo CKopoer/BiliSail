@@ -39,7 +39,9 @@ final class FsPlayerInputLease {
             'dash+xml',
           );
           request.response.contentLength = manifest.length;
-          if (request.method == 'GET') request.response.add(manifest);
+          if (request.method == 'GET') {
+            request.response.add(manifest);
+          }
         } else {
           // Native FFmpeg follows the original URL with validated headers.
           request.response.statusCode = HttpStatus.found;

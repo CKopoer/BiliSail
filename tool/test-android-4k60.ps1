@@ -98,6 +98,8 @@ try {
   $completed = $false
   while ($runWatch.Elapsed.TotalSeconds -lt $timeoutSeconds) {
     if ($server.HasExited) { throw 'Collector stopped unexpectedly' }
+    $currentProbe = ((& adb -s $DeviceId shell pidof $AndroidDevelopmentPackageId) -join '').Trim()
+    if ($currentProbe -cne $probeId) { throw 'Probe process exited or restarted before completion' }
     $events = Join-Path $folder 'events.jsonl'
     if (Test-Path -LiteralPath $events) {
       $last = Get-Content -LiteralPath $events -Tail 1 | ConvertFrom-Json
