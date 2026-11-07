@@ -416,7 +416,7 @@ class ProfileController extends Notifier<ProfileState> {
     }
   }
 
-  Future<void> loadFollowGroups() async {
+  Future<void> loadFollowGroups({bool refreshContent = true}) async {
     if (!state.followGroupsAvailable) return;
     final repository = ref.read(profileRepositoryProvider);
     if (repository is! ProfileFollowGroupsRepository) return;
@@ -441,7 +441,7 @@ class ProfileController extends Notifier<ProfileState> {
       );
       final selected = state.followingGroupId;
       if (selected != null && !groups.any((group) => group.id == selected)) {
-        selectFollowingGroup(null);
+        selectFollowingGroup(null, loadContent: refreshContent);
       }
     } on AppFailure catch (error) {
       if (current()) {
@@ -462,7 +462,7 @@ class ProfileController extends Notifier<ProfileState> {
     }
   }
 
-  void selectFollowingGroup(String? groupId) {
+  void selectFollowingGroup(String? groupId, {bool loadContent = true}) {
     if (!state.followGroupsAvailable ||
         (groupId == state.followingGroupId &&
             !state.showBlacklist &&
@@ -485,7 +485,7 @@ class ProfileController extends Notifier<ProfileState> {
       }),
     );
     // A group refresh can finish while another section is visible.
-    if (state.section == ProfileSection.following) load();
+    if (loadContent && state.section == ProfileSection.following) load();
   }
 
   void searchFollowing(String keyword) {
@@ -667,16 +667,25 @@ class ProfileController extends Notifier<ProfileState> {
     final generation = _generation;
     final repository = ref.read(profileRepositoryProvider);
     final scope = repository.accountScope, epoch = repository.sessionEpoch;
-    await loadFollowGroups();
+    // Pre-mutation paging must not restore stale members while tags reload.
+    const section = ProfileSection.following;
+    _reads[section]?.cancel();
+    _versions[section] = (_versions[section] ?? 0) + 1;
+    // Resolve a deleted selection before issuing exactly one content refresh.
+    await loadFollowGroups(refreshContent: false);
     if (!_current(generation, scope, epoch)) return;
-    if (state.section == ProfileSection.following) await load(refresh: true);
+    // A user-initiated write also refreshes the retained following page when
+    // another section is visible, without reloading that unrelated section.
+    await load(refresh: true, targetSection: section);
     if (!_current(generation, scope, epoch)) return;
+    final list = state.lists[section];
     final reconciled =
         state.followGroupsMessage == null &&
         !state.followGroupsLoading &&
-        state.section == ProfileSection.following &&
-        state.current.message == null &&
-        !state.current.loading;
+        list != null &&
+        list.page > 0 &&
+        list.message == null &&
+        !list.loading;
     state = state.copy(
       followingUncertain: !reconciled,
       clearFollowingMessage: reconciled,
@@ -802,8 +811,12 @@ class ProfileController extends Notifier<ProfileState> {
     );
   }
 
-  Future<void> load({bool refresh = false}) async {
-    final section = state.section, old = state.current;
+  Future<void> load({
+    bool refresh = false,
+    ProfileSection? targetSection,
+  }) async {
+    final section = targetSection ?? state.section;
+    final old = state.lists[section] ?? const ProfileListState();
     if (!refresh && (old.loading || !old.hasMore)) return;
     _reads[section]?.cancel();
     final read = RequestCancellation();

@@ -97,16 +97,23 @@ void main() {
     await action(tester, '新建分组');
     await submit(tester, '新分组');
     expect(repo.edits.single, (FollowGroupEdit.create, null, '新分组'));
+    expect(find.widgetWithText(TextButton, '新分组'), findsOneWidget);
     controller().selectFollowingGroup('3');
     await tester.pumpAndSettle();
+    repo.contentRevision = 1;
     await action(tester, '重命名分组');
     await submit(tester, '重命名');
     expect(repo.edits.last, (FollowGroupEdit.rename, '3', '重命名'));
+    expect(find.widgetWithText(TextButton, '重命名'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, '新分组'), findsNothing);
+    expect(find.text('分组3-1-r1'), findsOneWidget);
     await action(tester, '删除分组');
     expect(find.textContaining('关注关系会保留'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, '删除'));
     await tester.pumpAndSettle();
     expect(repo.edits.last.$1, FollowGroupEdit.delete);
+    expect(find.widgetWithText(TextButton, '重命名'), findsNothing);
+    expect(find.text('关注-1-r1'), findsOneWidget);
     expect(
       container.read(profileControllerProvider(_id)).followingGroupId,
       isNull,
@@ -120,6 +127,12 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '保存'));
     await tester.pumpAndSettle();
     expect(repo.sorted, ['2', '1']);
+    final group2 = find.byKey(const ValueKey('profile-follow-group-2'));
+    final group1 = find.byKey(const ValueKey('profile-follow-group-1'));
+    expect(
+      tester.getTopLeft(group2).dx,
+      lessThan(tester.getTopLeft(group1).dx),
+    );
     expect(tester.takeException(), isNull);
   });
 

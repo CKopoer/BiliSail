@@ -17,8 +17,10 @@ class FollowingRepository
   final queries = <(String, String, bool, int)>[];
   final edits = <(FollowGroupEdit, String?, String)>[];
   final blocks = <(UserId, bool)>[];
+  final memberQueries = <(String, int)>[];
   List<String>? sorted;
   int groupReads = 0;
+  int contentRevision = 0;
   List<ProfileFollowGroup> groups = [
     const ProfileFollowGroup(id: '0', name: '默认分组'),
     const ProfileFollowGroup(id: '-10', name: '特别关注'),
@@ -26,6 +28,7 @@ class FollowingRepository
     const ProfileFollowGroup(id: '2', name: '音乐'),
   ];
   Completer<ProfilePage>? pendingRead;
+  Completer<List<ProfileFollowGroup>>? pendingGroups;
   Completer<void>? pendingWrite;
   RequestCancellation? readCancellation, writeCancellation;
   AppFailure? writeFailure, readFailure;
@@ -48,7 +51,7 @@ class FollowingRepository
               ? '黑名单'
               : keyword.isEmpty
               ? '关注'
-              : keyword}-$page',
+              : keyword}-$page$_revision',
           more: page < 2,
         );
   }
@@ -118,7 +121,7 @@ class FollowingRepository
     required RequestCancellation cancellation,
   }) async {
     groupReads++;
-    return groups;
+    return pendingGroups?.future ?? groups;
   }
 
   @override
@@ -127,7 +130,12 @@ class FollowingRepository
     String groupId, {
     required int page,
     required RequestCancellation cancellation,
-  }) async => followingPage('分组$groupId-$page');
+  }) async {
+    memberQueries.add((groupId, page));
+    return followingPage('分组$groupId-$page$_revision');
+  }
+
+  String get _revision => contentRevision == 0 ? '' : '-r$contentRevision';
   @override
   Future<UserProfile> loadProfile(
     UserId id, {
