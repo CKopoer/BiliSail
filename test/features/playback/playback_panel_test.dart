@@ -6,6 +6,7 @@ import 'package:bilisail/app/workspace_playback_window.dart';
 import 'package:bilisail/core/platform/detached_playback_window.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/core/presentation/input_scope.dart';
+import 'package:bilisail/core/presentation/android_system_ui.dart';
 import 'package:bilisail/core/input/input_stroke.dart';
 import 'package:bilisail/core/input/shortcut_dispatcher.dart';
 
@@ -4567,6 +4568,122 @@ void main() {
         await tester.pumpWidget(const SizedBox());
         await _pumpFrames(tester);
       },
+    );
+  }
+
+  for (final dark in [false, true]) {
+    testWidgets(
+      'mobile fullscreen paints black before rotating and keeps hidden bar style dark=$dark',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.display.size = const Size(390, 844);
+        tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
+        tester.view.viewPadding = const FakeViewPadding(top: 24, bottom: 24);
+        addTearDown(tester.view.reset);
+        addTearDown(tester.view.display.resetSize);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final boundary = GlobalKey();
+        var enteredAfterPaint = false;
+        final window = _DelayedWindow(
+          desktop: false,
+          onEnter: () {
+            expect(find.byType(Dialog), findsOneWidget);
+            final render = boundary.currentContext!.findRenderObject()!;
+            expect(render.debugNeedsPaint, isFalse);
+            enteredAfterPaint = true;
+          },
+        );
+        addTearDown(() async {
+          if (!window.gate.isCompleted) window.gate.complete();
+          await session.close();
+        });
+        await tester.pumpWidget(
+          RepaintBoundary(
+            key: boundary,
+            child: AndroidSystemUi(
+              child: _app(
+                session,
+                window,
+                const AppSettings.defaults(),
+                theme: dark ? BiliTheme.dark() : BiliTheme.light(),
+              ),
+            ),
+          ),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        await session.pause();
+        final opens = engine.opens;
+        final generation = session.sourceGeneration;
+
+        Future<void> expectBlackStatusBar() async {
+          final render =
+              boundary.currentContext!.findRenderObject()!
+                  as RenderRepaintBoundary;
+          final image = (await tester.runAsync(() => render.toImage()))!;
+          try {
+            final pixels = (await tester.runAsync(
+              () => image.toByteData(format: ImageByteFormat.rawRgba),
+            ))!;
+            final offset = (12 * image.width + image.width ~/ 2) * 4;
+            expect(pixels.getUint32(offset), 0x000000ff);
+          } finally {
+            image.dispose();
+          }
+          final style = tester.binding.renderViews.single.debugLayer!
+              .find<SystemUiOverlayStyle>(
+                Offset(tester.view.physicalSize.width / 2, 0),
+              );
+          expect(style?.statusBarIconBrightness, Brightness.light);
+          expect(style?.statusBarBrightness, Brightness.dark);
+        }
+
+        await tester.tap(find.byTooltip('全屏（F）'));
+        // Late dimensions must not issue a native rotation before the route's
+        // first paint, even while the explicit entry waits for endOfFrame.
+        engine._emit(
+          engine.currentSnapshot.copyWith(
+            videoDimensions: const VideoDimensions(1920, 1080),
+          ),
+        );
+        await _pumpFrames(tester);
+        // The platform request is still pending; the fullscreen route must
+        // already cover the browsing page before it can rotate or hide bars.
+        expect(window.fullScreen, isFalse);
+        expect(enteredAfterPaint, isTrue);
+        expect(find.byType(Dialog), findsOneWidget);
+        await expectBlackStatusBar();
+        tester.view.physicalSize = const Size(844, 390);
+        tester.view.display.size = const Size(844, 390);
+        tester.view.padding = const FakeViewPadding();
+        tester.view.viewPadding = const FakeViewPadding();
+        await _pumpFrames(tester);
+        await expectBlackStatusBar();
+        window.gate.complete();
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isTrue);
+        // Transient system bars also retain the black area and white icons.
+        tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
+        tester.view.viewPadding = const FakeViewPadding(top: 24, bottom: 24);
+        await _pumpFrames(tester);
+        await expectBlackStatusBar();
+        await tester.binding.handlePopRoute();
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isFalse);
+        expect(engine.opens, opens);
+        expect(session.sourceGeneration, generation);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(engine.maxSurfaces, 1);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+      variant: TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+      }),
     );
   }
 
@@ -10643,8 +10760,9 @@ final class _FakeProgressStore implements PlaybackProgressStore {
 }
 
 final class _DelayedWindow extends WindowService {
-  _DelayedWindow({this.desktop = true});
+  _DelayedWindow({this.desktop = true, this.onEnter});
   final bool desktop;
+  final VoidCallback? onEnter;
   final gate = Completer<void>();
   bool fullScreen = false;
   final orientations = <FullScreenOrientation?>[];
@@ -10655,7 +10773,10 @@ final class _DelayedWindow extends WindowService {
     bool value, {
     FullScreenOrientation? orientation,
   }) async {
-    if (value) await gate.future;
+    if (value) {
+      onEnter?.call();
+      await gate.future;
+    }
     fullScreen = value;
     orientations.add(value ? orientation : null);
   }

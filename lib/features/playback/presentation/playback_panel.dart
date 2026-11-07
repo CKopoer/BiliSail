@@ -11,6 +11,7 @@ import '../../../core/platform/window_service.dart';
 import '../../../core/platform/window_size_policy.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../core/presentation/android_system_ui.dart';
+import '../../../core/presentation/mobile_playback_status_bar.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/width_layout_builder.dart';
@@ -89,6 +90,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   final _picture = PlayerPictureController();
   late int _pictureGeneration;
   bool _fullScreen = false;
+  bool _fullScreenPresented = false;
   bool _active = false;
   bool _surfaceReady = false;
   Object? _activityRequest;
@@ -638,7 +640,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     if (orientation == _fullScreenOrientation) return;
     _fullScreenOrientation = orientation;
     // The same owner/command queue also orders delayed dimensions against exit.
-    unawaited(_setWindowFullScreen(request, true));
+    if (_fullScreenPresented) {
+      unawaited(_setWindowFullScreen(request, true));
+    }
   }
 
   Future<void> _enterFullScreen() async {
@@ -662,9 +666,11 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       if (!mounted || !_active || !identical(_fullScreenRequest, request)) {
         return;
       }
-      await _setWindowFullScreen(request, true);
-      if (!mounted || !_active || !identical(_fullScreenRequest, request)) {
-        return;
+      if (widget.window.hasDesktopWindow) {
+        await _setWindowFullScreen(request, true);
+        if (!mounted || !_active || !identical(_fullScreenRequest, request)) {
+          return;
+        }
       }
       // The detached view remains below the browser's Navigator in the widget
       // tree. Use this window's Navigator so its route fills the playback view.
@@ -676,38 +682,41 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         transitionDuration: Duration.zero,
         pageBuilder: (dialogContext, _, _) => UncontrolledProviderScope(
           container: providerContainer,
-          child: AndroidSystemUi(
-            backgroundColor: Colors.black,
-            brightness: Brightness.dark,
-            child: Dialog.fullscreen(
+          child: MobilePlaybackStatusBar(
+            enabled: true,
+            builder: (_) => AndroidSystemUi(
               backgroundColor: Colors.black,
-              child: _PlayerView(
-                session: _session,
-                settings: _settings,
-                controlsVisible: _controlsVisible,
-                picture: _picture,
-                shortcuts: _shortcuts,
-                onToggleComments: () => widget.onToggleComments(),
-                danmakuComposerBuilder: widget.danmakuComposerBuilder == null
-                    ? null
-                    : (context) => _buildDanmakuComposer(context),
-                danmakuOverlayBuilder: widget.danmakuOverlayBuilder == null
-                    ? null
-                    : (context) =>
-                          widget.danmakuOverlayBuilder?.call(context) ??
-                          const SizedBox.shrink(),
-                pageCommands: _pageCommands,
-                navigation: _navigation,
-                onNavigate: _navigateFromPlayer,
-                fullScreen: true,
-                onFullScreen: () {
-                  if (identical(
-                    _fullScreenRoute,
-                    ModalRoute.of(dialogContext),
-                  )) {
-                    navigator.pop();
-                  }
-                },
+              brightness: Brightness.dark,
+              child: Dialog.fullscreen(
+                backgroundColor: Colors.black,
+                child: _PlayerView(
+                  session: _session,
+                  settings: _settings,
+                  controlsVisible: _controlsVisible,
+                  picture: _picture,
+                  shortcuts: _shortcuts,
+                  onToggleComments: () => widget.onToggleComments(),
+                  danmakuComposerBuilder: widget.danmakuComposerBuilder == null
+                      ? null
+                      : (context) => _buildDanmakuComposer(context),
+                  danmakuOverlayBuilder: widget.danmakuOverlayBuilder == null
+                      ? null
+                      : (context) =>
+                            widget.danmakuOverlayBuilder?.call(context) ??
+                            const SizedBox.shrink(),
+                  pageCommands: _pageCommands,
+                  navigation: _navigation,
+                  onNavigate: _navigateFromPlayer,
+                  fullScreen: true,
+                  onFullScreen: () {
+                    if (identical(
+                      _fullScreenRoute,
+                      ModalRoute.of(dialogContext),
+                    )) {
+                      navigator.pop();
+                    }
+                  },
+                ),
               ),
             ),
           ),
@@ -716,8 +725,26 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       InputScope.of<Object>(context)?.routes.presentation(route);
       _fullScreenRoute = route;
       _fullScreenNavigator = navigator;
-      await navigator.push(route);
+      final closed = navigator.push(route);
+      try {
+        if (!widget.window.hasDesktopWindow) {
+          // Paint the black route before the OS rotates or hides the bars.
+          // Otherwise the light browsing page is exposed during the transition.
+          await WidgetsBinding.instance.endOfFrame;
+          if (mounted &&
+              _active &&
+              identical(_fullScreenRequest, request) &&
+              route.isActive) {
+            _fullScreenPresented = true;
+            await _setWindowFullScreen(request, true);
+          }
+        }
+        await closed;
+      } finally {
+        if (navigator.mounted && route.isActive) navigator.removeRoute(route);
+      }
     } finally {
+      _fullScreenPresented = false;
       _stopDeviceOrientation();
       if (identical(_fullScreenRequest, request)) _fullScreenRequest = null;
       _fullScreenRoute = null;

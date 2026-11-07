@@ -119,16 +119,28 @@ void main() {
             );
           }
         }
-        tester.view.physicalSize = const Size(900, 600);
-        tester.view.display.size = const Size(900, 600);
+        tester.view.physicalSize = const Size(844, 390);
+        tester.view.display.size = const Size(844, 390);
+        await tester.pumpAndSettle();
+        expect(await topPixel(), Colors.black);
+        // Wide displays keep their theme, including a narrow split window.
+        for (final size in [const Size(900, 600), const Size(390, 844)]) {
+          tester.view.display.size = const Size(900, 600);
+          tester.view.physicalSize = size;
+          await tester.pumpAndSettle();
+          final wideBrowseColor =
+              theme.platform == TargetPlatform.android || size.width < 600
+              ? theme.colorScheme.surface
+              : theme.scaffoldBackgroundColor;
+          expect(await topPixel(), wideBrowseColor);
+        }
+        tester.view.display.size = const Size(390, 844);
         await tester.pumpAndSettle();
         expect(await topPixel(), Colors.black);
         // A retained player must not keep the status area black on its UP page.
         router.go('/user/1');
         await tester.pumpAndSettle();
-        final browseColor = theme.platform == TargetPlatform.android
-            ? theme.colorScheme.surface
-            : theme.scaffoldBackgroundColor;
+        final browseColor = theme.colorScheme.surface;
         expect(await topPixel(), browseColor);
         router.go('/');
         await tester.pumpAndSettle();
