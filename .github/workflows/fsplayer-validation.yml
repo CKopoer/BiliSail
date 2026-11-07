@@ -40,9 +40,21 @@ jobs:
           fixtures="$HOME/Library/Containers/dev.bilisail.bilisail/Data/tmp/fsplayer-fixtures"
           mkdir -p "$fixtures"
           cp test/fixtures/media/video.mp4 test/fixtures/media/audio.m4a "$fixtures/"
-          flutter run -d macos --release -t tool/validation/fsplayer_smoke.dart \
-            --dart-define="FSPLAYER_FIXTURE_ROOT=$fixtures" | tee fsplayer-smoke.log
-          grep -q 'FSPLAYER_SMOKE_RESULT=0' fsplayer-smoke.log
+          flutter build macos --release -t tool/validation/fsplayer_smoke.dart \
+            --dart-define="FSPLAYER_FIXTURE_ROOT=$fixtures"
+          python3 - <<'PY'
+          import pathlib, subprocess, sys
+          binary = pathlib.Path('build/macos/Build/Products/Release/BiliSail.app/Contents/MacOS/BiliSail')
+          process = subprocess.Popen([str(binary.resolve())], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+          try:
+              output, _ = process.communicate(timeout=120)
+          except subprocess.TimeoutExpired:
+              process.kill()
+              output, _ = process.communicate(timeout=10)
+          pathlib.Path('fsplayer-smoke.log').write_bytes(output)
+          print(output.decode('utf-8', errors='replace'))
+          sys.exit(0 if process.returncode == 0 and b'FSPLAYER_SMOKE_RESULT=0' in output else 1)
+          PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:

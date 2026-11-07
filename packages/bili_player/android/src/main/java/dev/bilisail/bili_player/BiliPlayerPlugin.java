@@ -14,16 +14,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.io.File;
-import android.content.Context;
-import android.util.AtomicFile;
-import java.io.FileOutputStream;
 
 /** Off-main native commands. Raw source strings and native messages never leave this bridge. */
 public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.MethodCallHandler {
     private MethodChannel channel;
     private TextureRegistry textures;
-    private Context context;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Map<Long, Runtime> players = new HashMap<>();
@@ -53,7 +48,6 @@ public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
 
     @Override public void onAttachedToEngine(FlutterPluginBinding binding) {
         textures = binding.getTextureRegistry();
-        context = binding.getApplicationContext();
         channel = new MethodChannel(binding.getBinaryMessenger(), "dev.bilisail/fsplayer");
         channel.setMethodCallHandler(this);
     }
@@ -127,19 +121,11 @@ public final class BiliPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
                 r.player.setOption(FSPlayer.OPT_CATEGORY_PLAYER, "max-buffer-size", 256L * 1024 * 1024);
                 r.player.setOption(FSPlayer.OPT_CATEGORY_PLAYER, "min-frames", Math.max(2, Math.min(50000,
                     ((Number)call.argument("bufferMs")).longValue() * 24 / 1000)));
-                r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "protocol_whitelist", "file,data,http,https,tcp,tls,crypto");
+                r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "protocol_whitelist", "file,data,http,tcp,crypto");
                 r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "allowed_extensions", "ALL");
                 r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "rw_timeout", 15000000);
                 r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "reconnect", 0);
-                byte[] caPem = call.argument("caPem");
-                if (caPem == null || caPem.length < 1000 || caPem.length > 1048576)
-                    throw new IllegalArgumentException("Missing CA bundle");
-                AtomicFile caFile = new AtomicFile(new File(context.getCacheDir(), "fsplayer-ca.pem"));
-                FileOutputStream caOutput = caFile.startWrite();
-                try { caOutput.write(caPem); caFile.finishWrite(caOutput); }
-                catch (Exception error) { caFile.failWrite(caOutput); throw error; }
                 r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "tls_verify", 1);
-                r.player.setOption(FSPlayer.OPT_CATEGORY_FORMAT, "ca_file", caFile.getBaseFile().getAbsolutePath());
                 Map<String, String> headers = call.argument("headers");
                 StringBuilder headerText = new StringBuilder();
                 for (Map.Entry<String, String> entry : headers.entrySet()) {

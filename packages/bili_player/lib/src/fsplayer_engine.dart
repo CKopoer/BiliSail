@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
@@ -22,17 +21,8 @@ final class FsPlayerEngine
         VideoOutputSource,
         AudioGainControl,
         PlayerInformationSource {
-  FsPlayerEngine({
-    this.onDiagnostic,
-    MethodChannel? channel,
-    Future<Uint8List> Function()? loadCertificates,
-  }) : _channel = channel ?? const MethodChannel('dev.bilisail/fsplayer'),
-       _loadCertificates = loadCertificates ?? _defaultCertificates;
-
-  static Future<Uint8List> _defaultCertificates() async =>
-      (await rootBundle.load('packages/bili_player/native/cacert.pem')).buffer
-          .asUint8List();
-  final Future<Uint8List> Function() _loadCertificates;
+  FsPlayerEngine({this.onDiagnostic, MethodChannel? channel})
+    : _channel = channel ?? const MethodChannel('dev.bilisail/fsplayer');
 
   static bool get supported =>
       Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
@@ -104,14 +94,14 @@ final class FsPlayerEngine
   Future<void> _release() async {
     _timer?.cancel();
     _output.clear();
+    await _inputLease?.close();
+    _inputLease = null;
     await _lateCreationRelease;
     _lateCreationRelease = null;
     final id = _id;
     // Preserve a failed release as a barrier: no new runtime may overlap it.
     if (id != null) await _call<void>('dispose');
     _id = _texture = null;
-    await _inputLease?.close();
-    _inputLease = null;
     await _leases?.close();
     _leases = null;
     _native = {};
@@ -212,14 +202,17 @@ final class FsPlayerEngine
           ),
         };
         final input = fsPlayerInput(leased, options);
+        if (Platform.isAndroid && options.rate != 1) {
+          throw const PlayerFailure(
+            PlayerFailureKind.invalidSource,
+            '当前 Android fsplayer 仅验证支持 1×，请调整倍速或切换后端',
+            0,
+          );
+        }
         if (cancel.isCompleted) throw const _Superseded();
         _live = input.live;
         _gain = options.audioGainDb;
         final inputLease = _inputLease = await FsPlayerInputLease.open(input);
-        if (cancel.isCompleted) throw const _Superseded();
-        final certificates = await _loadCertificates().timeout(
-          const Duration(seconds: 5),
-        );
         if (cancel.isCompleted) throw const _Superseded();
         final creation = _channel.invokeMethod<Map<Object?, Object?>>(
           'create',
@@ -230,7 +223,6 @@ final class FsPlayerEngine
             'software': options.videoDecoding == VideoDecodingMode.software,
             'bufferMs': options.maxBufferAhead.inMilliseconds,
             'durationMs': input.duration?.inMilliseconds ?? 0,
-            'caPem': certificates,
           },
         );
         Map<Object?, Object?>? created;
@@ -494,6 +486,13 @@ final class FsPlayerEngine
   @override
   Future<void> setRate(double rate) async {
     if (!rate.isFinite || rate <= 0) throw ArgumentError.value(rate);
+    if (Platform.isAndroid && rate != 1) {
+      throw PlayerFailure(
+        PlayerFailureKind.nativePlayback,
+        '当前 Android fsplayer 不支持可靠倍速，请切换后端',
+        _generation,
+      );
+    }
     final generation = _generation;
     await _command('rate', {'rate': rate});
     if (_disposed || generation != _generation) return;

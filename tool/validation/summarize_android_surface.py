@@ -64,6 +64,8 @@ def summarize(folder, binary):
         av = [abs(row['avsyncSeconds']) for row in samples if row.get('avsyncSeconds') is not None]
         output.append({
             'run': folder.name, 'stage': stage, 'backend': config['backend'],
+            'requestedRate': config.get('rate', 3),
+            'requestedRateAchieved': abs((end['positionMs']-start['positionMs'])/1000/elapsed - config.get('rate', 3)) <= max(.1, config.get('rate', 3)*.05),
             'requestedDirect': config['direct'], 'presentation': metadata.get('presentation', 'Flutter.Texture'),
             'actualOutput': metadata['videoOutput'], 'hwdec': metadata['hwdec'],
             'seconds': elapsed,

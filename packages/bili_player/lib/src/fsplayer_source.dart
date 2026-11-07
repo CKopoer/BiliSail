@@ -17,11 +17,15 @@ final class FsPlayerInput {
     required this.audio,
     required this.live,
     this.duration,
+    this.resources = const [],
+    this.hls = false,
   });
   final String url;
   final Map<String, String> headers;
   final bool video, audio, live;
   final Duration? duration;
+  final List<Uri> resources;
+  final bool hls;
 }
 
 FsPlayerInput fsPlayerInput(ResolvedMediaSource source, OpenOptions options) {
@@ -107,6 +111,8 @@ FsPlayerInput fsPlayerInput(ResolvedMediaSource source, OpenOptions options) {
       video: video,
       audio: source is! DashVideoSource && source is! DashPairSource,
       live: live,
+      resources: [main.uri],
+      hls: source is ManifestSource,
     );
   }
   final second = headers(audio);
@@ -161,5 +167,6 @@ FsPlayerInput fsPlayerInput(ResolvedMediaSource source, OpenOptions options) {
     audio: true,
     live: false,
     duration: duration,
+    resources: [main.uri, audio.uri],
   );
 }

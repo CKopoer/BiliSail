@@ -58,10 +58,9 @@ void main() {
       final response = await (await client.getUrl(Uri.parse(lease.url)))
           .close();
       expect(response.statusCode, 200);
-      expect(
-        await utf8.decoder.bind(response).join(),
-        contains('&amp;token=private'),
-      );
+      final manifest = await utf8.decoder.bind(response).join();
+      expect(manifest, isNot(contains('private')));
+      expect(manifest, contains('/r0'));
       final unknown = await (await client.getUrl(
         Uri.parse(lease.url).replace(path: '/unknown'),
       )).close();

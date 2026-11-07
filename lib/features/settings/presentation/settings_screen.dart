@@ -665,6 +665,14 @@ final class _SettingsCategoryPageState
                             GpuDeviceSetting(settings: s),
                             if (defaultTargetPlatform ==
                                     TargetPlatform.android &&
+                                s.playbackBackend ==
+                                    PlaybackBackendPreference.fsplayer)
+                              const Text(
+                                '当前 fsplayer 公开版本仅验证支持 1×；需要倍速时请选择其他后端。',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            if (defaultTargetPlatform ==
+                                    TargetPlatform.android &&
                                 s.playbackBackend !=
                                     PlaybackBackendPreference.fsplayer) ...[
                               _choices(
