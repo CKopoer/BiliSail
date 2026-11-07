@@ -20,6 +20,7 @@ class ApiFeedRepository
         FeedRepository,
         PopularFeedRepository,
         RankingFeedRepository,
+        RecommendationPublicationTimeRepository,
         AppRecommendationFeedRepository,
         RecommendationFeedbackRepository {
   ApiFeedRepository(this.api, this.requests, {this.appIdentity});
@@ -171,6 +172,7 @@ class ApiFeedRepository
             previewCid: video.previewCid,
             playCount: video.playCount,
             danmakuCount: video.danmakuCount,
+            publishedAt: video.publishedAt,
             likeCount: video.likeCount,
             categoryName: video.categoryName,
             isFollowed: video.isFollowed,
@@ -197,6 +199,16 @@ class ApiFeedRepository
       ),
     );
   }, cancellation: cancellation);
+
+  @override
+  Future<DateTime?> loadPublicationTime(
+    VideoId id, {
+    required RequestCancellation cancellation,
+  }) => requests.run(
+    (context) async =>
+        (await api.getVideoDetail(id.value, context: context)).publishedAt,
+    cancellation: cancellation,
+  );
 
   static RecommendationTarget? _appRecommendationTarget(
     ApiAppRecommendation item,

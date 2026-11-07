@@ -2,6 +2,12 @@
 
 日期：2026-10-27。承接[推荐流设置](recommendation-settings-design.md)，本轮接入 App 来源、独立 buvid、可选 App 授权和服务端反馈，保留原 Web 来源及已保存设置。
 
+2026-11-07 推荐卡发布时间：共享视频卡右下角复用评论区 `commentTimeLabel`，按时间间隔显示刚刚、分钟／小时前、昨天、天前或日期，跨年日期保留年份。Web／App 映射都保留接口提供的有效 `pubdate`；缺失／非法值不生成虚假日期。游客只读核对中，Web 推荐 20 条均有 `pubdate`，App 推荐 12 条均未提供该字段，因此 App 仅补传可选字段不足以恢复显示。
+
+推荐页对加载范围内、具有有效 BV 身份且缺少发布时间的卡片，经应用层调度和 Repository 端口读取既有视频详情接口的发布时间；列表请求不等待这些补充查询。最多并发 4 项、排队 64 项、缓存 256 个结果，按访问顺序淘汰；缓存按 session epoch 隔离，组件释放取消请求，隐藏工作区不继续订阅，迟到或已取消的结果不能写入缓存。失败保留原卡片，元数据 Provider 不额外自动重试；未知或非视频身份不补查。此项是为发布时间增加的按需元数据读取，不改变 App 卡片身份解析，也不再为 aid→BV 转换查询详情。回归覆盖两种推荐来源的时间映射、相对时间位置、并发／缓存／取消／账号边界及单卡更新隔离，见 [发布时间测试](../test/features/feed/recommendation_publication_time_test.dart)。
+
+本轮验证：以 `c465979` 为基线、仅应用本次改动的临时隔离工作区执行 `tool/check.ps1 -EnforceLockfile`，锁文件解析、格式、全量分析、打包边界脚本与离线测试全部通过：根应用 4555、bili_api 678、bili_player 181、bili_danmaku 161、bili_mux 5，共 5580 项。13 项 Windows 符号链接用例受权限限制跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生验证。完整日志保留在 `build/recommendation-publication-time-isolated-check.log`。主工作区首次 `tool/check.ps1 -SkipPub` 在同期未提交的 `fvp_native_player.dart` 报出 90 项分析问题后中止；没有修改该文件，本次文件的定向分析通过。游客在线烟测确认缺时 App 卡片可由视频详情取得有效发布时间；没有运行中的调试应用／DTD，热重载无法执行，未构建安装或进行三端实机界面验收。
+
 2026-10-28 后续调整：App 凭据已并入正常扫码登录，推荐设置不再提供独立扫码或更新登录入口。密码/短信继续保存 Web 会话，已删除 Cookie 换 token 流程；所有登录方式都可选择 App 来源，无 App 凭据时使用游客推荐，有效同账号凭据才使用账号推荐。设置只显示当前推荐身份摘要，并移除设备标识显示、手工编辑和随机生成入口；设备标识继续由内部自动生成并持久化，保留已有值。当前职责与验证见[统一登录设计](unified-login-design.md)。下文初次接入的独立授权方案及验证保留为历史记录。
 
 2026-10-31 请求身份对齐：继续只读参考下述 PiliPlus 精确提交的 `lib/common/constants.dart`、`lib/http/video.dart`、`lib/utils/login_utils.dart`，并核对 `lib/utils/accounts/account.dart`、`lib/utils/accounts/account_manager/account_mgr.dart` 和 `lib/utils/id_utils.dart` 对请求头的最终覆盖，只采用协议字段与设备标识格式，独立实现，不复制 GPLv3 应用代码或资源。App profile 使用相同的完整 Android HD UA；仅首页 App feed 补齐 `fp_local`、`fp_remote`、`session_id`、`x-bili-trace-id`、`x-bili-aurora-eid/zone`、`bili-http-engine`、`referer` 请求头，以及空 `splash_id` 参数。按拦截器处理后的最终值使用 `app-key=android64`、`x-bili-aurora-zone=sh001`；有有效同账号 App token 时，使用该 token 所属 mid 生成 `x-bili-mid` 和相应 aurora eid，游客不附带账号头。固定指纹/trace 占位字段与参考请求一致，不采集设备硬件指纹，也不改变实际 HTTP 传输实现。

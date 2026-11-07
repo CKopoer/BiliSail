@@ -42,6 +42,47 @@ ApiHttpResponse _response(Object? data, {int code = 0, int status = 200}) =>
 
 void main() {
   test(
+    'App publication timestamps remain optional and reject invalid values',
+    () async {
+      final values = <Object?>[
+        1793505600,
+        '1793505600',
+        null,
+        0,
+        -1,
+        1.5,
+        'bad',
+        8640000000001,
+      ];
+      final transport = _Transport()
+        ..entries = [
+          for (final value in values) _entry(extra: {'pubdate': value}),
+        ];
+      final api = BiliApiClient(transport: transport);
+      addTearDown(api.close);
+      final page = await AppRecommendationClient(
+        api,
+      ).load(page: 1, buvid: _device);
+      expect(page.items.length, values.length);
+      final date = DateTime.fromMillisecondsSinceEpoch(
+        1793505600000,
+        isUtc: true,
+      );
+      expect(page.items.map((item) => item.video.publishedAt), [
+        date,
+        date,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+      ]);
+      expect(transport.uris, hasLength(1));
+    },
+  );
+
+  test(
     'App follow markers do not discard independent recommendation text',
     () async {
       final cases = <(Object?, Object?, String?, bool?)>[

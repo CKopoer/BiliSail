@@ -4,15 +4,17 @@ import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-VideoSummary _video({String? reason, bool? followed}) => VideoSummary(
-  id: const VideoId('BV1234567890'),
-  title: '推荐视频',
-  coverUrl: '',
-  author: '推荐UP',
-  duration: const Duration(minutes: 1),
-  recommendationReason: reason,
-  isFollowed: followed,
-);
+VideoSummary _video({String? reason, bool? followed, DateTime? publishedAt}) =>
+    VideoSummary(
+      id: const VideoId('BV1234567890'),
+      title: '推荐视频',
+      coverUrl: '',
+      author: '推荐UP',
+      duration: const Duration(minutes: 1),
+      recommendationReason: reason,
+      isFollowed: followed,
+      publishedAt: publishedAt,
+    );
 
 Widget _app({
   required VideoSummary video,
@@ -43,6 +45,30 @@ Widget _app({
 );
 
 void main() {
+  testWidgets('publication times use comment formatting at the bottom right', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    for (final (date, label) in [
+      (now.subtract(const Duration(seconds: 10)), '刚刚'),
+      (now.subtract(const Duration(minutes: 5, seconds: 10)), '5分钟前'),
+      (now.subtract(const Duration(hours: 2, seconds: 10)), '2小时前'),
+      (DateTime(2020, 1, 2), '2020-01-02'),
+    ]) {
+      await tester.pumpWidget(_app(video: _video(publishedAt: date)));
+      expect(find.text(label), findsOneWidget);
+      expect(find.text('10-31'), findsNothing);
+      final card = tester.getRect(find.byType(VideoCard));
+      final time = tester.getRect(find.text(label));
+      final author = tester.getRect(find.text('推荐UP'));
+      expect(time.right, lessThanOrEqualTo(card.right));
+      expect(time.left, greaterThan(author.right));
+      expect(time.center.dy, closeTo(author.center.dy, 1));
+      expect(time.bottom, lessThanOrEqualTo(card.bottom));
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('explicit follow metadata supplies the missing badge', (
     tester,
   ) async {

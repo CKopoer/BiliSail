@@ -4,11 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/platform/external_links.dart';
+import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/video_card.dart';
 import '../application/feed_controller.dart';
+import '../application/recommendation_publication_time.dart';
 import '../domain/home_channel.dart';
 
 /// The grid observes list membership; each mounted card owns its feedback view.
@@ -95,6 +97,7 @@ final class _FeedVideoCard extends ConsumerStatefulWidget {
 final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
   VideoCard? _card;
   _FeedbackState? _feedback;
+  DateTime? _publicationTime;
 
   Future<void> _open() async {
     final target = widget.video.recommendationTarget;
@@ -133,11 +136,25 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
     if (!identical(oldWidget.video, widget.video) ||
         oldWidget.recommended != widget.recommended) {
       _card = null;
+      _publicationTime = null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.recommended &&
+        widget.video.id.isValid &&
+        widget.video.publishedAt == null &&
+        WorkspaceActivity.isActive(context)) {
+      final date = ref
+          .watch(recommendationPublicationTimeProvider(widget.video.id))
+          .asData
+          ?.value;
+      if (_publicationTime != date) {
+        _publicationTime = date;
+        _card = null;
+      }
+    }
     var feedback = (rejected: false, busy: false, uncertain: false);
     if (widget.recommended) {
       final controller = ref.watch(feedControllerProvider.notifier);
@@ -168,6 +185,7 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
       onTap: _open,
       onOpenUser: (id) => context.go('/user/${id.value}'),
       showRecommendationReason: widget.recommended,
+      publishedAt: _publicationTime,
       feedback: feedback.rejected
           ? VideoCardFeedback(
               busy: feedback.busy,

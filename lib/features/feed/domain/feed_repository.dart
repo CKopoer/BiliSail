@@ -74,3 +74,11 @@ abstract interface class AppRecommendationFeedRepository {
     required RequestCancellation cancellation,
   });
 }
+
+/// Optional metadata for recommendation sources that omit publication times.
+abstract interface class RecommendationPublicationTimeRepository {
+  Future<DateTime?> loadPublicationTime(
+    VideoId id, {
+    required RequestCancellation cancellation,
+  });
+}

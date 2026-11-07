@@ -196,6 +196,7 @@ final class AppRecommendationClient {
         ),
         playCount: _count(entry['cover_left_text_1']),
         danmakuCount: _count(entry['cover_left_text_2']),
+        publishedAt: _publishedAt(entry['pubdate']),
         categoryName: args['tname'] is String ? args['tname'] as String : null,
         isFollowed: followed ? true : null,
         recommendationReason: followReason || reason == '竖屏' ? null : reason,
@@ -210,6 +211,12 @@ final class AppRecommendationClient {
       : value is String
       ? int.tryParse(value)
       : null;
+  static DateTime? _publishedAt(Object? value) {
+    final seconds = _integer(value);
+    if (seconds == null || seconds <= 0 || seconds > 8640000000000) return null;
+    return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
+  }
+
   static String? _id(Object? value) {
     final text = value is int || value is String ? '$value' : '';
     return RegExp(r'^[1-9][0-9]{0,19}$').hasMatch(text) ? text : null;

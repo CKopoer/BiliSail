@@ -66,6 +66,40 @@ void main() {
   });
 
   test(
+    'Web and App recommendation mappings preserve publication timestamps',
+    () async {
+      const seconds = 1793505600;
+      transport.entries = [
+        {..._entry('av'), 'pubdate': seconds},
+        _entry('av'),
+      ];
+      transport.webEntries = [
+        {'bvid': 'BV17x411w7KC', 'title': 'Web 推荐', 'pubdate': seconds},
+        {'bvid': 'BV17x411w7KC', 'title': '没有时间'},
+      ];
+      final expected = [
+        DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true),
+        null,
+      ];
+      final app = await repository.loadAppRecommendations(
+        page: 1,
+        cancellation: RequestCancellation(),
+      );
+      final web = await repository.loadFeed(
+        page: 1,
+        categoryId: null,
+        cancellation: RequestCancellation(),
+      );
+      expect(app.items.map((item) => item.publishedAt), expected);
+      expect(web.items.map((item) => item.publishedAt), expected);
+      expect(
+        transport.uris.where((uri) => uri.path.endsWith('/view')),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
     'Web and App mappings retain independent reasons and follow metadata',
     () async {
       transport.entries = [

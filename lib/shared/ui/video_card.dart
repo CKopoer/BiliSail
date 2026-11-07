@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../domain/user.dart';
+import '../../features/comments/domain/comment_time.dart';
 import 'bili_icons.dart';
 import 'app_cover_image.dart';
 import 'bili_badges.dart';
@@ -98,6 +99,7 @@ final class VideoCard extends StatefulWidget {
     this.playCountText = '',
     this.danmakuCountText = '',
     this.publishText = '',
+    this.publishedAt,
     this.publishTooltip,
     this.menu,
     this.feedback,
@@ -115,6 +117,7 @@ final class VideoCard extends StatefulWidget {
   final String playCountText;
   final String danmakuCountText;
   final String publishText;
+  final DateTime? publishedAt;
   final String? publishTooltip;
   final VideoCardMenu? menu;
   final VideoCardFeedback? feedback;
@@ -148,6 +151,7 @@ final class VideoCard extends StatefulWidget {
     playCountText,
     danmakuCountText,
     publishText,
+    publishedAt,
     publishTooltip,
     showWatchLaterButton,
     menu != null,
@@ -452,6 +456,7 @@ final class _VideoCardState extends State<VideoCard> {
                             widget.showRecommendationReason &&
                             video.isFollowed == true,
                         publishText: widget.publishText,
+                        publishedAt: widget.publishedAt,
                         publishTooltip: widget.publishTooltip,
                       ),
                     ],
@@ -879,6 +884,7 @@ final class _AuthorMetadata extends StatelessWidget {
     required this.reason,
     required this.showFollowed,
     required this.publishText,
+    required this.publishedAt,
     required this.publishTooltip,
   });
   final VideoSummary video;
@@ -889,6 +895,7 @@ final class _AuthorMetadata extends StatelessWidget {
   final String? reason;
   final bool showFollowed;
   final String publishText;
+  final DateTime? publishedAt;
   final String? publishTooltip;
 
   @override
@@ -896,12 +903,8 @@ final class _AuthorMetadata extends StatelessWidget {
     final theme = Theme.of(context);
     final id = video.authorId;
     final openUser = onOpenUser;
-    final date = video.publishedAt?.toLocal();
-    final dateText = date == null
-        ? publishText
-        : date.year == DateTime.now().year
-        ? '${date.month}-${date.day}'
-        : '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final timeLabel = commentTimeLabel(video.publishedAt ?? publishedAt);
+    final dateText = timeLabel.isEmpty ? publishText : timeLabel;
     final reasonText = reason?.trim() ?? '';
     final labels = [
       if (reasonText.isNotEmpty) reasonText,
