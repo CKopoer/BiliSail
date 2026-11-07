@@ -4,6 +4,7 @@ import 'dart:io';
 import 'android_media_leases.dart';
 import 'android_fvp_player.dart';
 import 'fvp_native_player.dart';
+import 'fvp_audio_health.dart';
 import 'fvp_video_output.dart';
 import 'native_audio_gain.dart';
 import 'native_playback_health.dart';
@@ -39,6 +40,7 @@ final class FvpEngine
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   final _failures = StreamController<PlayerFailure>.broadcast(sync: true);
   final _health = NativePlaybackHealth();
+  final _audioHealth = FvpAudioHealth();
   final _clock = Stopwatch()..start();
   Future<void> _commands = Future.value();
   FvpPlayerPort? _player;
@@ -80,11 +82,18 @@ final class FvpEngine
     _snapshots.add(snapshot);
   }
 
-  void _diagnose(PlayerDiagnosticKind kind) => onDiagnostic?.call(
+  void _diagnose(
+    PlayerDiagnosticKind kind, {
+    NativePlaybackInterruption? interruption,
+    PlayerFailureKind? failureKind,
+  }) => onDiagnostic?.call(
     PlayerDiagnosticEvent(
       kind: kind,
       snapshot: _snapshot,
       readinessStage: _stage,
+      failureKind: failureKind,
+      stallReason: interruption?.reason,
+      stalledFor: interruption?.stalledFor,
       nativeErrorCode: kind == PlayerDiagnosticKind.nativeProcessExited
           ? switch (_player) {
               final AndroidFvpPlayer player => player.exitStatus,
@@ -169,6 +178,7 @@ final class FvpEngine
     await _leases?.close();
     _leases = null;
     _health.reset();
+    _audioHealth.reset();
   }
 
   @override
@@ -460,7 +470,26 @@ final class FvpEngine
         position +
         Duration(milliseconds: player.bufferedMilliseconds.clamp(0, 1 << 53));
     _publish(_snapshot.copyWith(position: position, buffered: buffered));
-    if (_health.update(_snapshot, _clock.elapsed, paired: false) != null) {
+    // Snapshot listeners may synchronously close or replace this source.
+    if (_disposed || generation != _generation || !identical(player, _player)) {
+      return;
+    }
+    final audioFailure = _requiresAudio && player is FvpAudioActivityPort
+        ? _audioHealth.update(
+            _snapshot,
+            _clock.elapsed,
+            (player as FvpAudioActivityPort).decodedAudioFrames,
+          )
+        : null;
+    final failure =
+        audioFailure ??
+        _health.update(_snapshot, _clock.elapsed, paired: false);
+    if (failure != null) {
+      _diagnose(
+        PlayerDiagnosticKind.playbackStalled,
+        interruption: failure,
+        failureKind: failure.kind,
+      );
       _fail('fvp 播放停滞，正在尝试恢复');
     }
   }
@@ -481,7 +510,7 @@ final class FvpEngine
       ),
     );
     _failures.add(PlayerFailure(kind, message, _generation));
-    _diagnose(PlayerDiagnosticKind.failed);
+    _diagnose(PlayerDiagnosticKind.failed, failureKind: kind);
   }
 
   (MediaTrack, MediaTrack?, bool, bool) _validate(
@@ -607,6 +636,7 @@ final class FvpEngine
           _audioConfirmed = true;
         }
         _health.reset();
+        _audioHealth.reset();
         _publish(
           _snapshot.copyWith(
             phase: PlaybackPhase.playing,
@@ -646,6 +676,7 @@ final class FvpEngine
       if (_snapshot.phase == PlaybackPhase.failed) return;
       player.pause();
       _health.reset();
+      _audioHealth.reset();
       _publish(
         _snapshot.copyWith(
           phase: _snapshot.phase == PlaybackPhase.ended
@@ -676,6 +707,7 @@ final class FvpEngine
       final shouldPlay = _snapshot.desiredPlaying;
       player.pause();
       _health.reset();
+      _audioHealth.reset();
       _publish(
         _snapshot.copyWith(
           isSeeking: true,
@@ -701,6 +733,7 @@ final class FvpEngine
         final resume = shouldPlay && pauseRevision == _pauseRevision;
         if (resume) player.play();
         _health.reset();
+        _audioHealth.reset();
         _publish(
           _snapshot.copyWith(
             position: Duration(milliseconds: result),
@@ -728,6 +761,7 @@ final class FvpEngine
     if (!rate.isFinite || rate <= 0) throw ArgumentError.value(rate);
     player.setRate(rate);
     _health.reset();
+    _audioHealth.reset();
     _publish(_snapshot.copyWith(rate: rate));
   });
   @override

@@ -8,6 +8,10 @@ dependencies:
   flutter:
     sdk: flutter
   ffi: 2.2.0
+  code_assets: 2.1.0
+  hooks: 2.2.0
+  native_toolchain_c: 0.19.5
+  meta: 1.19.0
   fvp:
     git:
       url: https://github.com/wang-bin/fvp.git
@@ -73,6 +77,7 @@ dependency_overrides:
       ref: 9abd8a56f24371fd8c9628b70eba5e84c29e86c8
 
 dev_dependencies:
+  ffigen: 23.0.0
   flutter_test:
     sdk: flutter
   flutter_lints: 6.0.0

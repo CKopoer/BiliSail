@@ -77,7 +77,7 @@ enum NativeErrorCause {
 
 enum NativeLogSeverity { warning, error, fatal }
 
-enum PlaybackStallReason { playbackClock, audioClock, videoBuffer }
+enum PlaybackStallReason { playbackClock, audioClock, videoBuffer, audioFrames }
 
 /// The bounded source-open step, without media URLs or native log text.
 enum NativeReadinessStage { tracks, externalAudio, videoDecode, videoOutput }

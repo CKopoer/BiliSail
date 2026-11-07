@@ -38,6 +38,8 @@ void runFvpWorker(
             'kind': 'sample',
             'position': port.positionMilliseconds,
             'buffered': port.bufferedMilliseconds,
+            if (port is FvpAudioActivityPort)
+              'audioFrames': (port as FvpAudioActivityPort).decodedAudioFrames,
           }),
         );
       });

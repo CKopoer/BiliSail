@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:fvp/fvp.dart' as fvp;
@@ -11,6 +12,7 @@ import 'fvp_playback_information.dart';
 import 'fvp_video_decoders.dart';
 import 'fvp_surface_preroll.dart';
 import 'player_playback_information.dart';
+import 'third_party/fvp_audio_activity.g.dart' as audio_activity;
 
 final class FvpMediaInfo {
   const FvpMediaInfo({
@@ -63,6 +65,11 @@ abstract interface class FvpInformationPort {
   });
 }
 
+/// Count of frames decoded by the actual native audio pipeline, not a probe.
+abstract interface class FvpAudioActivityPort {
+  int get decodedAudioFrames;
+}
+
 Future<void>? _initialization;
 
 Future<FvpPlayerPort> createFvpNativePlayer({int? windowsAdapterIndex}) async {
@@ -108,7 +115,8 @@ Future<FvpPlayerPort> createInProcessFvpNativePlayer({
   return _MdkPlayerPort(windowsAdapterIndex: windowsAdapterIndex);
 }
 
-final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
+final class _MdkPlayerPort
+    implements FvpPlayerPort, FvpInformationPort, FvpAudioActivityPort {
   _MdkPlayerPort({this.windowsAdapterIndex});
 
   final int? windowsAdapterIndex;
@@ -146,9 +154,18 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
   bool _videoRendered = false;
   bool _directSurface = false;
   VideoDimensions? _textureDimensions;
+  Pointer<Void> _audioActivity = nullptr;
+
+  @override
+  int get decodedAudioFrames =>
+      audio_activity.bili_fvp_audio_frames(_audioActivity);
 
   void _initializePlayer() {
     _native = mdk.Player();
+    _audioActivity = audio_activity.bili_fvp_audio_attach(_player.nativeHandle);
+    if (_audioActivity == nullptr) {
+      throw StateError('MDK audio activity observation unavailable');
+    }
     _eventSubscription = _player.onEvent.listen((event) {
       if (_closed) return;
       if (event.category == 'decoder.video') {
@@ -233,7 +250,7 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
       externalAudio: _externalAudio,
       silent: _silent,
       videoDecoded: _videoDecoded,
-      audioDecoded: _audioDecoded,
+      audioDecoded: _audioDecoded || decodedAudioFrames > 0,
       videoRendered: _videoRendered,
       videoDecoder: _videoDecoder,
       outputDimensions: _textureDimensions,
@@ -274,7 +291,7 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
           ),
         );
         if (!info.hasAudio) throw StateError('No companion audio track');
-        if (!await _active(probe.confirmAudio())) {
+        if (!await _active(probe._audioOpened.future)) {
           throw StateError('Companion audio decoder failed');
         }
         // The probe is about to be released. Retain owned scalars only, not
@@ -287,7 +304,6 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
             ..channels = codec.channels
             ..sampleRate = codec.sampleRate;
         }
-        _audioDecoded = true;
       } finally {
         await probe.dispose();
         _audioProbe = null;
@@ -452,7 +468,18 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
   }
 
   @override
-  Future<bool> confirmAudio() => _active(_audioOpened.future);
+  Future<bool> confirmAudio() async {
+    if (!await _active(_audioOpened.future)) return false;
+    // A paused probe only confirms decoder initialization. Playing must also
+    // confirm frames from this player's real (possibly external) audio pipe.
+    while (decodedAudioFrames == 0) {
+      if (_ended || _closed || _closing) return false;
+      await _active(Future<void>.delayed(const Duration(milliseconds: 10)));
+    }
+    _audioDecoded = true;
+    return true;
+  }
+
   @override
   void play() => _native?.state = mdk.PlaybackState.playing;
   @override
@@ -596,6 +623,10 @@ final class _MdkPlayerPort implements FvpPlayerPort, FvpInformationPort {
     }
     _closed = true;
     await _native?.disposeAsync();
+    // Destruction joins MDK's decoder threads. Only then can the observer's
+    // opaque state be freed; unregistering alone is not a callback barrier.
+    audio_activity.bili_fvp_audio_release(_audioActivity);
+    _audioActivity = nullptr;
     await _statusSubscription?.cancel();
     await _eventSubscription?.cancel();
     await _stateSubscription?.cancel();

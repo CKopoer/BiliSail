@@ -24,5 +24,18 @@ https://github.com/libass/libass/blob/master/COPYING
 FFmpeg, libass and other bundled dependencies retain their separate licenses.
 The fvp plugin's BSD license does not replace those licenses.
 
+The project's audio activity observer compiles against the unmodified public
+MDK 0.39 C headers Player.h, global.h and RenderAPI.h. Source and exact header
+hashes are recorded in packages/bili_player/third_party/mdk/SOURCE.md.
+The headers carry this notice (Player.h and global.h also state "AI participated"):
+
+Copyright (c) 2019-2026 WangBin <wbsecg1 at gmail.com>
+This file is part of MDK
+MDK SDK: https://github.com/wang-bin/mdk-sdk
+Free for opensource softwares or non-commercial use.
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
 The experimental backend retains the original SDK bytes. It does not include
 the SDK's optional BRAW, R3D or nvJPEG2000 decoder plugins in Windows/Linux bundles.

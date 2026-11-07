@@ -28,6 +28,22 @@ void main() {
         return null;
       });
       final port = await AndroidFvpPlayer.create();
+      final activity = port as FvpAudioActivityPort;
+      expect(activity.decodedAudioFrames, 0);
+      final delivered = Completer<void>();
+      messenger.handlePlatformMessage(
+        'dev.bilisail/fvp_process/events',
+        const StandardMethodCodec().encodeSuccessEnvelope({
+          'kind': 'sample',
+          'player': 100,
+          'position': 1250,
+          'buffered': 2000,
+          'audioFrames': 47,
+        }),
+        (_) => delivered.complete(),
+      );
+      await delivered.future;
+      expect(activity.decodedAudioFrames, 47);
       for (final decoding in VideoDecodingMode.values) {
         await port.prepare(
           MediaTrack(

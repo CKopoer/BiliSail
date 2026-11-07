@@ -12,7 +12,8 @@ final class FvpProcessException implements Exception {
   const FvpProcessException();
 }
 
-final class AndroidFvpPlayer implements FvpPlayerPort, FvpInformationPort {
+final class AndroidFvpPlayer
+    implements FvpPlayerPort, FvpInformationPort, FvpAudioActivityPort {
   AndroidFvpPlayer._(this._id);
 
   static const channel = MethodChannel('dev.bilisail/fvp_process');
@@ -22,6 +23,7 @@ final class AndroidFvpPlayer implements FvpPlayerPort, FvpInformationPort {
   final int _id;
   final _statuses = StreamController<FvpNativeStatus>.broadcast(sync: true);
   int _position = 0, _buffered = 0;
+  int _decodedAudioFrames = 0;
   bool _closed = false, _lost = false;
   int? exitStatus;
   Future<void>? _disposal;
@@ -46,6 +48,9 @@ final class AndroidFvpPlayer implements FvpPlayerPort, FvpInformationPort {
         } else if (event['kind'] == 'sample') {
           if (event['position'] case final int value) player._position = value;
           if (event['buffered'] case final int value) player._buffered = value;
+          if (event['audioFrames'] case final int value) {
+            player._decodedAudioFrames = value;
+          }
         }
       },
       onError: (Object _) {
@@ -115,6 +120,8 @@ final class AndroidFvpPlayer implements FvpPlayerPort, FvpInformationPort {
   int get positionMilliseconds => _position;
   @override
   int get bufferedMilliseconds => _buffered;
+  @override
+  int get decodedAudioFrames => _decodedAudioFrames;
 
   @override
   Future<PlayerPlaybackInformation?> inspectPlaybackInformation({
