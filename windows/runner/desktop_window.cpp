@@ -245,6 +245,7 @@ DesktopWindowChannel::DesktopWindowChannel(flutter::BinaryMessenger* messenger,
         }
         if (call.method_name() == "retireGeometry") {
           if (geometry_.Owns(id, owner)) {
+            mini_players_.erase(id);
             geometry_.Retire(id, owner);
             if (frame_view_ == id) {
               playback_frame_.reset();
@@ -276,7 +277,32 @@ DesktopWindowChannel::DesktopWindowChannel(flutter::BinaryMessenger* messenger,
           result->Error("window_unavailable", "Flutter view is unavailable.");
           return;
         }
-        if (call.method_name() == "setPlaybackTitleBar") {
+        if (call.method_name() == "setMiniPlayer" || call.method_name() == "setAlwaysOnTop") {
+          const auto entry = arguments->find(flutter::EncodableValue("enabled"));
+          const auto* enabled = entry == arguments->end() ? nullptr : std::get_if<bool>(&entry->second);
+          if (!enabled) {
+            result->Error("invalid_argument", "Expected a presentation state.");
+            return;
+          }
+          if (call.method_name() == "setAlwaysOnTop") {
+            if (!SetWindowPos(window, *enabled ? HWND_TOPMOST : HWND_NOTOPMOST,
+                0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)) {
+              result->Error("window_presentation_failed", "Cannot change window level.");
+              return;
+            }
+          } else if (*enabled) {
+            auto& mini = mini_players_[id];
+            if (!mini) mini = std::make_unique<playback_window::MiniPlayerWindow>(window);
+            if (!mini->Enter()) {
+              mini_players_.erase(id);
+              result->Error("window_presentation_failed", "Cannot enter mini player.");
+              return;
+            }
+          } else {
+            mini_players_.erase(id);
+          }
+          result->Success();
+        } else if (call.method_name() == "setPlaybackTitleBar") {
           apply_icon_(window);
           const auto dark_entry = arguments->find(flutter::EncodableValue("dark"));
           const auto* dark = dark_entry != arguments->end()
@@ -344,6 +370,11 @@ DesktopWindowChannel::DesktopWindowChannel(flutter::BinaryMessenger* messenger,
             maximized = *value;
           }
           const bool save = call.method_name() == "saveGeometry";
+          if (save) {
+            const auto mini = mini_players_.find(id);
+            if (mini != mini_players_.end()) mini->second->Save();
+            mini_players_.erase(id);
+          }
           const bool captured = save
               ? geometry_.SaveAndHide(window, id, owner, maximized)
               : geometry_.Capture(window, id, owner, maximized);

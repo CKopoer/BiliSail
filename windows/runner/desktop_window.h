@@ -13,6 +13,7 @@
 
 #include "playback_window_geometry_win32.h"
 #include "playback_window_frame.h"
+#include "mini_player_window.h"
 
 class CaptionBackButton;
 
@@ -35,6 +36,7 @@ class DesktopWindowChannel {
   int64_t frame_view_ = -1;
   std::unique_ptr<playback_window::PlaybackWindowFrame> playback_frame_;
   std::unordered_map<int64_t, std::unique_ptr<CaptionBackButton>> captions_;
+  std::unordered_map<int64_t, std::unique_ptr<playback_window::MiniPlayerWindow>> mini_players_;
 };
 
 #endif  // RUNNER_DESKTOP_WINDOW_H_

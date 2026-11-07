@@ -50,6 +50,19 @@ class PlaybackWindowChrome extends StatelessWidget {
             ),
           ),
         ),
+        ValueListenableBuilder<bool>(
+          valueListenable: window.alwaysOnTop,
+          builder: (context, pinned, _) => DesktopCaptionButton(
+            tooltip: pinned ? '取消置顶' : '置顶',
+            icon: pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+            onPressed: () => window.setAlwaysOnTop(!pinned),
+          ),
+        ),
+        DesktopCaptionButton(
+          tooltip: '迷你小窗',
+          icon: Icons.picture_in_picture_alt_rounded,
+          onPressed: () => window.onMiniPlayerRequested?.call(),
+        ),
         DesktopCaptionButton(
           tooltip: '最小化',
           icon: Icons.remove_rounded,

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/platform/window_service.dart';
+import '../../../core/platform/picture_in_picture_service.dart';
 import '../../../core/platform/window_size_policy.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../core/presentation/android_system_ui.dart';
@@ -43,6 +44,7 @@ import 'playback_timeline_bar.dart';
 import 'playback_snapshot_builder.dart';
 import 'live_stream_menu.dart';
 import 'live_stream_picker.dart';
+import 'mini_player.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/bili_icons.dart';
 import '../../../shared/ui/shortcut_hint.dart';
@@ -91,6 +93,11 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   final _picture = PlayerPictureController();
   late int _pictureGeneration;
   bool _fullScreen = false;
+  bool _miniPlayer = false;
+  bool _systemPip = false;
+  OverlayEntry? _miniOverlay;
+  Object? _miniRequest;
+  Timer? _pipExitTimer;
   bool _fullScreenPresented = false;
   bool _active = false;
   bool _surfaceReady = false;
@@ -132,9 +139,11 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       session: _session,
       settings: () => widget.settings.shortcuts,
       active: () => mounted && _active,
-      fullscreen: () => _fullScreen,
+      fullscreen: () => _fullScreen || _miniPlayer,
       toggleFullscreen: () {
-        if (_fullScreen) {
+        if (_miniPlayer) {
+          unawaited(_exitMiniPlayer());
+        } else if (_fullScreen) {
           unawaited(_exitFullScreen());
         } else {
           unawaited(_enterFullScreen());
@@ -146,6 +155,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       },
     );
     WidgetsBinding.instance.addObserver(this);
+    PictureInPictureService.instance.active.addListener(_pipChanged);
   }
 
   @override
@@ -164,12 +174,14 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       }
     });
     final active = WorkspaceActivity.isActive(context);
+    if (active) widget.window.onMiniPlayerRequested = _requestMiniPlayer;
     if (_active == active) return;
     _active = active;
     _surfaceReady = false;
     final activityRequest = Object();
     _activityRequest = activityRequest;
     if (!active) {
+      _dismissMiniPlayer();
       _landscapeRotationPending = false;
       _shortcuts.cancel();
       _dismissFullScreen();
@@ -313,6 +325,11 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
 
   @override
   void dispose() {
+    PictureInPictureService.instance.active.removeListener(_pipChanged);
+    _dismissMiniPlayer();
+    if (widget.window.onMiniPlayerRequested == _requestMiniPlayer) {
+      widget.window.onMiniPlayerRequested = null;
+    }
     WidgetsBinding.instance.removeObserver(this);
     _session.snapshots.removeListener(_updateFullScreenOrientation);
     _session.snapshots.removeListener(_onPlaybackCompleted);
@@ -707,7 +724,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   }
 
   Future<void> _enterFullScreen() async {
-    if (_fullScreen || !_active) return;
+    if (_fullScreen || _miniPlayer || !_active) return;
     _shortcuts.cancel();
     final request = Object();
     final providerContainer = ProviderScope.containerOf(context);
@@ -842,37 +859,191 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     }
   }
 
+  void _requestMiniPlayer() => unawaited(_enterMiniPlayer());
+
+  void _pipChanged() {
+    if (!_systemPip || PictureInPictureService.instance.active.value) return;
+    _pipExitTimer?.cancel();
+    // The mode callback can precede onResume when the user expands PiP.
+    _pipExitTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted || !_systemPip) return;
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (lifecycle == AppLifecycleState.paused ||
+          lifecycle == AppLifecycleState.hidden) {
+        unawaited(_session.pause());
+      }
+      unawaited(_exitMiniPlayer());
+    });
+  }
+
+  Future<void> _enterMiniPlayer() async {
+    if (!_active || _miniPlayer || _fullScreen || _session.media == null) {
+      return;
+    }
+    if (_miniRequest != null) return;
+    if (_session.audioOnly) {
+      showAppNotice(context, '请先退出听视频，再打开小窗');
+      return;
+    }
+    final request = Object();
+    _miniRequest = request;
+    _shortcuts.cancel();
+    _stopDeviceOrientation();
+    try {
+      final systemPip =
+          !widget.window.hasDesktopWindow &&
+          await PictureInPictureService.instance.isSupported();
+      if (!mounted || !_active || !identical(_miniRequest, request)) return;
+      _systemPip = systemPip;
+      setState(() => _miniPlayer = true);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || !_active || !identical(_miniRequest, request)) return;
+      final overlay = OverlayEntry(
+        opaque: widget.window.hasDesktopWindow || _systemPip,
+        maintainState: true,
+        builder: (context) {
+          final player = ListenableBuilder(
+            listenable: _session,
+            builder: (context, _) => MiniPlayer(
+              session: _session,
+              window: widget.window,
+              systemPip: _systemPip,
+              onRestore: () => unawaited(_exitMiniPlayer()),
+              onClose: () {
+                if (widget.window.onMiniPlayerClose case final close?) {
+                  close();
+                } else {
+                  unawaited(_session.pause());
+                  unawaited(_exitMiniPlayer());
+                }
+              },
+            ),
+          );
+          return widget.window.hasDesktopWindow || _systemPip
+              ? Positioned.fill(child: player)
+              : Positioned.fill(
+                  child: FloatingMiniPlayer(
+                    aspectRatio: _miniAspectRatio,
+                    child: player,
+                  ),
+                );
+        },
+      );
+      _miniOverlay = overlay;
+      Overlay.of(context).insert(overlay);
+      // Publish the clean video before Android captures its source rectangle.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || !_active || !identical(_miniRequest, request)) return;
+      if (widget.window.hasDesktopWindow) {
+        await widget.window.setMiniPlayer(true);
+      } else if (_systemPip) {
+        if (!await PictureInPictureService.instance.enter(_miniAspectRatio)) {
+          throw StateError('系统未允许进入画中画，请检查应用的小窗权限');
+        }
+      }
+    } catch (error) {
+      if (!identical(_miniRequest, request)) return;
+      await _exitMiniPlayer();
+      if (mounted) showAppNotice(context, '无法打开小窗：$error');
+    }
+  }
+
+  double get _miniAspectRatio {
+    final snapshot = _session.snapshots.value;
+    final dimensions = snapshot.videoDimensions;
+    return dimensions == null ? 16 / 9 : dimensions.width / dimensions.height;
+  }
+
+  Future<void> _exitMiniPlayer() async {
+    final request = _miniRequest;
+    if (request == null) return;
+    _miniRequest = null;
+    _pipExitTimer?.cancel();
+    final overlay = _miniOverlay;
+    _miniOverlay = null;
+    try {
+      if (widget.window.hasDesktopWindow) {
+        await widget.window.setMiniPlayer(false);
+      }
+    } catch (error) {
+      if (mounted) showAppNotice(context, '还原窗口失败：$error');
+    } finally {
+      overlay?.remove();
+      overlay?.dispose();
+      if (_miniRequest == null) _systemPip = false;
+      await WidgetsBinding.instance.endOfFrame;
+      if (mounted && _miniRequest == null) {
+        setState(() => _miniPlayer = false);
+        _syncDeviceOrientation();
+      }
+    }
+  }
+
+  void _dismissMiniPlayer() {
+    final restore = _miniPlayer || _miniRequest != null;
+    _pipExitTimer?.cancel();
+    _miniRequest = null;
+    _miniOverlay?.remove();
+    _miniOverlay?.dispose();
+    _miniOverlay = null;
+    _miniPlayer = false;
+    _systemPip = false;
+    if (restore && widget.window.hasDesktopWindow) {
+      unawaited(
+        widget.window.setMiniPlayer(false).catchError((
+          Object error,
+          StackTrace stack,
+        ) {
+          FlutterError.reportError(
+            FlutterErrorDetails(
+              exception: error,
+              stack: stack,
+              library: 'BiliSail mini player cleanup',
+            ),
+          );
+        }),
+      );
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => CommandTargetScope<Object>(
-    scope: CommandScope.playback,
-    active: _active,
-    onCancel: _shortcuts.cancel,
-    revision: () => _session.sourceGeneration,
-    onNavigate: _dismissFullScreen,
-    commands: {
-      for (final action in _shortcuts.capabilities)
-        action: (stroke) => _shortcuts.execute(action, stroke),
-    },
-    child: _fullScreen
-        ? const ColoredBox(color: Colors.black)
-        : _PlayerView(
-            session: _session,
-            settings: _settings,
-            controlsVisible: _controlsVisible,
-            picture: _picture,
-            shortcuts: _shortcuts,
-            onToggleComments: widget.onToggleComments,
-            danmakuComposerBuilder: widget.danmakuComposerBuilder == null
-                ? null
-                : _buildDanmakuComposer,
-            danmakuOverlayBuilder: widget.danmakuOverlayBuilder,
-            onFullScreen: _enterFullScreen,
-            pageCommands: _pageCommands,
-            navigation: _navigation,
-            onNavigate: _navigateFromPlayer,
-            fullScreen: false,
-            active: _active && _surfaceReady,
-          ),
+  Widget build(BuildContext context) => MiniPlayerActions(
+    window: widget.window,
+    onEnter: _requestMiniPlayer,
+    child: CommandTargetScope<Object>(
+      scope: CommandScope.playback,
+      active: _active,
+      onCancel: _shortcuts.cancel,
+      revision: () => _session.sourceGeneration,
+      onNavigate: () {
+        _dismissMiniPlayer();
+        _dismissFullScreen();
+      },
+      commands: {
+        for (final action in _shortcuts.capabilities)
+          action: (stroke) => _shortcuts.execute(action, stroke),
+      },
+      child: _fullScreen || _miniPlayer
+          ? const ColoredBox(color: Colors.black)
+          : _PlayerView(
+              session: _session,
+              settings: _settings,
+              controlsVisible: _controlsVisible,
+              picture: _picture,
+              shortcuts: _shortcuts,
+              onToggleComments: widget.onToggleComments,
+              danmakuComposerBuilder: widget.danmakuComposerBuilder == null
+                  ? null
+                  : _buildDanmakuComposer,
+              danmakuOverlayBuilder: widget.danmakuOverlayBuilder,
+              onFullScreen: _enterFullScreen,
+              pageCommands: _pageCommands,
+              navigation: _navigation,
+              onNavigate: _navigateFromPlayer,
+              fullScreen: false,
+              active: _active && _surfaceReady,
+            ),
+    ),
   );
 
   Widget _buildDanmakuComposer(BuildContext context) {
@@ -3512,6 +3683,22 @@ class _PlayerTopBar extends StatelessWidget {
               showHomeButton ||
               (fullScreen && Theme.of(context).platform == TargetPlatform.iOS);
           final buttons = <Widget>[
+            if (MiniPlayerActions.maybeOf(context) case final mini?)
+              _action(
+                '迷你小窗',
+                Icons.picture_in_picture_alt_rounded,
+                mini.onEnter,
+              ),
+            if (MiniPlayerActions.maybeOf(context) case final mini?
+                when mini.window.hasDesktopWindow)
+              ValueListenableBuilder<bool>(
+                valueListenable: mini.window.alwaysOnTop,
+                builder: (context, pinned, _) => _action(
+                  pinned ? '取消置顶' : '置顶',
+                  pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                  () => unawaited(mini.window.setAlwaysOnTop(!pinned)),
+                ),
+              ),
             if (showSleepTimer && !session.isLive)
               SizedBox(
                 width: _ControlsLayout.buttonWidth,

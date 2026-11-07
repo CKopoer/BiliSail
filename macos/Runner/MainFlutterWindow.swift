@@ -293,6 +293,7 @@ private final class DesktopWindowController {
   private var captions: [Int64: PlaybackTitlebarBack] = [:]
   private var geometryOwner: (view: Int64, owner: Int64)?
   private var geometryTracker: PersistentWindowGeometry?
+  private var miniPlayers: [Int64: MiniPlaybackPresentation] = [:]
   private var presentations: [Int64: WindowFullScreenCoordinator] = [:]
 
   init(messenger: FlutterBinaryMessenger) {
@@ -315,6 +316,7 @@ private final class DesktopWindowController {
       let ownsGeometry = self.geometryOwner?.view == viewID && self.geometryOwner?.owner == owner
       if call.method == "retireGeometry" {
         if ownsGeometry {
+          self.miniPlayers.removeValue(forKey: viewID)?.restore()
           self.geometryTracker?.detach()
           self.geometryTracker = nil
           self.geometryOwner = nil
@@ -341,6 +343,24 @@ private final class DesktopWindowController {
         return
       }
       switch call.method {
+      case "setMiniPlayer", "setAlwaysOnTop":
+        guard let enabled = args["enabled"] as? Bool else {
+          result(FlutterError(code: "invalid_argument", message: "Expected presentation state.", details: nil))
+          return
+        }
+        if call.method == "setAlwaysOnTop" {
+          window.level = enabled ? .floating : .normal
+        } else if enabled {
+          if self.miniPlayers[viewID] == nil {
+            self.miniPlayers[viewID] = MiniPlaybackPresentation(window: window)
+          }
+        } else {
+          self.miniPlayers.removeValue(forKey: viewID)?.restore()
+        }
+        result(nil)
+      case "startDragging":
+        if let event = NSApp.currentEvent { window.performDrag(with: event) }
+        result(nil)
       case "setFullScreen", "prepareToClose":
         if call.method == "setFullScreen" && args["enabled"] as? Bool == nil {
           result(FlutterError(code: "invalid_argument", message: "Expected fullscreen state.", details: nil))
@@ -582,6 +602,71 @@ final class WindowFullScreenCoordinator {
 
 // Native presentation preferences are shared across accounts, with one record
 // per role. Smoke builds use no persistent state or production window geometry.
+private final class MiniPlaybackPresentation {
+  private static var active: Set<ObjectIdentifier> = []
+  static func contains(_ window: NSWindow) -> Bool { active.contains(ObjectIdentifier(window)) }
+  private weak var window: NSWindow?
+  private let identity: ObjectIdentifier
+  private let style: NSWindow.StyleMask
+  private let minimum: NSSize
+  private let level: NSWindow.Level
+  private let zoomed: Bool
+  private var normalFrame: NSRect
+  private var observers: [NSObjectProtocol] = []
+  private var restored = false
+  private let key = "bilisail.windowGeometry.v1.miniPlayer"
+
+  init(window: NSWindow) {
+    self.window = window
+    identity = ObjectIdentifier(window)
+    style = window.styleMask
+    minimum = window.minSize
+    level = window.level
+    zoomed = window.isZoomed
+    normalFrame = window.frame
+    Self.active.insert(identity)
+    if zoomed { window.zoom(nil); normalFrame = window.frame }
+    window.minSize = NSSize(width: 240, height: 135)
+    window.styleMask.remove(.titled)
+    window.level = .floating
+    var frame = NSRect(x: normalFrame.maxX - 400, y: normalFrame.maxY - 225, width: 400, height: 225)
+    if let values = UserDefaults.standard.array(forKey: key) as? [Double], values.count == 4 {
+      frame = NSRect(x: values[0], y: values[1], width: values[2], height: values[3])
+    }
+    if let fitted = PlaybackGeometryTracker.fitToVisibleScreen(frame) {
+      window.setFrame(fitted, display: true)
+    }
+    for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification, NSWindow.willCloseNotification] {
+      observers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+        self?.save()
+      })
+    }
+  }
+
+  private func save() {
+    guard let window = window, !window.isMiniaturized, PlaybackGeometryTracker.valid(window.frame) else { return }
+    let frame = window.frame
+    UserDefaults.standard.set([Double(frame.minX), Double(frame.minY), Double(frame.width), Double(frame.height)], forKey: key)
+  }
+
+  func restore() {
+    guard !restored else { return }
+    save()
+    restored = true
+    observers.forEach { NotificationCenter.default.removeObserver($0) }
+    observers.removeAll()
+    if let window = window {
+      window.styleMask = style
+      window.minSize = minimum
+      window.level = level
+      window.setFrame(normalFrame, display: true)
+      if zoomed && !window.isZoomed { window.zoom(nil) }
+    }
+    Self.active.remove(identity)
+  }
+  deinit { restore() }
+}
+
 private final class PersistentWindowGeometry {
   private var tracker: PlaybackGeometryTracker?
   private var normalFrame: NSRect?
@@ -679,6 +764,7 @@ private final class PlaybackGeometryTracker {
 
   func capture() {
     guard let window = window, !fullscreenTransition,
+          !MiniPlaybackPresentation.contains(window),
           !window.isMiniaturized,
           !window.styleMask.contains(.fullScreen), Self.valid(window.frame) else { return }
     onCapture(window.isZoomed ? nil : window.frame, window.isZoomed)

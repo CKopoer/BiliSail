@@ -81,6 +81,75 @@ class WindowService {
   final _maximized = ValueNotifier(false);
   ValueListenable<bool> get maximized => _maximized;
 
+  final miniPlayer = ValueNotifier(false);
+  final alwaysOnTop = ValueNotifier(false);
+  VoidCallback? onMiniPlayerRequested;
+  VoidCallback? onMiniPlayerClose;
+  bool _beforeMiniPlayerTopmost = false;
+  Future<void> Function(bool mini)? configureMiniPlayerConstraints;
+  Future<void> _presentationCommands = Future.value();
+
+  bool get supportsMiniPlayer => hasDesktopWindow;
+  bool get hasMiniPlayerResizeHandle => Platform.isLinux;
+
+  Future<void> startResizingMiniPlayer() async {
+    if (!hasMiniPlayerResizeHandle) return;
+    await windowManager
+        .startResizing(ResizeEdge.bottomRight)
+        .timeout(_geometryTimeout);
+  }
+
+  Future<void> setAlwaysOnTop(bool enabled) async {
+    if (!hasDesktopWindow || _isViewAvailable?.call() == false) return;
+    if (Platform.isWindows || (Platform.isMacOS && viewId != null)) {
+      await _desktopChannel
+          .invokeMethod<void>('setAlwaysOnTop', {
+            'viewId': viewId ?? 0,
+            'windowHandle': ?nativeWindowHandle,
+            'enabled': enabled,
+          })
+          .timeout(_geometryTimeout);
+    } else {
+      await windowManager.setAlwaysOnTop(enabled).timeout(_geometryTimeout);
+    }
+    alwaysOnTop.value = enabled;
+  }
+
+  /// Serializes native presentation so a late enter cannot overtake restore.
+  Future<void> setMiniPlayer(bool enabled) {
+    final operation = _presentationCommands.then((_) async {
+      if (!supportsMiniPlayer ||
+          _isViewAvailable?.call() == false ||
+          miniPlayer.value == enabled) {
+        return;
+      }
+      if (enabled && _preparingToClose != null) return;
+      if (enabled) await capturePlaybackGeometry();
+      if (enabled) _beforeMiniPlayerTopmost = alwaysOnTop.value;
+      if (enabled) await configureMiniPlayerConstraints?.call(true);
+      try {
+        await _desktopChannel
+            .invokeMethod<void>('setMiniPlayer', {
+              'viewId': viewId ?? 0,
+              'windowHandle': ?nativeWindowHandle,
+              'enabled': enabled,
+            })
+            .timeout(_geometryTimeout);
+        if (!enabled) await configureMiniPlayerConstraints?.call(false);
+        miniPlayer.value = enabled;
+        alwaysOnTop.value = enabled ? true : _beforeMiniPlayerTopmost;
+      } catch (_) {
+        if (enabled) await configureMiniPlayerConstraints?.call(false);
+        rethrow;
+      }
+    });
+    _presentationCommands = operation.then(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
+  }
+
   bool get hasCustomPlaybackTitleBar => Platform.isWindows && viewId != null;
 
   Future<void> configurePlaybackTitleBar({
@@ -95,8 +164,19 @@ class WindowService {
       'backgroundColor': backgroundColor.toARGB32() & 0x00ffffff,
   });
 
-  Future<void> startDraggingPlaybackWindow() =>
-      _playbackCaptionCall('startDragging');
+  Future<void> startDraggingPlaybackWindow() async {
+    if (_isViewAvailable?.call() == false) return;
+    if (Platform.isWindows || (Platform.isMacOS && viewId != null)) {
+      await _desktopChannel
+          .invokeMethod<void>('startDragging', {
+            'viewId': viewId ?? 0,
+            'windowHandle': ?nativeWindowHandle,
+          })
+          .timeout(_geometryTimeout);
+    } else if (hasDesktopWindow) {
+      await windowManager.startDragging();
+    }
+  }
 
   Future<void> togglePlaybackWindowMaximized() =>
       _playbackCaptionCall('toggleMaximized');
@@ -137,7 +217,9 @@ class WindowService {
     required bool minimized,
     required bool fullScreen,
   }) {
-    if (!minimized && !fullScreen) _normalWindowMaximized = maximized;
+    if (!minimized && !fullScreen && !miniPlayer.value) {
+      _normalWindowMaximized = maximized;
+    }
     _maximized.value = maximized;
   }
 

@@ -13,6 +13,7 @@ class MainActivity : AudioServiceActivity() {
     private var windowBrightness: WindowBrightnessHandler? = null
     private var mobileWindow: MobileWindowHandler? = null
     private var appIcon: AppIconHandler? = null
+    private var pictureInPicture: PictureInPictureHandler? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -23,6 +24,7 @@ class MainActivity : AudioServiceActivity() {
         logExport = LogExportHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         windowBrightness = WindowBrightnessHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         mobileWindow = MobileWindowHandler(this, flutterEngine.dartExecutor.binaryMessenger)
+        pictureInPicture = PictureInPictureHandler(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
     override fun onResume() {
@@ -40,6 +42,11 @@ class MainActivity : AudioServiceActivity() {
         super.onConfigurationChanged(newConfig)
         updateDisplayMetrics(flutterEngine)
         mobileWindow?.reapplyFullScreen()
+    }
+
+    override fun onPictureInPictureModeChanged(active: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(active, newConfig)
+        pictureInPicture?.changed(active)
     }
 
     private fun updateDisplayMetrics(engine: FlutterEngine?) {
@@ -66,6 +73,8 @@ class MainActivity : AudioServiceActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        pictureInPicture?.close()
+        pictureInPicture = null
         appIcon?.close()
         appIcon = null
         mobileWindow?.close()

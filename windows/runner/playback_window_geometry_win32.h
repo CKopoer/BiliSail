@@ -23,6 +23,7 @@ inline Bounds RectBounds(const RECT& rect) {
 inline bool CaptureNormalBounds(
     HWND window, int64_t view, int64_t owner, GeometrySession& session,
     std::optional<bool> last_maximized = std::nullopt) {
+  if (GetPropW(window, L"BiliSail.MiniPlayer")) return true;
   // Fullscreen removes the native caption and may replace WINDOWPLACEMENT.
   // Dart captures immediately before entering fullscreen; never save its frame.
   if ((GetWindowLongPtr(window, GWL_STYLE) & WS_CAPTION) != WS_CAPTION ||

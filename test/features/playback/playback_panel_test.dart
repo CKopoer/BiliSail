@@ -63,6 +63,99 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  testWidgets(
+    'hiding a page while native mini enter is pending restores its window',
+    (tester) async {
+      const channel = MethodChannel('bilisail/desktop_window');
+      final entering = Completer<void>();
+      final transitions = <bool>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        call,
+      ) async {
+        if (call.method == 'setMiniPlayer') {
+          final enabled =
+              (call.arguments as Map<Object?, Object?>)['enabled'] as bool;
+          transitions.add(enabled);
+          if (enabled) await entering.future;
+        }
+        return null;
+      });
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      final window = WindowService.forView(
+        viewId: 42,
+        setFullScreen: (_) async {},
+        activate: () async {},
+      );
+      final settings = AppSettings();
+      await tester.pumpWidget(_app(session, window, settings));
+      await _pumpFrames(tester);
+      window.onMiniPlayerRequested?.call();
+      await _pumpFrames(tester);
+      expect(transitions, [true]);
+      await tester.pumpWidget(_app(session, window, settings, active: false));
+      await tester.pump();
+      entering.complete();
+      await _pumpFrames(tester);
+      expect(transitions, [true, false]);
+      expect(window.miniPlayer.value, isFalse);
+      expect(find.byKey(const ValueKey('mini-player')), findsNothing);
+      expect(engine.maxSurfaces, 1);
+    },
+  );
+
+  for (final desktop in [true, false]) {
+    testWidgets(
+      'mini player preserves session, pause intent and one surface desktop=$desktop',
+      (tester) async {
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final window = _MiniWindowService(desktop: desktop);
+        addTearDown(session.close);
+        await tester.pumpWidget(_app(session, window, AppSettings()));
+        await _pumpFrames(tester);
+        await session.seek(const Duration(seconds: 7));
+        await session.pause();
+        final opens = engine.opens;
+        window.onMiniPlayerRequested?.call();
+        await _pumpFrames(tester);
+        expect(find.byKey(const ValueKey('mini-player')), findsOneWidget);
+        expect(engine.opens, opens);
+        expect(engine.maxSurfaces, 1);
+        expect(engine.activeSurfaces, 1);
+        expect(session.snapshots.value.desiredPlaying, isFalse);
+        expect(session.snapshots.value.position, const Duration(seconds: 7));
+        final seeks = engine.seeks;
+        await tester.drag(find.byType(Slider), const Offset(40, 0));
+        await _pumpFrames(tester);
+        expect(engine.seeks, seeks + 1);
+        expect(session.snapshots.value.desiredPlaying, isFalse);
+        if (desktop) {
+          expect(window.miniPlayer.value, isTrue);
+          await tester.tap(find.byTooltip('取消置顶'));
+          await tester.pump();
+          expect(window.alwaysOnTop.value, isFalse);
+        }
+        await tester.tap(find.byTooltip('还原播放页'));
+        await _pumpFrames(tester);
+        expect(find.byKey(const ValueKey('mini-player')), findsNothing);
+        expect(engine.opens, opens);
+        expect(engine.maxSurfaces, 1);
+        expect(engine.activeSurfaces, 1);
+        expect(session.snapshots.value.desiredPlaying, isFalse);
+        expect(window.miniPlayer.value, isFalse);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final compact in [false, true]) {
     testWidgets(
       'custom rate menu and keyboard steps share options compact=$compact',
@@ -810,6 +903,8 @@ void main() {
                   .toList()
                 ..sort();
           final expectedTopButtons = [
+            '迷你小窗',
+            '置顶',
             '返回',
             '回到主页',
             if (content == 'video' || content == 'pgc') '投屏',
@@ -10499,7 +10594,20 @@ const _detail = VideoDetail(
   parts: [_part],
 );
 
-final class _FakeWindowService extends WindowService {
+final class _MiniWindowService extends _FakeWindowService {
+  _MiniWindowService({required super.desktop});
+  @override
+  Future<void> setMiniPlayer(bool enabled) async {
+    miniPlayer.value = enabled;
+    alwaysOnTop.value = enabled;
+  }
+
+  @override
+  Future<void> setAlwaysOnTop(bool enabled) async =>
+      alwaysOnTop.value = enabled;
+}
+
+class _FakeWindowService extends WindowService {
   _FakeWindowService({
     this.desktop = true,
     this.phoneRotation = true,

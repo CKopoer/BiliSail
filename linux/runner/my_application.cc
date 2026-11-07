@@ -60,6 +60,28 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+static void desktop_window_method_call(FlMethodChannel*, FlMethodCall* call, gpointer data) {
+  auto* window = GTK_WINDOW(data);
+  const auto* name = fl_method_call_get_name(call);
+  auto* args = fl_method_call_get_args(call);
+  auto* enabled = args && fl_value_get_type(args) == FL_VALUE_TYPE_MAP
+      ? fl_value_lookup_string(args, "enabled") : nullptr;
+  if (g_strcmp0(name, "setMiniPlayer") != 0) {
+    g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+    fl_method_call_respond(call, response, nullptr);
+    return;
+  }
+  if (!enabled || fl_value_get_type(enabled) != FL_VALUE_TYPE_BOOL) {
+    g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
+        fl_method_error_response_new("invalid_argument", "Expected presentation state.", nullptr));
+    fl_method_call_respond(call, response, nullptr);
+    return;
+  }
+  auto* geometry = static_cast<WindowGeometry*>(g_object_get_data(G_OBJECT(window), "bilisail-window-geometry"));
+  geometry->SetMiniPlayer(fl_value_get_bool(enabled));
+  fl_method_call_respond_success(call, nullptr, nullptr);
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -125,6 +147,11 @@ static void my_application_activate(GApplication* application) {
                                            window, nullptr);
   g_object_set_data_full(G_OBJECT(view), "bilisail-app-icon-channel", icon_channel,
                          g_object_unref);
+  auto* desktop_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "bilisail/desktop_window", FL_METHOD_CODEC(icon_codec));
+  fl_method_channel_set_method_call_handler(desktop_channel, desktop_window_method_call, window, nullptr);
+  g_object_set_data_full(G_OBJECT(view), "bilisail-desktop-window-channel", desktop_channel, g_object_unref);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

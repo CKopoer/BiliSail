@@ -1,5 +1,6 @@
 #include "../runner/playback_window_geometry_win32.h"
 #include "../runner/playback_window_frame.h"
+#include "../runner/mini_player_window.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -753,6 +754,50 @@ void RunPersistenceTests() {
 }
 }  // namespace
 
+void RunMiniPlayerTests() {
+  const std::wstring key = L"Software\\BiliSail\\MiniPlayerTest-" + std::to_wstring(GetCurrentProcessId());
+  const playback_window::WindowGeometryStore store(L"miniPlayer", key);
+  const TestWindow window;
+  ShowWindow(window.get(), SW_SHOWNORMAL);
+  RECT normal{};
+  GetWindowRect(window.get(), &normal);
+  playback_window::GeometrySession normal_geometry;
+  normal_geometry.Begin(1, 1);
+  Require(playback_window::CaptureNormalBounds(window.get(), 1, 1, normal_geometry), "Cannot capture normal window.");
+  {
+    playback_window::MiniPlayerWindow mini(window.get(), store);
+    Require(mini.Enter(), "Cannot enter mini player.");
+    Require((GetWindowLongPtr(window.get(), GWL_EXSTYLE) & WS_EX_TOPMOST) != 0, "Mini player was not pinned.");
+    Require((GetWindowLongPtr(window.get(), GWL_STYLE) & WS_CAPTION) == 0, "Mini player retained the caption.");
+    SetWindowPos(window.get(), nullptr, 110, 120, 360, 203, SWP_NOZORDER | SWP_NOACTIVATE);
+    Require(playback_window::CaptureNormalBounds(window.get(), 1, 1, normal_geometry), "Cannot capture during mini player.");
+    Require(normal_geometry.normal()->width == normal.right - normal.left, "Mini player overwrote ordinary bounds.");
+    SendMessage(window.get(), WM_EXITSIZEMOVE, 0, 0);
+    mini.Restore();
+  }
+  RequireBounds(window.get(), playback_window::RectBounds(normal));
+  Require((GetWindowLongPtr(window.get(), GWL_EXSTYLE) & WS_EX_TOPMOST) == 0, "Mini player changed normal pin state.");
+  {
+    playback_window::MiniPlayerWindow reopened(window.get(), store);
+    Require(reopened.Enter(), "Cannot reopen mini player.");
+    RECT bounds{};
+    GetWindowRect(window.get(), &bounds);
+    Require(bounds.left == 110 && bounds.top == 120 && bounds.right - bounds.left == 360 && bounds.bottom - bounds.top == 203,
+            "Mini player did not restore its separate geometry.");
+    MINMAXINFO limits{};
+    SendMessage(window.get(), WM_GETMINMAXINFO, 0, reinterpret_cast<LPARAM>(&limits));
+    Require(limits.ptMinTrackSize.x >= 240 && limits.ptMinTrackSize.y >= 135, "Mini player lost resize minimum.");
+  }
+  ShowWindow(window.get(), SW_MAXIMIZE);
+  {
+    playback_window::MiniPlayerWindow zoomed(window.get(), store);
+    Require(zoomed.Enter(), "Cannot enter mini player from maximized window.");
+    zoomed.Restore();
+    Require(IsZoomed(window.get()) != FALSE, "Mini player lost normal maximize state.");
+  }
+  RegDeleteTreeW(HKEY_CURRENT_USER, key.c_str());
+}
+
 int wmain(int argc, wchar_t* argv[]) {
   try {
     if (argc == 2) {
@@ -779,6 +824,7 @@ int wmain(int argc, wchar_t* argv[]) {
     RunRestoredNormalSizeTests();
     RunInitialSizeTests();
     RunPersistenceTests();
+    RunMiniPlayerTests();
     UnregisterClassW(window_class.lpszClassName, window_class.hInstance);
     std::cout << "PASS native first show, caption and persistence: SDK restore reproduction, directly visible maximized reopen, user Restore, normal bounds, narrow/wide first scene on repeated reopen, main-window delegate isolation and SDK child bounds, minimize, pending close, reentrant cancellation, stale owner, fullscreen, custom client frame, app brightness, detach, independent roles, cross-process restore and corrupt records\n";
     return 0;

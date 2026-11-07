@@ -125,6 +125,7 @@ class _WorkspacePlaybackWindowState extends State<WorkspacePlaybackWindow> {
     _captionTimer?.cancel();
     final previous = _window;
     _window = window;
+    if (window != null) window.onMiniPlayerClose = widget.onClose;
     _scheduleWindowTheme();
     if (previous != null) _unbindBack(previous);
     if (window == null) return;

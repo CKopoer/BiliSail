@@ -546,6 +546,13 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
       ),
     );
     _controller.addListener(_rememberPresentation);
+    windowService.configureMiniPlayerConstraints = (mini) async {
+      _controller.setConstraints(
+        mini
+            ? const BoxConstraints(minWidth: 240, minHeight: 135)
+            : constraints,
+      );
+    };
     _rememberPresentation();
   }
 
