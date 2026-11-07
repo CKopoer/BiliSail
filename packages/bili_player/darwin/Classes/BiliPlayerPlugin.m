@@ -78,7 +78,9 @@
     if ([call.method isEqualToString:@"create"]) {
         FSOptions *options = [FSOptions optionsByDefault];
         options.showHudView = NO;
-        options.automaticallySetupAudioSession = NO;
+        // iOS needs the SDK's playback category, activation and interruption handling.
+        // macOS ignores this option; the application has no separate audio-session owner.
+        options.automaticallySetupAudioSession = YES;
         options.protocolWhitelist = @"file,data,http,tcp,crypto";
         [options setFormatOptionValue:@"file,data,http,tcp,crypto" forKey:@"protocol_whitelist"];
         [options setFormatOptionValue:@"ALL" forKey:@"allowed_extensions"];
