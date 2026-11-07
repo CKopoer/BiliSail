@@ -5,6 +5,55 @@ import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('seek readiness requires a new seek and its playback restart', () async {
+    final state = NativeLoadState();
+    addTearDown(state.dispose);
+    state.playbackRestarted();
+    final before = state.seekCount;
+    var ready = false;
+    final waiting = waitForNativeState(
+      ready: () =>
+          state.seekCount > before &&
+          state.restartedSeekCount == state.seekCount,
+      superseded: () => false,
+      changes: [state.changes],
+      timeout: const Duration(seconds: 1),
+    ).then((_) => ready = true);
+    state.playbackRestarted();
+    await Future<void>.delayed(Duration.zero);
+    expect(ready, isFalse);
+    state.seekStarted();
+    state.clockChanged(seconds: 9);
+    await Future<void>.delayed(Duration.zero);
+    expect(ready, isFalse);
+    state.playbackRestarted();
+    await waiting;
+    expect(ready, isTrue);
+    state.seekStarted();
+    expect(state.restartedSeekCount, lessThan(state.seekCount));
+  });
+
+  test(
+    'seek restarts invalidate clocks and cannot cross source disposal',
+    () async {
+      final state = NativeLoadState();
+      state.clockChanged(seconds: 1, epoch: 0);
+      state.seekStarted();
+      state.clockChanged(seconds: 1, epoch: 0);
+      expect(state.audioPosition, isNull);
+      state.playbackRestarted();
+      await state.dispose();
+      state.seekStarted();
+      state.playbackRestarted();
+      expect(state.seekCount, 1);
+      expect(state.restartedSeekCount, 1);
+      final replacement = NativeLoadState();
+      addTearDown(replacement.dispose);
+      expect(replacement.seekCount, 0);
+      expect(replacement.restartedSeekCount, 0);
+    },
+  );
+
   test('output color confirmation can follow decoded dimensions', () async {
     final state = NativeLoadState();
     addTearDown(state.dispose);

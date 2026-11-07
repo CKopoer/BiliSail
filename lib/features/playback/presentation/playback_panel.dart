@@ -1832,6 +1832,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                             if (session.error == null &&
                                 (session.isResolving ||
                                     session.isRecovering ||
+                                    snapshot.isSeeking ||
                                     snapshot.phase != PlaybackPhase.ended &&
                                         snapshot.isBuffering ||
                                     snapshot.phase == PlaybackPhase.opening))
@@ -1847,6 +1848,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                       session.isRecovering
                                           ? '正在恢复播放…'
                                           : session.isResolving ||
+                                                snapshot.isSeeking ||
                                                 snapshot.phase ==
                                                     PlaybackPhase.opening
                                           ? '正在准备音视频…'

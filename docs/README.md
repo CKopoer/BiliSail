@@ -50,6 +50,7 @@
 | [播放器实时播放信息](validation/player-information-tab-2026-11-07.md) | 设置内实时参数、当前后端、解码／输出／缓存／同步观测与采样生命周期 |
 | [缓冲充足时的播放冻结检测](validation/buffered-playback-stall-2026-11-06.md) | #83 非阻塞时钟采样、静默停滞、抖动保护与恢复验证 |
 | [缓冲停帧与误恢复修复](validation/buffering-frame-retention-2026-11-07.md) | 缓存／音频时钟落后的误判、最后一帧保持与连续网络 seek 验证 |
+| [跳转后音视频同步恢复](validation/seek-av-synchronization-2026-11-07.md) | 暂停准备目标帧、原生 seek／restart 确认、暂停意图与旧请求隔离 |
 | [Android 视频灰黑首帧](validation/android-video-first-frame-2026-11-03.md) | Surface 初始尺寸、首帧通知、加载纹理过滤与硬解／软件解码真机回归 |
 | [会员彩色弹幕](validation/vip-danmaku-2026-11-03.md) | #35 渐变显示／发送、权限与回显、离线保存及验证边界 |
 | [1080P60 播放请求对照](validation/playurl-quality-2026-11-01.md) | PiliPlus 请求上下文、最高档发现／缺档补取、普通账号在线证据与大会员验收边界 |

@@ -2604,14 +2604,26 @@ class PlaybackSession extends ChangeNotifier {
     return operation;
   }
 
+  int _seekRevision = 0;
+
   Future<void> seek(Duration target) async {
     if (isLive) return;
+    final revision = ++_seekRevision;
+    final generation = _generation;
     if (_automaticRepeat != null) {
       _automaticRepeat = null;
       _desiredPlaying = false;
     }
     _cancelCloudResume();
     await _command(() => engine.seek(target));
+    if (_disposed ||
+        _closing ||
+        generation != _generation ||
+        revision != _seekRevision ||
+        engine.currentSnapshot.isSeeking ||
+        engine.currentSnapshot.phase == PlaybackPhase.failed) {
+      return;
+    }
     danmaku.seekConfirmed(engine.currentSnapshot.position);
     _lastCommentWindow = null;
     _ensureComments(engine.currentSnapshot.position);

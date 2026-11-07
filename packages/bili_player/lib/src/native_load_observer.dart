@@ -3,7 +3,7 @@ import 'dart:ffi';
 
 import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit/generated/libmpv/bindings.dart'
-    show mpv_event_hook, mpv_event_property;
+    show mpv_event_hook, mpv_event_property, mpv_event_id;
 import 'package:ffi/ffi.dart';
 
 import 'native_readiness.dart';
@@ -22,6 +22,23 @@ final class NativeLoadState {
   Duration? audioPosition;
   String? videoOutputMatrix;
   String? videoOutputDriver;
+  int _seekCount = 0, _restartedSeekCount = 0;
+
+  int get seekCount => _seekCount;
+  int get restartedSeekCount => _restartedSeekCount;
+
+  void seekStarted() {
+    if (_disposed) return;
+    _seekCount++;
+    resetClocks();
+    _changes.add(null);
+  }
+
+  void playbackRestarted() {
+    if (_disposed) return;
+    _restartedSeekCount = _seekCount;
+    _changes.add(null);
+  }
 
   void outputChanged(NativeOutputProperty property, String? value) {
     if (_disposed) return;
@@ -220,6 +237,16 @@ final class NativeLoadObserver {
                 ? property.data.cast<Double>().value
                 : null,
           );
+          continue;
+        }
+        // These notifications carry no data. A command reply or time-pos
+        // update can precede the target frame; wait for the matching restart.
+        if (event.event_id == mpv_event_id.MPV_EVENT_SEEK) {
+          state.seekStarted();
+          continue;
+        }
+        if (event.event_id == mpv_event_id.MPV_EVENT_PLAYBACK_RESTART) {
+          state.playbackRestarted();
           continue;
         }
         if (event.data == nullptr) continue;

@@ -35,6 +35,35 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
+    'superseded seek completion does not save an obsolete checkpoint',
+    () async {
+      final engine = _FakeEngine();
+      final progress = _FakeProgress();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: progress,
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      progress.writes.clear();
+      final firstGate = Completer<void>();
+      engine.nextSeek = firstGate;
+      final first = session.seek(const Duration(seconds: 20));
+      final latestGate = Completer<void>();
+      engine.nextSeek = latestGate;
+      final latest = session.seek(const Duration(seconds: 40));
+      firstGate.complete();
+      await first;
+      expect(progress.writes, isEmpty);
+      latestGate.complete();
+      await latest;
+      expect(progress.writes, hasLength(1));
+      expect(engine.currentSnapshot.position, const Duration(seconds: 40));
+    },
+  );
+  test(
     'member echoes retain style and obey display and color filters',
     () async {
       final repository = _FakeRepository(autoResolve: true);

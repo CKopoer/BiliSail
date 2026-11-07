@@ -9568,8 +9568,17 @@ void main() {
             );
           }
 
+          final surfaceBeforeSeek = tester.state(find.byType(VideoSurface));
+          engine._emit(engine.currentSnapshot.copyWith(isSeeking: true));
+          await tester.pump();
+          expect(find.text('正在准备音视频…'), findsOneWidget);
+          expect(
+            tester.state(find.byType(VideoSurface)),
+            same(surfaceBeforeSeek),
+          );
           engine._emit(
             engine.currentSnapshot.copyWith(
+              isSeeking: false,
               phase: PlaybackPhase.buffering,
               isBuffering: true,
             ),

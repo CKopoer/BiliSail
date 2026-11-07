@@ -124,6 +124,8 @@ final class MediaKitEngine
       _videoOutput.debugRequestedViewport;
 
   final List<StreamSubscription<Object?>> _subscriptions = [];
+  final _seekChanges = StreamController<int>.broadcast(sync: true);
+  int _seekRevision = 0, _pauseRevision = 0;
   Future<void> _commands = Future.value();
   mk.Player? _player;
   NativeAudioGain? _audioGain;
@@ -637,15 +639,17 @@ final class MediaKitEngine
     bool Function() ready,
     List<Stream<Object?>> changes,
     Duration timeout,
-    String safeMessage,
-  ) async {
+    String safeMessage, {
+    bool Function()? superseded,
+  }) async {
     try {
       await waitForNativeState(
         ready: ready,
         superseded: () =>
             generation != _generation ||
             _disposed ||
-            !identical(_player, player),
+            !identical(_player, player) ||
+            (superseded?.call() ?? false),
         changes: [
           ...changes,
           _generationChanges.stream,
@@ -1530,20 +1534,41 @@ final class MediaKitEngine
   }
 
   @override
-  Future<void> pause() => _command(
-    (player) => player.pause(),
-    optimistic: (s) => s.copyWith(desiredPlaying: false),
-  );
+  Future<void> pause() {
+    _pauseRevision++;
+    return _command(
+      (player) => player.pause(),
+      optimistic: (s) => s.copyWith(desiredPlaying: false),
+    );
+  }
+
   @override
   Future<void> seek(Duration target) {
     if (target < Duration.zero) throw ArgumentError.value(target, 'target');
+    _requireActive();
+    final revision = ++_seekRevision;
+    final pauseRevision = _pauseRevision;
+    _seekChanges.add(revision);
     final generation = _generation;
     return _command(
       (player) async {
+        if (revision != _seekRevision) return;
+        final watch = Stopwatch()..start();
+        const budget = Duration(seconds: 12);
+        final resume = _snapshot.desiredPlaying;
+        final video = _hasRealTrack(player.state.tracks.video);
+        final load = _nativeLoad;
+        final previousSeek = load?.state.seekCount ?? 0;
+        // Keep audio from advancing while video fetches/decodes its target.
+        // Paused seeking still renders a video frame. Audio-only playback does
+        // not need this barrier and may not restart decoding until played.
+        if (video) await player.pause();
+        if (revision != _seekRevision || generation != _generation) {
+          throw const SourceSuperseded();
+        }
         await player.seek(target);
-        // A command reply can precede the position event. Callers use this
-        // completion to save progress and rebuild danmaku, so confirm the
-        // backend position before clearing seeking or exposing a checkpoint.
+        // time-pos may jump before any target video data has arrived. Require
+        // SEEK -> PLAYBACK_RESTART as well as the confirmed paused position.
         final duration = player.state.duration;
         final expected = duration > Duration.zero && target > duration
             ? duration
@@ -1552,19 +1577,34 @@ final class MediaKitEngine
           player,
           generation,
           () =>
+              (!video ||
+                  load != null &&
+                      load.state.seekCount > previousSeek &&
+                      load.state.restartedSeekCount == load.state.seekCount) &&
               (player.state.position - expected).abs() <=
-              const Duration(milliseconds: 250),
-          [player.stream.position],
-          const Duration(seconds: 12),
-          'Playback position did not become ready after seeking.',
+                  const Duration(milliseconds: 250),
+          [player.stream.position, _seekChanges.stream],
+          _remaining(watch, budget),
+          'Audio and video did not become ready after seeking.',
+          superseded: () => revision != _seekRevision,
         );
         if (!_disposed &&
             generation == _generation &&
             identical(_player, player)) {
+          final shouldResume = resume && pauseRevision == _pauseRevision;
+          if (video && shouldResume) await player.play();
+          if (revision != _seekRevision || generation != _generation) return;
           _publish(
             _snapshot.copyWith(
               position: player.state.position,
               isSeeking: false,
+              desiredPlaying: shouldResume,
+              isBuffering: player.state.buffering,
+              phase: player.state.buffering
+                  ? PlaybackPhase.buffering
+                  : shouldResume
+                  ? PlaybackPhase.playing
+                  : PlaybackPhase.paused,
             ),
           );
         }
@@ -1628,5 +1668,6 @@ final class MediaKitEngine
     await _snapshots.close();
     await _failures.close();
     await _generationChanges.close();
+    await _seekChanges.close();
   }
 }
