@@ -19,11 +19,14 @@ final class _Player extends Fake implements FvpPlayerPort {
   bool released = false;
   bool playing = false;
   int interrupts = 0;
+  int position = 1000;
+  final seeks = <(Duration, Completer<int>)>[];
+  bool holdSeek = false;
   MediaTrack? main, sound;
   @override
   Stream<FvpNativeStatus> get statuses => events.stream;
   @override
-  int get positionMilliseconds => 1000;
+  int get positionMilliseconds => position;
   @override
   int get bufferedMilliseconds => 2000;
   @override
@@ -62,7 +65,14 @@ final class _Player extends Fake implements FvpPlayerPort {
   }
 
   @override
-  Future<int> seek(Duration target) async => target.inMilliseconds;
+  Future<int> seek(Duration target) async {
+    final ready = Completer<int>();
+    seeks.add((target, ready));
+    // MDK exposes the requested position before the frame has decoded.
+    position = target.inMilliseconds;
+    return holdSeek ? ready.future : position;
+  }
+
   @override
   void setRate(double rate) {}
   @override
@@ -77,6 +87,154 @@ final class _Player extends Fake implements FvpPlayerPort {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final source = DashPairSource(video: track('video'), audio: track('audio'));
+  test(
+    'seek pauses both tracks until the target video frame is decoded',
+    () async {
+      final player = _Player()..holdSeek = true;
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      await engine.open(source, const OpenOptions(play: true));
+      final seeking = engine.seek(const Duration(milliseconds: 9375));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(player.playing, false);
+      expect(engine.currentSnapshot.isSeeking, true);
+      expect(engine.currentSnapshot.position, Duration.zero);
+      player.events.add(FvpNativeStatus.buffered);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.buffering);
+      player.seeks.single.$2.complete(9375);
+      await seeking;
+      expect(player.playing, true);
+      expect(engine.currentSnapshot.position.inMilliseconds, 9375);
+      expect(engine.currentSnapshot.isSeeking, false);
+    },
+  );
+
+  for (final immediate in [false, true]) {
+    test(
+      'seek preserves a ${immediate ? 'same-turn' : 'pending'} manual pause',
+      () async {
+        final player = _Player()..holdSeek = true;
+        final engine = FvpEngine(createPlayer: () async => player);
+        addTearDown(engine.dispose);
+        await engine.open(source, const OpenOptions(play: true));
+        final seeking = engine.seek(const Duration(seconds: 9));
+        if (!immediate) await Future<void>.delayed(Duration.zero);
+        final pausing = engine.pause();
+        await Future<void>.delayed(Duration.zero);
+        player.seeks.single.$2.complete(9000);
+        await Future.wait([seeking, pausing]);
+        expect(player.playing, false);
+        expect(engine.currentSnapshot.desiredPlaying, false);
+        expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+        expect(engine.currentSnapshot.isSeeking, false);
+      },
+    );
+  }
+
+  test(
+    'rapid seeks serialize MDK callbacks and only resume the latest target',
+    () async {
+      final player = _Player()..holdSeek = true;
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      await engine.open(source, const OpenOptions(play: true));
+      final first = engine.seek(const Duration(seconds: 9));
+      await Future<void>.delayed(Duration.zero);
+      final obsolete = engine.seek(const Duration(seconds: 5));
+      final latest = engine.seek(const Duration(seconds: 2));
+      expect(player.seeks, hasLength(1));
+      player.seeks.first.$2.complete(9000);
+      await Future<void>.delayed(Duration.zero);
+      expect(player.seeks.map((seek) => seek.$1.inSeconds), [9, 2]);
+      expect(player.playing, false);
+      expect(engine.currentSnapshot.position, Duration.zero);
+      expect(engine.currentSnapshot.isSeeking, true);
+      player.seeks.last.$2.complete(2000);
+      await Future.wait([first, obsolete, latest]);
+      expect(player.playing, true);
+      expect(engine.currentSnapshot.position.inSeconds, 2);
+    },
+  );
+
+  test('stop cancels a blocked seek and ignores its late completion', () async {
+    final player = _Player()..holdSeek = true;
+    final engine = FvpEngine(createPlayer: () async => player);
+    addTearDown(engine.dispose);
+    await engine.open(source, const OpenOptions(play: true));
+    final seeking = engine.seek(const Duration(seconds: 9));
+    await Future<void>.delayed(Duration.zero);
+    await engine.stop().timeout(const Duration(seconds: 1));
+    await seeking;
+    player.seeks.single.$2.complete(9000);
+    await Future<void>.delayed(Duration.zero);
+    expect(player.playing, false);
+    expect(player.released, true);
+    expect(engine.currentSnapshot.phase, PlaybackPhase.idle);
+    expect(engine.currentSnapshot.isSeeking, false);
+  });
+
+  test(
+    'failed seeks interrupt the pending native slot and cannot resume playback',
+    () async {
+      final player = _Player()..holdSeek = true;
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      await engine.open(source, const OpenOptions(play: true));
+      final seeking = engine.seek(const Duration(seconds: 9));
+      await Future<void>.delayed(Duration.zero);
+      player.seeks.single.$2.complete(-1);
+      await seeking;
+      await engine.pause();
+      await engine.play();
+      await engine.seek(const Duration(seconds: 2));
+      expect(player.seeks, hasLength(1));
+      expect(player.interrupts, greaterThan(0));
+      expect(player.playing, false);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+      expect(engine.currentSnapshot.isSeeking, false);
+      expect(engine.currentSnapshot.desiredPlaying, false);
+    },
+  );
+  test('seek deadline interrupts native work without resuming sound', () async {
+    final player = _Player()..holdSeek = true;
+    final engine = FvpEngine(createPlayer: () async => player);
+    addTearDown(engine.dispose);
+    await engine.open(source, const OpenOptions(play: true));
+    final seeking = engine.seek(const Duration(seconds: 9));
+    await seeking.timeout(const Duration(seconds: 17));
+    expect(player.interrupts, greaterThan(0));
+    expect(player.playing, false);
+    expect(engine.currentSnapshot.isSeeking, false);
+    expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+    player.seeks.single.$2.complete(9000);
+    await Future<void>.delayed(Duration.zero);
+    expect(player.playing, false);
+    await engine.dispose();
+  });
+
+  test('reopening cancels an old seek and ignores its late target', () async {
+    final first = _Player()..holdSeek = true;
+    final second = _Player();
+    var creations = 0;
+    final engine = FvpEngine(
+      createPlayer: () async => creations++ == 0 ? first : second,
+    );
+    addTearDown(engine.dispose);
+    await engine.open(source, const OpenOptions(play: true));
+    final oldGeneration = engine.currentSnapshot.generation;
+    final seeking = engine.seek(const Duration(seconds: 9));
+    await Future<void>.delayed(Duration.zero);
+    await engine.open(source, const OpenOptions());
+    await seeking;
+    first.seeks.single.$2.complete(9000);
+    await Future<void>.delayed(Duration.zero);
+    expect(first.released, true);
+    expect(second.playing, false);
+    expect(engine.currentSnapshot.generation, greaterThan(oldGeneration));
+    expect(engine.currentSnapshot.position, Duration.zero);
+    expect(engine.currentSnapshot.isSeeking, false);
+  });
+
   test(
     'pause cancels first-play audio readiness and ignores its late success',
     () async {

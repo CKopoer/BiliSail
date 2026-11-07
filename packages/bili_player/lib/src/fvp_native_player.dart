@@ -270,7 +270,10 @@ final class _MdkPlayerPort implements FvpPlayerPort {
       }
     }
     final result = await _active(
-      _player.seek(position: _startPosition.inMilliseconds),
+      _player.seek(
+        position: _startPosition.inMilliseconds,
+        flags: _preciseSeek,
+      ),
     );
     if (result < 0) return false;
     return _active(_firstFrame.future);
@@ -282,7 +285,9 @@ final class _MdkPlayerPort implements FvpPlayerPort {
   void play() => _native?.state = mdk.PlaybackState.playing;
   @override
   void pause() {
-    if (!_closed && _native?.state != mdk.PlaybackState.paused) {
+    // Re-apply even when the main player's cached state is already paused:
+    // a newly attached external audio pipeline must receive this request too.
+    if (!_closed) {
       _native?.state = mdk.PlaybackState.paused;
     }
   }
@@ -295,8 +300,13 @@ final class _MdkPlayerPort implements FvpPlayerPort {
   }
 
   @override
-  Future<int> seek(Duration target) =>
-      _active(_player.seek(position: target.inMilliseconds));
+  Future<int> seek(Duration target) => _active(
+    _player.seek(position: target.inMilliseconds, flags: _preciseSeek),
+  );
+
+  static const _preciseSeek = mdk.SeekFlag(
+    mdk.SeekFlag.fromStart | mdk.SeekFlag.inCache,
+  );
   @override
   void setRate(double rate) => _player.playbackRate = rate;
   @override

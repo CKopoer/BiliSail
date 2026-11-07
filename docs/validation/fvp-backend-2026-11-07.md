@@ -27,6 +27,8 @@ MDK 0.39 的外部音频管线未向 Dart 转发音频解码器事件，因此�
 
 ## 验证入口
 
+同日后续补齐精确 seek 与目标帧等待：准备期间暂停同一个 MDK Player，保留最后画面，只在目标解码后按用户意图恢复。连续跳转、取消及平台验证边界见 [fvp 跳转同步专项](fvp-seek-synchronization-2026-11-07.md)。
+
 ```powershell
 ./tool/check.ps1 -EnforceLockfile
 ./tool/test-windows-media.ps1

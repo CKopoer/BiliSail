@@ -1,0 +1,301 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:bili_player/bili_player.dart';
+import 'package:bili_player/src/fvp_native_player.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
+      LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+
+  for (final scenario in [
+    'playing',
+    'paused',
+    'immediatePause',
+    'pauseRequested',
+    'stop',
+    'superseded',
+  ]) {
+    final playing = scenario != 'paused';
+    testWidgets(
+      'fvp waits for decoded target before resuming both tracks: $scenario',
+      (tester) async {
+        initializePlayerBackend();
+        final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR']!;
+        final video = await File('$fixtures/video.mp4').readAsBytes();
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final blocked = Completer<void>();
+        final resumeVideo = Completer<void>();
+        var delayVideo = false;
+        server.listen((request) async {
+          final range = request.headers.value(HttpHeaders.rangeHeader);
+          final start = range == null
+              ? 0
+              : int.parse(RegExp(r'bytes=(\d+)-').firstMatch(range)!.group(1)!);
+          final response = request.response;
+          response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+          response.contentLength = video.length - start;
+          if (range != null) {
+            response.statusCode = 206;
+            response.headers.set(
+              HttpHeaders.contentRangeHeader,
+              'bytes $start-${video.length - 1}/${video.length}',
+            );
+          }
+          if (delayVideo) {
+            if (!blocked.isCompleted) blocked.complete();
+            await resumeVideo.future;
+          }
+          try {
+            response.add(video.sublist(start));
+            await response.close();
+          } on SocketException {
+            // Cancelled seeks and teardown close the old range request.
+          }
+        });
+        late _ObservedPlayer native;
+        final engine = FvpEngine(
+          createPlayer: () async =>
+              native = _ObservedPlayer(await createFvpNativePlayer()),
+        );
+        final failures = <PlayerFailure>[];
+        final subscription = engine.failures.listen(failures.add);
+        final boundaryKey = GlobalKey();
+        try {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: RepaintBoundary(
+                key: boundaryKey,
+                child: VideoSurface(engine: engine),
+              ),
+            ),
+          );
+          await _withFrames(
+            tester,
+            engine.open(
+              DashPairSource(
+                video: MediaTrack(
+                  uri: Uri.parse('http://127.0.0.1:${server.port}/video.mp4'),
+                  requestPolicy: MediaRequestPolicy(),
+                ),
+                audio: MediaTrack(
+                  uri: File('$fixtures/audio.m4a').uri,
+                  requestPolicy: MediaRequestPolicy(),
+                ),
+              ),
+              OpenOptions(
+                play: playing,
+                volume: 0,
+                maxBufferAhead: const Duration(seconds: 1),
+              ),
+            ),
+          );
+          final generation = engine.currentSnapshot.generation;
+          final readiness = engine.videoOutput as VideoFrameReadiness;
+          final firstFrameWait = Stopwatch()..start();
+          while (!readiness.frameReady.value &&
+              firstFrameWait.elapsed < const Duration(seconds: 5)) {
+            await tester.pump(const Duration(milliseconds: 20));
+          }
+          expect(readiness.frameReady.value, isTrue);
+          // Readiness is published after paint; let its mask removal paint too.
+          await tester.pump();
+          await tester.pump();
+          final initialFrame = await _pixels(boundaryKey);
+          delayVideo = true;
+          var seekCompleted = false;
+          final seeking = engine.seek(const Duration(milliseconds: 9375)).then((
+            _,
+          ) {
+            seekCompleted = true;
+          });
+          final immediatePause = scenario == 'immediatePause'
+              ? engine.pause()
+              : null;
+          await _withFrames(
+            tester,
+            blocked.future.timeout(const Duration(seconds: 5)),
+          );
+          await tester.pump(const Duration(milliseconds: 200));
+          final clockBefore = native.positionMilliseconds;
+          await tester.pump(const Duration(milliseconds: 1500));
+          final clockAfter = native.positionMilliseconds;
+          expect(
+            seekCompleted,
+            isFalse,
+            reason: 'Position alone cannot finish a seek',
+          );
+          expect(engine.currentSnapshot.isSeeking, isTrue);
+          expect(
+            native.playing,
+            isFalse,
+            reason: 'Wait for video with both tracks paused',
+          );
+          expect((clockAfter - clockBefore).abs(), lessThan(100));
+          await _pixels(boundaryKey);
+          if (scenario == 'stop') {
+            await _withFrames(tester, engine.stop());
+            await _withFrames(tester, seeking);
+            expect(engine.currentSnapshot.phase, PlaybackPhase.idle);
+            expect(engine.currentSnapshot.desiredPlaying, isFalse);
+            expect(failures, isEmpty);
+            return;
+          }
+          final Future<void>? next = switch (scenario) {
+            'immediatePause' => immediatePause,
+            'pauseRequested' => engine.pause(),
+            'superseded' => engine.seek(const Duration(seconds: 2)),
+            _ => null,
+          };
+          resumeVideo.complete();
+          await _withFrames(tester, Future.wait([seeking, ?next]));
+          final shouldPlay =
+              playing &&
+              scenario != 'pauseRequested' &&
+              scenario != 'immediatePause';
+          expect(engine.currentSnapshot.isSeeking, isFalse);
+          expect(engine.currentSnapshot.desiredPlaying, shouldPlay);
+          expect(engine.currentSnapshot.generation, generation);
+          expect(failures, isEmpty);
+          expect(native.playing, shouldPlay);
+          final target = scenario == 'superseded' ? 2000 : 9375;
+          expect(
+            (engine.currentSnapshot.position - Duration(milliseconds: target))
+                .abs(),
+            lessThan(const Duration(milliseconds: 300)),
+          );
+          await tester.pump(const Duration(milliseconds: 300));
+          expect(
+            native.positionMilliseconds,
+            closeTo(target + (shouldPlay ? 300 : 0), 300),
+            reason:
+                'The MDK clock must not include time spent waiting for video',
+          );
+          expect(
+            await _pixels(boundaryKey),
+            isNot(orderedEquals(initialFrame)),
+            reason: 'The target video must replace the old frame when audio resumes',
+          );
+          expect(native.maxPendingSeeks, 1);
+          expect(tester.takeException(), isNull);
+        } finally {
+          if (!resumeVideo.isCompleted) resumeVideo.complete();
+          await subscription.cancel();
+          await _withFrames(tester, engine.dispose());
+          await tester.pumpWidget(const SizedBox.shrink());
+          await server.close(force: true);
+        }
+      },
+    );
+  }
+}
+
+Future<List<int>> _pixels(GlobalKey key) async {
+  final boundary =
+      key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  final image = await boundary.toImage(pixelRatio: .1);
+  try {
+    final data = (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+    final samples = <int>[];
+    for (var i = 0; i < data.lengthInBytes; i += 16) {
+      samples.add(
+        data.getUint8(i) + data.getUint8(i + 1) + data.getUint8(i + 2),
+      );
+    }
+    expect(
+      samples.where((value) => value > 100).length,
+      greaterThan(samples.length ~/ 10),
+    );
+    return samples;
+  } finally {
+    image.dispose();
+  }
+}
+
+Future<void> _withFrames(WidgetTester tester, Future<void> operation) async {
+  var done = false;
+  final result = operation.whenComplete(() => done = true);
+  while (!done) {
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+  await result;
+}
+
+// Observe the real port's commands without replacing MDK decoding or its seek
+// callback. No additional native player or playback clock is introduced.
+final class _ObservedPlayer implements FvpPlayerPort {
+  _ObservedPlayer(this.delegate);
+  final FvpPlayerPort delegate;
+  bool playing = false;
+  int pendingSeeks = 0;
+  int maxPendingSeeks = 0;
+  @override
+  Stream<FvpNativeStatus> get statuses => delegate.statuses;
+  @override
+  int get positionMilliseconds => delegate.positionMilliseconds;
+  @override
+  int get bufferedMilliseconds => delegate.bufferedMilliseconds;
+  @override
+  Future<FvpMediaInfo> prepare(
+    MediaTrack media,
+    MediaTrack? audio,
+    OpenOptions options, {
+    required bool silent,
+    MediaTrack? audioProbe,
+    bool isLive = false,
+  }) => delegate.prepare(
+    media,
+    audio,
+    options,
+    silent: silent,
+    audioProbe: audioProbe,
+    isLive: isLive,
+  );
+  @override
+  Future<int> createTexture() => delegate.createTexture();
+  @override
+  Future<bool> confirmVideoFrame() => delegate.confirmVideoFrame();
+  @override
+  Future<bool> confirmAudio() => delegate.confirmAudio();
+  @override
+  void play() {
+    playing = true;
+    delegate.play();
+  }
+
+  @override
+  void pause() {
+    playing = false;
+    delegate.pause();
+  }
+
+  @override
+  void interrupt() {
+    playing = false;
+    delegate.interrupt();
+  }
+
+  @override
+  Future<int> seek(Duration target) async {
+    pendingSeeks++;
+    if (pendingSeeks > maxPendingSeeks) maxPendingSeeks = pendingSeeks;
+    try {
+      return await delegate.seek(target);
+    } finally {
+      pendingSeeks--;
+    }
+  }
+
+  @override
+  void setRate(double rate) => delegate.setRate(rate);
+  @override
+  void setVolume(double volume, double gainDb) =>
+      delegate.setVolume(volume, gainDb);
+  @override
+  Future<void> dispose() => delegate.dispose();
+}

@@ -43,6 +43,8 @@ final class FvpEngine
   Completer<void>? _playCancelled;
   double _gainDb = 0;
   int _generation = 0;
+  int _seekRevision = 0;
+  int _pauseRevision = 0;
   Future<void>? _disposal;
   PlaybackSnapshot _snapshot = const PlaybackSnapshot(
     phase: PlaybackPhase.idle,
@@ -197,7 +199,12 @@ final class FvpEngine
         _player = player;
         if (_disposed || generation != _generation) throw const _Cancelled();
         _statusSubscription = player.statuses.listen((status) {
-          if (_disposed || generation != _generation || _opening) return;
+          if (_disposed ||
+              generation != _generation ||
+              _opening ||
+              _snapshot.phase == PlaybackPhase.failed) {
+            return;
+          }
           switch (status) {
             case FvpNativeStatus.invalid:
               _fail('fvp 无法继续播放此媒体');
@@ -224,7 +231,9 @@ final class FvpEngine
                 _snapshot.copyWith(
                   isBuffering: false,
                   phase: _snapshot.desiredPlaying
-                      ? PlaybackPhase.playing
+                      ? (_snapshot.isSeeking
+                            ? PlaybackPhase.buffering
+                            : PlaybackPhase.playing)
                       : PlaybackPhase.paused,
                 ),
               );
@@ -344,6 +353,7 @@ final class FvpEngine
         generation != _generation ||
         player == null ||
         _opening ||
+        _snapshot.isSeeking ||
         _snapshot.phase == PlaybackPhase.failed ||
         _snapshot.phase == PlaybackPhase.ended) {
       return;
@@ -368,7 +378,12 @@ final class FvpEngine
     _timer?.cancel();
     _player?.pause();
     _publish(
-      _snapshot.copyWith(phase: PlaybackPhase.failed, isBuffering: false),
+      _snapshot.copyWith(
+        phase: PlaybackPhase.failed,
+        desiredPlaying: false,
+        isBuffering: false,
+        isSeeking: false,
+      ),
     );
     _failures.add(PlayerFailure(kind, message, _generation));
     _diagnose(PlayerDiagnosticKind.failed);
@@ -472,7 +487,12 @@ final class FvpEngine
       if (_disposed ||
           generation != _generation ||
           player == null ||
+          _snapshot.phase == PlaybackPhase.failed ||
           cancelled.isCompleted) {
+        return;
+      }
+      if (_snapshot.isSeeking) {
+        _publish(_snapshot.copyWith(desiredPlaying: true));
         return;
       }
       final watch = Stopwatch()..start();
@@ -523,9 +543,11 @@ final class FvpEngine
 
   @override
   Future<void> pause() {
+    ++_pauseRevision;
     _cancelPlay();
     _player?.pause();
     return _command((player) {
+      if (_snapshot.phase == PlaybackPhase.failed) return;
       player.pause();
       _health.reset();
       _publish(
@@ -537,33 +559,63 @@ final class FvpEngine
   @override
   Future<void> seek(Duration target) {
     final generation = _generation;
+    final revision = ++_seekRevision;
+    final pauseRevision = _pauseRevision;
     return _enqueue(() async {
       final player = _player;
-      if (_disposed || generation != _generation || player == null || _live) {
+      if (_disposed ||
+          generation != _generation ||
+          revision != _seekRevision ||
+          player == null ||
+          _live ||
+          _snapshot.phase == PlaybackPhase.failed) {
         return;
       }
+      final shouldPlay = _snapshot.desiredPlaying;
+      player.pause();
       _health.reset();
-      _publish(_snapshot.copyWith(isSeeking: true));
+      _publish(
+        _snapshot.copyWith(
+          isSeeking: true,
+          phase: shouldPlay ? PlaybackPhase.buffering : PlaybackPhase.paused,
+        ),
+      );
       try {
+        // MDK's Dart wrapper owns one seek callback slot. Finish the active
+        // native seek before issuing the latest queued target, keeping both
+        // tracks paused throughout; never overlap native callbacks.
         final result = await _wait(
-          player.seek(target),
+          player.seek(target < Duration.zero ? Duration.zero : target),
           _cancelled,
           Stopwatch()..start(),
           const Duration(seconds: 15),
         );
         if (result < 0) throw StateError('MDK seek failed');
+        if (_disposed ||
+            generation != _generation ||
+            revision != _seekRevision ||
+            _snapshot.phase == PlaybackPhase.failed) {
+          return;
+        }
+        final resume = shouldPlay && pauseRevision == _pauseRevision;
+        if (resume) player.play();
+        _health.reset();
         _publish(
           _snapshot.copyWith(
             position: Duration(milliseconds: result),
             isSeeking: false,
+            isBuffering: false,
+            desiredPlaying: resume,
+            phase: resume ? PlaybackPhase.playing : PlaybackPhase.paused,
           ),
         );
       } on _Cancelled {
         return;
       } on Object {
         if (!_disposed && generation == _generation) {
-          _publish(_snapshot.copyWith(isSeeking: false));
           _fail('fvp 跳转失败');
+          // A timeout must not leave a live callback slot for another seek.
+          player.interrupt();
         }
       }
     });
