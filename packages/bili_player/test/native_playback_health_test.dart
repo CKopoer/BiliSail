@@ -25,6 +25,71 @@ void main() {
     expect(result?.position, const Duration(seconds: 10));
   });
 
+  for (final track in ['video', 'audio']) {
+    test('a $track boundary mismatch while buffering waits for refill', () {
+      health.update(
+        playing,
+        Duration.zero,
+        paired: true,
+        audioPosition: playing.position,
+      );
+      // At an underrun the demuxer endpoint and cached audio clock can trail
+      // the final position sample. Neither proves that a track reached EOF.
+      final buffering = playing.copyWith(
+        phase: PlaybackPhase.buffering,
+        isBuffering: true,
+        position: const Duration(seconds: 11),
+        buffered: Duration(seconds: track == 'video' ? 10 : 30),
+      );
+      for (final second in [1, 10, 29]) {
+        expect(
+          health.update(
+            buffering,
+            Duration(seconds: second),
+            paired: true,
+            audioPosition: Duration(seconds: track == 'audio' ? 10 : 11),
+          ),
+          isNull,
+        );
+      }
+      expect(
+        health.update(
+          playing.copyWith(
+            position: const Duration(seconds: 12),
+            buffered: const Duration(seconds: 30),
+          ),
+          const Duration(seconds: 29),
+          paired: true,
+          audioPosition: const Duration(seconds: 12),
+        ),
+        isNull,
+      );
+    });
+  }
+
+  test('paired buffering with lagging track clocks still has a deadline', () {
+    final buffering = playing.copyWith(
+      phase: PlaybackPhase.buffering,
+      isBuffering: true,
+      position: const Duration(seconds: 11),
+    );
+    health.update(
+      buffering,
+      Duration.zero,
+      paired: true,
+      audioPosition: const Duration(seconds: 10),
+    );
+    final result = health.update(
+      buffering,
+      NativePlaybackHealth.bufferingTimeout,
+      paired: true,
+      audioPosition: const Duration(seconds: 10),
+    );
+    expect(result?.kind, PlayerFailureKind.nativePlayback);
+    expect(result?.reason, PlaybackStallReason.playbackClock);
+    expect(result?.stalledFor, NativePlaybackHealth.bufferingTimeout);
+  });
+
   for (final missing in [false, true]) {
     test(
       'external audio EOF cannot be hidden by video progress ($missing)',

@@ -43,7 +43,11 @@ final class NativePlaybackHealth {
           : null;
       return null;
     }
+    // Cache endpoints and the sampled audio clock can trail the final position
+    // at an underrun. While native playback is buffering, retain its paused
+    // frame and let the bounded refill watchdog below decide when to recover.
     if (paired &&
+        !snapshot.isBuffering &&
         snapshot.buffered > Duration.zero &&
         (snapshot.duration <= Duration.zero ||
             snapshot.duration - snapshot.buffered >
@@ -72,7 +76,8 @@ final class NativePlaybackHealth {
                   ((snapshot.rate - 1) * sampleInterval.inMicroseconds).round(),
             )
           : Duration.zero;
-      if (audio != null &&
+      if (!snapshot.isBuffering &&
+          audio != null &&
           snapshot.position - audio >
               const Duration(milliseconds: 750) + rateAllowance &&
           (snapshot.duration <= Duration.zero ||

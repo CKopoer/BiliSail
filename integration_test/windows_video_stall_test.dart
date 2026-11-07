@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:bili_player/bili_player.dart';
 import 'package:bili_player/src/native_player_properties.dart';
@@ -7,13 +8,18 @@ import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 // Native fault injection inspects the player's pinned transitive renderer.
 // ignore: depend_on_referenced_packages
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
+
+import '../test/support/window_service_fake.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
@@ -21,7 +27,101 @@ void main() {
 
   testWidgets(
     'temporary video underrun waits with audio then resumes together',
-    _runBuffering,
+    (tester) => _runBuffering(tester),
+  );
+  testWidgets(
+    'temporary video underrun retains its frame with a lagging buffer event',
+    (tester) => _runBuffering(tester, laggingBuffer: true),
+  );
+  testWidgets(
+    'repeated forward and backward network seeks retain the native pair',
+    (tester) async {
+      initializePlayerBackend();
+      final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
+      expect(fixtures, isNotNull);
+      final engine = MediaKitEngine();
+      final failures = <PlayerFailure>[];
+      final subscription = engine.failures.listen(failures.add);
+      final media = {
+        '/video.mp4': await File('$fixtures/video.mp4').readAsBytes(),
+        '/audio.m4a': await File('$fixtures/audio.m4a').readAsBytes(),
+      };
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      var requests = 0;
+      server.listen((request) async {
+        requests++;
+        final bytes = media[request.uri.path]!;
+        final range = request.headers.value(HttpHeaders.rangeHeader);
+        final start = range == null
+            ? 0
+            : int.parse(RegExp(r'bytes=(\d+)-').firstMatch(range)!.group(1)!);
+        final response = request.response;
+        response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+        response.contentLength = bytes.length - start;
+        if (range != null) {
+          response.statusCode = 206;
+          response.headers.set(
+            HttpHeaders.contentRangeHeader,
+            'bytes $start-${bytes.length - 1}/${bytes.length}',
+          );
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        try {
+          response.add(bytes.sublist(start));
+          await response.close();
+        } on SocketException {
+          // Seeking can cancel an older range request.
+        }
+      });
+      try {
+        await tester.pumpWidget(
+          MaterialApp(home: VideoSurface(engine: engine)),
+        );
+        await _withFrames(
+          tester,
+          engine.open(
+            DashPairSource(
+              video: MediaTrack(
+                uri: Uri.parse('http://127.0.0.1:${server.port}/video.mp4'),
+                requestPolicy: MediaRequestPolicy(),
+              ),
+              audio: MediaTrack(
+                uri: Uri.parse('http://127.0.0.1:${server.port}/audio.m4a'),
+                requestPolicy: MediaRequestPolicy(),
+              ),
+            ),
+            const OpenOptions(
+              play: true,
+              volume: 0,
+              maxBufferAhead: Duration(seconds: 1),
+            ),
+          ),
+        );
+        final generation = engine.currentSnapshot.generation;
+        for (final rate in [1.0, 2.0, 4.0, 8.0]) {
+          await _withFrames(tester, engine.setRate(rate));
+          for (final second in [1, 4, 7, 2, 5, 8]) {
+            await _withFrames(tester, engine.seek(Duration(seconds: second)));
+            await tester.pump(const Duration(milliseconds: 300));
+            expect(engine.currentSnapshot.isSeeking, isFalse);
+            expect(engine.currentSnapshot.generation, generation);
+            expect(failures, isEmpty);
+          }
+        }
+        expect(engine.currentSnapshot.desiredPlaying, isTrue);
+        expect(
+          requests,
+          greaterThan(2),
+          reason: 'Exercise uncached HTTP seeks',
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        await subscription.cancel();
+        await _withFrames(tester, engine.dispose());
+        await tester.pumpWidget(const SizedBox.shrink());
+        await server.close(force: true);
+      }
+    },
   );
 
   for (final audioFault in [false, true]) {
@@ -158,7 +258,10 @@ Future<void> _runSilentStall(
   }
 }
 
-Future<void> _runBuffering(WidgetTester tester) async {
+Future<void> _runBuffering(
+  WidgetTester tester, {
+  bool laggingBuffer = false,
+}) async {
   initializePlayerBackend();
   final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
   expect(fixtures, isNotNull);
@@ -196,37 +299,118 @@ Future<void> _runBuffering(WidgetTester tester) async {
   final failures = <PlayerFailure>[];
   final engine = MediaKitEngine();
   final subscription = engine.failures.listen(failures.add);
+  final boundaryKey = GlobalKey();
+  final source = DashPairSource(
+    video: MediaTrack(
+      uri: Uri.parse('http://127.0.0.1:${server.port}/video.mp4'),
+      requestPolicy: MediaRequestPolicy(),
+    ),
+    audio: MediaTrack(
+      uri: File('$fixtures/audio.m4a').uri,
+      requestPolicy: MediaRequestPolicy(),
+    ),
+  );
+  final session = PlaybackSession(
+    engine: engine,
+    repository: _FixtureRepository(source),
+    progress: _MemoryProgress(),
+    accountScope: () => 'guest',
+  );
+  final window = FakePlaybackWindowService(
+    viewId: 0,
+    setFullScreen: (_) async {},
+    activate: () async {},
+  );
   try {
-    await tester.pumpWidget(MaterialApp(home: VideoSurface(engine: engine)));
-    await _withFrames(
-      tester,
-      engine.open(
-        DashPairSource(
-          video: MediaTrack(
-            uri: Uri.parse('http://127.0.0.1:${server.port}/video.mp4'),
-            requestPolicy: MediaRequestPolicy(),
-          ),
-          audio: MediaTrack(
-            uri: File('$fixtures/audio.m4a').uri,
-            requestPolicy: MediaRequestPolicy(),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [playbackSessionProvider.overrideWithValue(session)],
+        child: MaterialApp(
+          home: VideoCompositionScope(
+            adapter: _FrameProbeComposition(boundaryKey),
+            child: PlaybackPanel(
+              detail: _detail,
+              part: _part,
+              settings: AppSettings(
+                autoPlay: true,
+                resumePlayback: false,
+                defaultPlaybackRate: 2,
+                defaultVolume: 0,
+                danmakuEnabled: false,
+                playerControlsMode: PlayerControlsMode.click,
+              ),
+              onToggleComments: () {},
+              window: window,
+            ),
           ),
         ),
-        const OpenOptions(play: true, volume: 0, rate: 2),
       ),
     );
     final watch = Stopwatch()..start();
     while ((!engine.currentSnapshot.isBuffering ||
             engine.currentSnapshot.position < const Duration(seconds: 2)) &&
-        watch.elapsed < const Duration(seconds: 4)) {
+        watch.elapsed < const Duration(seconds: 10)) {
       await tester.pump(const Duration(milliseconds: 50));
     }
     expect(engine.currentSnapshot.isBuffering, true);
+    expect(engine.currentSnapshot.position, greaterThan(Duration.zero));
+    expect(find.text('网络缓冲中…'), findsOneWidget);
+    final surfaceState = tester.state(find.byType(VideoSurface));
+    final textureId = tester.widget<Texture>(find.byType(Texture)).textureId;
+    final generation = engine.currentSnapshot.generation;
+    if (laggingBuffer) {
+      // Position, cache and audio clocks arrive independently. Exercise a late
+      // cache sample while the real native pair is already waiting for data.
+      final native = tester
+          .widget<mkv.Video>(find.byType(mkv.Video))
+          .controller
+          .player;
+      // Fault injection only; production never writes the SDK event streams.
+      // ignore: invalid_use_of_protected_member
+      native.platform!.bufferController.add(
+        engine.currentSnapshot.position - const Duration(seconds: 1),
+      );
+    }
+    final readiness = engine.videoOutput as VideoFrameReadiness;
+    Future<List<int>> readFrame() async {
+      expect(tester.state(find.byType(VideoSurface)), same(surfaceState));
+      expect(tester.widget<Texture>(find.byType(Texture)).textureId, textureId);
+      expect(readiness.frameReady.value, isTrue);
+      final boundary =
+          boundaryKey.currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: .25);
+      try {
+        final pixels = (await image.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        ))!;
+        final samples = <int>[];
+        for (var i = 0; i < pixels.lengthInBytes; i += 16) {
+          samples.add(
+            pixels.getUint8(i) +
+                pixels.getUint8(i + 1) +
+                pixels.getUint8(i + 2),
+          );
+        }
+        expect(
+          samples.where((value) => value > 100).length,
+          greaterThan(samples.length ~/ 10),
+          reason: 'An underrun must retain the last video frame',
+        );
+        return samples;
+      } finally {
+        image.dispose();
+      }
+    }
+
+    await tester.pump(const Duration(milliseconds: 500));
+    final heldFrame = await readFrame();
     final waitingAt = engine.currentSnapshot.position;
     // A usable TCP connection may be quiet for more than the old 8s failure
     // threshold. Retain the already loaded pair and recover without a reopen.
-    final generation = engine.currentSnapshot.generation;
     final nativeWaitingAt = engine.inspectDiagnostics().position;
     await tester.pump(const Duration(seconds: 9));
+    expect(await readFrame(), orderedEquals(heldFrame));
     expect(
       (engine.currentSnapshot.position - waitingAt).abs(),
       lessThan(const Duration(milliseconds: 250)),
@@ -251,17 +435,39 @@ Future<void> _runBuffering(WidgetTester tester) async {
     );
     expect(failures, isEmpty);
     expect(engine.currentSnapshot.generation, generation);
+    expect(find.text('网络缓冲中…'), findsNothing);
+    expect(await readFrame(), isNot(orderedEquals(heldFrame)));
     debugPrint(
       'TEMPORARY_VIDEO_BUFFER waitedAtMs=${waitingAt.inMilliseconds} '
-      'resumedAtMs=${engine.currentSnapshot.position.inMilliseconds} failures=0',
+      'resumedAtMs=${engine.currentSnapshot.position.inMilliseconds} '
+      'laggingBuffer=$laggingBuffer failures=0',
     );
   } finally {
     if (!resume.isCompleted) resume.complete();
     await subscription.cancel();
-    await _withFrames(tester, engine.dispose());
     await tester.pumpWidget(const SizedBox.shrink());
+    await _withFrames(tester, session.close());
     await server.close(force: true);
   }
+}
+
+final class _FrameProbeComposition implements VideoCompositionAdapter {
+  const _FrameProbeComposition(this.key);
+  final GlobalKey key;
+
+  @override
+  Widget buildVideoSurface(BuildContext context, VideoOutput output) =>
+      RepaintBoundary(
+        key: key,
+        child: const FlutterVideoCompositionAdapter().buildVideoSurface(
+          context,
+          output,
+        ),
+      );
+
+  @override
+  Widget compose(BuildContext context, {required List<Widget> layers}) =>
+      const FlutterVideoCompositionAdapter().compose(context, layers: layers);
 }
 
 Future<void> _runStall(
