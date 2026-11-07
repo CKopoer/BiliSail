@@ -1929,7 +1929,7 @@ void main() {
                 index,
               );
               if (index == 0) {
-                final autoPlay = find.widgetWithText(SwitchListTile, '自动播放新视频');
+                final autoPlay = find.widgetWithText(SwitchListTile, '自动播放');
                 await tester.scrollUntilVisible(
                   autoPlay,
                   150,

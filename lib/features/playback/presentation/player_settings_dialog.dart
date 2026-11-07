@@ -153,7 +153,7 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                           ),
                         ),
                         _switch(
-                          '自动播放新视频',
+                          '自动播放',
                           s.autoPlay,
                           (c, v) => c.copyWith(autoPlay: v),
                         ),
