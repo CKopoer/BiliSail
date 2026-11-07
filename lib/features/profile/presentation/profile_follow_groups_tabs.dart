@@ -12,18 +12,20 @@ class ProfileFollowGroupsTabs extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final (available, groups, selected, loading, message) = ref.watch(
-      profileControllerProvider(id).select(
-        (state) => (
-          state.followGroupsAvailable,
-          state.followGroups,
-          state.followingGroupId,
-          state.followGroupsLoading,
-          state.followGroupsMessage,
-        ),
-      ),
-    );
-    if (!available) return const SizedBox.shrink();
+    final (available, groups, selected, loading, message, blacklist) = ref
+        .watch(
+          profileControllerProvider(id).select(
+            (state) => (
+              state.followGroupsAvailable,
+              state.followGroups,
+              state.followingGroupId,
+              state.followGroupsLoading,
+              state.followGroupsMessage,
+              state.showBlacklist,
+            ),
+          ),
+        );
+    if (!available || blacklist) return const SizedBox.shrink();
     final controller = ref.read(profileControllerProvider(id).notifier);
     return Column(
       mainAxisSize: MainAxisSize.min,

@@ -1,5 +1,7 @@
 # API、鉴权与数据边界
 
+2026-11-08 我的关注增加 Web Cookie 全量搜索（WBI `/x/relation/followings/search`）、黑名单分页、关注排序及分组新建／重命名／删除／排序。写入沿用 Web Cookie／CSRF 单次提交，结果不明需刷新，管理端口只允许本人账号。端点、字段、取消与验证边界见[关注／粉丝卡片与管理](validation/profile-relations-2026-11-08.md)。
+
 2026-11-05 空间反馈修复复用 `api.bilibili.com` Web JSON 端点：基本资料 GET `/x/web-interface/card` 增加 `photo=true`，解析响应中的 `space.l_img/s_img` 作为头图；GET `/x/space/setting?mid=...` 读取 `privacy.fav_video/bangumi`，区分收藏夹及追番／追剧隐藏状态，本人查看不受访客隐私限制。两项读取 Cookie 可选，无签名、CSRF 或分页，沿用取消、25 秒总 deadline 与有界只读重试。黑名单状态使用当前 Web Cookie GET `/x/relation?fid=...`，无签名、CSRF 或分页；显式确认后 POST `/x/relation/modify`，字段 `fid/act=5或6/re_src=11`，使用当前 Web Cookie／CSRF，仅尝试一次。账号 scope/session epoch 及页面生命周期隔离迟到结果；细节、参考与线上未验收项见[空间修复](validation/profile-fixes-2026-11-05.md)。
 
 同日按用户要求将主页举报改为应用内表单，显式点击提交后单次 form-urlencoded POST `https://space.bilibili.com/ajax/report/add`，Web profile、目标域 Cookie/CSRF，参数 `mid/reason` 和可选 `reason_v2`；不需要签名、App token 或分页。响应严格检查旧式 JSON 布尔 `status`，保留认证/风控 `code` 错误；账号 epoch、取消、25 秒总 deadline 和写入不重试沿用共享通道。参考、编码、结果不明处理和真实账号未验收边界见[应用内举报](validation/profile-report-2026-11-05.md)。

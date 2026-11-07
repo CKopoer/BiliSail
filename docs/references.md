@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-08 关注／粉丝卡片和我的关注管理只读参考 PiliPlus `265f879fa85973b4bf885bde2562f1007f1013b8` 的关注、分组、搜索与黑名单交互和 Web 协议；精确路径、独立实现范围及离线验证见[专项记录](validation/profile-relations-2026-11-08.md)。未复制 GPLv3 源码或资源，未修改相邻仓库或引入依赖。
+
 2026-11-05 UP 主主页应用内举报只读参考 PiliPlus `265f879fa85973b4bf885bde2562f1007f1013b8` 的 `lib/common/widgets/dialog/report_member.dart`、`lib/http/member.dart` 与 `lib/http/api.dart`。仅采用多选内容/可选单选理由的交互职责，以及空间 Web Cookie/CSRF 端点、字段和布尔 `status` 响应；独立实现本项目代码，未复制 GPLv3 应用源码或资源、未修改相邻仓库或增加依赖。编码、单次写入与未验收边界见[应用内举报](validation/profile-report-2026-11-05.md)。
 
 2026-11-05 空间与消息反馈修复继续只读参考 PiliPlus `265f879fa85973b4bf885bde2562f1007f1013b8`。空间核对头图、装扮、徽章、隐私与用户操作；消息核对会话排列、助手入口及通知子页职责。具体源码、当前公开脚本和采用范围分别记录在[空间修复](validation/profile-fixes-2026-11-05.md)、[私信修复](validation/private-message-fixes-2026-11-05.md)及[通知布局](validation/message-notification-layout-2026-11-05.md)。独立实现本项目代码，未复制 GPLv3 应用源码或资源，未修改相邻仓库；离线测试及未验收边界见[汇总记录](validation/profile-message-fixes-2026-11-05.md)。

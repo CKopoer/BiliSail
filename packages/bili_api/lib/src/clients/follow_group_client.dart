@@ -14,6 +14,57 @@ final class FollowGroupClient {
 
   final BiliApiClient api;
 
+  Future<void> create(String name, {ApiRequestContext? context}) async {
+    await api.submitForm('/x/relation/tag/create', 'follow_group_create', {
+      'tag': _name(name),
+    }, context: context);
+  }
+
+  Future<void> rename(
+    String id,
+    String name, {
+    ApiRequestContext? context,
+  }) async {
+    _editable(id);
+    await api.submitForm('/x/relation/tag/update', 'follow_group_rename', {
+      'tagid': id,
+      'name': _name(name),
+    }, context: context);
+  }
+
+  Future<void> delete(String id, {ApiRequestContext? context}) async {
+    _editable(id);
+    await api.submitForm('/x/relation/tag/del', 'follow_group_delete', {
+      'tagid': id,
+    }, context: context);
+  }
+
+  Future<void> sort(List<String> ids, {ApiRequestContext? context}) async {
+    if (ids.isEmpty || ids.length > 100 || ids.toSet().length != ids.length) {
+      throw ArgumentError('Invalid follow groups');
+    }
+    for (final id in ids) {
+      _editable(id);
+    }
+    await api.submitForm('/x/relation/tags/update_sort', 'follow_group_sort', {
+      'tagids': ids.join(','),
+    }, context: context);
+  }
+
+  static String _name(String name) {
+    final value = name.trim();
+    if (value.isEmpty || value.runes.length > 16) {
+      throw ArgumentError('Invalid follow group name');
+    }
+    return value;
+  }
+
+  static void _editable(String id) {
+    if (!RegExp(r'^[1-9]\d*$').hasMatch(id)) {
+      throw ArgumentError('Reserved or invalid follow group');
+    }
+  }
+
   Future<List<ApiFollowGroup>> groups({
     bool includeReserved = false,
     ApiRequestContext? context,

@@ -1,0 +1,46 @@
+# 关注／粉丝卡片与我的关注管理
+
+日期：2026-11-08。本轮仅修改界面、领域端口、应用控制器和 Web 协议；按用户要求不构建应用、不执行真实账号写操作，实机交互与性能留待用户验收。
+
+## 界面与生命周期
+
+- UP 主及个人主页的关注、粉丝共用紧凑用户卡：头像、单行名称和单行简介，点击打开用户主页；我的关注额外提供一个管理入口。沿用主题色、12 像素圆角和 `NetworkAvatar` 的固定尺寸空白加载态、公共图片缩略图与缓存。
+- 网格按内容宽度与字体缩放自适应 1–6 列，使用 `SliverGrid.builder` 懒创建，关闭子项自动保活。布局和 delegate 按不可变列表、回调、宽度与文字缩放缓存；分页状态、头部资料和其他栏目更新不会替换未变化的卡片树。卡片本身没有 Provider 订阅、定时器或关系请求，只有用户打开关注操作时才读取对应用户的关系／分组。
+- 自己的关注增加全量远端搜索、最近关注／最常访问排序，沿用分组标签，并提供新建、重命名、删除及拖动排序；默认／特别关注等保留分组不允许编辑。用户关注／分组操作复用 `UserFollowButton` 和原有单次写入控制器。
+- 黑名单使用同一懒网格，提供分页、按 UID 添加和确认移除。管理端口只允许当前登录账号查看自己的主页时调用；普通 UP 主主页保留公开关注／粉丝浏览。
+- 视频搜索与关注搜索分别拥有关键词。分组、搜索、排序、黑名单改变时取消旧分页，并通过请求代次、账号 scope/session epoch 和页面 generation 丢弃旧响应。继续保留每栏目最多 500 条、去重和连续空页停止自动翻页的既有边界。
+- 写入串行，网络／超时／协议等结果不明时禁用继续写入，要求显式刷新读取状态，不自动重放。删除当前分组后回到全部关注。
+- 输入控制器在初始化时创建并在销毁时释放。管理弹窗及嵌套的关注分组弹窗绑定来源页面与账号；页面关闭或账号改变会移除弹窗、清理草稿和监听。页面／Provider 销毁取消其请求，不保留全局用户卡状态。
+
+## 协议登记
+
+均为 Web profile、HTTPS `api.bilibili.com`，响应为 JSON，复用 `ApiRequests` 的账号隔离、取消及 25 秒总 deadline；不需要 App／TV token。
+
+| 操作 | Method / path | 参数与规则 |
+| --- | --- | --- |
+| 搜索全部关注 | GET `/x/relation/followings/search` | Web Cookie，WBI；`vmid/name/pn/ps=30/order=desc/order_type=attention/gaia_source=main_web/web_location=333.999`；原始文本只编码一次，按 total 分页；有界只读重试 |
+| 全部关注排序 | GET `/x/relation/followings` | 沿用 `vmid/pn/ps/order=desc`，最常访问增加 `order_type=attention`；无签名／CSRF，按 total 分页 |
+| 黑名单 | GET `/x/relation/blacks` | Web Cookie；`pn/ps=30/order=desc`，无 WBI／CSRF，按 total 分页，total=0 的 null 列表按空页处理；有界只读重试 |
+| 新建分组 | POST `/x/relation/tag/create` | Web Cookie／CSRF；`tag`，去除首尾空白后限制 1–16 个 Unicode code point；无签名／分页，仅一次 |
+| 重命名分组 | POST `/x/relation/tag/update` | Web Cookie／CSRF；`tagid/name`，仅正整数自定义分组；仅一次 |
+| 删除分组 | POST `/x/relation/tag/del` | Web Cookie／CSRF；`tagid`，仅自定义分组，确认后一次提交 |
+| 分组排序 | POST `/x/relation/tags/update_sort` | Web Cookie／CSRF；`tagids` 为自定义分组 ID 有序逗号列表，校验无重复且为完整集合；仅一次 |
+| 加入／移出黑名单 | POST `/x/relation/modify` | 沿用 `fid/act=5或6/re_src=11` 与 Web Cookie／CSRF；禁止操作本人；显式操作后一次提交 |
+
+分组读取／成员分页及用户分组归属继续沿用现有 `/x/relation/tags`、`/x/relation/tag`、`/x/relation/tag/user`、`/x/relation/tags/addUsers`，不另建持久化私有缓存。
+
+## 参考来源与许可
+
+只读核对本地 PiliPlus 提交 `265f879fa85973b4bf885bde2562f1007f1013b8`：`lib/pages/follow/view.dart`、`controller.dart`、`widgets/follow_item.dart`、`lib/pages/follow_search/controller.dart`、`lib/pages/follow_tag_sort/view.dart`、`lib/pages/blacklist/view.dart`、`controller.dart`，以及 `lib/http/member.dart`、`follow.dart`、`black.dart`、`api.dart` 和 `lib/models/common/follow_order_type.dart`。仅参考交互职责、端点和字段，独立实现本项目 Riverpod／领域端口与共享主题卡片；未复制 GPLv3 应用代码或资源、未修改相邻仓库、未增加依赖或改变 media-kit 固定来源。
+
+## 自动验证与未测项
+
+离线协议测试覆盖 WBI／原始搜索文本、分页与空名单、超大十进制 UID、写端点／CSRF／字段、保留分组和重复排序拒绝、失败写入仅一次。Repository 测试覆盖访客与非本人账号的管理请求在发送前拒绝。
+
+控制器测试覆盖远端搜索／分页、独立筛选条件、快速查询／排序／黑名单切换、迟到成功与错误、分组操作后回读与删除回退、写入单飞／结果不明／刷新失败，以及账号切换和页面关闭的读写取消。组件测试覆盖所有管理入口、确认写入、搜索清空、320 宽／两倍字体、来源页面／账号变化清理草稿及嵌套分组弹窗。
+
+性能结构回归覆盖 375／1600 宽的关注与粉丝：连续滚动 30 帧及无关状态更新，已挂载卡片额外重建为 0、全列表类型扫描为 0；并验证视口外元素释放、字体／窗口变化后的网格重排和更新回调生效。这些是自动化结构证据，不代表设备帧率或内存改善的测量结论。
+
+最终 `tool/check.ps1 -SkipPub` 运行中，根应用／四个包格式检查、全仓静态分析和打包边界检查通过；根应用 4653 项、`bili_api` 703 项离线测试全部通过，根应用另有 13 项按环境条件跳过。用户随后明确要求停止扩大测试并直接提交，因此在 `bili_player` 测试阶段停止脚本，未将未完成的播放器／弹幕／mux 阶段计作通过。日志为 `build/profile-following-check-final-2026-11-08.log`。原滚轮测试假定可完整滚动 480 像素，已适配紧凑网格和折叠头部布局后的实际边界；对应回归及全量根应用测试通过。
+
+尚未验证真实账号在线读写、三端视觉与触摸手感、长名单设备帧率／内存；没有执行平台应用构建或安装，也未执行 mux 原生集成回归。未发现正在运行的 Dart debug／DTD 进程，因此未启动应用进行热重载。

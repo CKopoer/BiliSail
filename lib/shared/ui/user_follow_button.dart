@@ -17,11 +17,15 @@ final class UserFollowButton extends ConsumerWidget {
     this.compact = false,
     this.showMessage = true,
     this.iconOnly = false,
+    this.openGroupsDialog,
   });
 
   final UserId id;
   final VoidCallback? onLogin;
   final bool compact, showMessage, iconOnly;
+
+  /// Lets an owning page apply its lifecycle to the nested membership dialog.
+  final Future<void> Function(WidgetBuilder)? openGroupsDialog;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,10 +51,13 @@ final class UserFollowButton extends ConsumerWidget {
         if (action == 'groups') {
           unawaited(controller.loadGroups());
           unawaited(
-            showAppDialog<void>(
-              context: context,
-              builder: (_) => _FollowGroupsDialog(id: VideoAuthorId(mid)),
-            ),
+            openGroupsDialog?.call(
+                  (_) => _FollowGroupsDialog(id: VideoAuthorId(mid)),
+                ) ??
+                showAppDialog<void>(
+                  context: context,
+                  builder: (_) => _FollowGroupsDialog(id: VideoAuthorId(mid)),
+                ),
           );
         } else if (action == 'unfollow') {
           unawaited(controller.toggleFollow());

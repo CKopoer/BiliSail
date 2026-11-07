@@ -27,6 +27,7 @@ import 'profile_details_dialog.dart';
 import 'profile_report_dialog.dart';
 import 'profile_section_content.dart';
 import 'profile_follow_groups_tabs.dart';
+import 'profile_following_tools.dart';
 import '../application/profile_controller.dart';
 import '../application/profile_actions_controller.dart';
 import '../domain/profile_repository.dart';
@@ -464,6 +465,24 @@ class _ProfileSectionPage extends ConsumerStatefulWidget {
 }
 
 class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
+  final _followingDialogs = FollowingDialogLifetime();
+
+  @override
+  void dispose() {
+    _followingDialogs.dispose();
+    super.dispose();
+  }
+
+  void _manageUser(ProfileEntry entry) {
+    manageProfileUser(
+      context: context,
+      ref: ref,
+      owner: widget.id,
+      entry: entry,
+      lifetime: _followingDialogs,
+    );
+  }
+
   void _openFavoriteVideo(VideoSummary video) {
     _playFavorites(initial: video.id);
   }
@@ -536,6 +555,7 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
       collection,
       collectionTitle,
       followingGroupId,
+      followingQuery,
     ) = ref.watch(
       profileControllerProvider(widget.id).select(
         (state) => (
@@ -554,6 +574,14 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
           widget.section == ProfileSection.following
               ? state.followingGroupId
               : null,
+          widget.section == ProfileSection.following
+              ? (
+                  state.followingKeyword,
+                  state.followingOrder,
+                  state.showBlacklist,
+                  state.followingManagementAvailable,
+                )
+              : ('', '', false, false),
         ),
       ),
     );
@@ -565,6 +593,7 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
       widget.section == ProfileSection.folders ? folderId : null,
       collection,
       followingGroupId,
+      followingQuery,
     );
     return PagedScrollViewport(
       key: ValueKey(listKey),
@@ -586,7 +615,14 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
             (widget.section != ProfileSection.collections ||
                 current.collection == collection) &&
             (widget.section != ProfileSection.following ||
-                current.followingGroupId == followingGroupId) &&
+                (current.followingGroupId == followingGroupId &&
+                    (
+                          current.followingKeyword,
+                          current.followingOrder,
+                          current.showBlacklist,
+                          current.followingManagementAvailable,
+                        ) ==
+                        followingQuery)) &&
             (widget.section != ProfileSection.videos ||
                 (current.order == order && current.keyword == keyword)) &&
             current.current.message == null) {
@@ -607,6 +643,11 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.section == ProfileSection.following &&
+                      followingQuery.$4) ...[
+                    ProfileFollowingTools(id: widget.id),
+                    const SizedBox(height: 12),
+                  ],
                   if (widget.section == ProfileSection.videos) ...[
                     Consumer(
                       builder: (context, ref, _) {
@@ -725,7 +766,11 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
                       !list.isHidden &&
                       list.message == null)
                     StateView.empty(
-                      message: '${profileSectionLabel(widget.section)}暂无公开内容',
+                      message: followingQuery.$3
+                          ? '黑名单为空'
+                          : followingQuery.$1.isNotEmpty
+                          ? '没有找到匹配的关注用户'
+                          : '${profileSectionLabel(widget.section)}暂无公开内容',
                     ),
                 ],
               ),
@@ -741,6 +786,7 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
                   ? _openFavoriteVideo
                   : widget.onOpenVideo,
               onOpenUser: widget.onOpenUser,
+              onManageUser: followingQuery.$4 ? _manageUser : null,
               onOpenFolder: controller.openFolder,
               onOpenCollection: controller.openCollection,
               onOpenSeason: widget.onOpenSeason,

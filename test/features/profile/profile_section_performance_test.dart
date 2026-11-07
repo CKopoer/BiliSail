@@ -9,6 +9,7 @@ import 'package:bilisail/features/dynamic/application/dynamic_actions_controller
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:bilisail/features/profile/presentation/profile_video_card.dart';
+import 'package:bilisail/features/profile/presentation/profile_user_card.dart';
 import 'package:bilisail/shared/ui/dynamic_post_interactions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -100,7 +101,11 @@ void main() {
   }
 
   for (final width in [375.0, 1600.0]) {
-    for (final section in [ProfileSection.videos, ProfileSection.following]) {
+    for (final section in [
+      ProfileSection.videos,
+      ProfileSection.following,
+      ProfileSection.followers,
+    ]) {
       testWidgets('$section stable scroll delegates at width=$width', (
         tester,
       ) async {
@@ -109,7 +114,9 @@ void main() {
         final mounted = tester
             .elementList(
               find.byType(
-                section == ProfileSection.videos ? ProfileVideoCard : ListTile,
+                section == ProfileSection.videos
+                    ? ProfileVideoCard
+                    : ProfileUserCard,
               ),
             )
             .toSet();
@@ -137,7 +144,12 @@ void main() {
     }
   }
 
-  for (final section in [ProfileSection.videos, ProfileSection.dynamics]) {
+  for (final section in [
+    ProfileSection.videos,
+    ProfileSection.dynamics,
+    ProfileSection.following,
+    ProfileSection.followers,
+  ]) {
     testWidgets('$section ignores profile and other-list updates', (
       tester,
     ) async {
@@ -148,7 +160,9 @@ void main() {
             find.byType(
               section == ProfileSection.videos
                   ? ProfileVideoCard
-                  : InteractiveDynamicPostCard,
+                  : section == ProfileSection.dynamics
+                  ? InteractiveDynamicPostCard
+                  : ProfileUserCard,
             ),
           )
           .toSet();
@@ -323,6 +337,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'relationship cards resize, release offscreen elements and retain their list offset',
+    (tester) async {
+      await mount(
+        tester,
+        section: ProfileSection.followers,
+        entries: _entries(ProfileSection.followers),
+      );
+      final cards = find.byType(ProfileUserCard);
+      expect(
+        tester.getTopLeft(cards.at(0)).dy,
+        tester.getTopLeft(cards.at(1)).dy,
+      );
+      final first = tester.element(cards.first);
+      _position(tester).jumpTo(_position(tester).maxScrollExtent);
+      await tester.pumpAndSettle();
+      expect(first.mounted, false);
+      expect(cards.evaluate().length, lessThan(100));
+      _position(tester).jumpTo(0);
+      await tester.pumpAndSettle();
+      await render(tester, width: 320, scale: 2);
+      expect(tester.getSize(cards.first).height, greaterThan(90));
+      expect(
+        tester.getTopLeft(cards.at(0)).dy,
+        lessThan(tester.getTopLeft(cards.at(1)).dy),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('updating dynamics leaves the retained submissions unchanged', (
     tester,
   ) async {
@@ -463,7 +507,12 @@ final class _Controller extends ProfileController {
   void updateOtherList() => state = state.copy(
     lists: {
       ...state.lists,
-      ProfileSection.followers: const ProfileListState(page: 1, hasMore: false),
+      (state.section == ProfileSection.followers
+          ? ProfileSection.following
+          : ProfileSection.followers): const ProfileListState(
+        page: 1,
+        hasMore: false,
+      ),
     },
   );
 }

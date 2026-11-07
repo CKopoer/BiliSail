@@ -671,8 +671,14 @@ void main() {
       expect(offset(), greaterThan(first));
       expect(offset(), lessThan(480));
       await tester.pumpAndSettle();
-      expect(offset(), closeTo(480, .5));
-      expect(position.pixels, closeTo(480 - headerHeight, .5));
+      // Nested overlap changes the inner extent as the header collapses. The
+      // compact user grid may reach its end before all 480 wheel pixels.
+      final expectedOffset = 480.0.clamp(
+        0.0,
+        headerHeight + position.maxScrollExtent,
+      );
+      expect(offset(), closeTo(expectedOffset, .5));
+      expect(position.pixels, closeTo(expectedOffset - headerHeight, .5));
       expect(find.byType(ProfileHeader).hitTestable(), findsNothing);
       expect(
         tester.getTopLeft(find.byType(ProfileSectionNavigation)).dy,

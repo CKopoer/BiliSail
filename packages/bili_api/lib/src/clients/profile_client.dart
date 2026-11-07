@@ -480,20 +480,81 @@ final class ProfileClient {
     String mid, {
     required bool followers,
     required int page,
+    String orderType = '',
     ApiRequestContext? context,
   }) async {
     _id(mid);
     _page(page);
     final e = followers ? 'profile_followers' : 'profile_followings';
-    final data = await _get(
-      '/x/relation/${followers ? 'followers' : 'followings'}',
-      e,
-      {'vmid': mid, 'pn': '$page', 'ps': '$_size', 'order': 'desc'},
-      context,
-    );
+    final data =
+        await _get('/x/relation/${followers ? 'followers' : 'followings'}', e, {
+          'vmid': mid,
+          'pn': '$page',
+          'ps': '$_size',
+          'order': 'desc',
+          if (orderType.isNotEmpty) 'order_type': orderType,
+        }, context);
     final items = _list(data['list'], e).map((v) => _relation(v, e)).toList();
     final total = _number(data['total']);
     if (total == null || total < 0) _fail(e);
+    return _paged(items, page, total);
+  }
+
+  Future<ApiPage<ApiProfileEntry>> searchFollowing(
+    String mid,
+    String keyword, {
+    required int page,
+    ApiRequestContext? context,
+  }) async {
+    _id(mid);
+    _page(page);
+    if (keyword.trim().isEmpty || keyword.runes.length > 100) {
+      throw ArgumentError('Invalid following search');
+    }
+    const e = 'profile_following_search';
+    final data = await api.requestWbiJson(
+      '/x/relation/followings/search',
+      {
+        'vmid': mid,
+        'pn': '$page',
+        'ps': '$_size',
+        'name': keyword.trim(),
+        'order': 'desc',
+        'order_type': 'attention',
+        'gaia_source': 'main_web',
+        'web_location': '333.999',
+      },
+      e,
+      context: context,
+    );
+    return _relationPage(data, page, e);
+  }
+
+  Future<ApiPage<ApiProfileEntry>> loadBlacklist({
+    required int page,
+    ApiRequestContext? context,
+  }) async {
+    _page(page);
+    const e = 'profile_blacklist';
+    final data = await _get('/x/relation/blacks', e, {
+      'pn': '$page',
+      'ps': '$_size',
+      'order': 'desc',
+    }, context);
+    return _relationPage(data, page, e);
+  }
+
+  static ApiPage<ApiProfileEntry> _relationPage(
+    Map<String, Object?> data,
+    int page,
+    String e,
+  ) {
+    final total = _number(data['total']);
+    if (total == null || total < 0) _fail(e);
+    final items = _list(
+      data['list'] ?? (total == 0 ? const [] : null),
+      e,
+    ).map((value) => _relation(value, e)).toList();
     return _paged(items, page, total);
   }
 

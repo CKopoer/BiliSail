@@ -11,6 +11,7 @@ import '../../../shared/ui/sliver_dynamic_post_list.dart';
 import '../domain/profile_repository.dart';
 import 'profile_folder_video_grid.dart';
 import 'profile_video_card.dart';
+import 'profile_user_card.dart';
 
 /// Retain one lazy delegate for unchanged content, independent of scroll offset
 /// and paging/header status. Entry snapshots are immutable in the controller.
@@ -26,6 +27,7 @@ class ProfileSectionContent extends StatefulWidget {
     this.onOpenUser,
     this.onOpenCollection,
     this.onOpenSeason,
+    this.onManageUser,
   });
 
   final ProfileSection section;
@@ -37,6 +39,7 @@ class ProfileSectionContent extends StatefulWidget {
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<ProfileEntry>? onOpenCollection;
   final ValueChanged<String>? onOpenSeason;
+  final ValueChanged<ProfileEntry>? onManageUser;
 
   @override
   State<ProfileSectionContent> createState() => _ProfileSectionContentState();
@@ -64,6 +67,7 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
         oldWidget.onOpenLink != widget.onOpenLink ||
         oldWidget.onOpenVideo != widget.onOpenVideo ||
         oldWidget.onOpenUser != widget.onOpenUser ||
+        oldWidget.onManageUser != widget.onManageUser ||
         oldWidget.onOpenCollection != widget.onOpenCollection ||
         oldWidget.onOpenSeason != widget.onOpenSeason) {
       _content = null;
@@ -93,6 +97,14 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
   }
 
   Widget _buildContent() {
+    if (widget.section == ProfileSection.following ||
+        widget.section == ProfileSection.followers) {
+      return ProfileUserGrid(
+        entries: widget.entries,
+        onOpen: widget.onOpenUser,
+        onManage: widget.onManageUser,
+      );
+    }
     final kind = _kind ??= _classify();
     if (kind == _ContentKind.folderVideos) {
       return ProfileFolderVideoGrid(

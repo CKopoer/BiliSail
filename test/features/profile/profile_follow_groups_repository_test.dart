@@ -7,6 +7,7 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/profile/data/api_profile_repository.dart';
+import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -68,6 +69,49 @@ void main() {
             id,
             '1',
             page: 1,
+            cancellation: RequestCancellation(),
+          ),
+          denied,
+        );
+        await expectLater(
+          repo.loadManagedFollowing(
+            id,
+            page: 1,
+            blacklist: true,
+            cancellation: RequestCancellation(),
+          ),
+          denied,
+        );
+        await expectLater(
+          repo.loadManagedFollowing(
+            id,
+            page: 1,
+            keyword: '查询',
+            cancellation: RequestCancellation(),
+          ),
+          denied,
+        );
+        await expectLater(
+          repo.editFollowGroup(
+            id,
+            FollowGroupEdit.create,
+            name: '分组',
+            cancellation: RequestCancellation(),
+          ),
+          denied,
+        );
+        await expectLater(
+          repo.sortFollowGroups(id, [
+            '1',
+            '2',
+          ], cancellation: RequestCancellation()),
+          denied,
+        );
+        await expectLater(
+          repo.setFollowingBlocked(
+            id,
+            const UserId('9'),
+            true,
             cancellation: RequestCancellation(),
           ),
           denied,

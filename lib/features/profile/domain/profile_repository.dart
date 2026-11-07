@@ -21,6 +21,39 @@ final class ProfileFollowGroup {
   const ProfileFollowGroup({required this.id, required this.name});
 
   final String id, name;
+  bool get isEditable => RegExp(r'^[1-9]\d*$').hasMatch(id);
+}
+
+enum FollowGroupEdit { create, rename, delete }
+
+/// Owner-only operations, separate from public profile browsing.
+abstract interface class ProfileFollowingManagementRepository {
+  Future<ProfilePage> loadManagedFollowing(
+    UserId owner, {
+    required int page,
+    String keyword = '',
+    String order = '',
+    bool blacklist = false,
+    required RequestCancellation cancellation,
+  });
+  Future<void> editFollowGroup(
+    UserId owner,
+    FollowGroupEdit edit, {
+    String? groupId,
+    String name = '',
+    required RequestCancellation cancellation,
+  });
+  Future<void> sortFollowGroups(
+    UserId owner,
+    List<String> ids, {
+    required RequestCancellation cancellation,
+  });
+  Future<void> setFollowingBlocked(
+    UserId owner,
+    UserId target,
+    bool blocked, {
+    required RequestCancellation cancellation,
+  });
 }
 
 abstract interface class ProfileFollowGroupsRepository {

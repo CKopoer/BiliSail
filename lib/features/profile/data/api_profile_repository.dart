@@ -17,6 +17,7 @@ class ApiProfileRepository
     implements
         ProfileRepository,
         ProfileFollowGroupsRepository,
+        ProfileFollowingManagementRepository,
         ProfileDetailsRepository,
         ProfileReportRepository,
         ProfileActionsRepository {
@@ -32,6 +33,82 @@ class ApiProfileRepository
   String get accountScope => _scope();
   @override
   int get sessionEpoch => requests.sessionEpoch;
+
+  @override
+  Future<ProfilePage> loadManagedFollowing(
+    UserId owner, {
+    required int page,
+    String keyword = '',
+    String order = '',
+    bool blacklist = false,
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    _requireFollowGroupOwner(owner);
+    final result = blacklist
+        ? await client.loadBlacklist(page: page, context: context)
+        : keyword.isNotEmpty
+        ? await client.searchFollowing(
+            owner.value,
+            keyword,
+            page: page,
+            context: context,
+          )
+        : await client.loadRelations(
+            owner.value,
+            followers: false,
+            page: page,
+            orderType: order,
+            context: context,
+          );
+    return ProfilePage(
+      items: List.unmodifiable(result.items.map(_entry)),
+      hasMore: result.hasMore,
+    );
+  }, cancellation: cancellation);
+
+  @override
+  Future<void> editFollowGroup(
+    UserId owner,
+    FollowGroupEdit edit, {
+    String? groupId,
+    String name = '',
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    _requireFollowGroupOwner(owner);
+    final groups = FollowGroupClient(client.api);
+    switch (edit) {
+      case FollowGroupEdit.create:
+        await groups.create(name, context: context);
+      case FollowGroupEdit.rename:
+        if (groupId == null) throw ArgumentError('Missing group');
+        await groups.rename(groupId, name, context: context);
+      case FollowGroupEdit.delete:
+        if (groupId == null) throw ArgumentError('Missing group');
+        await groups.delete(groupId, context: context);
+    }
+  }, cancellation: cancellation);
+
+  @override
+  Future<void> sortFollowGroups(
+    UserId owner,
+    List<String> ids, {
+    required RequestCancellation cancellation,
+  }) => requests.run((context) {
+    _requireFollowGroupOwner(owner);
+    return FollowGroupClient(client.api).sort(ids, context: context);
+  }, cancellation: cancellation);
+
+  @override
+  Future<void> setFollowingBlocked(
+    UserId owner,
+    UserId target,
+    bool blocked, {
+    required RequestCancellation cancellation,
+  }) => requests.run((context) {
+    _requireFollowGroupOwner(owner);
+    if (target == owner) throw ArgumentError('Cannot block self');
+    return client.setBlocked(target.value, blocked, context: context);
+  }, cancellation: cancellation);
 
   void _requireFollowGroupOwner(UserId id) {
     if (accountScope != 'user:${id.value}') {

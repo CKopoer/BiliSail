@@ -90,6 +90,7 @@ final class BiliApiClient {
       '/x/web-interface/wbi/search/type',
       '/x/web-interface/wbi/search/all/v2',
       '/x/web-interface/suggest',
+      '/x/relation/followings/search',
       '/x/player/wbi/v2',
     }.contains(path)) {
       throw ArgumentError('Unsupported WBI endpoint');
@@ -416,6 +417,10 @@ final class BiliApiClient {
       '/x/v2/reply/add',
       '/x/relation/modify',
       '/x/relation/tags/addUsers',
+      '/x/relation/tag/create',
+      '/x/relation/tag/update',
+      '/x/relation/tag/del',
+      '/x/relation/tags/update_sort',
     }.contains(path)) {
       throw ArgumentError('Unsupported mutation');
     }

@@ -59,6 +59,13 @@ final class ProfileState {
     this.followGroupsLoading = false,
     this.followGroupsMessage,
     this.followingGroupId,
+    this.followingManagementAvailable = false,
+    this.followingKeyword = '',
+    this.followingOrder = '',
+    this.showBlacklist = false,
+    this.followingBusy = false,
+    this.followingUncertain = false,
+    this.followingMessage,
   });
   final UserProfile? profile;
   final ProfileSpaceDetails? details;
@@ -80,6 +87,12 @@ final class ProfileState {
   final bool followGroupsAvailable, followGroupsLoading;
   final List<ProfileFollowGroup>? followGroups;
   final String? followGroupsMessage, followingGroupId;
+  final bool followingManagementAvailable,
+      showBlacklist,
+      followingBusy,
+      followingUncertain;
+  final String followingKeyword, followingOrder;
+  final String? followingMessage;
   ProfileListState get current => lists[section] ?? const ProfileListState();
   ProfileState copy({
     UserProfile? profile,
@@ -112,6 +125,13 @@ final class ProfileState {
     bool clearFollowGroupsMessage = false,
     String? followingGroupId,
     bool allFollowing = false,
+    String? followingKeyword,
+    String? followingOrder,
+    bool? showBlacklist,
+    bool? followingBusy,
+    bool? followingUncertain,
+    String? followingMessage,
+    bool clearFollowingMessage = false,
   }) => ProfileState(
     sessionGeneration: sessionGeneration,
     profile: profile ?? this.profile,
@@ -148,6 +168,15 @@ final class ProfileState {
     followingGroupId: allFollowing
         ? null
         : followingGroupId ?? this.followingGroupId,
+    followingManagementAvailable: followingManagementAvailable,
+    followingKeyword: followingKeyword ?? this.followingKeyword,
+    followingOrder: followingOrder ?? this.followingOrder,
+    showBlacklist: showBlacklist ?? this.showBlacklist,
+    followingBusy: followingBusy ?? this.followingBusy,
+    followingUncertain: followingUncertain ?? this.followingUncertain,
+    followingMessage: clearFollowingMessage
+        ? null
+        : followingMessage ?? this.followingMessage,
   );
 }
 
@@ -159,6 +188,7 @@ class ProfileController extends Notifier<ProfileState> {
   int _detailsGeneration = 0;
   int _followGroupsGeneration = 0;
   RequestCancellation _followGroupsRead = RequestCancellation();
+  RequestCancellation _followingWrite = RequestCancellation();
   RequestCancellation _detailsRead = RequestCancellation();
   RequestCancellation _profileRead = RequestCancellation();
   RequestCancellation _liveRoomRead = RequestCancellation();
@@ -188,6 +218,9 @@ class ProfileController extends Notifier<ProfileState> {
       followGroupsAvailable:
           repository is ProfileFollowGroupsRepository &&
           repository.accountScope == 'user:${id.value}',
+      followingManagementAvailable:
+          repository is ProfileFollowingManagementRepository &&
+          repository.accountScope == 'user:${id.value}',
     );
   }
 
@@ -197,6 +230,7 @@ class ProfileController extends Notifier<ProfileState> {
     _queueRead.cancel();
     _detailsRead.cancel();
     _followGroupsRead.cancel();
+    _followingWrite.cancel();
     for (final read in _reads.values) {
       read.cancel();
     }
@@ -430,7 +464,9 @@ class ProfileController extends Notifier<ProfileState> {
 
   void selectFollowingGroup(String? groupId) {
     if (!state.followGroupsAvailable ||
-        groupId == state.followingGroupId ||
+        (groupId == state.followingGroupId &&
+            !state.showBlacklist &&
+            state.followingKeyword.isEmpty) ||
         (groupId != null &&
             state.followGroups?.any((group) => group.id == groupId) != true)) {
       return;
@@ -441,6 +477,8 @@ class ProfileController extends Notifier<ProfileState> {
     state = state.copy(
       followingGroupId: groupId,
       allFollowing: groupId == null,
+      followingKeyword: '',
+      showBlacklist: false,
       lists: Map.unmodifiable({
         ...state.lists,
         ProfileSection.following: const ProfileListState(),
@@ -448,6 +486,202 @@ class ProfileController extends Notifier<ProfileState> {
     );
     // A group refresh can finish while another section is visible.
     if (state.section == ProfileSection.following) load();
+  }
+
+  void searchFollowing(String keyword) {
+    if (!state.followingManagementAvailable ||
+        keyword.trim().runes.length > 100) {
+      return;
+    }
+    final value = keyword.trim();
+    if (value == state.followingKeyword &&
+        !state.showBlacklist &&
+        state.followingGroupId == null) {
+      return;
+    }
+    _resetFollowing(
+      state.copy(
+        followingKeyword: value,
+        allFollowing: true,
+        showBlacklist: false,
+      ),
+    );
+  }
+
+  void showFollowingBlacklist(bool value) {
+    if (!state.followingManagementAvailable || value == state.showBlacklist) {
+      return;
+    }
+    _resetFollowing(
+      state.copy(
+        showBlacklist: value,
+        followingKeyword: '',
+        allFollowing: true,
+      ),
+    );
+  }
+
+  void orderFollowing(String value) {
+    if (!state.followingManagementAvailable ||
+        !const ['', 'attention'].contains(value) ||
+        value == state.followingOrder) {
+      return;
+    }
+    _resetFollowing(
+      state.copy(
+        followingOrder: value,
+        followingKeyword: '',
+        allFollowing: true,
+        showBlacklist: false,
+      ),
+    );
+  }
+
+  void _resetFollowing(ProfileState next) {
+    _reads[ProfileSection.following]?.cancel();
+    _versions[ProfileSection.following] =
+        (_versions[ProfileSection.following] ?? 0) + 1;
+    state = next.copy(
+      lists: Map.unmodifiable({
+        ...next.lists,
+        ProfileSection.following: const ProfileListState(),
+      }),
+    );
+    if (state.section == ProfileSection.following) load();
+  }
+
+  Future<bool> editFollowGroup(
+    FollowGroupEdit edit, {
+    String? groupId,
+    String name = '',
+  }) {
+    if (edit != FollowGroupEdit.create &&
+        state.followGroups?.any(
+              (group) => group.id == groupId && group.isEditable,
+            ) !=
+            true) {
+      return Future.value(false);
+    }
+    if (edit != FollowGroupEdit.delete &&
+        (name.trim().isEmpty || name.trim().runes.length > 16)) {
+      return Future.value(false);
+    }
+    return _manageFollowing(
+      (repo, read) => repo.editFollowGroup(
+        id,
+        edit,
+        groupId: groupId,
+        name: name.trim(),
+        cancellation: read,
+      ),
+    );
+  }
+
+  Future<bool> sortFollowGroups(List<String> ids) {
+    final expected = state.followGroups
+        ?.where((group) => group.isEditable)
+        .map((group) => group.id)
+        .toSet();
+    if (expected == null ||
+        ids.isEmpty ||
+        ids.length != expected.length ||
+        ids.toSet().length != ids.length ||
+        !expected.containsAll(ids)) {
+      return Future.value(false);
+    }
+    final snapshot = List<String>.unmodifiable(ids);
+    return _manageFollowing(
+      (repo, read) => repo.sortFollowGroups(id, snapshot, cancellation: read),
+    );
+  }
+
+  Future<bool> setFollowingBlocked(UserId target, bool blocked) {
+    if (!target.isValid || target == id) return Future.value(false);
+    return _manageFollowing(
+      (repo, read) =>
+          repo.setFollowingBlocked(id, target, blocked, cancellation: read),
+    );
+  }
+
+  Future<bool> _manageFollowing(
+    Future<void> Function(
+      ProfileFollowingManagementRepository,
+      RequestCancellation,
+    )
+    action,
+  ) async {
+    final repository = ref.read(profileRepositoryProvider);
+    if (!state.followingManagementAvailable ||
+        state.followingBusy ||
+        state.followingUncertain ||
+        repository is! ProfileFollowingManagementRepository ||
+        repository.accountScope != 'user:${id.value}') {
+      return false;
+    }
+    final scope = repository.accountScope,
+        epoch = repository.sessionEpoch,
+        generation = _generation;
+    _followingWrite.cancel();
+    final read = _followingWrite = RequestCancellation();
+    bool current() =>
+        _current(generation, scope, epoch) && identical(read, _followingWrite);
+    state = state.copy(followingBusy: true, clearFollowingMessage: true);
+    try {
+      await action(repository as ProfileFollowingManagementRepository, read);
+      if (!current()) return false;
+      // Keep writes disabled until both authoritative lists have reconciled.
+      await refreshFollowingManagement();
+      return current() && !state.followingUncertain;
+    } on AppFailure catch (error) {
+      if (current()) {
+        final uncertain = const {
+          AppFailureKind.network,
+          AppFailureKind.timeout,
+          AppFailureKind.protocol,
+          AppFailureKind.unknown,
+        }.contains(error.kind);
+        state = state.copy(
+          followingUncertain: uncertain,
+          followingMessage: error.kind == AppFailureKind.cancelled
+              ? null
+              : uncertain
+              ? '操作结果未确认，请刷新后再操作'
+              : error.message,
+        );
+      }
+    } catch (_) {
+      if (current()) {
+        state = state.copy(
+          followingUncertain: true,
+          followingMessage: '操作结果未确认，请刷新后再操作',
+        );
+      }
+    } finally {
+      read.cancel();
+      if (current()) state = state.copy(followingBusy: false);
+    }
+    return false;
+  }
+
+  Future<void> refreshFollowingManagement() async {
+    final generation = _generation;
+    final repository = ref.read(profileRepositoryProvider);
+    final scope = repository.accountScope, epoch = repository.sessionEpoch;
+    await loadFollowGroups();
+    if (!_current(generation, scope, epoch)) return;
+    if (state.section == ProfileSection.following) await load(refresh: true);
+    if (!_current(generation, scope, epoch)) return;
+    final reconciled =
+        state.followGroupsMessage == null &&
+        !state.followGroupsLoading &&
+        state.section == ProfileSection.following &&
+        state.current.message == null &&
+        !state.current.loading;
+    state = state.copy(
+      followingUncertain: !reconciled,
+      clearFollowingMessage: reconciled,
+      followingMessage: reconciled ? null : '刷新关注管理状态后再操作',
+    );
   }
 
   void filter({String? order, String? keyword}) {
@@ -490,8 +724,13 @@ class ProfileController extends Notifier<ProfileState> {
       loadProfile(),
       loadDetails(),
       loadLiveRoom(),
-      if (state.section == ProfileSection.following) loadFollowGroups(),
-      load(refresh: true),
+      if (state.section == ProfileSection.following &&
+          state.followingManagementAvailable)
+        refreshFollowingManagement()
+      else ...[
+        if (state.section == ProfileSection.following) loadFollowGroups(),
+        load(refresh: true),
+      ],
     ]);
   }
 
@@ -596,7 +835,22 @@ class ProfileController extends Notifier<ProfileState> {
           ? state.followingGroupId
           : null;
       final result =
-          groupId != null && repository is ProfileFollowGroupsRepository
+          section == ProfileSection.following &&
+              state.followingManagementAvailable &&
+              (state.showBlacklist ||
+                  state.followingKeyword.isNotEmpty ||
+                  groupId == null) &&
+              repository is ProfileFollowingManagementRepository
+          ? await (repository as ProfileFollowingManagementRepository)
+                .loadManagedFollowing(
+                  id,
+                  page: page,
+                  keyword: state.followingKeyword,
+                  order: state.followingOrder,
+                  blacklist: state.showBlacklist,
+                  cancellation: read,
+                )
+          : groupId != null && repository is ProfileFollowGroupsRepository
           ? await (repository as ProfileFollowGroupsRepository)
                 .loadFollowingGroup(id, groupId, page: page, cancellation: read)
           : await repository.loadEntries(
