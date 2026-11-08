@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD 与安装包
 
-更新日期：2026-11-07。配置覆盖 Android arm64、Windows x64／ARM64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
+更新日期：2026-11-08。配置覆盖 Android arm64、Windows x64／ARM64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
 
 ## 入口与分工
 
@@ -542,3 +542,17 @@ CI 现在并行运行以下任务，全部完成后由原名 `Analyze and test` 
 本轮 Windows x64／Flutter 3.47.6 验证：`tool/check.ps1 -EnforceLockfile` 完整通过打包边界、五份锁文件严格解析、格式、静态分析和 5628 项 Dart／Flutter 测试（根应用 4572、API 678、播放器 212、弹幕 161、封装 5）。根应用 13 项按原有条件跳过；未配置 `BILI_MUX_LIBRARY`，mux 的 10 项原生测试跳过，不计作原生通过。五份锁文件无修改，日志为 `build/ci-42349410990-fix-check.log`。
 
 CI／Release 工作流通过 actionlint 1.7.12；直接执行新增的生产 Bash 步骤，以模拟 Apple 命令验证工具链路径传递至当前及后续步骤、缺少指定目录时停止，以及 Xcode 命令失败时停止。本文 45 条本地链接及 `git diff --check` 通过。本机为 Windows，无法执行真实 Xcode／Apple SDK 编译、DMG／IPA 打包或 Apple 设备验证；修复后的三个远端构建结果仍待新 CI 确认。
+
+## 2026-11-08：窗口拖动测试补齐各平台通道
+
+[CI #321](https://github.com/CKopoer/BiliSail/actions/runs/42461627294) 对应提交 `39aa7f2c8a5107b9eadb1a99895a4f643982f827`。唯一直接失败为 [根测试分片 0](https://github.com/CKopoer/BiliSail/actions/runs/42461627294/job/128671997758) 中的 `playback caption calls target one view and stop after retirement`：等待 10 分钟后超时，该分片为 2445 项通过、1 项失败、2 项跳过。格式／分析、另一根测试分片、包测试和原生 mux 回归均通过；汇总失败，平台构建全部跳过。
+
+[窗口服务测试](../../test/core/platform/window_service_test.dart) 仅模拟了 `bilisail/desktop_window`。迷你窗功能让 [窗口服务](../../lib/core/platform/window_service.dart) 在 Linux 通过 `window_manager.startDragging` 拖动窗口，测试未接管该通道，因而停在等待平台回复处。macOS 的有 view 拖动也会调用应用桌面通道，但旧测试错误地要求所有非 Windows 主机都没有调用。
+
+修复仅调整测试：同时模拟并清理两个通道，分别断言 Windows 的完整标题栏调用、macOS 的 view 拖动和 Linux 的插件拖动及参数，并验证窗口退役后两个通道均不再收到调用。生产平台分支、CI 超时和工作流保持原值。
+
+本轮 Flutter 3.47.6／Dart 3.13.5 验证：
+
+- Windows x64 的该测试文件 23 项全部通过。在基于 `1656aa06`、仅加入本次测试修复的独立工作树运行 `tool/check.ps1 -EnforceLockfile`，打包边界、五份锁文件严格解析、格式和静态分析全部通过；5952 项测试通过（根应用 4726、API 719、播放器 341、弹幕 161、封装 5）。根应用 13 项按原有条件跳过；未配置 `BILI_MUX_LIBRARY`，10 项 mux 原生测试跳过，不计为原生通过。日志保留为 `build/ci-42461627294-check.log`，工作区同期播放器修改未纳入该独立验证或本次提交。
+- WSL Ubuntu 22.04／Linux x64 使用同一 Flutter／Dart 和锁定依赖，修复后的测试文件 19 项通过、4 项按平台条件跳过。对照运行修复前的同名单项，测试开始后持续没有完成，由外部 `timeout 25s` 终止（退出码 124）；未等待完整 10 分钟。日志为 `build/ci-42461627294-linux-{fixed,original}.log`。初次准备遇到 Git 代理中断，独立测试缓存复用了本机同一固定提交；原生测试钩子使用系统已有 `clang-14` 的临时 PATH 别名，没有修改依赖源码或锁文件。
+- 本文 51 条本地链接和 `git diff --check` 通过。没有可热重载的运行中调试应用；本轮未执行客户端构建、安装或设备交互。macOS 实际运行和 Ubuntu 24.04 远端 CI 尚未复验，不能用本机 Linux 定向测试代替整条远端工作流结果。

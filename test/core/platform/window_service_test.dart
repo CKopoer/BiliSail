@@ -176,16 +176,33 @@ void main() {
     'playback caption calls target one view and stop after retirement',
     (tester) async {
       const channel = MethodChannel('bilisail/desktop_window');
+      const pluginChannel = MethodChannel('window_manager');
       final calls = <MethodCall>[];
+      final pluginCalls = <MethodCall>[];
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
         call,
       ) async {
         calls.add(call);
         return null;
       });
+      // Linux drags through window_manager; macOS uses the view channel even
+      // though only Windows installs the custom playback caption.
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        pluginChannel,
+        (call) async {
+          pluginCalls.add(call);
+          return null;
+        },
+      );
       addTearDown(
         () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
           channel,
+          null,
+        ),
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          pluginChannel,
           null,
         ),
       );
@@ -214,8 +231,17 @@ void main() {
                 'toggleMaximized',
                 'minimize',
               ]
+            : Platform.isMacOS
+            ? ['startDragging']
             : isEmpty,
       );
+      expect(
+        pluginCalls.map((call) => call.method),
+        Platform.isLinux ? ['startDragging'] : isEmpty,
+      );
+      for (final call in pluginCalls) {
+        expect(call.arguments, isNull);
+      }
       for (final call in calls) {
         expect(call.arguments, {
           'viewId': 71,
@@ -234,12 +260,14 @@ void main() {
         });
       }
       calls.clear();
+      pluginCalls.clear();
       available = false;
       await window.configurePlaybackTitleBar();
       await window.startDraggingPlaybackWindow();
       await window.togglePlaybackWindowMaximized();
       await window.minimizePlaybackWindow();
       expect(calls, isEmpty);
+      expect(pluginCalls, isEmpty);
       await WindowService().configurePlaybackTitleBar();
       expect(calls, isEmpty);
     },
