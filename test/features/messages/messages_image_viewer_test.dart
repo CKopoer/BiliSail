@@ -68,7 +68,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(ImageViewer), findsOneWidget);
-    expect(originals.sources.last, source);
+    expect(originals.sources.last, Uri.parse('$source@1280w_1280h_0e.webp'));
   }
 
   void expectConversation(WidgetTester tester) {
@@ -95,8 +95,8 @@ void main() {
       if (image == null) throw StateError('Original image missing');
       await openConversation(tester, width);
       await openImage(tester);
-      expect(find.text('正在加载原图…'), findsOneWidget);
-      expect(originals.sources, [source]);
+      expect(find.text('正在加载预览图…'), findsOneWidget);
+      expect(originals.sources, [Uri.parse('$source@1280w_1280h_0e.webp')]);
       final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
       expect(viewer.request.images, [source]);
       originals.pending.single.complete(image);
@@ -141,10 +141,13 @@ void main() {
       const FormatException('invalid image'),
     );
     await tester.pumpAndSettle();
-    expect(find.text('原图无法读取，请重试'), findsOneWidget);
+    expect(find.text('预览图无法读取，请重试'), findsOneWidget);
     await tester.tap(find.text('重试'));
     await tester.pump();
-    expect(originals.sources, [source, source]);
+    expect(
+      originals.sources,
+      List.filled(2, Uri.parse('$source@1280w_1280h_0e.webp')),
+    );
     await tester.tap(find.byTooltip('关闭图片'));
     await tester.pumpAndSettle();
     expect(originals.reads.last.isCancelled, isTrue);

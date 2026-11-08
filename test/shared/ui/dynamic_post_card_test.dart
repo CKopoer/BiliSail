@@ -20,7 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
   testWidgets(
-    'large original uses thumbnail until clicking then downloads original',
+    'large original uses bounded previews until explicitly requested',
     (tester) async {
       final thumbnail = await tester.runAsync(() async {
         final recorder = ui.PictureRecorder();
@@ -91,7 +91,10 @@ void main() {
       await waitForImages();
       expect(downloaded, hasLength(1));
       expect(downloaded, isNot(contains(source)));
-      expect(originals.sources, [source]);
+      expect(originals.sources, [Uri.parse('$source@1280w_1280h_0e.webp')]);
+      await tester.tap(find.text('查看原图'));
+      await tester.pumpAndSettle();
+      expect(originals.sources.last, source);
       expect(find.byType(Dialog), findsOneWidget);
       expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
       expect(tester.takeException(), isNull);

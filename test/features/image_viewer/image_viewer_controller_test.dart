@@ -59,7 +59,109 @@ void main() {
     await pending;
   }
 
-  test('export ignores loading, uses current original and prevents duplicate writes', () async {
+  test('preview loads first; original is explicit and single flight', () async {
+    await load();
+    expect(repository.sources, [request.previewSource(0)]);
+    var state = container.read(imageViewerControllerProvider(request));
+    expect(state.isOriginal, isFalse);
+    final original = controller.loadOriginal();
+    await controller.loadOriginal();
+    expect(repository.sources, [request.previewSource(0), sources[0]]);
+    state = container.read(imageViewerControllerProvider(request));
+    expect(state.loading, isTrue);
+    expect(state.image, image);
+    repository.pending.last.complete(image);
+    await original;
+    state = container.read(imageViewerControllerProvider(request));
+    expect(state.isOriginal, isTrue);
+    await controller.loadOriginal();
+    expect(repository.sources, hasLength(2));
+    final next = controller.load(1);
+    expect(repository.sources.last, request.previewSource(1));
+    expect(
+      container.read(imageViewerControllerProvider(request)).image,
+      isNull,
+    );
+    repository.pending.last.complete(image);
+    await next;
+    expect(
+      container.read(imageViewerControllerProvider(request)).isOriginal,
+      isFalse,
+    );
+  });
+
+  test(
+    'failed original keeps preview and retry targets the original',
+    () async {
+      await load();
+      final original = controller.loadOriginal();
+      repository.pending.last.completeError(TimeoutException('test'));
+      await original;
+      var state = container.read(imageViewerControllerProvider(request));
+      expect(state.image, image);
+      expect(state.isOriginal, isFalse);
+      expect(state.message, '原图加载超时，请重试');
+      final retry = controller.retry();
+      expect(repository.sources.last, sources[0]);
+      repository.pending.last.complete(image);
+      await retry;
+      state = container.read(imageViewerControllerProvider(request));
+      expect(state.isOriginal, isTrue);
+      expect(state.message, isNull);
+    },
+  );
+
+  test(
+    'switch cancels original upgrade and ignores its late response',
+    () async {
+      await load();
+      final original = controller.loadOriginal();
+      final cancelled = repository.reads.last;
+      final next = controller.load(1);
+      expect(cancelled.isCancelled, isTrue);
+      repository.pending[2].complete(image);
+      await next;
+      repository.pending[1].complete(image);
+      await original;
+      final state = container.read(imageViewerControllerProvider(request));
+      expect(state.index, 1);
+      expect(state.isOriginal, isFalse);
+      expect(repository.sources, [
+        request.previewSource(0),
+        sources[0],
+        request.previewSource(1),
+      ]);
+    },
+  );
+
+  test(
+    'URLs without a safe CDN preview load directly without an upgrade',
+    () async {
+      final direct = ImageViewerRequest([
+        Uri.parse('https://i0.hdslb.com/a.png?signature=example'),
+      ], 0);
+      final subscription = container.listen(
+        imageViewerControllerProvider(direct),
+        (_, _) {},
+      );
+      final directController = container.read(
+        imageViewerControllerProvider(direct).notifier,
+      );
+      final pending = directController.load();
+      repository.pending.last.complete(image);
+      await pending;
+      expect(repository.sources, direct.images);
+      expect(
+        container.read(imageViewerControllerProvider(direct)).isOriginal,
+        isTrue,
+      );
+      await directController.loadOriginal();
+      expect(repository.sources, hasLength(1));
+      subscription.close();
+    },
+  );
+
+  test('export ignores loading, uses the displayed image and prevents duplicate writes', () async {
     await controller.export(save: true);
     expect(exporter.bytes, isEmpty);
     await load();
@@ -151,7 +253,10 @@ void main() {
       final state = container.read(imageViewerControllerProvider(request));
       expect(state.index, 1);
       expect(state.image, image);
-      expect(repository.sources, sources);
+      expect(repository.sources, [
+        request.previewSource(0),
+        request.previewSource(1),
+      ]);
     },
   );
 

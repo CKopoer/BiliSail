@@ -1,5 +1,19 @@
 # 播放页与评论交互
 
+## 评论 GIF 与按需查看原图（2026-11-08）
+
+游客只读检查用户提供的 [BV1t8nv6wEjc](https://www.bilibili.com/video/BV1t8nv6wEjc)：WBI 主评论返回的 GIF 为 400×225、5,186,335 字节，HTTP 200。原评论缩略图规则跳过 GIF，因而直接下载原图，被共享图片缓存的 4 MiB 单图上限拒绝；`cacheWidth/cacheHeight` 只缩小解码像素，不能减少传输大小。点击后的独立原图仓储允许最多 32 MiB，因此能够显示。这是两条加载路径的额度差异，并非 Flutter 不支持 GIF。
+
+[共享评论正文](../../lib/shared/ui/comment_rich_content.dart)现在显式启用 GIF CDN 缩放，沿用 `@264w_1280h_0e.webp` 的等比缩略图规则，不添加选取单帧的参数。同一示例返回 HTTP 200、264×149、1,425,582 字节，WebP 容器包含 121 个动画帧。缓存的 4 MiB 上限保持不变；签名地址、已有 CDN 变换和其他域名不被改写，其他图片调用点默认仍保留原有 GIF 行为。
+
+按用户追加要求，共享预览改为先加载最大边 1280 像素的 CDN 预览，点击“查看原图”才请求原地址；原图下载及失败时保留已显示的预览，切图重新从预览开始。详情见[共享图片预览记录](feed-scroll-image-cache.md#2026-11-08先预览再查看原图)。
+
+GIF 缩略图回归使用独立生成的两帧动态 WebP，验证实际像素由红变蓝、超过 4 MiB 的原图不会被评论缩略图请求，以及点击预览后仍需明确点击才请求原图；修复前无法得到评论图片帧，修复后通过。评论、图片预览控制器与组件、动态、私信、空间和桌面播放窗口的定向回归共 80 项通过。
+
+`tool/check.ps1 -SkipPub` 分阶段执行：`Lint` 通过格式、全仓静态分析和打包边界检查；`PackageTests` 通过 API 718、player 292、danmaku 161、mux 5 项，共 1,176 项。`RootTests` 通过 4,691 项、失败 1 项：同期修改中的 `test/features/live/live_chat_bubble_test.dart` 的 `medals and levels wrap on narrow screens with large text` 未找到预期的长粉丝牌名称，与本次图片路径无关，未修改该文件。根应用 13 项 Windows 符号链接用例因权限不足跳过；mux 的 10 项实际原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。全量检查基于包含同期修改的共享工作区，不记为全量通过。日志位于本机忽略目录 `build/comment-gif-investigation/` 的 `lint.log`、`root-tests.log`、`package-tests.log` 和 `regression-final.log`；文档本地链接与本次 `git diff --check` 通过。
+
+按用户要求不构建、不进行实机测试；未发现可连接的 Flutter/DTD 调试进程，因此未热重载。在线证据仅来自公开 API/CDN 只读请求，没有使用账号凭据或执行评论等账号写入。
+
 ## 滚动到底部自动加载（2026-11-06）
 
 [共用评论面板](../../lib/shared/ui/comments_panel.dart)的主评论和楼中楼在距列表底部不超过 240 逻辑像素时自动请求下一页，覆盖视频、影视和动态入口。首屏或新一页不足以填满视口、窗口放大后露出底部时也继续补页；保留原来的“加载更多”按钮和加载提示。触摸、滚轮与嵌套播放器布局沿用现有滚动控制器，返回主评论仍恢复原位置。

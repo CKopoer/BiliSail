@@ -36,4 +36,34 @@ void main() {
       expect(publicImageThumbnail(source, width: 960), source);
     }
   });
+
+  test('GIF resizing is opt-in and keeps existing URL boundaries', () {
+    for (final extension in ['gif', 'GIF']) {
+      final source = Uri.parse('http://i0.hdslb.com/image.$extension');
+      expect(
+        publicImageThumbnail(
+          source,
+          width: 264,
+          resizeAnimated: true,
+        ).toString(),
+        'https://i0.hdslb.com/image.$extension@264w_1280h_0e.webp',
+      );
+    }
+    for (final url in [
+      'https://i0.hdslb.com/image.gif?signature=example',
+      'https://i0.hdslb.com/image.gif#part',
+      'https://i0.hdslb.com/image.gif@400w.gif',
+      'https://example.test/image.gif',
+      'https://hdslb.com.example.test/image.gif',
+      'https://user@i0.hdslb.com/image.gif',
+      'https://i0.hdslb.com:8443/image.gif',
+      'file:///image.gif',
+    ]) {
+      final source = Uri.parse(url);
+      expect(
+        publicImageThumbnail(source, width: 264, resizeAnimated: true),
+        source,
+      );
+    }
+  });
 }

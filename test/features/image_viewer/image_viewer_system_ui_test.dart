@@ -81,7 +81,7 @@ void main() {
           await tester.tap(find.text('查看'));
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 300));
-          expect(find.text('正在加载原图…'), findsOneWidget);
+          expect(find.text('正在加载预览图…'), findsOneWidget);
           expect(tester.getRect(find.byType(Dialog)), Offset.zero & size);
           final close = tester.getRect(find.byTooltip('关闭图片'));
           expect(close.top, greaterThanOrEqualTo(24));
@@ -94,7 +94,7 @@ void main() {
 
           repository.result.completeError(StateError('image unavailable'));
           await tester.pumpAndSettle();
-          expect(find.text('原图无法读取，请重试'), findsOneWidget);
+          expect(find.text('预览图无法读取，请重试'), findsOneWidget);
           await _expectInsetPixels(tester, boundary, theme.colorScheme.surface);
           await tester.tap(find.text('重试'));
           await tester.pump();

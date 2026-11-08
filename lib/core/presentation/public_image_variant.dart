@@ -1,7 +1,13 @@
 /// Size public static CDN images before transfer, since decode dimensions only
 /// limit decoded memory and cannot keep a large original within the byte limit.
-/// Keep signed URLs, animation and existing CDN transforms unchanged.
-Uri publicImageThumbnail(Uri source, {required int width, int height = 1280}) {
+/// GIF resizing is opt-in: the CDN returns animated WebP without a frame selector.
+/// Keep signed URLs and existing CDN transforms unchanged.
+Uri publicImageThumbnail(
+  Uri source, {
+  required int width,
+  int height = 1280,
+  bool resizeAnimated = false,
+}) {
   final host = source.host.toLowerCase();
   if (!['http', 'https'].contains(source.scheme) ||
       source.userInfo.isNotEmpty ||
@@ -11,7 +17,9 @@ Uri publicImageThumbnail(Uri source, {required int width, int height = 1280}) {
       !(host == 'hdslb.com' || host.endsWith('.hdslb.com')) ||
       source.path.contains('@') ||
       !RegExp(
-        r'\.(?:jpe?g|png|webp)$',
+        resizeAnimated
+            ? r'\.(?:jpe?g|png|webp|gif)$'
+            : r'\.(?:jpe?g|png|webp)$',
         caseSensitive: false,
       ).hasMatch(source.path)) {
     return source;

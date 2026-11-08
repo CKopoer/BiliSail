@@ -289,14 +289,18 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                                           if (mounted) _fit();
                                         });
                                   }
-                                  if (state.loading) {
-                                    return const Center(
+                                  if (state.loading && image == null) {
+                                    return Center(
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          CircularProgressIndicator(),
-                                          SizedBox(height: 16),
-                                          Text('正在加载原图…'),
+                                          const CircularProgressIndicator(),
+                                          const SizedBox(height: 16),
+                                          Text(
+                                            state.originalRequested
+                                                ? '正在加载原图…'
+                                                : '正在加载预览图…',
+                                          ),
                                         ],
                                       ),
                                     );
@@ -315,7 +319,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                                                     widget.request,
                                                   ).notifier,
                                                 )
-                                                .load(),
+                                                .retry(),
                                             child: const Text('重试'),
                                           ),
                                         ],
@@ -372,10 +376,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                                           height: image.height.toDouble(),
                                           fit: BoxFit.fill,
                                           semanticLabel:
-                                              '原图 ${state.index + 1}',
+                                              '${state.isOriginal ? '原图' : '预览图'} ${state.index + 1}',
                                           errorBuilder: (_, _, _) =>
                                               const Center(
-                                                child: Text('原图解码失败'),
+                                                child: Text('图片解码失败'),
                                               ),
                                         ),
                                       ),
@@ -396,10 +400,51 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                                 spacing: 10,
                                 runSpacing: 8,
                                 children: [
+                                  if (!state.isOriginal &&
+                                      widget.request.previewSource(
+                                            state.index,
+                                          ) !=
+                                          widget.request.images[state.index])
+                                    _group([
+                                      TextButton.icon(
+                                        onPressed:
+                                            state.loading &&
+                                                state.originalRequested
+                                            ? null
+                                            : () => ref
+                                                  .read(
+                                                    imageViewerControllerProvider(
+                                                      widget.request,
+                                                    ).notifier,
+                                                  )
+                                                  .loadOriginal(),
+                                        icon:
+                                            state.loading &&
+                                                state.originalRequested
+                                            ? const SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : const Icon(Icons.hd_outlined),
+                                        label: Text(
+                                          state.loading &&
+                                                  state.originalRequested
+                                              ? '正在加载原图…'
+                                              : '查看原图',
+                                        ),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Colors.white,
+                                        ),
+                                      ),
+                                    ]),
                                   if (canExport)
                                     _group([
                                       _button(
-                                        '保存图片',
+                                        state.isOriginal ? '保存图片' : '保存预览图',
                                         Icons.save_alt,
                                         image == null || state.exporting
                                             ? null
@@ -412,7 +457,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                                                   .export(save: true),
                                       ),
                                       _button(
-                                        '复制图片',
+                                        state.isOriginal ? '复制图片' : '复制预览图',
                                         Icons.copy_outlined,
                                         image == null || state.exporting
                                             ? null
@@ -432,7 +477,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                                       image == null ? null : _fit,
                                     ),
                                     _button(
-                                      '原始大小',
+                                      '实际大小',
                                       Icons.photo_size_select_actual_outlined,
                                       image == null ? null : () => _scale(1),
                                     ),
@@ -499,13 +544,17 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                     icon: const Icon(Icons.close),
                   ),
                 ),
-                if (state.exportMessage != null || image?.scaledPreview == true)
+                if (state.exportMessage != null ||
+                    (image != null && state.message != null) ||
+                    image?.scaledPreview == true)
                   Positioned(
                     top: safePadding.top + 12,
                     left: safePadding.left + 16,
                     right: safePadding.right + 64,
                     child: Text(
-                      state.exportMessage ?? '大图采用缩小预览，保存和复制使用原图',
+                      state.exportMessage ??
+                          state.message ??
+                          '大图采用缩小预览，保存和复制使用原图',
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),

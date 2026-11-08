@@ -3,6 +3,7 @@ import '../../support/input_test_app.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
 
+import 'package:bilisail/core/presentation/public_image_variant.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/image_export_service.dart';
 import 'package:bilisail/features/image_viewer/application/image_viewer_controller.dart';
@@ -26,6 +27,9 @@ Future<Uint8List> png() async {
   if (data == null) throw StateError('PNG encoding failed');
   return data.buffer.asUint8List();
 }
+
+Uri preview(Uri source) =>
+    publicImageThumbnail(source, width: 1280, resizeAnimated: true);
 
 void main() {
   testWidgets(
@@ -142,6 +146,57 @@ void main() {
   );
 
   for (final size in [const Size(1100, 740), const Size(360, 640)]) {
+    testWidgets('viewer ${size.width} requests original only after tapping', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repository = _PendingRepository();
+      final sources = await _openViewer(
+        tester,
+        repository,
+        pending: true,
+        exporter: _ExportService(),
+      );
+      final image = (await _swipeRepository(tester)).image;
+      repository.reads.single.result.complete(image);
+      await tester.pumpAndSettle();
+      expect(repository.sources, [preview(sources[1])]);
+      expect(find.text('查看原图'), findsOneWidget);
+      expect(find.byTooltip('保存预览图'), findsOneWidget);
+      expect(find.byTooltip('复制预览图'), findsOneWidget);
+      await tester.tap(find.text('查看原图'));
+      await tester.pump();
+      expect(repository.sources, [preview(sources[1]), sources[1]]);
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      expect(find.text('正在加载原图…'), findsOneWidget);
+      // A failed upgrade leaves the preview usable and permits explicit retry.
+      repository.reads.last.result.completeError(TimeoutException('test'));
+      await tester.pumpAndSettle();
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      expect(find.text('原图加载超时，请重试'), findsOneWidget);
+      await tester.tap(find.text('查看原图'));
+      await tester.pump();
+      repository.reads.last.result.complete(image);
+      await tester.pumpAndSettle();
+      expect(repository.sources, [preview(sources[1]), sources[1], sources[1]]);
+      expect(find.text('查看原图'), findsNothing);
+      expect(find.byTooltip('保存图片'), findsOneWidget);
+      expect(find.byTooltip('复制图片'), findsOneWidget);
+      expect(find.text('原图加载超时，请重试'), findsNothing);
+      await tester.tap(find.byTooltip('下一张'));
+      await tester.pump();
+      expect(repository.sources.last, preview(sources[2]));
+      expect(find.text('查看原图'), findsOneWidget);
+      await tester.tap(find.byTooltip('关闭图片'));
+      await tester.pumpAndSettle();
+      expect(repository.reads.last.cancellation.isCancelled, isTrue);
+      repository.reads.last.result.complete(image);
+      await tester.pump();
+      expect(find.byType(ImageViewer), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('viewer ${size.width} swipes between fitted images', (
       tester,
     ) async {
@@ -163,7 +218,7 @@ void main() {
 
       await swipe(const Offset(-120, 0));
       expect(find.text('3 / 3'), findsOneWidget);
-      expect(repository.sources, [sources[1], sources[2]]);
+      expect(repository.sources, [preview(sources[1]), preview(sources[2])]);
       await swipe(const Offset(-120, 0));
       expect(find.text('3 / 3'), findsOneWidget);
       expect(repository.sources, hasLength(2));
@@ -303,10 +358,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('1 / 2'), findsOneWidget);
         expect(find.text('100%'), findsOneWidget);
-        await tester.tap(find.byTooltip('保存图片'));
+        await tester.tap(find.byTooltip('保存预览图'));
         await tester.pumpAndSettle();
         expect(find.text('已保存到 Pictures/BiliSail/test.png'), findsOneWidget);
-        await tester.tap(find.byTooltip('复制图片'));
+        await tester.tap(find.byTooltip('复制预览图'));
         await tester.pumpAndSettle();
         expect(find.text('图片已复制到剪贴板'), findsOneWidget);
         expect(exporter.saved, [bytes]);
@@ -331,7 +386,7 @@ void main() {
         await tester.tap(find.byTooltip('下一张'));
         await tester.pumpAndSettle();
         expect(find.text('2 / 2'), findsOneWidget);
-        expect(repository.sources, sources);
+        expect(repository.sources, sources.map(preview));
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
         await tester.pumpAndSettle();
         expect(find.text('1 / 2'), findsOneWidget);
@@ -358,7 +413,7 @@ void main() {
   ) async {
     final repository = _PendingRepository();
     await _openViewer(tester, repository, pending: true);
-    final loading = find.text('正在加载原图…');
+    final loading = find.text('正在加载预览图…');
     await tester.drag(loading, const Offset(-120, 0));
     await tester.pump();
     expect(find.text('3 / 3'), findsOneWidget);
@@ -369,7 +424,7 @@ void main() {
     expect(loading, findsOneWidget);
     repository.reads[1].result.completeError(StateError('failed image'));
     await tester.pump();
-    final failure = find.text('原图无法读取，请重试');
+    final failure = find.text('预览图无法读取，请重试');
     expect(failure, findsOneWidget);
     await tester.drag(failure, const Offset(120, 0));
     await tester.pump();
@@ -414,6 +469,7 @@ Future<List<Uri>> _openViewer(
   int count = 3,
   int index = 1,
   bool pending = false,
+  ImageExportService? exporter,
 }) async {
   final sources = List.generate(
     count,
@@ -423,6 +479,8 @@ Future<List<Uri>> _openViewer(
     ProviderScope(
       overrides: [
         originalImageRepositoryProvider.overrideWithValue(repository),
+        if (exporter != null)
+          imageExportServiceProvider.overrideWithValue(exporter),
       ],
       child: InputTestApp(
         home: Builder(
@@ -447,11 +505,13 @@ Future<List<Uri>> _openViewer(
 }
 
 class _PendingRepository implements OriginalImageRepository {
+  final sources = <Uri>[];
   final reads =
       <({RequestCancellation cancellation, Completer<OriginalImage> result})>[];
 
   @override
   Future<OriginalImage> load(Uri source, RequestCancellation cancellation) {
+    sources.add(source);
     final result = Completer<OriginalImage>();
     reads.add((cancellation: cancellation, result: result));
     return result.future;

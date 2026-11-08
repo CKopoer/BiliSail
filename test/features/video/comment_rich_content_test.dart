@@ -1,7 +1,11 @@
 import '../../support/input_test_app.dart';
 
+import 'dart:convert';
+import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:bilisail/core/presentation/app_image_provider.dart';
+import 'package:bilisail/core/storage/image_byte_cache.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/image_viewer/application/image_viewer_controller.dart';
@@ -17,6 +21,127 @@ import 'package:bilisail/features/video/presentation/comment_rich_content.dart';
 import 'package:bilisail/features/video/domain/video_comments_repository.dart';
 
 void main() {
+  testWidgets(
+    'large comment GIF animates and opens a preview before its original',
+    (tester) async {
+      // Two lossless 2x2 WebP frames, red then blue, at 100ms per frame.
+      // Generated from raw RGBA pixels with FFmpeg's libwebp_anim encoder.
+      final bytes = base64Decode(
+        'UklGRoQAAABXRUJQVlA4WAoAAAACAAAAAQAAAQAAQU5JTQYAAAD/////AABB'
+        'Tk1GKAAAAAAAAAAAAAEAAAEAAGQAAAJWUDhMDwAAAC8BQAAABxD9j/4HIqL/'
+        'AQBBTk1GKAAAAAAAAAAAAAEAAAEAAGQAAABWUDhMDwAAAC8BQAAABxDR//4H'
+        'IqL/AQA=',
+      );
+      final source = Uri.parse('http://i0.hdslb.com/bfs/new_dyn/large.gif');
+      final downloaded = <Uri>[];
+      final originals = _Originals(
+        OriginalImage(bytes: bytes, width: 2, height: 2),
+      );
+      final cache = AppImageCache(
+        ImageByteCache(
+          directory: () async => throw const FileSystemException('optional'),
+          loader: (uri, limits) async {
+            downloaded.add(uri);
+            // Reproduce a GIF larger than the unchanged 4 MiB cache limit.
+            return uri.path == source.path
+                ? Uint8List(limits.maxBytes + 1)
+                : bytes;
+          },
+        ),
+      );
+      try {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              originalImageRepositoryProvider.overrideWithValue(originals),
+            ],
+            child: AppImageCacheScope(
+              cache: cache,
+              child: InputTestApp(
+                home: Scaffold(
+                  body: CommentRichContent(
+                    comment: CommentEntry(
+                      id: 'large-gif',
+                      author: 'reader',
+                      message: 'comment',
+                      pictures: [source],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        final thumbnail = find.descendant(
+          of: find.byType(CommentRichContent),
+          matching: find.byType(RawImage),
+        );
+        Future<List<int>?> pixels() async {
+          if (thumbnail.evaluate().isEmpty) return null;
+          final image = tester.widget<RawImage>(thumbnail).image?.clone();
+          if (image == null) return null;
+          try {
+            final data = await tester.runAsync(image.toByteData);
+            return data?.buffer.asUint8List().take(4).toList();
+          } finally {
+            image.dispose();
+          }
+        }
+
+        Future<List<int>> waitForFrame({List<int>? differentFrom}) async {
+          for (var attempt = 0; attempt < 40; attempt++) {
+            await tester.runAsync(
+              () => Future<void>.delayed(const Duration(milliseconds: 10)),
+            );
+            await tester.pump(const Duration(milliseconds: 50));
+            final frame = await pixels();
+            if (frame != null &&
+                (differentFrom == null ||
+                    frame.toString() != differentFrom.toString())) {
+              return frame;
+            }
+          }
+          fail('Animated comment thumbnail did not deliver a frame');
+        }
+
+        final first = await waitForFrame();
+        final second = await waitForFrame(differentFrom: first);
+        expect(
+          [first, second],
+          unorderedEquals([
+            [255, 0, 0, 255],
+            [0, 0, 255, 255],
+          ]),
+        );
+        expect(downloaded, [
+          Uri.parse('$source@264w_1280h_0e.webp').replace(scheme: 'https'),
+        ]);
+        expect(cache.bytes.maxImageBytes, 4 * 1024 * 1024);
+        expect(find.text('图片加载失败'), findsNothing);
+        expect(originals.sources, isEmpty);
+        await tester.tap(find.byType(InkWell));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.byType(ImageViewer), findsOneWidget);
+        expect(originals.sources, [
+          Uri.parse('$source@1280w_1280h_0e.webp').replace(scheme: 'https'),
+        ]);
+        expect(find.text('查看原图'), findsOneWidget);
+        await tester.tap(find.text('查看原图'));
+        await tester.pump();
+        expect(originals.sources.last, source);
+        expect(downloaded, hasLength(1));
+        await tester.tap(find.byTooltip('关闭图片'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        await cache.close();
+      }
+    },
+  );
+
   testWidgets(
     'mention taps update with user IDs, callbacks and missing metadata',
     (tester) async {
@@ -411,14 +536,14 @@ void main() {
     await tester.tap(find.byType(InkWell));
     await tester.pumpAndSettle();
     expect(find.byType(ImageViewer), findsOneWidget);
-    expect(find.text('原图无法读取，请重试'), findsOneWidget);
+    expect(find.text('预览图无法读取，请重试'), findsOneWidget);
     expect(find.byTooltip('适应窗口'), findsOneWidget);
     await tester.tap(find.byTooltip('关闭图片'));
     await tester.pumpAndSettle();
     expect(find.byType(ImageViewer), findsNothing);
   });
   testWidgets(
-    'comment opens selected original in the shared multi-image viewer',
+    'comment opens selected preview in the shared multi-image viewer',
     (tester) async {
       final bytes = await tester.runAsync(() async {
         final recorder = ui.PictureRecorder();
@@ -474,7 +599,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(ImageViewer), findsOneWidget);
       expect(find.text('2 / 3'), findsOneWidget);
-      expect(originals.sources, [sources[1]]);
+      expect(originals.sources, [
+        Uri.parse('${sources[1]}@1280w_1280h_0e.webp'),
+      ]);
       await tester.tap(find.byTooltip('放大'));
       await tester.pump();
       expect(find.text('125%'), findsOneWidget);
@@ -484,7 +611,14 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
       await tester.pumpAndSettle();
       expect(find.text('2 / 3'), findsOneWidget);
-      expect(originals.sources, [sources[1], sources[2], sources[1]]);
+      expect(
+        originals.sources,
+        [
+          sources[1],
+          sources[2],
+          sources[1],
+        ].map((uri) => Uri.parse('$uri@1280w_1280h_0e.webp')),
+      );
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(find.byType(ImageViewer), findsNothing);

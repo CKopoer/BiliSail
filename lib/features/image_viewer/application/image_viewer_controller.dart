@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/presentation/public_image_variant.dart';
 import '../../../core/storage/image_byte_cache.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/image_export_service.dart';
@@ -28,6 +29,9 @@ final class ImageViewerRequest {
   }
   final List<Uri> images;
   final int initialIndex;
+
+  Uri previewSource(int index) =>
+      publicImageThumbnail(images[index], width: 1280, resizeAnimated: true);
 }
 
 final class ImageViewerState {
@@ -38,6 +42,8 @@ final class ImageViewerState {
     this.message,
     this.exporting = false,
     this.exportMessage,
+    this.originalRequested = false,
+    this.isOriginal = false,
   });
   final int index;
   final bool loading;
@@ -45,6 +51,8 @@ final class ImageViewerState {
   final String? message;
   final bool exporting;
   final String? exportMessage;
+  final bool originalRequested;
+  final bool isOriginal;
 
   ImageViewerState withExport(bool busy, [String? feedback]) =>
       ImageViewerState(
@@ -54,6 +62,8 @@ final class ImageViewerState {
         message: message,
         exporting: busy,
         exportMessage: feedback,
+        originalRequested: originalRequested,
+        isOriginal: isOriginal,
       );
 }
 
@@ -89,25 +99,55 @@ class ImageViewerController extends Notifier<ImageViewerState> {
     );
   }
 
-  Future<void> load([int? index]) async {
-    final next = index ?? state.index;
+  Future<void> load([int? index]) => _load(index ?? state.index);
+
+  Future<void> retry() => _load(state.index, original: state.originalRequested);
+
+  Future<void> loadOriginal() async {
+    if (state.isOriginal) return;
+    await _load(state.index, original: true);
+  }
+
+  Future<void> _load(int next, {bool original = false}) async {
     if (next < 0 || next >= request.images.length) return;
-    if (state.loading && _read != null && next == state.index) return;
+    final preview = request.previewSource(next);
+    final originalRequested = original || preview == request.images[next];
+    if (state.loading &&
+        _read != null &&
+        next == state.index &&
+        state.originalRequested == originalRequested) {
+      return;
+    }
+    // Keep the small preview visible while an explicitly requested original
+    // downloads. Switching pictures never carries pixels from the old index.
+    final retained = original && next == state.index ? state.image : null;
+    final retainedOriginal = retained != null && state.isOriginal;
     _read?.cancel();
     final generation = ++_generation;
     final cancellation = RequestCancellation();
     _read = cancellation;
-    state = ImageViewerState(index: next, exporting: _exporting);
+    state = ImageViewerState(
+      index: next,
+      image: retained,
+      exporting: _exporting,
+      originalRequested: originalRequested,
+      isOriginal: retainedOriginal,
+    );
     try {
       final image = await ref
           .read(originalImageRepositoryProvider)
-          .load(request.images[next], cancellation);
+          .load(
+            originalRequested ? request.images[next] : preview,
+            cancellation,
+          );
       if (generation != _generation || cancellation.isCancelled) return;
       state = ImageViewerState(
         index: next,
         loading: false,
         image: image,
         exporting: _exporting,
+        originalRequested: originalRequested,
+        isOriginal: originalRequested,
       );
     } catch (error) {
       if (generation != _generation || cancellation.isCancelled) return;
@@ -117,6 +157,9 @@ class ImageViewerController extends Notifier<ImageViewerState> {
           loading: false,
           message: '图片加载已取消',
           exporting: _exporting,
+          image: retained,
+          originalRequested: originalRequested,
+          isOriginal: retainedOriginal,
         );
         return;
       }
@@ -124,12 +167,16 @@ class ImageViewerController extends Notifier<ImageViewerState> {
         index: next,
         loading: false,
         exporting: _exporting,
+        image: retained,
+        originalRequested: originalRequested,
+        isOriginal: retainedOriginal,
         message: switch (error) {
-          OriginalImageLimit() ||
-          ImageResponseTooLarge() => '原图超过安全加载上限（32 MiB／约 6711 万像素），请在官方页面查看',
-          TimeoutException() => '原图加载超时，请重试',
-          HttpException() || SocketException() => '原图下载失败，请重试',
-          _ => '原图无法读取，请重试',
+          OriginalImageLimit() || ImageResponseTooLarge() =>
+            '${originalRequested ? '原图' : '预览图'}超过安全加载上限（32 MiB／约 6711 万像素），请在官方页面查看',
+          TimeoutException() => '${originalRequested ? '原图' : '预览图'}加载超时，请重试',
+          HttpException() ||
+          SocketException() => '${originalRequested ? '原图' : '预览图'}下载失败，请重试',
+          _ => '${originalRequested ? '原图' : '预览图'}无法读取，请重试',
         },
       );
     } finally {

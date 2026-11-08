@@ -5,8 +5,8 @@ import '../../../core/storage/image_byte_cache.dart';
 import '../../../domain/request_cancellation.dart';
 import '../domain/original_image.dart';
 
-/// Originals are fetched only on explicit preview, without CDN resizing,
-/// credentials or disk persistence. The viewer owns cancellation and memory.
+/// Loads the preview or original URL selected by the viewer, without credentials
+/// or disk persistence. The viewer owns cancellation and memory.
 final class NetworkOriginalImageRepository implements OriginalImageRepository {
   NetworkOriginalImageRepository({this.loader = loadPublicImage});
   final ImageByteLoader loader;

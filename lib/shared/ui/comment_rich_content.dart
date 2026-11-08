@@ -209,6 +209,9 @@ class _CommentRichContentState extends State<CommentRichContent> {
                           url: publicImageThumbnail(
                             comment.pictures[index],
                             width: 264,
+                            // Resizing decoded pixels alone still downloads the
+                            // full GIF, which can exceed the byte-cache limit.
+                            resizeAnimated: true,
                           ).toString(),
                           cacheWidth: 264,
                           cacheHeight: 264,

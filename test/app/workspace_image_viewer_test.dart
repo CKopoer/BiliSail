@@ -69,6 +69,9 @@ void main() {
             Uri.https('i0.hdslb.com', '/first.png'),
             Uri.https('i0.hdslb.com', '/second.png'),
           ].take(imageCount).toList();
+          final previews = sources
+              .map((uri) => Uri.parse('$uri@1280w_1280h_0e.webp'))
+              .toList();
           final initialIndex = sources.length - 1;
           final windows = FakeDetachedWindowFactory(tester.view);
           var backs = 0;
@@ -140,12 +143,12 @@ void main() {
           expect(browserNavigator.canPop(), isFalse);
           expect(registry.windows, isEmpty);
           expect(find.text('$imageCount / $imageCount'), findsOneWidget);
-          expect(repository.sources, [sources[initialIndex]]);
-          expect(find.text('正在加载原图…'), findsOneWidget);
+          expect(repository.sources, [previews[initialIndex]]);
+          expect(find.text('正在加载预览图…'), findsOneWidget);
           Future<void> completeOriginal() async {
             repository.initial.complete(repository.image);
             await tester.pump();
-            expect(find.text('正在加载原图…'), findsNothing);
+            expect(find.text('正在加载预览图…'), findsNothing);
             expect(find.byType(InteractiveViewer), findsOneWidget);
             await tester.runAsync(
               () => Future<void>.delayed(const Duration(milliseconds: 50)),
@@ -160,9 +163,9 @@ void main() {
           await tester.pump();
           expect(repository.reads.single.isCancelled, isFalse);
           if (!completeBeforeRebuild) await completeOriginal();
-          expect(find.text('正在加载原图…'), findsNothing);
+          expect(find.text('正在加载预览图…'), findsNothing);
           expect(find.byType(InteractiveViewer), findsOneWidget);
-          expect(repository.sources, [sources[initialIndex]]);
+          expect(repository.sources, [previews[initialIndex]]);
           await sendNativeWindowBack(tester, playback.viewId);
           expect(backs, 0);
           expect(find.byType(ImageViewer), findsOneWidget);
@@ -172,16 +175,16 @@ void main() {
           ModalRoute.of(viewer)!.changedExternalState();
           await tester.pump();
           expect(find.text('125%'), findsOneWidget);
-          expect(find.text('正在加载原图…'), findsNothing);
+          expect(find.text('正在加载预览图…'), findsNothing);
           if (imageCount > 1) {
             await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
             await tester.pumpAndSettle();
             expect(find.text('1 / 2'), findsOneWidget);
-            expect(repository.sources, [sources[1], sources[0]]);
+            expect(repository.sources, [previews[1], previews[0]]);
             ModalRoute.of(viewer)!.changedExternalState();
             await tester.pump();
             expect(find.text('1 / 2'), findsOneWidget);
-            expect(find.text('正在加载原图…'), findsNothing);
+            expect(find.text('正在加载预览图…'), findsNothing);
             expect(find.byType(InteractiveViewer), findsOneWidget);
           }
           await tester.sendKeyEvent(LogicalKeyboardKey.escape);

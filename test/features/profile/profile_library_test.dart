@@ -240,7 +240,9 @@ void main() {
         await tester.tap(find.byKey(ValueKey('profile-$target')));
         await tester.pumpAndSettle();
         expect(find.byType(ImageViewer), findsOneWidget);
-        expect(images.sources, [Uri.parse('https://i0.hdslb.com/$target.png')]);
+        expect(images.sources, [
+          Uri.parse('https://i0.hdslb.com/$target.png@1280w_1280h_0e.webp'),
+        ]);
         await tester.tap(find.byTooltip('关闭图片'));
         await tester.pumpAndSettle();
         expect(find.byType(ImageViewer), findsNothing);
