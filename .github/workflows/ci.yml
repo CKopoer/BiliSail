@@ -169,6 +169,8 @@ jobs:
           pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
       - name: Run root app test shard
         shell: pwsh
+        env:
+          BILISAIL_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./tool/check.ps1 -Stage RootTests -TotalShards 2 -ShardIndex ${{ matrix.shard }} -EnforceLockfile
 
   package-tests:
@@ -350,6 +352,7 @@ jobs:
         env:
           BUILD_TARGET: ${{ matrix.target }}
           BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+          BILISAIL_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux-retry.outputs.msys2-location || steps.windows-mux.outputs.msys2-location }}
           ANDROID_PREVIEW_SIGNING: ${{ matrix.target == 'android-arm64' && github.event_name == 'pull_request' }}
           ANDROID_KEYSTORE_BASE64: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}

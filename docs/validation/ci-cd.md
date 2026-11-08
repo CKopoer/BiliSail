@@ -601,3 +601,24 @@ CI／Release 工作流通过 actionlint 1.7.12，修改的 PowerShell 通过语�
 已有本机结果：五份锁文件严格解析、格式、静态分析和四包 1226 项测试通过；mux 原生 10 项因未配置 `BILI_MUX_LIBRARY` 跳过。Windows 根测试批次 4725 项通过、13 项环境跳过，日志轮转用例超时；该文件随后以并行度 1 复测，3 项通过。WSL 分片 0 为 2446 项通过、2 项跳过；分片 1 的默认并行批次有日志／下载用例超时，降低并行度后的重跑按用户要求主动停止，不声称整套本机 CI 通过。后续不继续运行本机整套 CI，直接提交修复，远端工作流尚待新提交验证。
 
 后续一次重复冷缓存探测因连接错误耗尽三次尝试，按预期失败且未发布未验证内容；日志为 `build/ci-42468170432-sqlite-live-final.log`。之后恢复同摘要的已有缓存，并重新通过校验。这说明备用 API 路径不能保证外部网络已经恢复；两条路径均不可用时仍会明确失败。
+
+## 2026-11-08：未认证 GitHub 请求故障与 SQLite 下载对照
+
+[CI 42472383067](https://github.com/CKopoer/BiliSail/actions/runs/42472383067) 对应提交 `4f41f08260127aa8a82dc723c17ad0a2d8be99cb`。格式／分析、包测试和 mux 原生回归成功；两份根测试分片都在 SQLite 准备阶段失败，尚未开始测试。分片 0 先连接失败，随后 API 路径返回 502、503；分片 1 先连接失败，随后返回两次 504。汇总失败后平台构建全部跳过，未发现本次运行中的应用编译或业务测试失败证据。
+
+GitHub [官方状态 API](https://www.githubstatus.com/api/v2/incidents.json) 在 10:36 UTC（北京时间 18:36）记录 `pyynvrm1vskw`，标题为 “Increase in timeouts for some unauthenticated users”，状态为 investigating；与本次 10:40–10:41 UTC 的失败窗口重合。该通报未给出内部根因，不能据此断言所有下载入口或所有 runner 都不可用，也不能将它直接套用于更早的失败。
+
+为区分应用改动和外部路径，进行了两类远端对照：
+
+- 将最近一次完整成功的 [CI 42356243958](https://github.com/CKopoer/BiliSail/actions/runs/42356243958) 的精确提交 `8ad1f9465c424d10d9dbc8704e6130e8fbdc7e1b` 原样推至 `codex/ci-baseline-8ad1f946-20261108`，触发 [CI 42473055942](https://github.com/CKopoer/BiliSail/actions/runs/42473055942)。没有将候选修复混入旧提交；旧版同样固定 SQLite 3.7.0、Flutter 3.47.6 和 Dart 3.13.5，下载地址及 SQLite 摘要与当前一致。
+- 在独立诊断分支 `codex/ci-download-probe-20261108` 上运行 [下载对照 42473273253](https://github.com/CKopoer/BiliSail/actions/runs/42473273253)，在同一 Ubuntu 24.04 runner 并行请求三条路径，每条各两次。普通 Release 下载两次均在 0.23–0.32 秒完成；未认证 API 的元数据请求两次均在约 4.1 秒后返回 503；带本次 job 内置只读 token 的 API 路径两次均在 0.68–0.72 秒取得二进制。四份成功响应均为 1,788,664 字节，SHA-256 为锁定的 `0f947ebe629e8d9d02d7f408bef36e056bfc63ea47e02e0d45a7bae454f04ace`。诊断不输出凭据、重定向 query 或错误页正文；这组有限样本不代表持续可用性保证。
+
+这些证据支持 GitHub 未认证请求链路故障是当前下载失败的主要原因，而非文件名、摘要或 SQLite 版本错误。代码另有恢复策略问题：第一次下载失败后始终留在未认证 API，每次还重新请求元数据，无法利用已恢复的普通下载入口。本机真实冷缓存也复现了“普通入口超时 → API 504 → 再次普通下载成功”，日志为 `build/ci-42472383067-sqlite-live.log`；本机结果仅作为辅助，远端对照是主要证据。
+
+修复 [SQLite 准备脚本](../../tool/prepare-sqlite-assets.py)：[CI 工作流](../../.github/workflows/ci.yml) 的根测试与构建步骤通过环境变量 `BILISAIL_GITHUB_TOKEN` 注入 `${{ secrets.GITHUB_TOKEN }}`，沿用现有 `contents: read` 权限，优先请求官方 Release API。该令牌由 GitHub Actions 自动创建和轮换，不需要额外 PAT，不写入源码、日志或缓存。本地没有该变量时继续先走公开下载。凭据只发送至固定 `api.github.com` API 前缀，使用 urllib 的不继承重定向头，CDN 请求不携带 token。两条路径遇到瞬时连接／HTTP 错误交替尝试，已取得的附件 API 地址复用；保留原 120 秒预算和最多三次尝试，错误日志注明实际失败阶段。404、摘要不符等仍立即失败，不扩大依赖版本或修改 Pub 源码。
+
+本次最终修改聚焦认证路径，未增加 Actions 下载缓存或扩大重试次数。认证失败或两条下载路径均不可用时仍明确失败，不使用系统 SQLite、第三方镜像或未校验内容兜底。
+
+[HTTP 回归](../../tool/test_sqlite_assets.py) 在 Windows 和 WSL Ubuntu 22.04 均通过 17 项，覆盖普通入口恢复、API 元数据复用、认证优先及 CDN 重定向移除 token，并保留损坏内容拒绝、重试上限、截止时间、容量和七目标检查。[远端专项 42473567553](https://github.com/CKopoer/BiliSail/actions/runs/42473567553) 在相同旧版锁文件上实际通过 17 项 HTTP 回归、认证冷缓存下载、缓存复用及原生 hook 的 5 项数据库测试；该专项使用同一认证实现，之后最终版将候选重试上限从六次收敛回三次，并再次通过 Windows／WSL 的 17 项回归。专项不代表七个平台的完整构建或设备验收。
+
+Windows x64／Flutter 3.47.6 的 `tool/check.ps1 -EnforceLockfile` 完整通过五份锁文件严格解析、打包边界、格式、静态分析及 5964 项 Dart／Flutter 测试（根应用 4729、API 719、播放器 350、弹幕 161、封装 5）；根应用 13 项环境跳过，未配置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生测试跳过，不计作原生通过。日志为 `build/ci-42472383067-check-final.log`；上述收敛后的定向复验另存于 `build/ci-42472383067-python{-linux,}-final.log`。CI／Release 工作流通过 actionlint 1.7.12，本文本地链接与 `git diff --check` 通过，五份锁文件未修改。本轮没有客户端构建、签名、安装或设备操作；旧提交完整对照在本次记录时分片 1 已通过，分片 0 仍在运行，平台构建尚未开始，不声称该次完整 CI 成功。

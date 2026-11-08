@@ -26,6 +26,7 @@ TARGETS = {
 }
 API_ROOT = "https://api.github.com/repos/simolus3/sqlite3.dart/releases"
 MAX_BYTES = 16 * 1024 * 1024
+MAX_ATTEMPTS = 3
 
 
 def host_target() -> str:
@@ -57,10 +58,16 @@ def request(url: str, deadline: float, accept: str):
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise TimeoutError("SQLite preparation exceeded its 120 second deadline")
-    return urlopen(Request(url, headers={
+    outgoing = Request(url, headers={
         "User-Agent": "BiliSail-SQLite-Preparation",
         "Accept": accept,
-    }), timeout=min(20, remaining))
+    })
+    token = os.environ.get("BILISAIL_GITHUB_TOKEN")
+    if token and url.startswith(f"{API_ROOT}/"):
+        # urllib omits unredirected headers from the CDN request. The CI token
+        # belongs only on the official API, never github.com or an asset URL.
+        outgoing.add_unredirected_header("Authorization", f"Bearer {token}")
+    return urlopen(outgoing, timeout=min(20, remaining))
 
 
 def api_asset(tag: str, filename: str, digest: str, deadline: float) -> str:
@@ -123,30 +130,39 @@ def prepare(repo: Path, target: str) -> Path:
         return destination
     destination.parent.mkdir(parents=True, exist_ok=True)
     filename = TARGETS[target][0]
-    url = f"https://github.com/simolus3/sqlite3.dart/releases/download/{tag}/{filename}"
+    release_url = f"https://github.com/simolus3/sqlite3.dart/releases/download/{tag}/{filename}"
+    asset_url = None
+    api_first = bool(os.environ.get("BILISAIL_GITHUB_TOKEN"))
     deadline = time.monotonic() + 120
-    for attempt in range(3):
+    for attempt in range(MAX_ATTEMPTS):
         phase = "Release download"
         try:
-            # GitHub's API provides an independent official route to the same
-            # release asset when github.com's download gateway returns 5xx.
-            if attempt:
-                phase = "Release API metadata"
-                url = api_asset(tag, filename, digest, deadline)
+            # Either official gateway can fail independently. Do not stay on
+            # an unavailable API after the first Release download failure.
+            url = release_url
+            use_api = (attempt % 2 == 0) == api_first
+            if use_api:
+                if asset_url is None:
+                    phase = "Release API metadata"
+                    asset_url = api_asset(tag, filename, digest, deadline)
                 phase = "Release API asset"
+                url = asset_url
             download(url, destination, digest, deadline)
             print(f"Verified SQLite for {target}: {digest}", flush=True)
             return destination
         except HTTPError as error:
             error.close()
-            if error.code not in (408, 429, 500, 502, 503, 504) or attempt == 2:
-                raise RuntimeError(f"SQLite HTTP download failed: {error.code}") from None
-            print(f"SQLite HTTP {error.code}; retrying via GitHub Release API", flush=True)
+            if (error.code not in (408, 429, 500, 502, 503, 504)
+                    or attempt == MAX_ATTEMPTS - 1 or time.monotonic() >= deadline):
+                raise RuntimeError(f"SQLite {phase} failed after {attempt + 1} attempts (HTTP {error.code})") from None
+            failure = f"HTTP {error.code}"
         except (URLError, TimeoutError, ConnectionError, http.client.IncompleteRead) as error:
-            if attempt == 2 or time.monotonic() >= deadline:
+            if attempt == MAX_ATTEMPTS - 1 or time.monotonic() >= deadline:
                 raise RuntimeError(f"SQLite {phase} failed after {attempt + 1} attempts ({type(error).__name__})") from None
-            print(f"SQLite {phase} connection failed; retrying via GitHub Release API", flush=True)
-        time.sleep(attempt + 1)
+            failure = type(error).__name__
+        next_route = "Release download" if use_api else "Release API"
+        print(f"SQLite {phase} attempt {attempt + 1}/{MAX_ATTEMPTS}: {failure}; retrying via {next_route}", flush=True)
+        time.sleep(min(2 ** attempt, max(0, deadline - time.monotonic())))
     raise RuntimeError("SQLite preparation did not complete")
 
 

@@ -5,6 +5,7 @@ import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import threading
@@ -48,14 +49,20 @@ def metadata(digest=DIGEST, name="libsqlite3.x64.linux.so"):
 
 
 @contextmanager
-def http_fixture(routes):
+def http_fixture(routes, authorization_calls=None):
     calls = []
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             calls.append((self.path, self.headers.get("Accept")))
-            status, data = routes[self.path]
+            if authorization_calls is not None:
+                authorization_calls.append((self.path, self.headers.get("Authorization")))
+            route = routes[self.path]
+            response = route.pop(0) if isinstance(route, list) else route
+            status, data = response[:2]
             self.send_response(status)
+            for key, value in (response[2] if len(response) == 3 else {}).items():
+                self.send_header(key, value)
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
@@ -71,7 +78,10 @@ def http_fixture(routes):
         # Only this test adapter maps the public HTTPS endpoints to a local
         # HTTP server. Production keeps normal HTTPS/TLS verification.
         url = f"http://127.0.0.1:{server.server_port}{urlparse(request.full_url).path}"
-        return urlopen(Request(url, headers=dict(request.header_items())), timeout=timeout)
+        local_request = Request(url, headers=request.headers)
+        for key, value in request.unredirected_hdrs.items():
+            local_request.add_unredirected_header(key, value)
+        return urlopen(local_request, timeout=timeout)
 
     try:
         with patch.object(staging, "urlopen", side_effect=open_local), patch.object(staging.time, "sleep"):
@@ -83,6 +93,11 @@ def http_fixture(routes):
 
 
 class SQLiteAssetsTests(unittest.TestCase):
+    def setUp(self):
+        environment = patch.dict(os.environ, {"BILISAIL_GITHUB_TOKEN": ""})
+        environment.start()
+        self.addCleanup(environment.stop)
+
     def test_ci_mismatch_was_the_exact_504_error_page(self):
         self.assertEqual(len(GATEWAY_ERROR), 92)
         self.assertEqual(hashlib.sha256(GATEWAY_ERROR).hexdigest(),
@@ -138,17 +153,95 @@ class SQLiteAssetsTests(unittest.TestCase):
             destination = fixture(repo)
             routes = {PRIMARY: (504, GATEWAY_ERROR), METADATA: (200, metadata()), ASSET: (504, GATEWAY_ERROR)}
             with http_fixture(routes) as calls:
-                with self.assertRaisesRegex(RuntimeError, "HTTP download failed: 504"):
+                with self.assertRaisesRegex(RuntimeError, "3 attempts.*HTTP 504"):
                     staging.prepare(repo, "linux-x64")
             self.assertEqual(sum(path in (PRIMARY, ASSET) for path, _ in calls), 3)
+            self.assertEqual(sum(path == METADATA for path, _ in calls), 1)
             self.assertFalse(destination.exists())
+
+    def test_api_gateway_failure_returns_to_the_release_download(self):
+        # The failed CI stayed on the API after a connection error, then spent
+        # its remaining attempts on 502/503 metadata responses.
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory).resolve()
+            destination = fixture(repo)
+            routes = {
+                PRIMARY: [(504, GATEWAY_ERROR), (200, PAYLOAD)],
+                METADATA: (502, b"bad gateway"),
+            }
+            with http_fixture(routes) as calls:
+                staging.prepare(repo, "linux-x64")
+            self.assertEqual(destination.read_bytes(), PAYLOAD)
+            self.assertEqual([path for path, _ in calls], [PRIMARY, METADATA, PRIMARY])
+
+    def test_transient_api_asset_failure_reuses_metadata_and_recovers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory).resolve()
+            destination = fixture(repo)
+            routes = {
+                PRIMARY: (503, b"unavailable"),
+                METADATA: (200, metadata()),
+                ASSET: [(504, GATEWAY_ERROR), (200, PAYLOAD)],
+            }
+            with patch.dict(os.environ, {"BILISAIL_GITHUB_TOKEN": "controlled-test-token"}):
+                with http_fixture(routes) as calls:
+                    staging.prepare(repo, "linux-x64")
+            self.assertEqual(destination.read_bytes(), PAYLOAD)
+            self.assertEqual([path for path, _ in calls], [METADATA, ASSET, PRIMARY, ASSET])
+
+    def test_exhausted_metadata_errors_name_the_failed_phase(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory).resolve()
+            destination = fixture(repo)
+            routes = {PRIMARY: (504, GATEWAY_ERROR), METADATA: (503, b"unavailable")}
+            with patch.dict(os.environ, {"BILISAIL_GITHUB_TOKEN": "controlled-test-token"}):
+                with http_fixture(routes) as calls:
+                    with self.assertRaisesRegex(RuntimeError, "Release API metadata.*3 attempts.*503"):
+                        staging.prepare(repo, "linux-x64")
+            self.assertEqual(len(calls), 3)
+            self.assertFalse(destination.exists())
+
+    def test_ci_uses_authenticated_api_and_drops_token_on_asset_redirect(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory).resolve()
+            destination = fixture(repo)
+            authorization = []
+            routes = {
+                METADATA: (200, metadata()),
+                ASSET: (302, b"", {"Location": "/cdn-binary"}),
+                "/cdn-binary": (200, PAYLOAD),
+            }
+            with patch.dict(os.environ, {"BILISAIL_GITHUB_TOKEN": "controlled-test-token"}):
+                with http_fixture(routes, authorization) as calls:
+                    staging.prepare(repo, "linux-x64")
+            self.assertEqual(destination.read_bytes(), PAYLOAD)
+            self.assertEqual([path for path, _ in calls], [METADATA, ASSET, "/cdn-binary"])
+            self.assertEqual(authorization, [
+                (METADATA, "Bearer controlled-test-token"),
+                (ASSET, "Bearer controlled-test-token"),
+                ("/cdn-binary", None),
+            ])
+
+    def test_authenticated_api_failure_uses_anonymous_release_download(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory).resolve()
+            destination = fixture(repo)
+            authorization = []
+            routes = {METADATA: (503, b"unavailable"), PRIMARY: (200, PAYLOAD)}
+            with patch.dict(os.environ, {"BILISAIL_GITHUB_TOKEN": "controlled-test-token"}):
+                with http_fixture(routes, authorization):
+                    staging.prepare(repo, "linux-x64")
+            self.assertEqual(destination.read_bytes(), PAYLOAD)
+            self.assertEqual(authorization, [
+                (METADATA, "Bearer controlled-test-token"), (PRIMARY, None),
+            ])
 
     def test_404_stops_without_retry(self):
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory).resolve()
             fixture(repo)
             with http_fixture({PRIMARY: (404, b"not found")}) as calls:
-                with self.assertRaisesRegex(RuntimeError, "HTTP download failed: 404"):
+                with self.assertRaisesRegex(RuntimeError, "HTTP 404"):
                     staging.prepare(repo, "linux-x64")
             self.assertEqual(len(calls), 1)
 
