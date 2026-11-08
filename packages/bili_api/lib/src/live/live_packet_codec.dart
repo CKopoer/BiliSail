@@ -192,7 +192,8 @@ ApiLiveEvent? _parseCommand(Map<String, Object?> data) {
     final metadata = flags.length > 15
         ? _map(flags[15])
         : const <String, Object?>{};
-    final userId = _id(_map(metadata['user'])['uid']) ?? _id(user[0]);
+    final profile = _map(metadata['user']);
+    final userId = _id(profile['uid']) ?? _id(user[0]);
     final extra = liveChatExtra(metadata['extra']);
     final color = flags.length > 3 ? _int(flags[3]) : null;
     final mode = flags.length > 1 ? _int(flags[1]) : null;
@@ -209,6 +210,14 @@ ApiLiveEvent? _parseCommand(Map<String, Object?> data) {
         fontSize: (fontSize ?? 24).clamp(12, 54),
         emotes: liveChatEmotes(extra['emots'], text),
         sticker: flags.length > 13 ? liveChatImage(flags[13]) : null,
+        medal: liveChatMedal(
+          profile.containsKey('medal')
+              ? profile['medal']
+              : info.length > 3
+              ? info[3]
+              : null,
+        ),
+        userLevel: liveChatUserLevel(info.length > 4 ? info[4] : null),
       ),
     );
   }

@@ -51,6 +51,8 @@ final class LiveChatMessage {
     this.userId,
     this.emotes = const {},
     this.sticker,
+    this.medal,
+    this.userLevel,
   });
 
   final String userName, text;
@@ -60,9 +62,11 @@ final class LiveChatMessage {
   final UserId? userId;
   final Map<String, LiveChatImage> emotes;
   final LiveChatImage? sticker;
+  final LiveFanMedal? medal;
+  final int? userLevel;
 
   /// Snapshot and socket overlap; a sparse history record must retain links
-  /// and images already supplied by the socket for the same message.
+  /// and rich metadata already supplied by the socket for the same message.
   LiveChatMessage withFallbackMetadata(LiveChatMessage? previous) {
     if (previous == null) return this;
     return LiveChatMessage(
@@ -78,6 +82,8 @@ final class LiveChatMessage {
         Map.fromEntries({...previous.emotes, ...emotes}.entries.take(50)),
       ),
       sticker: sticker ?? previous.sticker,
+      medal: medal ?? previous.medal,
+      userLevel: userLevel ?? previous.userLevel,
     );
   }
 
@@ -90,6 +96,29 @@ final class LiveChatMessage {
     }
     return id ?? '$userName\u0000$text';
   }
+}
+
+final class LiveFanMedal {
+  const LiveFanMedal({
+    required this.name,
+    required this.level,
+    this.color,
+    this.textColor,
+  });
+  final String name;
+  final int level;
+  final int? color, textColor;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiveFanMedal &&
+      name == other.name &&
+      level == other.level &&
+      color == other.color &&
+      textColor == other.textColor;
+
+  @override
+  int get hashCode => Object.hash(name, level, color, textColor);
 }
 
 final class LiveChatImage {

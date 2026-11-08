@@ -96,6 +96,8 @@ final class ApiLiveChatMessage {
     this.userId,
     this.emotes = const {},
     this.sticker,
+    this.medal,
+    this.userLevel,
   });
 
   final String userName;
@@ -106,6 +108,20 @@ final class ApiLiveChatMessage {
   final String? userId;
   final Map<String, ApiLiveChatImage> emotes;
   final ApiLiveChatImage? sticker;
+  final ApiLiveFanMedal? medal;
+  final int? userLevel;
+}
+
+final class ApiLiveFanMedal {
+  const ApiLiveFanMedal({
+    required this.name,
+    required this.level,
+    this.color,
+    this.textColor,
+  });
+  final String name;
+  final int level;
+  final int? color, textColor;
 }
 
 final class ApiLiveChatImage {

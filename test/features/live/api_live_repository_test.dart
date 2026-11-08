@@ -31,7 +31,14 @@ void main() {
       expect(chat.first.userId, const UserId('9007199254740993'));
       expect(chat.first.emotes['[笑]']?.url.scheme, 'https');
       expect(chat.first.sticker?.width, 160);
+      expect(chat.first.medal?.name, '哔帆');
+      expect(chat.first.medal?.level, 25);
+      expect(chat.first.medal?.color, 0x994c7dff);
+      expect(chat.first.medal?.textColor, 0xffffffff);
+      expect(chat.first.userLevel, 42);
       expect(chat.last.userId, isNull);
+      expect(chat.last.medal, isNull);
+      expect(chat.last.userLevel, isNull);
       expect(() => chat.first.emotes.clear(), throwsUnsupportedError);
       final sc = await repository.loadSuperChats(
         const RoomId('12'),
@@ -64,7 +71,17 @@ final class _Transport implements ApiTransport {
                     {
                       'nickname': '观众甲',
                       'text': '[笑]',
-                      'user': {'uid': '9007199254740993'},
+                      'user': {
+                        'uid': '9007199254740993',
+                        'medal': {
+                          'name': '哔帆',
+                          'level': 25,
+                          'is_light': 1,
+                          'v2_medal_color_start': '#4C7DFF99',
+                          'v2_medal_color_text': '#FFFFFF',
+                        },
+                      },
+                      'user_level': [42],
                       'emots': {
                         '[笑]': {'url': '//i0.hdslb.com/smile.png'},
                       },

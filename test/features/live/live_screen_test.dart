@@ -17,6 +17,7 @@ import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -512,6 +513,52 @@ void main() {
       );
       expect(identical(tester.element(anchor), element), isTrue);
       expect(tester.getTopLeft(anchor).dy, closeTo(position.dy, 1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'selecting chat freezes the reading window until scrolling down',
+    (tester) async {
+      repository.chatMessages = const [
+        LiveChatMessage(
+          id: 'selected',
+          userName: '观众',
+          text: 'select this message',
+        ),
+      ];
+      await showPage(tester);
+      await tester.pumpAndSettle();
+      final bubble = find.byType(LiveChatBubble);
+      final element = tester.element(bubble);
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.descendant(of: bubble, matching: find.byType(RichText)).first,
+      );
+      final start = paragraph.text.toPlainText().indexOf('select this message');
+      Offset point(int offset) => paragraph.localToGlobal(
+        paragraph.getOffsetForCaret(TextPosition(offset: offset), Rect.zero) +
+            const Offset(0, 7),
+      );
+      final mouse = await tester.startGesture(
+        point(start),
+        kind: PointerDeviceKind.mouse,
+      );
+      await mouse.moveTo(point(start + 'select this message'.length));
+      await mouse.up();
+      await tester.pump();
+      receiveMessages(0, LiveController.maxChatMessages);
+      await tester.pumpAndSettle();
+      expect(
+        container.read(liveControllerProvider(room.id)).messages,
+        hasLength(500),
+      );
+      expect(tester.element(find.byType(LiveChatBubble)), same(element));
+      expect(find.textContaining('select this message'), findsOneWidget);
+      expect(find.textContaining('新消息 499 '), findsNothing);
+      await wheelChat(tester, 120);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('新消息 499 ').hitTestable(), findsOneWidget);
+      expect(chatPosition(tester).extentAfter, 0);
       expect(tester.takeException(), isNull);
     },
   );

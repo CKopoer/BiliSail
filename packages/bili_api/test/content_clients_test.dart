@@ -375,6 +375,8 @@ void main() {
                     'text': '你好',
                     'timeline': '2026-10-05 10:20:30',
                     'id': '9007199254740993',
+                    'medal': [12, '旧牌', '', 1, 0x123456],
+                    'user_level': [42],
                     'user': {'uid': '9007199254740995'},
                     'emots': {
                       '你好': {
@@ -398,6 +400,10 @@ void main() {
       final chat = await client.getChatHistory('6');
       expect(chat.single.id, '9007199254740993');
       expect(chat.single.userId, '9007199254740995');
+      expect(chat.single.medal?.name, '旧牌');
+      expect(chat.single.medal?.level, 12);
+      expect(chat.single.medal?.color, 0xff123456);
+      expect(chat.single.userLevel, 42);
       expect(chat.single.emotes['你好']?.url.scheme, 'https');
       expect(chat.single.sticker?.width, 160);
       expect(chat.single.timestamp?.year, 2026);

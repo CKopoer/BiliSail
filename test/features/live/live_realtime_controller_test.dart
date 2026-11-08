@@ -259,6 +259,8 @@ void main() {
             timestamp: now,
             emotes: {'新消息': image},
             sticker: image,
+            medal: const LiveFanMedal(name: '哔帆', level: 25),
+            userLevel: 42,
           ),
         ),
       ]);
@@ -268,6 +270,8 @@ void main() {
       expect(message.userId, const UserId('123'));
       expect(message.emotes['新消息'], image);
       expect(message.sticker, image);
+      expect(message.medal, const LiveFanMedal(name: '哔帆', level: 25));
+      expect(message.userLevel, 42);
     },
   );
   test('watched and viewer counts stay independent and reject stale connection events', () async {
@@ -342,6 +346,29 @@ void main() {
     expect(state().viewerCountText, isNull);
     expect(state().watchedCountText, isNull);
   });
+  test('badge-only updates replace one row and identical metadata publishes nothing', () {
+    LiveChatMessage message({int level = 1, int userLevel = 42}) =>
+        LiveChatMessage(
+          id: 'one',
+          userName: '观众',
+          text: '内容',
+          timestamp: now,
+          medal: LiveFanMedal(name: '哔帆', level: level),
+          userLevel: userLevel,
+        );
+    repository.events.add([LiveChatReceived(message())]);
+    final initial = state();
+    repository.events.add([LiveChatReceived(message(level: 2))]);
+    expect(state().messages, hasLength(1));
+    expect(state().messages.single.medal?.level, 2);
+    expect(state().messages, isNot(same(initial.messages)));
+    repository.events.add([LiveChatReceived(message(level: 2, userLevel: 43))]);
+    expect(state().messages.single.userLevel, 43);
+    final updated = state();
+    repository.events.add([LiveChatReceived(message(level: 2, userLevel: 43))]);
+    expect(state(), same(updated));
+  });
+
   test('merging rich snapshots keeps the per-message image limit', () {
     final image = LiveChatImage(
       url: Uri.parse('https://i0.hdslb.com/fixture.png'),

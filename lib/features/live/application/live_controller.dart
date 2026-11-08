@@ -843,6 +843,8 @@ class LiveController extends Notifier<LiveState> {
           a.color == b.color &&
           a.mode == b.mode &&
           a.fontSize == b.fontSize &&
+          a.medal == b.medal &&
+          a.userLevel == b.userLevel &&
           _sameImage(a.sticker, b.sticker) &&
           a.emotes.length == b.emotes.length &&
           a.emotes.entries.every(

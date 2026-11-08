@@ -9,6 +9,7 @@ import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/live/presentation/live_chat_bubble.dart';
 import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,6 +45,174 @@ Future<Uint8List> _fixtureImage() async {
 }
 
 void main() {
+  String? copiedText;
+  setUp(() {
+    copiedText = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copiedText =
+                (call.arguments as Map<Object?, Object?>)['text'] as String?;
+          }
+          if (call.method == 'Clipboard.hasStrings') {
+            return {'value': copiedText?.isNotEmpty ?? false};
+          }
+          return null;
+        });
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null);
+  });
+  testWidgets('medals and levels wrap on narrow screens with large text', (
+    tester,
+  ) async {
+    for (final width in [160.0, 320.0]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MediaQuery(
+              data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+              child: SizedBox(
+                width: width,
+                child: const LiveChatBubble(
+                  message: LiveChatMessage(
+                    userName: '很长的昵称很长的昵称很长的昵称',
+                    text: '完整的弹幕内容',
+                    medal: LiveFanMedal(name: '很长的粉丝牌子名称', level: 25),
+                    userLevel: 42,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('很长的粉丝牌子名称'), findsOneWidget);
+      final level = find.text(' 25');
+      expect(level, findsOneWidget);
+      expect(
+        tester
+            .renderObject<RenderParagraph>(
+              find.descendant(of: level, matching: find.byType(RichText)),
+            )
+            .didExceedMaxLines,
+        isFalse,
+      );
+      expect(tester.getRect(level).right, lessThanOrEqualTo(width));
+      expect(find.text('UL 42'), findsOneWidget);
+      expect(find.textContaining('完整的弹幕内容'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: LiveChatBubble(
+            message: LiveChatMessage(userName: '游客', text: '无牌子内容'),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('UL 42'), findsNothing);
+    expect(find.text('很长的粉丝牌子名称'), findsNothing);
+  });
+
+  testWidgets(
+    'desktop mouse selection copies content and retains profile action',
+    (tester) async {
+      var selections = 0;
+      final opened = <UserId>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.windows),
+          home: Scaffold(
+            body: LiveChatBubble(
+              message: const LiveChatMessage(
+                userName: '观众',
+                userId: UserId('123'),
+                text: 'copy this message',
+                medal: LiveFanMedal(name: '哔帆', level: 25),
+                userLevel: 42,
+              ),
+              onOpenUser: opened.add,
+              onSelectContent: () => selections++,
+            ),
+          ),
+        ),
+      );
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find
+            .descendant(
+              of: find.byType(SelectionArea),
+              matching: find.byType(RichText),
+            )
+            .first,
+      );
+      final plain = paragraph.text.toPlainText();
+      final start = plain.indexOf('copy this message');
+      Offset point(int offset) => paragraph.localToGlobal(
+        paragraph.getOffsetForCaret(TextPosition(offset: offset), Rect.zero) +
+            const Offset(0, 7),
+      );
+      final mouse = await tester.startGesture(
+        point(start),
+        kind: PointerDeviceKind.mouse,
+      );
+      await mouse.moveTo(point(start + 'copy this message'.length));
+      await mouse.up();
+      await tester.pump();
+      expect(selections, greaterThan(0));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(copiedText, 'copy this message');
+      await tester.tap(find.text('观众'));
+      expect(opened, [const UserId('123')]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('mobile long press selects chat content', (tester) async {
+    var selections = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.android),
+        home: Scaffold(
+          body: LiveChatBubble(
+            message: const LiveChatMessage(
+              userName: '观众',
+              text: 'select this message',
+            ),
+            onSelectContent: () => selections++,
+          ),
+        ),
+      ),
+    );
+    final paragraph = tester.renderObject<RenderParagraph>(
+      find
+          .descendant(
+            of: find.byType(SelectionArea),
+            matching: find.byType(RichText),
+          )
+          .first,
+    );
+    final offset = paragraph.text.toPlainText().indexOf('select') + 2;
+    await tester.longPressAt(
+      paragraph.localToGlobal(
+        paragraph.getOffsetForCaret(TextPosition(offset: offset), Rect.zero) +
+            const Offset(0, 7),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(selections, greaterThan(0));
+    expect(find.text('Copy'), findsOneWidget);
+    await tester.tap(find.text('Copy'));
+    await tester.pumpAndSettle();
+    expect(copiedText, 'select');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'inline emotes and stickers decode with text order, profile links and bounded layout',
     (tester) async {

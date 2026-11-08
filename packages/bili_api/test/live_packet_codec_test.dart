@@ -23,6 +23,134 @@ Map<String, Object?> chat(int index) => {
 };
 
 void main() {
+  test('modern lit medals take precedence and RGBA colors become ARGB', () {
+    final flags = List<Object?>.filled(16, null);
+    flags[15] = {
+      'user': {
+        'medal': {
+          'name': '哔帆',
+          'level': 25,
+          'is_light': 1,
+          'v2_medal_color_start': '#4C7DFF99',
+          'v2_medal_color_text': '#FFFFFF',
+        },
+      },
+    };
+    final message =
+        (LivePacketCodec.decode(
+                  command({
+                    'cmd': 'DANMU_MSG',
+                    'info': [
+                      flags,
+                      '内容',
+                      [123, '观众'],
+                      [1, '旧牌'],
+                      [42],
+                    ],
+                  }),
+                ).events.single
+                as ApiLiveChatReceived)
+            .message;
+    expect(message.medal?.name, '哔帆');
+    expect(message.medal?.level, 25);
+    expect(message.medal?.color, 0x994c7dff);
+    expect(message.medal?.textColor, 0xffffffff);
+    expect(message.userLevel, 42);
+  });
+  test('legacy medals retain their name, level and RGB color', () {
+    final message =
+        (LivePacketCodec.decode(
+                  command({
+                    'cmd': 'DANMU_MSG',
+                    'info': [
+                      [],
+                      '内容',
+                      [123, '观众'],
+                      [12, '旧牌', '', 1, 0x123456],
+                      [0],
+                    ],
+                  }),
+                ).events.single
+                as ApiLiveChatReceived)
+            .message;
+    expect(message.medal?.name, '旧牌');
+    expect(message.medal?.level, 12);
+    expect(message.medal?.color, 0xff123456);
+    expect(message.userLevel, 0);
+  });
+  test(
+    'unlit or invalid optional medals never discard chat or revive legacy data',
+    () {
+      for (final medal in <Object?>[
+        null,
+        [],
+        'bad',
+        {'name': '牌', 'level': 12, 'is_light': 0},
+        {'name': '', 'level': 12},
+        {'name': '牌', 'level': -1},
+        {'name': '牌', 'level': 0},
+        {'name': '牌', 'level': 1.5},
+        {'name': '牌', 'level': 1001},
+        [1],
+      ]) {
+        final flags = List<Object?>.filled(16, null);
+        flags[15] = {
+          'user': {'medal': medal},
+        };
+        final message =
+            (LivePacketCodec.decode(
+                      command({
+                        'cmd': 'DANMU_MSG',
+                        'info': [
+                          flags,
+                          '仍然可读',
+                          [123, '观众'],
+                          [12, '旧牌'],
+                          ['invalid'],
+                        ],
+                      }),
+                    ).events.single
+                    as ApiLiveChatReceived)
+                .message;
+        expect(message.text, '仍然可读');
+        expect(message.medal, isNull);
+        expect(message.userLevel, isNull);
+      }
+    },
+  );
+  test(
+    'medal labels are bounded and malformed colors fall back independently',
+    () {
+      final flags = List<Object?>.filled(16, null);
+      flags[15] = {
+        'user': {
+          'medal': {
+            'name': '牌' * 100,
+            'level': '12',
+            'v2_medal_color_start': '#bad',
+            'v2_medal_color_text': -1,
+          },
+        },
+      };
+      final message =
+          (LivePacketCodec.decode(
+                    command({
+                      'cmd': 'DANMU_MSG',
+                      'info': [
+                        flags,
+                        '内容',
+                        [123, '观众'],
+                      ],
+                    }),
+                  ).events.single
+                  as ApiLiveChatReceived)
+              .message;
+      expect(message.medal?.name.length, 30);
+      expect(message.medal?.level, 12);
+      expect(message.medal?.color, isNull);
+      expect(message.medal?.textColor, isNull);
+    },
+  );
   test('raw merged packets preserve auth, heartbeat and chat metadata', () {
     final pop = Uint8List(4);
     ByteData.sublistView(pop).setUint32(0, 1250);

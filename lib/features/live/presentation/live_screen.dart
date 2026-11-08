@@ -858,6 +858,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
         message: message,
         content: _chatContent.resolve(message),
         onOpenUser: widget.onOpenUser,
+        // Keep the bounded reading snapshot until the user scrolls back down.
+        onSelectContent: () => _followChat = false,
       ),
     );
     _chatRows[key] = (

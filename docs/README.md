@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [直播聊天牌子、等级与内容选择](validation/live-chat-medals-selection-2026-11-08.md) | 粉丝牌与等级字段、可选择正文、阅读快照及离线回归边界 |
 | [跨后端起播同步](validation/synchronized-playback-startup-2026-11-08.md) | 共享静音起播门槛、fvp 原生暂停与 Flutter 首帧、取消／暂停和延迟双轨验证 |
 | [fvp 中途断音检测与恢复](validation/fvp-audio-recovery-2026-11-07.md) | 本机 1.2.8 证据边界、实际外部音频解码活动、停滞恢复与原生回归 |
 | [可选 fsplayer 与三后端对照](validation/fsplayer-backend-2026-11-07.md) | Android／iOS／macOS 接入、内存 DASH、固定原生资产、功能回归和 Android 同条件对照 |

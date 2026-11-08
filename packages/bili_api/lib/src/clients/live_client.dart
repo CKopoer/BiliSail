@@ -426,17 +426,22 @@ final class LiveClient {
       final text = rawText.substring(0, rawText.length.clamp(0, 300));
       final name = _text(entry['nickname']) ?? '';
       final timeline = _text(entry['timeline']);
+      final user = _mapOrEmpty(entry['user']);
       messages.add(
         ApiLiveChatMessage(
           userName: name.substring(0, name.length.clamp(0, 100)),
-          userId:
-              _optionalId(_mapOrEmpty(entry['user'])['uid']) ??
-              _optionalId(entry['uid']),
+          userId: _optionalId(user['uid']) ?? _optionalId(entry['uid']),
           text: text,
           timestamp: _historyTimestamp(timeline),
           id: _optionalId(entry['id_str'] ?? entry['id']),
           emotes: liveChatEmotes(entry['emots'], text),
           sticker: liveChatImage(entry['emoticon']),
+          medal: liveChatMedal(
+            user.containsKey('medal')
+                ? user['medal']
+                : entry['medal'] ?? entry['medal_info'],
+          ),
+          userLevel: liveChatUserLevel(entry['user_level']),
         ),
       );
     }

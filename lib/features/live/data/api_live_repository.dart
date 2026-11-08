@@ -173,6 +173,16 @@ class ApiLiveRepository
           ),
         ),
         sticker: _mapOptionalImage(message.sticker),
+        medal: switch (message.medal) {
+          final medal? => LiveFanMedal(
+            name: medal.name,
+            level: medal.level,
+            color: medal.color,
+            textColor: medal.textColor,
+          ),
+          null => null,
+        },
+        userLevel: message.userLevel,
       );
 
   static LiveSuperChatMessage _mapSuperChat(ApiLiveSuperChatMessage message) =>
