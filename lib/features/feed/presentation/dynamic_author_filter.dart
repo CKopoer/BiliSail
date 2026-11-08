@@ -298,8 +298,10 @@ final class _AuthorChoice extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       textAlign: wide ? TextAlign.start : TextAlign.center,
       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-        color: selected ? colors.primary : colors.onSurfaceVariant,
-        fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+        fontSize: wide ? 14 : null,
+        height: wide ? 1.25 : null,
+        color: colors.onSurface,
+        fontWeight: !wide && selected ? FontWeight.w600 : FontWeight.w400,
       ),
     );
     return Padding(
