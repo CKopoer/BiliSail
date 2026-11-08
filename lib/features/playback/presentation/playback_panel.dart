@@ -1807,8 +1807,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                             PlaybackPhase.opening &&
                                         snapshot.phase != PlaybackPhase.idle,
                                     sourceGeneration: sourceGeneration,
-                                    position: () =>
-                                        session.snapshots.value.position,
+                                    position: () => session.commandPosition,
                                     duration: snapshot.duration,
                                     preview: _swipeSeekPreview,
                                     storyboard: session.storyboard,

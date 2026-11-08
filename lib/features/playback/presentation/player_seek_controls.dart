@@ -24,7 +24,8 @@ class PlayerSeekControls extends StatefulWidget {
 
   final bool enabled;
   final int sourceGeneration;
-  // Read the confirmed clock once, without subscribing the gesture layer to it.
+  // Read the latest command target (or confirmed clock) once per gesture,
+  // without subscribing the gesture layer to high-frequency position updates.
   final ValueGetter<Duration> position;
   final Duration duration;
   final ValueNotifier<Duration?> preview;

@@ -2623,12 +2623,15 @@ class PlaybackSession extends ChangeNotifier {
   Duration? _seekTarget;
   int? _seekTargetGeneration;
 
+  // Command anchors may use an unconfirmed target; playback clocks must not.
+  Duration get commandPosition => _seekTargetGeneration == _generation
+      ? _seekTarget ?? snapshots.value.position
+      : snapshots.value.position;
+
   Future<void> seekBy(Duration offset) {
     // Native position remains at the old frame until seek finishes. Repeated
     // relative commands must advance the pending target instead of restarting it.
-    final position = _seekTargetGeneration == _generation
-        ? _seekTarget ?? snapshots.value.position
-        : snapshots.value.position;
+    final position = commandPosition;
     var target = position + offset;
     final duration = snapshots.value.duration;
     if (target < Duration.zero) target = Duration.zero;

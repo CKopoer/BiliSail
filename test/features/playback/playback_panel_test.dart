@@ -2366,6 +2366,136 @@ void main() {
 
   for (final fullscreen in [false, true]) {
     for (final playing in [false, true]) {
+      for (final firstInput in ['picture', 'timeline']) {
+        testWidgets(
+          'successive picture seeks accumulate from the latest target (fullscreen: $fullscreen, playing: $playing, first: $firstInput)',
+          (tester) async {
+            final engine = _FakeEngine();
+            final session = _session(engine);
+            addTearDown(session.close);
+            await tester.pumpWidget(
+              _app(
+                session,
+                _FakeWindowService(),
+                const AppSettings.defaults().copyWith(
+                  playerControlsMode: PlayerControlsMode.click,
+                ),
+              ),
+            );
+            await _pumpFrames(tester);
+            await _showControls(tester);
+            if (fullscreen) {
+              await tester.tap(find.byTooltip('全屏（F）'));
+              await _pumpFrames(tester);
+            }
+            if (playing != session.snapshots.value.desiredPlaying) {
+              await session.togglePlaying();
+            }
+            await session.seek(const Duration(seconds: 30));
+            await _pumpFrames(tester);
+            final picture = tester.getRect(
+              find.byKey(const ValueKey('player-surface-tap-target')),
+            );
+            final start =
+                picture.topLeft +
+                Offset(picture.width * .3, picture.height * .35);
+            final gates = List.generate(3, (_) => Completer<void>());
+            addTearDown(() {
+              for (final gate in gates) {
+                if (!gate.isCompleted) gate.complete();
+              }
+            });
+            final seeks = engine.seeks;
+            final firstTarget = Duration(
+              seconds: firstInput == 'picture' ? 54 : 90,
+            );
+            engine.nextSeek = gates[0];
+            if (firstInput == 'picture') {
+              final first = await tester.startGesture(start);
+              await first.moveBy(Offset(picture.width * .2, 0));
+              await first.up();
+            } else {
+              await tester.tapAt(
+                tester
+                    .getRect(
+                      find.byKey(const ValueKey('playback-timeline-slider')),
+                    )
+                    .center,
+              );
+            }
+            await _pumpFrames(tester);
+            expect(engine.seeks, seeks + 1);
+            expect(
+              engine.currentSnapshot.position,
+              const Duration(seconds: 30),
+            );
+
+            final second = await tester.startGesture(start);
+            await second.moveBy(Offset(picture.width * .2, 0));
+            await tester.pump();
+            final controls = tester.widget<PlayerSeekControls>(
+              find.byType(PlayerSeekControls),
+            );
+            final secondTarget = firstTarget + const Duration(seconds: 24);
+            expect(controls.preview.value, secondTarget);
+            gates[0].complete();
+            await _pumpFrames(tester);
+            expect(controls.preview.value, secondTarget);
+            engine.nextSeek = gates[1];
+            await second.up();
+            await _pumpFrames(tester);
+
+            // Cancelling an uncommitted drag must retain the session's target.
+            final cancelled = await tester.startGesture(start);
+            await cancelled.moveBy(Offset(picture.width * .1, 0));
+            await cancelled.cancel();
+            await _pumpFrames(tester);
+            expect(controls.preview.value, isNull);
+            expect(engine.seeks, seeks + 2);
+
+            final third = await tester.startGesture(start);
+            await third.moveBy(Offset(-picture.width * .1, 0));
+            await tester.pump();
+            final thirdTarget = secondTarget - const Duration(seconds: 12);
+            expect(controls.preview.value, thirdTarget);
+            engine.nextSeek = gates[2];
+            await third.up();
+            gates[1].complete();
+            await _pumpFrames(tester);
+            expect(controls.preview.value, thirdTarget);
+            gates[2].complete();
+            await _pumpFrames(tester);
+            expect(controls.preview.value, isNull);
+            expect(engine.currentSnapshot.position, thirdTarget);
+
+            // Once confirmed, a new gesture follows the advancing real clock.
+            engine._emit(
+              engine.currentSnapshot.copyWith(
+                position: thirdTarget + const Duration(seconds: 1),
+              ),
+            );
+            final fourth = await tester.startGesture(start);
+            await fourth.moveBy(Offset(picture.width * .1, 0));
+            await fourth.up();
+            await _pumpFrames(tester);
+            expect(
+              engine.currentSnapshot.position,
+              thirdTarget + const Duration(seconds: 13),
+            );
+            expect(engine.seeks, seeks + 4);
+            expect(engine.opens, 1);
+            expect(engine.currentSnapshot.desiredPlaying, playing);
+            await tester.pumpWidget(const SizedBox());
+            await _pumpFrames(tester);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  }
+
+  for (final fullscreen in [false, true]) {
+    for (final playing in [false, true]) {
       testWidgets(
         'timeline click keeps target and state until confirmation (fullscreen: $fullscreen, playing: $playing)',
         (tester) async {
