@@ -1,408 +1,86 @@
-name: CI
-
+name: SQLite download diagnosis
 on:
   push:
-    branches: ['**', '!dependabot/**']
-  pull_request:
+    branches: [codex/ci-download-probe-20261108]
   workflow_dispatch:
-    inputs:
-      version:
-        description: '版本 x.y.z+N（留空使用 pubspec.yaml）'
-        type: string
-        default: ''
-      enable_android:
-        type: boolean
-        default: true
-      enable_windows:
-        description: Windows x64 MSIX / MSI / EXE 安装包
-        type: boolean
-        default: true
-      enable_macos:
-        description: macOS arm64 / Intel x64 DMG 安装文件
-        type: boolean
-        default: true
-      enable_ios:
-        description: iOS arm64 unsigned IPA
-        type: boolean
-        default: true
-      enable_linux:
-        description: Linux x64 Flatpak / AppImage
-        type: boolean
-        default: true
-  workflow_call:
-    inputs:
-      version:
-        description: Flutter version (build name plus build number); empty uses pubspec.yaml.
-        type: string
-        default: ''
-      build_targets:
-        description: 'Optional JSON array limiting builds to a subset of the enabled platform targets.'
-        type: string
-        default: ''
-      enable_android:
-        type: boolean
-        default: true
-      enable_windows:
-        description: Windows x64 MSIX / MSI / EXE installers.
-        type: boolean
-        default: true
-      enable_macos:
-        description: macOS arm64 / Intel x64 DMG installers.
-        type: boolean
-        default: true
-      enable_ios:
-        description: iOS arm64 unsigned IPA (requires signing before installation).
-        type: boolean
-        default: true
-      enable_linux:
-        description: Linux x64 Flatpak / AppImage.
-        type: boolean
-        default: true
-    secrets:
-      ANDROID_KEYSTORE_BASE64:
-        required: false
-      ANDROID_KEYSTORE_PASSWORD:
-        required: false
-      ANDROID_KEY_ALIAS:
-        required: false
-      ANDROID_KEY_PASSWORD:
-        required: false
-      MSIX_CERTIFICATE_BASE64:
-        required: false
-      MSIX_CERTIFICATE_PASSWORD:
-        required: false
-    outputs:
-      version:
-        description: Version used by every selected build.
-        value: ${{ jobs.prepare.outputs.version }}
-
 permissions:
   contents: read
-
-env:
-  # Match the official hosted source recorded in all five lockfiles.
-  PUB_HOSTED_URL: https://pub.dev
-
 jobs:
-  prepare:
+  probe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      version: ${{ steps.plan.outputs.version }}
-      matrix: ${{ steps.plan.outputs.matrix }}
+    timeout-minutes: 8
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Resolve version and platforms
-        id: plan
-        shell: pwsh
+      - name: Compare anonymous and authenticated official download routes
         env:
-          REQUESTED_VERSION: ${{ inputs.version }}
-          BUILD_TARGETS: ${{ inputs.build_targets }}
-          # Push/PR has no inputs; a reusable caller can explicitly pass false.
-          ENABLE_ANDROID: ${{ !contains(toJSON(inputs), '"enable_android"') || inputs.enable_android }}
-          ENABLE_WINDOWS: ${{ !contains(toJSON(inputs), '"enable_windows"') || inputs.enable_windows }}
-          ENABLE_MACOS: ${{ !contains(toJSON(inputs), '"enable_macos"') || inputs.enable_macos }}
-          ENABLE_IOS: ${{ !contains(toJSON(inputs), '"enable_ios"') || inputs.enable_ios }}
-          ENABLE_LINUX: ${{ !contains(toJSON(inputs), '"enable_linux"') || inputs.enable_linux }}
-        run: ./tool/ci-build-plan.ps1
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import concurrent.futures
+          import hashlib
+          import json
+          import os
+          import time
+          from urllib.error import HTTPError, URLError
+          from urllib.parse import urlparse
+          from urllib.request import Request, HTTPRedirectHandler, build_opener
 
-  lint:
-    name: Format and analyze
-    needs: prepare
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: '3.47.6'
-          channel: stable
-          cache: true
-          # flutter-action appends the hash of all pubspec.lock files.
-          pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
-      - name: Check formatting, analysis and packaging boundaries
-        shell: pwsh
-        run: ./tool/check.ps1 -Stage Lint -EnforceLockfile
-      - name: Show pinned SDK formatting differences
-        if: failure()
-        shell: bash
-        run: |
-          dart format lib test integration_test packages/*/lib packages/*/test
-          git diff -- '*.dart'
+          API = 'https://api.github.com/repos/simolus3/sqlite3.dart/releases'
+          PRIMARY = 'https://github.com/simolus3/sqlite3.dart/releases/download/sqlite3-3.7.0/libsqlite3.x64.linux.so'
+          DIGEST = '0f947ebe629e8d9d02d7f408bef36e056bfc63ea47e02e0d45a7bae454f04ace'
 
-      - name: Check Apple frameworks, Linux packaging, apt mirrors and download caches
-        shell: bash
-        run: |
-          python3 -m unittest discover -s tool -p 'test_linux_*.py'
-          python3 -m unittest discover -s tool -p 'test_apple_*.py'
-          ruby -c ios/Podfile
-          ruby -c macos/Podfile
-          ruby -c tool/media-kit-apple-pods.rb
-          bash tool/test-linux-downloads.sh
-          bash packages/bili_mux/tool/test-apple-framework.sh
-          for script in tool/package-linux.sh tool/setup-linux-build.sh tool/linux-downloads.sh tool/linux-runtime-validation.sh; do
-            bash -n "$script"
-          done
+          def probe(route):
+              label, authenticated = route
+              results = []
+              for sample in range(2):
+                  phase = 'release' if label == 'release' else 'api-metadata'
+                  started = time.monotonic()
+                  class Redirect(HTTPRedirectHandler):
+                      def redirect_request(self, req, fp, code, msg, headers, newurl):
+                          print(json.dumps({'route': label, 'authenticated': authenticated, 'sample': sample,
+                                            'event': 'redirect', 'status': code, 'from_host': urlparse(req.full_url).hostname,
+                                            'to_host': urlparse(newurl).hostname}), flush=True)
+                          return super().redirect_request(req, fp, code, msg, headers, newurl)
+                  opener = build_opener(Redirect())
+                  def fetch(url, accept):
+                      req = Request(url, headers={'Accept': accept, 'User-Agent': 'BiliSail-CI-Download-Diagnosis'})
+                      if authenticated and urlparse(url).hostname == 'api.github.com':
+                          # These headers are intentionally absent from redirected requests.
+                          req.add_unredirected_header('Authorization', 'Bearer ' + os.environ['GH_TOKEN'])
+                      with opener.open(req, timeout=20) as response:
+                          data = response.read(4 * 1024 * 1024)
+                          print(json.dumps({'route': label, 'authenticated': authenticated, 'sample': sample,
+                                            'phase': phase, 'status': response.status, 'bytes': len(data),
+                                            'final_host': urlparse(response.geturl()).hostname,
+                                            'request_id': response.headers.get('x-github-request-id')}), flush=True)
+                          return data
+                  try:
+                      url = PRIMARY
+                      if label == 'api':
+                          release = json.loads(fetch(API + '/tags/sqlite3-3.7.0', 'application/vnd.github+json'))
+                          asset = next(x for x in release['assets'] if x['name'] == 'libsqlite3.x64.linux.so')
+                          url = API + '/assets/' + str(asset['id'])
+                          phase = 'api-asset'
+                      data = fetch(url, 'application/octet-stream')
+                      digest = hashlib.sha256(data).hexdigest()
+                      result = {'route': label, 'authenticated': authenticated, 'sample': sample,
+                                'sha256': digest, 'verified': digest == DIGEST}
+                  except HTTPError as error:
+                      data = error.read(4096)
+                      result = {'route': label, 'authenticated': authenticated, 'sample': sample, 'phase': phase,
+                                'http_error': error.code, 'body_bytes_up_to_4096': len(data),
+                                'body_sha256': hashlib.sha256(data).hexdigest(),
+                                'request_id': error.headers.get('x-github-request-id')}
+                      error.close()
+                  except (URLError, TimeoutError, ConnectionError) as error:
+                      result = {'route': label, 'authenticated': authenticated, 'sample': sample,
+                                'phase': phase, 'error_type': type(error).__name__}
+                  result['seconds'] = round(time.monotonic() - started, 2)
+                  print(json.dumps(result), flush=True)
+                  results.append(result)
+              return results
 
-  root-tests:
-    name: Root app tests (shard ${{ matrix.shard }})
-    needs: prepare
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: '3.47.6'
-          channel: stable
-          cache: true
-          pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
-      - name: Run root app test shard
-        shell: pwsh
-        run: ./tool/check.ps1 -Stage RootTests -TotalShards 2 -ShardIndex ${{ matrix.shard }} -EnforceLockfile
-
-  package-tests:
-    name: Package tests
-    needs: prepare
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: '3.47.6'
-          channel: stable
-          cache: true
-          pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
-      - name: Run package tests covered outside the native mux job
-        shell: pwsh
-        run: ./tool/check.ps1 -Stage PackageTests -SkipMuxTests -EnforceLockfile
-
-  # Preserve the existing required status and build dependency after splitting checks.
-  check:
-    name: Analyze and test
-    if: ${{ always() }}
-    needs: [lint, root-tests, package-tests, native-mux]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Require every check job to pass
-        shell: bash
-        env:
-          LINT_RESULT: ${{ needs.lint.result }}
-          ROOT_TEST_RESULT: ${{ needs.root-tests.result }}
-          PACKAGE_TEST_RESULT: ${{ needs.package-tests.result }}
-          MUX_TEST_RESULT: ${{ needs.native-mux.result }}
-        run: |
-          if [[ "$LINT_RESULT" != success || "$ROOT_TEST_RESULT" != success || "$PACKAGE_TEST_RESULT" != success || "$MUX_TEST_RESULT" != success ]]; then
-            echo "::error::Checks did not all pass: lint=$LINT_RESULT root=$ROOT_TEST_RESULT packages=$PACKAGE_TEST_RESULT mux=$MUX_TEST_RESULT"
-            exit 1
-          fi
-
-  build:
-    name: Build ${{ matrix.target }}
-    needs: [prepare, check, native-mux]
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: ${{ startsWith(matrix.target, 'macos-') && 40 || 90 }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Java for Android
-        if: matrix.target == 'android-arm64'
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: gradle
-          # Flutter plugins and the SDK also affect Android native dependencies.
-          cache-dependency-path: |
-            android/**/*.gradle.kts
-            android/gradle.properties
-            android/gradle/wrapper/gradle-wrapper.properties
-            **/pubspec.lock
-            .flutter-version
-      - name: Select Apple toolchain
-        if: startsWith(matrix.target, 'macos-') || matrix.target == 'ios-arm64'
-        shell: bash
-        run: |
-          # video_player_avfoundation uses AVFoundation's isolation-aware load API.
-          # Both macOS runner architectures default to the incompatible Xcode 16.4.
-          export DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer
-          test -d "$DEVELOPER_DIR"
-          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
-          xcodebuild -version
-          xcrun swift --version
-          xcrun --sdk macosx --show-sdk-version
-          xcrun --sdk iphoneos --show-sdk-version
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: '3.47.6'
-          channel: stable
-          architecture: ${{ matrix.arch }}
-          cache: true
-          pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
-      - name: Set up the Windows mux compiler
-        id: windows-mux
-        if: matrix.target == 'windows-x64'
-        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
-        with:
-          msystem: UCRT64
-          install: make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libarchive
-      - name: Set up LZMA support for Windows Native Assets
-        if: matrix.target == 'windows-x64'
-        shell: pwsh
-        env:
-          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux.outputs.msys2-location }}
-        run: ./tool/setup-windows-native-tar.ps1 -MsysRoot $env:BILI_MUX_MSYS_ROOT
-      - name: Set up the Android mux compiler
-        if: matrix.target == 'android-arm64'
-        shell: bash
-        run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358'
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
-      - name: Resolve Linux dependency cache epoch
-        id: linux-cache-epoch
-        if: matrix.target == 'linux-x64'
-        shell: bash
-        run: |
-          echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore Linux apt packages and verified packaging tools
-        id: linux-downloads
-        if: matrix.target == 'linux-x64'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cache/bilisail/linux/apt/*.deb
-            ~/.cache/bilisail/linux/tools
-          key: linux-downloads-v1-ubuntu24.04-x64-${{ hashFiles('tool/setup-linux-build.sh', 'tool/linux-downloads.sh', 'tool/linux-apt-mirrors.py') }}-${{ steps.linux-cache-epoch.outputs.week }}
-          restore-keys: |
-            linux-downloads-v1-ubuntu24.04-x64-${{ hashFiles('tool/setup-linux-build.sh', 'tool/linux-downloads.sh', 'tool/linux-apt-mirrors.py') }}-
-      - name: Restore Linux Flatpak Runtime and SDK
-        id: linux-flatpak
-        if: matrix.target == 'linux-x64'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.local/share/flatpak
-          key: linux-flatpak-v1-ubuntu24.04-x64-${{ hashFiles('linux/packaging/dev.bilisail.bilisail.json', 'tool/setup-linux-build.sh') }}-${{ steps.linux-cache-epoch.outputs.week }}
-          restore-keys: |
-            linux-flatpak-v1-ubuntu24.04-x64-${{ hashFiles('linux/packaging/dev.bilisail.bilisail.json', 'tool/setup-linux-build.sh') }}-
-      - name: Set up Linux build and packaging dependencies
-        if: matrix.target == 'linux-x64'
-        shell: bash
-        run: bash tool/setup-linux-build.sh
-      # Save dependencies before building the app, so a packaging failure does
-      # not discard downloads. The Flatpak snapshot contains no built app.
-      - name: Save Linux apt packages and verified packaging tools
-        if: matrix.target == 'linux-x64' && steps.linux-downloads.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cache/bilisail/linux/apt/*.deb
-            ~/.cache/bilisail/linux/tools
-          key: ${{ steps.linux-downloads.outputs.cache-primary-key }}
-      - name: Save Linux Flatpak Runtime and SDK
-        if: matrix.target == 'linux-x64' && steps.linux-flatpak.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.local/share/flatpak
-          key: ${{ steps.linux-flatpak.outputs.cache-primary-key }}
-      - name: Check Apple toolchain
-        if: matrix.target == 'ios-arm64'
-        shell: bash
-        run: |
-          xcodebuild -version
-          xcrun --sdk iphoneos --show-sdk-version
-          pod --version
-      - name: Build and package preview
-        timeout-minutes: ${{ startsWith(matrix.target, 'macos-') && 30 || 90 }}
-        shell: pwsh
-        env:
-          BUILD_TARGET: ${{ matrix.target }}
-          BUILD_VERSION: ${{ needs.prepare.outputs.version }}
-          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux.outputs.msys2-location }}
-          ANDROID_PREVIEW_SIGNING: ${{ matrix.target == 'android-arm64' && github.event_name == 'pull_request' }}
-          ANDROID_KEYSTORE_BASE64: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
-          ANDROID_KEY_ALIAS: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEY_ALIAS || '' }}
-          ANDROID_KEY_PASSWORD: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEY_PASSWORD || '' }}
-          ANDROID_SIGNING_CERTIFICATE_SHA256: ${{ matrix.target == 'android-arm64' && vars.ANDROID_SIGNING_CERTIFICATE_SHA256 || '' }}
-          MSIX_CERTIFICATE_BASE64: ${{ matrix.target == 'windows-x64' && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_BASE64 || '' }}
-          MSIX_CERTIFICATE_PASSWORD: ${{ matrix.target == 'windows-x64' && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_PASSWORD || '' }}
-        run: ./tool/build-release.ps1 -Target $env:BUILD_TARGET -Version $env:BUILD_VERSION -AndroidPreviewSigning:($env:ANDROID_PREVIEW_SIGNING -eq 'true')
-      - name: Collect Windows native build diagnostics
-        if: failure() && matrix.target == 'windows-x64'
-        shell: pwsh
-        env:
-          MSIX_CERTIFICATE_BASE64: ${{ secrets.MSIX_CERTIFICATE_BASE64 }}
-          MSIX_CERTIFICATE_PASSWORD: ${{ secrets.MSIX_CERTIFICATE_PASSWORD }}
-        run: ./tool/collect-build-diagnostics.ps1
-      - name: Upload Windows build diagnostics
-        if: failure() && matrix.target == 'windows-x64'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: BiliSail-windows-x64-build-diagnostics
-          path: artifacts/windows-x64/diagnostics/
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Upload packages and checksums
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: BiliSail-${{ matrix.target }}-${{ needs.prepare.outputs.version }}-packages
-          path: artifacts/${{ matrix.target }}/release/*
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
-      - name: Upload macOS smoke results
-        if: (failure() || cancelled()) && startsWith(matrix.target, 'macos-')
-        timeout-minutes: 2
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: BiliSail-${{ matrix.target }}-smoke-diagnostics
-          path: |
-            artifacts/${{ matrix.target }}/validation/*.result.json
-            artifacts/${{ matrix.target }}/validation/*.crash.json
-            artifacts/${{ matrix.target }}/validation/*.sample.json
-          if-no-files-found: warn
-          retention-days: 14
-
-  native-mux:
-    name: MP4 and MKV native regression
-    needs: prepare
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: '3.47.6'
-          channel: stable
-          cache: true
-          pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
-      - name: Build and verify the isolated MP4 component
-        shell: bash
-        run: |
-          bash packages/bili_mux/tool/build.sh linux-x64
-          bash packages/bili_mux/tool/build-test-ffprobe.sh
-          export BILI_MUX_LIBRARY="$PWD/packages/bili_mux/native/prebuilt/linux-x64/libbili_mux.so"
-          export BILI_MUX_FFPROBE="$PWD/build/download_mux/test-ffprobe-linux-x64/ffprobe"
-          cd packages/bili_mux
-          flutter pub get --enforce-lockfile
-          flutter test --no-pub
+          with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+              results = list(pool.map(probe, [('release', False), ('api', False), ('api', True)]))
+          print(json.dumps({'summary': results}), flush=True)
+          PY
