@@ -15,6 +15,8 @@
 
 ## iOS
 
+2026-11-08：1.2.8 的 Sideloadly 重签失败、真实 Avutil FAT 差异及新打包门槛见[侧载兼容性记录](ios-sideload-2026-11-08.md)。未签名 IPA 现在包含为后续重签准备的 ad-hoc 签名，仍需用户自己的 Apple 签名流程才能安装；下文保留首次接入与旧 BiliMux 布局问题的历史记录。
+
 - [工程](../../ios/Runner.xcodeproj/project.pbxproj) 与 Linux runner 均由固定 Flutter 3.47.6 模板生成。iOS bundle ID 为 `dev.bilisail.bilisail`，显示名 BiliSail；Swift 入口注册原生插件，使用 CocoaPods，与根配置的禁用 SwiftPM 保持一致。
 - `flutter build ios --release --no-codesign` 构建真实设备 arm64 应用，再将 `Runner.app` 按 `Payload/Runner.app` 布局压缩。脚本核对版本名、构建号、bundle ID、主程序和必需 framework 的 arm64 架构，以及压缩包内的实际布局。
 - [bili_mux](../../packages/bili_mux/README.md) 从已有固定 FFmpeg 源码构建独立的 iOS 动态 framework；通过 CocoaPods 嵌入，不借用播放器 FFmpeg。最低 iOS 15，暂不提供 simulator slice。媒体/CDN 可能提供 HTTP 地址，Info.plist 允许 ATS 非 HTTPS 请求，仍保留系统 TLS 证书校验。

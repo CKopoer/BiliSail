@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [iOS 1.2.8 侧载重签兼容性](validation/ios-sideload-2026-11-08.md) | 实际 IPA 的 unsigned FAT 回归、arm64 thinning、临时签名和设备验证边界 |
 | [分轨缓冲续读与共同进度](validation/track-buffer-recovery-2026-11-08.md) | HTTP DASH 单轨静默续读、两轨连续缓存的最小值、内存上限与原生验证边界 |
 | [Apple／Linux 纹理交接与 Android 检查](validation/apple-linux-texture-handoff-2026-11-08.md) | Apple 完成帧与 Metal 复制、Linux 双向屏障／软件副本、Android Surface 队列审查与验证边界 |
 | [Windows 两后端纹理交接](validation/windows-texture-handoff-2026-11-08.md) | 不可变 GPU 快照、完成查询、旧帧延后消费回归与其他平台边界 |

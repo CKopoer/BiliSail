@@ -255,6 +255,7 @@ try {
         if ($LASTEXITCODE -ne 0 -or $actual -cne $key.Value) { throw "Invalid iOS BiliMux framework plist key: $($key.Key)" }
       }
       Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination $app
+      Invoke-BuildCommand python3 @((Join-Path $PSScriptRoot 'ios-sideload.py'), '--prepare-app', $app)
       $package = Join-Path $releaseDir "$name-unsigned.ipa"
       Invoke-BuildCommand ditto @('-c', '-k', '--keepParent', $payload, $package)
       $ipa = [System.IO.Compression.ZipFile]::OpenRead($package)
@@ -265,6 +266,7 @@ try {
         $muxPrefix = 'Payload/Runner.app/Frameworks/BiliMux.framework/'
         Confirm-IosMuxFrameworkEntries @($ipa.Entries.FullName | Where-Object { $_.StartsWith($muxPrefix, [System.StringComparison]::Ordinal) } | ForEach-Object { $_.Substring($muxPrefix.Length) })
       } finally { $ipa.Dispose() }
+      Invoke-BuildCommand python3 @((Join-Path $PSScriptRoot 'ios-sideload.py'), '--verify-ipa', $package)
       $signing = 'unsigned-requires-apple-signing'
     }
     'linux-x64' {
