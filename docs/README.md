@@ -8,7 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [官方客户端文字排版对齐](validation/official-client-typography-2026-11-09.md) | 本机 HarmonyOS 字体核对、字号／字重／色阶／行高对齐、保留 Material 默认字距与既有评论样式 |
+| [官方客户端文字排版对齐](validation/official-client-typography-2026-11-09.md) | HarmonyOS 字体核对、文字层级与频道字号、评论各部分样式及昵称色、楼中楼详情返回 |
 | [动态页 UP 主筛选](validation/dynamic-author-filter-2026-11-08.md) | 动态／视频动态共享作者目录、宽窄布局、请求与滚动生命周期、离线回归和实机边界 |
 | [Android fvp 音频定位阻塞](validation/android-fvp-seek-audio-2026-11-08.md) | 点击进度条久等、音频目标静音确认、SDK 固定参数与 APK 产物校验、手机双后端回归 |
 | [PiliPlus 跳转与准备流程对照](validation/piliplus-seek-flow-2026-11-08.md) | 两后端单次目标确认、普通继续、原生缓存复用、真实缓冲提示与原生回归 |

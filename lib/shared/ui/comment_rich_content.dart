@@ -127,7 +127,7 @@ class _CommentRichContentState extends State<CommentRichContent> {
                 recognizer == null ||
                     (part.kind == CommentTextKind.mention && onTap == null)
                 ? null
-                : TextStyle(color: Theme.of(context).colorScheme.primary),
+                : TextStyle(color: styles.linkColor),
             recognizer: onTap == null ? null : recognizer,
             mouseCursor: onTap == null ? null : SystemMouseCursors.click,
           ),
@@ -168,14 +168,11 @@ class _CommentRichContentState extends State<CommentRichContent> {
               if (comment.verifyType == 0 || comment.verifyType == 1)
                 BiliVerifyBadge(type: comment.verifyType!),
               if (comment.vipLabel != null)
-                Text(
-                  comment.vipLabel!,
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
+                Text(comment.vipLabel!, style: styles.badge),
               if (comment.medalName != null)
                 Text(
                   '${comment.medalName} ${comment.medalLevel ?? ''}',
-                  style: Theme.of(context).textTheme.labelSmall,
+                  style: styles.badge,
                 ),
             ],
           ),
@@ -266,8 +263,8 @@ class CommentAuthorHeader extends StatelessWidget {
               child: Text(
                 c.author,
                 style: styles.author.copyWith(
-                  color: c.vipLabel != null
-                      ? theme.colorScheme.primary
+                  color: c.nicknameColor != null
+                      ? Color(0xFF000000 | c.nicknameColor!)
                       : styles.author.color,
                 ),
               ),
@@ -279,8 +276,10 @@ class CommentAuthorHeader extends StatelessWidget {
             if (c.vipLabel != null)
               Text(
                 c.vipLabel!,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.primary,
+                style: styles.badge.copyWith(
+                  color: c.nicknameColor != null
+                      ? Color(0xFF000000 | c.nicknameColor!)
+                      : theme.colorScheme.primary,
                 ),
               ),
             if (c.medalName != null)
@@ -292,7 +291,7 @@ class CommentAuthorHeader extends StatelessWidget {
                 ),
                 child: Text(
                   '${c.medalName} ${c.medalLevel ?? ''}',
-                  style: theme.textTheme.labelSmall,
+                  style: styles.badge,
                 ),
               ),
           ],

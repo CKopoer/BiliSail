@@ -41,6 +41,7 @@ final class ApiCommentsRepository
     level: v.level,
     verifyType: v.verifyType,
     vipLabel: v.vipLabel,
+    nicknameColor: v.nicknameColor,
     medalName: v.medalName,
     medalLevel: v.medalLevel,
     decorationImageUrl: v.decorationImageUrl,

@@ -849,7 +849,7 @@ void main() {
             .text
             .style
             ?.fontSize,
-        13,
+        14,
       );
       expect(tester.widget<TextField>(input).maxLines, 1);
       expect(find.byTooltip('选择表情'), findsNothing);
@@ -1103,6 +1103,8 @@ void main() {
     await tester.tap(find.text('共 3 条回复 ›'));
     await tester.pumpAndSettle();
     expect(find.text('评论详情'), findsOneWidget);
+    expect(find.byTooltip('关闭评论详情'), findsNothing);
+    expect(find.byTooltip('返回评论'), findsOneWidget);
     expect(find.text('回复'), findsOneWidget);
     expect(find.text('IP属地：广东'), findsOneWidget);
     expect(find.text('IP属地：上海'), findsOneWidget);

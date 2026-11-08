@@ -142,6 +142,7 @@ void main() {
                     'official_verify': {'type': 1},
                     'vip': {
                       'vipStatus': 1,
+                      'nickname_color': '#fb7299',
                       'label': {'text': '年度大会员'},
                     },
                     'fans_detail': {'medal_name': 'medal', 'level': 5},
@@ -189,6 +190,7 @@ void main() {
       expect(c.level, 6);
       expect(c.verifyType, 1);
       expect(c.vipLabel, '年度大会员');
+      expect(c.nicknameColor, 0xfb7299);
       expect(c.medalLevel, 5);
       expect(c.decorationImageUrl, Uri.https('i0.hdslb.com', '/card.png'));
       expect(c.decorationName, '装扮名称');
@@ -203,7 +205,7 @@ void main() {
     },
   );
   test(
-    'comment decoration rejects unsafe images and malformed fan colors',
+    'comments reject unsafe decorations and malformed nickname or fan colors',
     () async {
       final values = <Object?>[null, -1, 0x1000000, 1.5, 'bad', {}, []];
       final client = BiliApiClient(
@@ -218,6 +220,7 @@ void main() {
                     'rpid': index + 1,
                     'member': {
                       'uname': 'reader',
+                      'vip': {'nickname_color': values[index]},
                       'user_sailing': {
                         'cardbg': {
                           'image': index.isEven
@@ -236,6 +239,7 @@ void main() {
       );
       final page = await client.getVideoComments('42');
       for (final comment in page.items) {
+        expect(comment.nicknameColor, isNull);
         expect(comment.decorationImageUrl, isNull);
         expect(comment.decorationFanNumber, isNull);
         expect(comment.decorationFanColor, isNull);

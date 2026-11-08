@@ -491,14 +491,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
                       onPressed: _closeDetail,
                       icon: const Icon(Icons.arrow_back),
                     ),
-                    Expanded(
-                      child: Text('评论详情', style: theme.textTheme.titleSmall),
-                    ),
-                    IconButton(
-                      tooltip: '关闭评论详情',
-                      onPressed: _closeDetail,
-                      icon: const Icon(Icons.close),
-                    ),
+                    Expanded(child: Text('评论详情', style: styles.detailTitle)),
                   ],
                 ),
                 const Divider(height: 1),
@@ -559,10 +552,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       final controller = ref.read(_provider.notifier);
       final theme = Theme.of(context);
       final root = state.openRoot;
-      final inputStyle = theme.textTheme.bodyMedium?.copyWith(
-        fontSize: 13,
-        height: 1.4,
-      );
+      final styles = CommentTextStyles(theme);
       final iconStyle = IconButton.styleFrom(
         minimumSize: const Size.square(32),
         padding: const EdgeInsets.all(6),
@@ -598,7 +588,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
                         Expanded(
                           child: Text(
                             '回复 @${state.replyTarget!.author}',
-                            style: theme.textTheme.bodySmall,
+                            style: styles.metadata,
                           ),
                         ),
                         if (!widget.composerOnly)
@@ -622,7 +612,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
                       // Keep native Enter behavior stable while collapsed.
                       keyboardType: TextInputType.multiline,
                       textInputAction: TextInputAction.newline,
-                      style: inputStyle,
+                      style: styles.input,
                       readOnly: !state.signedIn,
                       onTap: state.signedIn ? null : _login,
                       onTapOutside: (_) => _composerFocus.unfocus(),
@@ -630,6 +620,9 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
                       maxLines: expanded ? 4 : 1,
                       maxLength: 1000,
                       decoration: InputDecoration(
+                        hintStyle: state.signedIn
+                            ? styles.inputHint
+                            : styles.disabledInput,
                         hintText: state.signedIn
                             ? root == null
                                   ? '发一条友善的评论'
@@ -733,6 +726,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
 
   Widget _composerToolbar(CommentsState state, ButtonStyle iconStyle) {
     final theme = Theme.of(context);
+    final styles = CommentTextStyles(theme);
     final toolStyle = iconStyle.copyWith(
       minimumSize: const WidgetStatePropertyAll(Size.square(40)),
     );
@@ -807,10 +801,10 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
             '$length/1000',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(
+            style: styles.counter.copyWith(
               color: length > 1000
                   ? theme.colorScheme.error
-                  : theme.colorScheme.onSurfaceVariant,
+                  : styles.counter.color,
             ),
           ),
         ),
@@ -819,7 +813,9 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
           style: FilledButton.styleFrom(
             minimumSize: const Size(56, 32),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            textStyle: theme.textTheme.labelMedium,
+            textStyle: styles.submit,
+            foregroundColor: Colors.white,
+            disabledForegroundColor: styles.metadata.color,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           onPressed: canSend ? _send : null,
@@ -986,7 +982,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Text(
                       '全部回复 ${root.replyCount}',
-                      style: Theme.of(context).textTheme.titleSmall,
+                      style: CommentTextStyles(Theme.of(context)).sectionTitle,
                     ),
                   );
           }
@@ -1017,6 +1013,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
                               (root == null && (widget.replyCount ?? 0) > 0)
                         ? '当前会话未返回可展示的评论'
                         : '还没有评论，来聊聊吧',
+                    style: CommentTextStyles(Theme.of(context)).empty,
                   ),
                   if (more) _loadMore(root),
                 ],
@@ -1029,7 +1026,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
               padding: const EdgeInsets.all(12),
               child: Text(
                 comments.length >= 500 ? '已显示 500 条评论' : '没有更多了',
-                style: Theme.of(context).textTheme.bodySmall,
+                style: CommentTextStyles(Theme.of(context)).footer,
               ),
             ),
           );
@@ -1082,6 +1079,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
             (root == null ? state.loadFailed : state.replyLoadFailed)
                 ? '重试加载'
                 : '加载更多',
+            style: CommentTextStyles(Theme.of(context)).footer,
           ),
         ),
       );
@@ -1338,7 +1336,14 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                                             : null,
                                         child: Text(
                                           '${r.author}：',
-                                          style: styles.previewAuthor,
+                                          style: styles.previewAuthor.copyWith(
+                                            color: r.nicknameColor != null
+                                                ? Color(
+                                                    0xFF000000 |
+                                                        r.nicknameColor!,
+                                                  )
+                                                : null,
+                                          ),
                                         ),
                                       ),
                                       CommentRichContent(
@@ -1355,12 +1360,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                                   ),
                                 ),
                               ),
-                          Text(
-                            '共 ${c.replyCount} 条回复 ›',
-                            style: styles.metadata.copyWith(
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
+                          Text('共 ${c.replyCount} 条回复 ›', style: styles.link),
                         ],
                       ),
                     ),

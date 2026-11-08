@@ -173,6 +173,7 @@ final class ApiVideoComment {
     this.level,
     this.verifyType,
     this.vipLabel,
+    this.nicknameColor,
     this.medalName,
     this.medalLevel,
     this.decorationImageUrl,
@@ -192,6 +193,8 @@ final class ApiVideoComment {
   final String? submissionMessage;
   final int? level, verifyType, medalLevel;
   final String? vipLabel, medalName;
+  // Optional 24-bit RGB nickname color supplied by the response.
+  final int? nicknameColor;
   final Uri? decorationImageUrl;
   final String? decorationName, decorationFanNumber;
 

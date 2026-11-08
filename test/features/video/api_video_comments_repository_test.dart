@@ -31,6 +31,11 @@ void main() {
       ]) {
         final root = page.items.single;
         expect(root.ipLocation, 'IP属地：广东');
+        expect(root.nicknameColor, 0xfb7299);
+        expect(root.withLike(true).nicknameColor, 0xfb7299);
+        expect(root.withReplies(root.replies).nicknameColor, 0xfb7299);
+        expect(root.replies.single.nicknameColor, 0x123456);
+        expect(root.replies.single.withLike(true).nicknameColor, 0x123456);
         expect(root.visibility, CommentVisibility.restricted);
         expect(root.withLike(true).visibility, CommentVisibility.restricted);
         expect(
@@ -97,7 +102,10 @@ final class _Transport implements ApiTransport {
                       {
                         'rpid': '10',
                         'state': 17,
-                        'member': {'uname': 'reader'},
+                        'member': {
+                          'uname': 'reader',
+                          'vip': {'nickname_color': '#fb7299'},
+                        },
                         'content': {
                           'message': 'comment',
                           'at_name_to_mid_str': {'reader': '9007199254740993'},
@@ -107,7 +115,10 @@ final class _Transport implements ApiTransport {
                           {
                             'rpid': '11',
                             'state': 0,
-                            'member': {'uname': 'reply author'},
+                            'member': {
+                              'uname': 'reply author',
+                              'vip': {'nickname_color': '#123456'},
+                            },
                             'content': {
                               'message': 'reply',
                               'members': [

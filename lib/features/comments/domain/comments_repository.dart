@@ -24,6 +24,7 @@ final class CommentEntry {
     this.level,
     this.verifyType,
     this.vipLabel,
+    this.nicknameColor,
     this.medalName,
     this.medalLevel,
     this.decorationImageUrl,
@@ -40,6 +41,8 @@ final class CommentEntry {
   final String? submissionMessage;
   final int? level, verifyType, medalLevel;
   final String? vipLabel, medalName;
+  // Optional 24-bit RGB; presentation supplies the opaque alpha channel.
+  final int? nicknameColor;
   final Uri? decorationImageUrl;
   final String? decorationName, decorationFanNumber;
 
@@ -66,6 +69,7 @@ final class CommentEntry {
     level: level,
     verifyType: verifyType,
     vipLabel: vipLabel,
+    nicknameColor: nicknameColor,
     medalName: medalName,
     medalLevel: medalLevel,
     decorationImageUrl: decorationImageUrl,
@@ -96,6 +100,7 @@ final class CommentEntry {
         level: level,
         verifyType: verifyType,
         vipLabel: vipLabel,
+        nicknameColor: nicknameColor,
         medalName: medalName,
         medalLevel: medalLevel,
         decorationImageUrl: decorationImageUrl,

@@ -971,6 +971,9 @@ final class BiliApiClient {
       avatarUrl: _commentImage(member['avatar']),
       level: _int(_commentMap(member['level_info'])['current_level']),
       verifyType: _int(_commentMap(member['official_verify'])['type']),
+      nicknameColor: _commentColor(
+        _commentMap(member['vip'])['nickname_color'],
+      ),
       vipLabel:
           _int(_commentMap(member['vip'])['vipStatus']) == 1 ||
               _int(_commentMap(member['vip'])['vip_status']) == 1

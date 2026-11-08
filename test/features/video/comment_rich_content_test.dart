@@ -215,6 +215,7 @@ void main() {
           .toList();
       expect(interactive, hasLength(6));
       expect(interactive.map((span) => span.style).toSet(), hasLength(1));
+      expect(interactive.first.style?.color, const Color(0xFF008AC5));
       expect(find.byType(SelectionArea), findsOneWidget);
       expect(opened, isEmpty);
       expect(sought, isEmpty);
@@ -301,6 +302,7 @@ void main() {
       final comment = CommentEntry(
         id: '1',
         author: '很长的用户名称用于测试换行',
+        nicknameColor: 0x123456,
         message: 'comment',
         level: 6,
         publishedAt: DateTime(2026, 10, 6),
@@ -325,6 +327,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(BiliLevelBadge), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.text(comment.author)).style?.color,
+        const Color(0xFF123456),
+      );
       expect(find.text('IP属地：内蒙古'), findsOneWidget);
       expect(find.text('装扮名称'), findsNothing);
       final serial = tester.widget<Text>(find.text('NO.\n0014931'));

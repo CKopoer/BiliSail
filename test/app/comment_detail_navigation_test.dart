@@ -89,14 +89,9 @@ void main() {
           final infoTop = tester.getTopLeft(find.byType(PlaybackInfoTabs)).dy;
           final location = harness.router.routeInformationProvider.value.uri;
 
-          for (final action in [
-            'button',
-            'close',
-            'system',
-            'shortcut',
-            'mouse',
-          ]) {
+          for (final action in ['button', 'system', 'shortcut', 'mouse']) {
             await _openDetail(tester);
+            expect(find.byTooltip('关闭评论详情'), findsNothing);
             expect(find.text('简介'), findsNothing);
             expect(find.text('评论'), findsNothing);
             expect(
@@ -109,8 +104,6 @@ void main() {
             switch (action) {
               case 'button':
                 await tester.tap(find.byTooltip('返回评论'));
-              case 'close':
-                await tester.tap(find.byTooltip('关闭评论详情'));
               case 'system':
                 await tester.binding.handlePopRoute();
               case 'shortcut':
