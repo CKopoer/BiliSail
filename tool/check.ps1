@@ -70,6 +70,7 @@ try {
     }
   }
   if ($runLint) {
+    Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_windows_media_assets.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_texture_handoff.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_texture_handoff.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_media_libs.py')

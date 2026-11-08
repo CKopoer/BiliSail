@@ -26,6 +26,17 @@ function(bilisail_verify_media_assets)
   bilisail_media_manifest(manifest)
   include("${manifest}")
   list(LENGTH MEDIA_KIT_MPV_FILES file_count)
+  list(LENGTH MEDIA_KIT_MPV_HASHES hash_count)
+  # The pinned ARM64 manifest replaces the six SDK hashes but inherits the
+  # x64-only license/provenance filenames. Verify every ARM64 hash against its
+  # corresponding SDK file, without requiring that unrelated x64 archive tail.
+  if(FLUTTER_TARGET_PLATFORM STREQUAL "windows-arm64" AND hash_count EQUAL 6
+      AND file_count GREATER hash_count)
+    set(file_count ${hash_count})
+  endif()
+  if(file_count EQUAL 0 OR NOT file_count EQUAL hash_count)
+    message(FATAL_ERROR "Invalid media-kit SDK manifest for ${FLUTTER_TARGET_PLATFORM}: file/hash counts differ or are empty")
+  endif()
   math(EXPR last_file "${file_count} - 1")
   foreach(index RANGE 0 ${last_file})
     list(GET MEDIA_KIT_MPV_FILES ${index} file)
