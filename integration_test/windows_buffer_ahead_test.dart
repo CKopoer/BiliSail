@@ -122,14 +122,14 @@ void _testBackend(bool useFvp) {
       final nativeAhead = Duration(
         microseconds: (nativeSeconds * 1000000).round(),
       );
-      // The native main demuxer retains the two-minute window. The timeline
-      // now reports the shorter continuous A/V range and may be much smaller.
+      // The timeline follows native demuxer time, without a byte-cache proxy
+      // or MP4 index. mpv reports its main demuxer; MDK reports the paired min.
       expect(nativeAhead, greaterThanOrEqualTo(const Duration(seconds: 119)));
       expect(
         nativeAhead,
         lessThanOrEqualTo(const Duration(milliseconds: 120500)),
       );
-      expect(ahead, greaterThan(Duration.zero));
+      expect(ahead, greaterThanOrEqualTo(const Duration(seconds: 119)));
       expect(ahead, lessThanOrEqualTo(const Duration(milliseconds: 120500)));
       expect(
         ahead,

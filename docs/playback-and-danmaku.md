@@ -1,6 +1,6 @@
 # 播放、直播与弹幕设计
 
-2026-11-08：HTTP DASH 分轨由两后端共用源内加载层，单轨网络读停滞从缺失字节续读，不重开播放器或改动播放进度；缓冲条显示两轨连续供给范围与原生窗口的最小值，保留原生播放器已接收字节的依据，未知索引沿用原生缓冲信息。取消原生 seek 时一并撤销旧读取，避免占满并发名额；恢复播放重新确认音频帧。传输、内存、取消与逐平台证据见[分轨缓冲续读](validation/track-buffer-recovery-2026-11-08.md)及[缓冲显示与连续跳转修复](validation/buffer-display-rapid-seek-2026-11-08.md)。
+2026-11-08 最新调整：参考 PiliPlus 的职责划分，HTTP DASH 直接交原生播放器读取和缓存，删除应用侧 HTTP 代理、分轨字节缓存与 MP4 时间索引。事件和采样共用确认时间线入口，连续跳转只保留一个执行操作与一个最新目标，跳转后重新接收原生缓冲范围；双轨暂停就绪、用户意图、健康检测及释放屏障保留。缓冲条表示后端报告的媒体时间，不能当作两轨已解码的保证。行为变化、参考许可及本次未构建／实机边界见[控制流程简化](validation/player-control-simplification-2026-11-08.md)；早先[分轨续读](validation/track-buffer-recovery-2026-11-08.md)与[缓冲显示修复](validation/buffer-display-rapid-seek-2026-11-08.md)为历史记录。
 
 2026-11-08 后续：Apple media_kit 的 GPU／软件输出改为发布独立完整 CoreVideo 帧，fvp 等待 Metal blit 完成后交付不可变图像；Linux media_kit 补齐跨 context 双向完成屏障与软件像素副本。Android 两后端通过系统 Surface 队列交接，未发现同类应用层覆盖路径。源码、受控回归和未实测边界见[Apple／Linux 与 Android 检查](validation/apple-linux-texture-handoff-2026-11-08.md)。
 

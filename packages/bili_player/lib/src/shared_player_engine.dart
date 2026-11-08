@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'dash_track_buffer.dart';
 import 'native_error_monitor.dart';
 import 'native_playback_health.dart';
 import 'native_readiness.dart';
@@ -26,7 +25,6 @@ class SharedPlayerEngine
     this.schemes = const {'http', 'https', 'file'},
     this.onDiagnostic,
     this.monotonicNow,
-    this.bufferDashTracks = false,
     this.seekCoalescingDelay = Duration.zero,
     VideoOutput? initialVideoOutput,
   }) {
@@ -41,9 +39,7 @@ class SharedPlayerEngine
   final Set<String> schemes;
   final void Function(PlayerDiagnosticEvent)? onDiagnostic;
   final Duration Function()? monotonicNow;
-  final bool bufferDashTracks;
   final Duration seekCoalescingDelay;
-  DashTrackBuffer? _dashBuffer;
   final _clock = Stopwatch()..start();
   final _output = SwitchingVideoOutput();
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
@@ -56,7 +52,8 @@ class SharedPlayerEngine
   StreamSubscription<BackendEvent>? _subscription;
   Future<void> _lifecycle = Future.value();
   Future<void> _controls = Future.value();
-  Future<void> _seeks = Future.value();
+  _SeekRequest? _pendingSeek;
+  bool _drainingSeeks = false;
   Future<void> _seekRetirement = Future.value();
   Future<void>? _disposal;
   Future<void>? _releaseBarrier;
@@ -68,7 +65,6 @@ class SharedPlayerEngine
       _seekRevision = 0,
       _intentRevision = 0,
       _gainRevision = 0;
-  int? _pendingSeekRevision;
   bool _disposed = false, _opening = false;
   bool _waitingForPair = false, _backendBuffering = false;
   bool _requiresAudio = false, _requiresVideo = false, _audioConfirmed = false;
@@ -108,6 +104,32 @@ class SharedPlayerEngine
       _requiresAudio &&
           !_audioConfirmed &&
           _playOperation?.isCancelled == false;
+  bool get _seeking =>
+      _pendingSeek != null || _seekOperation?.isCancelled == false;
+
+  // Native demuxers own buffering. All event and polling samples use the same
+  // media-time endpoint; never infer cache from bytes, bitrate or old seeks.
+  PlaybackSnapshot _timeline({
+    Duration? position,
+    Duration? duration,
+    Duration? buffered,
+    VideoDimensions? dimensions,
+  }) {
+    final length = _live ? Duration.zero : duration ?? _snapshot.duration;
+    Duration clamp(Duration value) {
+      if (value < Duration.zero) return Duration.zero;
+      return length > Duration.zero && value > length ? length : value;
+    }
+
+    final current = clamp(position ?? _snapshot.position);
+    final end = clamp(buffered ?? _snapshot.buffered);
+    return _snapshot.copyWith(
+      position: current,
+      duration: length < Duration.zero ? Duration.zero : length,
+      buffered: end < current ? current : end,
+      videoDimensions: dimensions,
+    );
+  }
 
   void _publish(PlaybackSnapshot value) {
     if (_disposed || value.generation != _generation || value == _snapshot) {
@@ -192,7 +214,6 @@ class SharedPlayerEngine
   }
 
   void _interrupt(PlaybackBackend? backend) {
-    unawaited(_dashBuffer?.close());
     try {
       backend?.interrupt();
     } on Object {
@@ -209,7 +230,8 @@ class SharedPlayerEngine
     _playOperation?.cancel();
     _seekOperation?.cancel();
     _seekRetirement = Future.value();
-    _pendingSeekRevision = null;
+    _pendingSeek?.complete();
+    _pendingSeek = null;
     _timer?.cancel();
     _timer = null;
     _errors.reset();
@@ -242,8 +264,6 @@ class SharedPlayerEngine
     _output.bind(null);
     await _subscription?.cancel();
     _subscription = null;
-    await _dashBuffer?.close();
-    _dashBuffer = null;
     // A late factory remains owned. No replacement allocates over an unknown
     // release, including a factory which returned after its open timed out.
     final allocation = _allocation;
@@ -321,7 +341,7 @@ class SharedPlayerEngine
       if (!_current(generation)) return;
       _diagnose(PlayerDiagnosticKind.openStarted);
       try {
-        var plan = ValidatedSource.validate(
+        final plan = ValidatedSource.validate(
           source,
           options,
           generation,
@@ -331,23 +351,6 @@ class SharedPlayerEngine
         _live = plan.live;
         _preview = source is DashVideoSource;
         _audioConfirmed = false;
-        if (bufferDashTracks && DashTrackBuffer.supports(plan)) {
-          final buffer = await DashTrackBuffer.create(
-            plan,
-            onFailure: (error) {
-              if (_current(generation)) {
-                _diagnose(PlayerDiagnosticKind.nativeError, nativeError: error);
-              }
-            },
-          );
-          if (!_current(generation)) {
-            await buffer.close();
-            return;
-          }
-          _dashBuffer = buffer;
-          operation.check();
-          plan = buffer.prepare(plan);
-        }
         final creating = _allocation =
             Future<PlaybackBackend>.sync(createBackend).then((value) {
               _backend = value;
@@ -388,20 +391,24 @@ class SharedPlayerEngine
           startupIntent = _intentRevision;
           await finishSynchronizedStartup(
             shouldPlay: () =>
-                startupIntent == _intentRevision && _snapshot.desiredPlaying,
+                startupIntent == _intentRevision &&
+                _snapshot.desiredPlaying &&
+                _pendingSeek == null,
             play: () => operation.wait(
               _control(
                 generation,
                 (b) => b.play(),
                 allowed: () =>
                     startupIntent == _intentRevision &&
-                    _snapshot.desiredPlaying,
+                    _snapshot.desiredPlaying &&
+                    _pendingSeek == null,
               ),
             ),
             pause: () =>
                 operation.wait(_control(generation, (b) => b.pauseAndWait())),
             confirmReady: () async {
               if (_snapshot.desiredPlaying &&
+                  _pendingSeek == null &&
                   _requiresAudio &&
                   !_audioConfirmed) {
                 final intent = _intentRevision;
@@ -428,15 +435,16 @@ class SharedPlayerEngine
         _opening = false;
         if (!_requiresAudio || _audioConfirmed) _output.clearRetainedFrame();
         _publish(
-          _snapshot.copyWith(
-            phase: PlaybackPhase.ready,
+          _timeline(
             position: tracks.position,
             duration: _live
                 ? Duration.zero
                 : _snapshot.duration > Duration.zero
                 ? _snapshot.duration
                 : tracks.duration,
-            videoDimensions: dimensions ?? tracks.dimensions,
+            dimensions: dimensions ?? tracks.dimensions,
+          ).copyWith(
+            phase: PlaybackPhase.ready,
             rate: _live ? 1 : _snapshot.rate,
           ),
         );
@@ -476,7 +484,10 @@ class SharedPlayerEngine
 
   PlaybackPhase _phase() => !_snapshot.desiredPlaying
       ? PlaybackPhase.paused
-      : (_backendBuffering || _waitingForPair || _snapshot.isSeeking)
+      : (_backendBuffering ||
+            _waitingForPair ||
+            _snapshot.isSeeking ||
+            _pendingSeek != null)
       ? PlaybackPhase.buffering
       : PlaybackPhase.playing;
 
@@ -495,8 +506,7 @@ class SharedPlayerEngine
       _backendBuffering = event.value ?? false;
     }
     if (event.kind == BackendEventKind.ended &&
-        _pendingSeekRevision != null &&
-        _seekOperation?.revision != _pendingSeekRevision) {
+        (_pendingSeek != null || _snapshot.isSeeking)) {
       return;
     }
     if (event.kind == BackendEventKind.failure &&
@@ -531,17 +541,21 @@ class SharedPlayerEngine
       );
       return;
     }
-    if (_terminal || _opening || _snapshot.isSeeking || _failing != null) {
+    if (_terminal ||
+        _opening ||
+        _pendingSeek != null ||
+        _snapshot.isSeeking ||
+        _failing != null) {
       return;
     }
     switch (event.kind) {
       case BackendEventKind.sample:
         _publish(
-          _snapshot.copyWith(
+          _timeline(
             position: event.position,
             duration: _live ? Duration.zero : event.duration,
-            buffered: _buffered(event.position, event.buffered),
-            videoDimensions: event.dimensions,
+            buffered: event.buffered,
+            dimensions: event.dimensions,
           ),
         );
       case BackendEventKind.buffering:
@@ -625,28 +639,18 @@ class SharedPlayerEngine
           _opening ||
           _confirmingAudio ||
           _snapshot.isSeeking ||
-          _pendingSeekRevision != null ||
+          _seeking ||
           _terminal ||
           _failing != null) {
         return;
       }
       final sample = backend.sampleHealth();
-      _publish(
-        _snapshot.copyWith(
-          position: sample.position,
-          buffered: _buffered(sample.position, sample.buffered),
-        ),
-      );
-      if (!_current(generation, backend) || _terminal || _snapshot.isSeeking) {
+      _publish(_timeline(position: sample.position, buffered: sample.buffered));
+      if (!_current(generation, backend) || _terminal || _seeking) {
         return;
       }
       final interruption = _health.update(
-        // Transport cache describes both tracks. The existing video underrun
-        // check must keep using the native video endpoint, not the smaller
-        // audio endpoint displayed by the timeline.
-        _dashBuffer == null
-            ? _snapshot
-            : _snapshot.copyWith(buffered: sample.buffered),
+        _snapshot,
         monotonicNow?.call() ?? _clock.elapsed,
         paired: sample.comparePairedClocks,
         audioPosition: sample.audioPosition,
@@ -665,15 +669,6 @@ class SharedPlayerEngine
         unawaited(_fail(interruption.kind));
       }
     });
-  }
-
-  Duration? _buffered(Duration? position, Duration? nativeEnd) {
-    final buffer = _dashBuffer;
-    if (buffer == null) return nativeEnd;
-    return buffer.commonBuffered(
-      position ?? _snapshot.position,
-      nativeEnd ?? _snapshot.buffered,
-    );
   }
 
   void _resetHealth() {
@@ -764,7 +759,7 @@ class SharedPlayerEngine
     }
     ++_intentRevision;
     _publish(_snapshot.copyWith(desiredPlaying: true));
-    if (_opening || _snapshot.isSeeking) return Future.value();
+    if (_opening || _seeking) return Future.value();
     return _runPlay(_generation);
   }
 
@@ -868,119 +863,142 @@ class SharedPlayerEngine
       return Future.value();
     }
     final generation = _generation;
-    final revision = ++_seekRevision;
-    _pendingSeekRevision = revision;
+    final request = _SeekRequest(generation, ++_seekRevision, target);
+    _pendingSeek?.complete();
+    _pendingSeek = request;
     final pending = _seekOperation;
-    pending?.cancel();
-    if (pending != null && identical(pending, _nativeSeekOperation)) {
-      final buffer = _dashBuffer;
-      _seekRetirement = () async {
-        await _backend?.cancelSeek();
-        if (_current(generation)) buffer?.cancelReads();
-      }();
-      unawaited(_seekRetirement.then<void>((_) {}, onError: (Object _) {}));
+    if (pending != null && !pending.isCancelled) {
+      pending.cancel();
+      if (identical(pending, _nativeSeekOperation)) {
+        _seekRetirement = () async {
+          await _backend?.cancelSeek();
+        }();
+        unawaited(_seekRetirement.then<void>((_) {}, onError: (Object _) {}));
+      }
     }
     _playOperation?.cancel();
-    final next = _seeks.then((_) async {
-      // Opening seeks coalesce but cannot hold up open/stop/pause dispatch.
-      await _lifecycle;
-      final backend = _backend;
-      if (!_current(generation) ||
-          revision != _seekRevision ||
-          backend == null ||
-          _failing != null) {
-        return;
-      }
-      // Merge a burst of progress gestures before allocating another native
-      // seek/prepare callback slot. Cancellation of an active seek is immediate.
-      if (seekCoalescingDelay > Duration.zero) {
-        await Future<void>.delayed(seekCoalescingDelay);
-        if (!_current(generation, backend) ||
-            revision != _seekRevision ||
-            _failing != null) {
-          return;
+    if (!_drainingSeeks) unawaited(_drainSeeks());
+    return request.done.future;
+  }
+
+  Future<void> _drainSeeks() async {
+    _drainingSeeks = true;
+    try {
+      while (_pendingSeek != null) {
+        // Opening and gesture bursts retain one target, without allocating a
+        // Future chain (or a native callback slot) for every pointer/key event.
+        final lifecycle = _lifecycle;
+        await lifecycle;
+        if (!identical(lifecycle, _lifecycle)) continue;
+        if (seekCoalescingDelay > Duration.zero) {
+          await Future<void>.delayed(seekCoalescingDelay);
+        }
+        if (!identical(lifecycle, _lifecycle)) continue;
+        final request = _pendingSeek;
+        if (request == null) continue;
+        _pendingSeek = null;
+        try {
+          await _seekTo(request);
+          request.complete();
+        } on Object catch (error, stack) {
+          request.done.completeError(error, stack);
         }
       }
-      final operation = _seekOperation = PlaybackOperation(
-        generation,
-        backend.seekTimeout,
-        revision: revision,
-      );
+    } finally {
+      _drainingSeeks = false;
+    }
+  }
+
+  Future<void> _seekTo(_SeekRequest request) async {
+    final generation = request.generation;
+    final revision = request.revision;
+    final backend = _backend;
+    if (!_current(generation) ||
+        revision != _seekRevision ||
+        backend == null ||
+        _failing != null) {
+      return;
+    }
+    final duration = _snapshot.duration;
+    final target = duration > Duration.zero && request.target > duration
+        ? duration
+        : request.target;
+    final operation = _seekOperation = PlaybackOperation(
+      generation,
+      backend.seekTimeout,
+      revision: revision,
+    );
+    _resetHealth();
+    _publish(
+      _snapshot.copyWith(
+        isSeeking: true,
+        phase: _snapshot.desiredPlaying
+            ? PlaybackPhase.buffering
+            : PlaybackPhase.paused,
+      ),
+    );
+    try {
+      if (!_current(generation, backend) || revision != _seekRevision) return;
+      await operation.wait(_seekRetirement);
+      _nativeSeekOperation = operation;
+      final position = await operation.wait(backend.seekTo(target, operation));
+      if (identical(operation, _nativeSeekOperation)) {
+        _nativeSeekOperation = null;
+      }
+      if (!_current(generation, backend) || revision != _seekRevision) return;
+      if (!_snapshot.desiredPlaying) _output.clearRetainedFrame();
+      _audioConfirmed =
+          _snapshot.duration > Duration.zero &&
+          _snapshot.duration - position <= const Duration(milliseconds: 500);
       _resetHealth();
       _publish(
-        _snapshot.copyWith(
-          isSeeking: true,
-          phase: _snapshot.desiredPlaying
-              ? PlaybackPhase.buffering
-              : PlaybackPhase.paused,
+        _timeline(
+          position: position,
+          // A seek starts a new contiguous cache range. The next native
+          // sample supplies its endpoint, including after backward seeks.
+          buffered: position,
+        ).copyWith(
+          isSeeking: false,
+          isBuffering: _backendBuffering,
+          phase: PlaybackPhase.paused,
         ),
       );
       if (!_current(generation, backend) || revision != _seekRevision) return;
-      try {
-        await operation.wait(_seekRetirement);
-        _nativeSeekOperation = operation;
-        final position = await operation.wait(
-          backend.seekTo(target, operation),
-        );
-        if (identical(operation, _nativeSeekOperation)) {
-          _nativeSeekOperation = null;
-        }
-        if (!_current(generation, backend) || revision != _seekRevision) return;
-        if (!_snapshot.desiredPlaying) _output.clearRetainedFrame();
-        _audioConfirmed =
-            _snapshot.duration > Duration.zero &&
-            _snapshot.duration - position <= const Duration(milliseconds: 500);
-        _resetHealth();
-        _publish(
-          _snapshot.copyWith(
-            position: position,
-            isSeeking: false,
-            isBuffering: false,
-            phase: PlaybackPhase.paused,
-          ),
-        );
-        if (!_current(generation, backend) || revision != _seekRevision) return;
-        if (_snapshot.desiredPlaying) {
-          await _runPlay(generation);
-        } else {
-          await operation.wait(_applyVolume(generation));
-        }
-        _startSampling(generation);
-      } on SourceSuperseded {
-        final failing = _failing;
-        if (_current(generation, backend) && failing != null) {
-          throw await failing;
-        }
-        return;
-      } on Object catch (error) {
-        if (_current(generation, backend) &&
-            revision == _seekRevision &&
-            !operation.isCancelled) {
-          if (error is NativeSeekFailure) {
-            _diagnose(
-              PlayerDiagnosticKind.nativeError,
-              nativeErrorCode: error.code,
-            );
-          }
-          throw await _fail(
-            error is PlayerFailure
-                ? error.kind
-                : PlayerFailureKind.nativePlayback,
-            interruptNative: true,
+      if (_snapshot.desiredPlaying) {
+        await _runPlay(generation);
+      } else {
+        await operation.wait(_applyVolume(generation));
+      }
+      _startSampling(generation);
+    } on SourceSuperseded {
+      final failing = _failing;
+      if (_current(generation, backend) && failing != null) {
+        throw await failing;
+      }
+      return;
+    } on Object catch (error) {
+      if (_current(generation, backend) &&
+          revision == _seekRevision &&
+          !operation.isCancelled) {
+        if (error is NativeSeekFailure) {
+          _diagnose(
+            PlayerDiagnosticKind.nativeError,
+            nativeErrorCode: error.code,
           );
         }
-      } finally {
-        if (identical(operation, _nativeSeekOperation)) {
-          _nativeSeekOperation = null;
-        }
-        if (identical(operation, _seekOperation)) _seekOperation = null;
+        throw await _fail(
+          error is PlayerFailure
+              ? error.kind
+              : PlayerFailureKind.nativePlayback,
+          interruptNative: true,
+        );
       }
-    });
-    final completed = next.whenComplete(() {
-      if (_pendingSeekRevision == revision) _pendingSeekRevision = null;
-    });
-    _seeks = completed.then<void>((_) {}, onError: (Object _, StackTrace _) {});
-    return completed;
+    } finally {
+      if (identical(operation, _nativeSeekOperation)) {
+        _nativeSeekOperation = null;
+      }
+      if (identical(operation, _seekOperation)) _seekOperation = null;
+    }
   }
 
   @override
@@ -1091,4 +1109,12 @@ class SharedPlayerEngine
     );
     return completed.future;
   }
+}
+
+final class _SeekRequest {
+  _SeekRequest(this.generation, this.revision, this.target);
+  final int generation, revision;
+  final Duration target;
+  final done = Completer<void>();
+  void complete() => done.complete();
 }

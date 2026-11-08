@@ -24,6 +24,7 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
   Completer<void>? pauseGate;
   int interrupts = 0;
   int position = 1000;
+  Duration duration = const Duration(seconds: 12);
   final seeks = <(Duration, Completer<int>)>[];
   bool holdSeek = false;
   Object? seekCancellationError;
@@ -59,7 +60,7 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
     sound = audio;
     return await preparation?.future ??
         FvpMediaInfo(
-          duration: const Duration(seconds: 12),
+          duration: duration,
           dimensions: const VideoDimensions(320, 180),
           hasAudio: this.audio,
         );
@@ -378,7 +379,9 @@ void main() {
     test(
       'seek ${pauseAfterVideo ? 'pause' : 'resume'} waits for audio after the video target',
       () async {
-        final player = _Player()..holdSeek = true;
+        final player = _Player()
+          ..holdSeek = true
+          ..duration = const Duration(minutes: 2);
         final engine = FvpEngine(createPlayer: () async => player);
         addTearDown(engine.dispose);
         await engine.open(source, const OpenOptions(play: true));

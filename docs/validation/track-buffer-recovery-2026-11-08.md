@@ -2,13 +2,15 @@
 
 日期：2026-11-08（Asia/Shanghai）。
 
+**历史记录：已由[播放控制流程简化](player-control-simplification-2026-11-08.md)替代。** 当前源码已移除本文的代理、字节缓存与 MP4 索引，改用原生缓存；下列结果仅对应当时实现，历史源码链接固定到移除前提交。
+
 后续修正：本文保留首次实现的历史结果；“缓存淘汰／未知索引导致缓冲条停在当前位置”及 fvp 片尾快速 seek 的状态，以[缓冲显示与连续跳转修复](buffer-display-rapid-seek-2026-11-08.md)为准。
 
 ## 现有保护与本轮目标
 
 现有 `NativePlaybackHealth` 并非只在播放越过缓存终点时触发：它同时检测单轨时钟／解码活动停滞和总进度冻结。不过，这些检测针对播放受损，最终会暂停整组并交给会话重开，不能提前修复尚未耗尽的网络缓存。
 
-本轮将 HTTP(S) DASH 分轨的网络读取交给两个后端共用的 [DashTrackBuffer](../../packages/bili_player/lib/src/dash_track_buffer.dart)。网络卡住时只续读该轨，保留原播放器、已解码数据、源代次、播放位置和用户意图。正常缓冲满后停止读取是背压，不是故障；播放中的网络读恢复不发布 opening、seek 或通用错误提示。
+本轮将 HTTP(S) DASH 分轨的网络读取交给两个后端共用的 [DashTrackBuffer](https://github.com/CKopoer/BiliSail/blob/b328741134a3582cb723bd6679d5e9e1d5c73826/packages/bili_player/lib/src/dash_track_buffer.dart)。网络卡住时只续读该轨，保留原播放器、已解码数据、源代次、播放位置和用户意图。正常缓冲满后停止读取是背压，不是故障；播放中的网络读恢复不发布 opening、seek 或通用错误提示。
 
 ## 实现与边界
 
@@ -24,10 +26,10 @@
 
 ## 验证
 
-- [传输测试](../../packages/bili_player/test/dash_track_buffer_test.dart)：双向单轨停滞、逐字节续读、另一轨不重连、公共最短端点、原生上界、内存淘汰、重复读命中、有限重试、错误 Range／实体变更及关闭期间的资源屏障。
-- [MP4 索引测试](../../packages/bili_player/test/mp4_buffer_index_test.dart)：两种 sidx、普通 MP4、截断／畸形索引、完整分段及连续范围。
+- [传输测试](https://github.com/CKopoer/BiliSail/blob/b328741134a3582cb723bd6679d5e9e1d5c73826/packages/bili_player/test/dash_track_buffer_test.dart)：双向单轨停滞、逐字节续读、另一轨不重连、公共最短端点、原生上界、内存淘汰、重复读命中、有限重试、错误 Range／实体变更及关闭期间的资源屏障。
+- [MP4 索引测试](https://github.com/CKopoer/BiliSail/blob/b328741134a3582cb723bd6679d5e9e1d5c73826/packages/bili_player/test/mp4_buffer_index_test.dart)：两种 sidx、普通 MP4、截断／畸形索引、完整分段及连续范围。
 - [共享引擎测试](../../packages/bili_player/test/shared_player_engine_test.dart)：事件和定时采样均采用共同缓冲，不改变当前进度或重复准备播放器；保留原起播、seek、暂停、释放和故障测试。
-- [Windows 原生专项](../../integration_test/windows_track_buffer_recovery_test.dart)：两个后端分别在已打开后阻塞音频／视频 HTTP 响应，要求准确续读、进度单调、同一 generation、无 opening／额外 seek／失败，并确认缓冲继续增长。fvp 音频先显式跳至未缓存的 400 秒，按索引只阻塞该新位置的实际请求，排除临时探针的旧读取。`tool/test-windows-buffer.ps1` 生成素材并运行原有窗口和新增恢复用例，也由完整媒体回归调用；已生成素材时可设置 `BILI_TEST_BUFFER_DIR` 指向 `build/validation/player-buffer-fixtures/` 单独运行。
+- [Windows 原生专项](https://github.com/CKopoer/BiliSail/blob/b328741134a3582cb723bd6679d5e9e1d5c73826/integration_test/windows_track_buffer_recovery_test.dart)：两个后端分别在已打开后阻塞音频／视频 HTTP 响应，要求准确续读、进度单调、同一 generation、无 opening／额外 seek／失败，并确认缓冲继续增长。fvp 音频先显式跳至未缓存的 400 秒，按索引只阻塞该新位置的实际请求，排除临时探针的旧读取。`tool/test-windows-buffer.ps1` 生成素材并运行原有窗口和新增恢复用例，也由完整媒体回归调用；已生成素材时可设置 `BILI_TEST_BUFFER_DIR` 指向 `build/validation/player-buffer-fixtures/` 单独运行。
 
 原生播放器的缓存读取速度现在测量本地入口吞吐，不能当作 CDN 下载速度；原有“缓存速度不是总网速”的 UI 说明继续适用。原始 HTTP 失败的数字状态码通过脱敏回调保留，避免本地网关状态覆盖真实的 403 等诊断，原始地址和响应头不进入事件。
 

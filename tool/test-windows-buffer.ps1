@@ -14,8 +14,6 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "Windows audio seek synchronization failed: $LASTEXITCODE" }
   & flutter test integration_test/windows_buffer_ahead_test.dart -d windows
   if ($LASTEXITCODE -ne 0) { throw "Windows forward buffer validation failed: $LASTEXITCODE" }
-  & flutter test integration_test/windows_track_buffer_recovery_test.dart -d windows
-  if ($LASTEXITCODE -ne 0) { throw "Windows per-track buffer recovery failed: $LASTEXITCODE" }
   & flutter test integration_test/windows_dash_rapid_seek_test.dart -d windows
   if ($LASTEXITCODE -ne 0) { throw "Windows DASH rapid seek failed: $LASTEXITCODE" }
 } finally {

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
 import 'package:bili_player/src/playback_backend.dart';
@@ -8,8 +7,6 @@ import 'package:bili_player/src/validated_source.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'mp4_buffer_index_test.dart' show indexedMedia;
 
 final class _Output implements FlutterVideoOutput, VideoFrameReadiness {
   final ready = ValueNotifier(true);
@@ -43,6 +40,8 @@ final class _Backend extends Fake implements PlaybackBackend {
   double volume = 0, gain = 0;
   int disposals = 0;
   bool failInterrupt = false;
+  bool failRetirement = false;
+  bool endOnPlay = false;
   bool pauseConfirmed = true;
   PreparedTracks tracks = const PreparedTracks(
     hasVideo: true,
@@ -88,6 +87,11 @@ final class _Backend extends Fake implements PlaybackBackend {
   Future<void> play() async {
     playing = true;
     writes.add('play');
+    if (endOnPlay) {
+      signals.add(
+        BackendEvent(BackendEventKind.ended, position: tracks.duration),
+      );
+    }
   }
 
   @override
@@ -124,9 +128,10 @@ final class _Backend extends Fake implements PlaybackBackend {
   }
 
   @override
-  Future<void> cancelSeek() async {
+  Future<void> cancelSeek() {
     writes.add('cancelSeek');
-    await retiring?.future;
+    if (failRetirement) throw StateError('native cancellation rejected');
+    return retiring?.future ?? Future.value();
   }
 
   @override
@@ -156,8 +161,6 @@ final class _Backend extends Fake implements PlaybackBackend {
 
 Future<void> tick() => Future<void>.delayed(Duration.zero);
 
-final class _NetworkHttp extends HttpOverrides {}
-
 MediaTrack track(String name) => MediaTrack(
   uri: Uri.parse('https://example.com/$name'),
   requestPolicy: MediaRequestPolicy(),
@@ -168,76 +171,292 @@ void main() {
   final pair = DashPairSource(video: track('v'), audio: track('a'));
 
   test(
-    'track cache clamps event and polling buffers without changing position',
-    () => HttpOverrides.runWithHttpOverrides(() async {
-      final bytes = indexedMedia();
-      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      server.listen((request) async {
-        final match = RegExp(r'bytes=(\d+)-(\d+)')
-            .firstMatch(request.headers.value('range') ?? '')!;
-        final start = int.parse(match[1]!);
-        final end = int.parse(match[2]!).clamp(0, bytes.length - 1);
-        request.response
-          ..statusCode = 206
-          ..headers.set('Content-Range', 'bytes $start-$end/${bytes.length}')
-          ..contentLength = end - start + 1
-          ..add(bytes.sublist(start, end + 1));
-        await request.response.close();
-      });
-      addTearDown(() => server.close(force: true));
-      MediaTrack remote(String path) => MediaTrack(
-        uri: Uri.parse('http://127.0.0.1:${server.port}/$path'),
-        requestPolicy: MediaRequestPolicy(),
+    'native preparation receives the original tracks, headers and window',
+    () async {
+      final backend = _Backend();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      const options = OpenOptions(maxBufferAhead: Duration(seconds: 5));
+      final policy = MediaRequestPolicy(
+        headers: {'Referer': 'https://example.com/'},
       );
+      final source = DashPairSource(
+        video: MediaTrack(
+          uri: Uri.parse('https://example.com/video?sign=v'),
+          requestPolicy: policy,
+        ),
+        audio: MediaTrack(
+          uri: Uri.parse('https://example.com/audio?sign=a'),
+          requestPolicy: policy,
+        ),
+      );
+      await engine.open(source, options);
+      expect(backend.preparedPlan!.media, same(source.video));
+      expect(backend.preparedPlan!.audio, same(source.audio));
+      expect(backend.preparedPlan!.options, same(options));
+      expect(backend.preparedPlan!.media.requestPolicy, same(policy));
+    },
+  );
+
+  test('events and polling accept a shrinking native cache without moving progress', () async {
+    final backend = _Backend();
+    final engine = SharedPlayerEngine(createBackend: () => backend);
+    addTearDown(engine.dispose);
+    await engine.open(pair, const OpenOptions());
+    backend.signals.add(
+      const BackendEvent(
+        BackendEventKind.sample,
+        position: Duration(seconds: 4),
+        buffered: Duration(seconds: 18),
+      ),
+    );
+    backend.signals.add(
+      const BackendEvent(
+        BackendEventKind.sample,
+        buffered: Duration(seconds: 8),
+      ),
+    );
+    expect(engine.currentSnapshot.position, const Duration(seconds: 4));
+    expect(engine.currentSnapshot.buffered, const Duration(seconds: 8));
+    backend.sample = const BackendHealth(buffered: Duration(seconds: 6));
+    await Future<void>.delayed(const Duration(milliseconds: 280));
+    expect(engine.currentSnapshot.position, const Duration(seconds: 4));
+    expect(engine.currentSnapshot.buffered, const Duration(seconds: 6));
+    expect(backend.seeks, isEmpty);
+    expect(backend.writes.where((w) => w == 'prepare'), hasLength(1));
+  });
+
+  test(
+    'native timeline endpoints stay within confirmed duration and position',
+    () async {
+      final backend = _Backend();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions());
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: 3),
+          buffered: Duration(seconds: 40),
+        ),
+      );
+      expect(engine.currentSnapshot.buffered, const Duration(seconds: 20));
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          buffered: Duration(seconds: -1),
+        ),
+      );
+      expect(engine.currentSnapshot.buffered, const Duration(seconds: 3));
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: -1),
+          buffered: Duration(seconds: -2),
+        ),
+      );
+      expect(engine.currentSnapshot.position, Duration.zero);
+      expect(engine.currentSnapshot.buffered, Duration.zero);
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: 22),
+          buffered: Duration(seconds: 40),
+        ),
+      );
+      expect(engine.currentSnapshot.position, const Duration(seconds: 20));
+      expect(engine.currentSnapshot.buffered, const Duration(seconds: 20));
+    },
+  );
+
+  test(
+    'backward seek resets old cache until the new native endpoint arrives',
+    () async {
+      final backend = _Backend();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions());
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: 15),
+          buffered: Duration(seconds: 20),
+        ),
+      );
+      await engine.seek(const Duration(seconds: 2));
+      expect(engine.currentSnapshot.position, const Duration(seconds: 2));
+      expect(engine.currentSnapshot.buffered, const Duration(seconds: 2));
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          buffered: Duration(seconds: 7),
+        ),
+      );
+      expect(engine.currentSnapshot.position, const Duration(seconds: 2));
+      expect(engine.currentSnapshot.buffered, const Duration(seconds: 7));
+    },
+  );
+
+  test(
+    'opening target clamps once the native duration becomes known',
+    () async {
+      final backend = _Backend()..preparing = Completer<void>();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      final opening = engine.open(pair, const OpenOptions());
+      final seeking = engine.seek(const Duration(seconds: 90));
+      backend.preparing!.complete();
+      await Future.wait([opening, seeking]);
+      expect(backend.seeks.single.$1, const Duration(seconds: 20));
+      expect(engine.currentSnapshot.position, const Duration(seconds: 20));
+      expect(engine.currentSnapshot.desiredPlaying, false);
+    },
+  );
+
+  test(
+    'a large seek burst retires once and releases superseded pending callers',
+    () async {
       final backend = _Backend()
-        ..sample = const BackendHealth(
-          position: Duration(seconds: 1),
-          buffered: Duration(seconds: 8),
-        );
+        ..holdSeeks = true
+        ..retiring = Completer<void>();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions());
+      final first = engine.seek(const Duration(seconds: 19));
+      await tick();
+      final discarded = <Future<void>>[];
+      for (var i = 0; i < 1000; i++) {
+        discarded.add(engine.seek(Duration(milliseconds: i)));
+      }
+      final latest = engine.seek(const Duration(seconds: 3));
+      await Future.wait([first, ...discarded])
+          .timeout(const Duration(seconds: 1));
+      expect(backend.seeks, hasLength(1));
+      expect(backend.writes.where((w) => w == 'cancelSeek'), hasLength(1));
+      backend.retiring!.complete();
+      await tick();
+      expect(backend.seeks.map((s) => s.$1), [
+        const Duration(seconds: 19),
+        const Duration(seconds: 3),
+      ]);
+      backend.seeks.last.$2.complete(const Duration(seconds: 3));
+      await latest;
+      backend.seeks.first.$2.complete(const Duration(seconds: 19));
+      await tick();
+      expect(engine.currentSnapshot.position, const Duration(seconds: 3));
+    },
+  );
+
+  test(
+    'queued gestures ignore old progress and stop releases the pending caller',
+    () async {
+      final backend = _Backend();
       final engine = SharedPlayerEngine(
         createBackend: () => backend,
-        bufferDashTracks: true,
+        seekCoalescingDelay: const Duration(milliseconds: 40),
       );
       addTearDown(engine.dispose);
-      await engine.open(
-        DashPairSource(video: remote('v'), audio: remote('a')),
-        const OpenOptions(),
+      await engine.open(pair, const OpenOptions(play: true));
+      final seeking = engine.seek(const Duration(seconds: 2));
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: 19),
+          buffered: Duration(seconds: 20),
+        ),
       );
-      final local = backend.preparedPlan!;
-      expect(local.media.uri.host, '127.0.0.1');
-      expect(local.media.uri.port, isNot(server.port));
-      final client = HttpClient();
-      addTearDown(() => client.close(force: true));
-      for (final media in [local.media, local.audio!]) {
-        final request = await client.getUrl(media.uri);
-        if (identical(media, local.audio)) {
-          request.headers.set('range', 'bytes=0-${bytes.length - 201}');
-        }
-        final response = await request.close();
-        await response.drain<void>();
-      }
-      for (
-        var i = 0;
-        i < 200 &&
-            engine.currentSnapshot.buffered != const Duration(seconds: 4);
-        i++
-      ) {
-        backend.signals.add(
-          const BackendEvent(
-            BackendEventKind.sample,
-            position: Duration(seconds: 1),
-            buffered: Duration(seconds: 8),
-          ),
-        );
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-      expect(engine.currentSnapshot.position, const Duration(seconds: 1));
-      expect(engine.currentSnapshot.buffered, const Duration(seconds: 4));
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      expect(engine.currentSnapshot.buffered, const Duration(seconds: 4));
-      expect(backend.writes.where((write) => write == 'prepare').length, 1);
+      expect(engine.currentSnapshot.position, Duration.zero);
+      await engine.stop();
+      await seeking;
       expect(backend.seeks, isEmpty);
-    }, _NetworkHttp()),
+      expect(engine.currentSnapshot.phase, PlaybackPhase.idle);
+    },
+  );
+
+  test(
+    'source replacement during gesture delay waits for the new preparation',
+    () async {
+      var backend = _Backend();
+      final first = backend;
+      final engine = SharedPlayerEngine(
+        createBackend: () => backend,
+        seekCoalescingDelay: const Duration(milliseconds: 40),
+      );
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions());
+      final old = engine.seek(const Duration(seconds: 9));
+      await tick();
+      backend = _Backend()..preparing = Completer<void>();
+      final opening = engine.open(pair, const OpenOptions());
+      final current = engine.seek(const Duration(seconds: 2));
+      await Future<void>.delayed(const Duration(milliseconds: 70));
+      expect(backend.seeks, isEmpty);
+      backend.preparing!.complete();
+      await Future.wait([old, opening, current]);
+      expect(first.seeks, isEmpty);
+      expect(backend.seeks.single.$1, const Duration(seconds: 2));
+      expect(engine.currentSnapshot.position, const Duration(seconds: 2));
+    },
+  );
+
+  test(
+    'rejected retirement fails the latest request without stranding callers',
+    () async {
+      final backend = _Backend()
+        ..holdSeeks = true
+        ..failRetirement = true;
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions(play: true));
+      final first = engine.seek(const Duration(seconds: 9));
+      await tick();
+      final latest = engine.seek(const Duration(seconds: 2));
+      await expectLater(latest, throwsA(isA<PlayerFailure>()));
+      await first;
+      expect(backend.playing, false);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+      expect(backend.seeks, hasLength(1));
+      backend.seeks.first.$2.complete(const Duration(seconds: 9));
+    },
+  );
+
+  test(
+    'natural EOF after the confirmed seek target is not discarded',
+    () async {
+      final backend = _Backend();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions(play: true));
+      backend.endOnPlay = true;
+      var endings = 0;
+      engine.snapshots.listen((s) {
+        if (s.phase == PlaybackPhase.ended) endings++;
+      });
+      await engine.seek(const Duration(seconds: 20));
+      expect(engine.currentSnapshot.phase, PlaybackPhase.ended);
+      expect(engine.currentSnapshot.desiredPlaying, false);
+      expect(endings, 1);
+    },
+  );
+
+  test(
+    'opening seek plays only after the latest target is confirmed',
+    () async {
+      final backend = _Backend()..preparing = Completer<void>();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      final positions = <Duration>[];
+      engine.snapshots.listen((s) {
+        if (s.phase == PlaybackPhase.playing) positions.add(s.position);
+      });
+      final opening = engine.open(pair, const OpenOptions(play: true));
+      final seeking = engine.seek(const Duration(seconds: 2));
+      backend.preparing!.complete();
+      await Future.wait([opening, seeking]);
+      expect(backend.writes.where((w) => w == 'play'), hasLength(1));
+      expect(positions, [const Duration(seconds: 2)]);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+    },
   );
 
   test(

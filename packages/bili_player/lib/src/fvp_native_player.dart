@@ -378,7 +378,7 @@ final class _MdkPlayerPort
       outputDimensions: _textureDimensions,
       generation: generation,
       positionMilliseconds: positionMilliseconds,
-      bufferedMilliseconds: player.buffered(),
+      bufferedMilliseconds: bufferedMilliseconds,
       audioGainDb: audioGainDb,
       directSurface: _directSurface,
     );

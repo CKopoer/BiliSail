@@ -15,7 +15,6 @@ final class FvpEngine extends SharedPlayerEngine {
     late final FvpEngine engine;
     NativeReadinessStage? readinessStage;
     engine = FvpEngine._(
-      bufferDashTracks: createPlayer == null,
       seekCoalescingDelay: createPlayer == null
           ? const Duration(milliseconds: 40)
           : Duration.zero,
@@ -64,7 +63,6 @@ final class FvpEngine extends SharedPlayerEngine {
   FvpEngine._({
     required super.createBackend,
     super.onDiagnostic,
-    required super.bufferDashTracks,
     required super.seekCoalescingDelay,
   }) : super(
          schemes: {'http', 'https', 'file', if (Platform.isAndroid) 'content'},

@@ -162,6 +162,11 @@ final class PlaybackSnapshot {
   final int generation;
   final Duration position;
   final Duration duration;
+
+  /// The native demuxer's absolute media-time buffer endpoint.
+  ///
+  /// Bounded by [position] and known [duration]. Decoding and presentation
+  /// readiness are confirmed separately.
   final Duration buffered;
   final bool desiredPlaying;
   final bool isBuffering;

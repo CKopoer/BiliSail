@@ -993,8 +993,7 @@ final class MediaKitBackend implements PlaybackBackend {
     _seek?.cancel();
     _replaceSeek = true;
     _seekChanges.add(++_seekRevision);
-    // Retire the previous demuxers before the shared transport closes their
-    // readers. Otherwise a truncated old response can complete the new load.
+    // Retire the previous demuxers before reusing their seek callback slot.
     await _player?.native.command(['stop']);
     await Future<void>.delayed(Duration.zero);
   }
