@@ -351,7 +351,7 @@ class AppDependencies {
     }
     final playback = PlaybackManager(
       systemMediaControls: systemMedia,
-      createSession: () {
+      createSession: (sleepTimer) {
         final repository = OfflinePlaybackRepository(
           downloads: downloads,
           network: playbackRepository,
@@ -365,6 +365,7 @@ class AppDependencies {
           ),
         );
         return PlaybackSession(
+          sleepTimer: sleepTimer,
           rateMemory: playbackRateMemory,
           volumeMemory: playbackVolumeMemory,
           listeningMode: playbackListeningMode,

@@ -6288,7 +6288,8 @@ PlaybackManager _manager({
   final rates = rateMemory ?? PlaybackRateMemory();
   final volumes = volumeMemory ?? PlaybackVolumeMemory();
   return PlaybackManager(
-    createSession: () => PlaybackSession(
+    createSession: (sleepTimer) => PlaybackSession(
+      sleepTimer: sleepTimer,
       engine: _FakeEngine(),
       repository: repository ?? _FakeRepository(autoResolve: true),
       progress: _FakeProgress(),

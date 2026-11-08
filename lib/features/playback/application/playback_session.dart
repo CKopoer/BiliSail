@@ -48,6 +48,7 @@ class PlaybackSession extends ChangeNotifier {
     Duration Function()? historyNow,
     Duration Function()? danmakuNow,
     DateTime Function()? sleepTimerNow,
+    ListeningSleepTimer? sleepTimer,
     this.startupNow,
     PlaybackRateMemory? rateMemory,
     PlaybackVolumeMemory? volumeMemory,
@@ -57,29 +58,13 @@ class PlaybackSession extends ChangeNotifier {
        startupDiagnostics = startupDiagnostics ?? PlaybackStartupDiagnostics(),
        _rateMemory = rateMemory ?? PlaybackRateMemory(),
        _volumeMemory = volumeMemory ?? PlaybackVolumeMemory(),
-       _listeningMode = listeningMode ?? PlaybackListeningMode() {
+       _listeningMode = listeningMode ?? PlaybackListeningMode(),
+       _ownsSleepTimer = sleepTimer == null {
     _listeningMode.addListener(_applyListeningMode);
     _clock.start();
-    sleepTimer = ListeningSleepTimer(
-      now: sleepTimerNow,
-      onElapsed: () {
-        if (_disposed || _closing) return;
-        final next = _nextSourceIntent;
-        if (next != null) {
-          // A related-video route can mount after the alarm. Keep its media
-          // identity while revoking the already accepted autoplay request.
-          _nextSourceIntent = (
-            id: next.id,
-            cid: next.cid,
-            playing: false,
-            position: next.position,
-            scope: next.scope,
-            epoch: next.epoch,
-          );
-        }
-        unawaited(pause());
-      },
-    );
+    this.sleepTimer =
+        sleepTimer ??
+        ListeningSleepTimer(now: sleepTimerNow, onElapsed: pauseForSleepTimer);
     final history = historyRepository;
     _historyReporter = history == null
         ? null
@@ -359,6 +344,7 @@ class PlaybackSession extends ChangeNotifier {
   bool _allowColorFallback = true;
   bool get audioOnly => _audioOnly;
   late final ListeningSleepTimer sleepTimer;
+  final bool _ownsSleepTimer;
   bool get canAutoAdvance => !sleepTimer.elapsed;
   PlaybackMode get playbackMode => _settings.playbackMode;
   int _playbackModeRevision = 0;
@@ -368,6 +354,23 @@ class PlaybackSession extends ChangeNotifier {
   void startSleepTimer(Duration duration) {
     if (_disposed || _closing || isLive || !sourceMatchesAccount) return;
     sleepTimer.start(duration);
+  }
+
+  void pauseForSleepTimer() {
+    if (_disposed || _closing || !sleepTimer.elapsed) return;
+    final next = _nextSourceIntent;
+    if (next != null) {
+      // Revoke an accepted autoplay intent before its new route can mount.
+      _nextSourceIntent = (
+        id: next.id,
+        cid: next.cid,
+        playing: false,
+        position: next.position,
+        scope: next.scope,
+        epoch: next.epoch,
+      );
+    }
+    unawaited(pause());
   }
 
   bool get continuousRelatedPlaybackEnabled =>
@@ -915,7 +918,7 @@ class PlaybackSession extends ChangeNotifier {
     final requestedAudioOnly =
         _listeningMode.enabled && target is! LivePlaybackTarget;
     _audioOnly = requestedAudioOnly;
-    if (target is LivePlaybackTarget) sleepTimer.cancel();
+    if (_ownsSleepTimer && target is LivePlaybackTarget) sleepTimer.cancel();
     sleepTimer.checkDeadline();
     _audioRecovery = null;
     // Capture source settings together; a preference change during resolution
@@ -2995,7 +2998,7 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> stop({bool clearCheckpoints = true}) async {
-    sleepTimer.cancel();
+    if (_ownsSleepTimer) sleepTimer.cancel();
     _cancelRecovery();
     _audioRecovery = null;
     _audioOnly = false;
@@ -3077,7 +3080,7 @@ class PlaybackSession extends ChangeNotifier {
     await attempt(engine.dispose);
     await attempt(() async => snapshots.dispose());
     await attempt(() async => highEnergy.dispose());
-    await attempt(() async => sleepTimer.dispose());
+    if (_ownsSleepTimer) await attempt(() async => sleepTimer.dispose());
     await attempt(() async => danmakuSendStyle.dispose());
     await attempt(() async => danmaku.dispose());
     _clock.stop();

@@ -4,6 +4,7 @@ import 'package:bili_player/bili_player.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/application/playback_listening_mode.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
@@ -14,6 +15,65 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+
+  for (final backend in ['media_kit', 'fvp']) {
+    testWidgets('shared timer pauses a replacement native page: $backend', (
+      tester,
+    ) async {
+      initializePlayerBackend();
+      final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR']!;
+      var now = DateTime(2026, 11, 8);
+      final manager = PlaybackManager(
+        sleepTimerNow: () => now,
+        createSession: (sleepTimer) => PlaybackSession(
+          sleepTimer: sleepTimer,
+          engine: ConfigurablePlayerEngine(
+            createEngine: () async =>
+                backend == 'fvp' ? FvpEngine() : MediaKitEngine(),
+          ),
+          repository: _Repository(Directory(fixtures).uri),
+          progress: _Progress(),
+          accountScope: () => 'guest',
+        ),
+      );
+      try {
+        await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+        final first = manager.acquire('first');
+        first.configureSettings(
+          AppSettings(defaultVolume: 0, resumePlayback: false),
+        );
+        await _withFrames(tester, first.open(_detail, _part));
+        expect(first.error, isNull);
+        first.startSleepTimer(const Duration(minutes: 2));
+        now = now.add(const Duration(seconds: 30));
+        final second = manager.acquire('second');
+        second.configureSettings(
+          AppSettings(defaultVolume: 0, resumePlayback: false),
+        );
+        await _withFrames(tester, second.open(_detail, _part));
+        expect(second.error, isNull);
+        expect(second.sleepTimer.remaining, const Duration(seconds: 90));
+        manager.release('first', first);
+        await _withFrames(tester, manager.drainReleases());
+        expect(second.sleepTimer.remaining, const Duration(seconds: 90));
+        now = now.add(const Duration(seconds: 90));
+        second.sleepTimer.checkDeadline();
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(second.engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(second.engine.currentSnapshot.phase, PlaybackPhase.paused);
+        final position = second.engine.currentSnapshot.position;
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(
+          (second.engine.currentSnapshot.position - position).abs(),
+          lessThan(const Duration(milliseconds: 200)),
+        );
+        expect(second.canAutoAdvance, isFalse);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await _withFrames(tester, manager.close());
+      }
+    });
+  }
 
   for (final backend in ['media_kit', 'fvp']) {
     for (final paused in [false, true]) {

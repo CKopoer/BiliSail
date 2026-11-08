@@ -20,11 +20,12 @@ void main() {
     epoch = 0;
     manager = PlaybackManager(
       systemMediaControls: controls,
-      createSession: () {
+      createSession: (sleepTimer) {
         final engine = _Engine();
         engines.add(engine);
         final repository = SystemMediaFixtureRepository();
         return PlaybackSession(
+          sleepTimer: sleepTimer,
           engine: engine,
           repository: repository,
           contentRepository: SystemMediaFixtureContent(repository),

@@ -25,7 +25,8 @@ void main() {
       final repository = SystemMediaFixtureRepository(directory: directory);
       final manager = PlaybackManager(
         systemMediaControls: WindowsMediaControls(),
-        createSession: () => PlaybackSession(
+        createSession: (sleepTimer) => PlaybackSession(
+          sleepTimer: sleepTimer,
           engine: engine,
           repository: repository,
           progress: SystemMediaFixtureProgress(),

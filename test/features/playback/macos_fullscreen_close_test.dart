@@ -43,7 +43,7 @@ void main() {
       }
       final engines = <_Engine>[];
       final manager = PlaybackManager(
-        createSession: () {
+        createSession: (sleepTimer) {
           final engine = _Engine();
           engines.add(engine);
           addTearDown(() {
@@ -53,6 +53,7 @@ void main() {
             }
           });
           return PlaybackSession(
+            sleepTimer: sleepTimer,
             engine: engine,
             repository: _Repository(),
             progress: _Progress(),

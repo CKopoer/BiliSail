@@ -18,6 +18,7 @@ import 'package:bilisail/features/playback/presentation/live_stream_picker.dart'
 import 'dart:ui' show PointerDeviceKind, Tristate, ImageByteFormat;
 
 import 'package:bili_danmaku/bili_danmaku.dart';
+import 'package:bilisail/features/playback/application/listening_sleep_timer.dart';
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
@@ -5041,8 +5042,8 @@ void main() {
         addTearDown(tester.view.resetDevicePixelRatio);
         final sessions = <PlaybackSession>[];
         final manager = PlaybackManager(
-          createSession: () {
-            final session = _session(_FakeEngine());
+          createSession: (sleepTimer) {
+            final session = _session(_FakeEngine(), sleepTimer: sleepTimer);
             sessions.add(session);
             return session;
           },
@@ -10567,7 +10568,9 @@ PlaybackSession _session(
   PlaybackRepository? repository,
   ContentPlaybackRepository? contentRepository,
   Duration Function()? danmakuNow,
+  ListeningSleepTimer? sleepTimer,
 }) => PlaybackSession(
+  sleepTimer: sleepTimer,
   engine: engine,
   repository: repository ?? _FakePlaybackRepository(),
   contentRepository: contentRepository ?? _FakeContentPlaybackRepository(),

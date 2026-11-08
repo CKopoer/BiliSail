@@ -276,7 +276,7 @@ class _SleepTimerDialogState extends State<_SleepTimerDialog> {
           ],
           const SizedBox(height: 16),
           Text(
-            '连续播放、暂停和缓冲时继续计时，切换视频或听视频保留定时。关闭播放页或退出应用后取消。',
+            '本次播放共用定时，连续播放、暂停和缓冲时继续计时，切换视频或听视频保留。关闭全部播放页或退出应用后取消。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

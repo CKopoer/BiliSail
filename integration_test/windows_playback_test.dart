@@ -52,7 +52,8 @@ void main() {
         final rates = PlaybackRateMemory();
         final volumes = PlaybackVolumeMemory();
         return PlaybackManager(
-          createSession: () => PlaybackSession(
+          createSession: (sleepTimer) => PlaybackSession(
+            sleepTimer: sleepTimer,
             rateMemory: rates,
             volumeMemory: volumes,
             engine: MediaKitEngine(),
@@ -148,7 +149,8 @@ void main() {
       final fixturePath = Platform.environment['BILI_TEST_MEDIA_DIR'];
       expect(fixturePath, isNotNull, reason: 'Use tool/test-windows-media.ps1');
       final manager = PlaybackManager(
-        createSession: () => PlaybackSession(
+        createSession: (sleepTimer) => PlaybackSession(
+          sleepTimer: sleepTimer,
           engine: MediaKitEngine(),
           repository: _FakePlaybackRepository(
             File('$fixturePath/video.mp4').uri,

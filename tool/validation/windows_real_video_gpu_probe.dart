@@ -97,7 +97,8 @@ Future<void> main() async {
   final repository = _ObservedRepository(dependencies);
   PlaybackSession? playing;
   final manager = PlaybackManager(
-    createSession: () => playing = PlaybackSession(
+    createSession: (sleepTimer) => playing = PlaybackSession(
+      sleepTimer: sleepTimer,
       engine: MediaKitEngine(),
       repository: repository,
       metadataRepository: repository,

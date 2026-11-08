@@ -5,6 +5,7 @@ import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/audio_playback_view.dart';
@@ -21,6 +22,16 @@ void main() {
   late _Engine engine;
   late _Repository repository;
   late PlaybackSession session;
+
+  Future<void> flush(WidgetTester tester, Future<void> operation) async {
+    var done = false;
+    unawaited(operation.then((_) => done = true));
+    for (var i = 0; !done && i < 20; i++) {
+      await tester.pump(Duration.zero);
+    }
+    expect(done, isTrue, reason: 'Playback cleanup did not complete');
+    await operation;
+  }
 
   Future<void> open(WidgetTester tester, {DateTime Function()? now}) async {
     engine = _Engine();
@@ -39,6 +50,191 @@ void main() {
     addTearDown(session.close);
     await session.open(_detail, _parts.first);
   }
+
+  PlaybackManager manager(WidgetTester tester) {
+    final value = PlaybackManager(
+      sleepTimerNow: tester.binding.clock.now,
+      createSession: (sleepTimer) {
+        final session = PlaybackSession(
+          engine: _Engine(),
+          repository: _Repository(),
+          contentRepository: _Content(),
+          progress: _Progress(),
+          accountScope: () => 'guest',
+          sleepTimer: sleepTimer,
+        );
+        session.configureSettings(
+          AppSettings(autoPlay: true, resumePlayback: false),
+        );
+        return session;
+      },
+    );
+    addTearDown(() => flush(tester, value.close()));
+    return value;
+  }
+
+  for (final concurrent in [false, true]) {
+    testWidgets(
+      'new playback pages share the deadline: concurrent=$concurrent',
+      (tester) async {
+        final playback = manager(tester);
+        final first = playback.acquire('first');
+        await playback.updateWorkspace(
+          allowConcurrent: concurrent,
+          activeTabId: 'first',
+        );
+        await first.open(_detail, _parts.first);
+        first.startSleepTimer(const Duration(seconds: 10));
+        await tester.pump(const Duration(seconds: 3));
+        final second = playback.acquire('second');
+        await playback.updateWorkspace(
+          allowConcurrent: concurrent,
+          activeTabId: 'second',
+        );
+        await second.open(_detail, _parts.last);
+        expect(second.sleepTimer.remaining, const Duration(seconds: 7));
+        expect(second.sleepTimer, same(first.sleepTimer));
+        await second.pause();
+        await tester.pump(const Duration(seconds: 2));
+        expect(second.sleepTimer.remaining, const Duration(seconds: 5));
+        await second.play();
+        await tester.pump(const Duration(seconds: 5));
+        for (final session in [first, second]) {
+          expect(session.sleepTimer.elapsed, isTrue);
+          expect(session.canAutoAdvance, isFalse);
+          expect(session.engine.currentSnapshot.desiredPlaying, isFalse);
+        }
+        await playback.updateWorkspace(
+          allowConcurrent: concurrent,
+          activeTabId: 'first',
+        );
+        expect(first.engine.currentSnapshot.desiredPlaying, isFalse);
+      },
+    );
+  }
+
+  testWidgets(
+    'closing the timer page preserves it until the last page closes',
+    (tester) async {
+      final playback = manager(tester);
+      final first = playback.acquire('first');
+      final second = playback.acquire('second');
+      await first.open(_detail, _parts.first);
+      await second.open(_detail, _parts.last);
+      first.startSleepTimer(const Duration(seconds: 10));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.runAsync(() async {
+        playback.release('first', first);
+        await playback.drainReleases();
+      });
+      expect(second.sleepTimer.remaining, const Duration(seconds: 7));
+      await tester.pump(const Duration(seconds: 7));
+      expect(second.sleepTimer.elapsed, isTrue);
+      expect(second.engine.currentSnapshot.desiredPlaying, isFalse);
+      second.startSleepTimer(const Duration(seconds: 5));
+      final closingGate = Completer<void>();
+      (second.engine as CardFakeEngine).releasing = closingGate;
+      await tester.runAsync(() async => playback.release('second', second));
+      // A new page can mount while the previous native engine is still closing.
+      final third = playback.acquire('third');
+      await third.open(_detail, _parts.first);
+      expect(third.sleepTimer.remaining, isNull);
+      expect(third.sleepTimer.elapsed, isFalse);
+      third.startSleepTimer(const Duration(seconds: 10));
+      await tester.runAsync(() async {
+        closingGate.complete();
+        await playback.drainReleases();
+      });
+      await tester.pump(const Duration(seconds: 6));
+      expect(third.sleepTimer.remaining, const Duration(seconds: 4));
+      expect(third.engine.currentSnapshot.desiredPlaying, isTrue);
+      await tester.pump(const Duration(seconds: 4));
+      expect(third.engine.currentSnapshot.desiredPlaying, isFalse);
+    },
+  );
+
+  testWidgets('expiry while a new page resolves prevents its late autoplay', (
+    tester,
+  ) async {
+    final playback = manager(tester);
+    final first = playback.acquire('first');
+    await first.open(_detail, _parts.first);
+    first.startSleepTimer(const Duration(seconds: 5));
+    final second = playback.acquire('second');
+    final repository = second.repository as _Repository;
+    repository.pending = Completer<PlaybackMedia>();
+    final loading = second.open(_detail, _parts.last, desiredPlaying: true);
+    await tester.pump(const Duration(seconds: 5));
+    repository.pending!.complete(cardPreviewMedia());
+    await loading;
+    expect(first.engine.currentSnapshot.desiredPlaying, isFalse);
+    expect(second.engine.currentSnapshot.desiredPlaying, isFalse);
+    expect(second.canAutoAdvance, isFalse);
+    final third = playback.acquire('third');
+    await third.open(_detail, _parts.first);
+    expect(third.engine.currentSnapshot.desiredPlaying, isFalse);
+  });
+
+  for (final target in [
+    const PgcPlaybackTarget('2', cid: '102'),
+    const OfflinePlaybackTarget('2'),
+    const LivePlaybackTarget('42'),
+  ]) {
+    testWidgets('new content pages preserve the shared timer: $target', (
+      tester,
+    ) async {
+      final playback = manager(tester);
+      final first = playback.acquire('first');
+      await first.open(_detail, _parts.first);
+      first.startSleepTimer(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 2));
+      final second = playback.acquire('second');
+      await second.open(null, null, target: target);
+      expect(second.sleepTimer.remaining, const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 3));
+      expect(first.engine.currentSnapshot.desiredPlaying, isFalse);
+      expect(second.engine.currentSnapshot.desiredPlaying, isFalse);
+    });
+  }
+
+  testWidgets('stop of one page preserves the timer; account stop clears it', (
+    tester,
+  ) async {
+    final playback = manager(tester);
+    final first = playback.acquire('first');
+    final second = playback.acquire('second');
+    await first.open(_detail, _parts.first);
+    await second.open(_detail, _parts.last);
+    first.startSleepTimer(const Duration(seconds: 10));
+    await first.stop();
+    await tester.pump(const Duration(seconds: 3));
+    expect(second.sleepTimer.remaining, const Duration(seconds: 7));
+    await playback.stop();
+    expect(second.sleepTimer.remaining, isNull);
+    await second.open(_detail, _parts.last);
+    await tester.pump(const Duration(seconds: 8));
+    expect(second.engine.currentSnapshot.desiredPlaying, isTrue);
+  });
+
+  testWidgets('timer replacement and cancellation are shared across pages', (
+    tester,
+  ) async {
+    final playback = manager(tester);
+    final first = playback.acquire('first');
+    final second = playback.acquire('second');
+    await first.open(_detail, _parts.first);
+    await second.open(_detail, _parts.last);
+    first.startSleepTimer(const Duration(seconds: 5));
+    await tester.pump(const Duration(seconds: 2));
+    second.startSleepTimer(const Duration(seconds: 10));
+    await tester.pump(const Duration(seconds: 4));
+    expect(first.sleepTimer.remaining, const Duration(seconds: 6));
+    expect(first.engine.currentSnapshot.desiredPlaying, isTrue);
+    first.sleepTimer.cancel();
+    expect(second.sleepTimer.remaining, isNull);
+    await tester.pump(const Duration(seconds: 7));
+    expect(second.engine.currentSnapshot.desiredPlaying, isTrue);
+  });
 
   for (final audioOnly in [false, true]) {
     testWidgets('expiry pauses until explicit play: audioOnly=$audioOnly', (

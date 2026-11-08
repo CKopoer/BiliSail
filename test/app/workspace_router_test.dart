@@ -277,10 +277,11 @@ void main() {
         final engines = <CardFakeEngine>[];
         final sessions = <PlaybackSession>[];
         final manager = PlaybackManager(
-          createSession: () {
+          createSession: (sleepTimer) {
             final engine = CardFakeEngine();
             engines.add(engine);
             final session = PlaybackSession(
+              sleepTimer: sleepTimer,
               engine: engine,
               repository: _UnusedPlaybackRepository(),
               progress: _UnusedProgressRepository(),
@@ -387,10 +388,11 @@ void main() {
         final engines = <CardFakeEngine>[];
         final sessions = <PlaybackSession>[];
         final manager = PlaybackManager(
-          createSession: () {
+          createSession: (sleepTimer) {
             final engine = CardFakeEngine();
             engines.add(engine);
             final session = PlaybackSession(
+              sleepTimer: sleepTimer,
               engine: engine,
               repository: _UnusedPlaybackRepository(),
               progress: _UnusedProgressRepository(),
@@ -722,10 +724,11 @@ void main() {
         if (platform == TargetPlatform.macOS) expect(detached, isTrue);
         final engines = <CardFakeEngine>[];
         final manager = PlaybackManager(
-          createSession: () {
+          createSession: (sleepTimer) {
             final engine = CardFakeEngine();
             engines.add(engine);
             return PlaybackSession(
+              sleepTimer: sleepTimer,
               engine: engine,
               repository: _UnusedPlaybackRepository(),
               progress: _UnusedProgressRepository(),
