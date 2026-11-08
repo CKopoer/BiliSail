@@ -49,6 +49,7 @@ app.*.map.json
 
 # Local package/tool output; application and package lockfiles are retained.
 **/.dart_tool/
+**/.gradle/
 **/build/
 **/.flutter-plugins-dependencies
 /artifacts/
