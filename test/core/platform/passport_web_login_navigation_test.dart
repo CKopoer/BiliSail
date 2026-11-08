@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:bilisail/core/platform/passport_web_login.dart';
+import 'package:bilisail/core/presentation/app_input_host.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -32,6 +33,26 @@ void main() {
     await support.delete(recursive: true);
   });
   setUp(() => platform.cookies.reset());
+
+  testWidgets('Windows native focus handoff keeps polling login cookies', (
+    tester,
+  ) async {
+    final result = await _open(tester);
+    expect(
+      find.ancestor(
+        of: find.byType(InAppWebView),
+        matching: find.byType(NativeInputRegion),
+      ),
+      findsOneWidget,
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    platform.cookies.value = [_sessionCookie()];
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect((await result.value)?.single.name, 'SESSDATA');
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  }, skip: !Platform.isWindows);
 
   for (final target in [TargetPlatform.iOS, TargetPlatform.macOS]) {
     testWidgets('Apple login captures private cookies and closes after login', (

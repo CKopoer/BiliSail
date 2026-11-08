@@ -90,3 +90,16 @@
 最终登录相关 62 项定向测试及四个相关 Dart 文件的静态分析通过。根检查按 `-Stage Lint -SkipPub` 和 `-Stage RootTests -SkipPub` 收尾：全仓格式、静态分析、打包边界检查通过，根应用 3266 项离线测试通过，13 项 Windows 符号链接用例按环境条件跳过；日志分别为 `build/passport-web-login-lint.log` 与 `build/passport-web-login-root-tests.log`。四个包在本轮完整 `tool/check.ps1 -SkipPub` 中通过 bili_api 492、bili_player 83、bili_danmaku 116、bili_mux 5 项测试；未配置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生用例跳过，不计为原生通过。测试总数包含同期其他任务的改动，不代表本次新增数量。文档相对链接、共享 Swift 源码引用、Xcode 对象标识唯一性和 `git diff --check` 通过；五份锁文件未修改。
 
 本机为 Windows，未执行 iOS／macOS 构建、上述 XCTest 或 iPhone 真实密码／短信登录。仍需 Xcode 主机构建与原生测试，以及设备上确认自动关闭、账号状态、重启恢复、切换短信应用和取消重开；用户已确认的扫码成功不推导为网页登录修复已实机通过。
+
+## 2026-11-08 Windows 网页无法点击
+
+在真实 WebView2 中用本地无账号按钮复现：网页单独显示可点击，放入 `showAppDialog` 和应用的 `AppInputHost` 后只收到 `mousedown`，没有 `mouseup`／`click`。焦点事件显示点击使 Flutter view 失焦并进入 `inactive`，同时 `document.hasFocus()` 为真。原因是网页正常取得原生焦点后，输入宿主的失焦清理调用 `GestureBinding.cancelPointer`，中断了插件继续转发鼠标抬起的路径；没有发现网页刷新调用主窗口 `activate` 的证据。[WebView2 合成控制器契约](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2compositioncontroller)也分别规定了宿主的指针转发与焦点管理职责。
+
+- [输入宿主](../../lib/core/presentation/app_input_host.dart)新增显式 `NativeInputRegion`，只保留从原生区域开始的鼠标序列，让原生控件处理焦点交接。普通 Flutter 控件仍在失焦／停用时取消；快捷键、按键状态和侧键状态仍按原规则清理。隐藏、暂停、设备移除、区域卸载或宿主释放会清理保留的鼠标序列。
+- [登录窗口](../../lib/core/platform/passport_web_login.dart)只给 WebView 加此区域，不覆盖标题栏与关闭按钮。Windows 的可见 `inactive` 状态继续提取登录 Cookie，避免修好点击后仍因原生焦点导致轮询停止；隐藏／暂停／销毁继续停止读取，迟到结果仍被拒绝。其他平台的 Cookie 生命周期规则不变。
+- [输入回归](../../test/core/presentation/app_input_host_test.dart)覆盖 view 失焦和 `inactive` 后仍收到 Up、主应用快捷键继续停用、隐藏后取消；原有普通按钮丢失 Up、跨窗口和输入法回归继续执行。[导航回归](../../test/core/platform/passport_web_login_navigation_test.dart)验证实际登录 WebView 处于保护区域，以及 Windows `inactive` 时继续轮询并完成交接。
+- [Windows 原生测试](../../integration_test/windows_passport_web_login_test.dart)使用真实隐私 WebView2、本地按钮与输入框，经过相同输入宿主和 Material 弹窗验证鼠标点击、编辑焦点及重新加载后的交互；保留隐私 Cookie 隔离、官网登录窗口打开／重开和配置目录释放测试。使用测试指针驱动插件转发，不输入真实密码或发送短信，不等同于真实账号、验证码和系统中文输入法验收。
+
+本次五个 Dart 文件的格式与专项静态分析、文档相对链接和 `git diff --check` 通过。隔离副本以 `72f7ce25` 加本次五个代码／测试文件执行根应用离线回归，4729 项通过、13 项 Windows 符号链接用例因权限跳过。原工作区四个包分别通过 bili_api 719、bili_player 350、bili_danmaku 161、bili_mux 5 项；未配置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生用例跳过。根全量检查在同期 `windows_fvp_seek_synchronization_test.dart` 格式问题处停止，另行分析有 10 项同期播放器 lint，原目录根测试被其他运行实例占用的 `sqlite3.dll` 阻塞；这些无关修改未纳入本提交。
+
+Windows Debug 原生构建成功，隐私 Cookie 隔离、官网登录窗口打开／重开和目录释放两项通过。最终交互专项 1 项通过，覆盖 DOM 按钮点击、编辑元素及重新加载；移除了受同机其他窗口激活影响的 `document.hasFocus()` 断言。Android、iOS、macOS 设备和真实账号／验证码流程未测；按用户要求不扩大验证范围。

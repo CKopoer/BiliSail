@@ -6,6 +6,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../shared/ui/app_dialog.dart';
+import '../presentation/app_input_host.dart';
 import 'passport_web_cookies.dart';
 import 'passport_webview_environment.dart';
 
@@ -155,8 +156,12 @@ class _PassportDialogState extends State<_PassportDialog>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _paused = state != AppLifecycleState.resumed;
-    if (state == AppLifecycleState.resumed) unawaited(_capture());
+    // A focused Windows WebView2 child leaves its Flutter view inactive while
+    // the login page is still visible and accepting input.
+    _paused =
+        state != AppLifecycleState.resumed &&
+        !(Platform.isWindows && state == AppLifecycleState.inactive);
+    if (!_paused) unawaited(_capture());
   }
 
   void _fail(String message) {
@@ -361,7 +366,7 @@ class _PassportDialogState extends State<_PassportDialog>
                       children: [
                         // The platform delegate owns the native controller.
                         // Keep both identities stable while showing errors.
-                        _webView ??= _createWebView(),
+                        NativeInputRegion(child: _webView ??= _createWebView()),
                         if (_pageError case final message?)
                           ColoredBox(
                             color: Theme.of(context).colorScheme.surface,

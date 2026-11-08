@@ -12,6 +12,91 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/detached_window_fake.dart';
 
 void main() {
+  testWidgets(
+    'native mouse handoff preserves Up and keeps shortcuts inactive',
+    (tester) async {
+      final calls = <String>[];
+      final input = _dispatcher(calls);
+      addTearDown(input.dispose);
+      final events = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppInputHost<String>(
+            dispatcher: input,
+            routes: InputRouteObserver(),
+            child: NativeInputRegion(
+              child: Listener(
+                onPointerDown: (_) => events.add('down'),
+                onPointerUp: (_) => events.add('up'),
+                onPointerCancel: (_) => events.add('cancel'),
+                child: const ColoredBox(color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final mouse = await tester.startGesture(
+        tester.getCenter(find.byType(NativeInputRegion)),
+        kind: PointerDeviceKind.mouse,
+      );
+      _active(tester, false, viewFocus: true);
+      _active(tester, false, viewFocus: false);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
+      expect(calls, isEmpty);
+      expect(events, ['down']);
+      await mouse.up();
+      await tester.pump();
+      expect(events, ['down', 'up']);
+      _active(tester, true, viewFocus: false);
+      _active(tester, true, viewFocus: true);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
+      expect(calls, ['W']);
+    },
+  );
+
+  testWidgets('native mouse handoff still cancels when the app is hidden', (
+    tester,
+  ) async {
+    final input = _dispatcher([]);
+    addTearDown(input.dispose);
+    final events = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppInputHost<String>(
+          dispatcher: input,
+          routes: InputRouteObserver(),
+          child: NativeInputRegion(
+            child: Listener(
+              onPointerDown: (_) => events.add('down'),
+              onPointerUp: (_) => events.add('up'),
+              onPointerCancel: (_) => events.add('cancel'),
+              child: const ColoredBox(color: Colors.white),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final mouse = await tester.startGesture(
+      tester.getCenter(find.byType(NativeInputRegion)),
+      kind: PointerDeviceKind.mouse,
+    );
+    _active(tester, false, viewFocus: true);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await tester.pump();
+    expect(events, ['down', 'cancel']);
+    _active(tester, true, viewFocus: false);
+    _active(tester, true, viewFocus: true);
+    await tester.pump();
+    await mouse.up();
+    await tester.pump();
+    expect(events, ['down', 'cancel']);
+  });
+
   for (final viewFocus in [false, true]) {
     testWidgets(
       'lost mouse Up cannot leave a button stuck after ${viewFocus ? 'view blur' : 'lifecycle deactivation'}',

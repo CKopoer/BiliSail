@@ -257,7 +257,9 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
     with WidgetsBindingObserver {
   final _normalizer = InputNormalizer();
   final _mousePointers = <int, int>{};
+  final _nativeMousePointers = <int>{};
   bool _lifecycleActive = true;
+  bool _lifecycleVisible = true;
   bool _viewFocused = false;
   int? _viewId;
   final _focusScope = FocusScopeNode(debugLabel: 'Window input');
@@ -335,8 +337,8 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
   void _routesChanged() =>
       widget.dispatcher.cancel(keepWorkspace: !widget.routes.modal);
 
-  void _resetInput() {
-    _cancelMouseGestures();
+  void _resetInput({bool preserveNativePointers = false}) {
+    _cancelMouseGestures(preserveNativePointers: preserveNativePointers);
     widget.dispatcher.cancel();
     _normalizer.resetKeyboard();
     _normalizer.resetMouse();
@@ -346,22 +348,38 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
     widget.dispatcher.resetDevice(InputDevice.mouse);
   }
 
-  void _cancelMouseGestures({int? device}) {
+  void _cancelMouseGestures({
+    int? device,
+    bool preserveNativePointers = false,
+  }) {
     final pointers = _mousePointers.entries
         .where((entry) => device == null || entry.value == device)
+        .where(
+          (entry) =>
+              !preserveNativePointers ||
+              !_nativeMousePointers.contains(entry.key),
+        )
         .map((entry) => entry.key)
         .toList();
     for (final pointer in pointers) {
-      _mousePointers.remove(pointer);
-      // A native window handoff can lose Up. Clear Flutter's retained tap/drag
-      // recognizers too, before another Down reaches the same control.
-      GestureBinding.instance.cancelPointer(pointer);
+      _cancelMousePointer(pointer);
     }
+  }
+
+  void _cancelMousePointer(int pointer) {
+    _nativeMousePointers.remove(pointer);
+    if (_mousePointers.remove(pointer) == null) return;
+    // A native window handoff can lose Up. Clear Flutter's retained tap/drag
+    // recognizers too, before another Down reaches the same control.
+    GestureBinding.instance.cancelPointer(pointer);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _lifecycleActive = state == AppLifecycleState.resumed;
+    _lifecycleVisible =
+        state == AppLifecycleState.resumed ||
+        state == AppLifecycleState.inactive;
     _windowActivityChanged();
   }
 
@@ -418,7 +436,10 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
 
   void _windowActivityChanged() {
     if (!_active) {
-      _resetInput();
+      // A native editor can take focus from its Flutter view during Down.
+      // That also makes the Flutter lifecycle inactive. Let the native control
+      // handle focus loss; hiding the app still cancels all retained pointers.
+      _resetInput(preserveNativePointers: _lifecycleVisible);
     }
     // Selecting an IME or switching windows can change the native association
     // while the same Flutter editor retains focus. Reconcile on return too.
@@ -492,6 +513,7 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
         _mousePointers[event.pointer] = event.device;
       } else if (event is PointerUpEvent || event is PointerCancelEvent) {
         _mousePointers.remove(event.pointer);
+        _nativeMousePointers.remove(event.pointer);
       } else if (event is PointerRemovedEvent) {
         _cancelMouseGestures(device: event.device);
       }
@@ -529,5 +551,62 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
         child: widget.child,
       ),
     ),
+  );
+}
+
+/// Lets a native child take view focus without cancelling its mouse click.
+class NativeInputRegion extends StatefulWidget {
+  const NativeInputRegion({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<NativeInputRegion> createState() => _NativeInputRegionState();
+}
+
+class _NativeInputRegionState extends State<NativeInputRegion> {
+  _AppInputHostState<Object?>? _host;
+  final _pointers = <int>{};
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final host = context.findAncestorStateOfType<_AppInputHostState<Object?>>();
+    if (identical(host, _host)) return;
+    _releasePointers();
+    _host = host;
+  }
+
+  void _releasePointers() {
+    for (final pointer in _pointers) {
+      _host?._cancelMousePointer(pointer);
+    }
+    _pointers.clear();
+  }
+
+  @override
+  void deactivate() {
+    _releasePointers();
+    _host = null;
+    super.deactivate();
+  }
+
+  @override
+  void dispose() {
+    _releasePointers();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    onPointerDown: (event) {
+      if (event.kind == PointerDeviceKind.mouse) {
+        _pointers.add(event.pointer);
+        _host?._nativeMousePointers.add(event.pointer);
+      }
+    },
+    onPointerUp: (event) => _pointers.remove(event.pointer),
+    onPointerCancel: (event) => _pointers.remove(event.pointer),
+    child: widget.child,
   );
 }
