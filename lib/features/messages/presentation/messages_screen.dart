@@ -211,6 +211,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                     tabs: InboxSection.values,
                     value: section,
                     progress: _pagingProgress,
+                    // Categories use explicit entry points in the message center.
+                    swipeEnabled: false,
                     onChanged: controller.selectSection,
                     pageBuilder: (context, tab, active) => TickerMode(
                       enabled: active && WorkspaceActivity.isActive(context),
@@ -612,7 +614,7 @@ class _InboxListState extends ConsumerState<_InboxList> {
   set _searching(bool value) => widget.filter?.searching = value;
   bool get _unreadOnly => widget.filter?.unreadOnly ?? false;
   set _unreadOnly(bool value) => widget.filter?.unreadOnly = value;
-  // A retained neighbor must keep its own rows during the next swipe rather
+  // A retained neighbor must keep its own rows during category transitions rather
   // than render the newly selected category's inbox.
   (List<InboxEntry>, String?, bool, String?) _snapshot = (
     const [],

@@ -67,8 +67,8 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  for (final width in [390.0, 1280.0]) {
-    testWidgets('message sections swipe in both directions at $width', (
+  for (final width in [390.0, 800.0, 1280.0]) {
+    testWidgets('message sections ignore horizontal swipes at $width', (
       tester,
     ) async {
       tester.view.physicalSize = Size(width, 850);
@@ -80,18 +80,35 @@ void main() {
         tester.element(find.byType(MessagesScreen)),
       );
       final pager = find.byKey(const ValueKey('message-section-pager'));
-      for (final section in InboxSection.values.skip(1)) {
-        await tester.drag(pager, Offset(-width * .8, 0));
-        await tester.pumpAndSettle();
+      for (final section in InboxSection.values) {
+        if (section != InboxSection.private) {
+          await tester.tap(
+            find.byKey(ValueKey('message-section-${section.name}')),
+          );
+          await tester.pumpAndSettle();
+        }
         expect(container.read(messagesControllerProvider).section, section);
+        final reads = repo.reads;
+        final writes = repo.sends + repo.marks + repo.systemMarks;
+        for (final direction in [-1, 1]) {
+          await tester.drag(
+            pager,
+            Offset(tester.getSize(pager).width * .8 * direction, 0),
+          );
+          await tester.pumpAndSettle();
+          expect(container.read(messagesControllerProvider).section, section);
+          expect(repo.reads, reads);
+          expect(repo.sends + repo.marks + repo.systemMarks, writes);
+        }
+        if (section != InboxSection.private) {
+          await tester.tap(
+            width < 600
+                ? find.byTooltip('返回消息首页')
+                : find.byKey(const ValueKey('message-section-private')),
+          );
+          await tester.pumpAndSettle();
+        }
       }
-      for (final section in InboxSection.values.reversed.skip(1)) {
-        await tester.drag(pager, Offset(width * .8, 0));
-        await tester.pumpAndSettle();
-        expect(container.read(messagesControllerProvider).section, section);
-      }
-      await tester.drag(pager, Offset(width * .8, 0));
-      await tester.pumpAndSettle();
       expect(
         container.read(messagesControllerProvider).section,
         InboxSection.private,
@@ -104,7 +121,7 @@ void main() {
 
   for (final cancel in [false, true]) {
     testWidgets(
-      'partial message swipe follows local progress: cancel=$cancel',
+      'partial message swipe leaves local progress unchanged: cancel=$cancel',
       (tester) async {
         final outer = TabPagingProgress(7);
         addTearDown(outer.dispose);
@@ -131,7 +148,7 @@ void main() {
         await gesture.moveBy(Offset(-tester.getSize(pager).width * .25, 0));
         await tester.pump();
         await tester.pump();
-        expect(progress.value, inExclusiveRange(0, .5));
+        expect(progress.value, 0);
         expect(
           container.read(messagesControllerProvider).section,
           InboxSection.private,
@@ -155,7 +172,7 @@ void main() {
     );
   }
 
-  testWidgets('retained message neighbors display their own category rows', (
+  testWidgets('horizontal drag cannot reveal a retained message category', (
     tester,
   ) async {
     await mount(tester);
@@ -175,16 +192,22 @@ void main() {
     final gesture = await tester.startGesture(tester.getCenter(pager));
     await gesture.moveBy(Offset(tester.getSize(pager).width * .4, 0));
     await tester.pump();
-    expect(find.text('回复正文'), findsOneWidget);
+    expect(find.text('回复正文'), findsNothing);
     expect(find.text('提及正文'), findsOneWidget);
     expect(repo.reads, 3);
     await gesture.cancel();
     await tester.pumpAndSettle();
     expect(find.text('提及正文'), findsOneWidget);
     expect(repo.reads, 3);
+    repo.entries = [replies];
+    await tester.tap(find.byKey(const ValueKey('message-section-replies')));
+    await tester.pumpAndSettle();
+    expect(find.text('回复正文'), findsOneWidget);
+    expect(find.text('提及正文'), findsNothing);
+    expect(repo.reads, 4);
   });
 
-  testWidgets('hiding messages interrupts a swipe without loading a section', (
+  testWidgets('messages still ignore swipes after hiding and showing', (
     tester,
   ) async {
     final active = ValueNotifier(true);
@@ -212,12 +235,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       container.read(messagesControllerProvider).section,
+      InboxSection.private,
+    );
+    expect(repo.reads, 1);
+    await tester.tap(find.byKey(const ValueKey('message-section-replies')));
+    await tester.pumpAndSettle();
+    expect(
+      container.read(messagesControllerProvider).section,
       InboxSection.replies,
     );
     expect(repo.reads, 2);
   });
 
-  testWidgets('swiping from a private conversation preserves its draft', (
+  testWidgets('horizontal swipes keep the private conversation and its draft', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 850);
@@ -230,15 +260,43 @@ void main() {
     await tester.enterText(find.byType(TextField), '滑动后保留的草稿');
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MessagesScreen)),
+    );
     final pager = find.byKey(const ValueKey('message-section-pager'));
-    await tester.drag(pager, const Offset(-310, 0));
-    await tester.pumpAndSettle();
-    await tester.drag(pager, const Offset(310, 0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('测试会话'));
-    await tester.pumpAndSettle();
-    expect(find.text('滑动后保留的草稿'), findsOneWidget);
+    final reads = repo.reads;
+    for (final direction in [-1, 1]) {
+      await tester.drag(pager, Offset(310.0 * direction, 0));
+      await tester.pumpAndSettle();
+      final state = container.read(messagesControllerProvider);
+      expect(state.section, InboxSection.private);
+      expect(state.selected?.id, conversation.id);
+      expect(find.text('滑动后保留的草稿'), findsOneWidget);
+      expect(find.text('测试私信正文'), findsOneWidget);
+      expect(repo.reads, reads);
+    }
     expect(repo.sends, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('message list still scrolls vertically', (tester) async {
+    repo.more = false;
+    repo.entries = [
+      for (var index = 0; index < 40; index++)
+        InboxEntry(id: '$index', title: '会话 $index', text: '摘要 $index'),
+    ];
+    await mount(tester);
+    expect(find.text('会话 30'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('会话 30'),
+      400,
+      scrollable: find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(find.text('会话 30').hitTestable(), findsOneWidget);
+    expect(repo.reads, 1);
     expect(tester.takeException(), isNull);
   });
 
