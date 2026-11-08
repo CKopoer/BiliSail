@@ -196,6 +196,7 @@ try {
   $sourceDirty = [bool]$sourceChanges
   $lockHash = (Get-FileHash -LiteralPath 'pubspec.lock' -Algorithm SHA256).Hash
   Invoke-BuildDependencyCommand flutter @('pub', 'get', '--enforce-lockfile')
+  Invoke-BuildCommand python @((Join-Path $PSScriptRoot 'prepare-sqlite-assets.py'), '--target', $Target)
   if ($isWindowsTarget) {
     & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1') -Architecture $windowsArch
   }

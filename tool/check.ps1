@@ -48,6 +48,7 @@ try {
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_macos_*.py')
     & (Join-Path $PSScriptRoot 'test-ios-package-validation.ps1')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_ios_*.py')
+    Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_sqlite_assets.py')
   }
   # A cold Windows SDK can emit pub bootstrap output before the machine JSON.
   Invoke-Check flutter @('--version')
@@ -85,6 +86,7 @@ try {
     Invoke-Check dart @('analyze', 'linux/plugins/flutter_inappwebview_linux/lib')
   }
   if ($runRootTests) {
+    Invoke-Check python @((Join-Path $PSScriptRoot 'prepare-sqlite-assets.py'))
     $testArgs = @('test', '--no-pub')
     if ($TotalShards -gt 1) {
       $testArgs += @('--total-shards', "$TotalShards", '--shard-index', "$ShardIndex")

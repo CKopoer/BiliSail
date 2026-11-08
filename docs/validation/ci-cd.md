@@ -585,3 +585,19 @@ CI／Release 工作流通过 actionlint 1.7.12；直接执行新增的生产 Bas
 Windows x64／Flutter 3.47.6 的独立工作树检查：首次 `tool/check.ps1 -EnforceLockfile` 完成五份锁文件严格解析、打包边界、格式和静态分析，随后 SQLite 原生库下载停滞。终止该次 hook 后，复用已有 SQLite 3.7.0 DLL 缓存（SHA-256 `98b4be674137b85ec111a7a29223e87aa41c3e964d61f73602471ddd7b9c56ce`，由原 hook 重新校验），完整执行 `tool/check.ps1 -SkipPub` 成功：5952 项 Dart／Flutter 测试通过（根应用 4726、API 719、播放器 341、弹幕 161、封装 5）。根应用 13 项环境跳过；未配置 `BILI_MUX_LIBRARY`，10 项 mux 原生测试跳过。新增的 11 项 PowerShell 回归通过，Apple 专项在 Windows 为 5 项通过、2 项因缺少 make 跳过，后二者已在上述 WSL 运行通过。五份锁文件无修改；完整日志为 `build/ci-42465560900-check-cached.log`。
 
 CI／Release 工作流通过 actionlint 1.7.12，修改的 PowerShell 通过语法检查，本文 53 条本地链接及 `git diff --check` 通过。真实 Windows 资产准备首次因本机 TLS 连接失败耗尽三次尝试，复用相同固定归档缓存后通过 fork 的归档／逐文件 SHA-256 校验，日志为 `build/ci-42465560900-windows-assets{,-cached}.log`。没有修改相邻 fork、依赖版本或 Pub 源码；未重新触发远端 CI，未执行完整客户端／安装包构建、签名、安装或设备验证。有限重试不代表 GitHub 服务端故障已经恢复。
+
+## 2026-11-08：SQLite 原生 hook 收到 504 错误页
+
+[CI 42468170432](https://github.com/CKopoer/BiliSail/actions/runs/42468170432) 对应上节修复提交 `72f7ce2547de00760b2a04eb42627e37081cd5c9`。格式／分析、包测试和 mux 原生回归通过；两份根测试分片均在启动测试前的 SQLite 原生 hook 失败，平台构建尚未执行。两次日志都报告 `libsqlite3.x64.linux.so` 实际 SHA-256 为 `bef140a1a96994029153dca8c00b1750b9a5a764fb9db2dc68d7bb40e8a29e8a`，预期为 `0f947ebe629e8d9d02d7f408bef36e056bfc63ea47e02e0d45a7bae454f04ace`。
+
+已将上节实际获取的 92 字节 HTTP 504 HTML 错误页重新计算摘要，与这次 CI 的实际值完全一致，确定失败内容来自网关错误页。`sqlite3 3.7.0` 的默认 hook 未先检查 HTTP 状态，直接把响应 body 交给哈希管线，因此表现为下载文件摘要不符。上一轮修复只包围了正式构建命令，没有覆盖根测试启动前的该下载路径。
+
+新增 [SQLite 资产准备](../../tool/prepare-sqlite-assets.py)：从当前解析的 sqlite3 包自身读取 Release tag、文件名和固定 SHA-256，在根测试以及七个平台的正式构建前准备相应二进制。普通 GitHub Release 地址遇到连接故障或可重试 HTTP 状态后，切换到 GitHub 官方 [Release asset API](https://docs.github.com/en/rest/releases/assets#get-a-release-asset)；通过公开元数据选择同名附件，再以 `Accept: application/octet-stream` 获取其内容。不使用第三方镜像，不需要新凭据。
+
+下载最多三次、总预算 120 秒、单个文件上限 16 MiB。HTTP 错误页不进入二进制缓存；HTTP 200 的内容如摘要不符立即停止，404 等不可重试状态也立即停止。仅校验通过后原子写入原 hook 使用的工作区共享缓存，hook 仍会再次校验；不会修改 Pub 源码、依赖锁文件或预期摘要。已有缓存必须先通过相同摘要检查才可复用。
+
+[12 项 HTTP 回归](../../tool/test_sqlite_assets.py) 在 Windows 和 WSL 通过，覆盖这份错误页的精确摘要、504／连接故障后 API 恢复、正常下载和缓存复用、200 损坏内容拒绝、API 元数据摘要不符、重试耗尽、404、无效缓存原子替换、截止时间／容量限制及七目标映射。Windows 与 WSL 的真实冷缓存准备均实际遇到普通入口 504，随后通过官方 API 取得 Linux x64 二进制，摘要为上述预期值；日志分别为 `build/ci-42468170432-sqlite-live.log` 和 `/home/kopoer/.cache/bilisail-ci-42468170432/sqlite-live.log`。WSL 的原生 hook 已成功读取该缓存，生成与 CI 相同配置键 `sqlite3/6b4ebf10e7/output.json`，没有改写 hook 配置。
+
+已有本机结果：五份锁文件严格解析、格式、静态分析和四包 1226 项测试通过；mux 原生 10 项因未配置 `BILI_MUX_LIBRARY` 跳过。Windows 根测试批次 4725 项通过、13 项环境跳过，日志轮转用例超时；该文件随后以并行度 1 复测，3 项通过。WSL 分片 0 为 2446 项通过、2 项跳过；分片 1 的默认并行批次有日志／下载用例超时，降低并行度后的重跑按用户要求主动停止，不声称整套本机 CI 通过。后续不继续运行本机整套 CI，直接提交修复，远端工作流尚待新提交验证。
+
+后续一次重复冷缓存探测因连接错误耗尽三次尝试，按预期失败且未发布未验证内容；日志为 `build/ci-42468170432-sqlite-live-final.log`。之后恢复同摘要的已有缓存，并重新通过校验。这说明备用 API 路径不能保证外部网络已经恢复；两条路径均不可用时仍会明确失败。
