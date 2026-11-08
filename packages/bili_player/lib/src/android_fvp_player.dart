@@ -13,7 +13,12 @@ final class FvpProcessException implements Exception {
 }
 
 final class AndroidFvpPlayer
-    implements FvpPlayerPort, FvpInformationPort, FvpAudioActivityPort {
+    implements
+        FvpPlayerPort,
+        FvpInformationPort,
+        FvpAudioActivityPort,
+        FvpCommandCompletionPort,
+        FvpPauseConfirmationPort {
   AndroidFvpPlayer._(this._id);
 
   static const channel = MethodChannel('dev.bilisail/fvp_process');
@@ -24,6 +29,7 @@ final class AndroidFvpPlayer
   final _statuses = StreamController<FvpNativeStatus>.broadcast(sync: true);
   int _position = 0, _buffered = 0;
   int _decodedAudioFrames = 0;
+  int _seekRevision = 0;
   bool _closed = false, _lost = false;
   int? exitStatus;
   Future<void>? _disposal;
@@ -40,12 +46,14 @@ final class AndroidFvpPlayer
           }
           player._processExited();
         } else if (event['kind'] == 'status') {
+          if ((event['seekRevision'] ?? 0) != player._seekRevision) return;
           final name = event['status'];
           final status = FvpNativeStatus.values
               .where((s) => s.name == name)
               .firstOrNull;
           if (status != null) player._statuses.add(status);
         } else if (event['kind'] == 'sample') {
+          if ((event['seekRevision'] ?? 0) != player._seekRevision) return;
           if (event['position'] case final int value) player._position = value;
           if (event['buffered'] case final int value) player._buffered = value;
           if (event['audioFrames'] case final int value) {
@@ -172,6 +180,7 @@ final class AndroidFvpPlayer
             ? VideoDimensions(width, height)
             : null,
         hasAudio: hasAudio,
+        hasVideo: result['video'] as bool?,
         directSurface: result['direct'] == true,
       );
     }
@@ -187,21 +196,39 @@ final class AndroidFvpPlayer
   @override
   void play() => _command('play');
   @override
+  Future<void> playAndWait() async => await _call('play');
+  @override
   void pause() => _command('pause');
   @override
   Future<void> pauseAndWait() async => await _call('pause');
   @override
+  Future<bool> pauseAndConfirm() async => await _call('pause') == true;
+  @override
   void interrupt() => _command('interrupt');
   @override
-  Future<int> seek(Duration target) async =>
-      (await _call('seek', {'position': target.inMilliseconds})) as int;
+  Future<int> seek(Duration target) async {
+    final revision = ++_seekRevision;
+    final result = (await _call('seek', {
+      'position': target.inMilliseconds,
+      'seekRevision': revision,
+    })) as int;
+    if (revision == _seekRevision && result >= 0) _position = result;
+    return result;
+  }
+
   @override
   void cancelSeek() => _command('cancelSeek');
   @override
   void setRate(double rate) => _command('rate', {'value': rate});
   @override
+  Future<void> setRateAndWait(double rate) async =>
+      await _call('rate', {'value': rate});
+  @override
   void setVolume(double volume, double gainDb) =>
       _command('volume', {'value': volume, 'gain': gainDb});
+  @override
+  Future<void> setVolumeAndWait(double volume, double gainDb) async =>
+      await _call('volume', {'value': volume, 'gain': gainDb});
   @override
   Future<void> dispose() => _disposal ??= _dispose();
   Future<void> _dispose() async {

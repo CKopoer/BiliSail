@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bili_player/src/android_media_leases.dart';
 import 'package:bili_player/bili_player.dart';
+import 'package:bili_player/src/native_readiness.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -64,4 +67,36 @@ void main() {
     await leases.close();
     expect(calls, isEmpty);
   });
+  test(
+    'close waits for a pending provider lease and releases its late descriptor',
+    () async {
+      final reply = Completer<Map<String, Object>>();
+      final closed = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'openMedia') return reply.future;
+            if (call.method == 'closeMedia') {
+              closed.add((call.arguments as Map)['lease'] as String);
+            }
+            return null;
+          });
+      final leases = AndroidMediaLeases();
+      final opened = expectLater(
+        leases.open(
+          MediaTrack(
+            uri: Uri.parse('content://provider/video'),
+            requestPolicy: MediaRequestPolicy(),
+          ),
+        ),
+        throwsA(isA<SourceSuperseded>()),
+      );
+      var done = false;
+      final closing = leases.close().then((_) => done = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(done, false);
+      reply.complete({'fd': 42, 'lease': 'late'});
+      await Future.wait([opened, closing]);
+      expect(closed, ['late']);
+    },
+  );
 }

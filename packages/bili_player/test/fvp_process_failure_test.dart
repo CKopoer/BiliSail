@@ -46,6 +46,8 @@ class _Port extends Fake implements FvpPlayerPort {
   @override
   void setVolume(double volume, double gainDb) {}
   @override
+  void setRate(double rate) {}
+  @override
   void interrupt() {}
   @override
   Future<int> seek(Duration target) async =>
@@ -142,10 +144,20 @@ void main() {
     await engine.open(source, const OpenOptions(play: true));
     port.seeking = Completer<int>();
     final seek = engine.seek(const Duration(seconds: 2));
+    final failed = expectLater(
+      seek,
+      throwsA(
+        isA<PlayerFailure>().having(
+          (e) => e.kind,
+          'kind',
+          PlayerFailureKind.nativeProcessExited,
+        ),
+      ),
+    );
     await Future<void>.delayed(Duration.zero);
     port.events.add(FvpNativeStatus.processExited);
     port.seeking!.completeError(const FvpProcessException());
-    await seek;
+    await failed;
     expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
     expect(engine.currentSnapshot.desiredPlaying, false);
     await engine.dispose();

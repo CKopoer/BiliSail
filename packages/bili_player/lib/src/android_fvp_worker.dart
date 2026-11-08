@@ -30,12 +30,21 @@ void runFvpWorker(
       final owned = _WorkerPlayer(port);
       players[id] = owned;
       owned.subscription = port.statuses.listen((status) {
-        unawaited(event(id, {'kind': 'status', 'status': status.name}));
+        if (owned.seeking) return;
+        unawaited(
+          event(id, {
+            'kind': 'status',
+            'seekRevision': owned.seekRevision,
+            'status': status.name,
+          }),
+        );
       });
       owned.timer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+        if (owned.seeking) return;
         unawaited(
           event(id, {
             'kind': 'sample',
+            'seekRevision': owned.seekRevision,
             'position': port.positionMilliseconds,
             'buffered': port.bufferedMilliseconds,
             if (port is FvpAudioActivityPort)
@@ -116,6 +125,7 @@ void runFvpWorker(
           'width': info.dimensions?.width ?? 0,
           'height': info.dimensions?.height ?? 0,
           'audio': info.hasAudio,
+          'video': info.hasVideo,
           'direct': info.directSurface,
         };
       case 'surface':
@@ -132,13 +142,26 @@ void runFvpWorker(
       case 'play':
         port.play();
       case 'pause':
+        if (port is FvpPauseConfirmationPort) {
+          return await (port as FvpPauseConfirmationPort).pauseAndConfirm();
+        }
         await port.pauseAndWait();
+        return true;
       case 'interrupt':
         port.interrupt();
       case 'cancelSeek':
         port.cancelSeek();
       case 'seek':
-        return port.seek(Duration(milliseconds: args['position'] as int));
+        final revision = args['seekRevision'] as int;
+        owned.seekRevision = revision;
+        owned.seeking = true;
+        try {
+          return await port.seek(
+            Duration(milliseconds: args['position'] as int),
+          );
+        } finally {
+          if (owned.seekRevision == revision) owned.seeking = false;
+        }
       case 'rate':
         port.setRate((args['value'] as num).toDouble());
       case 'volume':
@@ -172,4 +195,6 @@ final class _WorkerPlayer {
   Timer? timer;
   bool closing = false;
   bool directSurface = false;
+  int seekRevision = 0;
+  bool seeking = false;
 }

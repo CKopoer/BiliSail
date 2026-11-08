@@ -549,3 +549,9 @@ Windows 保留经过验证的 ANGLE 与 EGL device-query 修正 SDK，Android �
 **决定（2026-11-08，替代 2026-11-07 的接入决定）**：按用户要求完整移除 fsplayer 后端及其原生桥、依赖、资产、构建／CI 和专属验证代码。播放器包继续提供通用契约、media_kit 和 fvp，不再作为 Android／Apple 的本地播放器插件注册；fvp 的 Native Assets 构建 hook 保留。
 
 旧 `playbackBackend: fsplayer` 通过已有未知值回退规则加载为 media_kit，下次成功保存写回有效值；不重置其他设置、不更改 SQLite schema，不改变有效的 fvp 选择或正在使用的两后端契约。实施与验证见[播放后端清理](validation/playback-backends-2026-11-08.md)。
+
+## D75：两个播放后端共用包内播放状态机
+
+**决定（2026-11-08）**：保留主应用的 `PlayerEngine`、`PlaybackSession` 和可切换工厂，把起播、首次 play、暂停、连续 seek、EOF、健康检测、增益平滑和终止／释放策略集中到 `bili_player` 的 `SharedPlayerEngine`。固定后端构造器保留公开参数与诊断入口，分别注入 `MediaKitBackend` 或 `FvpBackend`；共享层不导入 SDK，也不按后端名分支。
+
+适配器只持有当前源的原生对象、回调身份、输出、租约及平台探针。原生等待接收同一取消与截止时间；Android fvp 的静音／播放／倍速屏障等待 worker 应答。失败流和命令 Future 共用同一次失败，未知释放状态阻止下一次分配；CDN、账号、选流及恢复次数仍归应用会话。接口与逐平台证据见[重构方案](player-backend-refactor-design.md)和[实施记录](validation/player-backend-refactor-2026-11-08.md)。

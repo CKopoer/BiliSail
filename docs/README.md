@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [fvp 连续跳转与片尾竞态](validation/fvp-rapid-seek-eof-2026-11-08.md) | Android Release 的 MDK busy／unloaded 复现、最新目标隔离与有界重准备 |
 | [直播聊天牌子、等级与内容选择](validation/live-chat-medals-selection-2026-11-08.md) | 粉丝牌与等级字段、可选择正文、阅读快照及离线回归边界 |
 | [跨后端起播同步](validation/synchronized-playback-startup-2026-11-08.md) | 共享静音起播门槛、fvp 原生暂停与 Flutter 首帧、取消／暂停和延迟双轨验证 |
 | [fvp 中途断音检测与恢复](validation/fvp-audio-recovery-2026-11-07.md) | 本机 1.2.8 证据边界、实际外部音频解码活动、停滞恢复与原生回归 |
@@ -59,6 +60,7 @@
 | [搜索历史与热搜](validation/search-discovery-2026-11-01.md) | 居中搜索动效、宽窄屏入口、账号历史存储、热搜协议与自动验证边界 |
 | [密码、短信与移动登录窗口](validation/password-sms-login.md) | 三种 Web 登录、交互验证码、安全会话与小屏/键盘布局 |
 | [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |
+| [media_kit 与 fvp 播放后端重构方案](player-backend-refactor-design.md) | 共享状态机、原生适配接口、两端行为差异、迁移顺序与验收矩阵；[实施与验证](validation/player-backend-refactor-2026-11-08.md) |
 | [播放器实时播放信息](validation/player-information-tab-2026-11-07.md) | 设置内实时参数、当前后端、解码／输出／缓存／同步观测与采样生命周期 |
 | [缓冲充足时的播放冻结检测](validation/buffered-playback-stall-2026-11-06.md) | #83 非阻塞时钟采样、静默停滞、抖动保护与恢复验证 |
 | [缓冲停帧与误恢复修复](validation/buffering-frame-retention-2026-11-07.md) | 缓存／音频时钟落后的误判、最后一帧保持与连续网络 seek 验证 |

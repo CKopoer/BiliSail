@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-11-08：fvp 连续跳转与片尾释放并发时，仅最新跳转可以改变播放状态；MDK busy／unloaded 在原总预算内最多重新准备一次当前源，旧 EOF／旧异常不清除在途跳转。Android Release 证据、暂停／重播和平台回归见[连续跳转与片尾竞态](validation/fvp-rapid-seek-eof-2026-11-08.md)。
+
 2026-11-08：media_kit／fvp 共用静音起播门槛，轨道和所需视频输出确认后才恢复用户音量；fvp 从准备起静音，全部预滚等待原生暂停完成，共享纹理输出等待画面揭示后的 Flutter 帧。取消、超时和加载期间手动暂停不能放行旧播放意图，纯音频和明确无音轨视频保留各自能力边界。原因、回归及未测平台见[跨后端起播同步](validation/synchronized-playback-startup-2026-11-08.md)。
 
 2026-11-08：UGC 接纳服务端明确声明所有音轨不存在的完整视频，并将 `isIntentionallySilent` 从协议、选流和会话传给已有 `DashPairSource`。普通缺轨响应仍执行权益诊断和有界重试；无音轨视频不提供“听视频”。响应形态、权限边界和 Windows 两后端原视频回归见[无音轨视频播放](validation/silent-video-playback-2026-11-08.md)。
@@ -373,3 +375,5 @@ M0 必测：三端带真实请求头的分轨音视频、暂停/seek/倍速、�
 记录首帧、seek 到恢复画面、buffering 时长、backend error、视频 dropped frames（后端提供时）、Flutter UI/raster 帧耗时、CPU/GPU/内存。Flutter 帧率与视频解码掉帧是两个指标，不能互相代替。
 
 不假设单个基准能证明全部硬解/codec 可用。播放器失败记录阶段和错误分类，对媒体 URL、native 日志和 headers 脱敏。量化预算及验证记录格式见 [实施与验收](implementation-plan.md)。
+
+2026-11-08：`bili_player` 的 `MediaKitEngine`／`FvpEngine` 已委托同一 `SharedPlayerEngine`。共享层拥有快照、起播静音与首次 play、暂停意图、最新 seek、EOF／重播、250 ms 健康采样、增益平滑和释放屏障；两个适配器只执行原生命令并报告轨道、帧和时钟。应用侧 `PlayerEngine`／`PlaybackSession` 接口与恢复预算保持原边界。设计及逐平台验证见[后端重构方案](player-backend-refactor-design.md)和[实施记录](validation/player-backend-refactor-2026-11-08.md)。

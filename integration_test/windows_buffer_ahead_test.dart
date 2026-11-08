@@ -157,7 +157,11 @@ void _testBackend(bool useFvp) {
     expect(rangeRequests, containsAll(['/video.mp4', '/audio.m4a']));
 
     await engine.open(
-      DashVideoSource(track('/short.mp4')),
+      DashPairSource(
+        video: track('/short.mp4'),
+        audio: null,
+        isIntentionallySilent: true,
+      ),
       const OpenOptions(volume: 0),
     );
     await _until(

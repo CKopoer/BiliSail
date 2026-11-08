@@ -15,13 +15,19 @@ final class _Engine extends Fake
   Completer<void>? openGate;
   Future<void> Function(Duration)? onSeek;
   final seekTargets = <Duration>[];
+  OpenOptions? openedOptions;
+  int playCalls = 0;
   Completer<PlayerPlaybackInformation?>? informationGate;
   @override
   Future<PlayerPlaybackInformation?> inspectPlaybackInformation() async =>
       informationGate?.future ??
       const PlayerPlaybackInformation(generation: 1, backend: 'test');
   @override
-  Future<void> play() async => await playGate?.future;
+  Future<void> play() async {
+    playCalls++;
+    await playGate?.future;
+  }
+
   @override
   Future<void> pause() async {
     final gate = playGate;
@@ -34,6 +40,7 @@ final class _Engine extends Fake
   Stream<PlayerFailure> get failures => errors.stream;
   @override
   Future<void> open(ResolvedMediaSource source, OpenOptions options) async {
+    openedOptions = options;
     await openGate?.future;
     events.add(
       PlaybackSnapshot(
@@ -71,6 +78,23 @@ void main() {
   final source = ProgressiveSource(
     MediaTrack(uri: Uri.file('video.mp4'), requestPolicy: MediaRequestPolicy()),
   );
+  test('pause before backend factory returns overrides autoplay', () async {
+    final child = _Engine();
+    final factory = Completer<PlayerEngine>();
+    final engine = ConfigurablePlayerEngine(createEngine: () => factory.future);
+    final opening = engine.open(source, const OpenOptions(play: true));
+    await Future<void>.delayed(Duration.zero);
+    final queuedPlay = engine.play();
+    await engine.pause();
+    factory.complete(child);
+    await Future.wait([opening, queuedPlay]);
+    expect(child.openedOptions?.play, false);
+    expect(child.playCalls, 0);
+    await engine.seek(const Duration(seconds: -1));
+    expect(child.seekTargets, [Duration.zero]);
+    await engine.dispose();
+    await child.closeStreams();
+  });
   test(
     'seeks during open wait for readiness and discard obsolete targets',
     () async {
@@ -87,6 +111,46 @@ void main() {
       expect(child.seekTargets, [const Duration(seconds: 2)]);
       await engine.dispose();
       await child.closeStreams();
+    },
+  );
+
+  test(
+    'command failures and stream failures use the external source generation',
+    () async {
+      final first = _Engine(), second = _Engine();
+      var selected = first;
+      final engine = ConfigurablePlayerEngine(
+        createEngine: () async => selected,
+      );
+      await engine.open(source, const OpenOptions());
+      selected = second;
+      await engine.open(source, const OpenOptions());
+      final failures = <PlayerFailure>[];
+      final subscription = engine.failures.listen(failures.add);
+      second.onSeek = (_) {
+        const failure = PlayerFailure(
+          PlayerFailureKind.nativePlayback,
+          'safe',
+          1,
+        );
+        second.errors.add(failure);
+        return Future.error(failure);
+      };
+      await expectLater(
+        engine.seek(const Duration(seconds: 2)),
+        throwsA(
+          isA<PlayerFailure>().having(
+            (e) => e.generation,
+            'generation',
+            engine.currentSnapshot.generation,
+          ),
+        ),
+      );
+      expect(failures.single.generation, engine.currentSnapshot.generation);
+      await subscription.cancel();
+      await engine.dispose();
+      await first.closeStreams();
+      await second.closeStreams();
     },
   );
 

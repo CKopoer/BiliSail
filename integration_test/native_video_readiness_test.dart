@@ -202,7 +202,13 @@ void main() {
     initializePlayerBackend();
     final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
     expect(fixtures, isNotNull);
-    final engine = MediaKitEngine();
+    final engine = MediaKitEngine(
+      onDiagnostic: (event) {
+        if (event.kind == PlayerDiagnosticKind.failed) {
+          debugPrint('RESUME_FAILURE ${event.toJson()}');
+        }
+      },
+    );
     final policy = MediaRequestPolicy();
     final video = MediaTrack(
       uri: File('$fixtures/video.mp4').uri,

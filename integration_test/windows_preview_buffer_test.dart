@@ -144,7 +144,14 @@ void _testBackend(bool useFvp) {
       expect(rangeRequests, greaterThan(0));
 
       // A regular open restores the two-minute window, covering this short file.
-      await engine.open(source, const OpenOptions(volume: 0));
+      await engine.open(
+        DashPairSource(
+          video: source.video,
+          audio: null,
+          isIntentionallySilent: true,
+        ),
+        const OpenOptions(volume: 0),
+      );
       await _until(
         tester,
         () => engine.currentSnapshot.buffered >= const Duration(seconds: 58),

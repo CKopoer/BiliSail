@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'player_contract.dart';
+import 'playback_backend.dart';
+import 'native_readiness.dart';
 import 'player_playback_information.dart';
 import 'switching_video_output.dart';
 import 'video_output.dart';
@@ -22,6 +24,10 @@ final class ConfigurablePlayerEngine
   final _subscriptions = <StreamSubscription<Object?>>[];
   Future<void> _commands = Future.value();
   PlayerEngine? _engine;
+  Future<PlayerEngine>? _creating;
+  PlaybackOperation? _opening;
+  bool _desiredPlaying = false;
+  int _playRevision = 0;
   int _generation = 0;
   int _seekRevision = 0;
   bool _disposed = false;
@@ -71,6 +77,15 @@ final class ConfigurablePlayerEngine
       await subscription.cancel();
     }
     _subscriptions.clear();
+    final creating = _creating;
+    if (creating != null) {
+      try {
+        await creating;
+      } on Object {
+        // A rejected factory returned no engine to release.
+      }
+      _creating = null;
+    }
     final old = _engine;
     // Retain a failed release so a later open cannot overlap an uncertain core.
     if (old != null) await old.dispose();
@@ -99,6 +114,12 @@ final class ConfigurablePlayerEngine
       );
     }
     final generation = ++_generation;
+    _opening?.cancel();
+    final operation = _opening = PlaybackOperation(
+      generation,
+      options.openTimeout,
+    );
+    _desiredPlaying = options.play;
     // Invalidate a pending child open before waiting for the command queue.
     final stopped = _requestStop();
     return _enqueue(() async {
@@ -109,8 +130,13 @@ final class ConfigurablePlayerEngine
         PlaybackSnapshot(phase: PlaybackPhase.opening, generation: generation),
       );
       try {
-        final selected = await createEngine();
-        _engine = selected;
+        if (_disposed || generation != _generation) return;
+        final creating = _creating = createEngine().then((selected) {
+          _engine = selected;
+          return selected;
+        });
+        final selected = await operation.wait(creating);
+        _creating = null;
         if (_disposed || generation != _generation) {
           await _release();
           return;
@@ -138,7 +164,26 @@ final class ConfigurablePlayerEngine
         if (selected case VideoOutputSource source) {
           _output.bind(source.videoOutput);
         }
-        await selected.open(source, options);
+        if (_disposed || generation != _generation) {
+          await _release();
+          return;
+        }
+        await selected.open(
+          source,
+          OpenOptions(
+            startPosition: options.startPosition,
+            play: _desiredPlaying,
+            rate: options.rate,
+            volume: options.volume,
+            audioGainDb: options.audioGainDb,
+            videoDecoding: options.videoDecoding,
+            androidVideoOutput: options.androidVideoOutput,
+            openTimeout: operation.remaining,
+            maxBufferAhead: options.maxBufferAhead,
+          ),
+        );
+      } on SourceSuperseded {
+        return;
       } on Object catch (error) {
         if (_disposed || generation != _generation) return;
         final failure = error is PlayerFailure
@@ -167,19 +212,46 @@ final class ConfigurablePlayerEngine
           completed.complete();
           return;
         }
-        completed.complete(Future<void>.sync(() => operation(engine)));
+        completed.complete(
+          _withGeneration(
+            Future<void>.sync(() => operation(engine)),
+            generation,
+          ),
+        );
       }),
     );
     return completed.future;
   }
 
+  Future<void> _withGeneration(Future<void> command, int generation) async {
+    try {
+      await command;
+    } on PlayerFailure catch (failure) {
+      throw PlayerFailure(failure.kind, failure.message, generation);
+    }
+  }
+
   @override
-  Future<void> play() => _command((engine) => engine.play());
+  Future<void> play() {
+    _desiredPlaying = true;
+    final revision = ++_playRevision;
+    return _command((engine) async {
+      if (revision == _playRevision && _desiredPlaying) await engine.play();
+    });
+  }
+
   @override
   Future<void> pause() {
+    _desiredPlaying = false;
+    ++_playRevision;
+    final generation = _generation;
+    final engine = _engine;
     // Revoke an in-flight play/audio-readiness wait before our queue drains.
     // Its completion must not block dispatch of a later superseding seek.
-    return Future<void>.sync(() => _engine?.pause());
+    return _withGeneration(
+      Future<void>.sync(() => engine?.pause()),
+      generation,
+    );
   }
 
   @override
@@ -187,7 +259,7 @@ final class ConfigurablePlayerEngine
     final revision = ++_seekRevision;
     return _command((engine) async {
       if (revision != _seekRevision) return;
-      await engine.seek(target);
+      await engine.seek(target < Duration.zero ? Duration.zero : target);
     });
   }
 
@@ -208,6 +280,7 @@ final class ConfigurablePlayerEngine
   Future<void> stop() {
     if (_disposed) return _disposal ?? Future.value();
     final generation = ++_generation;
+    _opening?.cancel();
     final stopped = _requestStop();
     return _enqueue(() async {
       await stopped;
@@ -225,6 +298,7 @@ final class ConfigurablePlayerEngine
     if (_disposal case final disposal?) return disposal;
     _disposed = true;
     ++_generation;
+    _opening?.cancel();
     final stopped = _requestStop();
     return _disposal = _enqueue(() async {
       await stopped;

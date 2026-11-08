@@ -26,6 +26,8 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "Windows fvp backend validation failed: $LASTEXITCODE" }
   & flutter test integration_test/windows_fvp_seek_synchronization_test.dart -d windows
   if ($LASTEXITCODE -ne 0) { throw "Windows fvp seek synchronization failed: $LASTEXITCODE" }
+  & flutter test integration_test/fvp_seek_end_test.dart -d windows
+  if ($LASTEXITCODE -ne 0) { throw "Windows fvp EOF seek validation failed: $LASTEXITCODE" }
 } finally {
   $env:BILI_TEST_MEDIA_DIR = $previousMedia
   $env:BILI_FVP_LIVE_MEDIA_DIR = $previousLive

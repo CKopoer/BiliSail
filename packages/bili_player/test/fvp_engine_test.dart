@@ -26,6 +26,7 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
   int position = 1000;
   final seeks = <(Duration, Completer<int>)>[];
   bool holdSeek = false;
+  Object? seekCancellationError;
   Completer<PlayerPlaybackInformation?>? informationGate;
   @override
   Future<PlayerPlaybackInformation?> inspectPlaybackInformation({
@@ -99,7 +100,11 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
   @override
   void cancelSeek() {
     if (seeks.isNotEmpty && !seeks.last.$2.isCompleted) {
-      seeks.last.$2.complete(-2);
+      if (seekCancellationError case final error?) {
+        seeks.last.$2.completeError(error);
+      } else {
+        seeks.last.$2.complete(-2);
+      }
     }
   }
 
@@ -139,7 +144,7 @@ void main() {
       expect(player.volume, 0);
       expect(player.playing, false);
       player.videoGate!.complete(true);
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(player.playing, true);
       expect(player.volume, 0);
       expect(engine.currentSnapshot.phase, PlaybackPhase.opening);
@@ -299,7 +304,11 @@ void main() {
     'premature main-video EOF pauses the surviving external audio',
     () async {
       final player = _Player();
-      final engine = FvpEngine(createPlayer: () async => player);
+      final diagnostics = <PlayerDiagnosticEvent>[];
+      final engine = FvpEngine(
+        createPlayer: () async => player,
+        onDiagnostic: diagnostics.add,
+      );
       addTearDown(engine.dispose);
       final failures = <PlayerFailure>[];
       final subscription = engine.failures.listen(failures.add);
@@ -308,8 +317,16 @@ void main() {
       player.position = 4000;
       player.events.add(FvpNativeStatus.ended);
       expect(player.playing, isFalse);
+      // Terminal failure follows the actual native pause acknowledgement.
+      await Future<void>.delayed(Duration.zero);
       expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
       expect(failures.single.kind, PlayerFailureKind.videoInterrupted);
+      expect(
+        diagnostics
+            .singleWhere((e) => e.kind == PlayerDiagnosticKind.playbackStalled)
+            .stallReason,
+        PlaybackStallReason.videoBuffer,
+      );
     },
   );
 
@@ -382,6 +399,39 @@ void main() {
     },
   );
 
+  for (final retiredEvent in ['EOF', 'error']) {
+    test(
+      'retired seek $retiredEvent cannot fail or release the latest target',
+      () async {
+        final player = _Player()..holdSeek = true;
+        if (retiredEvent == 'error') {
+          player.seekCancellationError = StateError('retired native seek');
+        }
+        final engine = FvpEngine(createPlayer: () async => player);
+        addTearDown(engine.dispose);
+        await engine.open(source, const OpenOptions(play: true));
+        final old = engine.seek(const Duration(seconds: 11));
+        await Future<void>.delayed(Duration.zero);
+        if (retiredEvent == 'EOF') {
+          player.events.add(FvpNativeStatus.ended);
+          expect(engine.currentSnapshot.isSeeking, true);
+          expect(engine.currentSnapshot.desiredPlaying, true);
+        }
+        final latest = engine.seek(const Duration(seconds: 2));
+        await old.timeout(const Duration(milliseconds: 500));
+        await Future<void>.delayed(Duration.zero);
+        expect(player.seeks, hasLength(2));
+        expect(engine.currentSnapshot.phase, PlaybackPhase.buffering);
+        expect(engine.currentSnapshot.isSeeking, true);
+        player.seeks.last.$2.complete(2000);
+        await latest;
+        expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+        expect(engine.currentSnapshot.position.inSeconds, 2);
+        expect(player.interrupts, 0);
+      },
+    );
+  }
+
   for (final output in AndroidVideoOutputMode.values) {
     for (final intent in ['playing', 'paused', 'pauseDuringSeek']) {
       test(
@@ -448,9 +498,10 @@ void main() {
       addTearDown(engine.dispose);
       await engine.open(source, const OpenOptions(play: true));
       final seeking = engine.seek(const Duration(seconds: 9));
+      final failed = expectLater(seeking, throwsA(isA<PlayerFailure>()));
       await Future<void>.delayed(Duration.zero);
       player.seeks.single.$2.complete(-1);
-      await seeking;
+      await failed;
       await engine.pause();
       await engine.play();
       await engine.seek(const Duration(seconds: 2));
@@ -468,7 +519,10 @@ void main() {
     addTearDown(engine.dispose);
     await engine.open(source, const OpenOptions(play: true));
     final seeking = engine.seek(const Duration(seconds: 9));
-    await seeking.timeout(const Duration(seconds: 17));
+    await expectLater(
+      seeking.timeout(const Duration(seconds: 17)),
+      throwsA(isA<PlayerFailure>()),
+    );
     expect(player.interrupts, greaterThan(0));
     expect(player.playing, false);
     expect(engine.currentSnapshot.isSeeking, false);
@@ -638,8 +692,8 @@ void main() {
           ),
         ),
       );
-      expect(player.released, true);
       await engine.dispose();
+      expect(player.released, true);
     }
   });
 }
