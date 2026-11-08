@@ -64,6 +64,18 @@ if(MSVC AND TARGET flutter_inappwebview_windows_plugin)
   target_compile_definitions(flutter_inappwebview_windows_plugin PRIVATE
     _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
 endif()
+
+# MSBuild project parallelism still compiles each project's sources serially.
+# Bound the two larger C++ targets to two compiler processes each. Restrict /MP
+# to Visual Studio: Ninja's /showIncludes dependency tracking is incompatible.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND CMAKE_GENERATOR MATCHES "^Visual Studio")
+  foreach(COMPILE_TARGET IN ITEMS ${BINARY_NAME} flutter_inappwebview_windows_plugin)
+    if(TARGET ${COMPILE_TARGET})
+      target_compile_options(${COMPILE_TARGET} PRIVATE /MP2)
+    endif()
+  endforeach()
+endif()
+
 include(patches/fvp/apply.cmake)
 bilisail_patch_fvp_target()
 list(FILTER PLUGIN_BUNDLED_LIBRARIES EXCLUDE REGEX "[/\\\\]mdk-(braw|r3d|nvjp2k)\\.dll$")

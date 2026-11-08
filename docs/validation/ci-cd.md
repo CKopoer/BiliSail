@@ -80,6 +80,34 @@ Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d1
 
 同分支取消、push／PR 去重和默认 Release 复用保持现有实现；这次单一默认分支 push 不能证明开 PR 去重或 Release 复用的运行效果。按用户要求，本轮只读取远端记录、审阅改动和提交，**没有在本机运行测试、静态分析、actionlint、构建或 CI 验证脚本**。新增分片、失败后保存及 Wrapper 回归留给下一次 CI；Windows ARM64 兼容修复、实际提速和新缓存容量同样待远端验证。
 
+## 2026-11-08：第二轮 CI 复盘与 Windows 编译调整
+
+分析对象为 [CI 42485547260](https://github.com/CKopoer/BiliSail/actions/runs/42485547260)，源码 `2f853f5b5db22a05643666a4b28522215804ca0a`，总墙钟约 **31:13**。全部检查与六个构建目标通过，只有 Windows ARM64 失败。以下是该次已完成运行的结果；本节新增的编译调整尚未进入远端运行。
+
+| 任务 | 该次实际墙钟 | 观察 |
+| --- | --- | --- |
+| 根测试 0／1／2／3 | 8:45／8:28／6:14／7:15 | 最长分片比上一轮少 1:35；四片总 job 时间为 30:42 |
+| 格式／分析、包测试、原生 mux | 2:36／1:57／1:33 | 全部通过，Linux 完整 Pub 精确命中 |
+| Android | 9:48 | Wrapper 配置变更使 Gradle／Wrapper 本次冷启动，随后均成功写入新缓存 |
+| Windows x64 | 16:59 | WebView 的 95 个 C++ 编译单元串行编译阶段约 5:32，仍是明显热点 |
+| Windows ARM64 | 22:07，失败 | WebView 已编过；应用 `system_media_controls.cpp` 的 WinRT 头触发同一 STL1011，WebView 编译阶段约 6:07 |
+| macOS ARM64／Intel、iOS | 8:27／11:45／7:05 | 均通过；单次耗时有波动，不能据此恢复所有 SDK 大快照 |
+| Linux | 9:38 | 新分组显示 AppDir／GTK 约 1:37、AppImage 1:14、Flatpak bundle 导出 2:00 |
+
+前一轮两份根测试 job 总时间为 19:05，本轮四份为 30:42，约多 61%。两次源码与测试负载不同，不能当作受控性能实验；目前四片只换得约 15% 的最长分片缩短，暂不继续增加分片。总体墙钟只少约 40 秒，Windows 编译仍在关键路径。Linux 下一步可继续分析 GTK 收集和 bundle 压缩成本；本轮保留全部依赖／许可及实际 Flatpak Runtime 验证，不在缺少包体积与兼容性测量时调整压缩格式。
+
+本次补齐应用 runner 的 PRIVATE `_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS`，与此前 WebView 目标分别声明，保留 C++17 协程 ABI。上次只处理插件，未覆盖应用自身 SMTC 的 WinRT include；最新日志确认其他插件已经通过，错误源为 `windows/runner/system_media_controls.cpp`。
+
+两种 Windows 日志的 `CL.exe` 调用均没有 `/MP`，也未使用与其冲突的 `/showIncludes` 或 `/Yc`。现为应用 runner 和 WebView 插件各启用 PRIVATE `/MP2`，仅作用于 **MSVC + Visual Studio generator**，每个目标最多两个编译进程，避免与 Ninja 的依赖扫描冲突；不全局扩大所有插件并发，也不新增对象／二进制缓存。依据 [Microsoft `/MP` 文档](https://learn.microsoft.com/en-us/cpp/build/reference/mp-build-with-multiple-processes?view=msvc-170)，该选项并行的是项目内编译单元，实际提速与内存峰值仍须由下一轮 CI 判断。mux 本次在 Windows x64／ARM64 重复准备及编译约 2:21／3:52；后续若缓存它，必须同时约束源码、工具链与产物摘要，并保留发布所需源码／许可，不能直接恢复任意旧 `build/`。
+
+远端缓存当前为 **8,009,383,637 bytes／14 条**，均在默认分支，未见旧代际重复或保存预算不足：
+
+- Wrapper 从 **401,848,579** 降至 **273,293,835 bytes**，减少 **128,554,744 bytes，约 32%**；Gradle 新快照约 1.30 GB。此次冷启动符合键轮换预期，保留 `-bin` 分发与固定摘要。
+- Windows ARM64 在后续编译失败时仍保存了完整 Pub，大小 **278,316,275 bytes**，说明严格解析完成标志和 `!cancelled()` 保存路径已在远端生效。Linux Pub 仍为完整约 203 MB 快照，没有被 mux-only 小快照覆盖。
+- Linux SDK 约 1.72 GB、Apple ARM64 SDK 约 2.22 GB，继续只保留这两类 SDK。当前再增加约 2.22 GB 的 Intel SDK 会超过本项目十进制 9 GB 预算；维持有界写入和只轮换本类旧代际的策略，不为短小缓存驱逐另一类有效 SDK。清理策略不能阻止 GitHub 自身 LRU 或长期未访问淘汰。
+
+此次只读取远端 API／日志并人工审阅差异，按用户要求，**没有在本机运行测试、静态分析、actionlint、构建或 CI 验证脚本**。SMTC 兼容修复和 `/MP2` 的构建结果／耗时留待下一次远端 CI；该 push 运行也不能证明 PR 去重、过时运行取消及 Release 产物复用已实际执行。
+
 ## Windows ARM64 构建
 
 2026-11-07 新增 `windows-arm64`。现有 `enable_windows` 同时选择 x64 和 ARM64；push／PR 默认构建两种架构，复用调用方的 `build_targets` 可单独选择其中一种。目标、产物名、诊断目录、Release 缺失目标重建和 SHA-256 校验均独立。
