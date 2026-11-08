@@ -70,6 +70,15 @@ try {
     $plan = Invoke-Plan '1.2.5+0' 31 (ConvertTo-Json -InputObject $expected -Compress)
     $targets = @(($plan.matrix | ConvertFrom-Json).include.target)
     if (($targets -join ',') -cne ($expected -join ',')) { throw "Wrong missing-target subset for mask $mask." }
+    $entries = @(($plan.matrix | ConvertFrom-Json).include)
+    $apple = @($entries | Where-Object { $_.target -like 'macos-*' -or $_.target -eq 'ios-arm64' })
+    if ($apple.Count -and (@($apple | Where-Object cache_writer).Count -ne 1 -or
+        @($apple | Where-Object { $_.runner -cne 'macos-15' -or $_.arch -cne 'arm64' -or !$_.cache_sdk }).Count)) {
+      throw "Apple cross builds require one ARM64 host cache writer for subset $mask."
+    }
+    if (@($entries | Where-Object { $_.mux_cache_writer -ne ($_.target -ne 'linux-x64') }).Count) {
+      throw 'Linux mux cache writes belong only to native regression.'
+    }
     $checks++
   }
   foreach ($invalid in @('[]', 'null', '"macos-x64"', '{}', '["unknown"]',
@@ -78,10 +87,10 @@ try {
   }
   Assert-Rejected '1.2.5+0' 1 '["windows-x64"]'
   $full = ((Invoke-Plan '1.2.5+0' 31).matrix | ConvertFrom-Json).include
-  if (@($full | Where-Object cache_writer).target -join ',' -cne 'windows-x64,windows-arm64,macos-arm64,macos-x64') {
+  if (@($full | Where-Object cache_writer).target -join ',' -cne 'windows-x64,windows-arm64,macos-arm64') {
     throw 'Each non-Linux host ABI must have exactly one Pub cache writer.'
   }
-  if (@($full | Where-Object cache_sdk).target -join ',' -cne 'android-arm64,macos-arm64,ios-arm64,linux-x64') {
+  if (@($full | Where-Object cache_sdk).target -join ',' -cne 'android-arm64,macos-arm64,macos-x64,ios-arm64,linux-x64') {
     throw 'Only Linux and Apple ARM64 should retain Flutter SDK snapshots.'
   }
   $iosOnly = ((Invoke-Plan '1.2.5+0' 31 '["ios-arm64"]').matrix | ConvertFrom-Json).include[0]

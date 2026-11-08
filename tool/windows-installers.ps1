@@ -38,7 +38,15 @@ function Initialize-WindowsInstallerTools([string]$ToolsDirectory) {
   return $wix
 }
 
-function New-WindowsMsi([string]$Wix, [string]$Staging, [string]$Destination, [string]$Version, [string]$WorkingDirectory, [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64') {
+function Initialize-WindowsInstallerResources([string]$WorkingDirectory, [ValidateSet('x64', 'arm64')][string]$Architecture) {
+  $native = Join-Path $WorkingDirectory 'installer-native'
+  $helper = Build-WindowsInstallerNative $native $Architecture
+  $artwork = Join-Path $WorkingDirectory 'installer-artwork'
+  New-WindowsInstallerArtwork $artwork | Out-Null
+  return @{ Architecture = $Architecture; Helper = $helper; Artwork = $artwork; NativeDirectory = $native }
+}
+
+function New-WindowsMsi([string]$Wix, [string]$Staging, [string]$Destination, [string]$Version, [string]$WorkingDirectory, [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64', [System.Collections.IDictionary]$Resources = $null) {
   $requiredFiles = @('bilisail.exe', 'flutter_windows.dll', 'libmpv-2.dll', 'data/icudtl.dat', 'data/flutter_assets/AssetManifest.bin', 'THIRD_PARTY_NOTICES.md')
   $requiredFiles += @(Get-WindowsRuntimeRequiredFiles $Architecture)
   foreach ($required in $requiredFiles) {
@@ -47,8 +55,10 @@ function New-WindowsMsi([string]$Wix, [string]$Staging, [string]$Destination, [s
   # Build before MSIX adds package identity, icons and PRI to this directory.
   if (Test-Path -LiteralPath (Join-Path $Staging 'AppxManifest.xml')) { throw 'MSI payload must be staged before MSIX packaging.' }
   # The package directory is uploaded recursively; keep build-only files outside it.
-  $native = Join-Path $WorkingDirectory 'installer-native'
-  $helper = Build-WindowsInstallerNative $native $Architecture
+  if (!$Resources) { $Resources = Initialize-WindowsInstallerResources $WorkingDirectory $Architecture }
+  if ($Resources.Architecture -cne $Architecture) { throw 'Installer resource architecture mismatch.' }
+  $native = $Resources.NativeDirectory
+  $helper = $Resources.Helper
   # Ship the source of the adapted WiX UI together with its file-scoped MS-RL.
   $uiSource = Join-Path $Staging 'data/licenses/wix/installer-ui'
   New-Item -ItemType Directory -Path $uiSource -Force | Out-Null
@@ -64,16 +74,16 @@ function New-WindowsMsi([string]$Wix, [string]$Staging, [string]$Destination, [s
       if (Test-Path -LiteralPath $headerPath) { Copy-Item -LiteralPath $headerPath -Destination $uiSource -Force }
     }
   }
-  $artwork = Join-Path $WorkingDirectory 'installer-artwork'
-  New-WindowsInstallerArtwork $artwork
+  $artwork = $Resources.Artwork
   Invoke-WixCommand $Wix @('build', (Join-Path $script:WindowsPackagingRoot 'Installer.wxs'), (Join-Path $script:WindowsPackagingRoot 'InstallerUI.wxs'), '-culture', 'zh-CN', '-arch', $Architecture, '-ext', "WixToolset.UI.wixext/$script:WindowsWixVersion", '-d', "InstallerUIHelper=$helper", '-d', "InstallerArtwork=$artwork", '-d', "PayloadDirectory=$Staging", '-d', "MsiVersion=$(Get-WindowsMsiVersion $Version)", '-d', "DisplayVersion=$Version", '-d', "AppIcon=$(Join-Path $script:WindowsPackagingRoot '../runner/resources/app_icon.ico')", '-pdbtype', 'none', '-o', $Destination)
 }
 
-function New-WindowsBundle([string]$Wix, [string]$Msi, [string]$Destination, [string]$Version, [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64') {
+function New-WindowsBundle([string]$Wix, [string]$Msi, [string]$Destination, [string]$Version, [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64', [System.Collections.IDictionary]$Resources = $null) {
   Get-WindowsMsiVersion $Version | Out-Null
-  $helper = Build-WindowsInstallerNative (Join-Path (Split-Path $Destination -Parent) 'installer-native') $Architecture
-  $artwork = Join-Path (Split-Path $Destination -Parent) 'installer-artwork'
-  New-WindowsInstallerArtwork $artwork
+  if (!$Resources) { $Resources = Initialize-WindowsInstallerResources (Split-Path $Destination -Parent) $Architecture }
+  if ($Resources.Architecture -cne $Architecture) { throw 'Installer resource architecture mismatch.' }
+  $helper = $Resources.Helper
+  $artwork = $Resources.Artwork
   Invoke-WixCommand $Wix @('build', (Join-Path $script:WindowsPackagingRoot 'Bundle.wxs'), '-arch', $Architecture, '-ext', "WixToolset.BootstrapperApplications.wixext/$script:WindowsWixVersion", '-ext', "WixToolset.Util.wixext/$script:WindowsWixVersion", '-d', "InstallerUIHelper=$helper", '-d', "PackagingDirectory=$script:WindowsPackagingRoot", '-d', "InstallerArtwork=$artwork", '-d', "MsiPackage=$Msi", '-d', "BundleVersion=$($Version.Replace('+', '.'))", '-d', "AppIcon=$(Join-Path $script:WindowsPackagingRoot '../runner/resources/app_icon.ico')", '-pdbtype', 'none', '-o', $Destination)
 }
 

@@ -15,6 +15,7 @@ $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'macos-release-validation.ps1')
 . (Join-Path $PSScriptRoot 'ios-package-validation.ps1')
 . (Join-Path $PSScriptRoot 'build-dependency-command.ps1')
+. (Join-Path $PSScriptRoot 'build-stage.ps1')
 
 function Invoke-BuildCommand([string]$Executable, [string[]]$Parameters) {
   & $Executable @Parameters
@@ -24,7 +25,8 @@ function Invoke-BuildCommand([string]$Executable, [string[]]$Parameters) {
 function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [string]$Version, [string]$Wix, [string]$WorkingDirectory, [ValidateSet('x64', 'arm64')][string]$Architecture) {
   $msi = [System.IO.Path]::ChangeExtension($Destination, '.msi')
   $setup = [System.IO.Path]::ChangeExtension($Destination, '.exe')
-  New-WindowsMsi $Wix $Staging $msi $Version $WorkingDirectory $Architecture
+  $installerResources = Initialize-WindowsInstallerResources $WorkingDirectory $Architecture
+  New-WindowsMsi $Wix $Staging $msi $Version $WorkingDirectory $Architecture -Resources $installerResources
   $sdkTool = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/makeappx.exe" |
     Sort-Object FullName -Descending | Select-Object -First 1
   if (!$sdkTool) { throw 'Windows SDK MakeAppx.exe was not found.' }
@@ -116,7 +118,7 @@ function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [stri
     Confirm-WindowsMsixSignature $Destination $certificate.Thumbprint
     Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $msi) | Out-Host
     $unsignedBundle = Join-Path $WorkingDirectory 'unsigned-setup.exe'
-    New-WindowsBundle $Wix $msi $unsignedBundle $Version $Architecture
+    New-WindowsBundle $Wix $msi $unsignedBundle $Version $Architecture -Resources $installerResources
     Complete-WindowsBundleSigning $Wix $unsignedBundle $setup $WorkingDirectory {
       param($file)
       Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $file)
@@ -152,8 +154,8 @@ if ($isWindowsTarget -and (!$IsWindows -or [System.Runtime.InteropServices.Runti
 if ($Target -eq 'macos-arm64' -and (!$IsMacOS -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'Arm64')) {
   throw 'macos-arm64 requires an Apple Silicon macOS host.'
 }
-if ($Target -eq 'macos-x64' -and (!$IsMacOS -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64')) {
-  throw 'macos-x64 requires an Intel x64 macOS host.'
+if ($Target -eq 'macos-x64' -and !$IsMacOS) {
+  throw 'macos-x64 requires macOS with the x86_64 Xcode SDK.'
 }
 if ($Target -eq 'ios-arm64' -and !$IsMacOS) {
   throw 'ios-arm64 requires a macOS host with Xcode.'
@@ -161,6 +163,13 @@ if ($Target -eq 'ios-arm64' -and !$IsMacOS) {
 if ($Target -eq 'linux-x64' -and (!$IsLinux -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64')) {
   throw 'linux-x64 requires a Linux x64 host.'
 }
+
+$name = "BiliSail-$Version-$Target"
+$outputRoot = Join-Path $repoRoot "artifacts/$Target"
+$releaseDir = Join-Path $outputRoot 'release'
+# Fail before dependency/toolchain/native work; creating diagnostics later must
+# not be mistaken for a stale release directory.
+if (Test-Path -LiteralPath $outputRoot) { throw "$outputRoot already exists. Move it aside before rebuilding." }
 
 $oldMacSigningIdentity = $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY
 $oldMacSigningStyle = $env:FLUTTER_XCODE_CODE_SIGN_STYLE
@@ -177,7 +186,7 @@ try {
     $androidSigning = Initialize-AndroidSigning -Preview:$AndroidPreviewSigning
   }
   # Finish SDK bootstrap before capturing the machine-readable version.
-  Invoke-BuildCommand flutter @('--version')
+  Invoke-BuildStage 'Flutter SDK bootstrap' { Invoke-BuildCommand flutter @('--version') }
   $sdkJson = & flutter --version --machine
   if ($LASTEXITCODE -ne 0) { throw 'Could not read Flutter SDK version.' }
   $sdk = $sdkJson | ConvertFrom-Json
@@ -195,7 +204,8 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Could not read source status.' }
   $sourceDirty = [bool]$sourceChanges
   $lockHash = (Get-FileHash -LiteralPath 'pubspec.lock' -Algorithm SHA256).Hash
-  Invoke-BuildDependencyCommand flutter @('pub', 'get', '--enforce-lockfile')
+  $script:BuildTimingFile = Join-Path $outputRoot 'diagnostics/build-timings.json'
+  Invoke-BuildStage 'Strict Pub resolution' { Invoke-BuildDependencyCommand flutter @('pub', 'get', '--enforce-lockfile') }
   # Publish readiness after resolution without moving pub ahead of the source
   # provenance snapshot. A later native failure may still reuse these downloads.
   if ($env:GITHUB_ACTIONS -eq 'true' -and $env:GITHUB_OUTPUT) {
@@ -211,42 +221,39 @@ try {
     if (!$runtime) { throw "Visual C++ $windowsArch redistributable DLLs were not found." }
     $windowsRuntimeFiles = @(Get-WindowsRuntimeFiles $runtime.FullName $windowsArch)
   }
-  Invoke-BuildCommand python @((Join-Path $PSScriptRoot 'prepare-sqlite-assets.py'), '--target', $Target)
+  Invoke-BuildStage 'SQLite assets' { Invoke-BuildCommand python @((Join-Path $PSScriptRoot 'prepare-sqlite-assets.py'), '--target', $Target) }
   if ($isWindowsTarget) {
-    & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1') -Architecture $windowsArch
+    Invoke-BuildStage 'Windows media assets' { & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1') -Architecture $windowsArch }
   }
-  & (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Target $Target
+  Invoke-BuildStage 'Mux component preparation' { & (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Target $Target }
   # Release builds must regenerate native registrants without dev-only plugins.
   # In Flutter 3.47.6 --no-pub skips that regeneration (not just dependency fetching).
   $versionArgs = @('--release', '--build-name', $buildName, '--build-number', $buildNumber, "--dart-define=BILISAIL_RELEASE_VERSION=$Version")
-  $name = "BiliSail-$Version-$Target"
-  $outputRoot = Join-Path $repoRoot "artifacts/$Target"
-  $releaseDir = Join-Path $outputRoot 'release'
-  # Refuse to mix a new package with an earlier local build's staging/metadata.
-  if (Test-Path -LiteralPath $outputRoot) { throw "$outputRoot already exists. Move it aside before rebuilding." }
   New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
   # Corresponding FFmpeg source and our wrapper/build instructions accompany
   # the release, without increasing the application installer size.
-  $muxSources = Join-Path $outputRoot 'mux-source'
-  $nativeSources = Join-Path $muxSources 'packages/bili_mux/native'
-  $muxToolSources = Join-Path $muxSources 'packages/bili_mux/tool'
-  $ffmpegSources = Join-Path $muxSources 'build/download_mux'
-  $buildToolSources = Join-Path $muxSources 'tool'
-  New-Item -ItemType Directory -Path $nativeSources, $muxToolSources, $ffmpegSources, $buildToolSources -Force | Out-Null
-  Get-ChildItem -LiteralPath 'packages/bili_mux/native' -File |
-    Copy-Item -Destination $nativeSources
-  Get-ChildItem -LiteralPath 'packages/bili_mux/tool' -File |
-    Copy-Item -Destination $muxToolSources
-  Copy-Item -LiteralPath 'packages/bili_mux/README.md', 'packages/bili_mux/LICENSE-FFmpeg.txt' -Destination (Join-Path $muxSources 'packages/bili_mux')
-  Copy-Item -LiteralPath 'build/download_mux/n9.0.2.tar.gz' -Destination $ffmpegSources
-  Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Destination $buildToolSources
-  Copy-Item -LiteralPath "packages/bili_mux/native/prebuilt/$Target/configure.log" -Destination $muxSources
-  Compress-Archive -Path (Join-Path $muxSources '*') -DestinationPath (Join-Path $releaseDir "$name.mux-source.zip") -CompressionLevel Optimal
+  Invoke-BuildStage 'Mux source archive' {
+    $muxSources = Join-Path $outputRoot 'mux-source'
+    $nativeSources = Join-Path $muxSources 'packages/bili_mux/native'
+    $muxToolSources = Join-Path $muxSources 'packages/bili_mux/tool'
+    $ffmpegSources = Join-Path $muxSources 'build/download_mux'
+    $buildToolSources = Join-Path $muxSources 'tool'
+    New-Item -ItemType Directory -Path $nativeSources, $muxToolSources, $ffmpegSources, $buildToolSources -Force | Out-Null
+    Get-ChildItem -LiteralPath 'packages/bili_mux/native' -File |
+      Copy-Item -Destination $nativeSources
+    Get-ChildItem -LiteralPath 'packages/bili_mux/tool' -File |
+      Copy-Item -Destination $muxToolSources
+    Copy-Item -LiteralPath 'packages/bili_mux/README.md', 'packages/bili_mux/LICENSE-FFmpeg.txt' -Destination (Join-Path $muxSources 'packages/bili_mux')
+    Copy-Item -LiteralPath 'build/download_mux/n9.0.2.tar.gz' -Destination $ffmpegSources
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Destination $buildToolSources
+    Copy-Item -LiteralPath "packages/bili_mux/native/prebuilt/$Target/configure.log" -Destination $muxSources
+    Compress-Archive -Path (Join-Path $muxSources '*') -DestinationPath (Join-Path $releaseDir "$name.mux-source.zip") -CompressionLevel Optimal
+  }
 
   switch ($Target) {
     'ios-arm64' {
-      Invoke-BuildDependencyCommand flutter (@('build', 'ios', '--no-codesign') + $versionArgs)
+      Invoke-BuildStage 'Flutter iOS build' { Invoke-BuildDependencyCommand flutter (@('build', 'ios', '--no-codesign') + $versionArgs) }
       $payload = Join-Path $outputRoot 'Payload'
       New-Item -ItemType Directory -Path $payload | Out-Null
       $app = Join-Path $payload 'Runner.app'
@@ -272,9 +279,9 @@ try {
         if ($LASTEXITCODE -ne 0 -or $actual -cne $key.Value) { throw "Invalid iOS BiliMux framework plist key: $($key.Key)" }
       }
       Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination $app
-      Invoke-BuildCommand python3 @((Join-Path $PSScriptRoot 'ios-sideload.py'), '--prepare-app', $app)
+      Invoke-BuildStage 'iOS sideload preparation' { Invoke-BuildCommand python3 @((Join-Path $PSScriptRoot 'ios-sideload.py'), '--prepare-app', $app) }
       $package = Join-Path $releaseDir "$name-unsigned.ipa"
-      Invoke-BuildCommand ditto @('-c', '-k', '--keepParent', $payload, $package)
+      Invoke-BuildStage 'IPA archive export' { Invoke-BuildCommand ditto @('-c', '-k', '--keepParent', $payload, $package) }
       $ipa = [System.IO.Compression.ZipFile]::OpenRead($package)
       try {
         if (!$ipa.GetEntry('Payload/Runner.app/Info.plist') -or !$ipa.GetEntry('Payload/Runner.app/Frameworks/BiliMux.framework/BiliMux')) {
@@ -283,13 +290,13 @@ try {
         $muxPrefix = 'Payload/Runner.app/Frameworks/BiliMux.framework/'
         Confirm-IosMuxFrameworkEntries @($ipa.Entries.FullName | Where-Object { $_.StartsWith($muxPrefix, [System.StringComparison]::Ordinal) } | ForEach-Object { $_.Substring($muxPrefix.Length) })
       } finally { $ipa.Dispose() }
-      Invoke-BuildCommand python3 @((Join-Path $PSScriptRoot 'ios-sideload.py'), '--verify-ipa', $package)
+      Invoke-BuildStage 'IPA validation' { Invoke-BuildCommand python3 @((Join-Path $PSScriptRoot 'ios-sideload.py'), '--verify-ipa', $package) }
       $signing = 'unsigned-requires-apple-signing'
     }
     'linux-x64' {
       Invoke-BuildCommand flutter @('config', '--enable-linux-desktop')
-      Invoke-BuildDependencyCommand flutter (@('build', 'linux', '--target-platform', 'linux-x64') + $versionArgs)
-      Invoke-BuildCommand bash @((Join-Path $PSScriptRoot 'package-linux.sh'), $Version, $releaseDir)
+      Invoke-BuildStage 'Flutter Linux build' { Invoke-BuildDependencyCommand flutter (@('build', 'linux', '--target-platform', 'linux-x64') + $versionArgs) }
+      Invoke-BuildStage 'Linux package and Runtime validation' { Invoke-BuildCommand bash @((Join-Path $PSScriptRoot 'package-linux.sh'), $Version, $releaseDir) }
       $package = Join-Path $releaseDir "$name.AppImage"
       if (!(Test-Path -LiteralPath $package) -or !(Test-Path -LiteralPath (Join-Path $releaseDir "$name.flatpak"))) {
         throw 'Linux packaging did not produce both AppImage and Flatpak.'
@@ -297,9 +304,9 @@ try {
       $signing = 'unsigned-sha256'
     }
     'android-arm64' {
-      Invoke-BuildDependencyCommand flutter (@('build', 'apk', '--target-platform', 'android-arm64', '--split-per-abi') + $versionArgs)
+      Invoke-BuildStage 'Flutter Android build' { Invoke-BuildDependencyCommand flutter (@('build', 'apk', '--target-platform', 'android-arm64', '--split-per-abi') + $versionArgs) }
       $package = Join-Path $releaseDir "$name.apk"
-      Copy-Item -LiteralPath 'build/app/outputs/flutter-apk/app-arm64-v8a-release.apk' -Destination $package
+      Invoke-BuildStage 'APK artifact copy' { Copy-Item -LiteralPath 'build/app/outputs/flutter-apk/app-arm64-v8a-release.apk' -Destination $package }
       $apk = [System.IO.Compression.ZipFile]::OpenRead($package)
       try {
         $abis = @($apk.Entries.FullName | Where-Object { $_ -match '^lib/' } | ForEach-Object { $_.Split('/')[1] } | Sort-Object -Unique)
@@ -308,13 +315,13 @@ try {
       $androidVersionCode = Confirm-AndroidApkVersion $package $Version
       Confirm-AndroidMediaNotificationResources $package
       Write-Output "Verified APK manifest: versionName=$buildName, versionCode=$androidVersionCode"
-      $androidCertificateSha256 = Confirm-AndroidApkSigning $package $androidSigning
+      $androidCertificateSha256 = Invoke-BuildStage 'APK signature validation' { Confirm-AndroidApkSigning $package $androidSigning }
       $signing = $androidSigning.Signing
     }
     { $_ -in @('windows-x64', 'windows-arm64') } {
       $installerWork = Join-Path $outputRoot 'installer-work'
       New-Item -ItemType Directory -Path $installerWork | Out-Null
-      $wix = Initialize-WindowsInstallerTools (Join-Path $installerWork 'tools')
+      $wix = Invoke-BuildStage 'WiX tool setup' { Initialize-WindowsInstallerTools (Join-Path $installerWork 'tools') }
       # Native toolchain diagnostics can print the compiler environment. Signing
       # happens later and these credentials must not reach build hooks.
       $msixCertificate = $env:MSIX_CERTIFICATE_BASE64
@@ -322,7 +329,7 @@ try {
       try {
         $env:MSIX_CERTIFICATE_BASE64 = $null
         $env:MSIX_CERTIFICATE_PASSWORD = $null
-        Invoke-BuildDependencyCommand flutter (@('build', 'windows', '--verbose') + $versionArgs)
+        Invoke-BuildStage 'Flutter Windows build' { Invoke-BuildDependencyCommand flutter (@('build', 'windows', '--verbose') + $versionArgs) }
       } finally {
         $env:MSIX_CERTIFICATE_BASE64 = $msixCertificate
         $env:MSIX_CERTIFICATE_PASSWORD = $msixPassword
@@ -343,7 +350,7 @@ try {
       New-Item -ItemType Directory -Path $wixLicenseDir -Force | Out-Null
       Copy-Item -Path 'windows/licenses/wix/*' -Destination $wixLicenseDir
       $package = Join-Path $releaseDir "$name.msix"
-      $signing = New-SignedWindowsPackages $staging $package $Version $wix $installerWork $windowsArch
+      $signing = Invoke-BuildStage 'Windows packaging and signing' { New-SignedWindowsPackages $staging $package $Version $wix $installerWork $windowsArch }
     }
     { $_ -in @('macos-arm64', 'macos-x64') } {
       $arm64Only = if ($Target -eq 'macos-arm64') { '--enable-macos-arm64-only' } else { '--no-enable-macos-arm64-only' }
@@ -353,7 +360,7 @@ try {
       $env:FLUTTER_XCODE_ARCHS = $macosArch
       $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY = '-'
       $env:FLUTTER_XCODE_CODE_SIGN_STYLE = 'Manual'
-      Invoke-BuildDependencyCommand flutter (@('build', 'macos') + $versionArgs)
+      Invoke-BuildStage 'Flutter macOS build' { Invoke-BuildDependencyCommand flutter (@('build', 'macos') + $versionArgs) }
       $builtApp = 'build/macos/Build/Products/Release/BiliSail.app'
       foreach ($binary in @('MacOS/BiliSail', 'Frameworks/App.framework/App', 'Frameworks/FlutterMacOS.framework/FlutterMacOS', 'Frameworks/BiliMux.framework/BiliMux')) {
         Invoke-BuildCommand lipo @((Join-Path $builtApp "Contents/$binary"), '-verify_arch', $macosArch)
@@ -368,14 +375,16 @@ try {
       if ($LASTEXITCODE -ne 0 -or $macosBuildNumber -cne $buildNumber) { throw 'macOS bundle build number does not match.' }
       Write-Output "Verified macOS bundle: versionName=$macosVersionName, buildNumber=$macosBuildNumber"
       # Intel hosted GUI smoke is excluded from packaging; keep static validation.
-      $macosValidation = Test-MacOSReleaseApp (Join-Path $staging 'BiliSail.app') (Join-Path $outputRoot 'validation') -SkipRuntimeSmoke:($Target -eq 'macos-x64')
+      $macosValidation = Invoke-BuildStage 'macOS signing and smoke validation' { Test-MacOSReleaseApp (Join-Path $staging 'BiliSail.app') (Join-Path $outputRoot 'validation') -SkipRuntimeSmoke:($Target -eq 'macos-x64') }
       Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination $staging
       # A root-level Applications link gives Finder a drag-to-install destination.
       Invoke-BuildCommand ln @('-s', '/Applications', (Join-Path $staging 'Applications'))
       $package = Join-Path $releaseDir "$name.dmg"
       # Keep bundle permissions and symlinks in a compressed, read-only HFS+ image.
-      Invoke-BuildCommand hdiutil @('create', '-volname', 'BiliSail', '-srcfolder', $staging, '-fs', 'HFS+', '-format', 'UDZO', $package)
-      Invoke-BuildCommand hdiutil @('verify', $package)
+      Invoke-BuildStage 'DMG packaging and verification' {
+        Invoke-BuildCommand hdiutil @('create', '-volname', 'BiliSail', '-srcfolder', $staging, '-fs', 'HFS+', '-format', 'UDZO', $package)
+        Invoke-BuildCommand hdiutil @('verify', $package)
+      }
       $signing = 'ad-hoc-not-notarized'
     }
   }
@@ -418,6 +427,7 @@ try {
   Write-Output "Packaged $package"
   if ($isWindowsTarget) { Write-Output "Also packaged $name.msi and $name.exe" }
 } finally {
+  Save-BuildStageTimings
   Clear-AndroidSigning $androidSigning
   if ($isMacOSTarget) {
     $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY = $oldMacSigningIdentity

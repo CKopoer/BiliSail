@@ -1,11 +1,24 @@
 param(
   [Parameter(Mandatory)][ValidateSet('windows-x64', 'windows-arm64', 'android-arm64', 'macos-arm64', 'macos-x64', 'ios-arm64', 'linux-x64')][string]$Target,
   [string]$MsysRoot = $(if ($env:BILI_MUX_MSYS_ROOT) { $env:BILI_MUX_MSYS_ROOT } else { 'C:\msys64' }),
-  [string]$AndroidNdk
+  [string]$AndroidNdk,
+  [ValidateSet('Build', 'Identity', 'Archive')][string]$Mode = 'Build'
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $buildScript = Join-Path $repoRoot 'packages/bili_mux/tool/build.sh'
+$cacheEnabled = $Mode -eq 'Build' -and $env:BILISAIL_MUX_CACHE -eq 'true'
+$reuse = $false
+if ($cacheEnabled) {
+  . (Join-Path $PSScriptRoot 'mux-cache.ps1')
+  $identity = [IO.File]::ReadAllText((Join-Path $repoRoot "build/ci-mux/$Target/identity.txt"))
+  $component = Join-Path $repoRoot "packages/bili_mux/native/prebuilt/$Target"
+  if (Test-Path -LiteralPath (Join-Path $component 'cache-manifest.json')) {
+    try { Confirm-MuxSnapshot $component $Target $identity; $reuse = $true }
+    catch { Write-Warning "Mux cache validation failed; rebuilding: $($_.Exception.Message)"; Clear-MuxSnapshot $repoRoot $Target }
+  }
+}
+$scriptMode = if ($reuse) { 'archive' } else { $Mode.ToLowerInvariant() }
 if ($Target -eq 'android-arm64') {
   if (!$AndroidNdk) { $AndroidNdk = $env:ANDROID_NDK_HOME }
   if (!$AndroidNdk) {
@@ -33,9 +46,9 @@ if ($IsWindows) {
   $cygpath = Join-Path $MsysRoot 'usr/bin/cygpath.exe'
   $scriptPath = & $cygpath -u $buildScript
   if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the build script path.' }
-  & $bash $scriptPath $Target
+  & $bash $scriptPath $Target $scriptMode
 } else {
-  & bash $buildScript $Target
+  & bash $buildScript $Target $scriptMode
 }
 if ($LASTEXITCODE -ne 0) {
   $buildDirectory = Join-Path $repoRoot "build/download_mux/$Target"
@@ -47,4 +60,9 @@ if ($LASTEXITCODE -ne 0) {
     }
   }
   throw "Download mux component build failed. Inspect build/download_mux/$Target/*.log."
+}
+if ($cacheEnabled) {
+  if ($reuse) { Write-Output "Reused verified mux component for $Target; source archive verified." }
+  $ready = if ($reuse) { $true } else { Write-MuxSnapshot $component $Target $identity }
+  if ($ready -and $env:GITHUB_OUTPUT) { 'mux-ready=true' >> $env:GITHUB_OUTPUT }
 }

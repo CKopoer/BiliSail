@@ -66,6 +66,13 @@ test('legacy Pub stays available until its OS/ABI has a new complete replacement
   assert.deepEqual(planCleanup(caches, options), []);
 });
 
+test('cross-building Intel on ARM64 retires the unused Intel host Pub cache only on the default ref', () => {
+  const caches = [cache(1, `bilisail-pub-v2-macos-X64-${flutterVersion}-old`),
+    cache(2, `bilisail-pub-v2-macos-ARM64-${flutterVersion}-current`),
+    cache(3, `bilisail-pub-v2-macos-X64-${flutterVersion}-branch`, { ref: 'refs/heads/active' })];
+  assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [1]);
+});
+
 test('APT and Flatpak rotate weekly while fixed tools stay independent', () => {
   const caches = [cache(1, 'linux-downloads-v1-ubuntu24.04-x64-old'),
     cache(2, 'linux-apt-v2-ubuntu24.04-x64-configuration-week1'),
@@ -89,6 +96,14 @@ test('MSYS2 keeps one package snapshot per compiler configuration', () => {
     cache(2, 'msys2-pkgs-upd:false-conf:x64config-files:new'),
     cache(3, 'msys2-pkgs-upd:false-conf:arm64config-files:current')];
   assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [1]);
+});
+
+test('native mux rotates only its own target and does not evict a useful SDK', () => {
+  const prefix = 'bilisail-mux-v1-windows-arm64-';
+  const caches = [cache(1, `flutter-linux-stable-${flutterVersion}-x64-sdk`),
+    cache(2, prefix + 'a'.repeat(64)), cache(3, prefix + 'b'.repeat(64)),
+    cache(4, 'bilisail-mux-v1-macos-x64-' + 'c'.repeat(64))];
+  assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [2]);
 });
 
 test('space reservations skip low-priority writes rather than deleting another useful family', async () => {

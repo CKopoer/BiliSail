@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD 与安装包
 
-更新日期：2026-11-08。配置覆盖 Android arm64、Windows x64／ARM64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
+更新日期：2026-11-09。配置覆盖 Android arm64、Windows x64／ARM64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
 
 ## 入口与分工
 
@@ -16,18 +16,18 @@
 | Windows x64 | `windows-2022`，Visual Studio C++ / Windows SDK / .NET 8 / WiX 6.0.2 | 同时提供 x64 MSIX、MSI 和 EXE 安装包；全部包含完整原生 DLL/data 及 VC++ runtime |
 | Windows ARM64 | `windows-11-arm`，Visual Studio ARM64 / Windows SDK / WiX 6.0.2 | ARM64 MSIX、MSI 和 EXE，独立 mux／媒体 SDK／VC++ runtime；打包前检查全部 EXE／DLL 的 PE 架构 |
 | macOS | `macos-15`，Apple Silicon / Xcode 26.2 | arm64 DMG；先验证签名／最终权限、同一 Release 应用首帧和跨进程 Keychain 读写删除，再由 `hdiutil` 打包校验；仅 ad-hoc 签名，未 notarize |
-| macOS Intel | `macos-15-intel`，Intel x64 / Xcode 26.2 | x64 DMG；校验架构、版本、签名、权限和镜像；不运行启动／窗口／Keychain smoke，metadata 明确记录跳过 |
+| macOS Intel | `macos-15`，Apple Silicon / Xcode 26.2，交叉构建 | x64 DMG；校验架构、版本、签名、权限和镜像；不运行启动／窗口／Keychain smoke，metadata 明确记录跳过；新宿主配置待远端验证 |
 | iOS | `macos-15`，Apple Silicon / Xcode 26.2 / CocoaPods | arm64 未签名 IPA；核对应用版本、bundle ID、arm64 framework 及 Payload 布局；安装前需自行 Apple 签名 |
 | Linux | `ubuntu-24.04`，GTK / libsecret / libmpv / Flatpak SDK | x64 AppImage 与 Flatpak；携带媒体依赖，核对版本及主机／实际 Flatpak Runtime 内动态依赖；X11／XWayland |
 | Release 上传 | `ubuntu-24.04` | 合并并校验本次所选平台的 Actions artifacts，上传汇总 ZIP artifact 后创建草稿 |
 
-PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要 Windows 主机与 Visual Studio 工具链，macOS 原生构建需要对应架构的 macOS/Xcode 主机。现有 `enable_macos` 开关同时控制 arm64 和 x64 两项矩阵；两项分别安装对应架构的 Flutter SDK，产物与缓存按架构隔离。arm64 启用 `--enable-macos-arm64-only`，x64 显式关闭该选项；两者均通过固定 SDK 支持的 `FLUTTER_XCODE_ARCHS` 指定单一架构（`arm64`／`x86_64`），与对应的 mux framework 一致。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
+PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要对应架构的 Windows 主机与 Visual Studio 工具链，macOS 构建需要 macOS/Xcode 主机。`enable_macos` 同时控制 arm64 和 x64；两项现在均使用 Apple Silicon runner 及 ARM64 Flutter SDK，产物和 mux 按目标架构隔离，SDK／Pub 按宿主 ABI 共享。arm64 启用 `--enable-macos-arm64-only`，x64 显式关闭；两者通过固定 SDK 的 `FLUTTER_XCODE_ARCHS` 指定 `arm64`／`x86_64`，mux 同步交叉编译对应切片。Intel Mac 上的本地 x64 打包入口仍保留。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 
 Flutter 固定 **3.47.6 stable / Dart 3.13.5**；升级需同时调整工作流、检查/构建脚本并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Apple 构建在 Flutter 和 mux 编译前通过 `DEVELOPER_DIR` 显式选择 runner 中的 Xcode 26.2，并打印 Xcode、Swift 和 SDK 版本，缺少该版本立即失败。系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
 
-2026-11-08 起，[依赖恢复组合 Action](../../.github/actions/restore-flutter/action.yml) 关闭 `flutter-action` 的自动 SDK／Pub 写入，使用独立的 restore／save。SDK 仅保留 Linux x64 与 macOS ARM64，沿用系统、架构、版本及 revision 隔离的原键；Windows 两种架构与 macOS Intel 每次安装固定 SDK，避免大型快照互相挤占。Pub 使用 `bilisail-pub-v2` 前缀、系统、实际 runner ABI、Flutter 版本和五份锁文件哈希，精确命中优先，未命中时回退同系统／ABI／SDK 的快照，仍执行 `pub get --enforce-lockfile`。Windows ARM64 的 Pub 键使用 ARM64，不与其初始 x64 Flutter 分发包的 ABI 混淆。
+2026-11-08 起，[依赖恢复组合 Action](../../.github/actions/restore-flutter/action.yml) 关闭 `flutter-action` 的自动 SDK／Pub 写入，使用独立的 restore／save。SDK 仅保留 Linux x64 与 macOS ARM64，沿用系统、架构、版本及 revision 隔离的原键；Windows 两种架构每次安装固定 SDK，避免大型快照互相挤占。Intel macOS 目标改用 ARM64 宿主后也读取现有 ARM64 SDK。Pub 使用 `bilisail-pub-v2` 前缀、系统、实际 runner ABI、Flutter 版本和五份锁文件哈希，精确命中优先，未命中时回退同系统／ABI／SDK 的快照，仍执行 `pub get --enforce-lockfile`。Windows ARM64 的 Pub 键使用 ARM64，不与其初始 x64 Flutter 分发包的 ABI 混淆。
 
-Linux SDK 与完整 Pub 的唯一写入者是 lint；Pub 只在根应用与四包依赖解析、分析成功后保存，mux／根测试／包测试／Android 与 Linux 构建仅读取。其他 host ABI 各有一个构建写入者，macOS ARM64 与 iOS 同时选中时由前者保存，iOS-only 时由 iOS 保存；构建在正确 host ABI 下严格解析依赖后输出 `pub-resolved=true`，缓存未精确命中且该标志存在时，后续原生编译／打包成功或失败都能保存这份完整快照，取消时跳过。源码清洁状态仍在原位置、Pub 执行前记录。自动写入、清理只允许默认分支的 push／手动运行，分支与 PR 仅读取；MSYS2 上游 Action 不提供只读缓存模式，因此非默认分支关闭其缓存。Gradle 改为独立恢复／受控保存，依赖键仍覆盖 Android 脚本、properties、Wrapper、全部 Pub 锁文件与 SDK 版本；Wrapper 按自身配置单独缓存，不随 Pub 更新复制，使用固定版本的 `-bin.zip` 和官方 SHA-256。
+Linux SDK 与完整 Pub 的唯一写入者是 lint；Pub 只在根应用与四包依赖解析、分析成功后保存，mux／根测试／包测试／Android 与 Linux 构建仅读取。其他 host ABI 各有一个构建写入者；Apple ARM64 写入者按本次选中目标依次选择 macOS ARM64、macOS x64、iOS，全部目标与缺失目标补建均只有一个。构建在正确 host ABI 下严格解析依赖后输出 `pub-resolved=true`，缓存未精确命中且该标志存在时，后续原生编译／打包成功或失败都能保存完整快照，取消时跳过。源码清洁状态仍在 Pub 前记录。自动写入、清理只允许默认分支的 push／手动运行，分支与 PR 仅读取；MSYS2 上游 Action 不提供只读缓存模式，因此非默认分支关闭其缓存。Gradle 独立恢复／受控保存，依赖键覆盖 Android 脚本、properties、Wrapper、全部 Pub 锁文件与 SDK 版本；Wrapper 按自身配置单独缓存，不随 Pub 更新复制，使用固定版本的 `-bin.zip` 和官方 SHA-256。
 
 [缓存策略脚本](../../tool/ci-cache-policy.cjs) 只清理默认分支中已识别的本项目缓存，不碰其他分支／PR 或未知缓存；每类保留一份当前快照，淘汰旧 Flutter 版本、停用的 SDK 与重复代际。新版 Pub 成功写入后淘汰对应 ABI 的旧前缀，APT／tools 两份都就绪后再淘汰旧合并快照。每次受控保存先清理过时条目，以十进制 9 GB 为预算并计入全部分支用量，按类型预留上传空间；必要时先轮换本类旧快照，空间不足或 API 查询失败时跳过新增缓存，不为保存小缓存删除另一类有效 SDK。此预算是并发上传下的尽力约束，GitHub 自身 LRU、上游 MSYS2 写入及缓存实际大小仍可能影响最终用量，不能宣称缓存被永久固定。
 
@@ -117,6 +117,20 @@ Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d1
 现有 `test-windows-architecture.ps1` 新增混合 CRT 目录的双架构选择／复制、必需文件缺失与错架构、未知外来 DLL、损坏可选文件，以及最终 payload 拒绝外来插件的行为回归；`test-windows-installers.ps1` 验证同一缺少 `_1` 的 payload 被 x64 拒绝、可继续生成 ARM64 MSI。这两份脚本已由 CI 的 Lint 阶段调用。本次继续遵循用户要求，**未在本机运行测试、静态分析、构建或其他 CI 验证**；只人工审阅修改。新增回归、真实 CRT 目录及完整 ARM64 安装包仍待修复提交的远端 CI 确认。
 
 本次缓存仍为 14 条、8,009,383,637 bytes，关键依赖命中，继续保留现有预算／清理策略、四份根测试和 Windows `/MP2`，本修复不增加缓存快照。
+
+## 2026-11-09：检查并行、原生缓存与脚本简化
+
+[CI 42494944119](https://github.com/CKopoer/BiliSail/actions/runs/42494944119) 的七个平台与全部检查已通过，ARM64 CRT 筛选修复已验证。总墙钟 32:42，构建开始前约 9:15；macOS Intel 23:23、Windows ARM64 20:10 是最长两项。本轮据此一次性调整以下内容，实际收益以新提交的远端运行确认，不沿用历史通过结果。
+
+- 构建矩阵等待 lint、包测试与原生 mux 回归后启动，与四份根测试并行。必需状态 `Analyze and test` 仍汇总全部检查；整个复用工作流和 Release 的检查／来源／签名校验不变。根测试失败时已经启动的构建可能消耗额外 runner 时间，产物不会因此获得 Release 复用资格。按旧日志估算可重叠约 6:26，此为依赖图推算，不是新运行测量。
+- 新增精确 mux 组件缓存：身份包含原生源文件、构建／framework 脚本、目标、宿主、编译器、Windows MSYS2 包版本或 Android NDK／Apple SDK build／Linux链接器信息。只保存最终 `native/prebuilt/<target>`，每文件摘要、文件集合与实际二进制架构均验证；不跨键回退。失效后从源码重建，默认分支可退休损坏的同键快照；PR／分支不删除共享缓存。每目标保留一个代际，80 MB 的未压缩组件上限配合 100 MB 上传预留，沿用 9 GB 总预算，不驱逐另一类有效 SDK。Linux 由原生回归唯一写入；原生回归始终执行，不将测试成功作为缓存命中推断。
+- mux 命中后仍验证固定 FFmpeg 归档，供 `.mux-source.zip` 与原生测试 oracle 使用，并重新生成 Apple 平台目录中的 CocoaPods framework。源码、许可和配置记录保持完整；本地未设置 CI 缓存开关时仍从源码构建。
+- macOS x64 转用 Apple Silicon runner、ARM64 SDK／Pub，继续显式构建 x86_64 App 与 mux，保留架构、版本、签名、权限和 DMG 校验，以及原有 x64 运行 smoke 跳过记录。Apple 宿主缓存写入者按实际所选目标唯一分配，包括 x64-only／iOS-only 补建。
+- 默认分支中不再使用的 Intel 宿主 Pub 快照纳入退休规则，其他分支仍受保护；该次清单中这份快照约 190 MB，可为新原生快照留出空间。首次使用新 mux 键仍需源码编译，后续命中才省去 configure／make／link。
+- 输出目录冲突在依赖和原生构建前拒绝；MSI／EXE 共享一次准备的 helper 与 artwork，跨架构复用会拒绝。Apple 工具链查询合并到一次准备步骤。Android 仅在 CI 关闭 Gradle VFS 文件监视，保留本地行为和依赖缓存。
+- 依赖、原生组件、Flutter、源码归档、签名／smoke、打包等阶段打印耗时；mux 分别记录 configure、compile、link。JSON 诊断通过独立 `*-build-timings` artifact 保存，不改变发布产物集合。计时保持原命令返回值／异常，诊断写入失败不覆盖构建错误。
+
+新增回归覆盖源码／工具链／SDK／目标失效、组件篡改／缺失／外来文件、错误架构、清理边界、计时返回值／异常和输出目录提前退出；补充全部矩阵子集的 Apple 写入者、mux 代际清理及安装器资源复用回归。按用户约定，**本轮未在本机执行测试、分析、构建、actionlint 或其他 CI 验证**，只人工审阅改动；新回归、Apple Silicon 上的 x86_64 完整交叉构建及缓存读写留待远端 CI。
 
 ## Windows ARM64 构建
 

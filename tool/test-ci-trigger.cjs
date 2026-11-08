@@ -84,3 +84,14 @@ test('root test matrix covers every shard exactly once with the same total', () 
   assert.deepEqual(shards, Array.from({ length: total }, (_, index) => index));
   assert.match(rootJob, /-ShardIndex \$\{\{ matrix.shard \}\}/);
 });
+
+test('platform builds overlap root tests while the required quality gate still waits for them', () => {
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const needs = (job) => new RegExp(`^  ${job}:\\r?\\n[\\s\\S]*?^    needs: \\[([^\\]]+)\\]`, 'm')
+    .exec(workflow)?.[1].split(',').map((name) => name.trim());
+  assert.deepEqual(needs('build'), ['prepare', 'lint', 'package-tests', 'native-mux']);
+  assert.ok(needs('check').includes('root-tests'));
+  assert.ok(needs('check').includes('native-mux'));
+  const mux = readFileSync('.github/actions/restore-mux/action.yml', 'utf8');
+  assert.doesNotMatch(mux, /restore-keys:/);
+});

@@ -22,7 +22,7 @@ $platforms = @(
   }
   if ($env:ENABLE_MACOS -eq 'true') {
     @{ target = 'macos-arm64'; runner = 'macos-15'; arch = 'arm64' }
-    @{ target = 'macos-x64'; runner = 'macos-15-intel'; arch = 'x64' }
+    @{ target = 'macos-x64'; runner = 'macos-15'; arch = 'arm64' }
   }
   if ($env:ENABLE_IOS -eq 'true') { @{ target = 'ios-arm64'; runner = 'macos-15'; arch = 'arm64' } }
   if ($env:ENABLE_LINUX -eq 'true') { @{ target = 'linux-x64'; runner = 'ubuntu-24.04'; arch = 'x64' } }
@@ -44,12 +44,14 @@ if (![string]::IsNullOrWhiteSpace($env:BUILD_TARGETS)) {
   }
   $platforms = @($platforms | Where-Object { $_.target -cin $targets })
 }
+$appleWriter = @('macos-arm64', 'macos-x64', 'ios-arm64') | Where-Object { $_ -in $platforms.target } | Select-Object -First 1
 foreach ($platform in $platforms) {
   # Linux Pub/SDK writes belong to lint. Apple ARM64 has one build writer,
   # including an iOS-only release; Windows ARM64 uses its actual host Pub ABI.
-  $platform.cache_sdk = $platform.target -in @('android-arm64', 'linux-x64', 'macos-arm64', 'ios-arm64')
-  $platform.cache_writer = $platform.target -in @('windows-x64', 'windows-arm64', 'macos-x64', 'macos-arm64') -or
-    ($platform.target -eq 'ios-arm64' -and 'macos-arm64' -notin $platforms.target)
+  $platform.cache_sdk = !$platform.target.StartsWith('windows-')
+  $platform.cache_writer = $platform.target -in @('windows-x64', 'windows-arm64') -or $platform.target -eq $appleWriter
+  # Linux application builds read the snapshot published by native regression.
+  $platform.mux_cache_writer = $platform.target -ne 'linux-x64'
 }
 "version=$version" >> $env:GITHUB_OUTPUT
 "matrix=$(@{ include = @($platforms) } | ConvertTo-Json -Depth 3 -Compress)" >> $env:GITHUB_OUTPUT

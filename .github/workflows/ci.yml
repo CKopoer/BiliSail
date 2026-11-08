@@ -230,7 +230,7 @@ jobs:
         shell: pwsh
         run: ./tool/check.ps1 -Stage PackageTests -SkipMuxTests -EnforceLockfile
 
-  # Preserve the existing required status and build dependency after splitting checks.
+  # Preserve the required quality status while root tests overlap platform builds.
   check:
     name: Analyze and test
     if: ${{ always() && needs.prepare.outputs.run-ci != 'false' }}
@@ -254,7 +254,7 @@ jobs:
 
   build:
     name: Build ${{ matrix.target }}
-    needs: [prepare, check, native-mux]
+    needs: [prepare, lint, package-tests, native-mux]
     if: needs.prepare.outputs.run-ci == 'true'
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -302,6 +302,7 @@ jobs:
           xcrun swift --version
           xcrun --sdk macosx --show-sdk-version
           xcrun --sdk iphoneos --show-sdk-version
+          pod --version
       - uses: ./.github/actions/restore-flutter
         id: flutter
         with:
@@ -348,6 +349,9 @@ jobs:
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358'
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          # Disposable CI runners do not need cross-build VFS watching. Keep
+          # local Gradle behavior and the dependency/wrapper caches unchanged.
+          echo "GRADLE_OPTS=${GRADLE_OPTS:-} -Dorg.gradle.vfs.watch=false" >> "$GITHUB_ENV"
       - name: Resolve Linux dependency cache epoch
         id: linux-cache-epoch
         if: matrix.target == 'linux-x64'
@@ -406,13 +410,12 @@ jobs:
           path: ~/.local/share/flatpak
           key: ${{ steps.linux-flatpak.outputs.cache-primary-key }}
           reserve-bytes: '1200000000'
-      - name: Check Apple toolchain
-        if: matrix.target == 'ios-arm64'
-        shell: bash
-        run: |
-          xcodebuild -version
-          xcrun --sdk iphoneos --show-sdk-version
-          pod --version
+      - uses: ./.github/actions/restore-mux
+        id: mux-cache
+        env:
+          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux-retry.outputs.msys2-location || steps.windows-mux.outputs.msys2-location }}
+        with:
+          target: ${{ matrix.target }}
       - name: Build and package preview
         id: package
         timeout-minutes: ${{ startsWith(matrix.target, 'macos-') && 30 || 90 }}
@@ -421,6 +424,7 @@ jobs:
           BUILD_TARGET: ${{ matrix.target }}
           BUILD_VERSION: ${{ needs.prepare.outputs.version }}
           BILISAIL_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BILISAIL_MUX_CACHE: 'true'
           BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux-retry.outputs.msys2-location || steps.windows-mux.outputs.msys2-location }}
           ANDROID_PREVIEW_SIGNING: ${{ matrix.target == 'android-arm64' && github.event_name == 'pull_request' }}
           ANDROID_KEYSTORE_BASE64: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
@@ -431,6 +435,23 @@ jobs:
           MSIX_CERTIFICATE_BASE64: ${{ startsWith(matrix.target, 'windows-') && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_BASE64 || '' }}
           MSIX_CERTIFICATE_PASSWORD: ${{ startsWith(matrix.target, 'windows-') && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_PASSWORD || '' }}
         run: ./tool/build-release.ps1 -Target $env:BUILD_TARGET -Version $env:BUILD_VERSION -AndroidPreviewSigning:($env:ANDROID_PREVIEW_SIGNING -eq 'true')
+      - name: Save verified native mux component
+        if: >-
+          !cancelled() && needs.prepare.outputs.cache-write == 'true' && matrix.mux_cache_writer &&
+          steps.mux-cache.outputs.valid != 'true' && steps.package.outputs.mux-ready == 'true'
+        uses: ./.github/actions/save-ci-cache
+        with:
+          key: ${{ steps.mux-cache.outputs.key }}
+          path: ${{ steps.mux-cache.outputs.path }}
+          reserve-bytes: '100000000'
+      - name: Upload build stage timings
+        if: always() && steps.package.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: BiliSail-${{ matrix.target }}-${{ needs.prepare.outputs.version }}-build-timings
+          path: artifacts/${{ matrix.target }}/diagnostics/build-timings.json
+          if-no-files-found: ignore
+          retention-days: 14
       # The build marks Pub ready only after strict resolution, before native
       # work. Preserve those downloads even if compilation or packaging fails.
       - name: Save platform Pub dependencies
@@ -498,18 +519,51 @@ jobs:
     if: needs.prepare.outputs.run-ci == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/restore-flutter
+      - uses: ./.github/actions/restore-mux
+        id: mux-cache
+        with:
+          target: linux-x64
+      - name: Prepare the isolated native mux component
+        id: mux
+        shell: pwsh
+        env:
+          BILISAIL_MUX_CACHE: 'true'
+        run: ./tool/build-download-mux.ps1 -Target linux-x64
+      - name: Exercise verified mux reuse without recompiling
+        shell: pwsh
+        env:
+          BILISAIL_MUX_CACHE: 'true'
+        run: |
+          $component = 'packages/bili_mux/native/prebuilt/linux-x64'
+          if (Test-Path "$component/cache-manifest.json") {
+            $before = (Get-Item "$component/libbili_mux.so").LastWriteTimeUtc
+            ./tool/build-download-mux.ps1 -Target linux-x64
+            if ((Get-Item "$component/libbili_mux.so").LastWriteTimeUtc -ne $before) { throw 'A verified mux cache hit recompiled the component.' }
+          }
       - name: Build and verify the isolated MP4 component
+        id: regression
         shell: bash
         run: |
-          bash packages/bili_mux/tool/build.sh linux-x64
           bash packages/bili_mux/tool/build-test-ffprobe.sh
           export BILI_MUX_LIBRARY="$PWD/packages/bili_mux/native/prebuilt/linux-x64/libbili_mux.so"
           export BILI_MUX_FFPROBE="$PWD/build/download_mux/test-ffprobe-linux-x64/ffprobe"
           cd packages/bili_mux
           flutter pub get --enforce-lockfile
           flutter test --no-pub
+      - name: Save regression-verified Linux mux component
+        if: >-
+          !cancelled() && needs.prepare.outputs.cache-write == 'true' && steps.regression.outcome == 'success' &&
+          steps.mux-cache.outputs.valid != 'true' && steps.mux.outputs.mux-ready == 'true'
+        uses: ./.github/actions/save-ci-cache
+        with:
+          key: ${{ steps.mux-cache.outputs.key }}
+          path: ${{ steps.mux-cache.outputs.path }}
+          reserve-bytes: '100000000'

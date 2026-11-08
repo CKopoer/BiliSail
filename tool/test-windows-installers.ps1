@@ -32,7 +32,10 @@ try {
     Set-Content -LiteralPath $file -Value 'test payload'
   }
   $expectedArchitecture = 'x64'
+  $script:installerHelperBuilds = 0
+  $script:installerArtworkBuilds = 0
   function Build-WindowsInstallerNative([string]$WorkingDirectory, [string]$Architecture) {
+    $script:installerHelperBuilds++
     if ($Architecture -cne $expectedArchitecture) { throw 'Native installer helper architecture was lost.' }
     $headers = Join-Path $WorkingDirectory 'sdk/wixtoolset.bootstrapperapplicationapi/build/native/include'
     $binary = Join-Path $WorkingDirectory 'build/Release/BiliSailInstallerUI.dll'
@@ -42,6 +45,7 @@ try {
     return $binary
   }
   function New-WindowsInstallerArtwork([string]$Destination) {
+    $script:installerArtworkBuilds++
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $Destination 'dialog.bmp') -Value 'test artwork'
   }
@@ -56,8 +60,12 @@ try {
     Set-Content -LiteralPath $destination -Value 'test installer'
   }
   $msi = Join-Path $release 'BiliSail-1.2.6+0-windows-x64.msi'
-  New-WindowsMsi 'test-wix' $staging $msi '1.2.6+0' $work
-  New-WindowsBundle 'test-wix' $msi (Join-Path $work 'unsigned-setup.exe') '1.2.6+0'
+  $resources = Initialize-WindowsInstallerResources $work 'x64'
+  New-WindowsMsi 'test-wix' $staging $msi '1.2.6+0' $work -Resources $resources
+  New-WindowsBundle 'test-wix' $msi (Join-Path $work 'unsigned-setup.exe') '1.2.6+0' -Resources $resources
+  if ($script:installerHelperBuilds -ne 1 -or $script:installerArtworkBuilds -ne 1) {
+    throw 'MSI and EXE did not reuse their prepared native helper and artwork.'
+  }
   $entries = @(Get-ChildItem -LiteralPath $release -Force)
   if ($entries.Count -ne 1 -or $entries[0].FullName -ne $msi -or $entries[0].PSIsContainer) {
     throw 'Installer build-only files leaked into the release directory.'
@@ -75,8 +83,14 @@ try {
   if (!$rejected) { throw 'x64 MSI accepted a missing exception-handling runtime.' }
   $expectedArchitecture = 'arm64'
   $armMsi = Join-Path $release 'BiliSail-1.2.6+0-windows-arm64.msi'
-  New-WindowsMsi 'test-wix' $staging $armMsi '1.2.6+0' $work 'arm64'
-  New-WindowsBundle 'test-wix' $armMsi (Join-Path $work 'unsigned-arm64-setup.exe') '1.2.6+0' 'arm64'
+  $rejected = $false
+  try { New-WindowsMsi 'test-wix' $staging $armMsi '1.2.6+0' $work 'arm64' -Resources $resources }
+  catch { $rejected = $_.Exception.Message -eq 'Installer resource architecture mismatch.' }
+  if (!$rejected) { throw 'ARM64 MSI accepted x64 installer resources.' }
+  $resources = Initialize-WindowsInstallerResources $work 'arm64'
+  New-WindowsMsi 'test-wix' $staging $armMsi '1.2.6+0' $work 'arm64' -Resources $resources
+  New-WindowsBundle 'test-wix' $armMsi (Join-Path $work 'unsigned-arm64-setup.exe') '1.2.6+0' 'arm64' -Resources $resources
+  if ($script:installerHelperBuilds -ne 2 -or $script:installerArtworkBuilds -ne 2) { throw 'ARM64 installer resources were rebuilt.' }
   if (@(Get-ChildItem -LiteralPath $release -Directory).Count -or !(Test-Path -LiteralPath $armMsi)) {
     throw 'ARM64 installer packaging violated the release boundary.'
   }

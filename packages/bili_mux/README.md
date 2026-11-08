@@ -13,6 +13,8 @@
 
 在仓库根目录执行，下列命令仅构建组件；首次下载约 17 MB 的源码归档，缓存于 `build/download_mux`。生成的 `native/prebuilt` 不提交 Git。修改包装代码后也需重新执行。
 
+CI 通过[组合 Action](../../.github/actions/restore-mux/action.yml)按原生源码、构建脚本、目标、实际编译器及 SDK 身份精确恢复最终组件；不回退其他键。快照包含配置、来源与许可，逐文件核对摘要及 PE／ELF／Mach-O 架构，失效时清理该目标并从源码重建。每目标只保留一个代际，组件上限 80 MB、上传预留 100 MB，服从仓库 9 GB 缓存预算；不缓存对象目录、源码树或测试 ffprobe。Linux 由原生回归任务唯一写入，应用构建仅读取；其他目标由各自构建任务写入。缓存命中仍下载并验证源码归档，重新准备 Apple CocoaPods framework 布局；原生回归照常执行。普通本地命令默认继续源码构建，不启用 CI 快照。
+
 ```powershell
 # Windows：MSYS2 的 UCRT64 GCC/G++、make、curl、tar。
 # 本轮验证 GCC 13.2.0；可用 -MsysRoot 指定非默认安装目录。

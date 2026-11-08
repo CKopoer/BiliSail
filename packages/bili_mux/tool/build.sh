@@ -9,28 +9,14 @@ if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == mingw* ]]; then
 fi
 
 target="${1:?usage: build.sh windows-x64|windows-arm64|android-arm64|macos-arm64|macos-x64|ios-arm64|linux-x64}"
+mode="${2:-build}"
+case "$mode" in build|identity|archive) ;; *) echo 'Unknown mux build mode' >&2; exit 1 ;; esac
 package_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_dir="$(cd "$package_dir/../.." && pwd)"
 cache="$repo_dir/build/download_mux"
 version=n9.0.2
 archive_sha=6e374ed621e48faa40639307dff48ba6fe574a509977956d2cce9669b7cc27e9
-mkdir -p "$cache/source" "$cache/$target" "$package_dir/native/prebuilt/$target"
 archive="$cache/$version.tar.gz"
-if [[ ! -f "$archive" ]]; then
-  curl --fail --location --retry 3 --connect-timeout 30 --max-time 600 \
-    "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/$version" \
-    --output "$archive.tmp"
-  mv "$archive.tmp" "$archive"
-fi
-if command -v sha256sum >/dev/null; then
-  actual_sha="$(sha256sum "$archive" | cut -d ' ' -f 1)"
-else
-  actual_sha="$(shasum -a 256 "$archive" | cut -d ' ' -f 1)"
-fi
-[[ "$actual_sha" == "$archive_sha" ]] || { echo 'FFmpeg source hash mismatch' >&2; exit 1; }
-if [[ ! -f "$cache/source/configure" ]]; then
-  tar -xf "$archive" -C "$cache/source" --strip-components=1
-fi
 
 cc=cc
 cxx=c++
@@ -126,9 +112,68 @@ case "$target" in
   *) echo "Unsupported target: $target" >&2; exit 1 ;;
 esac
 
+# This mode performs no downloads/builds. Its output is part of the exact key.
+if [[ "$mode" == identity ]]; then
+  printf 'target=%s\nhost=%s/%s\n' "$target" "$(uname -s)" "$(uname -m)"
+  "$cc" --version
+  "$cxx" --version
+  for name in CFLAGS CXXFLAGS CPPFLAGS LDFLAGS SDKROOT MACOSX_DEPLOYMENT_TARGET; do
+    printf '%s=%s\n' "$name" "$(printenv "$name" || true)"
+  done
+  case "$target" in
+    windows-*) pacman -Q ;;
+    android-*) cat "$ndk/source.properties" ;;
+    macos-*)
+      xcrun --sdk macosx --show-sdk-version
+      xcrun --sdk macosx --show-sdk-build-version
+      ;;
+    ios-*)
+      xcrun --sdk iphoneos --show-sdk-version
+      xcrun --sdk iphoneos --show-sdk-build-version
+      ;;
+    linux-*) ld --version; ldd --version ;;
+  esac
+  exit 0
+fi
+
+mkdir -p "$cache/source" "$cache/$target" "$package_dir/native/prebuilt/$target"
+if [[ ! -f "$archive" ]]; then
+  curl --fail --location --retry 3 --connect-timeout 30 --max-time 600 \
+    "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/$version" --output "$archive.tmp"
+  mv "$archive.tmp" "$archive"
+fi
+if command -v sha256sum >/dev/null; then
+  actual_sha="$(sha256sum "$archive" | cut -d ' ' -f 1)"
+else
+  actual_sha="$(shasum -a 256 "$archive" | cut -d ' ' -f 1)"
+fi
+[[ "$actual_sha" == "$archive_sha" ]] || { echo 'FFmpeg source hash mismatch' >&2; exit 1; }
+# A cache hit still needs the verified source archive for the release bundle.
+if [[ ! -f "$cache/source/configure" ]]; then
+  tar -xf "$archive" -C "$cache/source" --strip-components=1
+fi
+if [[ "$mode" == archive ]]; then
+  # CocoaPods consumes a separate generated framework outside prebuilt/.
+  # Recreate its versioned/shallow layout even when no compilation is needed.
+  if [[ "$target" == macos-* || "$target" == ios-arm64 ]]; then
+    bash "$package_dir/tool/package-apple-framework.sh" "$target"
+  fi
+  exit 0
+fi
+
+run_logged_stage() {
+  local name="$1" log="$2" started=$SECONDS result=0
+  shift 2
+  echo "::group::mux $target: $name"
+  if "$@" > "$log" 2>&1; then result=0; else result=$?; fi
+  echo "mux $target $name finished in $((SECONDS - started))s (exit $result)"
+  echo '::endgroup::'
+  return "$result"
+}
+
 cd "$cache/$target"
 # Library-only build: no ffmpeg command-line front end or filter/resample libs.
-"$cache/source/configure" \
+run_logged_stage configure configure.log "$cache/source/configure" \
   --disable-everything --disable-autodetect --disable-network \
   --disable-programs --disable-doc --disable-debug --disable-x86asm \
   --disable-avdevice --disable-avfilter --disable-swresample --disable-swscale \
@@ -137,21 +182,20 @@ cd "$cache/$target"
   --enable-parser=aac,h264,hevc,av1 \
   --enable-bsf=aac_adtstoasc,extract_extradata \
   --extra-cflags='-Os -fvisibility=hidden -ffunction-sections -fdata-sections' \
-  "${configure_flags[@]}" > configure.log 2>&1
-"$make_tool" -j"${BILI_MUX_JOBS:-4}" > build.log 2>&1
+  "${configure_flags[@]}"
+run_logged_stage compile build.log "$make_tool" -j"${BILI_MUX_JOBS:-4}"
 
 gc_flag=-Wl,--gc-sections
 shared_flag=-shared
 if [[ "$target" == macos-* || "$target" == ios-arm64 ]]; then
   gc_flag=-Wl,-dead_strip; shared_flag=-dynamiclib
 fi
-"$cxx" -std=c++17 -O2 -fvisibility=hidden -ffunction-sections -fdata-sections \
+run_logged_stage link link.log "$cxx" -std=c++17 -O2 -fvisibility=hidden -ffunction-sections -fdata-sections \
   -fPIC "$shared_flag" "${cxx_flags[@]}" "$package_dir/native/bili_mux.cpp" \
   -I"$cache/source" -I. \
   libavformat/libavformat.a libavcodec/libavcodec.a libavutil/libavutil.a \
   -o "$output_name" "$gc_flag" "${link_flags[@]}" \
-  $(sed -n 's/^EXTRALIBS-avformat=//p;s/^EXTRALIBS-avcodec=//p;s/^EXTRALIBS-avutil=//p' ffbuild/config.mak) \
-  > link.log 2>&1
+  $(sed -n 's/^EXTRALIBS-avformat=//p;s/^EXTRALIBS-avcodec=//p;s/^EXTRALIBS-avutil=//p' ffbuild/config.mak)
 
 framework_info="$package_dir/native/Info.plist"
 if [[ "$target" == ios-arm64 ]]; then framework_info="$package_dir/native/Info.ios.plist"; fi

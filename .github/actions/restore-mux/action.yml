@@ -1,0 +1,47 @@
+name: Restore exact native mux component
+description: Match source and toolchain, then validate every restored file and target binary.
+inputs:
+  target:
+    required: true
+    description: Native mux target.
+outputs:
+  key:
+    value: ${{ steps.identity.outputs.key }}
+  path:
+    value: ${{ steps.identity.outputs.path }}
+  valid:
+    value: ${{ steps.verify.outputs.valid }}
+runs:
+  using: composite
+  steps:
+    - name: Identify mux sources and compiler SDK
+      id: identity
+      shell: pwsh
+      env:
+        MUX_TARGET: ${{ inputs.target }}
+      run: ./tool/ci-mux-cache.ps1 -Target $env:MUX_TARGET
+    - name: Restore exact component snapshot
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.identity.outputs.path }}
+        key: ${{ steps.identity.outputs.key }}
+    - name: Validate restored mux files
+      id: verify
+      shell: pwsh
+      env:
+        MUX_TARGET: ${{ inputs.target }}
+      run: ./tool/ci-mux-cache.ps1 -Target $env:MUX_TARGET -Mode Validate
+    - name: Retire corrupt default-branch snapshot
+      if: steps.cache.outputs.cache-hit == 'true' && steps.verify.outputs.valid != 'true'
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        MUX_KEY: ${{ steps.identity.outputs.key }}
+      with:
+        script: |
+          const { canWriteCaches, cacheFamily } = require('./tool/ci-cache-policy.cjs');
+          const key = process.env.MUX_KEY;
+          if (!canWriteCaches(context) || !cacheFamily(key, '')?.name.startsWith('mux-')) return;
+          try {
+            await github.rest.actions.deleteActionsCacheByKey({ ...context.repo, key, ref: context.ref });
+          } catch (error) { if (error.status !== 404) core.warning(`Could not retire invalid mux cache: ${error.message}`); }

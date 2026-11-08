@@ -9,6 +9,8 @@ function canWriteCaches(context) {
 }
 
 function cacheFamily(key, flutterVersion) {
+  const mux = /^bilisail-mux-v1-(windows-(?:x64|arm64)|macos-(?:x64|arm64)|android-arm64|ios-arm64|linux-x64)-[a-f0-9]{64}$/.exec(key);
+  if (mux) return { name: `mux-${mux[1]}` };
   const sdk = /^flutter-(linux|macos|windows)-stable-([\d.]+)-(x64|arm64)(?:-|$)/i.exec(key);
   if (sdk) {
     const [, os, version, architecture] = sdk;
@@ -22,7 +24,8 @@ function cacheFamily(key, flutterVersion) {
     const version = /\d+\.\d+\.\d+/.exec(pub[3])?.[0];
     if (!architecture || !version) return null;
     return { name: `pub-${pub[2].toLowerCase()}-${architecture}`,
-      retired: version !== flutterVersion, legacy: pub[1] === 'flutter-pub' };
+      retired: version !== flutterVersion || (pub[2].toLowerCase() === 'macos' && architecture === 'x64'),
+      legacy: pub[1] === 'flutter-pub' };
   }
   if (key.startsWith('linux-downloads-v1-ubuntu24.04-x64-')) {
     return { name: 'linux-downloads', legacy: true };
