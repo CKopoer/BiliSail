@@ -46,6 +46,9 @@ final class _Engine extends Fake
       PlaybackSnapshot(
         phase: options.play ? PlaybackPhase.playing : PlaybackPhase.paused,
         generation: 1,
+        position: options.startPosition,
+        rate: options.rate,
+        volume: options.volume,
       ),
     );
   }
@@ -78,6 +81,61 @@ void main() {
   final source = ProgressiveSource(
     MediaTrack(uri: Uri.file('video.mp4'), requestPolicy: MediaRequestPolicy()),
   );
+  test('same-content recovery preserves the timeline across child selection and readiness', () async {
+    final first = _Engine();
+    final second = _Engine()..openGate = Completer<void>();
+    var calls = 0;
+    final engine = ConfigurablePlayerEngine(
+      createEngine: () async {
+        calls++;
+        return calls == 1 ? first : second;
+      },
+    );
+    await engine.open(source, const OpenOptions(play: true));
+    first.events.add(
+      const PlaybackSnapshot(
+        phase: PlaybackPhase.failed,
+        generation: 1,
+        position: Duration(seconds: 7),
+        duration: Duration(seconds: 20),
+      ),
+    );
+    final values = <PlaybackSnapshot>[];
+    engine.snapshots.listen(values.add);
+    first.release = Completer<void>();
+    final opening = engine.open(
+      source,
+      const OpenOptions(
+        retainPresentation: true,
+        startPosition: Duration(seconds: 7),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, 1);
+    first.release!.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(first.disposed, true);
+    expect(second.openedOptions?.retainPresentation, true);
+    second.events.add(
+      const PlaybackSnapshot(phase: PlaybackPhase.opening, generation: 1),
+    );
+    second.openGate!.complete();
+    await opening;
+    expect(values, isNotEmpty);
+    expect(
+      values.every(
+        (s) =>
+            s.position == const Duration(seconds: 7) &&
+            s.duration == const Duration(seconds: 20),
+      ),
+      true,
+    );
+    await engine.stop();
+    expect(engine.currentSnapshot.duration, Duration.zero);
+    await engine.dispose();
+    await first.closeStreams();
+    await second.closeStreams();
+  });
   test('pause before backend factory returns overrides autoplay', () async {
     final child = _Engine();
     final factory = Completer<PlayerEngine>();

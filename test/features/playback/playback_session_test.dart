@@ -904,6 +904,43 @@ void main() {
     });
 
     test(
+      'recovery holds the timeline through resolution and native preparation',
+      () async {
+        repository.autoResolve = false;
+        final stops = engine.stopCount;
+        interrupt(kind: PlayerFailureKind.nativePlayback);
+        final held = session.snapshots.value;
+        final snapshots = <PlaybackSnapshot>[];
+        session.snapshots.addListener(
+          () => snapshots.add(session.snapshots.value),
+        );
+        await _flush();
+        expect(session.isRecovering, true);
+        expect(session.snapshots.value.position, held.position);
+        expect(session.snapshots.value.duration, held.duration);
+        expect(engine.stopCount, stops);
+        final preparing = Completer<void>();
+        engine.nextOpen = preparing;
+        repository.completeResolve('one');
+        await _flush();
+        expect(engine.openOptions.last.retainPresentation, true);
+        expect(session.snapshots.value.position, held.position);
+        expect(session.snapshots.value.duration, held.duration);
+        preparing.complete();
+        await _flush();
+        expect(session.isRecovering, false);
+        expect(snapshots, isNotEmpty);
+        expect(
+          snapshots.every(
+            (s) => s.position == held.position && s.duration == held.duration,
+          ),
+          true,
+        );
+        expect(snapshots.any((s) => s.phase == PlaybackPhase.idle), false);
+      },
+    );
+
+    test(
       'interrupted media prefers refreshed backup URLs for both tracks',
       () async {
         repository.resolvedMedia = _backupMedia();
@@ -939,6 +976,8 @@ void main() {
         interrupt();
         await _flush();
         expect(engine.openOptions, hasLength(2));
+        expect(engine.openOptions.last.retainPresentation, true);
+        expect(engine.stopCount, 1);
         await Future<void>.delayed(const Duration(milliseconds: 1100));
         expect(engine.openOptions, hasLength(3));
         interrupt();
@@ -2310,6 +2349,8 @@ void main() {
         expect(engine.currentSnapshot.volume, 42);
         expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
         expect(engine.maxSimultaneousPlayers, 1);
+        expect(engine.openOptions.last.retainPresentation, true);
+        expect(engine.stopCount, 1);
         expect(session.error, isNull);
       },
     );
@@ -7008,6 +7049,7 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
   bool disposed = false;
   bool subscriptionsActiveAtDispose = false;
   int _players = 0;
+  int _playRevision = 0;
   final openedUris = <Uri>[];
   final openOptions = <OpenOptions>[];
   final sources = <ResolvedMediaSource>[];
@@ -7060,6 +7102,9 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
 
   @override
   Future<void> open(ResolvedMediaSource source, OpenOptions options) async {
+    ++_playRevision;
+    // Same-source recovery delegates replacement/release to PlayerEngine.open.
+    if (options.retainPresentation) _players = 0;
     _players++;
     if (_players > maxSimultaneousPlayers) maxSimultaneousPlayers = _players;
     sources.add(source);
@@ -7105,11 +7150,16 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
   @override
   Future<void> play() async {
     playCount++;
+    final revision = ++_playRevision;
     final generation = _current.generation;
     final pending = nextPlay;
     nextPlay = null;
     if (pending != null) await pending.future;
-    if (disposed || generation != _current.generation) return;
+    if (disposed ||
+        generation != _current.generation ||
+        revision != _playRevision) {
+      return;
+    }
     if (playFailuresRemaining > 0) {
       playFailuresRemaining--;
       emit(
@@ -7128,6 +7178,7 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
 
   @override
   Future<void> pause() async {
+    ++_playRevision;
     pauseCount++;
     final pending = nextPause;
     nextPause = null;
@@ -7178,6 +7229,7 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
 
   @override
   Future<void> stop() async {
+    ++_playRevision;
     stopCount++;
     if (failStop) throw StateError('stop failed');
     _players = 0;

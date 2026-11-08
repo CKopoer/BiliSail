@@ -4,9 +4,28 @@ import 'package:bili_player/bili_player.dart';
 import 'package:bili_player/src/playback_backend.dart';
 import 'package:bili_player/src/shared_player_engine.dart';
 import 'package:bili_player/src/validated_source.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-final class _Output extends Fake implements VideoOutput {}
+final class _Output implements FlutterVideoOutput, VideoFrameReadiness {
+  final ready = ValueNotifier(true);
+  @override
+  ValueListenable<bool> get frameReady => ready;
+  @override
+  void attach(Object owner) {}
+  @override
+  void detach(Object owner) {}
+  @override
+  void updateViewport(
+    Object owner, {
+    required double logicalWidth,
+    required double logicalHeight,
+    required double devicePixelRatio,
+  }) {}
+  @override
+  Widget buildVideoSurface() => const ColoredBox(color: Color(0xFF123456));
+}
 
 final class _Backend extends Fake implements PlaybackBackend {
   final signals = StreamController<BackendEvent>.broadcast(sync: true);
@@ -134,7 +153,102 @@ MediaTrack track(String name) => MediaTrack(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   final pair = DashPairSource(video: track('v'), audio: track('a'));
+
+  test(
+    'recovery keeps the timeline through release and paused preparation',
+    () async {
+      final first = _Backend();
+      final replacement = _Backend()
+        ..preparing = Completer<void>()
+        ..audio = Completer<void>()
+        ..tracks = const PreparedTracks(
+          hasVideo: true,
+          hasAudio: true,
+          externalAudioSelected: true,
+          position: Duration(seconds: 7),
+          duration: Duration(seconds: 20),
+          dimensions: VideoDimensions(320, 180),
+        );
+      var allocations = 0;
+      final engine = SharedPlayerEngine(
+        createBackend: () {
+          if (allocations++ == 0) return first;
+          expect(first.released, true);
+          return replacement;
+        },
+      );
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions(play: true));
+      first.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: 7),
+          buffered: Duration(seconds: 15),
+        ),
+      );
+      first.signals.add(const BackendEvent(BackendEventKind.failure));
+      await tick();
+      expect(first.playing, false);
+      final snapshots = <PlaybackSnapshot>[];
+      engine.snapshots.listen(snapshots.add);
+      first.releasing = Completer<void>();
+      final reopening = engine.open(
+        pair,
+        const OpenOptions(
+          startPosition: Duration(seconds: 7),
+          retainPresentation: true,
+        ),
+      );
+      await tick();
+      expect(allocations, 1);
+      expect(engine.currentSnapshot.duration, const Duration(seconds: 20));
+      expect(engine.currentSnapshot.position, const Duration(seconds: 7));
+      first.releasing!.complete();
+      await tick();
+      expect(allocations, 2);
+      expect(engine.currentSnapshot.duration, const Duration(seconds: 20));
+      replacement.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration.zero,
+          duration: Duration.zero,
+        ),
+      );
+      expect(engine.currentSnapshot.position, const Duration(seconds: 7));
+      expect(engine.currentSnapshot.duration, const Duration(seconds: 20));
+      replacement.preparing!.complete();
+      await reopening;
+      final playing = engine.play();
+      await tick();
+      expect(replacement.volume, 0);
+      replacement.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: 8),
+        ),
+      );
+      replacement.signals.add(
+        const BackendEvent(BackendEventKind.buffering, value: false),
+      );
+      expect(engine.currentSnapshot.position, const Duration(seconds: 7));
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      replacement.audio!.complete();
+      await playing;
+      expect(
+        snapshots.every(
+          (s) =>
+              s.position == const Duration(seconds: 7) &&
+              s.duration == const Duration(seconds: 20),
+        ),
+        true,
+      );
+      await engine.stop();
+      expect(engine.currentSnapshot.position, Duration.zero);
+      expect(engine.currentSnapshot.duration, Duration.zero);
+    },
+  );
 
   test('autoplay waits for decoded tracks and presentation, restoring the latest volume', () async {
     final backend = _Backend()

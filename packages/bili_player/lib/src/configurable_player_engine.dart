@@ -113,6 +113,7 @@ final class ConfigurablePlayerEngine
         const PlayerFailure(PlayerFailureKind.disposed, '播放器已关闭', 0),
       );
     }
+    final previous = _snapshot;
     final generation = ++_generation;
     _opening?.cancel();
     final operation = _opening = PlaybackOperation(
@@ -121,13 +122,35 @@ final class ConfigurablePlayerEngine
     );
     _desiredPlaying = options.play;
     // Invalidate a pending child open before waiting for the command queue.
-    final stopped = _requestStop();
+    if (!options.retainPresentation) _output.clearRetainedFrame();
+    final stopped = options.retainPresentation
+        ? () async {
+            await _output.retainFrame();
+            if (!_disposed && generation == _generation) await _requestStop();
+          }()
+        : _requestStop();
     return _enqueue(() async {
       await stopped;
       await _release();
       if (_disposed || generation != _generation) return;
       _publish(
-        PlaybackSnapshot(phase: PlaybackPhase.opening, generation: generation),
+        PlaybackSnapshot(
+          phase: PlaybackPhase.opening,
+          generation: generation,
+          position: options.startPosition,
+          duration: options.retainPresentation
+              ? previous.duration
+              : Duration.zero,
+          buffered: options.retainPresentation
+              ? previous.buffered
+              : Duration.zero,
+          videoDimensions: options.retainPresentation
+              ? previous.videoDimensions
+              : null,
+          desiredPlaying: _desiredPlaying,
+          rate: options.rate,
+          volume: options.volume,
+        ),
       );
       try {
         if (_disposed || generation != _generation) return;
@@ -146,7 +169,25 @@ final class ConfigurablePlayerEngine
             if (!_disposed &&
                 generation == _generation &&
                 identical(_engine, selected)) {
-              _publish(snapshot.copyWith(generation: generation));
+              var value = snapshot.copyWith(generation: generation);
+              if (options.retainPresentation) {
+                value = value.copyWith(
+                  position: value.phase == PlaybackPhase.opening
+                      ? options.startPosition
+                      : null,
+                  duration: value.duration <= Duration.zero
+                      ? previous.duration
+                      : null,
+                  videoDimensions:
+                      value.videoDimensions ?? previous.videoDimensions,
+                );
+              }
+              if (value.phase == PlaybackPhase.playing &&
+                  !value.isBuffering &&
+                  !value.isSeeking) {
+                _output.clearRetainedFrame();
+              }
+              _publish(value);
             }
           }),
         );
@@ -180,6 +221,7 @@ final class ConfigurablePlayerEngine
             androidVideoOutput: options.androidVideoOutput,
             openTimeout: operation.remaining,
             maxBufferAhead: options.maxBufferAhead,
+            retainPresentation: options.retainPresentation,
           ),
         );
       } on SourceSuperseded {
@@ -257,9 +299,16 @@ final class ConfigurablePlayerEngine
   @override
   Future<void> seek(Duration target) {
     final revision = ++_seekRevision;
+    final generation = _generation;
     return _command((engine) async {
       if (revision != _seekRevision) return;
       await engine.seek(target < Duration.zero ? Duration.zero : target);
+      if (!_disposed &&
+          generation == _generation &&
+          revision == _seekRevision &&
+          !_desiredPlaying) {
+        _output.clearRetainedFrame();
+      }
     });
   }
 
@@ -279,6 +328,7 @@ final class ConfigurablePlayerEngine
   @override
   Future<void> stop() {
     if (_disposed) return _disposal ?? Future.value();
+    _output.clearRetainedFrame();
     final generation = ++_generation;
     _opening?.cancel();
     final stopped = _requestStop();
@@ -296,6 +346,7 @@ final class ConfigurablePlayerEngine
   @override
   Future<void> dispose() {
     if (_disposal case final disposal?) return disposal;
+    _output.clearRetainedFrame();
     _disposed = true;
     ++_generation;
     _opening?.cancel();

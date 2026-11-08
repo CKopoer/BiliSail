@@ -94,6 +94,10 @@ class SharedPlayerEngine
     PlaybackPhase.ended,
     PlaybackPhase.disposed,
   }.contains(_snapshot.phase);
+  bool get _confirmingAudio =>
+      _requiresAudio &&
+      !_audioConfirmed &&
+      _playOperation?.isCancelled == false;
 
   void _publish(PlaybackSnapshot value) {
     if (_disposed || value.generation != _generation || value == _snapshot) {
@@ -160,12 +164,12 @@ class SharedPlayerEngine
         return;
       } on Object catch (error) {
         if (!_current(generation, backend)) return;
-        _interrupt(backend);
         if (_opening) rethrow;
         throw await _fail(
           error is PlayerFailure
               ? error.kind
               : PlayerFailureKind.nativePlayback,
+          interruptNative: true,
         );
       }
     });
@@ -181,7 +185,7 @@ class SharedPlayerEngine
     }
   }
 
-  void _invalidate() {
+  void _invalidate({bool retainPresentation = false}) {
     ++_generation;
     ++_intentRevision;
     ++_seekRevision;
@@ -193,8 +197,11 @@ class SharedPlayerEngine
     _timer = null;
     _errors.reset();
     _health.reset();
-    _interrupt(_backend);
-    _output.bind(null);
+    if (!retainPresentation) {
+      _output.clearRetainedFrame();
+      _interrupt(_backend);
+      _output.bind(null);
+    }
   }
 
   Future<void> _release() {
@@ -244,7 +251,8 @@ class SharedPlayerEngine
         PlayerFailure(PlayerFailureKind.disposed, '播放器已关闭', _generation),
       );
     }
-    _invalidate();
+    final previous = _snapshot;
+    _invalidate(retainPresentation: options.retainPresentation);
     final generation = _generation;
     final operation = _openOperation = PlaybackOperation(
       generation,
@@ -264,6 +272,15 @@ class SharedPlayerEngine
         phase: PlaybackPhase.opening,
         generation: generation,
         position: options.startPosition,
+        duration: options.retainPresentation
+            ? previous.duration
+            : Duration.zero,
+        buffered: options.retainPresentation
+            ? previous.buffered
+            : Duration.zero,
+        videoDimensions: options.retainPresentation
+            ? previous.videoDimensions
+            : null,
         rate: options.rate,
         volume: options.volume,
         desiredPlaying: options.play,
@@ -273,6 +290,13 @@ class SharedPlayerEngine
       // An opening snapshot can synchronously replace this request before it
       // reaches the lifecycle queue. Never release that replacement's backend.
       if (!_current(generation)) return;
+      if (options.retainPresentation) {
+        // A session deadline can request replacement before the failure stream
+        // arrives. Capture before interrupting that still-visible output too.
+        await _output.retainFrame();
+        if (!_current(generation)) return;
+        _interrupt(_backend);
+      }
       await _release();
       if (!_current(generation)) return;
       _diagnose(PlayerDiagnosticKind.openStarted);
@@ -364,6 +388,7 @@ class SharedPlayerEngine
         operation.check();
         _opening = false;
         _audioBudget = operation.remaining;
+        if (!_requiresAudio || _audioConfirmed) _output.clearRetainedFrame();
         _publish(
           _snapshot.copyWith(
             phase: PlaybackPhase.ready,
@@ -387,14 +412,13 @@ class SharedPlayerEngine
       } on Object catch (error) {
         if (!_current(generation)) return;
         operation.cancel();
-        _interrupt(_backend);
-        final releasing = _release();
         final failure = await _fail(
           error is PlayerFailure
               ? error.kind
               : PlayerFailureKind.nativePlayback,
-          pauseNative: false,
+          interruptNative: true,
         );
+        final releasing = _release();
         // Disposal is still required after a failed prepare. Retain a rejected
         // release barrier instead of silently allocating a replacement.
         final remaining = operation.budget - operation.elapsed;
@@ -440,16 +464,22 @@ class SharedPlayerEngine
       unawaited(_fail(event.failureKind));
       return;
     }
-    if (_opening && event.kind == BackendEventKind.sample) {
+    if ((_opening || _confirmingAudio) &&
+        event.kind == BackendEventKind.sample) {
       _publish(
         _snapshot.copyWith(
-          duration: _live ? Duration.zero : event.duration,
+          duration: _live
+              ? Duration.zero
+              : (event.duration ?? Duration.zero) > Duration.zero
+              ? event.duration
+              : null,
           videoDimensions: event.dimensions,
         ),
       );
       return;
     }
-    if (_opening && event.kind == BackendEventKind.buffering) {
+    if ((_opening || _confirmingAudio) &&
+        event.kind == BackendEventKind.buffering) {
       _publish(_snapshot.copyWith(isBuffering: event.value ?? false));
       return;
     }
@@ -503,9 +533,7 @@ class SharedPlayerEngine
           if (!_current(generation, backend) || revision != _seekRevision) {
             return;
           }
-          unawaited(
-            _fail(PlayerFailureKind.videoInterrupted, boundary: position),
-          );
+          unawaited(_fail(PlayerFailureKind.videoInterrupted));
           return;
         }
         _timer?.cancel();
@@ -534,6 +562,7 @@ class SharedPlayerEngine
       if (!_current(generation) ||
           backend == null ||
           _opening ||
+          _confirmingAudio ||
           _snapshot.isSeeking ||
           _terminal ||
           _failing != null) {
@@ -566,7 +595,7 @@ class SharedPlayerEngine
           failureKind: interruption.kind,
           interruption: interruption,
         );
-        unawaited(_fail(interruption.kind, boundary: interruption.position));
+        unawaited(_fail(interruption.kind));
       }
     });
   }
@@ -578,8 +607,7 @@ class SharedPlayerEngine
 
   Future<PlayerFailure> _fail(
     PlayerFailureKind kind, {
-    Duration? boundary,
-    bool pauseNative = true,
+    bool interruptNative = false,
   }) {
     if (_failing case final failing?) return failing;
     final generation = _generation;
@@ -606,9 +634,7 @@ class SharedPlayerEngine
     unawaited(() async {
       var released = false;
       try {
-        if (backend != null &&
-            pauseNative &&
-            kind != PlayerFailureKind.nativeProcessExited) {
+        if (backend != null && kind != PlayerFailureKind.nativeProcessExited) {
           var paused = false;
           try {
             paused = await backend.pauseAndWait().timeout(
@@ -617,6 +643,11 @@ class SharedPlayerEngine
           } on Object {
             // No complete native pause was acknowledged.
           }
+          if (_current(generation, backend)) await _output.retainFrame();
+          if (!_current(generation, backend)) return;
+          // Failed commands must still retire pending native I/O. Capture the
+          // visible frame first so interrupting that slot cannot blank it.
+          if (paused && interruptNative) _interrupt(backend);
           if (!paused) {
             _interrupt(backend);
             try {
@@ -631,7 +662,6 @@ class SharedPlayerEngine
           _publish(
             _snapshot.copyWith(
               phase: PlaybackPhase.failed,
-              position: boundary,
               desiredPlaying: false,
               isBuffering: false,
               isSeeking: false,
@@ -706,6 +736,7 @@ class SharedPlayerEngine
         operation.check();
       }
       if (!_current(generation, backend) || !allowed()) return;
+      _output.clearRetainedFrame();
       _resetHealth();
       _publish(_snapshot.copyWith(phase: _phase()));
       _startSampling(generation);
@@ -715,11 +746,11 @@ class SharedPlayerEngine
       return;
     } on Object catch (error) {
       if (_current(generation, backend) && !operation.isCancelled) {
-        _interrupt(backend);
         throw await _fail(
           error is PlayerFailure
               ? error.kind
               : PlayerFailureKind.nativePlayback,
+          interruptNative: true,
         );
       }
     } finally {
@@ -795,6 +826,7 @@ class SharedPlayerEngine
           backend.seekTo(target, operation),
         );
         if (!_current(generation, backend) || revision != _seekRevision) return;
+        if (!_snapshot.desiredPlaying) _output.clearRetainedFrame();
         _resetHealth();
         _publish(
           _snapshot.copyWith(
@@ -821,11 +853,11 @@ class SharedPlayerEngine
         if (_current(generation, backend) &&
             revision == _seekRevision &&
             !operation.isCancelled) {
-          _interrupt(backend);
           throw await _fail(
             error is PlayerFailure
                 ? error.kind
                 : PlayerFailureKind.nativePlayback,
+            interruptNative: true,
           );
         }
       } finally {

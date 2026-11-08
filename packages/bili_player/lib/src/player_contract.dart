@@ -91,6 +91,7 @@ final class OpenOptions {
     this.androidVideoOutput = AndroidVideoOutputMode.renderedTexture,
     this.openTimeout = const Duration(seconds: 35),
     this.maxBufferAhead = maximumBufferAhead,
+    this.retainPresentation = false,
   });
   final Duration startPosition;
   final bool play;
@@ -107,6 +108,10 @@ final class OpenOptions {
   /// Must be positive. Memory capacity may stop buffering earlier, and
   /// packet/I/O boundaries may slightly overshoot the time window.
   final Duration maxBufferAhead;
+
+  /// Reopening the same content after interruption keeps its last frame and
+  /// timeline until both replacement tracks are ready. Never use for new media.
+  final bool retainPresentation;
 }
 
 enum PlaybackPhase {

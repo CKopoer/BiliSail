@@ -232,7 +232,7 @@ class PlaybackSession extends ChangeNotifier {
       }
       final replacementGeneration = _generation + 1;
       _recoveryGeneration = replacementGeneration;
-      final recovery = retry();
+      final recovery = retry(retainPresentation: true);
       // open clears the queued timer synchronously. Keep recovery visible
       // through resolution, native open and the first audio readiness check.
       _recoveryInProgress = true;
@@ -892,6 +892,7 @@ class PlaybackSession extends ChangeNotifier {
     LiveStreamPreference? liveStream,
     bool allowColorFallback = true,
     Duration? startupBudget,
+    bool retainPresentation = false,
   }) async {
     if (_disposed || _closing) return;
     if (target == null && (video == null || selected == null)) return;
@@ -1049,7 +1050,7 @@ class PlaybackSession extends ChangeNotifier {
       final stopped = startupDiagnostics.measure(
         generation,
         PlaybackStartupStage.stopPrevious,
-        engine.stop,
+        retainPresentation ? engine.pause : engine.stop,
       );
       final contentResolver = contentRepository;
       final resolution = startupDiagnostics.measure(
@@ -1310,6 +1311,8 @@ class PlaybackSession extends ChangeNotifier {
                       AndroidVideoOutputMode.directTexture,
                   },
                   openTimeout: attemptBudget,
+                  retainPresentation:
+                      retainPresentation || checkpoint != null || attempt > 0,
                 ),
               ),
             );
@@ -2539,13 +2542,13 @@ class PlaybackSession extends ChangeNotifier {
           if (failure.kind != PlayerFailureKind.nativePlayback ||
               !recovery.canRetry) {
             // Exhausting a deadline must also cancel the underlying command.
-            if (recovery.remaining <= Duration.zero) await engine.stop();
+            if (recovery.remaining <= Duration.zero) await engine.pause();
             rethrow;
           }
           final checkpoint = engine.currentSnapshot;
           _resolving = true;
           _notify();
-          await engine.stop();
+          await engine.pause();
           if (!recovery.isCurrent()) return;
           await recovery.reopen(checkpoint);
           if (!recovery.isCurrent()) return;
@@ -3000,7 +3003,7 @@ class PlaybackSession extends ChangeNotifier {
     );
   }
 
-  Future<void> retry() async {
+  Future<void> retry({bool retainPresentation = false}) async {
     final video = detail;
     final selected = part;
     if (contentTarget != null || (video != null && selected != null)) {
@@ -3018,6 +3021,7 @@ class PlaybackSession extends ChangeNotifier {
         target: contentTarget,
         title: contentTitle,
         allowColorFallback: _allowColorFallback,
+        retainPresentation: retainPresentation,
       );
     }
   }
