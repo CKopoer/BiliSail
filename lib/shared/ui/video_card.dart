@@ -67,7 +67,7 @@ final class VideoCardMenu {
 enum _VideoCardWidthTier {
   compact(10, 20, 14),
   medium(11, 24, 17),
-  regular(12, 28, 20);
+  regular(13, 28, 20);
 
   const _VideoCardWidthTier(
     this.coverFontSize,
@@ -78,6 +78,13 @@ enum _VideoCardWidthTier {
   final double coverFontSize;
   final double menuButtonSize;
   final double menuIconSize;
+
+  // Preserve the existing icon and gap sizes when increasing regular text.
+  double get coverScale => switch (this) {
+    compact => 10 / 12,
+    medium => 11 / 12,
+    regular => 1,
+  };
 
   static _VideoCardWidthTier fromWidth(double cardWidth) => switch (cardWidth) {
     < 180 => compact,
@@ -168,6 +175,7 @@ final class VideoCard extends StatefulWidget {
 
 final class _VideoCardState extends State<VideoCard> {
   static const _titleFontSize = 15.0;
+  static const _titleLineHeight = 22.0;
 
   bool _hovered = false;
   bool _focused = false;
@@ -280,7 +288,7 @@ final class _VideoCardState extends State<VideoCard> {
     final titleStyle = theme.textTheme.bodyMedium?.copyWith(
       fontSize: _titleFontSize,
       fontWeight: FontWeight.w500,
-      height: 1.4,
+      height: _titleLineHeight / _titleFontSize,
     );
     final highlighted = (_hovered || _focused) && !_authorHovered;
     final progress = widget.progress;
@@ -408,7 +416,11 @@ final class _VideoCardState extends State<VideoCard> {
                       // Reserve two scaled lines so author rows align across cards.
                       SizedBox(
                         width: double.infinity,
-                        height: textScaler.scale(_titleFontSize) * 1.4 * 2 + 2,
+                        height:
+                            textScaler.scale(_titleFontSize) *
+                                (_titleLineHeight / _titleFontSize) *
+                                2 +
+                            2,
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -767,10 +779,9 @@ final class _CoverMetadataState extends State<_CoverMetadata> {
     return width;
   }
 
-  static const _regularFontSize = 12.0;
   static const _style = TextStyle(
     color: Colors.white,
-    fontSize: _regularFontSize,
+    fontSize: 13,
     fontWeight: FontWeight.w400,
     // The cover gradient supplies contrast. Blurred glyph shadows add raster
     // work for every label in dense rows even when the cards are unchanged.
@@ -785,9 +796,9 @@ final class _CoverMetadataState extends State<_CoverMetadata> {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       // Use the whole card width so padding does not shift typography tiers.
-      final fontSize = _VideoCardWidthTier.fromWidth(widget.cardWidth)
-          .coverFontSize;
-      final sizeFactor = fontSize / _regularFontSize;
+      final tier = _VideoCardWidthTier.fromWidth(widget.cardWidth);
+      final fontSize = tier.coverFontSize;
+      final sizeFactor = tier.coverScale;
       final style = _style.copyWith(fontSize: fontSize);
       final iconSize = _iconSize * sizeFactor;
       final iconGap = _iconGap * sizeFactor;
@@ -905,6 +916,10 @@ final class _AuthorMetadata extends StatelessWidget {
     final openUser = onOpenUser;
     final timeLabel = commentTimeLabel(video.publishedAt ?? publishedAt);
     final dateText = timeLabel.isEmpty ? publishText : timeLabel;
+    final metadataStyle = theme.textTheme.bodySmall?.copyWith(
+      fontSize: 13,
+      height: 16 / 13,
+    );
     final reasonText = reason?.trim() ?? '';
     final labels = [
       if (reasonText.isNotEmpty) reasonText,
@@ -930,7 +945,7 @@ final class _AuthorMetadata extends StatelessWidget {
                 video.author,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: metadataStyle?.copyWith(
                   color: hovered ? theme.colorScheme.primary : null,
                 ),
               ),
@@ -963,7 +978,7 @@ final class _AuthorMetadata extends StatelessWidget {
       dateText,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.bodySmall,
+      style: metadataStyle,
     );
     return LayoutBuilder(
       builder: (context, constraints) {

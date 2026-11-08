@@ -1502,10 +1502,14 @@ final class _BiliAppShellState extends State<BiliAppShell>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 12,
+                              height: 17 / 12,
                               color: selected
                                   ? colors.primary
-                                  : colors.onSurfaceVariant,
+                                  : Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.color,
                             ),
                           ),
                         ],
@@ -2024,29 +2028,67 @@ final class _BiliAppShellState extends State<BiliAppShell>
     return SizedBox(
       height: PageTabStyle.barHeight,
       child: LayoutBuilder(
-        builder: (context, constraints) => _horizontalTabs(
-          key: const ValueKey('home-channel-strip'),
-          padding: equalWidthTabs
-              ? EdgeInsets.zero
-              : const EdgeInsets.symmetric(horizontal: 10),
-          child: PagingTabStrip<HomeChannel>(
-            tabs: tabs,
-            value: selected,
-            progress: _pagingFor(active),
-            onSelected: _selectChannel,
-            itemKey: (channel) => ValueKey('channel-${channel.name}'),
-            spacing: equalWidthTabs ? 0 : 3,
-            buttonStyle: PageTabStyle.buttonStyle(context).copyWith(
-              fixedSize: equalWidthTabs
-                  ? WidgetStatePropertyAll(
-                      Size.fromWidth(constraints.maxWidth / tabs.length),
-                    )
-                  : null,
+        builder: (context, constraints) {
+          final buttonStyle = PageTabStyle.buttonStyle(context);
+          final preferredTextStyle = buttonStyle.textStyle?.resolve({});
+          var textStyle = preferredTextStyle;
+          if (equalWidthTabs && preferredTextStyle != null) {
+            final direction = Directionality.of(context);
+            final padding = buttonStyle.padding
+                ?.resolve({})
+                ?.resolve(direction);
+            final availableWidth =
+                constraints.maxWidth / tabs.length -
+                (padding?.horizontal ?? 0) -
+                PageTabStyle.iconSize -
+                PageTabStyle.iconGap;
+            // Keep the original tab geometry. Large text may fall back toward
+            // the previous 14px size when the official 16px label cannot fit.
+            for (final size in [16.0, 15.0, 14.0]) {
+              textStyle = preferredTextStyle.copyWith(fontSize: size);
+              if (tabs.every(
+                (channel) =>
+                    TextPainter.computeWidth(
+                      text: TextSpan(text: channel.label, style: textStyle),
+                      textDirection: direction,
+                      textScaler: MediaQuery.textScalerOf(context),
+                      locale: Localizations.maybeLocaleOf(context),
+                    ) <=
+                    availableWidth,
+              )) {
+                break;
+              }
+            }
+          }
+          return _horizontalTabs(
+            key: const ValueKey('home-channel-strip'),
+            padding: equalWidthTabs
+                ? EdgeInsets.zero
+                : const EdgeInsets.symmetric(horizontal: 10),
+            child: PagingTabStrip<HomeChannel>(
+              tabs: tabs,
+              value: selected,
+              progress: _pagingFor(active),
+              onSelected: _selectChannel,
+              itemKey: (channel) => ValueKey('channel-${channel.name}'),
+              spacing: equalWidthTabs ? 0 : 3,
+              buttonStyle: buttonStyle.copyWith(
+                textStyle: equalWidthTabs
+                    ? WidgetStatePropertyAll(textStyle)
+                    : null,
+                fixedSize: equalWidthTabs
+                    ? WidgetStatePropertyAll(
+                        Size.fromWidth(constraints.maxWidth / tabs.length),
+                      )
+                    : null,
+              ),
+              labelBuilder: (context, channel) => PageTabStyle.label(
+                channel.label,
+                icon: _channelIcon(channel),
+              ),
             ),
-            labelBuilder: (context, channel) =>
-                PageTabStyle.label(channel.label, icon: _channelIcon(channel)),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

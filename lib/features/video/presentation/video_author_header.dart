@@ -68,7 +68,7 @@ final class VideoAuthorHeader extends ConsumerWidget {
                   video.summary.author,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
+                  style: theme.textTheme.titleSmall?.copyWith(height: 16 / 14),
                 ),
                 const SizedBox(height: 3),
                 Text(

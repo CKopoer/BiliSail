@@ -310,7 +310,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleMedium
-                                        ?.copyWith(height: 1.4),
+                                        ?.copyWith(height: 22 / 16),
                                   ),
                                 ),
                               ),
@@ -361,16 +361,25 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                               _Meta(
                                 icon: BiliIcons.playCount,
                                 label: compactCount(video.summary.playCount),
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                               ),
                               _Meta(
                                 icon: BiliIcons.comment,
                                 label: compactCount(video.summary.danmakuCount),
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                               ),
                               if (video.summary.publishedAt
                                   case final DateTime date)
                                 _Meta(
                                   icon: Icons.schedule_outlined,
                                   label: _publicationTime(date),
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
                             ],
                           ),
@@ -1245,7 +1254,8 @@ final class _RelatedVideoCardState extends State<_RelatedVideoCard> {
                       tooltipTriggerMode: MediaQuery.sizeOf(context).width < 600
                           ? TooltipTriggerMode.manual
                           : TooltipTriggerMode.longPress,
-                      style: Theme.of(context).textTheme.titleSmall,
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(height: 19 / 14),
                     ),
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
@@ -1324,9 +1334,10 @@ final class _RelatedVideoCardState extends State<_RelatedVideoCard> {
 }
 
 final class _Meta extends StatelessWidget {
-  const _Meta({required this.icon, required this.label});
+  const _Meta({required this.icon, required this.label, this.color});
   final IconData icon;
   final String label;
+  final Color? color;
   @override
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
@@ -1337,7 +1348,10 @@ final class _Meta extends StatelessWidget {
         color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),
       const SizedBox(width: 5),
-      Text(label, style: Theme.of(context).textTheme.bodySmall),
+      Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
+      ),
     ],
   );
 }

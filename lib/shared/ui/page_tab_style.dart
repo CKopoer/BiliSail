@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 abstract final class PageTabStyle {
   static const barHeight = 58.0;
   static const iconSize = 16.0;
+  static const iconGap = 5.0;
 
   static ButtonStyle buttonStyle(BuildContext context) => TextButton.styleFrom(
     minimumSize: const Size(48, 42),
     padding: const EdgeInsets.symmetric(horizontal: 7),
     textStyle: Theme.of(context).textTheme.labelLarge
-        ?.copyWith(fontSize: 14, fontWeight: FontWeight.w500),
+        ?.copyWith(fontSize: 16, fontWeight: FontWeight.w500, height: 20 / 16),
   );
 
   static Widget label(String text, {IconData? icon}) => Row(
@@ -16,7 +17,7 @@ abstract final class PageTabStyle {
     children: [
       if (icon != null) ...[
         Icon(icon, size: iconSize),
-        const SizedBox(width: 5),
+        const SizedBox(width: iconGap),
       ],
       Text(text),
     ],

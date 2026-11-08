@@ -1,0 +1,63 @@
+# 官方桌面客户端文字排版对齐
+
+日期：2026-11-09。
+
+## 对照依据与范围
+
+本机官方 Windows 客户端版本为 1.13.0.3194，安装位置为 `C:\Program Files\bilibili`。实际查看首页、动态、设置，并确认外观设置选择 HarmonyOS Sans；其余数值只读核对 `resources/app.asar` 中的样式定义。对照哔帆当前源码及 1.2.9+0 Release 资源，不把安装包样式核对等同于全部页面的运行验收。
+
+官方缓存字体位于 `%APPDATA%/bilibili/fonts/HarmonyOS`，以 WOFF2 分片加载 Regular 和 Medium。两档字体与哔帆内置字体均为 HarmonyOS Sans SC 1.0；每档抽查 44 个常用中英文和数字字符，分解后的字形轮廓、字宽及字体度量全部一致。哔帆 Release 中两份字体与仓库源文件的 SHA-256 也一致。本次不替换字体、不采用官方程序源码或字体资源，只依据测得的样式数值调整现有 Flutter 组件。
+
+用户要求对齐字号、字重、文字颜色、行高及字距，已经一致的地方保持不变；同时明确排除继承自 Material 的默认字距等默认排版。本次未增加或修改任何 `letterSpacing`，保留原来的 Material 继承和评论区显式零字距。
+
+## 样式对应
+
+下表字号和行高为逻辑像素，字重为声明值。只修改已核对的对应角色，不通过统一加粗正文实现。
+
+| 位置 | 调整后 | 官方依据 |
+| --- | --- | --- |
+| 顶部频道及搜索分类 | 16 / 500，行高 20 | `index.f3cc8c56.css` 的 `.vui_tabs--nav-link`、`.vui_tabs--nav-text` |
+| 图标下方的侧栏文字 | 12 / 400，行高 17，未选中使用三级文字色 | `biliapp.827d2bd6.css` 的 `.app_sidebar--pages-wrap`，以及相应模板的 `text3` |
+| 页面标题（设置、消息工具栏） | 16 / 500，行高 20 | 官方顶栏标签及设置页标题 |
+| 视频卡片标题 | 保留 15 / 500，行高由 21 调为 22 | `index.f3cc8c56.css` 的 `.bili-video-card` |
+| 视频卡片作者、日期 | 13 / 400，行高 16，三级文字色 | `.bili-video-card__info--bottom`、卡片 subtitle 参数 |
+| 常规宽度封面统计文字 | 13 / 400，保留白色 | `.bili-video-card__stats`、卡片 subtitle 参数 |
+| 动态正文 | 15 / 400，行高 22 | `vd_restart.859bb762.css` 的 `.dynamic_rich_text` |
+| 动态作者名 | 14 / 600，行高 17.5 | `biliapp.827d2bd6.css` 的 `.dynamic_card_module_author--info--name` |
+| 动态时间 | 保留 12 / 400，行高 15，三级文字色 | `.dynamic_card_module_author--info--pub` |
+| 视频播放页主标题 | 保留 16 / 500，仅将行高从 22.4 调为 22 | `player.f6070335.css` 的 `.app_video--detail .video-title` |
+| 视频播放页作者名 | 保留 14 / 500，行高 16 | `.app_video--up .up-info_right .name` |
+| 视频播放页推荐卡片标题 | 保留 14 / 500，行高 19 | `.app_video--rec-card .ugc_title` |
+| 影视播放页标题 | 16 / 500，行高 32 | `.app_ogv--up-title` |
+| 设置分组标题 | 14 / 700，行高 17.5 | `h4.b_text`，以及设置分组模板 |
+
+前序聊天对照表把播放页推荐卡片的 `titleSmall` 误记为主标题样式。实际主标题已经使用 `titleMedium`，本次保留其字号和字重，只调整行高。
+
+常规卡片封面字号增加时，同步保留既有图标、间距和宽度分档：小于 240 的卡片仍使用 11 / 10 字号，并继续按实际文字测量决定是否换行。标题预留高度与新行高同步，保留两行省略、文本缩放和卡片自然高度。未移植官方基于整窗 2560px 的卡片断点，沿用应用现有局部宽度布局。
+
+按用户追加说明，文字配置对布局产生影响时允许适当回退文字参数。窄屏动态的两个等宽标签保留原有宽度、内边距、居中和图标间距，按实际字体、字重和系统文字缩放测量，依次尝试 16 / 15 / 14 字号。卡片标题预留高度继续以缩放后的字号乘行高比例计算，避免把行高直接作为字号交给 Android 非线性文字缩放而造成裁切。
+
+主评论 15 / 400 / 25、楼中楼预览 14 / 400 / 20、用户名、时间、操作文字及其显式颜色均已与官方客户端评论样式一致，[CommentTextStyles](../../lib/shared/ui/comment_text_styles.dart) 未修改。界面字体选择、独立弹幕字体和字体资源也保持现状。
+
+## 文字色阶
+
+| 角色 | 浅色 | 深色 |
+| --- | --- | --- |
+| 主要文字 | `#18191C` | `#E7E9EB` |
+| 次要说明 | `#61666D` | `#A2A7AE` |
+| 作者元信息、时间等三级文字 | `#9499A0` | `#757A81` |
+
+数值取自官方 `lib/theme/light.css`、`dark.css` 和 `map.css`。由[应用主题](../../lib/app/theme.dart)将主要文字映射到 `onSurface`、次要说明映射到 `onSurfaceVariant`，三级文字映射到 `bodySmall`。动态时间不再误用次要说明色；播放详情统计单独保留次要说明角色。原有背景、边框和品牌交互色沿用应用主题。
+
+实现入口为[频道标签](../../lib/shared/ui/page_tab_style.dart)、[视频卡片](../../lib/shared/ui/video_card.dart)、[动态卡片](../../lib/shared/ui/dynamic_post_card.dart)、[视频页](../../lib/features/video/presentation/video_screen.dart)、[视频作者](../../lib/features/video/presentation/video_author_header.dart)、[影视页](../../lib/features/pgc/presentation/pgc_screen.dart)和[设置页](../../lib/features/settings/presentation/settings_screen.dart)。
+
+## 验证
+
+- 首轮字体、卡片、动态、设置、工作区和播放布局定向回归 206 项通过。根应用全量回归发现一处双倍字号标签溢出、两项旧字号预期和两项非线性缩放裁切；按新的文字配置修复，保留原布局、字体跟随、无溢出及实际文字高度断言。
+- 最终根应用全量 4,763 项通过，13 项配置相关用例跳过；按用户文字适配更正后的标签、分页和 Android DPI 定向回归 227 项通过。日志为 `root-tests-final.log`、`text-fitting-tests.log`。
+- 四个子包测试通过：bili_api 733、bili_player 360、bili_danmaku 161、bili_mux 5，共 1,259 项。未配置 `BILI_MUX_LIBRARY`，mux 的 10 项原生测试跳过，不能记作原生封装通过。日志为 `package-tests.log`。
+- 根应用、四个包和 Linux 本地适配器的 1,063 份 Dart 文件格式检查通过；根全量静态分析通过。文档本地链接检查和 `git diff --check` 通过。
+- `tool/check.ps1 -SkipPub` 按 `Lint`、`RootTests`、`PackageTests` 三阶段完成，均通过。初次完整入口曾在同期 CI 改动的 `test-ci-build-plan.ps1` 缓存写入者断言处停止；对应检查随后由同期工作更新，本轮重跑完整 `Lint` 阶段也已通过，日志为 `lint-final.log`。保留全部同期 CI／mux 修改，本次提交只包含文字排版及其测试、文档。
+- 当前没有运行中的 Dart 调试进程或 DTD；已尝试发现连接并调用热重载，无法连接。未重新构建、安装或执行本轮 Windows／Android／Apple 实机视觉验收，Flutter 与 Chromium 的最终栅格化差异尚未做像素量化。
+
+字体文件、样式提取和测试日志保存在本机 `build/validation/font-comparison-2026-11-09/`，不随提交分发官方客户端文件。

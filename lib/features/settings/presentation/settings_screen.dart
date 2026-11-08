@@ -127,7 +127,8 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     child: Text(
                       '设置',
                       key: const ValueKey('settings-page-title'),
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(height: 20 / 16),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -296,7 +297,14 @@ final class _SettingsCategoryPageState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
+              ),
+            ),
             const SizedBox(height: 12),
             ...children,
           ],

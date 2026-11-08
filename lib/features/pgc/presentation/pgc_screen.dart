@@ -492,7 +492,10 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
         SelectionArea(
           child: Text(
             season.title,
-            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: text.titleMedium?.copyWith(
+              fontWeight: FontWeight.w500,
+              height: 32 / 16,
+            ),
           ),
         ),
         if (season.publishText?.isNotEmpty == true) ...[

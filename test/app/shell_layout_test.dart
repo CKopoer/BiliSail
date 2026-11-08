@@ -1004,7 +1004,7 @@ void main() {
               theme.textTheme.labelLarge?.fontFamily,
               reason: '${channel.name} font=$font family=$family width=$width',
             );
-            expect(style?.fontSize, 14);
+            expect(style?.fontSize, 16);
             expect(style?.fontWeight, FontWeight.w500);
           }
           final element = tester.element(

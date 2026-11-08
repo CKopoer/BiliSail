@@ -58,7 +58,8 @@ class PageToolbar extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(height: 20 / 16),
                       ),
                     ),
                     ...actions,

@@ -158,7 +158,11 @@ class _PostBody extends StatelessWidget {
                         children: [
                           Text(
                             post.authorName.isEmpty ? '动态' : post.authorName,
-                            style: Theme.of(context).textTheme.titleSmall,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.25,
+                                ),
                           ),
                           if (time.isNotEmpty || post.actionText.isNotEmpty)
                             Text(
@@ -167,7 +171,7 @@ class _PostBody extends StatelessWidget {
                                 post.actionText,
                               ].where((s) => s.isNotEmpty).join(' · '),
                               style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                                  ?.copyWith(height: 1.25),
                             ),
                         ],
                       ),
@@ -598,7 +602,8 @@ class _DynamicTextState extends State<_DynamicText> {
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5);
+    final style = Theme.of(context).textTheme.bodyMedium
+        ?.copyWith(fontSize: 15, height: 22 / 15);
     _disposeRecognizers();
     final parts = widget.post.spans;
     final length = parts.isEmpty
