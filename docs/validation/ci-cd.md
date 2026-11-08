@@ -634,3 +634,15 @@ GitHub [官方状态 API](https://www.githubstatus.com/api/v2/incidents.json) �
 [HTTP 回归](../../tool/test_sqlite_assets.py) 在 Windows 和 WSL Ubuntu 22.04 均通过 17 项，覆盖普通入口恢复、API 元数据复用、认证优先及 CDN 重定向移除 token，并保留损坏内容拒绝、重试上限、截止时间、容量和七目标检查。[远端专项 42473567553](https://github.com/CKopoer/BiliSail/actions/runs/42473567553) 在相同旧版锁文件上实际通过 17 项 HTTP 回归、认证冷缓存下载、缓存复用及原生 hook 的 5 项数据库测试；该专项使用同一认证实现，之后最终版将候选重试上限从六次收敛回三次，并再次通过 Windows／WSL 的 17 项回归。专项不代表七个平台的完整构建或设备验收。
 
 Windows x64／Flutter 3.47.6 的 `tool/check.ps1 -EnforceLockfile` 完整通过五份锁文件严格解析、打包边界、格式、静态分析及 5964 项 Dart／Flutter 测试（根应用 4729、API 719、播放器 350、弹幕 161、封装 5）；根应用 13 项环境跳过，未配置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生测试跳过，不计作原生通过。日志为 `build/ci-42472383067-check-final.log`；上述收敛后的定向复验另存于 `build/ci-42472383067-python{-linux,}-final.log`。CI／Release 工作流通过 actionlint 1.7.12，本文本地链接与 `git diff --check` 通过，五份锁文件未修改。本轮没有客户端构建、签名、安装或设备操作；旧提交完整对照在本次记录时分片 1 已通过，分片 0 仍在运行，平台构建尚未开始，不声称该次完整 CI 成功。
+
+## 2026-11-08：Linux 依赖重试后的安装目录
+
+[CI 42477860369 的 Linux 构建](https://github.com/CKopoer/BiliSail/actions/runs/42477860369/job/128725938776) 对应提交 `b328741134a3582cb723bd6679d5e9e1d5c73826`。格式／分析、两份根测试分片、包测试和 mux 原生回归已通过。Linux 首次配置于 12:13:17 UTC（北京时间 20:13:17）因 MDK 0.39.0 下载返回 HTTP 错误而终止；日志未记录具体状态码。既有下载重试随后继续到安装阶段，于 12:14:41 UTC 尝试将主程序复制至 `/usr/local`，因权限不足失败。
+
+[Linux CMake 配置](../../linux/CMakeLists.txt) 原先在插件配置之后才将默认安装前缀切换到构建目录下的 `bundle`。依据 [CMake 对默认初始化标志的说明](https://cmake.org/cmake/help/latest/variable/CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT.html)，该标志只在安装前缀刚被初始化为默认值时有效；首次插件下载失败时，系统默认前缀已进入缓存，而应用设置 bundle 的代码尚未运行。重试继续使用该缓存，跳过默认初始化分支，最终生成了安装到 `/usr/local` 的规则。
+
+现将 bundle 目录及默认安装前缀设置移至根 `project()` 后、Flutter／系统依赖和插件配置之前。下载失败前即保存正确的 bundle 目标，后续配置重试沿用该目录；显式指定的 `CMAKE_INSTALL_PREFIX` 仍保留。不增加系统目录写权限，不修改下载重试次数、媒体依赖或 Pub 缓存。
+
+新增 [CMake 安装回归](../../tool/test_linux_cmake_install.py)，复用完整的生产 `CMakeLists.txt`，以本地 Flutter／GTK／插件夹具替代外部依赖，覆盖正常配置、插件配置首次失败后重试／再次配置，以及自定义安装前缀跨重试保留。用例在执行安装前先核对缓存中的前缀，防止回归时写入系统目录；随后检查临时目录中的主程序、库和资源。既有 CI 的 `test_linux_*.py` 步骤自动包含这三项测试。
+
+按用户要求，本轮不运行本地回归、完整检查或构建；新增用例尚未执行，修复后的实际 Linux 构建、AppImage／Flatpak 打包及设备验证仍待后续 CI／设备确认。仅检查本次差异与 `git diff --check`，没有推送或重跑远端任务。
