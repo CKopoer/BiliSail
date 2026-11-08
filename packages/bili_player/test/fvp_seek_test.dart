@@ -4,6 +4,106 @@ import 'package:bili_player/src/fvp_seek.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'audio target stays muted until its native pause is acknowledged',
+    () async {
+      final running = Completer<void>();
+      final decoded = Completer<int>();
+      final paused = Completer<bool>();
+      final calls = <String>[];
+      final seeking = seekFvpAudioTarget(
+        isCancelled: () => false,
+        setMuted: (muted) => calls.add('mute:$muted'),
+        playAndWait: () {
+          calls.add('play');
+          return running.future;
+        },
+        seek: () {
+          calls.add('seek');
+          return decoded.future;
+        },
+        pauseAndConfirm: () {
+          calls.add('pause');
+          return paused.future;
+        },
+      );
+      expect(calls, ['mute:true', 'play']);
+      running.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(calls.last, 'seek');
+      decoded.complete(9365);
+      await Future<void>.delayed(Duration.zero);
+      expect(calls.last, 'pause');
+      expect(calls, isNot(contains('mute:false')));
+      paused.complete(true);
+      expect(await seeking, 9365);
+      expect(calls.last, 'mute:false');
+    },
+  );
+
+  for (final boundary in ['play', 'seek', 'pause']) {
+    test(
+      'retired audio target at $boundary never restores old volume',
+      () async {
+        var cancelled = false;
+        var seeks = 0;
+        final muted = <bool>[];
+        final result = await seekFvpAudioTarget(
+          isCancelled: () => cancelled,
+          setMuted: muted.add,
+          playAndWait: () async {
+            if (boundary == 'play') cancelled = true;
+          },
+          seek: () async {
+            seeks++;
+            if (boundary == 'seek') cancelled = true;
+            return 9365;
+          },
+          pauseAndConfirm: () async {
+            if (boundary == 'pause') cancelled = true;
+            return true;
+          },
+        );
+        expect(result, -2);
+        expect(muted, [true]);
+        expect(seeks, boundary == 'play' ? 0 : 1);
+      },
+    );
+  }
+
+  test('unconfirmed audio pause fails with the pipe still muted', () async {
+    final muted = <bool>[];
+    expect(
+      await seekFvpAudioTarget(
+        isCancelled: () => false,
+        setMuted: muted.add,
+        playAndWait: () async {},
+        seek: () async => 9365,
+        pauseAndConfirm: () async => false,
+      ),
+      -3,
+    );
+    expect(muted, [true]);
+  });
+
+  test('audio decode error pauses before restoring volume', () async {
+    final calls = <String>[];
+    await expectLater(
+      seekFvpAudioTarget(
+        isCancelled: () => false,
+        setMuted: (muted) => calls.add('mute:$muted'),
+        playAndWait: () async {},
+        seek: () async => throw StateError('decode failed'),
+        pauseAndConfirm: () async {
+          calls.add('pause');
+          return true;
+        },
+      ),
+      throwsStateError,
+    );
+    expect(calls, ['mute:true', 'pause', 'mute:false']);
+  });
+
   for (final code in [-2, -3, -8]) {
     test('restores an EOF race ($code) before confirming the target', () async {
       final paused = Completer<bool>();

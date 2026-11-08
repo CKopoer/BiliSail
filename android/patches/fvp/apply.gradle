@@ -5,8 +5,9 @@ subprojects { subproject ->
     subproject.plugins.withId('com.android.library') {
         if (subproject.name != 'fvp') return
         def manifest = new JsonSlurper().parse(rootProject.file('../native/fvp/assets.lock.json'))
-        subproject.afterEvaluate {
-            def android = subproject.extensions.getByName('android')
+        // AGP snapshots native options before afterEvaluate; late DSL changes
+        // can look correct while CMake still builds the unpinned default SDK.
+        subproject.extensions.getByName('androidComponents').finalizeDsl { android ->
             android.defaultConfig.externalNativeBuild.cmake.arguments.addAll([
                 "-DFVP_DEPS_URL=${manifest.baseUrl}",
                 "-DFVP_DEPS_SHA256=${manifest.assets.android.sha256}"

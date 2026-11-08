@@ -43,3 +43,31 @@ Future<int> seekFvpTarget({
   }
   return -3;
 }
+
+/// MDK's Android audio output can retain a paused seek after it has played.
+/// Drive that target silently, then acknowledge pause before restoring volume.
+Future<int> seekFvpAudioTarget({
+  required bool Function() isCancelled,
+  required void Function(bool) setMuted,
+  required Future<void> Function() playAndWait,
+  required Future<int> Function() seek,
+  required Future<bool> Function() pauseAndConfirm,
+}) async {
+  setMuted(true);
+  var result = -2;
+  var paused = false;
+  try {
+    await playAndWait();
+    if (!isCancelled()) result = await seek();
+  } finally {
+    if (!isCancelled()) {
+      paused = await pauseAndConfirm();
+      if (paused && !isCancelled()) setMuted(false);
+    }
+  }
+  return isCancelled()
+      ? -2
+      : paused
+      ? result
+      : -3;
+}

@@ -38,6 +38,8 @@ try {
   # Switching Profile/Debug to Release must remove dev-only native plugins.
   & flutter @buildArgs
   if ($LASTEXITCODE -ne 0) { throw 'Development APK build failed.' }
+  & python (Join-Path $PSScriptRoot 'verify_android_fvp_sdk.py') "build/app/outputs/flutter-apk/app-arm64-v8a-$buildMode.apk"
+  if ($LASTEXITCODE -ne 0) { throw 'Development APK contains an unexpected fvp SDK.' }
 
   $output = Join-Path $repoRoot 'build/development/android-arm64'
   New-Item -ItemType Directory -Force -Path $output | Out-Null

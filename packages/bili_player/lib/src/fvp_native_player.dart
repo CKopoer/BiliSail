@@ -197,7 +197,9 @@ final class _MdkPlayerPort
   String _mediaUri = '';
   bool _silent = false;
   bool _primingDirectSurface = false;
+  bool _mutedAudioSeek = false;
   double _volume = 100;
+  bool get _needsAudioSeekPlayback => audioOnly && Platform.isAndroid;
   double? _appliedGainDb;
   mdk.AudioCodecParameters? _externalAudio;
   String? _videoDecoder;
@@ -780,28 +782,47 @@ final class _MdkPlayerPort
       return result;
     }
 
+    Future<bool> pauseTarget() async {
+      _player.state = mdk.PlaybackState.paused;
+      while (!_player.waitFor(mdk.PlaybackState.paused, timeout: 0)) {
+        if (isCancelled() || _observedState == mdk.PlaybackState.stopped) {
+          return false;
+        }
+        await _active(Future<void>.delayed(const Duration(milliseconds: 10)));
+      }
+      return true;
+    }
+
     Future<int> prepareTarget() async {
       await _retiringSeek;
       return seekFvpTarget(
         isCancelled: isCancelled,
         needsPrepare: () => _ended || _repreparing,
         prepare: restoreTarget,
-        pauseAndWait: () async {
-          _player.state = mdk.PlaybackState.paused;
-          while (!_player.waitFor(mdk.PlaybackState.paused, timeout: 0)) {
-            if (isCancelled() || _observedState == mdk.PlaybackState.stopped) {
-              return false;
-            }
-            await _active(
-              Future<void>.delayed(const Duration(milliseconds: 10)),
-            );
-          }
-          return true;
-        },
+        pauseAndWait: pauseTarget,
         seek: () {
           audio_activity.bili_fvp_audio_clock_seek(_audioClock);
-          return _active(
+          Future<int> decodeTarget() => _active(
             _player.seek(position: target.inMilliseconds, flags: flags),
+          );
+          if (!_needsAudioSeekPlayback) return decodeTarget();
+          return seekFvpAudioTarget(
+            isCancelled: isCancelled,
+            setMuted: (muted) {
+              _mutedAudioSeek = muted;
+              _player.volume = muted ? 0 : _volume / 100;
+            },
+            playAndWait: () async {
+              _player.state = mdk.PlaybackState.playing;
+              while (!_player.waitFor(mdk.PlaybackState.playing, timeout: 0)) {
+                if (isCancelled()) return;
+                await _active(
+                  Future<void>.delayed(const Duration(milliseconds: 10)),
+                );
+              }
+            },
+            seek: decodeTarget,
+            pauseAndConfirm: pauseTarget,
           );
         },
       );
@@ -921,7 +942,8 @@ final class _MdkPlayerPort
   void setVolume(double volume, double gainDb) {
     _volume = volume;
     _audioCompanion?.setVolume(volume, gainDb);
-    _player.volume = _primingDirectSurface && _audioCompanion == null
+    _player.volume =
+        _primingDirectSurface && _audioCompanion == null || _mutedAudioSeek
         ? 0
         : volume / 100;
     // Updating base volume must not rebuild an unchanged MDK audio filter.

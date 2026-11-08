@@ -2,7 +2,8 @@ param(
   [Parameter(Mandatory)][string]$DeviceId,
   [switch]$SkipReleaseBuild,
   [ValidateSet('all', 'media_kit', 'fvp')][string]$Backend = 'all',
-  [ValidateSet('all', 'renderedTexture', 'directTexture')][string]$Output = 'all'
+  [ValidateSet('all', 'renderedTexture', 'directTexture')][string]$Output = 'all',
+  [ValidateSet('synchronization', 'cache')][string]$Suite = 'synchronization'
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -34,18 +35,29 @@ try {
   # so the delayed-Range assertions actually exercise a new network read.
   $mediaDirectory = Join-Path $repoRoot 'build/validation/seek-fixtures'
   New-Item -ItemType Directory -Force -Path $mediaDirectory | Out-Null
-  Invoke-SeekCheck ffmpeg @('-hide_banner', '-loglevel', 'error', '-y',
-    '-i', 'test/fixtures/media/video.mp4', '-an', '-c:v', 'libx264', '-preset', 'ultrafast',
-    '-pix_fmt', 'yuv420p', '-b:v', '64M', '-minrate', '64M', '-maxrate', '64M', '-bufsize', '64M',
-    '-x264-params', 'nal-hrd=cbr:force-cfr=1', '-movflags', '+faststart', (Join-Path $mediaDirectory 'video.mp4'))
-  Copy-Item -LiteralPath 'test/fixtures/media/audio.m4a' -Destination $mediaDirectory
+  if ($Suite -eq 'cache') {
+    Invoke-SeekCheck ffmpeg @('-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi',
+      '-i', 'testsrc2=size=160x90:rate=24:duration=720', '-an', '-c:v', 'libx264', '-preset', 'veryfast',
+      '-crf', '28', '-pix_fmt', 'yuv420p', '-g', '24', '-movflags', '+faststart', (Join-Path $mediaDirectory 'video.mp4'))
+    Invoke-SeekCheck ffmpeg @('-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi',
+      '-i', 'sine=frequency=440:sample_rate=48000:duration=720', '-vn', '-c:a', 'aac', '-b:a', '64k',
+      '-movflags', '+faststart', (Join-Path $mediaDirectory 'audio.m4a'))
+  } else {
+    Invoke-SeekCheck ffmpeg @('-hide_banner', '-loglevel', 'error', '-y',
+      '-i', 'test/fixtures/media/video.mp4', '-an', '-c:v', 'libx264', '-preset', 'ultrafast',
+      '-pix_fmt', 'yuv420p', '-b:v', '64M', '-minrate', '64M', '-maxrate', '64M', '-bufsize', '64M',
+      '-x264-params', 'nal-hrd=cbr:force-cfr=1', '-movflags', '+faststart', (Join-Path $mediaDirectory 'video.mp4'))
+    Copy-Item -LiteralPath 'test/fixtures/media/audio.m4a' -Destination $mediaDirectory
+  }
+  $entrypoint = if ($Suite -eq 'cache') { 'integration_test/native_seek_cache_test.dart' } else { 'integration_test/android_seek_synchronization_test.dart' }
   Invoke-SeekCheck flutter @('build', 'apk', '--profile', '--target-platform', 'android-arm64', '--split-per-abi',
-    '--target', 'integration_test/android_seek_synchronization_test.dart', $AndroidDevelopmentBuildArgument,
+    '--target', $entrypoint, $AndroidDevelopmentBuildArgument,
     "--build-number=$fixtureBuild", "--dart-define=BILISAIL_RELEASE_VERSION=$fixtureVersion",
     "--dart-define=BILI_TEST_MEDIA_DIR=$fixtureDirectory",
     "--dart-define=BILI_TEST_BACKEND=$Backend", "--dart-define=BILI_TEST_OUTPUT=$Output")
   $fixtureApk = Join-Path $repoRoot 'build/validation/seek-profile.apk'
   Copy-Item -LiteralPath 'build/app/outputs/flutter-apk/app-arm64-v8a-profile.apk' -Destination $fixtureApk
+  Invoke-SeekCheck python @((Join-Path $PSScriptRoot 'verify_android_fvp_sdk.py'), $fixtureApk)
   $fixtureIdentity = Confirm-AndroidDevelopmentApk $fixtureApk 'Profile'
   $fixtureCertificate = Confirm-AndroidApkSigning $fixtureApk ([pscustomobject]@{ Signing = 'temporary-debug-key' })
   if ($fixtureIdentity.VersionCode -ne $restoreIdentity.VersionCode -or $fixtureCertificate -cne $restoreCertificate) {
