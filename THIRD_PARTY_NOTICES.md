@@ -12,7 +12,7 @@ Windows x64 改用个人 mpv `afd6da8843a07f463ba4c736a2ea636b1a92e23e` 重建�
 
 ## 2026-11-07 个人媒体 fork
 
-当前核心、视频和全部平台库插件统一来自 MIT 的 [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/ba68fe1c56d46ed5d0e651da8d15e803e45038cb)，官方基线为 `c533e446755f51cf53c7e57aea873f2aa5355f81`。mpv 源码由 [CKopoer/mpv](https://github.com/CKopoer/mpv) 维护；固定资产与原来源见 [native-2026-11-07](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)。Windows、Android、Apple 的首批资产为原摘要不变的上游镜像；Linux 从个人固定源码构建，子依赖继续记录发行版来源。MIT 不替代 mpv、FFmpeg、ANGLE 或其他子依赖的许可。当前入口及验证见[实施记录](docs/validation/media-kit-personal-fork-2026-11-07.md)；下列各次切换记录保留为历史。
+当前核心、视频和全部平台库插件统一来自 MIT 的 [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/b1c7e4336140d8c4550c1e963365da8edfe56d0a)，官方基线为 `c533e446755f51cf53c7e57aea873f2aa5355f81`。mpv 源码由 [CKopoer/mpv](https://github.com/CKopoer/mpv) 维护；固定资产与原来源见 [native-2026-11-07](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)。Windows、Android、Apple 的首批资产为原摘要不变的上游镜像；Linux 从个人固定源码构建，子依赖继续记录发行版来源。MIT 不替代 mpv、FFmpeg、ANGLE 或其他子依赖的许可。当前入口及验证见[实施记录](docs/validation/media-kit-personal-fork-2026-11-07.md)；下列各次切换记录保留为历史。
 
 
 

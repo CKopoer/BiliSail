@@ -9,6 +9,11 @@ from windows/patches/fvp. It publishes completed immutable D3D11 snapshots using
 the MIT-licensed helper in the pinned CKopoer/media-kit fork. Upstream source and
 licenses are preserved; the Pub cache and MDK SDK binaries are not modified.
 
+The CocoaPods build stages a verified copy of the same pinned Apple plugin in
+build/apple-plugins and replaces MetalTexture using native/fvp/apple. It publishes
+write-once IOSurfaces only after Metal command completion. The original BSD
+license, MDK command queue and fixed SDK binaries are preserved.
+
 MDK SDK version 0.39.0 is copyright Wang Bin. The upstream author permits free
 use, including commercial use, through Flutter's fvp plugin, which installs the
 bundled Flutter key. The SDK has its own license; the upstream license text is

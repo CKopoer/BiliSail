@@ -31,6 +31,9 @@ target 'Runner' do
   pod 'mdk', :podspec => '../native/fvp/mdk.podspec'
 
   flutter_install_all_macos_pods File.dirname(File.realpath(__FILE__))
+  unless system('python3', File.expand_path('../tool/prepare-fvp-apple.py', __dir__), 'macos')
+    raise 'Could not prepare the pinned fvp Apple texture renderer'
+  end
   target 'RunnerTests' do
     inherit! :search_paths
   end

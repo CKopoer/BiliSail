@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-11-08 后续：Apple media_kit 的 GPU／软件输出改为发布独立完整 CoreVideo 帧，fvp 等待 Metal blit 完成后交付不可变图像；Linux media_kit 补齐跨 context 双向完成屏障与软件像素副本。Android 两后端通过系统 Surface 队列交接，未发现同类应用层覆盖路径。源码、受控回归和未实测边界见[Apple／Linux 与 Android 检查](validation/apple-linux-texture-handoff-2026-11-08.md)。
+
 2026-11-08：Windows media_kit／fvp 改为交付 GPU 已完成的不可变纹理快照，避免 Flutter 取样期间被后续帧覆盖；GPU 复制未完成时沿用上一完整帧并请求重试。来源、延后消费回归、额外分配／复制的性能边界及其他平台的独立实现见[纹理交接记录](validation/windows-texture-handoff-2026-11-08.md)。
 
 2026-11-08：fvp 连续跳转与片尾释放并发时，仅最新跳转可以改变播放状态；MDK busy／unloaded 在原总预算内最多重新准备一次当前源，旧 EOF／旧异常不清除在途跳转。Android Release 证据、暂停／重播和平台回归见[连续跳转与片尾竞态](validation/fvp-rapid-seek-eof-2026-11-08.md)。

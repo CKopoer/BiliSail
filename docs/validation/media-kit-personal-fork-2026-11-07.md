@@ -1,5 +1,7 @@
 # 官方基线与个人媒体 fork 统一维护
 
+2026-11-08 Apple／Linux 后续：现行源码统一固定到 `b1c7e4336140d8c4550c1e963365da8edfe56d0a`，修复 Apple 完成帧发布与旧缓冲重用、Linux GPU 跨 context 同步和软件帧交付；Windows 修复及全部 SDK 资产继续沿用。实现与未测项见[跨平台纹理交接](apple-linux-texture-handoff-2026-11-08.md)。以下各条保留对应专项当时的固定引用。
+
 2026-11-08 后续：现行媒体依赖统一固定到 `ba68fe1c56d46ed5d0e651da8d15e803e45038cb`，Windows 两后端共用已完成、不可变的 GPU 快照；原 SDK／ANGLE／MDK 资产未改变。修复、旧帧延后消费与慢 GPU 回归及跨平台边界见[纹理交接记录](windows-texture-handoff-2026-11-08.md)。以下保留迁移当时的来源与验证快照。
 
 日期：2026-11-07（Asia/Shanghai）。本轮将播放器核心、视频插件、平台库插件与 libmpv 的维护入口统一到个人 fork；保持当前 Flutter Texture 合成、弹幕调度和产品容量设置。依赖迁移不作为新的性能提升结论。
