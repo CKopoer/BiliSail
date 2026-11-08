@@ -73,3 +73,14 @@ test('automatic cancellation keeps manual and reusable release dispatches indepe
   const release = readFileSync('.github/workflows/release.yml', 'utf8');
   assert.match(release, /reuse_ci_build:\r?\n[\s\S]*?default: true/);
 });
+
+test('root test matrix covers every shard exactly once with the same total', () => {
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const rootJob = /  root-tests:\r?\n([\s\S]*?)\r?\n  package-tests:/.exec(workflow)?.[1];
+  assert.ok(rootJob);
+  const shards = /shard: \[([\d, ]+)\]/.exec(rootJob)?.[1].split(',').map(Number);
+  const total = Number(/-TotalShards (\d+)/.exec(rootJob)?.[1]);
+  assert.ok(total > 1);
+  assert.deepEqual(shards, Array.from({ length: total }, (_, index) => index));
+  assert.match(rootJob, /-ShardIndex \$\{\{ matrix.shard \}\}/);
+});

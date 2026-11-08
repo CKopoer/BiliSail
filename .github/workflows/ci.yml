@@ -161,7 +161,7 @@ jobs:
         with:
           key: ${{ steps.flutter.outputs.sdk-key }}
           path: ${{ steps.flutter.outputs.sdk-path }}
-          reserve-bytes: '3000000000'
+          reserve-bytes: '2200000000'
       - name: Check formatting, analysis and packaging boundaries
         shell: pwsh
         run: ./tool/check.ps1 -Stage Lint -EnforceLockfile
@@ -203,7 +203,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1]
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -213,7 +213,7 @@ jobs:
         shell: pwsh
         env:
           BILISAIL_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./tool/check.ps1 -Stage RootTests -TotalShards 2 -ShardIndex ${{ matrix.shard }} -EnforceLockfile
+        run: ./tool/check.ps1 -Stage RootTests -TotalShards 4 -ShardIndex ${{ matrix.shard }} -EnforceLockfile
 
   package-tests:
     name: Package tests
@@ -313,7 +313,7 @@ jobs:
         with:
           key: ${{ steps.flutter.outputs.sdk-key }}
           path: ${{ steps.flutter.outputs.sdk-path }}
-          reserve-bytes: '3000000000'
+          reserve-bytes: '2800000000'
       - name: Require native ARM64 Dart for Windows
         if: matrix.target == 'windows-arm64'
         timeout-minutes: 10
@@ -414,6 +414,7 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-version
           pod --version
       - name: Build and package preview
+        id: package
         timeout-minutes: ${{ startsWith(matrix.target, 'macos-') && 30 || 90 }}
         shell: pwsh
         env:
@@ -430,8 +431,13 @@ jobs:
           MSIX_CERTIFICATE_BASE64: ${{ startsWith(matrix.target, 'windows-') && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_BASE64 || '' }}
           MSIX_CERTIFICATE_PASSWORD: ${{ startsWith(matrix.target, 'windows-') && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_PASSWORD || '' }}
         run: ./tool/build-release.ps1 -Target $env:BUILD_TARGET -Version $env:BUILD_VERSION -AndroidPreviewSigning:($env:ANDROID_PREVIEW_SIGNING -eq 'true')
+      # The build marks Pub ready only after strict resolution, before native
+      # work. Preserve those downloads even if compilation or packaging fails.
       - name: Save platform Pub dependencies
-        if: needs.prepare.outputs.cache-write == 'true' && matrix.cache_writer && steps.flutter.outputs.pub-hit != 'true'
+        if: >-
+          !cancelled() && needs.prepare.outputs.cache-write == 'true' &&
+          matrix.cache_writer && steps.flutter.outputs.pub-hit != 'true' &&
+          steps.package.outputs.pub-resolved == 'true'
         uses: ./.github/actions/save-ci-cache
         with:
           key: ${{ steps.flutter.outputs.pub-key }}
@@ -449,7 +455,7 @@ jobs:
         with:
           path: ~/.gradle/wrapper
           key: ${{ steps.gradle-wrapper.outputs.cache-primary-key }}
-          reserve-bytes: '300000000'
+          reserve-bytes: '600000000'
       - name: Collect Windows native build diagnostics
         if: failure() && startsWith(matrix.target, 'windows-')
         shell: pwsh

@@ -172,3 +172,40 @@ test('formatting diagnostics run only after Flutter setup succeeded', () => {
     }
   }
 });
+
+test('platform Pub caches survive native failures only after strict resolution', () => {
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const condition = /name: Save platform Pub dependencies\r?\n\s+if: >-\r?\n([\s\S]*?)\s+uses:/.exec(workflow)?.[1];
+  assert.ok(condition);
+  const expression = condition.replace(/\.([a-z]+(?:-[a-z]+)+)/g, '["$1"]');
+  const evaluate = new Function('cancelled', 'needs', 'matrix', 'steps', `return ${expression};`);
+  for (const cancelled of [true, false]) {
+    for (const ready of ['true', 'false', '']) {
+      for (const hit of ['true', 'false', '']) {
+        for (const writer of [true, false]) {
+          for (const outcome of ['success', 'failure']) {
+            const needs = { prepare: { outputs: { 'cache-write': 'true' } } };
+            const steps = { flutter: { outputs: { 'pub-hit': hit } },
+              package: { outcome, outputs: { 'pub-resolved': ready } } };
+            assert.equal(evaluate(() => cancelled, needs, { cache_writer: writer }, steps),
+              !cancelled && writer && ready === 'true' && hit !== 'true');
+          }
+        }
+      }
+    }
+  }
+  const build = readFileSync('tool/build-release.ps1', 'utf8');
+  const source = build.indexOf('$sourceDirty = [bool]$sourceChanges');
+  const resolve = build.indexOf("Invoke-BuildDependencyCommand flutter @('pub', 'get', '--enforce-lockfile')");
+  const ready = build.indexOf("'pub-resolved=true'");
+  const native = build.indexOf("Invoke-BuildCommand python @((Join-Path $PSScriptRoot 'prepare-sqlite-assets.py')");
+  assert.ok(source >= 0 && source < resolve && resolve < ready && ready < native);
+  assert.equal((workflow.match(/name: Save platform Pub dependencies/g) ?? []).length, 1);
+});
+
+test('Gradle wrapper caches the pinned binary distribution with a verified checksum', () => {
+  const properties = readFileSync('android/gradle/wrapper/gradle-wrapper.properties', 'utf8');
+  assert.match(properties, /^distributionUrl=https\\:\/\/services\.gradle\.org\/distributions\/gradle-[\d.]+-bin\.zip\r?$/m);
+  assert.match(properties, /^distributionSha256Sum=[a-f0-9]{64}\r?$/m);
+  assert.doesNotMatch(properties, /-all\.zip/);
+});

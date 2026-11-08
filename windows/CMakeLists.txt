@@ -57,6 +57,13 @@ add_subdirectory("runner")
 # them to the application.
 include(../native/fvp/configure.cmake)
 include(flutter/generated_plugins.cmake)
+# The pinned WebView plugin's C++17 WinRT headers use the coroutine TS ABI.
+# VS 2026 rejects that deprecated header unless explicitly acknowledged. Keep
+# this temporary compatibility definition private to the third-party target.
+if(MSVC AND TARGET flutter_inappwebview_windows_plugin)
+  target_compile_definitions(flutter_inappwebview_windows_plugin PRIVATE
+    _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+endif()
 include(patches/fvp/apply.cmake)
 bilisail_patch_fvp_target()
 list(FILTER PLUGIN_BUNDLED_LIBRARIES EXCLUDE REGEX "[/\\\\]mdk-(braw|r3d|nvjp2k)\\.dll$")

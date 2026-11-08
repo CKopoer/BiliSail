@@ -6,7 +6,7 @@
 
 - [CI](../../.github/workflows/ci.yml)：替换原来的 `windows.yml`；分支 push、PR、手动运行时执行检查及构建，也供 Release 复用。
 - [Release preview](../../.github/workflows/release.yml)：在 Actions 页面手动运行；可选择五个平台，并可按目标复用同提交、同版本且已通过检查与构建的 CI 产物，只补建缺少的目标。全部所选构建通过后，将完整产物汇总上传为单个 Actions ZIP artifact，再创建 **draft + prerelease** 并上传安装包、签名公钥证书、汇总 ZIP、校验文件与第三方说明。不会自动公开发布。
-- [检查脚本](../../tool/check.ps1)：本地默认检查根应用和四个独立包；CI 在 Ubuntu 使用 PowerShell 7，分别执行 `Lint`、两份 `RootTests` 分片和 `PackageTests`。格式检查覆盖根应用与各包，根分析统一扫描子包，故分析前仍安装所有包的开发依赖。`-EnforceLockfile` 要求 pub 使用提交的锁文件及内容哈希。
+- [检查脚本](../../tool/check.ps1)：本地默认检查根应用和四个独立包；CI 在 Ubuntu 使用 PowerShell 7，分别执行 `Lint`、四份 `RootTests` 分片和 `PackageTests`。格式检查覆盖根应用与各包，根分析统一扫描子包，故分析前仍安装所有包的开发依赖。`-EnforceLockfile` 要求 pub 使用提交的锁文件及内容哈希。
 - [构建打包脚本](../../tool/build-release.ps1)：各平台使用对应主机生成预览包，缺文件、原生命令失败、签名失败立即停止。已有同目标输出目录时拒绝覆盖，重新本地构建前先将其移走。
 
 | 任务 | Runner | 产物与边界 |
@@ -27,7 +27,7 @@ Flutter 固定 **3.47.6 stable / Dart 3.13.5**；升级需同时调整工作流�
 
 2026-11-08 起，[依赖恢复组合 Action](../../.github/actions/restore-flutter/action.yml) 关闭 `flutter-action` 的自动 SDK／Pub 写入，使用独立的 restore／save。SDK 仅保留 Linux x64 与 macOS ARM64，沿用系统、架构、版本及 revision 隔离的原键；Windows 两种架构与 macOS Intel 每次安装固定 SDK，避免大型快照互相挤占。Pub 使用 `bilisail-pub-v2` 前缀、系统、实际 runner ABI、Flutter 版本和五份锁文件哈希，精确命中优先，未命中时回退同系统／ABI／SDK 的快照，仍执行 `pub get --enforce-lockfile`。Windows ARM64 的 Pub 键使用 ARM64，不与其初始 x64 Flutter 分发包的 ABI 混淆。
 
-Linux SDK 与完整 Pub 的唯一写入者是 lint；Pub 只在根应用与四包依赖解析、分析成功后保存，mux／根测试／包测试／Android 与 Linux 构建仅读取。其他 host ABI 各有一个构建写入者，macOS ARM64 与 iOS 同时选中时由前者保存，iOS-only 时由 iOS 保存。自动写入、清理只允许默认分支的 push／手动运行，分支与 PR 仅读取；MSYS2 上游 Action 不提供只读缓存模式，因此非默认分支关闭其缓存。Gradle 改为独立恢复／受控保存，依赖键仍覆盖 Android 脚本、properties、Wrapper、全部 Pub 锁文件与 SDK 版本；Wrapper 按自身配置单独缓存，不随 Pub 更新复制。
+Linux SDK 与完整 Pub 的唯一写入者是 lint；Pub 只在根应用与四包依赖解析、分析成功后保存，mux／根测试／包测试／Android 与 Linux 构建仅读取。其他 host ABI 各有一个构建写入者，macOS ARM64 与 iOS 同时选中时由前者保存，iOS-only 时由 iOS 保存；构建在正确 host ABI 下严格解析依赖后输出 `pub-resolved=true`，缓存未精确命中且该标志存在时，后续原生编译／打包成功或失败都能保存这份完整快照，取消时跳过。源码清洁状态仍在原位置、Pub 执行前记录。自动写入、清理只允许默认分支的 push／手动运行，分支与 PR 仅读取；MSYS2 上游 Action 不提供只读缓存模式，因此非默认分支关闭其缓存。Gradle 改为独立恢复／受控保存，依赖键仍覆盖 Android 脚本、properties、Wrapper、全部 Pub 锁文件与 SDK 版本；Wrapper 按自身配置单独缓存，不随 Pub 更新复制，使用固定版本的 `-bin.zip` 和官方 SHA-256。
 
 [缓存策略脚本](../../tool/ci-cache-policy.cjs) 只清理默认分支中已识别的本项目缓存，不碰其他分支／PR 或未知缓存；每类保留一份当前快照，淘汰旧 Flutter 版本、停用的 SDK 与重复代际。新版 Pub 成功写入后淘汰对应 ABI 的旧前缀，APT／tools 两份都就绪后再淘汰旧合并快照。每次受控保存先清理过时条目，以十进制 9 GB 为预算并计入全部分支用量，按类型预留上传空间；必要时先轮换本类旧快照，空间不足或 API 查询失败时跳过新增缓存，不为保存小缓存删除另一类有效 SDK。此预算是并发上传下的尽力约束，GitHub 自身 LRU、上游 MSYS2 写入及缓存实际大小仍可能影响最终用量，不能宣称缓存被永久固定。
 
@@ -50,6 +50,35 @@ macOS 原生插件按根 `pubspec.yaml` 的项目级开关统一使用 CocoaPods
 本地临时使用镜像运行 `pub get` 可能改写锁文件中的 hosted URL；不要将这类改动混入提交。恢复官方源后重新验证五份锁文件，并确认依赖版本、约束、内容哈希没有意外变化。`FLUTTER_STORAGE_BASE_URL` 控制 Flutter SDK 下载，与 Pub 包源是不同设置。
 
 Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d10a7fa0f6c6ec005340fb9ad29f3b012d0/lib/src/source/hosted.dart#L40) 会将官方旧域名 `https://pub.dartlang.org` 规范化为 `https://pub.dev`，再用于 hosted 来源身份比较；两者的文本差异不等于来源冲突。`pub.flutter-io.cn` 是另一来源，不能依赖这种官方别名规范化消除镜像冲突。验证以固定 Flutter 3.47.6 的实际解析、内容哈希与 `--enforce-lockfile` 为准。
+
+## 2026-11-08：实际 CI 耗时与缓存调整
+
+分析对象为 [CI 42480258474](https://github.com/CKopoer/BiliSail/actions/runs/42480258474)，源码 `28dfa0f8f3060016ce8a2a59c9a71e8942966178`，总墙钟约 31 分 53 秒。全部检查和六个构建目标通过，Windows ARM64 构建失败；这是该次运行的证据，不代表本轮未提交改动已经通过远端验证。
+
+| 任务 | 该次实际墙钟 | 主要观察 |
+| --- | --- | --- |
+| 根测试 0／1 | 10:20／8:45 | 测试步骤为 9:46／8:10，仍是构建开始前的关键路径 |
+| 格式／分析 | 2:48 | SDK／完整 Pub 命中，严格根依赖解析约半秒；日志中的受控下载失败样例来自测试 fixture |
+| 包测试／原生 mux | 2:07／1:36 | 原生 mux 实际编译并回归，未跳过该项检查 |
+| Android | 6:28 | Gradle、Wrapper、Linux SDK／Pub 均命中 |
+| macOS ARM64／iOS | 4:51／7:32 | 共享 ARM64 SDK／Pub，组合 Action 已正常加载 |
+| macOS Intel | 14:17 | SDK／Pub 设置为 2:19，mux 约 1:38；继续承担冷 SDK 安装成本 |
+| Windows x64 | 17:13 | 设置 2:10，mux 约 2:35，Flutter 编译约 9:04 |
+| Windows ARM64 | 20:57，失败 | 原生 Dart 自举通过，固定 WebView 插件遇到 MSVC 19.51 的 STL1011 |
+| Linux | 10:18 | 依赖恢复／安装已较短，Flutter bundle 完成后打包仍约 6:18 |
+
+当时通过 GitHub API 读取的缓存合计 **7,859,562,869 bytes／13 条**，Linux SDK 约 1.72 GB、Apple ARM64 SDK 约 2.22 GB、Gradle 约 1.30 GB、Flatpak 约 0.94 GB。完整 Linux Pub 为 202,578,992 bytes，已经替代此前 mux-only 的约 26 MB 快照；本轮没有出现同键写入竞争。APT／固定工具拆分后的快照约 164 MB／19 MB，也没有每次复制固定工具。Windows ARM64 Pub 尚未保存，因为旧流程要等待整个打包成功。
+
+据此实施以下调整：
+
+- 根测试改为四片，矩阵索引 0–3 与 `TotalShards=4` 同步，保留全部测试及原 `Analyze and test` 汇总。增加矩阵覆盖回归，新的耗时与 runner 分钟留待下一轮比较。
+- Windows WebView 插件仍固定现有版本，只给 `flutter_inappwebview_windows_plugin` 的 MSVC 编译添加 PRIVATE `_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS`。这是针对固定 C++17／WinRT 协程 TS 头文件的临时兼容确认，未修改 Pub 缓存或应用／其他插件的编译选项；后续升级插件时应复核移除。依据 [Microsoft STL 的诊断条件](https://github.com/microsoft/STL/blob/main/stl/inc/experimental/coroutine)及 [MSVC 协程选项说明](https://learn.microsoft.com/en-us/cpp/build/reference/await-enable-coroutine-support?view=msvc-170)，不混合改变旧协程 ABI。
+- 平台 Pub 以严格依赖解析完成标志作为保存条件，后续编译／打包失败时也通过 `!cancelled()` 路径使用原有有界保存入口；未完成依赖解析或已取消时跳过。保持源码清洁快照在 Pub 前，不新增预解析，也不改变实际 Flutter build 的原生注册文件生成流程。增加成功／失败／取消、完整／未完整解析和缓存命中的条件回归；Linux 仍只有 lint 写入。
+- Wrapper 原来使用 `gradle-9.3.1-all.zip`，缓存实际为 401,848,579 bytes，已经超过原 300 MB 预留。改为同版本的 `gradle-9.3.1-bin.zip`，SHA-256 从[官方端点](https://services.gradle.org/distributions/gradle-9.3.1-bin.zip.sha256)读取并固定为 `b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06`；省去构建不需要的 Gradle 源码／文档，实际新快照大小以下轮 API 为准。Wrapper 保守预留提高为 600 MB；依赖键包含 Wrapper 配置，本次会一次性轮换 Gradle／Wrapper 两类快照。
+- SDK 预留按已测快照分别调整为 Linux 2.2 GB、Apple ARM64 2.8 GB，减少统一预留 3 GB 导致有空间却不保存 SDK 的情况，仓库预算仍为十进制 9 GB。保留现有两类 SDK 选择：直接加回约 2.22 GB 的 Intel SDK 会使上述稳定占用达到约 10.08 GB；单次冷安装变慢尚不足以支撑恢复全部 SDK 大快照。
+- Linux 打包按 AppDir／GTK 收集、依赖及许可校验、AppImage、Flatpak repo／bundle、安装及实际 Runtime 检查分别分组计时并保留退出码。下一轮据此区分约六分钟的打包成本，未删减安装后 Runtime 校验或更改包内容策略。固定 mux 重复编译仍是后续可评估的热点，需要精确源码／工具链身份和产物校验后再设计缓存。
+
+同分支取消、push／PR 去重和默认 Release 复用保持现有实现；这次单一默认分支 push 不能证明开 PR 去重或 Release 复用的运行效果。按用户要求，本轮只读取远端记录、审阅改动和提交，**没有在本机运行测试、静态分析、actionlint、构建或 CI 验证脚本**。新增分片、失败后保存及 Wrapper 回归留给下一次 CI；Windows ARM64 兼容修复、实际提速和新缓存容量同样待远端验证。
 
 ## Windows ARM64 构建
 

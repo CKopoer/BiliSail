@@ -2,6 +2,17 @@
 # Package an existing Ubuntu 24.04 x64 Flutter release bundle. No Flutter build
 # runs here; build-release.ps1 supplies version, source archive and checksums.
 set -euo pipefail
+
+run_stage() {
+  local label="$1" started=$SECONDS result=0
+  shift
+  printf '::group::%s\n' "$label"
+  "$@" || result=$?
+  printf '%s finished in %ss (exit %s)\n' "$label" "$((SECONDS - started))" "$result"
+  echo '::endgroup::'
+  return "$result"
+}
+
 version="${1:?usage: package-linux.sh x.y.z+N output-directory}"
 [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\+(0|[1-9][0-9]*)$ ]] || { echo 'Invalid version' >&2; exit 1; }
 [[ "$(uname -sm)" == 'Linux x86_64' ]] || { echo 'Linux x64 required' >&2; exit 1; }
@@ -44,14 +55,14 @@ if grep -q 'not found' <<< "$mpv_dependencies"; then
   echo 'Pinned libmpv has unresolved runtime dependencies' >&2
   exit 1
 fi
-"$work/tools/linuxdeploy-x86_64.AppImage" --appdir "$work/AppDir" \
+run_stage 'Populate AppDir and GTK dependencies' "$work/tools/linuxdeploy-x86_64.AppImage" --appdir "$work/AppDir" \
   --executable "$work/AppDir/usr/bin/bilisail" --library "$mpv" \
   --desktop-file "$repo/linux/packaging/dev.bilisail.bilisail.desktop" \
   --icon-file "$repo/linux/packaging/dev.bilisail.bilisail.png" --plugin gtk
 
 # Retain distro license texts and exact source/binary versions for every bundled
 # distro library (the Flutter/mux licenses are supplied separately).
-python3 "$repo/tool/linux-package-validation.py" "$work/AppDir" "$version"
+run_stage 'Validate AppDir dependencies and notices' python3 "$repo/tool/linux-package-validation.py" "$work/AppDir" "$version"
 export LDAI_OUTPUT="$output/BiliSail-$version-linux-x64.AppImage"
 export LDAI_VERSION="$version"
 # Reuse the type-2 runtime in our hash-verified linuxdeploy image. Otherwise
@@ -60,20 +71,20 @@ runtime_offset="$("$work/tools/linuxdeploy-x86_64.AppImage" --appimage-offset)"
 [[ "$runtime_offset" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid AppImage runtime offset' >&2; exit 1; }
 export LDAI_RUNTIME_FILE="$work/tools/appimage-runtime"
 dd if="$work/tools/linuxdeploy-x86_64.AppImage" of="$LDAI_RUNTIME_FILE" bs=1 count="$runtime_offset" status=none
-"$work/tools/linuxdeploy-x86_64.AppImage" --appdir "$work/AppDir" --output appimage
+run_stage 'Build AppImage' "$work/tools/linuxdeploy-x86_64.AppImage" --appdir "$work/AppDir" --output appimage
 [[ -s "$LDAI_OUTPUT" ]] || { echo 'AppImage was not produced' >&2; exit 1; }
 
 cp "$repo/linux/packaging/dev.bilisail.bilisail.json" "$work/manifest.json"
-flatpak-builder --user --force-clean --disable-rofiles-fuse --repo="$work/repository" \
+run_stage 'Build Flatpak repository' flatpak-builder --user --force-clean --disable-rofiles-fuse --repo="$work/repository" \
   "$work/flatpak-build" "$work/manifest.json"
-flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+run_stage 'Export Flatpak bundle' flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
   "$work/repository" "$output/BiliSail-$version-linux-x64.flatpak" dev.bilisail.bilisail
-flatpak install --user --assumeyes --noninteractive --no-related \
+run_stage 'Install exported Flatpak' flatpak install --user --assumeyes --noninteractive --no-related \
   "$output/BiliSail-$version-linux-x64.flatpak"
 # Check the actual exported package under the Runtime, where SDK-only libraries
 # cannot accidentally hide a missing dependency. This does not launch the UI.
 echo 'Checking dependencies inside the installed Flatpak Runtime'
-flatpak run --user --command=sh dev.bilisail.bilisail -s < "$repo/tool/linux-runtime-validation.sh"
+run_stage 'Validate installed Flatpak Runtime' flatpak run --user --command=sh dev.bilisail.bilisail -s < "$repo/tool/linux-runtime-validation.sh"
 python3 - "$repo/linux/packaging/dev.bilisail.bilisail.json" "$(dirname "$output")/linux-packaging.json" <<'PY'
 import json, sys
 from pathlib import Path

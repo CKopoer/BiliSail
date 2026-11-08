@@ -196,6 +196,11 @@ try {
   $sourceDirty = [bool]$sourceChanges
   $lockHash = (Get-FileHash -LiteralPath 'pubspec.lock' -Algorithm SHA256).Hash
   Invoke-BuildDependencyCommand flutter @('pub', 'get', '--enforce-lockfile')
+  # Publish readiness after resolution without moving pub ahead of the source
+  # provenance snapshot. A later native failure may still reuse these downloads.
+  if ($env:GITHUB_ACTIONS -eq 'true' -and $env:GITHUB_OUTPUT) {
+    'pub-resolved=true' >> $env:GITHUB_OUTPUT
+  }
   Invoke-BuildCommand python @((Join-Path $PSScriptRoot 'prepare-sqlite-assets.py'), '--target', $Target)
   if ($isWindowsTarget) {
     & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1') -Architecture $windowsArch
