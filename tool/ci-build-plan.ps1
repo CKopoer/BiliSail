@@ -44,5 +44,12 @@ if (![string]::IsNullOrWhiteSpace($env:BUILD_TARGETS)) {
   }
   $platforms = @($platforms | Where-Object { $_.target -cin $targets })
 }
+foreach ($platform in $platforms) {
+  # Linux Pub/SDK writes belong to lint. Apple ARM64 has one build writer,
+  # including an iOS-only release; Windows ARM64 uses its actual host Pub ABI.
+  $platform.cache_sdk = $platform.target -in @('android-arm64', 'linux-x64', 'macos-arm64', 'ios-arm64')
+  $platform.cache_writer = $platform.target -in @('windows-x64', 'windows-arm64', 'macos-x64', 'macos-arm64') -or
+    ($platform.target -eq 'ios-arm64' -and 'macos-arm64' -notin $platforms.target)
+}
 "version=$version" >> $env:GITHUB_OUTPUT
 "matrix=$(@{ include = @($platforms) } | ConvertTo-Json -Depth 3 -Compress)" >> $env:GITHUB_OUTPUT

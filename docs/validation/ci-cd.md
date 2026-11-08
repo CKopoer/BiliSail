@@ -25,9 +25,17 @@ PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Wi
 
 Flutter 固定 **3.47.6 stable / Dart 3.13.5**；升级需同时调整工作流、检查/构建脚本并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Apple 构建在 Flutter 和 mux 编译前通过 `DEVELOPER_DIR` 显式选择 runner 中的 Xcode 26.2，并打印 Xcode、Swift 和 SDK 版本，缺少该版本立即失败。系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
 
-SDK 缓存沿用 `flutter-action` 的默认键，按系统、SDK 架构、版本和 revision 隔离。Pub 缓存键只配置系统、架构和版本前缀，由当前固定的 Action 追加所有 `pubspec.lock` 的哈希，避免重复追加。Gradle 缓存键覆盖 Android Gradle 脚本、`android/gradle.properties`、Wrapper 配置、所有 Pub 锁文件和 `.flutter-version`，使插件、SDK 或构建配置变化后保存新的依赖缓存。Release 新建构建沿用同一套缓存配置；开启产物复用时直接读取匹配 CI 的 artifacts。
+2026-11-08 起，[依赖恢复组合 Action](../../.github/actions/restore-flutter/action.yml) 关闭 `flutter-action` 的自动 SDK／Pub 写入，使用独立的 restore／save。SDK 仅保留 Linux x64 与 macOS ARM64，沿用系统、架构、版本及 revision 隔离的原键；Windows 两种架构与 macOS Intel 每次安装固定 SDK，避免大型快照互相挤占。Pub 使用 `bilisail-pub-v2` 前缀、系统、实际 runner ABI、Flutter 版本和五份锁文件哈希，精确命中优先，未命中时回退同系统／ABI／SDK 的快照，仍执行 `pub get --enforce-lockfile`。Windows ARM64 的 Pub 键使用 ARM64，不与其初始 x64 Flutter 分发包的 ABI 混淆。
 
-Linux 另用固定 SHA 的 `actions/cache/restore`／`save` 缓存 apt 下载的 `.deb`、经 SHA-256 校验的 linuxdeploy／GTK hook，以及用户级 Flatpak Runtime／SDK。键包含 Ubuntu 24.04 x64、相关安装脚本／manifest 哈希和 UTC 周次，允许恢复同配置前一周的缓存；仍执行 apt 索引更新、包验证和 Flatpak `--or-update`，工具每次读取缓存也校验固定哈希，损坏条目重新下载。依赖安装后、应用构建前单独保存，避免后续打包失败丢失缓存，也不把安装后的 BiliSail Flatpak 混进 Runtime 缓存。不缓存整个 `build/`、`.dart_tool/`、apt 索引或签名材料；首次运行仍需完整下载，缓存实际命中及耗时须由新 CI 确认。
+Linux SDK 与完整 Pub 的唯一写入者是 lint；Pub 只在根应用与四包依赖解析、分析成功后保存，mux／根测试／包测试／Android 与 Linux 构建仅读取。其他 host ABI 各有一个构建写入者，macOS ARM64 与 iOS 同时选中时由前者保存，iOS-only 时由 iOS 保存。自动写入、清理只允许默认分支的 push／手动运行，分支与 PR 仅读取；MSYS2 上游 Action 不提供只读缓存模式，因此非默认分支关闭其缓存。Gradle 改为独立恢复／受控保存，依赖键仍覆盖 Android 脚本、properties、Wrapper、全部 Pub 锁文件与 SDK 版本；Wrapper 按自身配置单独缓存，不随 Pub 更新复制。
+
+[缓存策略脚本](../../tool/ci-cache-policy.cjs) 只清理默认分支中已识别的本项目缓存，不碰其他分支／PR 或未知缓存；每类保留一份当前快照，淘汰旧 Flutter 版本、停用的 SDK 与重复代际。新版 Pub 成功写入后淘汰对应 ABI 的旧前缀，APT／tools 两份都就绪后再淘汰旧合并快照。每次受控保存先清理过时条目，以十进制 9 GB 为预算并计入全部分支用量，按类型预留上传空间；必要时先轮换本类旧快照，空间不足或 API 查询失败时跳过新增缓存，不为保存小缓存删除另一类有效 SDK。此预算是并发上传下的尽力约束，GitHub 自身 LRU、上游 MSYS2 写入及缓存实际大小仍可能影响最终用量，不能宣称缓存被永久固定。
+
+Linux 的 APT 下载、固定 SHA 的 linuxdeploy／GTK 工具和用户级 Flatpak Runtime／SDK 分成三份缓存。APT／Flatpak 键包含 Ubuntu 24.04 x64、相关脚本／manifest 哈希和 UTC 周次，允许恢复同配置前一周；固定工具键只包含其下载脚本哈希，不随周次复制。仍执行 apt 索引更新、包验证和 Flatpak `--or-update`，工具每次读取也校验固定哈希。依赖安装后、应用构建前受控保存，不把安装后的 BiliSail Flatpak 混进 Runtime 缓存。不缓存整个 `build/`、`.dart_tool/`、apt 索引或签名材料；首次运行仍需完整下载，缓存实际命中及耗时须由新 CI 确认。
+
+自动 CI 使用工作流名及分支／PR 隔离的 concurrency group，新的 push／PR 会取消同组过时运行。手动运行包含独立 run ID，Release 调用继承调用者工作流名，不与普通 CI 或其他手动发布互相取消。[触发去重脚本](../../tool/ci-trigger.cjs) 保留未开 PR 分支的 push CI；同仓库分支已有 open PR 时，只跳过重复 push 的重型任务，由 PR CI 检查合并 ref。默认分支和手动运行照常执行，PR 查询失败时继续 push CI。必需状态 `Analyze and test` 仍汇总全部检查，prepare 失败不能被当作去重成功。
+
+本轮本地验证：`tool/check.ps1 -SkipPub` 通过，根应用 4,729 项、API 719 项、播放器 358 项、弹幕 161 项、封装 5 项，共 5,972 项 Dart／Flutter 测试通过；13 项 Windows 符号链接用例因环境限制、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。最终缓存／触发策略 20 项行为回归、185 项构建计划检查、64 项 Release 回归、actionlint 1.7.12、本文本地链接和 `git diff --check` 通过，五份锁文件未改。根检查日志为 `build/ci-cache-optimization-check.log`。使用当时线上清单只读预演，识别 6 条停用／重复的默认分支缓存，合计约 4.84 GB；未实际删除缓存、推送或运行远端 CI，新的命中率、耗时与清理效果仍待默认分支工作流运行确认。
 
 GitHub hosted runner 存在 `/etc/apt/apt-mirrors.txt` 时，Linux 安装入口将该列表中的 Ubuntu 官方 archive／security 提到 Azure 镜像之前，保留其他条目及镜像回退；只在 `GITHUB_ACTIONS=true` 时执行，不修改本机开发环境。APT 连接／无数据超时不能保证终止持续低速传输，故调整镜像优先级与缓存配合使用。索引、apt 包安装、Flatpak Runtime／SDK 和固定打包工具分别打印分组及墙钟耗时，便于从下一次 CI 区分下载、安装和打包耗时。
 
@@ -93,11 +101,11 @@ GitHub 官方的 [`/releases/latest/download/<附件名>`](https://docs.github.c
 
 2026-10-29 本地验证：`node --test tool/test-readme-downloads.cjs` 的 10 项测试通过，覆盖十种附件、部分平台、旧版本／未完成上传排除、换行和安装说明保留、重复运行、并发编辑冲突及写入权限失败；actionlint 1.7.12 检查新工作流及 Release 工作流通过。使用 GitHub API 实际 `v1.2.3+1` 响应核对 README 的 9 个下载链接，并确认重复生成无差异。本轮 `tool/check.ps1 -SkipPub` 的格式、静态分析、根应用 3352 项及四包 709 项测试通过；13 项 Windows symlink 因权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生集成覆盖。远端自动更新尚未触发，未修改任何 Release 附件。
 
-CI 的 artifacts 保留 14 天；Release 默认从本次运行下载，开启复用时按目标从匹配的已完成 CI 运行下载，并合并本次补建产物。所选平台失败时不创建新草稿。不使用参考仓库的 WebDAV、NuGet ZIP、UWP manifest、Chocolatey 或 TLS 验证绕过逻辑。
+CI 的 artifacts 保留 14 天；Release 默认按目标复用匹配的已完成 CI 产物，并合并本次补建产物；显式关闭复用时全部重新构建。所选平台失败时不创建新草稿。不使用参考仓库的 WebDAV、NuGet ZIP、UWP manifest、Chocolatey 或 TLS 验证绕过逻辑。
 
 ### Release 复用已完成 CI（2026-10-31）
 
-Release 通过 `workflow_call` 调用同一份 `ci.yml`，检查、根应用分片测试、包测试、原生 mux 回归和所选平台打包共用实现。手动输入 `reuse_ci_build` 默认关闭；开启后，Release 先用与 CI 共用的[构建计划脚本](../../tool/ci-build-plan.ps1)解析版本、校验平台版本限制并生成目标列表，再通过 GitHub Actions API 分页查找每个目标可复用的构建。
+Release 通过 `workflow_call` 调用同一份 `ci.yml`，检查、根应用分片测试、包测试、原生 mux 回归和所选平台打包共用实现。手动输入 `reuse_ci_build` 默认开启，仍可显式关闭；开启后，Release 先用与 CI 共用的[构建计划脚本](../../tool/ci-build-plan.ps1)解析版本、校验平台版本限制并生成目标列表，再通过 GitHub Actions API 分页查找每个目标可复用的构建。
 
 每个所选目标分别满足以下条件即可复用，允许不同目标来自不同的 CI 运行：
 

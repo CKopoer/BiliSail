@@ -37,6 +37,7 @@ try {
     & (Join-Path $PSScriptRoot 'test-ci-build-plan.ps1')
     & (Join-Path $PSScriptRoot 'test-build-dependency-command.ps1')
     Invoke-Check node @('--test', 'tool/test-release-ci-reuse.cjs')
+    Invoke-Check node @('--test', 'tool/test-ci-trigger.cjs', 'tool/test-ci-cache-policy.cjs')
     & (Join-Path $PSScriptRoot 'test-android-version.ps1')
     & (Join-Path $PSScriptRoot 'test-android-signing.ps1')
     & (Join-Path $PSScriptRoot 'test-android-development.ps1')

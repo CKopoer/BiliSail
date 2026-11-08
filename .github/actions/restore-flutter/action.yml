@@ -1,0 +1,60 @@
+name: Restore pinned Flutter and Pub
+description: Restore shared dependencies without registering automatic cache writers.
+inputs:
+  architecture:
+    description: Flutter distribution architecture; Windows ARM64 bootstraps from x64.
+    default: '${{ runner.arch }}'
+  cache-sdk:
+    description: Retain SDK caches only where repeated reads justify their size.
+    default: 'true'
+outputs:
+  sdk-key:
+    value: ${{ steps.metadata.outputs.CACHE-KEY }}
+  sdk-path:
+    value: ${{ steps.metadata.outputs.CACHE-PATH }}
+  sdk-hit:
+    value: ${{ steps.sdk.outputs.cache-hit }}
+  pub-key:
+    value: ${{ steps.metadata.outputs.PUB-CACHE-KEY }}-${{ hashFiles('**/pubspec.lock') }}
+  pub-path:
+    value: ${{ steps.metadata.outputs.PUB-CACHE-PATH }}
+  pub-hit:
+    value: ${{ steps.pub.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve cache paths without downloading Flutter
+      id: metadata
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+      with:
+        flutter-version: '3.47.6'
+        channel: stable
+        architecture: ${{ inputs.architecture }}
+        cache: false
+        pub-cache: false
+        dry-run: true
+        # Pub uses the actual host ABI, including after Windows ARM64 bootstrap.
+        pub-cache-key: 'bilisail-pub-v2-:os:-${{ runner.arch }}-:version:'
+    - name: Restore Flutter SDK
+      id: sdk
+      if: inputs.cache-sdk == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.metadata.outputs.CACHE-PATH }}
+        key: ${{ steps.metadata.outputs.CACHE-KEY }}
+    - name: Restore Pub dependencies
+      id: pub
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.metadata.outputs.PUB-CACHE-PATH }}
+        key: ${{ steps.metadata.outputs.PUB-CACHE-KEY }}-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: |
+          ${{ steps.metadata.outputs.PUB-CACHE-KEY }}-
+    - name: Install pinned Flutter
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+      with:
+        flutter-version: '3.47.6'
+        channel: stable
+        architecture: ${{ inputs.architecture }}
+        cache: false
+        pub-cache: false

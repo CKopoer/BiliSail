@@ -77,6 +77,16 @@ try {
     Assert-Rejected '1.2.5+0' 31 $invalid
   }
   Assert-Rejected '1.2.5+0' 1 '["windows-x64"]'
+  $full = ((Invoke-Plan '1.2.5+0' 31).matrix | ConvertFrom-Json).include
+  if (@($full | Where-Object cache_writer).target -join ',' -cne 'windows-x64,windows-arm64,macos-arm64,macos-x64') {
+    throw 'Each non-Linux host ABI must have exactly one Pub cache writer.'
+  }
+  if (@($full | Where-Object cache_sdk).target -join ',' -cne 'android-arm64,macos-arm64,ios-arm64,linux-x64') {
+    throw 'Only Linux and Apple ARM64 should retain Flutter SDK snapshots.'
+  }
+  $iosOnly = ((Invoke-Plan '1.2.5+0' 31 '["ios-arm64"]').matrix | ConvertFrom-Json).include[0]
+  if (!$iosOnly.cache_writer -or !$iosOnly.cache_sdk) { throw 'iOS-only builds must own their ARM64 caches.' }
+  $checks += 3
 } finally {
   foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $previous[$name]) }
   Remove-Item -LiteralPath $outputFile

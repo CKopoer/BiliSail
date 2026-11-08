@@ -11,7 +11,7 @@ on:
       reuse_ci_build:
         description: '按平台复用同提交、同版本的已完成 CI 构建，仅构建缺少的目标'
         type: boolean
-        default: false
+        default: true
       enable_android:
         description: Android arm64 APK
         type: boolean
@@ -98,6 +98,10 @@ jobs:
   build:
     needs: prepare
     if: needs.prepare.outputs.build_required == 'true'
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
     uses: ./.github/workflows/ci.yml
     with:
       version: ${{ needs.prepare.outputs.version }}

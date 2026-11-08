@@ -1,0 +1,44 @@
+name: Save a bounded CI cache
+description: Save only on the default branch after pruning obsolete owned caches.
+inputs:
+  key:
+    description: Exact cache key produced by the restore step.
+    required: true
+  path:
+    description: Paths identical to those passed to the restore step.
+    required: true
+  reserve-bytes:
+    description: Conservative compressed-size reservation beneath a 9 GB budget.
+    default: '600000000'
+runs:
+  using: composite
+  steps:
+    - name: Reserve cache space
+      id: budget
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        CACHE_KEY: ${{ inputs.key }}
+        CACHE_RESERVE_BYTES: ${{ inputs.reserve-bytes }}
+      with:
+        script: |
+          const { prepareCacheSave } = require('./tool/ci-cache-policy.cjs');
+          core.setOutput('save', await prepareCacheSave({
+            github, context, core, key: process.env.CACHE_KEY,
+            reserveBytes: Number(process.env.CACHE_RESERVE_BYTES),
+          }));
+    - name: Save cache
+      if: steps.budget.outputs.save == 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}
+    - name: Retire replaced cache generations
+      if: steps.budget.outputs.save == 'true'
+      continue-on-error: true
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        CACHE_KEY: ${{ inputs.key }}
+      with:
+        script: |
+          const { cleanupCaches } = require('./tool/ci-cache-policy.cjs');
+          await cleanupCaches({ github, context, core, preferredKey: process.env.CACHE_KEY });

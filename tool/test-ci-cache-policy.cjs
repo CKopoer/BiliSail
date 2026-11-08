@@ -1,0 +1,144 @@
+const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const { test } = require('node:test');
+const { canWriteCaches, planCleanup, cleanupCaches, prepareCacheSave } = require('./ci-cache-policy.cjs');
+
+const flutterVersion = readFileSync('.flutter-version', 'utf8').trim();
+const context = { repo: { owner: 'CKopoer', repo: 'BiliSail' }, eventName: 'push',
+  ref: 'refs/heads/master', payload: { repository: { default_branch: 'master' } } };
+const options = { ref: context.ref, flutterVersion };
+const pubPrefix = `bilisail-pub-v2-linux-X64-${flutterVersion}-`;
+const cache = (id, key, overrides = {}) => ({ id, key, ref: context.ref,
+  size_in_bytes: 100_000_000, created_at: `2026-11-0${id}T00:00:00Z`, ...overrides });
+
+function fixture(caches) {
+  const deleted = [];
+  const warnings = [];
+  const getActionsCacheList = () => {};
+  return { deleted, warnings, context,
+    core: { info: () => {}, warning: (message) => warnings.push(message) },
+    github: { rest: { actions: { getActionsCacheList,
+      deleteActionsCacheById: async ({ cache_id }) => { deleted.push(cache_id); } } },
+    paginate: async (method, parameters) => {
+      assert.equal(method, getActionsCacheList);
+      assert.equal(parameters.per_page, 100);
+      return caches;
+    } } };
+}
+
+test('only trusted default-branch pushes and dispatches write or delete caches', async () => {
+  for (const change of [{ eventName: 'pull_request' }, { eventName: 'pull_request_target' },
+    { eventName: 'workflow_run' }, { ref: 'refs/heads/feature' }]) {
+    const suppliedContext = { ...context, ...change };
+    assert.equal(canWriteCaches(suppliedContext), false);
+    const supplied = fixture([]);
+    supplied.github.paginate = () => { throw new Error('Must not access the API'); };
+    assert.deepEqual(await cleanupCaches({ ...supplied, context: suppliedContext }), []);
+    assert.equal(await prepareCacheSave({ ...supplied, context: suppliedContext, key: pubPrefix + 'new', reserveBytes: 1 }), false);
+  }
+  assert.equal(canWriteCaches(context), true);
+  assert.equal(canWriteCaches({ ...context, eventName: 'workflow_dispatch' }), true);
+});
+
+test('cleanup preserves other refs, unknown caches and current useful large SDKs', () => {
+  const caches = [cache(1, `flutter-linux-stable-${flutterVersion}-x64-sdk`),
+    cache(2, `flutter-macos-stable-${flutterVersion}-arm64-sdk`),
+    cache(3, `flutter-macos-stable-${flutterVersion}-x64-sdk`),
+    cache(4, `flutter-windows-stable-${flutterVersion}-x64-sdk`),
+    cache(5, 'flutter-linux-stable-1.0.0-x64-sdk'),
+    cache(6, 'unknown-large-cache'),
+    cache(7, `flutter-windows-stable-${flutterVersion}-x64-sdk`, { ref: 'refs/heads/active' }),
+    cache(8, pubPrefix + 'old', { ref: 'refs/pull/42/merge' })];
+  assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [3, 4, 5]);
+});
+
+test('new complete Pub replaces legacy partial snapshots; last access cannot keep an old generation', () => {
+  const caches = [cache(1, `flutter-pub-linux-x64-${flutterVersion}-legacy`),
+    cache(2, pubPrefix + 'old', { last_accessed_at: '2026-12-01T00:00:00Z' }),
+    cache(3, pubPrefix + 'current')];
+  assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [1, 2]);
+  assert.deepEqual(planCleanup(caches, { ...options, preferredKey: caches[1].key }).map(({ id }) => id), [1, 3]);
+});
+
+test('legacy Pub stays available until its OS/ABI has a new complete replacement', () => {
+  const caches = [cache(1, `flutter-pub-macos-stable-${flutterVersion}-arm64-sdk-lock`),
+    cache(2, pubPrefix + 'current'), cache(3, `bilisail-pub-v2-windows-ARM64-${flutterVersion}-current`)];
+  assert.deepEqual(planCleanup(caches, options), []);
+});
+
+test('APT and Flatpak rotate weekly while fixed tools stay independent', () => {
+  const caches = [cache(1, 'linux-downloads-v1-ubuntu24.04-x64-old'),
+    cache(2, 'linux-apt-v2-ubuntu24.04-x64-configuration-week1'),
+    cache(3, 'linux-apt-v2-ubuntu24.04-x64-configuration-week2'),
+    cache(4, 'linux-flatpak-v1-ubuntu24.04-x64-configuration-week1'),
+    cache(5, 'linux-flatpak-v1-ubuntu24.04-x64-configuration-week2')];
+  assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [2, 4]);
+  assert.deepEqual(planCleanup([...caches, cache(6, 'linux-tools-v2-ubuntu24.04-x64-sha')], options)
+    .map(({ id }) => id), [1, 2, 4]);
+});
+
+test('Gradle and wrapper have independent generations and retire old setup-java copies', () => {
+  const caches = [cache(1, 'setup-java-Linux-x64-gradle-old'),
+    cache(2, 'bilisail-gradle-v1-linux-x64-new'),
+    cache(3, 'bilisail-gradle-wrapper-v1-linux-x64-wrapper')];
+  assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [1]);
+});
+
+test('MSYS2 keeps one package snapshot per compiler configuration', () => {
+  const caches = [cache(1, 'msys2-pkgs-upd:false-conf:x64config-files:old'),
+    cache(2, 'msys2-pkgs-upd:false-conf:x64config-files:new'),
+    cache(3, 'msys2-pkgs-upd:false-conf:arm64config-files:current')];
+  assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [1]);
+});
+
+test('space reservations skip low-priority writes rather than deleting another useful family', async () => {
+  const supplied = fixture([cache(1, `flutter-linux-stable-${flutterVersion}-x64-sdk`, { size_in_bytes: 8_500_000_000 })]);
+  assert.equal(await prepareCacheSave({ ...supplied, key: pubPrefix + 'new', reserveBytes: 600_000_000 }), false);
+  assert.deepEqual(supplied.deleted, []);
+  assert.match(supplied.warnings[0], /Skipping cache save/);
+});
+
+test('rotation can free only its own previous snapshot before a large replacement upload', async () => {
+  const supplied = fixture([cache(1, 'other-owned-by-another-workflow', { size_in_bytes: 7_000_000_000 }),
+    cache(2, 'linux-flatpak-v1-ubuntu24.04-x64-old', { size_in_bytes: 940_000_000 })]);
+  assert.equal(await prepareCacheSave({ ...supplied, key: 'linux-flatpak-v1-ubuntu24.04-x64-new', reserveBytes: 1_200_000_000 }), true);
+  assert.deepEqual(supplied.deleted, [2]);
+});
+
+test('repository usage includes protected branch/PR caches in the budget', async () => {
+  const supplied = fixture([cache(1, pubPrefix + 'pr', { ref: 'refs/pull/42/merge', size_in_bytes: 8_900_000_000 })]);
+  assert.equal(await prepareCacheSave({ ...supplied, key: pubPrefix + 'new', reserveBytes: 600_000_000 }), false);
+  assert.deepEqual(supplied.deleted, []);
+});
+
+test('an insufficient replacement cannot discard the last usable snapshot', async () => {
+  const supplied = fixture([cache(1, 'unknown-large-cache', { size_in_bytes: 8_500_000_000 }),
+    cache(2, pubPrefix + 'old', { size_in_bytes: 100_000_000 })]);
+  assert.equal(await prepareCacheSave({ ...supplied, key: pubPrefix + 'new', reserveBytes: 600_000_000 }), false);
+  assert.deepEqual(supplied.deleted, []);
+});
+
+test('existing exact cache needs no new upload', async () => {
+  const supplied = fixture([cache(1, pubPrefix + 'current')]);
+  assert.equal(await prepareCacheSave({ ...supplied, key: pubPrefix + 'current', reserveBytes: 1 }), false);
+  assert.deepEqual(supplied.deleted, []);
+});
+
+test('API failure prevents unbudgeted writes and cache deletion races tolerate 404', async () => {
+  const supplied = fixture([]);
+  supplied.github.paginate = async () => { throw new Error('No Actions permission'); };
+  assert.equal(await prepareCacheSave({ ...supplied, key: pubPrefix + 'new', reserveBytes: 1 }), false);
+  assert.match(supplied.warnings[0], /maintenance failed/);
+  const race = fixture([cache(1, `flutter-windows-stable-${flutterVersion}-x64-sdk`)]);
+  race.github.rest.actions.deleteActionsCacheById = async () => { throw Object.assign(new Error('Evicted'), { status: 404 }); };
+  assert.deepEqual(await cleanupCaches(race), []);
+});
+
+test('restore jobs cannot automatically publish SDK or partial Pub caches', () => {
+  const action = readFileSync('.github/actions/restore-flutter/action.yml', 'utf8');
+  assert.doesNotMatch(action, /uses: actions\/cache@|uses: actions\/cache\/save@/);
+  assert.equal((action.match(/pub-cache: false/g) ?? []).length, 2);
+  assert.equal((action.match(/cache: false/g) ?? []).length, 4);
+  assert.match(action, /pub-cache-key: 'bilisail-pub-v2-:os:-\$\{\{ runner.arch \}\}-:version:'/);
+  assert.match(action, /restore-keys:/);
+});
