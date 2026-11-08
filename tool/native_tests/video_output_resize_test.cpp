@@ -3,11 +3,14 @@
 #include <flutter/texture_registrar.h>
 
 #include <atomic>
+#include <algorithm>
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
+#include <thread>
 #include <unordered_map>
 
 #include "angle_surface_manager.h"
@@ -29,6 +32,7 @@ struct Registrar {
     variant = value;
     return ++registrations;
   }
+  void MarkTextureFrameAvailable(int64_t) {}
   int64_t registrations = 0;
   flutter::TextureVariant* variant = nullptr;
 };
@@ -74,6 +78,18 @@ void SubmitFrame(ANGLESurfaceManager& renderer) {
   });
 }
 
+const FlutterDesktopGpuSurfaceDescriptor* WaitDescriptor(
+    const flutter::GpuSurfaceTexture& callback, size_t width, size_t height) {
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  do {
+    const auto* descriptor = callback.ObtainDescriptor(width, height);
+    if (descriptor && descriptor->visible_width == width) return descriptor;
+    if (descriptor) descriptor->release_callback(descriptor->release_context);
+    std::this_thread::yield();
+  } while (std::chrono::steady_clock::now() < deadline);
+  throw std::runtime_error("GPU descriptor did not complete");
+}
+
 void HardwareDescriptorsSurviveReleaseAndResize() {
   Registrar registrar;
   VideoOutput output(registrar, true);
@@ -81,7 +97,7 @@ void HardwareDescriptorsSurviveReleaseAndResize() {
   const auto& callback =
       std::get<flutter::GpuSurfaceTexture>(*registrar.variant);
   SubmitFrame(*output.surface_manager_);
-  const auto* descriptor = callback.ObtainDescriptor(320, 180);
+  const auto* descriptor = WaitDescriptor(callback, 320, 180);
   Require(descriptor && descriptor->handle, "no completed GPU descriptor");
   for (const auto width : {640, 256, 960, 320}) {
     const auto old_width = descriptor->visible_width;
@@ -99,7 +115,7 @@ void HardwareDescriptorsSurviveReleaseAndResize() {
         "resize exposed an unpainted mailbox instead of the previous frame");
     fallback->release_callback(fallback->release_context);
     SubmitFrame(*output.surface_manager_);
-    descriptor = callback.ObtainDescriptor(width, width * 9 / 16);
+    descriptor = WaitDescriptor(callback, width, width * 9 / 16);
     Require(
         descriptor && descriptor->visible_width == static_cast<size_t>(width),
         "completed resize was not published");
@@ -117,6 +133,10 @@ void SoftwareDescriptorsSurviveResize() {
       std::get<flutter::PixelBufferTexture>(*registrar.variant);
   const auto* descriptor = callback.CopyPixelBuffer(320, 180);
   Require(descriptor && descriptor->width == 320, "no software descriptor");
+  const auto* snapshot = descriptor->buffer;
+  output.pixel_buffer_[0] = 123;
+  Require(snapshot[0] == 0, "software producer modified a delivered frame");
+  descriptor->release_callback(descriptor->release_context);
   output.Resize(640, 360);
   Require(descriptor->width == 320,
           "software resize invalidated in-flight callback metadata");
@@ -124,6 +144,7 @@ void SoftwareDescriptorsSurviveResize() {
   Require(descriptor && descriptor->width == 640,
           "software resize not published");
   Require(registrar.registrations == 1, "software resize replaced texture ID");
+  descriptor->release_callback(descriptor->release_context);
 }
 
 int main() {

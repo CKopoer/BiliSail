@@ -6,6 +6,8 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <thread>
+#include <vector>
 
 namespace {
 void Require(bool condition, const char *message) {
@@ -71,6 +73,24 @@ void CheckPixels(ID3D11Device *device, HANDLE handle, int width, int height,
 }
 } // namespace
 
+template <typename T>
+auto HasPendingFrame(T& value, int) -> decltype(value.HasPendingFrame()) {
+  return value.HasPendingFrame();
+}
+template <typename T>
+bool HasPendingFrame(T&, long) { return false; }
+
+HANDLE WaitForFrame(ANGLESurfaceManager& producer) {
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  HANDLE result = nullptr;
+  do {
+    result = producer.Read();
+    if (!HasPendingFrame(producer, 0)) return result;
+    std::this_thread::yield();
+  } while (std::chrono::steady_clock::now() < deadline);
+  throw std::runtime_error("GPU snapshot did not complete");
+}
+
 int main() {
   try {
     auto producer = std::make_unique<ANGLESurfaceManager>(64, 32);
@@ -78,6 +98,7 @@ int main() {
     consumer.MakeCurrent(true);
     const auto device = CurrentDevice();
     consumer.MakeCurrent(false);
+    std::vector<Microsoft::WRL::ComPtr<ID3D11Texture2D>> retained;
     for (int frame = 0; frame < 100; ++frame) {
       const bool red = frame % 2 == 0;
       producer->Draw([red] {
@@ -85,8 +106,11 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT);
       });
       consumer.MakeCurrent(true);
-      const auto handle = producer->Read();
-      Require(handle != producer->handle(), "Same-device path still copies");
+      const auto handle = WaitForFrame(*producer);
+      Require(handle != nullptr, "Completed snapshot is missing");
+      // Flutter's release_callback is invoked before sampling. Retain imported
+      // allocations across later renders to model that delayed GPU consumption.
+      if (frame < 4) retained.push_back(producer->TextureForHandle(handle));
       CheckPixels(device.Get(), handle, 64, 32,
                   red ? std::array<uint8_t, 4>{0, 0, 255, 255}
                       : std::array<uint8_t, 4>{255, 0, 0, 255});
@@ -97,7 +121,7 @@ int main() {
       glClearColor(0, 1, 0, 1);
       glClear(GL_COLOR_BUFFER_BIT);
     });
-    const auto copied = producer->Read();
+    const auto copied = WaitForFrame(*producer);
     Require(copied == producer->handle(), "Unknown consumer bypassed copying");
     CheckPixels(device.Get(), copied, 64, 32, {0, 255, 0, 255});
     Require(producer->Read() == copied, "Unchanged frame changed its delivery");
@@ -107,19 +131,30 @@ int main() {
       glClear(GL_COLOR_BUFFER_BIT);
     });
     consumer.MakeCurrent(true);
-    CheckPixels(device.Get(), producer->Read(), 32, 16, {255, 255, 255, 255});
+    CheckPixels(device.Get(), WaitForFrame(*producer), 32, 16, {255, 255, 255, 255});
     consumer.MakeCurrent(false);
     producer.reset();
+    // Every previously imported frame must survive 100 writes, resize and
+    // producer destruction WITHOUT its pixels changing to a later frame.
+    for (size_t i = 0; i < retained.size(); ++i) {
+      Microsoft::WRL::ComPtr<IDXGIResource> resource;
+      Require(SUCCEEDED(retained[i].As(&resource)), "Cannot retain import");
+      HANDLE handle = nullptr;
+      Require(SUCCEEDED(resource->GetSharedHandle(&handle)), "Lost import handle");
+      CheckPixels(device.Get(), handle, 64, 32,
+                  i % 2 == 0 ? std::array<uint8_t, 4>{0, 0, 255, 255}
+                             : std::array<uint8_t, 4>{255, 0, 0, 255});
+    }
     // Disposing a player cannot terminate Flutter's still-live EGL display.
     consumer.Draw([] {
       glClearColor(0, 1, 0, 1);
       glClear(GL_COLOR_BUFFER_BIT);
     });
     consumer.MakeCurrent(true);
-    CheckPixels(device.Get(), consumer.Read(), 64, 32, {0, 255, 0, 255});
+    CheckPixels(device.Get(), WaitForFrame(consumer), 64, 32, {0, 255, 0, 255});
     consumer.MakeCurrent(false);
-    std::cout << "PASS: 100 same-device frames, copied fallback, resize and "
-                 "shared-display lifetime\n";
+    std::cout << "PASS: 100 complete immutable GPU frames, delayed consumption, "
+                 "resize and shared-display lifetime\n";
     return 0;
   } catch (const std::exception &error) {
     std::cerr << "FAIL: " << error.what() << '\n';

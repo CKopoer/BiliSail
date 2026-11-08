@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [Windows 两后端纹理交接](validation/windows-texture-handoff-2026-11-08.md) | 不可变 GPU 快照、完成查询、旧帧延后消费回归与其他平台边界 |
 | [恢复时保留画面与进度](validation/recovery-frame-retention-2026-11-08.md) | 两后端共享停帧、同位置恢复、图像容量与离线验证边界 |
 | [fvp 连续跳转与片尾竞态](validation/fvp-rapid-seek-eof-2026-11-08.md) | Android Release 的 MDK busy／unloaded 复现、最新目标隔离与有界重准备 |
 | [直播聊天牌子、等级与内容选择](validation/live-chat-medals-selection-2026-11-08.md) | 粉丝牌与等级字段、可选择正文、阅读快照及离线回归边界 |

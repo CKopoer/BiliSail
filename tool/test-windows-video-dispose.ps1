@@ -1,4 +1,4 @@
-param()
+param([string]$VideoSourceRoot)
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $config = Get-Content -Raw -LiteralPath (Join-Path $repoRoot '.dart_tool/package_config.json') | ConvertFrom-Json
@@ -6,6 +6,7 @@ $package = $config.packages | Where-Object { $_.name -eq 'media_kit_video' }
 if (!$package) { throw 'Run flutter pub get before the native disposal checks.' }
 $configUri = [Uri]::new((Join-Path $repoRoot '.dart_tool/package_config.json'))
 $sourceRoot = [Uri]::new($configUri, $package.rootUri).LocalPath
+if ($VideoSourceRoot) { $sourceRoot = [IO.Path]::GetFullPath($VideoSourceRoot) }
 $output = Join-Path $repoRoot 'build/video-dispose-test'
 $patched = Join-Path $output 'patched'
 $patch = Join-Path $repoRoot 'windows/patches/media_kit_video'

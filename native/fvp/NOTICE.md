@@ -4,6 +4,11 @@ fvp is copyright Wang Bin, licensed under BSD-3-Clause. Its unmodified license
 is included as LICENSE-fvp.txt. Source:
 https://github.com/wang-bin/fvp/tree/e81637411c58a9ae28de246ee73ad06e3418f10e
 
+The Windows build uses a SHA-256-verified build-tree replacement of TexturePlayer
+from windows/patches/fvp. It publishes completed immutable D3D11 snapshots using
+the MIT-licensed helper in the pinned CKopoer/media-kit fork. Upstream source and
+licenses are preserved; the Pub cache and MDK SDK binaries are not modified.
+
 MDK SDK version 0.39.0 is copyright Wang Bin. The upstream author permits free
 use, including commercial use, through Flutter's fvp plugin, which installs the
 bundled Flutter key. The SDK has its own license; the upstream license text is

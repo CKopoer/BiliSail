@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-11-08：Windows media_kit／fvp 改为交付 GPU 已完成的不可变纹理快照，避免 Flutter 取样期间被后续帧覆盖；GPU 复制未完成时沿用上一完整帧并请求重试。来源、延后消费回归、额外分配／复制的性能边界及其他平台的独立实现见[纹理交接记录](validation/windows-texture-handoff-2026-11-08.md)。
+
 2026-11-08：fvp 连续跳转与片尾释放并发时，仅最新跳转可以改变播放状态；MDK busy／unloaded 在原总预算内最多重新准备一次当前源，旧 EOF／旧异常不清除在途跳转。Android Release 证据、暂停／重播和平台回归见[连续跳转与片尾竞态](validation/fvp-rapid-seek-eof-2026-11-08.md)。
 
 2026-11-08：media_kit／fvp 共用静音起播门槛，轨道和所需视频输出确认后才恢复用户音量；fvp 从准备起静音，全部预滚等待原生暂停完成，共享纹理输出等待画面揭示后的 Flutter 帧。取消、超时和加载期间手动暂停不能放行旧播放意图，纯音频和明确无音轨视频保留各自能力边界。原因、回归及未测平台见[跨后端起播同步](validation/synchronized-playback-startup-2026-11-08.md)。

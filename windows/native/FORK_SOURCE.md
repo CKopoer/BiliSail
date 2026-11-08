@@ -1,9 +1,9 @@
 # 当前 Windows 媒体来源
 
-2026-11-07：播放器核心、视频和全部平台库插件统一固定到 `CKopoer/media-kit` 的 `f57d7c5ffd564d7a91c45769943831d468caeb2f`。官方源码基线为 `c533e446755f51cf53c7e57aea873f2aa5355f81`，包装源码采用 MIT，未复制 GPLv3 的 PiliPlus 应用源码。
+2026-11-08：播放器核心、视频和全部平台库插件统一固定到 `CKopoer/media-kit` 的 `ba68fe1c56d46ed5d0e651da8d15e803e45038cb`。官方源码基线为 `c533e446755f51cf53c7e57aea873f2aa5355f81`，包装源码采用 MIT，未复制 GPLv3 的 PiliPlus 应用源码。两后端 Windows 纹理快照修复见 [交接记录](../../docs/validation/windows-texture-handoff-2026-11-08.md)。
 
 SDK、ANGLE 的下载和校验由个人库插件 `windows/native-assets.cmake` 维护；应用的同名适配入口只读取该契约。视频修复已经进入依赖，不修改 Pub 缓存或在应用构建时变换视频源码。
 
-Windows SDK、许可和原构建记录见个人 fork 的[原生资产说明](https://github.com/CKopoer/media-kit/blob/f57d7c5ffd564d7a91c45769943831d468caeb2f/native/README.md)。应用中的统一来源与验证记录位于 `docs/validation/media-kit-personal-fork-2026-11-07.md`。
+Windows SDK、许可和原构建记录见个人 fork 的[原生资产说明](https://github.com/CKopoer/media-kit/blob/ba68fe1c56d46ed5d0e651da8d15e803e45038cb/native/README.md)。应用中的统一来源与验证记录位于 `docs/validation/media-kit-personal-fork-2026-11-07.md`。
 
 Windows x64 的 D3D11/EGL 可见区域修复位于个人 mpv，media-kit 负责固定 SDK 和逐文件校验；应用只升级依赖，不安装诊断 shader。精确源提交、资产摘要和 ARM64 边界见 [mpv 来源](mpv/SOURCE.md)。

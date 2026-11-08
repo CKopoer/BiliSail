@@ -1,6 +1,6 @@
 # Windows libmpv 原生资产
 
-2026-11-07：维护入口为个人 [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/f57d7c5ffd564d7a91c45769943831d468caeb2f)。库插件 `windows/native-assets.cmake` 统一下载、校验、解压和安装，应用只读取该契约。
+2026-11-08：维护入口为个人 [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/ba68fe1c56d46ed5d0e651da8d15e803e45038cb)。库插件 `windows/native-assets.cmake` 统一下载、校验、解压和安装，应用只读取该契约。本次仅更新纹理交接源码，既有 mpv 二进制与摘要未变。
 
 Windows x64 使用个人 [mpv 固定源码](https://github.com/CKopoer/mpv/tree/afd6da8843a07f463ba4c736a2ea636b1a92e23e)，修复解码表面对齐填充区经 EGL／ANGLE 被采样产生的边缘绿线。有填充时在 GPU 内复制有效区域，保持硬解；无填充时保留原导入，不称为全链路零复制。合成 HEVC 未复现原问题，ARM64 未包含此次修复。
 

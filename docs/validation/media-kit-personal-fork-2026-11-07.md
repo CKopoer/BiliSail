@@ -1,5 +1,7 @@
 # 官方基线与个人媒体 fork 统一维护
 
+2026-11-08 后续：现行媒体依赖统一固定到 `ba68fe1c56d46ed5d0e651da8d15e803e45038cb`，Windows 两后端共用已完成、不可变的 GPU 快照；原 SDK／ANGLE／MDK 资产未改变。修复、旧帧延后消费与慢 GPU 回归及跨平台边界见[纹理交接记录](windows-texture-handoff-2026-11-08.md)。以下保留迁移当时的来源与验证快照。
+
 日期：2026-11-07（Asia/Shanghai）。本轮将播放器核心、视频插件、平台库插件与 libmpv 的维护入口统一到个人 fork；保持当前 Flutter Texture 合成、弹幕调度和产品容量设置。依赖迁移不作为新的性能提升结论。
 
 Windows x64 后续更新：个人 mpv 已修复有填充的 D3D11 解码表面经 EGL／ANGLE 产生的边缘绿线，使用重建 SDK 与补充原始许可后的固定资产；[专项记录](windows-amd-hwdec-edges-2026-11-07.md)列出像素对照、构建与未测边界。以下首批镜像与旧产物数据保留为迁移当时的历史记录，当前 x64 不再使用首批镜像 DLL。Windows ARM64、Android、Apple、Linux 的原生内容未因本次修复改变。
