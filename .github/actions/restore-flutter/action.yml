@@ -51,6 +51,7 @@ runs:
         restore-keys: |
           ${{ steps.metadata.outputs.PUB-CACHE-KEY }}-
     - name: Install pinned Flutter
+      if: runner.os != 'Windows'
       uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
       with:
         flutter-version: '3.47.6'
@@ -58,3 +59,11 @@ runs:
         architecture: ${{ inputs.architecture }}
         cache: false
         pub-cache: false
+    - name: Install pinned Windows SDK with native extraction
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        SDK_DESTINATION: ${{ steps.metadata.outputs.CACHE-PATH }}
+        SDK_EXPECTED_KEY: ${{ steps.metadata.outputs.CACHE-KEY }}
+        SDK_PUB_CACHE: ${{ steps.metadata.outputs.PUB-CACHE-PATH }}
+      run: ./tool/setup-windows-flutter.ps1 -Destination $env:SDK_DESTINATION -ExpectedCacheKey $env:SDK_EXPECTED_KEY -PubCache $env:SDK_PUB_CACHE

@@ -66,12 +66,25 @@ if(MSVC AND TARGET flutter_inappwebview_windows_plugin)
 endif()
 
 # MSBuild project parallelism still compiles each project's sources serially.
-# Bound the two larger C++ targets to two compiler processes each. Restrict /MP
+# Public Windows CI runners have four cores/16 GB. Keep local builds at two
+# processes, and cap CI at the available processor count and four. Restrict /MP
 # to Visual Studio: Ninja's /showIncludes dependency tracking is incompatible.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND CMAKE_GENERATOR MATCHES "^Visual Studio")
+  set(BILISAIL_MSVC_COMPILE_JOBS 2)
+  if("$ENV{GITHUB_ACTIONS}" STREQUAL "true")
+    include(ProcessorCount)
+    ProcessorCount(BILISAIL_RUNNER_PROCESSORS)
+    if(BILISAIL_RUNNER_PROCESSORS GREATER 0)
+      set(BILISAIL_MSVC_COMPILE_JOBS ${BILISAIL_RUNNER_PROCESSORS})
+      if(BILISAIL_MSVC_COMPILE_JOBS GREATER 4)
+        set(BILISAIL_MSVC_COMPILE_JOBS 4)
+      endif()
+    endif()
+  endif()
+  message(STATUS "BiliSail MSVC compiler processes per target: ${BILISAIL_MSVC_COMPILE_JOBS}")
   foreach(COMPILE_TARGET IN ITEMS ${BINARY_NAME} flutter_inappwebview_windows_plugin)
     if(TARGET ${COMPILE_TARGET})
-      target_compile_options(${COMPILE_TARGET} PRIVATE /MP2)
+      target_compile_options(${COMPILE_TARGET} PRIVATE /MP${BILISAIL_MSVC_COMPILE_JOBS})
     endif()
   endforeach()
 endif()

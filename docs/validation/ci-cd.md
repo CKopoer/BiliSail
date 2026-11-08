@@ -23,7 +23,7 @@
 
 PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要对应架构的 Windows 主机与 Visual Studio 工具链，macOS 构建需要 macOS/Xcode 主机。`enable_macos` 同时控制 arm64 和 x64；两项现在均使用 Apple Silicon runner 及 ARM64 Flutter SDK，产物和 mux 按目标架构隔离，SDK／Pub 按宿主 ABI 共享。arm64 启用 `--enable-macos-arm64-only`，x64 显式关闭；两者通过固定 SDK 的 `FLUTTER_XCODE_ARCHS` 指定 `arm64`／`x86_64`，mux 同步交叉编译对应切片。Intel Mac 上的本地 x64 打包入口仍保留。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 
-Flutter 固定 **3.47.6 stable / Dart 3.13.5**；升级需同时调整工作流、检查/构建脚本并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Apple 构建在 Flutter 和 mux 编译前通过 `DEVELOPER_DIR` 显式选择 runner 中的 Xcode 26.2，并打印 Xcode、Swift 和 SDK 版本，缺少该版本立即失败。系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
+Flutter 固定 **3.47.6 stable / Dart 3.13.5**；升级需同时调整工作流、检查/构建脚本、[Windows SDK 归档固定值](../../tool/flutter-windows-sdk.json)并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Apple 构建在 Flutter 和 mux 编译前通过 `DEVELOPER_DIR` 显式选择 runner 中的 Xcode 26.2，并打印 Xcode、Swift 和 SDK 版本，缺少该版本立即失败。系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
 
 2026-11-08 起，[依赖恢复组合 Action](../../.github/actions/restore-flutter/action.yml) 关闭 `flutter-action` 的自动 SDK／Pub 写入，使用独立的 restore／save。SDK 仅保留 Linux x64 与 macOS ARM64，沿用系统、架构、版本及 revision 隔离的原键；Windows 两种架构每次安装固定 SDK，避免大型快照互相挤占。Intel macOS 目标改用 ARM64 宿主后也读取现有 ARM64 SDK。Pub 使用 `bilisail-pub-v2` 前缀、系统、实际 runner ABI、Flutter 版本和五份锁文件哈希，精确命中优先，未命中时回退同系统／ABI／SDK 的快照，仍执行 `pub get --enforce-lockfile`。Windows ARM64 的 Pub 键使用 ARM64，不与其初始 x64 Flutter 分发包的 ABI 混淆。
 
@@ -131,6 +131,27 @@ Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d1
 - 依赖、原生组件、Flutter、源码归档、签名／smoke、打包等阶段打印耗时；mux 分别记录 configure、compile、link。JSON 诊断通过独立 `*-build-timings` artifact 保存，不改变发布产物集合。计时保持原命令返回值／异常，诊断写入失败不覆盖构建错误。
 
 新增回归覆盖源码／工具链／SDK／目标失效、组件篡改／缺失／外来文件、错误架构、清理边界、计时返回值／异常和输出目录提前退出；补充全部矩阵子集的 Apple 写入者、mux 代际清理及安装器资源复用回归。按用户约定，**本轮未在本机执行测试、分析、构建、actionlint 或其他 CI 验证**，只人工审阅改动；新回归、Apple Silicon 上的 x86_64 完整交叉构建及缓存读写留待远端 CI。
+
+## 2026-11-09：Windows SDK 解压与编译并行度
+
+[CI 42502005242](https://github.com/CKopoer/BiliSail/actions/runs/42502005242) 对应提交 `2c9f6e629d188d3419e6998125912a99b3bc903a`，最终全部检查和七个平台通过，总墙钟 **24:37**，比上一轮 32:42 少 **8:05**。构建矩阵在运行开始约 2:46 后启动，根测试最晚约 9:06 才完成，检查与构建已实际重叠；macOS x64 在 Apple Silicon 上生成并通过现有静态校验，耗时 **8:00**，上轮 Intel runner 为 23:23，不代表 Intel 实机验证。
+
+| 构建 | 本轮墙钟 | 观察 |
+| --- | --- | --- |
+| Windows ARM64 | 21:50 | SDK／Pub 3:14、原生 Dart 0:53、MSYS2 1:56；冷 mux 4:02，其中 configure 3:23、compile 0:27；Flutter 命令 8:20、打包签名 1:54 |
+| Windows x64 | 14:49 | 冷 mux 2:22；Flutter 命令 6:41，WebView 仍使用两个编译进程 |
+| macOS x64／ARM64 | 8:00／8:06 | 共享宿主 SDK／Pub；两个目标各自完成首次 mux 缓存写入 |
+| iOS／Android／Linux | 8:36／6:09／8:47 | Linux 应用直接读取本轮原生回归保存的 mux，准备仅 1.4 秒；Linux 打包仍为主要成本 |
+
+原生回归的缓存命中路径及全部新回归均已在远端通过。首次冷构建后，七份 mux 快照压缩合计 **4,194,191 bytes**；清单合计 **7,823,322,397 bytes／20 条**，比之前减少约 186 MB，旧 Intel 宿主 Pub 已退休。保留现有预算、身份键和唯一写入者，本轮不增加 SDK 快照或更换 mux 键；下一次可直接观察其余目标的暖 mux 收益。
+
+Windows 的剩余热点是 SDK 冷安装和 C++ 编译。[上游固定 Action](https://github.com/subosito/flutter-action/blob/1a449444c387b1966244ae4d4f8c696479add0b2/setup.sh#L40-L55)用 MSYS `unzip` 解压 Windows 分发包；本轮保留其元数据／缓存键解析与非 Windows 安装，Windows 改用[原生安装入口](../../tool/setup-windows-flutter.ps1)，调用 runner 自带 7-Zip，最多四个解压线程。下载保持固定版本与 HTTPS，解压前核对 SHA-256，随后核对实际 Git revision、必要文件和 Dart PE 架构；ARM64 后续仍执行原生 Dart 自举并拒绝 x64 运行回退。安装目标限定在 runner tool cache，临时 ZIP 在结束时清理，不自动覆盖错误版本的既有 SDK。
+
+归档及摘要来自[官方 Windows 发布清单](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json)：`stable/windows/flutter_windows_3.47.6-stable.zip`，revision `5fc346839b5d0eef006ed8404392afb4dfae428d`，SHA-256 `a01bb0d26de91bc23c97cd9ccfaad281a612fb8304213fdd5df1119a09404796`。元数据 Action 的键必须与该固定 revision 一致，升级 SDK 时同步 JSON 固定值，不能只更改版本字符串。
+
+Windows MSVC／Visual Studio 下，CI 的 runner 与 WebView 私有 `/MP` 并行度调整为实际处理器数、上限四，本地仍为二；日志打印最终并行度。未更改 C++17／协程 ABI、其他插件或 Ninja 选项。当前公开 Windows runner 为四核／16 GB，私有或较小 runner 会按实际核数收敛；提速与内存使用仍由新 CI 确认。
+
+新增离线回归覆盖固定版本漂移、归档损坏阻止解压、原生解压参数、revision／必要文件／Dart 架构校验，以及 ARM64 已自举 SDK 的识别。按用户此前要求，**没有在本机执行测试、构建、分析或 CI 验证**；只读取远端结果和官方发布元数据、人工审阅修改。新 Windows 安装路径和并行度留待推送后的远端 CI，不将上述已完成运行算作新改动通过。
 
 ## Windows ARM64 构建
 
