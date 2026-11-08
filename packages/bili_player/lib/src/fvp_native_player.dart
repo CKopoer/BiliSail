@@ -10,7 +10,7 @@ import 'android_fvp_worker.dart';
 import 'player_contract.dart';
 import 'fvp_playback_information.dart';
 import 'fvp_video_decoders.dart';
-import 'fvp_surface_preroll.dart' show FvpFirstVideoFrame;
+import 'fvp_surface_preroll.dart';
 import 'fvp_seek.dart';
 import 'player_playback_information.dart';
 import 'third_party/fvp_audio_activity.g.dart' as audio_activity;
@@ -195,6 +195,8 @@ final class _MdkPlayerPort
   int _nativeSeekRevision = 0;
   String _mediaUri = '';
   bool _silent = false;
+  bool _primingDirectSurface = false;
+  double _volume = 100;
   double? _appliedGainDb;
   mdk.AudioCodecParameters? _externalAudio;
   String? _videoDecoder;
@@ -421,16 +423,10 @@ final class _MdkPlayerPort
       throw StateError('MDK preparation cancelled');
     }
     _initializePlayer();
-    if (_audioCompanion case final companion?) {
-      _audioClock = audio_activity.bili_fvp_audio_clock(
-        _player.nativeHandle,
-        companion._player.nativeHandle,
-      );
-      if (_audioClock == nullptr) {
-        throw StateError('Audio master clock unavailable');
-      }
-      _holdClock(options.startPosition.inMilliseconds);
-    }
+    // Android's Surface is bound after prepare. Its replacement decoder must
+    // submit an image before the paused audio clock can become video master.
+    if (!Platform.isAndroid) _connectAudioClock();
+    _holdClock(options.startPosition.inMilliseconds);
     _audioReadyPosition = options.startPosition.inMilliseconds;
     _player.videoDecoders = fvpVideoDecoders(
       operatingSystem: Platform.operatingSystem,
@@ -544,6 +540,49 @@ final class _MdkPlayerPort
   }();
   @override
   Future<bool> confirmVideoFrame() async {
+    if (_directSurface) {
+      void checkActive() {
+        if (_closing || _closed || _interrupted.isCompleted) {
+          throw StateError('MDK preparation cancelled');
+        }
+      }
+
+      _primingDirectSurface = true;
+      // DASH video has no active audio track. A progressive source can contain
+      // embedded audio; keep that native output silent during Surface setup.
+      if (_audioCompanion == null) _player.volume = 0;
+      try {
+        final ready = await confirmFvpDirectSurface(
+          // Do not call play(): the companion and its clock must stay paused.
+          startVideo: () => _player.state = mdk.PlaybackState.playing,
+          firstFrame: () => _active(_firstFrame.ready(directSurface: true)),
+          pauseAndWait: () async {
+            if (!_closing && !_closed && !_interrupted.isCompleted) {
+              await _pauseAndWait();
+            }
+          },
+          checkActive: checkActive,
+          seek: _live
+              ? null
+              : () => _active(
+                  _player.seek(
+                    position: _startPosition.inMilliseconds,
+                    flags: _preciseSeek,
+                  ),
+                ),
+        );
+        if (!ready) return false;
+      } finally {
+        _primingDirectSurface = false;
+        if (!_closing && !_closed && !_interrupted.isCompleted) {
+          _player.volume = _volume / 100;
+        }
+      }
+      _connectAudioClock();
+      _holdClock(_startPosition.inMilliseconds);
+      return true;
+    }
+    _connectAudioClock();
     _holdClock(_startPosition.inMilliseconds);
     // Live has no network seek. Decode the first already buffered target
     // while paused, without advancing the live clock to obtain a frame.
@@ -557,6 +596,19 @@ final class _MdkPlayerPort
     );
     if (result < 0) return false;
     return _active(_firstFrame.ready(directSurface: _directSurface));
+  }
+
+  void _connectAudioClock() {
+    if (_audioClock != nullptr) return;
+    if (_audioCompanion case final companion?) {
+      _audioClock = audio_activity.bili_fvp_audio_clock(
+        _player.nativeHandle,
+        companion._player.nativeHandle,
+      );
+      if (_audioClock == nullptr) {
+        throw StateError('Audio master clock unavailable');
+      }
+    }
   }
 
   Future<void> _pauseAndWait() async {
@@ -840,8 +892,11 @@ final class _MdkPlayerPort
 
   @override
   void setVolume(double volume, double gainDb) {
+    _volume = volume;
     _audioCompanion?.setVolume(volume, gainDb);
-    _player.volume = volume / 100;
+    _player.volume = _primingDirectSurface && _audioCompanion == null
+        ? 0
+        : volume / 100;
     // Updating base volume must not rebuild an unchanged MDK audio filter.
     // Apply gain while paused, before the target timeline advances.
     if (_appliedGainDb == gainDb) return;
