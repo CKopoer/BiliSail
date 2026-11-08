@@ -34,6 +34,8 @@ import '../../../shared/ui/app_notice.dart';
 import 'home_feed_cards.dart';
 import 'favorite_folder_edit_dialog.dart';
 import '../application/home_controller.dart';
+import '../application/dynamic_authors_controller.dart';
+import '../domain/dynamic_author.dart';
 import '../application/favorite_playback_queue.dart';
 import '../application/watch_later_removal_controller.dart';
 import '../domain/home_channel.dart';
@@ -71,6 +73,8 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   bool? _bodyCanUnsubscribe;
   Widget? _bodySliver;
   FavoriteQueueRequest? _favoriteRequest;
+  UserId? _dynamicAuthor;
+  String? _accountScope;
 
   void _clearBodyCache() {
     _bodyItems = null;
@@ -113,7 +117,30 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
         ),
       );
     }
-    final scope = ref.read(homeRepositoryProvider).accountScope;
+    final repository = ref.watch(homeRepositoryProvider);
+    final scope = repository.accountScope;
+    if (_accountScope != scope) {
+      _accountScope = scope;
+      _dynamicAuthor = null;
+      _visitedQueries.clear();
+      _clearBodyCache();
+    }
+    final isDynamic =
+        repository is HomeDynamicRepository &&
+        (widget.channel == HomeChannel.dynamic ||
+            widget.channel == HomeChannel.videoDynamic);
+    final pageActive = widget.active && WorkspaceActivity.isActive(context);
+    if (isDynamic) {
+      final selected = ref.watch(
+        dynamicAuthorsProvider(scope).select((state) => state.selected?.id),
+      );
+      // A hidden tab keeps its current list and request ownership. Apply the
+      // shared selection on activation rather than loading every retained tab.
+      if (pageActive && selected != _dynamicAuthor) {
+        _dynamicAuthor = selected;
+        _clearBodyCache();
+      }
+    }
     final liveBrowse =
         widget.channel == HomeChannel.live &&
         (widget.section == '推荐直播' || widget.section == '全部分区');
@@ -134,7 +161,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
           ? 'ugc:${_folder?.id}'
           : _folder?.id,
     );
-    _visitedQueries.add(query);
+    if (_dynamicAuthor == null) _visitedQueries.add(query);
     if (_visitedQueries.length > 20) {
       // Retain the parent plus at most 19 recently visited folders per subtab.
       final evicted = _visitedQueries.firstWhere(
@@ -143,9 +170,13 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
       _visitedQueries.remove(evicted);
     }
     for (final visited in _visitedQueries) {
-      ref.watch(homeControllerProvider(visited));
+      if (_dynamicAuthor == null) ref.watch(homeControllerProvider(visited));
     }
-    final feed = ref.watch(homeControllerProvider(query));
+    final author = _dynamicAuthor;
+    final provider = author != null
+        ? dynamicAuthorFeedProvider((query: query, authorId: author))
+        : homeControllerProvider(query);
+    final feed = ref.watch(provider);
     final favoriteRequest = _favoriteRequest =
         widget.channel == HomeChannel.favorites &&
             (_folder != null || widget.section == '默认收藏夹')
@@ -159,11 +190,14 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
       // body. Release its models and callbacks; paging errors still carry data.
       _clearBodyCache();
     }
-    final controller = ref.read(homeControllerProvider(query).notifier);
+    final controller = ref.read(provider.notifier);
+    Future<void> refresh() => Future.wait([
+      controller.refresh(),
+      if (isDynamic) ref.read(dynamicAuthorsProvider(scope).notifier).refresh(),
+    ]);
     final watchLaterActions = widget.channel == HomeChannel.watchLater
         ? ref.watch(watchLaterRemovalProvider(scope))
         : null;
-    final pageActive = widget.active && WorkspaceActivity.isActive(context);
     return CommandTargetScope<Object>(
       scope: CommandScope.page,
       active: pageActive,
@@ -172,12 +206,13 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
         if (pageActive)
           ShortcutAction.refresh: (stroke) async {
             if (stroke.phase != InputPhase.down) return CommandOutcome.noOp;
-            await controller.refresh();
+            await refresh();
             return CommandOutcome.completed;
           },
       },
       child: PagedScrollViewport(
-        key: ValueKey(query),
+        key: ValueKey((query, _dynamicAuthor)),
+        keepScrollOffset: _dynamicAuthor == null,
         active: widget.active,
         canLoadMore:
             !(widget.channel == HomeChannel.live && widget.section == '我的关注') &&
@@ -187,13 +222,15 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
             feed.pageError == null,
         contentVersion: feed,
         onLoadMore: controller.loadMore,
-        onRefresh: controller.refresh,
+        onRefresh: refresh,
         builder: (scrollController) => RefreshIndicator(
-          onRefresh: controller.refresh,
+          onRefresh: refresh,
           child: CustomScrollView(
-            key: PageStorageKey(
-              'home-${widget.channel.name}-${widget.section}-$scope-${query.folderId}',
-            ),
+            key: _dynamicAuthor != null
+                ? ValueKey((query, _dynamicAuthor))
+                : PageStorageKey(
+                    'home-${widget.channel.name}-${widget.section}-$scope-${query.folderId}',
+                  ),
             controller: scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [

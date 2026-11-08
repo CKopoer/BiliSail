@@ -8,6 +8,8 @@ import 'package:bili_api/bili_api.dart';
 import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
+import '../../../domain/user.dart';
+import '../domain/dynamic_author.dart';
 import '../domain/home_repository.dart';
 import '../domain/home_channel.dart';
 import '../../video/domain/video_actions_repository.dart';
@@ -15,6 +17,7 @@ import '../../video/domain/video_actions_repository.dart';
 final class ApiHomeRepository
     implements
         HomeRepository,
+        HomeDynamicRepository,
         HomeSubscriptionRepository,
         HomeWatchLaterRepository {
   ApiHomeRepository(
@@ -73,6 +76,64 @@ final class ApiHomeRepository
 
   @override
   String get accountScope => _accountScope();
+
+  @override
+  Future<DynamicAuthorPage> loadDynamicAuthors({
+    required String scope,
+    String? cursor,
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    if (scope != accountScope) {
+      throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
+    }
+    if (!scope.startsWith('user:')) {
+      throw const AppFailure(AppFailureKind.authentication, '请先登录');
+    }
+    final result = await client.dynamicAuthors(
+      cursor: cursor,
+      context: context,
+    );
+    if (scope != accountScope) {
+      throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
+    }
+    return DynamicAuthorPage(
+      List.unmodifiable(
+        result.items.map(
+          (item) => DynamicAuthor(
+            id: UserId(item.mid),
+            name: item.name,
+            avatarUrl: item.avatarUrl,
+            hasUpdate: item.hasUpdate,
+          ),
+        ),
+      ),
+      hasMore: result.hasMore,
+      nextCursor: result.nextCursor,
+    );
+  }, cancellation: cancellation);
+
+  @override
+  Future<HomePage> loadAuthorFeed(
+    HomeQuery query,
+    UserId authorId, {
+    required int page,
+    String? cursor,
+    required RequestCancellation cancellation,
+  }) {
+    if (!authorId.isValid ||
+        query.channel != HomeChannel.dynamic &&
+            query.channel != HomeChannel.videoDynamic) {
+      throw ArgumentError('Invalid dynamic author query');
+    }
+    return _load(
+      query,
+      page: page,
+      cursor: cursor,
+      authorId: authorId,
+      cancellation: cancellation,
+    );
+  }
+
   @override
   Future<void> removeWatchLater(
     HomeEntry entry, {
@@ -142,9 +203,20 @@ final class ApiHomeRepository
     required int page,
     String? cursor,
     required RequestCancellation cancellation,
+  }) => _load(query, page: page, cursor: cursor, cancellation: cancellation);
+
+  Future<HomePage> _load(
+    HomeQuery query, {
+    required int page,
+    String? cursor,
+    UserId? authorId,
+    required RequestCancellation cancellation,
   }) => requests.run((context) async {
     if (query.scope != accountScope) {
       throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
+    }
+    if (authorId != null && !query.scope.startsWith('user:')) {
+      throw const AppFailure(AppFailureKind.authentication, '请先登录');
     }
     if (page < 1) throw ArgumentError.value(page, 'page');
     if (cursor != null && cursor.startsWith(_snapshotPrefix)) {
@@ -157,6 +229,7 @@ final class ApiHomeRepository
       cursor: cursor,
       mid: query.scope.startsWith('user:') ? query.scope.substring(5) : null,
       folderId: query.folderId,
+      authorId: authorId?.value,
       context: context,
     );
     if (query.scope != accountScope) {

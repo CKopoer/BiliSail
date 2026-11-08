@@ -63,3 +63,17 @@ final class ApiHomeEntry {
   final DateTime? createdAt;
   final List<ApiHomeEntry> children;
 }
+
+final class ApiDynamicAuthor {
+  const ApiDynamicAuthor({
+    required this.mid,
+    required this.name,
+    this.avatarUrl,
+    this.hasUpdate = false,
+  });
+
+  final String mid;
+  final String name;
+  final Uri? avatarUrl;
+  final bool hasUpdate;
+}

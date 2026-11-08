@@ -10,6 +10,55 @@ final class HomeClient {
   final BiliApiClient api;
   static const _liveAreaPageSize = 36;
 
+  Future<ApiPage<ApiDynamicAuthor>> dynamicAuthors({
+    String? cursor,
+    ApiRequestContext? context,
+  }) async {
+    const endpoint = 'dynamic_authors';
+    final data = await api.requestJson(
+      Uri.https(
+        'api.bilibili.com',
+        '/x/polymer/web-dynamic/v1/${cursor == null ? 'portal' : 'uplist'}',
+        {
+          if (cursor == null) 'up_list_more': '1',
+          'offset': ?cursor,
+          'platform': 'web',
+        },
+      ),
+      endpoint,
+      context: context,
+    );
+    final list = cursor == null ? _map(data['up_list']) : data;
+    final authors = <ApiDynamicAuthor>[];
+    final seen = <String>{};
+    for (final raw in _list(list['items']).take(500)) {
+      final item = _map(raw);
+      final mid = _id(item['mid']);
+      if (!RegExp(r'^[1-9][0-9]*$').hasMatch(mid)) {
+        throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+      }
+      if (!seen.add(mid)) continue;
+      authors.add(
+        ApiDynamicAuthor(
+          mid: mid,
+          name: _required(item['uname']),
+          avatarUrl: _uri(item['face']),
+          hasUpdate: _yes(item['has_update']),
+        ),
+      );
+    }
+    final next = _text(list['offset']);
+    final hasMore = _yes(list['has_more']);
+    if (hasMore && (next == null || next.isEmpty || next == cursor)) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    return ApiPage(
+      List.unmodifiable(authors),
+      hasMore: hasMore,
+      nextCursor: next,
+    );
+  }
+
   /// Explicit user action; the shared CSRF form pipeline sends only one attempt.
   Future<void> unsubscribeFavorite(
     String id, {
@@ -38,6 +87,7 @@ final class HomeClient {
     String? cursor,
     String? mid,
     String? folderId,
+    String? authorId,
     ApiRequestContext? context,
   }) async {
     if (page < 1) throw ArgumentError.value(page, 'page');
@@ -134,8 +184,12 @@ final class HomeClient {
       );
     }
     if (channel == 'dynamic' || channel == 'videoDynamic') {
+      if (authorId != null) _validateId(authorId);
+      final videoOnly = channel == 'videoDynamic' || section == '视频';
       final data = await get('/x/polymer/web-dynamic/v1/feed/all', {
-        'type': channel == 'videoDynamic' || section == '视频' ? 'video' : 'all',
+        if (authorId == null) 'type': videoOnly ? 'video' : 'all',
+        'host_mid': ?authorId,
+        'platform': 'web',
         'page': '$page',
         // Current Web responses omit draw text unless the Opus shape is requested.
         'features': 'itemOpusStyle',
@@ -193,7 +247,10 @@ final class HomeClient {
               bvid: video?.bvid,
               url: post.linkUrl,
             );
-          });
+          })
+          // The host_mid endpoint returns all types. Keep the chosen content
+          // category across every page rather than filtering only loaded cards.
+          .where((entry) => !videoOnly || entry.dynamicPost?.video != null);
       final next = _text(data['offset']);
       if (_yes(data['has_more']) && (next == null || next == cursor)) {
         throw const ApiFailure(ApiFailureCategory.protocol, 'home_dynamic');

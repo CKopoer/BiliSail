@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
+import '../../../domain/user.dart';
+import '../domain/dynamic_author.dart';
 import '../domain/home_channel.dart';
 import '../domain/home_repository.dart';
 import 'watch_later_removal_controller.dart';
@@ -16,6 +18,12 @@ final homeControllerProvider = NotifierProvider.autoDispose
       // Declare scoping so nested overrides fork their family directory instead
       // of redirecting sibling queries into the account list's container.
       dependencies: const [],
+    );
+
+final dynamicAuthorFeedProvider = NotifierProvider.autoDispose
+    .family<HomeController, HomeState, ({HomeQuery query, UserId authorId})>(
+      (request) => HomeController(request.query, authorId: request.authorId),
+      dependencies: [homeControllerProvider],
     );
 
 final class HomeState {
@@ -46,7 +54,7 @@ final class HomeState {
 }
 
 final class HomeController extends Notifier<HomeState> {
-  HomeController(this.query);
+  HomeController(this.query, {this.authorId});
   // Rich posts retain images, spans and originals; bound each dynamic tab.
   static const maxDynamicEntries = 200;
   static const maxFavoriteEntries = 500;
@@ -54,6 +62,35 @@ final class HomeController extends Notifier<HomeState> {
   // valid, but a bounded scan avoids an endless layout-driven request loop.
   static const _maxPagesWithoutNewItems = 3;
   final HomeQuery query;
+  final UserId? authorId;
+
+  Future<HomePage> _load(
+    HomeRepository repository, {
+    required int page,
+    String? cursor,
+    required RequestCancellation cancellation,
+  }) {
+    final author = authorId;
+    if (author != null) {
+      if (repository is! HomeDynamicRepository) {
+        throw const AppFailure(AppFailureKind.protocol, '当前无法按 UP 主筛选动态');
+      }
+      return (repository as HomeDynamicRepository).loadAuthorFeed(
+        query,
+        author,
+        page: page,
+        cursor: cursor,
+        cancellation: cancellation,
+      );
+    }
+    return repository.load(
+      query,
+      page: page,
+      cursor: cursor,
+      cancellation: cancellation,
+    );
+  }
+
   final Map<VideoId, ({int page, String? cursor})> _queuePages = {};
   ({int page, String? cursor})? queuePageFor(VideoId id) => _queuePages[id];
   void _trackQueuePage(List<HomeEntry> items, int page, String? cursor) {
@@ -139,8 +176,8 @@ final class HomeController extends Notifier<HomeState> {
     final repository = ref.read(homeRepositoryProvider);
     try {
       if (!_isCurrent(generation, cancellation, repository)) return;
-      final result = await repository.load(
-        query,
+      final result = await _load(
+        repository,
         page: 1,
         cancellation: cancellation,
       );
@@ -197,8 +234,8 @@ final class HomeController extends Notifier<HomeState> {
       unsubscribing: _pending,
     );
     try {
-      final result = await repository.load(
-        query,
+      final result = await _load(
+        repository,
         page: _page + 1,
         cursor: _cursor,
         cancellation: cancellation,
