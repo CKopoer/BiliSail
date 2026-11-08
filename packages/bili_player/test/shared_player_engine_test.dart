@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
 import 'package:bili_player/src/playback_backend.dart';
@@ -7,6 +8,8 @@ import 'package:bili_player/src/validated_source.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'mp4_buffer_index_test.dart' show indexedMedia;
 
 final class _Output implements FlutterVideoOutput, VideoFrameReadiness {
   final ready = ValueNotifier(true);
@@ -48,6 +51,7 @@ final class _Backend extends Fake implements PlaybackBackend {
     dimensions: VideoDimensions(320, 180),
   );
   BackendHealth sample = const BackendHealth();
+  ValidatedSource? preparedPlan;
   @override
   VideoOutput get videoOutput => _output;
   final _output = _Output();
@@ -61,6 +65,7 @@ final class _Backend extends Fake implements PlaybackBackend {
     PlaybackOperation operation,
   ) async {
     writes.add('prepare');
+    preparedPlan = plan;
     volume = 0;
     await preparing?.future;
     return tracks;
@@ -147,6 +152,9 @@ final class _Backend extends Fake implements PlaybackBackend {
 }
 
 Future<void> tick() => Future<void>.delayed(Duration.zero);
+
+final class _NetworkHttp extends HttpOverrides {}
+
 MediaTrack track(String name) => MediaTrack(
   uri: Uri.parse('https://example.com/$name'),
   requestPolicy: MediaRequestPolicy(),
@@ -155,6 +163,79 @@ MediaTrack track(String name) => MediaTrack(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final pair = DashPairSource(video: track('v'), audio: track('a'));
+
+  test(
+    'track cache clamps event and polling buffers without changing position',
+    () => HttpOverrides.runWithHttpOverrides(() async {
+      final bytes = indexedMedia();
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        final match = RegExp(r'bytes=(\d+)-(\d+)')
+            .firstMatch(request.headers.value('range') ?? '')!;
+        final start = int.parse(match[1]!);
+        final end = int.parse(match[2]!).clamp(0, bytes.length - 1);
+        request.response
+          ..statusCode = 206
+          ..headers.set('Content-Range', 'bytes $start-$end/${bytes.length}')
+          ..contentLength = end - start + 1
+          ..add(bytes.sublist(start, end + 1));
+        await request.response.close();
+      });
+      addTearDown(() => server.close(force: true));
+      MediaTrack remote(String path) => MediaTrack(
+        uri: Uri.parse('http://127.0.0.1:${server.port}/$path'),
+        requestPolicy: MediaRequestPolicy(),
+      );
+      final backend = _Backend()
+        ..sample = const BackendHealth(
+          position: Duration(seconds: 1),
+          buffered: Duration(seconds: 8),
+        );
+      final engine = SharedPlayerEngine(
+        createBackend: () => backend,
+        bufferDashTracks: true,
+      );
+      addTearDown(engine.dispose);
+      await engine.open(
+        DashPairSource(video: remote('v'), audio: remote('a')),
+        const OpenOptions(),
+      );
+      final local = backend.preparedPlan!;
+      expect(local.media.uri.host, '127.0.0.1');
+      expect(local.media.uri.port, isNot(server.port));
+      final client = HttpClient();
+      addTearDown(() => client.close(force: true));
+      for (final media in [local.media, local.audio!]) {
+        final request = await client.getUrl(media.uri);
+        if (identical(media, local.audio)) {
+          request.headers.set('range', 'bytes=0-${bytes.length - 201}');
+        }
+        final response = await request.close();
+        await response.drain<void>();
+      }
+      for (
+        var i = 0;
+        i < 200 &&
+            engine.currentSnapshot.buffered != const Duration(seconds: 4);
+        i++
+      ) {
+        backend.signals.add(
+          const BackendEvent(
+            BackendEventKind.sample,
+            position: Duration(seconds: 1),
+            buffered: Duration(seconds: 8),
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(engine.currentSnapshot.position, const Duration(seconds: 1));
+      expect(engine.currentSnapshot.buffered, const Duration(seconds: 4));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(engine.currentSnapshot.buffered, const Duration(seconds: 4));
+      expect(backend.writes.where((write) => write == 'prepare').length, 1);
+      expect(backend.seeks, isEmpty);
+    }, _NetworkHttp()),
+  );
 
   test(
     'recovery keeps the timeline through release and paused preparation',

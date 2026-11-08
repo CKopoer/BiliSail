@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-11-08：HTTP DASH 分轨由两后端共用源内加载层，单轨网络读停滞从缺失字节续读，不重开播放器或改动播放进度；缓冲条显示两轨连续可用缓存与原生窗口的最小值。缓存耗尽和解码／输出故障继续沿用同步保护，索引不足时不猜测缓存时长。传输、内存、取消与逐平台证据见[分轨缓冲续读](validation/track-buffer-recovery-2026-11-08.md)。
+
 2026-11-08 后续：Apple media_kit 的 GPU／软件输出改为发布独立完整 CoreVideo 帧，fvp 等待 Metal blit 完成后交付不可变图像；Linux media_kit 补齐跨 context 双向完成屏障与软件像素副本。Android 两后端通过系统 Surface 队列交接，未发现同类应用层覆盖路径。源码、受控回归和未实测边界见[Apple／Linux 与 Android 检查](validation/apple-linux-texture-handoff-2026-11-08.md)。
 
 2026-11-08：Windows media_kit／fvp 改为交付 GPU 已完成的不可变纹理快照，避免 Flutter 取样期间被后续帧覆盖；GPU 复制未完成时沿用上一完整帧并请求重试。来源、延后消费回归、额外分配／复制的性能边界及其他平台的独立实现见[纹理交接记录](validation/windows-texture-handoff-2026-11-08.md)。

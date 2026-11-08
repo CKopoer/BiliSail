@@ -52,22 +52,25 @@ void main() {
         requests++;
         final bytes = media[request.uri.path]!;
         final range = request.headers.value(HttpHeaders.rangeHeader);
-        final start = range == null
-            ? 0
-            : int.parse(RegExp(r'bytes=(\d+)-').firstMatch(range)!.group(1)!);
+        final match = RegExp(r'^bytes=(\d+)-(\d*)$').firstMatch(range ?? '');
+        final start = int.parse(match?[1] ?? '0');
+        final end = (int.tryParse(match?[2] ?? '') ?? bytes.length - 1).clamp(
+          start,
+          bytes.length - 1,
+        );
         final response = request.response;
         response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
-        response.contentLength = bytes.length - start;
+        response.contentLength = end - start + 1;
         if (range != null) {
           response.statusCode = 206;
           response.headers.set(
             HttpHeaders.contentRangeHeader,
-            'bytes $start-${bytes.length - 1}/${bytes.length}',
+            'bytes $start-$end/${bytes.length}',
           );
         }
         await Future<void>.delayed(const Duration(milliseconds: 350));
         try {
-          response.add(bytes.sublist(start));
+          response.add(bytes.sublist(start, end + 1));
           await response.close();
         } on SocketException {
           // Seeking can cancel an older range request.

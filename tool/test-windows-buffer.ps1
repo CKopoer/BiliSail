@@ -12,6 +12,8 @@ try {
   $env:BILI_TEST_BUFFER_DIR = $fixtureDir
   & flutter test integration_test/windows_buffer_ahead_test.dart -d windows
   if ($LASTEXITCODE -ne 0) { throw "Windows forward buffer validation failed: $LASTEXITCODE" }
+  & flutter test integration_test/windows_track_buffer_recovery_test.dart -d windows
+  if ($LASTEXITCODE -ne 0) { throw "Windows per-track buffer recovery failed: $LASTEXITCODE" }
 } finally {
   Remove-Item Env:BILI_TEST_BUFFER_DIR -ErrorAction SilentlyContinue
   Pop-Location

@@ -71,6 +71,7 @@ final class MediaKitEngine extends SharedPlayerEngine {
     required MediaKitVideoOutput idleVideoOutput,
   }) : _idleOutput = idleVideoOutput,
        super(
+         bufferDashTracks: true,
          initialVideoOutput: idleVideoOutput,
          schemes: {'http', 'https', 'file', if (Platform.isAndroid) 'content'},
        );

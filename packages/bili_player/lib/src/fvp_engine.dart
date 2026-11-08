@@ -15,6 +15,7 @@ final class FvpEngine extends SharedPlayerEngine {
     late final FvpEngine engine;
     NativeReadinessStage? readinessStage;
     engine = FvpEngine._(
+      bufferDashTracks: createPlayer == null,
       onDiagnostic: (event) {
         if (event.kind == PlayerDiagnosticKind.openStarted ||
             event.kind == PlayerDiagnosticKind.openReady) {
@@ -26,6 +27,7 @@ final class FvpEngine extends SharedPlayerEngine {
             snapshot: event.snapshot,
             readinessStage: readinessStage,
             failureKind: event.failureKind,
+            nativeError: event.nativeError,
             nativeErrorCode:
                 (engine.activeBackend as FvpBackend?)?.processExitStatus,
             stallReason: event.stallReason,
@@ -55,10 +57,13 @@ final class FvpEngine extends SharedPlayerEngine {
     );
     return engine;
   }
-  FvpEngine._({required super.createBackend, super.onDiagnostic})
-    : super(
-        schemes: {'http', 'https', 'file', if (Platform.isAndroid) 'content'},
-      );
+  FvpEngine._({
+    required super.createBackend,
+    super.onDiagnostic,
+    required super.bufferDashTracks,
+  }) : super(
+         schemes: {'http', 'https', 'file', if (Platform.isAndroid) 'content'},
+       );
 
   // Preserve the historical direct-constructor normalization. The configurable
   // application entrypoint normalizes before selecting either backend.

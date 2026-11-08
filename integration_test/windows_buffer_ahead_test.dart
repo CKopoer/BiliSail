@@ -104,23 +104,43 @@ void _testBackend(bool useFvp) {
     await engine.pause();
 
     Future<Duration> checkWindow(String stage) async {
-      await _until(
-        tester,
-        () =>
-            engine.currentSnapshot.buffered - engine.currentSnapshot.position >=
-            const Duration(seconds: 119),
-      );
+      final information = engine as PlayerInformationSource;
+      double nativeSeconds = 0;
+      final watch = Stopwatch()..start();
+      while (watch.elapsed < const Duration(seconds: 15)) {
+        nativeSeconds =
+            (await information.inspectPlaybackInformation())?.cacheSeconds ?? 0;
+        if (nativeSeconds >= 119) break;
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(nativeSeconds, greaterThanOrEqualTo(119));
       await tester.pump(const Duration(milliseconds: 600));
+      nativeSeconds =
+          (await information.inspectPlaybackInformation())?.cacheSeconds ?? 0;
       final snapshot = engine.currentSnapshot;
       final ahead = snapshot.buffered - snapshot.position;
-      // The window bounds demuxed timestamps; allow decoder/frame rounding.
+      final nativeAhead = Duration(
+        microseconds: (nativeSeconds * 1000000).round(),
+      );
+      // The native main demuxer retains the two-minute window. The timeline
+      // now reports the shorter continuous A/V range and may be much smaller.
+      expect(nativeAhead, greaterThanOrEqualTo(const Duration(seconds: 119)));
+      expect(
+        nativeAhead,
+        lessThanOrEqualTo(const Duration(milliseconds: 120500)),
+      );
+      expect(ahead, greaterThan(Duration.zero));
       expect(ahead, lessThanOrEqualTo(const Duration(milliseconds: 120500)));
+      expect(
+        ahead,
+        lessThanOrEqualTo(nativeAhead + const Duration(milliseconds: 500)),
+      );
       expect(snapshot.buffered, lessThan(snapshot.duration));
       debugPrint(
         'PLAYER_BUFFER backend=${useFvp ? 'fvp' : 'media_kit'} $stage positionMs=${snapshot.position.inMilliseconds} '
-        'bufferedMs=${snapshot.buffered.inMilliseconds} aheadMs=${ahead.inMilliseconds}',
+        'bufferedMs=${snapshot.buffered.inMilliseconds} aheadMs=${ahead.inMilliseconds} nativeAheadMs=${nativeAhead.inMilliseconds}',
       );
-      return snapshot.buffered;
+      return snapshot.position + nativeAhead;
     }
 
     final firstBuffer = await checkWindow('initial');

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'dash_track_buffer.dart';
 import 'native_error_monitor.dart';
 import 'native_playback_health.dart';
 import 'native_readiness.dart';
@@ -25,6 +26,7 @@ class SharedPlayerEngine
     this.schemes = const {'http', 'https', 'file'},
     this.onDiagnostic,
     this.monotonicNow,
+    this.bufferDashTracks = false,
     VideoOutput? initialVideoOutput,
   }) {
     _output.bind(initialVideoOutput);
@@ -38,6 +40,8 @@ class SharedPlayerEngine
   final Set<String> schemes;
   final void Function(PlayerDiagnosticEvent)? onDiagnostic;
   final Duration Function()? monotonicNow;
+  final bool bufferDashTracks;
+  DashTrackBuffer? _dashBuffer;
   final _clock = Stopwatch()..start();
   final _output = SwitchingVideoOutput();
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
@@ -120,12 +124,14 @@ class SharedPlayerEngine
 
   void _diagnose(
     PlayerDiagnosticKind kind, {
+    NativeErrorSummary? nativeError,
     PlayerFailureKind? failureKind,
     NativePlaybackInterruption? interruption,
   }) => onDiagnostic?.call(
     PlayerDiagnosticEvent(
       kind: kind,
       snapshot: _snapshot,
+      nativeError: nativeError,
       failureKind: failureKind,
       stallReason: interruption?.reason,
       stalledFor: interruption?.stalledFor,
@@ -178,6 +184,7 @@ class SharedPlayerEngine
   }
 
   void _interrupt(PlaybackBackend? backend) {
+    unawaited(_dashBuffer?.close());
     try {
       backend?.interrupt();
     } on Object {
@@ -225,6 +232,8 @@ class SharedPlayerEngine
     _output.bind(null);
     await _subscription?.cancel();
     _subscription = null;
+    await _dashBuffer?.close();
+    _dashBuffer = null;
     // A late factory remains owned. No replacement allocates over an unknown
     // release, including a factory which returned after its open timed out.
     final allocation = _allocation;
@@ -301,7 +310,7 @@ class SharedPlayerEngine
       if (!_current(generation)) return;
       _diagnose(PlayerDiagnosticKind.openStarted);
       try {
-        final plan = ValidatedSource.validate(
+        var plan = ValidatedSource.validate(
           source,
           options,
           generation,
@@ -311,6 +320,23 @@ class SharedPlayerEngine
         _live = plan.live;
         _preview = source is DashVideoSource;
         _audioConfirmed = false;
+        if (bufferDashTracks && DashTrackBuffer.supports(plan)) {
+          final buffer = await DashTrackBuffer.create(
+            plan,
+            onFailure: (error) {
+              if (_current(generation)) {
+                _diagnose(PlayerDiagnosticKind.nativeError, nativeError: error);
+              }
+            },
+          );
+          if (!_current(generation)) {
+            await buffer.close();
+            return;
+          }
+          _dashBuffer = buffer;
+          operation.check();
+          plan = buffer.prepare(plan);
+        }
         final creating = _allocation =
             Future<PlaybackBackend>.sync(createBackend).then((value) {
               _backend = value;
@@ -492,7 +518,7 @@ class SharedPlayerEngine
           _snapshot.copyWith(
             position: event.position,
             duration: _live ? Duration.zero : event.duration,
-            buffered: event.buffered,
+            buffered: _buffered(event.position, event.buffered),
             videoDimensions: event.dimensions,
           ),
         );
@@ -572,14 +598,19 @@ class SharedPlayerEngine
       _publish(
         _snapshot.copyWith(
           position: sample.position,
-          buffered: sample.buffered,
+          buffered: _buffered(sample.position, sample.buffered),
         ),
       );
       if (!_current(generation, backend) || _terminal || _snapshot.isSeeking) {
         return;
       }
       final interruption = _health.update(
-        _snapshot,
+        // Transport cache describes both tracks. The existing video underrun
+        // check must keep using the native video endpoint, not the smaller
+        // audio endpoint displayed by the timeline.
+        _dashBuffer == null
+            ? _snapshot
+            : _snapshot.copyWith(buffered: sample.buffered),
         monotonicNow?.call() ?? _clock.elapsed,
         paired: sample.comparePairedClocks,
         audioPosition: sample.audioPosition,
@@ -598,6 +629,15 @@ class SharedPlayerEngine
         unawaited(_fail(interruption.kind));
       }
     });
+  }
+
+  Duration? _buffered(Duration? position, Duration? nativeEnd) {
+    final buffer = _dashBuffer;
+    if (buffer == null) return nativeEnd;
+    return buffer.commonBuffered(
+      position ?? _snapshot.position,
+      nativeEnd ?? _snapshot.buffered,
+    );
   }
 
   void _resetHealth() {

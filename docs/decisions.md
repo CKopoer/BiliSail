@@ -555,3 +555,7 @@ Windows 保留经过验证的 ANGLE 与 EGL device-query 修正 SDK，Android �
 **决定（2026-11-08）**：保留主应用的 `PlayerEngine`、`PlaybackSession` 和可切换工厂，把起播、首次 play、暂停、连续 seek、EOF、健康检测、增益平滑和终止／释放策略集中到 `bili_player` 的 `SharedPlayerEngine`。固定后端构造器保留公开参数与诊断入口，分别注入 `MediaKitBackend` 或 `FvpBackend`；共享层不导入 SDK，也不按后端名分支。
 
 适配器只持有当前源的原生对象、回调身份、输出、租约及平台探针。原生等待接收同一取消与截止时间；Android fvp 的静音／播放／倍速屏障等待 worker 应答。失败流和命令 Future 共用同一次失败，未知释放状态阻止下一次分配；CDN、账号、选流及恢复次数仍归应用会话。接口与逐平台证据见[重构方案](player-backend-refactor-design.md)和[实施记录](validation/player-backend-refactor-2026-11-08.md)。
+
+## D76：DASH 网络分轨在源内续读，缓冲显示共同可用范围
+
+**决定（2026-11-08）**：两个真实后端共用 `bili_player` 中的源内 HTTP Range 加载层，在单轨网络读取停滞时有限续读，不重挂音轨、不重开播放器或改动播放位置。缓存只在内存中有界保留；可信的 MP4 索引映射两轨连续可用时域，显示较小值并受原生窗口约束，未知索引不使用码率估算。源关闭必须取消网络任务并等待释放。原有缓存耗尽和轨道／输出失效保护保留；CDN 刷新、账号和整组重开仍归会话。原因、上限、验证和平台边界见[分轨缓冲续读](validation/track-buffer-recovery-2026-11-08.md)。
