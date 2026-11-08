@@ -36,7 +36,9 @@ abstract interface class ProfileFollowingManagementRepository {
     bool blacklist = false,
     required RequestCancellation cancellation,
   });
-  Future<void> editFollowGroup(
+
+  /// Creation returns the confirmed group identity; other edits return null.
+  Future<ProfileFollowGroup?> editFollowGroup(
     UserId owner,
     FollowGroupEdit edit, {
     String? groupId,

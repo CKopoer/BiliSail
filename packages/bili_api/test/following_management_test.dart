@@ -78,7 +78,10 @@ void main() {
 
   test('group writes use exact endpoints, raw fields and CSRF', () async {
     final groups = FollowGroupClient(api);
-    await groups.create(' 中文 & + % ');
+    transport.postResult = response({'tagid': '9007199254740993123'});
+    final created = await groups.create(' 中文 & + % ');
+    expect(created.id, '9007199254740993123');
+    expect(created.name, '中文 & + %');
     expect(transport.uri?.path, '/x/relation/tag/create');
     expect(transport.fields, containsPair('tag', '中文 & + %'));
     expect(transport.fields, containsPair('csrf', 'csrf-fixture'));
@@ -119,6 +122,33 @@ void main() {
     );
     expect(transport.posts, 1);
   });
+
+  test(
+    'creation requires a real positive tag identity without replaying writes',
+    () async {
+      for (final data in [
+        null,
+        {},
+        {'tagid': 0},
+        {'tagid': -1},
+        {'tagid': 1.5},
+      ]) {
+        transport.postResult = response(data);
+        final before = transport.posts;
+        await expectLater(
+          FollowGroupClient(api).create('分组'),
+          throwsA(
+            isA<ApiFailure>().having(
+              (error) => error.category,
+              'category',
+              ApiFailureCategory.protocol,
+            ),
+          ),
+        );
+        expect(transport.posts, before + 1);
+      }
+    },
+  );
 
   test('malformed relation responses do not become empty success', () async {
     for (final data in [

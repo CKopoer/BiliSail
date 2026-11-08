@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
@@ -151,6 +153,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(profileControllerProvider(_id)).followingKeyword, '');
     expect(find.text('全部关注的搜索结果'), findsNothing);
+  });
+
+  testWidgets('created and deleted top tabs survive stale group reads', (
+    tester,
+  ) async {
+    await mount(tester);
+    repo.staleGroups = List.of(repo.groups);
+    final pending = repo.pendingGroups = Completer<List<ProfileFollowGroup>>();
+    await action(tester, '新建分组');
+    await tester.enterText(find.byType(TextFormField), '新分组');
+    await tester.tap(find.widgetWithText(FilledButton, '确认'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final created = find.byKey(const ValueKey('profile-follow-group-3'));
+    // The top tab appears from the successful POST, before GET completes.
+    expect(created.hitTestable(), findsOneWidget);
+    pending.complete(repo.staleGroups);
+    await tester.pumpAndSettle();
+    repo.pendingGroups = null;
+    expect(created, findsOneWidget);
+    expect(find.widgetWithText(TextButton, '新分组'), findsOneWidget);
+    await tester.tap(created);
+    await tester.pumpAndSettle();
+    repo.staleGroups = List.of(repo.groups);
+    await action(tester, '删除分组');
+    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.pumpAndSettle();
+    expect(created, findsNothing);
+    expect(find.text('关注-1'), findsOneWidget);
+    await controller().loadFollowGroups();
+    await tester.pumpAndSettle();
+    expect(created, findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

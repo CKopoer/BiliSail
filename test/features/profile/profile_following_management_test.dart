@@ -366,6 +366,55 @@ void main() {
       await flush();
     },
   );
+
+  test('confirmed group changes survive stale reads until the server acknowledges them', () async {
+    repo.staleGroups = List.of(repo.groups);
+    expect(
+      await controller().editFollowGroup(FollowGroupEdit.create, name: '新增'),
+      true,
+    );
+    expect(state().followGroups?.last.id, '3');
+    await controller().loadFollowGroups();
+    expect(state().followGroups?.last.id, '3');
+    // Once a read acknowledges creation, later external edits are accepted.
+    repo.staleGroups = null;
+    await controller().loadFollowGroups();
+    repo.groups = [
+      for (final group in repo.groups)
+        if (group.id == '3')
+          const ProfileFollowGroup(id: '3', name: '其他客户端修改')
+        else
+          group,
+    ];
+    await controller().loadFollowGroups();
+    expect(state().followGroups?.last.name, '其他客户端修改');
+    repo.staleGroups = List.of(repo.groups);
+    expect(
+      await controller().editFollowGroup(
+        FollowGroupEdit.rename,
+        groupId: '3',
+        name: '重命名',
+      ),
+      true,
+    );
+    expect(state().followGroups?.last.name, '重命名');
+    expect(await controller().sortFollowGroups(['3', '2', '1']), true);
+    expect(
+      state().followGroups
+          ?.where((group) => group.isEditable)
+          .map((group) => group.id),
+      ['3', '2', '1'],
+    );
+    expect(
+      await controller().editFollowGroup(FollowGroupEdit.delete, groupId: '3'),
+      true,
+    );
+    await controller().loadFollowGroups();
+    expect(state().followGroups?.any((group) => group.id == '3'), false);
+    repo.staleGroups = null;
+    await controller().loadFollowGroups();
+    expect(state().followGroups?.any((group) => group.id == '3'), false);
+  });
 }
 
 extension<T> on Iterable<T> {

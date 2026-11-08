@@ -27,6 +27,7 @@ class FollowingRepository
     const ProfileFollowGroup(id: '1', name: '知识'),
     const ProfileFollowGroup(id: '2', name: '音乐'),
   ];
+  List<ProfileFollowGroup>? staleGroups;
   Completer<ProfilePage>? pendingRead;
   Completer<List<ProfileFollowGroup>>? pendingGroups;
   Completer<void>? pendingWrite;
@@ -57,7 +58,7 @@ class FollowingRepository
   }
 
   @override
-  Future<void> editFollowGroup(
+  Future<ProfileFollowGroup?> editFollowGroup(
     UserId owner,
     FollowGroupEdit edit, {
     String? groupId,
@@ -81,6 +82,7 @@ class FollowingRepository
       FollowGroupEdit.delete =>
         groups.where((group) => group.id != groupId).toList(),
     };
+    return edit == FollowGroupEdit.create ? groups.last : null;
   }
 
   Future<void> _write(RequestCancellation cancellation) async {
@@ -121,7 +123,7 @@ class FollowingRepository
     required RequestCancellation cancellation,
   }) async {
     groupReads++;
-    return pendingGroups?.future ?? groups;
+    return pendingGroups?.future ?? staleGroups ?? groups;
   }
 
   @override

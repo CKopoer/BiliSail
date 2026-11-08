@@ -14,10 +14,20 @@ final class FollowGroupClient {
 
   final BiliApiClient api;
 
-  Future<void> create(String name, {ApiRequestContext? context}) async {
-    await api.submitForm('/x/relation/tag/create', 'follow_group_create', {
-      'tag': _name(name),
+  Future<ApiFollowGroup> create(
+    String name, {
+    ApiRequestContext? context,
+  }) async {
+    const endpoint = 'follow_group_create';
+    final normalized = _name(name);
+    final data = await api.submitForm('/x/relation/tag/create', endpoint, {
+      'tag': normalized,
     }, context: context);
+    final id = data is Map<String, Object?> ? _id(data['tagid']) : null;
+    if (id == null || !RegExp(r'^[1-9]\d*$').hasMatch(id)) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    return ApiFollowGroup(id: id, name: normalized);
   }
 
   Future<void> rename(

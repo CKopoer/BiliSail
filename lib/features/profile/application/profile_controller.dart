@@ -189,6 +189,8 @@ class ProfileController extends Notifier<ProfileState> {
   int _followGroupsGeneration = 0;
   RequestCancellation _followGroupsRead = RequestCancellation();
   RequestCancellation _followingWrite = RequestCancellation();
+  final Map<String, ProfileFollowGroup?> _confirmedFollowGroups = {};
+  List<String>? _confirmedFollowGroupOrder;
   RequestCancellation _detailsRead = RequestCancellation();
   RequestCancellation _profileRead = RequestCancellation();
   RequestCancellation _liveRoomRead = RequestCancellation();
@@ -231,6 +233,8 @@ class ProfileController extends Notifier<ProfileState> {
     _detailsRead.cancel();
     _followGroupsRead.cancel();
     _followingWrite.cancel();
+    _confirmedFollowGroups.clear();
+    _confirmedFollowGroupOrder = null;
     for (final read in _reads.values) {
       read.cancel();
     }
@@ -432,9 +436,10 @@ class ProfileController extends Notifier<ProfileState> {
       clearFollowGroupsMessage: true,
     );
     try {
-      final groups = await (repository as ProfileFollowGroupsRepository)
+      final remote = await (repository as ProfileFollowGroupsRepository)
           .loadFollowGroups(id, cancellation: read);
       if (!current()) return;
+      final groups = _mergeConfirmedFollowGroups(remote, acknowledge: true);
       state = state.copy(
         followGroups: List.unmodifiable(groups),
         followGroupsLoading: false,
@@ -486,6 +491,69 @@ class ProfileController extends Notifier<ProfileState> {
     );
     // A group refresh can finish while another section is visible.
     if (loadContent && state.section == ProfileSection.following) load();
+  }
+
+  // Relation tags can lag behind a successful write. Keep its confirmed result
+  // until a read acknowledges it, rather than rolling the visible tabs back.
+  List<ProfileFollowGroup> _mergeConfirmedFollowGroups(
+    List<ProfileFollowGroup> remote, {
+    bool acknowledge = false,
+  }) {
+    final groups = {for (final group in remote) group.id: group};
+    if (acknowledge) {
+      _confirmedFollowGroups.removeWhere(
+        (id, group) => group == null
+            ? !groups.containsKey(id)
+            : groups[id]?.name == group.name,
+      );
+      final order = _confirmedFollowGroupOrder;
+      if (order != null) {
+        final ids = remote
+            .where((group) => order.contains(group.id))
+            .map((group) => group.id)
+            .toList();
+        if (ids.length == order.length &&
+            ids.indexed.every((entry) => entry.$2 == order[entry.$1])) {
+          _confirmedFollowGroupOrder = null;
+        }
+      }
+    }
+    for (final entry in _confirmedFollowGroups.entries) {
+      if (entry.value case final group?) {
+        groups[entry.key] = group;
+      } else {
+        groups.remove(entry.key);
+      }
+    }
+    final order = _confirmedFollowGroupOrder;
+    if (order == null) return groups.values.toList(growable: false);
+    final ordered = order.toSet();
+    return [
+      for (final group in groups.values)
+        if (!group.isEditable) group,
+      for (final id in order) ?groups[id],
+      for (final group in groups.values)
+        if (group.isEditable && !ordered.contains(group.id)) group,
+    ];
+  }
+
+  void _publishConfirmedFollowGroups() {
+    final groups = _mergeConfirmedFollowGroups(state.followGroups ?? const []);
+    state = state.copy(followGroups: List.unmodifiable(groups));
+    final selected = state.followingGroupId;
+    if (selected != null && !groups.any((group) => group.id == selected)) {
+      selectFollowingGroup(null, loadContent: false);
+    }
+  }
+
+  void _confirmFollowGroup(String id, ProfileFollowGroup? group) {
+    _confirmedFollowGroups.remove(id);
+    _confirmedFollowGroups[id] = group;
+    // Bound confirmed writes and deletion markers to the tag snapshot budget.
+    if (_confirmedFollowGroups.length > 100) {
+      _confirmedFollowGroups.remove(_confirmedFollowGroups.keys.first);
+    }
+    _publishConfirmedFollowGroups();
   }
 
   void searchFollowing(String keyword) {
@@ -566,14 +634,34 @@ class ProfileController extends Notifier<ProfileState> {
         (name.trim().isEmpty || name.trim().runes.length > 16)) {
       return Future.value(false);
     }
+    ProfileFollowGroup? created;
     return _manageFollowing(
-      (repo, read) => repo.editFollowGroup(
-        id,
-        edit,
-        groupId: groupId,
-        name: name.trim(),
-        cancellation: read,
-      ),
+      (repo, read) async {
+        created = await repo.editFollowGroup(
+          id,
+          edit,
+          groupId: groupId,
+          name: name.trim(),
+          cancellation: read,
+        );
+      },
+      afterWrite: () {
+        switch (edit) {
+          case FollowGroupEdit.create:
+            final group = created;
+            if (group == null || !group.isEditable) {
+              throw const AppFailure(AppFailureKind.protocol, '新建分组未返回有效身份');
+            }
+            _confirmFollowGroup(group.id, group);
+          case FollowGroupEdit.rename:
+            _confirmFollowGroup(
+              groupId!,
+              ProfileFollowGroup(id: groupId, name: name.trim()),
+            );
+          case FollowGroupEdit.delete:
+            _confirmFollowGroup(groupId!, null);
+        }
+      },
     );
   }
 
@@ -592,6 +680,10 @@ class ProfileController extends Notifier<ProfileState> {
     final snapshot = List<String>.unmodifiable(ids);
     return _manageFollowing(
       (repo, read) => repo.sortFollowGroups(id, snapshot, cancellation: read),
+      afterWrite: () {
+        _confirmedFollowGroupOrder = snapshot;
+        _publishConfirmedFollowGroups();
+      },
     );
   }
 
@@ -608,8 +700,9 @@ class ProfileController extends Notifier<ProfileState> {
       ProfileFollowingManagementRepository,
       RequestCancellation,
     )
-    action,
-  ) async {
+    action, {
+    void Function()? afterWrite,
+  }) async {
     final repository = ref.read(profileRepositoryProvider);
     if (!state.followingManagementAvailable ||
         state.followingBusy ||
@@ -629,6 +722,7 @@ class ProfileController extends Notifier<ProfileState> {
     try {
       await action(repository as ProfileFollowingManagementRepository, read);
       if (!current()) return false;
+      afterWrite?.call();
       // Keep writes disabled until both authoritative lists have reconciled.
       await refreshFollowingManagement();
       return current() && !state.followingUncertain;

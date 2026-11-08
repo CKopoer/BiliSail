@@ -67,7 +67,7 @@ class ApiProfileRepository
   }, cancellation: cancellation);
 
   @override
-  Future<void> editFollowGroup(
+  Future<ProfileFollowGroup?> editFollowGroup(
     UserId owner,
     FollowGroupEdit edit, {
     String? groupId,
@@ -78,7 +78,8 @@ class ApiProfileRepository
     final groups = FollowGroupClient(client.api);
     switch (edit) {
       case FollowGroupEdit.create:
-        await groups.create(name, context: context);
+        final created = await groups.create(name, context: context);
+        return ProfileFollowGroup(id: created.id, name: created.name);
       case FollowGroupEdit.rename:
         if (groupId == null) throw ArgumentError('Missing group');
         await groups.rename(groupId, name, context: context);
@@ -86,6 +87,7 @@ class ApiProfileRepository
         if (groupId == null) throw ArgumentError('Missing group');
         await groups.delete(groupId, context: context);
     }
+    return null;
   }, cancellation: cancellation);
 
   @override
