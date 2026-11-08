@@ -15,6 +15,7 @@ import 'package:bilisail/features/profile/presentation/profile_header.dart';
 import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
+import 'package:bilisail/shared/ui/season_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -149,6 +150,27 @@ void main() {
       (tester) async {
         String? season;
         await mount(tester, section: section, onSeason: (id) => season = id);
+        expect(find.byType(SeasonCard), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(SeasonCard),
+            matching: find.text(
+              section == ProfileSection.bangumi ? '追番' : '追剧',
+            ),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .getSize(
+                find.descendant(
+                  of: find.byType(SeasonCard),
+                  matching: find.byType(AspectRatio),
+                ),
+              )
+              .aspectRatio,
+          closeTo(3 / 4, .01),
+        );
         await tester.tap(find.text('番剧与影视'));
         expect(season, '9007199254740993123');
         final before = repository.reads.where((r) => r.$1 == section).length;

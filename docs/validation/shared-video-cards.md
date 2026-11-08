@@ -4,6 +4,18 @@
 
 2026-10-25 DPI 补充修复：共享网格按实际 15px 标题字号的缩放比例计算卡宽，不把 140／160／300 的卡宽当作字号缩放，兼容 Android 系统非线性大字体；默认列数与平板三列策略保留。溢出标题支持手机长按全文，桌面悬停保持。非线性字号、触摸单次打开、Android 模拟器与 Windows 工作区验证见 [DPI 与文字缩放](dpi-adaptation.md)。
 
+## 2026-11-08：首页影视与空间追番共用竖版卡片
+
+首页番剧、国创、放映厅的影视条目改为复用个人／UP 主空间追番、追剧的样式，共同使用 [SeasonCard](../../lib/shared/ui/season_card.dart)：3:4 竖版封面、12px 圆角底色、左下分类角标、两行标题与两行更新信息。空间保留“追番／追剧”角标，首页使用频道名称；“我的收藏”下的追番／追剧条目也沿用同一组件。收藏夹、合集、普通视频和直播的原有卡片保持。
+
+沿用原有懒加载网格、响应式列数、局部宽度／字号适配、分页及滚动状态；影视缺少封面时仍保留竖版占位。点击继续进入应用内影视页，时间表保留指定剧集 ID。本轮没有改变协议、账号或播放会话。
+
+70 项定向 Widget 测试通过，日志 `build/season-cards-targeted.log`：覆盖首页三个频道全部子标签、窄屏／宽屏、两倍字号、缺图占位、共享组件和内部影视／剧集跳转，以及空间追番／追剧的内部跳转与列表保留。按用户要求不构建、不进行实机验收，设备显示效果由用户后续确认。DTD 未发现运行中的调试应用，无法热重载。
+
+本次 5 个 Dart 文件格式检查及定向静态分析通过；根应用全量 4709 项测试通过，另有 13 项 Windows 符号链接用例跳过。`tool/check.ps1 -SkipPub` 的打包边界脚本及根应用格式检查通过，但同期 `bili_player` 重构中 6 个文件未格式化，检查在包格式阶段停止；补跑全局分析发现该包 `test/fvp_engine_test.dart` 的 12 条 `avoid_print` 提示。上述同期文件不属于本次提交，未修改。
+
+分包补跑：`bili_api` 719、`bili_danmaku` 161、`bili_mux` 5 项通过；mux 另有 10 项原生测试因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生集成通过。`bili_player` 测试运行到 252 项通过、5 项失败后持续无进展，已中止该轮；失败来自 `fvp_process_failure_test.dart` 的 3 项进程故障用例、`media_kit_engine_test.dart` 的无音轨源校验及 `video_viewport_test.dart` 的 Windows 缩放用例。日志分别为 `build/season-cards-check.log`、`build/season-cards-analyze.log`、`build/season-cards-root-tests.log`、`build/season-cards-package-tests.log`、`build/season-cards-danmaku-tests.log` 和 `build/season-cards-mux-tests.log`。
+
 ## 2026-10-30 常规参考卡宽调整
 
 共享 `ResponsiveCardGrid` / `SliverResponsiveCardGrid` 的常规参考卡宽从 300 调整为 260 逻辑像素。默认字号下，扣除侧栏、外层留白和页面内边距后的网格宽度达到 1100 时由三列切到四列，1380 时进入五列，1660 时进入六列；每张卡片仍按实际可用宽度减去列间距后均分，参考卡宽不是固定尺寸。推荐、首页直播／影视、搜索视频及历史等共享网格同步生效。

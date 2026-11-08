@@ -5,9 +5,11 @@ import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/feed/presentation/home_content.dart';
 import 'package:bilisail/shared/ui/responsive_card_grid.dart';
+import 'package:bilisail/shared/ui/season_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 void main() {
   for (final channel in [
@@ -70,7 +72,10 @@ void main() {
           find.descendant(of: slots.first, matching: find.byType(AspectRatio)),
         );
         expect(cover.width, closeTo(first.width, .01));
-        expect(cover.aspectRatio, closeTo(16 / 9, .01));
+        expect(
+          cover.aspectRatio,
+          closeTo(channel == HomeChannel.live ? 16 / 9 : 3 / 4, .01),
+        );
         expect(
           repository.calls,
           channel == HomeChannel.live ? 2 : 1,
@@ -89,9 +94,64 @@ void main() {
           find.text(channel == HomeChannel.live ? '直播作者' : '更新至第12集'),
           findsNWidgets(slots.length),
         );
+        if (channel != HomeChannel.live) {
+          expect(find.byType(SeasonCard), findsNWidgets(slots.length));
+          expect(find.text(channel.label), findsNWidgets(slots.length));
+        }
         expect(tester.takeException(), isNull, reason: section);
       }
     });
+  }
+
+  for (final channel in [
+    HomeChannel.bangumi,
+    HomeChannel.guochuang,
+    HomeChannel.cinema,
+  ]) {
+    testWidgets(
+      '${channel.name} poster opens the requested season and episode',
+      (tester) async {
+        final router = GoRouter(
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (_, _) => Scaffold(
+                body: HomeContent(
+                  channel: channel,
+                  section: channel == HomeChannel.cinema ? '电影' : '时间表',
+                  isSignedIn: true,
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/pgc/season/:seasonId',
+              builder: (_, state) => Scaffold(
+                body: Text(
+                  '影视 ${state.pathParameters['seasonId']} '
+                  '剧集 ${state.uri.queryParameters['ep']}',
+                ),
+              ),
+            ),
+          ],
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              homeRepositoryProvider.overrideWithValue(
+                _Repository(firstId: '9007199254740993123:17'),
+              ),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(SeasonCard).first);
+        await tester.pumpAndSettle();
+        expect(find.text('影视 9007199254740993123 剧集 17'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 }
 
@@ -131,6 +191,9 @@ Widget _app(
 );
 
 final class _Repository implements HomeRepository {
+  _Repository({this.firstId = '1'});
+
+  final String firstId;
   int calls = 0;
 
   @override
@@ -150,12 +213,14 @@ final class _Repository implements HomeRepository {
     return HomePage([
       for (var index = 0; index < 8; index++)
         HomeEntry(
-          id: '${index + 1}',
+          id: index == 0 ? firstId : '${index + 1}',
           title: '第${index + 1}张卡片的长标题，用于检查窄屏布局与文字缩放',
           kind: query.channel == HomeChannel.live
               ? HomeEntryKind.live
               : HomeEntryKind.season,
-          coverUrl: Uri.https('example.invalid', '/cover-$index.jpg'),
+          coverUrl: index == 0
+              ? null
+              : Uri.https('example.invalid', '/cover-$index.jpg'),
           authorName: query.channel == HomeChannel.live ? '直播作者' : '',
           subtitle: '更新至第12集',
           popularityText: '8万',

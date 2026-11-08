@@ -7,6 +7,7 @@ import '../../../shared/ui/dynamic_post_interactions.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
+import '../../../shared/ui/season_card.dart';
 import '../../../shared/ui/sliver_dynamic_post_list.dart';
 import '../domain/profile_repository.dart';
 import 'profile_folder_video_grid.dart';
@@ -187,21 +188,28 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
   );
 
   Widget _libraryCard(BuildContext context, ProfileEntry entry) {
+    if (entry.kind == ProfileEntryKind.season) {
+      final seasonId = entry.seasonId;
+      return SeasonCard(
+        key: ValueKey('profile-library-${entry.kind.name}-${entry.id}'),
+        title: entry.title,
+        subtitle: entry.subtitle,
+        coverUrl: entry.coverUrl,
+        label: widget.section == ProfileSection.bangumi ? '追番' : '追剧',
+        onTap: seasonId != null && widget.onOpenSeason != null
+            ? () => widget.onOpenSeason?.call(seasonId)
+            : null,
+      );
+    }
     final scheme = Theme.of(context).colorScheme;
-    final season = entry.kind == ProfileEntryKind.season;
     final label = switch (entry.kind) {
       ProfileEntryKind.folder => '收藏夹',
-      ProfileEntryKind.collection =>
-        entry.collection?.isSeries == true ? '系列' : '合集',
-      _ => widget.section == ProfileSection.bangumi ? '追番' : '追剧',
+      _ => entry.collection?.isSeries == true ? '系列' : '合集',
     };
     final VoidCallback? open = switch (entry.kind) {
       ProfileEntryKind.folder => () => widget.onOpenFolder(entry),
       ProfileEntryKind.collection when widget.onOpenCollection != null =>
         () => widget.onOpenCollection?.call(entry),
-      ProfileEntryKind.season
-          when entry.seasonId != null && widget.onOpenSeason != null =>
-        () => widget.onOpenSeason?.call(entry.seasonId!),
       _ => null,
     };
     return Material(
@@ -215,19 +223,14 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AspectRatio(
-              aspectRatio: season ? 3 / 4 : 16 / 9,
+              aspectRatio: 16 / 9,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   ColoredBox(
                     color: scheme.surfaceContainerHighest,
                     child: entry.coverUrl == null
-                        ? Icon(
-                            season
-                                ? Icons.movie_outlined
-                                : Icons.video_library_outlined,
-                            size: 36,
-                          )
+                        ? const Icon(Icons.video_library_outlined, size: 36)
                         : AppCoverImage(
                             url: entry.coverUrl.toString(),
                             excludeFromSemantics: true,
@@ -274,11 +277,7 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    season
-                        ? entry.subtitle
-                        : entry.count == null
-                        ? '视频数量未知'
-                        : '${entry.count} 个视频',
+                    entry.count == null ? '视频数量未知' : '${entry.count} 个视频',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall

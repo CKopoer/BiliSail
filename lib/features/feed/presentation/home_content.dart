@@ -1,6 +1,7 @@
 import '../../../domain/user.dart';
 import '../../../domain/dynamic_post.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
+import '../../../shared/ui/season_card.dart';
 import '../../../shared/ui/sliver_dynamic_post_list.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/app_cover_image.dart';
@@ -440,6 +441,20 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
             item.kind == HomeEntryKind.live) {
           return LiveRoomCard(key: key, entry: item, onTap: () => _open(item));
         }
+        if (item.kind == HomeEntryKind.season) {
+          return SeasonCard(
+            key: key,
+            title: item.title,
+            subtitle: item.subtitle,
+            coverUrl: item.coverUrl,
+            label: widget.channel == HomeChannel.favorites
+                ? widget.section == '我的追剧'
+                      ? '追剧'
+                      : '追番'
+                : widget.channel.label,
+            onTap: () => _open(item),
+          );
+        }
         return _EntryCard(key: key, entry: item, onTap: () => _open(item));
       },
     );
@@ -778,7 +793,6 @@ final class _EntryCard extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => Card(
-    margin: entry.kind == HomeEntryKind.season ? EdgeInsets.zero : null,
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: entry.kind == HomeEntryKind.video && entry.bvid == null
