@@ -267,6 +267,14 @@ jobs:
       - name: Set up the Windows mux compiler
         id: windows-mux
         if: startsWith(matrix.target, 'windows-')
+        continue-on-error: true
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        with:
+          msystem: ${{ matrix.target == 'windows-arm64' && 'CLANGARM64' || 'UCRT64' }}
+          install: ${{ matrix.target == 'windows-arm64' && 'make mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-llvm mingw-w64-ucrt-x86_64-libarchive' || 'make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libarchive' }}
+      - name: Retry Windows mux compiler setup
+        id: windows-mux-retry
+        if: startsWith(matrix.target, 'windows-') && steps.windows-mux.outcome == 'failure'
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
         with:
           msystem: ${{ matrix.target == 'windows-arm64' && 'CLANGARM64' || 'UCRT64' }}
@@ -275,7 +283,7 @@ jobs:
         if: startsWith(matrix.target, 'windows-')
         shell: pwsh
         env:
-          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux.outputs.msys2-location }}
+          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux-retry.outputs.msys2-location || steps.windows-mux.outputs.msys2-location }}
         run: ./tool/setup-windows-native-tar.ps1 -MsysRoot $env:BILI_MUX_MSYS_ROOT
       - name: Set up the Android mux compiler
         if: matrix.target == 'android-arm64'
@@ -342,7 +350,7 @@ jobs:
         env:
           BUILD_TARGET: ${{ matrix.target }}
           BUILD_VERSION: ${{ needs.prepare.outputs.version }}
-          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux.outputs.msys2-location }}
+          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux-retry.outputs.msys2-location || steps.windows-mux.outputs.msys2-location }}
           ANDROID_PREVIEW_SIGNING: ${{ matrix.target == 'android-arm64' && github.event_name == 'pull_request' }}
           ANDROID_KEYSTORE_BASE64: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
           ANDROID_KEYSTORE_PASSWORD: ${{ matrix.target == 'android-arm64' && github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}

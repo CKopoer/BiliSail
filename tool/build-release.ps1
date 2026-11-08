@@ -14,6 +14,7 @@ $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'windows-msix-identity.ps1')
 . (Join-Path $PSScriptRoot 'macos-release-validation.ps1')
 . (Join-Path $PSScriptRoot 'ios-package-validation.ps1')
+. (Join-Path $PSScriptRoot 'build-dependency-command.ps1')
 
 function Invoke-BuildCommand([string]$Executable, [string[]]$Parameters) {
   & $Executable @Parameters
@@ -194,7 +195,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Could not read source status.' }
   $sourceDirty = [bool]$sourceChanges
   $lockHash = (Get-FileHash -LiteralPath 'pubspec.lock' -Algorithm SHA256).Hash
-  Invoke-BuildCommand flutter @('pub', 'get', '--enforce-lockfile')
+  Invoke-BuildDependencyCommand flutter @('pub', 'get', '--enforce-lockfile')
   if ($isWindowsTarget) {
     & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1') -Architecture $windowsArch
   }
@@ -229,7 +230,7 @@ try {
 
   switch ($Target) {
     'ios-arm64' {
-      Invoke-BuildCommand flutter (@('build', 'ios', '--no-codesign') + $versionArgs)
+      Invoke-BuildDependencyCommand flutter (@('build', 'ios', '--no-codesign') + $versionArgs)
       $payload = Join-Path $outputRoot 'Payload'
       New-Item -ItemType Directory -Path $payload | Out-Null
       $app = Join-Path $payload 'Runner.app'
@@ -271,7 +272,7 @@ try {
     }
     'linux-x64' {
       Invoke-BuildCommand flutter @('config', '--enable-linux-desktop')
-      Invoke-BuildCommand flutter (@('build', 'linux', '--target-platform', 'linux-x64') + $versionArgs)
+      Invoke-BuildDependencyCommand flutter (@('build', 'linux', '--target-platform', 'linux-x64') + $versionArgs)
       Invoke-BuildCommand bash @((Join-Path $PSScriptRoot 'package-linux.sh'), $Version, $releaseDir)
       $package = Join-Path $releaseDir "$name.AppImage"
       if (!(Test-Path -LiteralPath $package) -or !(Test-Path -LiteralPath (Join-Path $releaseDir "$name.flatpak"))) {
@@ -280,7 +281,7 @@ try {
       $signing = 'unsigned-sha256'
     }
     'android-arm64' {
-      Invoke-BuildCommand flutter (@('build', 'apk', '--target-platform', 'android-arm64', '--split-per-abi') + $versionArgs)
+      Invoke-BuildDependencyCommand flutter (@('build', 'apk', '--target-platform', 'android-arm64', '--split-per-abi') + $versionArgs)
       $package = Join-Path $releaseDir "$name.apk"
       Copy-Item -LiteralPath 'build/app/outputs/flutter-apk/app-arm64-v8a-release.apk' -Destination $package
       $apk = [System.IO.Compression.ZipFile]::OpenRead($package)
@@ -305,7 +306,7 @@ try {
       try {
         $env:MSIX_CERTIFICATE_BASE64 = $null
         $env:MSIX_CERTIFICATE_PASSWORD = $null
-        Invoke-BuildCommand flutter (@('build', 'windows', '--verbose') + $versionArgs)
+        Invoke-BuildDependencyCommand flutter (@('build', 'windows', '--verbose') + $versionArgs)
       } finally {
         $env:MSIX_CERTIFICATE_BASE64 = $msixCertificate
         $env:MSIX_CERTIFICATE_PASSWORD = $msixPassword
@@ -342,7 +343,7 @@ try {
       $env:FLUTTER_XCODE_ARCHS = $macosArch
       $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY = '-'
       $env:FLUTTER_XCODE_CODE_SIGN_STYLE = 'Manual'
-      Invoke-BuildCommand flutter (@('build', 'macos') + $versionArgs)
+      Invoke-BuildDependencyCommand flutter (@('build', 'macos') + $versionArgs)
       $builtApp = 'build/macos/Build/Products/Release/BiliSail.app'
       foreach ($binary in @('MacOS/BiliSail', 'Frameworks/App.framework/App', 'Frameworks/FlutterMacOS.framework/FlutterMacOS', 'Frameworks/BiliMux.framework/BiliMux')) {
         Invoke-BuildCommand lipo @((Join-Path $builtApp "Contents/$binary"), '-verify_arch', $macosArch)

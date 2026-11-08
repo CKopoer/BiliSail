@@ -556,3 +556,32 @@ CI／Release 工作流通过 actionlint 1.7.12；直接执行新增的生产 Bas
 - Windows x64 的该测试文件 23 项全部通过。在基于 `1656aa06`、仅加入本次测试修复的独立工作树运行 `tool/check.ps1 -EnforceLockfile`，打包边界、五份锁文件严格解析、格式和静态分析全部通过；5952 项测试通过（根应用 4726、API 719、播放器 341、弹幕 161、封装 5）。根应用 13 项按原有条件跳过；未配置 `BILI_MUX_LIBRARY`，10 项 mux 原生测试跳过，不计为原生通过。日志保留为 `build/ci-42461627294-check.log`，工作区同期播放器修改未纳入该独立验证或本次提交。
 - WSL Ubuntu 22.04／Linux x64 使用同一 Flutter／Dart 和锁定依赖，修复后的测试文件 19 项通过、4 项按平台条件跳过。对照运行修复前的同名单项，测试开始后持续没有完成，由外部 `timeout 25s` 终止（退出码 124）；未等待完整 10 分钟。日志为 `build/ci-42461627294-linux-{fixed,original}.log`。初次准备遇到 Git 代理中断，独立测试缓存复用了本机同一固定提交；原生测试钩子使用系统已有 `clang-14` 的临时 PATH 别名，没有修改依赖源码或锁文件。
 - 本文 51 条本地链接和 `git diff --check` 通过。没有可热重载的运行中调试应用；本轮未执行客户端构建、安装或设备交互。macOS 实际运行和 Ubuntu 24.04 远端 CI 尚未复验，不能用本机 Linux 定向测试代替整条远端工作流结果。
+
+## 2026-11-08：Release 依赖下载超时与 Apple 框架预检
+
+[CI 42465560900](https://github.com/CKopoer/BiliSail/actions/runs/42465560900) 对应提交 `1619f79f1be4b7d47d905f72241d4919d75916a5`。格式／分析、两份根测试分片、包测试和原生 mux 回归全部成功，七个平台构建失败。直接证据分别为：
+
+| 目标 | 失败位置与日志证据 |
+| --- | --- |
+| Android arm64 | Gradle 9.3.1 发行包经 services.gradle.org 重定向到 GitHub 后返回 HTTP 504 |
+| Windows ARM64 | MSYS2 安装包下载三次返回 HTTP 504，尚未开始应用编译 |
+| Windows x64 | MSYS2 首次 504、自动重试后成功；随后 ANGLE 下载返回 CMake HTTP 错误，日志没有记录该次具体 HTTP 状态 |
+| macOS Intel x64 | 固定 MDK 与 libmpv 归档下载在各自重试后仍返回 HTTP 504 |
+| Linux x64 | 固定 MDK 下载返回 CMake HTTP 错误，日志未记录具体状态 |
+| iOS arm64、macOS arm64 | 链接时缺少 Mpv；库插件 podspec 未检查 `system("make")` 的结果，下载失败可被吞掉。该机制已核对源码，但原日志没有保留这两次 make 的输出，不能声称已经证明它们也返回 504 |
+
+失败集中在 09:16–09:21 UTC（北京时间 17:16–17:21），涉及 Gradle、MSYS2、MDK 和个人 media-kit 多个独立仓库的 GitHub Release 附件。查询 GitHub Release API，Gradle、MDK、ANGLE 和两个 Apple libmpv 归档均存在，状态为 `uploaded`、大小非零。经本机已有 Git HTTPS 代理再次请求 Gradle、MDK Linux 和 iOS libmpv 的公开下载地址，均可复现带 `x-github-request-id` 的 HTTP 504；Gradle GET 正文为网关超时，说明至少这些请求未取得正常的附件重定向。ANGLE 同次请求能取得正常的 302，表明故障具有间歇性。
+
+据此推断是 GitHub Release 下载入口或其上游资源链路超时；没有发现附件不存在或依赖版本错误的证据。[GitHub 官方状态 API](https://www.githubstatus.com/api/v2/incidents.json) 查询结果未包含与本次时间匹配的事故，尚无可引用的官方根因报告，无法进一步确定服务端哪一层超时。本机直连 GitHub 另有 TLS 连接失败，不能把本机代理／直连差异直接当作 hosted runner 的网络配置或 504 根因。脱敏探测记录为 `build/ci-42465560900-download-probe.log`，不记录签名重定向的 query。
+
+修复范围：
+
+- [构建命令入口](../../tool/build-dependency-command.ps1) 对明确的依赖下载／连接错误最多执行三次，间隔 5／10 秒；识别校验、编译、链接及未知错误时立即失败。只包围依赖解析、Windows 资产准备和 Flutter 编译，安装包生成、签名与发布不重放；既有工作流超时仍生效。
+- Windows mux 编译器准备失败后允许同一固定版本的 MSYS2 Action 再运行一次，后续使用成功步骤的安装目录。第二次仍失败则终止 job。
+- [Apple 框架预检](../../tool/prepare-apple-media-libs.py) 在 Flutter 生成插件 symlink 后，将库插件放入 `build/apple-plugins`，在正确的 pod 目录执行有超时且检查退出码的 make，并核对 Mpv 二进制的框架别名，再交给 CocoaPods。下载、SHA-256、解压和别名生成仍执行固定 fork 的 Makefile；不修改 Pub 源码或相邻 fork。
+
+新增回归覆盖下载恢复、重试耗尽、校验／编译／未知错误不重试，以及两种 Apple 平台的失败传播、框架缺失、重复准备和 Pub 源码保留。WSL Ubuntu 的七项 Apple 专项通过，包含真实 make 子进程的失败与成功／别名复用；这些受控框架夹具不等于 Xcode 链接或 Apple 设备验证。
+
+Windows x64／Flutter 3.47.6 的独立工作树检查：首次 `tool/check.ps1 -EnforceLockfile` 完成五份锁文件严格解析、打包边界、格式和静态分析，随后 SQLite 原生库下载停滞。终止该次 hook 后，复用已有 SQLite 3.7.0 DLL 缓存（SHA-256 `98b4be674137b85ec111a7a29223e87aa41c3e964d61f73602471ddd7b9c56ce`，由原 hook 重新校验），完整执行 `tool/check.ps1 -SkipPub` 成功：5952 项 Dart／Flutter 测试通过（根应用 4726、API 719、播放器 341、弹幕 161、封装 5）。根应用 13 项环境跳过；未配置 `BILI_MUX_LIBRARY`，10 项 mux 原生测试跳过。新增的 11 项 PowerShell 回归通过，Apple 专项在 Windows 为 5 项通过、2 项因缺少 make 跳过，后二者已在上述 WSL 运行通过。五份锁文件无修改；完整日志为 `build/ci-42465560900-check-cached.log`。
+
+CI／Release 工作流通过 actionlint 1.7.12，修改的 PowerShell 通过语法检查，本文 53 条本地链接及 `git diff --check` 通过。真实 Windows 资产准备首次因本机 TLS 连接失败耗尽三次尝试，复用相同固定归档缓存后通过 fork 的归档／逐文件 SHA-256 校验，日志为 `build/ci-42465560900-windows-assets{,-cached}.log`。没有修改相邻 fork、依赖版本或 Pub 源码；未重新触发远端 CI，未执行完整客户端／安装包构建、签名、安装或设备验证。有限重试不代表 GitHub 服务端故障已经恢复。

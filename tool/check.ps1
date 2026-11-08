@@ -35,6 +35,7 @@ Push-Location $repoRoot
 try {
   if ($runLint) {
     & (Join-Path $PSScriptRoot 'test-ci-build-plan.ps1')
+    & (Join-Path $PSScriptRoot 'test-build-dependency-command.ps1')
     Invoke-Check node @('--test', 'tool/test-release-ci-reuse.cjs')
     & (Join-Path $PSScriptRoot 'test-android-version.ps1')
     & (Join-Path $PSScriptRoot 'test-android-signing.ps1')
@@ -69,6 +70,7 @@ try {
   if ($runLint) {
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_texture_handoff.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_texture_handoff.py')
+    Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_media_libs.py')
     Invoke-Check dart @('format', '--output=none', '--set-exit-if-changed', 'lib', 'test', 'integration_test')
     Invoke-Check dart @('format', '--output=none', '--set-exit-if-changed', 'linux/plugins/flutter_inappwebview_linux/lib')
     foreach ($package in $packages) {
