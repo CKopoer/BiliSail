@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [PiliPlus 跳转与准备流程对照](validation/piliplus-seek-flow-2026-11-08.md) | 两后端单次目标确认、普通继续、原生缓存复用、真实缓冲提示与原生回归 |
 | [播放控制流程简化](validation/player-control-simplification-2026-11-08.md) | PiliPlus 职责参考、原生缓存、统一确认时间线、有界最新跳转及未构建／实机边界 |
 | [Windows ARM64 媒体清单校验](validation/windows-arm64-media-manifest-2026-11-08.md) | x64 文件名与 ARM64 哈希错配、应用校验修复及双架构 CMake 回归 |
 | [Android fvp 直出跳转准备态](validation/android-fvp-direct-seek-2026-11-08.md) | 暂停 seek 的外部音频主时钟等待、目标图像确认与定向单元回归 |

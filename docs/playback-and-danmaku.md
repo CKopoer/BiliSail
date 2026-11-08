@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-11-08 后续：对照 PiliPlus 简化两后端的普通继续和跳转。后端确认目标后直接按最新意图继续，不再重复执行暂停／音频和画面确认／音量恢复，不人为标记网络 buffering。seek 不再显示初次准备提示，真实缓冲持续 300ms 且用户想播放时显示；缓冲条沿用当前原生端点。media_kit 普通 seek 保留原生播放意图和缓存，只为已阻塞的取消操作保留解阻塞重载。fvp 双管线同步及两端旧事件、EOF、释放保护继续保留。设计、参考许可和本轮构建／原生验证见[跳转流程对照](validation/piliplus-seek-flow-2026-11-08.md)。
+
 2026-11-08 最新调整：参考 PiliPlus 的职责划分，HTTP DASH 直接交原生播放器读取和缓存，删除应用侧 HTTP 代理、分轨字节缓存与 MP4 时间索引。事件和采样共用确认时间线入口，连续跳转只保留一个执行操作与一个最新目标，跳转后重新接收原生缓冲范围；双轨暂停就绪、用户意图、健康检测及释放屏障保留。缓冲条表示后端报告的媒体时间，不能当作两轨已解码的保证。行为变化、参考许可及本次未构建／实机边界见[控制流程简化](validation/player-control-simplification-2026-11-08.md)；早先[分轨续读](validation/track-buffer-recovery-2026-11-08.md)与[缓冲显示修复](validation/buffer-display-rapid-seek-2026-11-08.md)为历史记录。
 
 2026-11-08 后续：Apple media_kit 的 GPU／软件输出改为发布独立完整 CoreVideo 帧，fvp 等待 Metal blit 完成后交付不可变图像；Linux media_kit 补齐跨 context 双向完成屏障与软件像素副本。Android 两后端通过系统 Surface 队列交接，未发现同类应用层覆盖路径。源码、受控回归和未实测边界见[Apple／Linux 与 Android 检查](validation/apple-linux-texture-handoff-2026-11-08.md)。

@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-08 后续跳转／准备流程继续只读参考 PiliPlus `265f879fa85973b4bf885bde2562f1007f1013b8` 的播放器控制器、视图和缓存设置，独立实现两后端共用的一次目标确认、直接继续和实际缓冲提示。许可、源码范围、原生差异及本次验证见[专项记录](validation/piliplus-seek-flow-2026-11-08.md)。
+
 2026-11-08 播放进度／缓存／跳转简化只读参考 PiliPlus `265f879fa85973b4bf885bde2562f1007f1013b8` 的 `lib/plugin/pl_player/controller.dart`、`lib/utils/storage_pref.dart` 以及实际 overrides／锁文件。借鉴原生缓存、事件订阅与统一 seek 职责，独立实现，未复制 GPLv3 应用源码／资源、修改相邻仓库或更换媒体依赖。具体采用范围、撤回代理续读的行为变化和未构建／实机边界见[专项记录](validation/player-control-simplification-2026-11-08.md)。
 
 2026-11-08 直播聊天只读参考 PiliPlus `265f879fa85973b4bf885bde2562f1007f1013b8` 的牌子协议、点亮标记、颜色和昵称前展示职责，独立实现牌子／等级及正文选择。未复制 GPLv3 应用源码或资源，未修改相邻仓库；精确路径、旧版字段参考及验证边界见[专项记录](validation/live-chat-medals-selection-2026-11-08.md)。

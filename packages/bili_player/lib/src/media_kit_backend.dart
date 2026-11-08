@@ -54,13 +54,13 @@ final class MediaKitBackend implements PlaybackBackend {
   mk.Player? _player;
   MediaTrack? _seekMedia;
   Duration? _restartSeekTarget;
+  bool _replaceSeek = false;
   NativeLoadObserver? _nativeLoad;
   NativeAudioGain? _audioGain;
   Future<mk.Player>? _creating;
   Future<void>? _disposal;
   PlaybackOperation? _preparation;
   PlaybackOperation? _seek;
-  bool _replaceSeek = false;
   bool _disposed = false;
   bool _requiresVideoColorMapping = false;
   bool _paired = false;
@@ -528,7 +528,6 @@ final class MediaKitBackend implements PlaybackBackend {
     final openBudget = operation.remaining;
     _videoOutput.advanceGeneration(generation);
     final mediaTrack = await _mediaLeases.open(video);
-    _seekMedia = mediaTrack;
     final audioTrack = audio == null ? null : await _mediaLeases.open(audio);
     if (generation != _generation || _disposed) {
       await _mediaLeases.close();
@@ -634,6 +633,7 @@ final class MediaKitBackend implements PlaybackBackend {
             watch,
             openBudget,
           );
+    _seekMedia = mediaTrack;
     if (generation != _generation || _disposed) throw const SourceSuperseded();
 
     final load = await NativeLoadObserver.attach(
@@ -918,26 +918,23 @@ final class MediaKitBackend implements PlaybackBackend {
   Future<Duration> seekTo(Duration target, PlaybackOperation operation) async {
     operation.check();
     _seek = operation;
-    await operation.wait(pauseAndWait());
-    operation.check();
     final player = _player!;
     final generation = _generation;
     final revision = ++_seekRevision;
     final replacePending = _replaceSeek;
     _replaceSeek = false;
+    if (replacePending) await operation.wait(pauseAndWait());
     final watch = Stopwatch()..start();
     final budget = operation.remaining;
-    // During an in-place reload, native tracks can temporarily be empty.
-    // Keep the confirmed source's video barrier and playback intent.
+    // Keep the confirmed source's video barrier while native events settle.
     final video =
         _snapshot.videoDimensions != null ||
         _hasRealTrack(player.state.tracks.video);
     final load = _nativeLoad;
     final previousSeek = load?.state.seekCount ?? 0;
     final previousLoad = load?.state.loadCount ?? 0;
-    // Keep audio from advancing while video fetches/decodes its target.
-    // Paused seeking still renders a video frame. Audio-only playback does
-    // not need this barrier and may not restart decoding until played.
+    // mpv owns seeking and cache-pause for the whole pair. Preserve native
+    // playback intent and packet cache instead of stopping/reloading the source.
     if (revision != _seekRevision || generation != _generation) {
       throw const SourceSuperseded();
     }
@@ -955,7 +952,7 @@ final class MediaKitBackend implements PlaybackBackend {
       await player.seek(target);
     }
     // time-pos may jump before any target video data has arrived. Require
-    // SEEK -> PLAYBACK_RESTART as well as the confirmed paused position.
+    // SEEK -> PLAYBACK_RESTART as well as the confirmed target position.
     final duration = player.state.duration;
     final expected = duration > Duration.zero && target > duration
         ? duration
@@ -991,9 +988,13 @@ final class MediaKitBackend implements PlaybackBackend {
   Future<void> cancelSeek() async {
     if (_seek == null) return;
     _seek?.cancel();
-    _replaceSeek = true;
     _seekChanges.add(++_seekRevision);
-    // Retire the previous demuxers before reusing their seek callback slot.
+    // The next native seek replaces this target. Retiring only the Dart wait
+    // keeps mpv's source, demuxer cache and selected external audio intact.
+    if (_player?.state.buffering != true) return;
+    // A blocked demux read cannot accept another seek until its socket exits.
+    // Reserve source retirement for that native buffering path.
+    _replaceSeek = true;
     await _player?.native.command(['stop']);
     await Future<void>.delayed(Duration.zero);
   }

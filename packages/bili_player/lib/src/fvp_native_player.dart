@@ -59,6 +59,7 @@ abstract interface class FvpPlayerPort {
   void pause();
   Future<void> pauseAndWait();
   void interrupt();
+  // Completes after the video and companion audio targets are ready.
   Future<int> seek(Duration target);
   // Retires in-flight preparation; the next seek restores this source.
   Future<void> cancelSeek();
@@ -729,6 +730,14 @@ final class _MdkPlayerPort
 
   @override
   Future<int> seek(Duration target) async {
+    final forward = target.inMilliseconds - positionMilliseconds;
+    final flags =
+        !_ended &&
+            !_repreparing &&
+            forward > 0 &&
+            forward <= bufferedMilliseconds
+        ? const mdk.SeekFlag(mdk.SeekFlag.fromStart | mdk.SeekFlag.inCache)
+        : _preciseSeek;
     final revision = ++_nativeSeekRevision;
     final cancelled = _seekCancelled = Completer<int>();
     // Freeze the old timeline until video acknowledges pause. Moving its master
@@ -792,7 +801,7 @@ final class _MdkPlayerPort
         seek: () {
           audio_activity.bili_fvp_audio_clock_seek(_audioClock);
           return _active(
-            _player.seek(position: target.inMilliseconds, flags: _preciseSeek),
+            _player.seek(position: target.inMilliseconds, flags: flags),
           );
         },
       );
@@ -899,8 +908,7 @@ final class _MdkPlayerPort
     await _active(Future<void>.delayed(Duration.zero));
   }
 
-  // InCache requires an already buffered forward target. Preparation, backward
-  // seeks and uncached targets must perform an ordinary precise demux seek.
+  // Preparation, backward and uncached seeks use ordinary precise demux seek.
   static const _preciseSeek = mdk.SeekFlag(mdk.SeekFlag.fromStart);
   @override
   void setRate(double rate) {

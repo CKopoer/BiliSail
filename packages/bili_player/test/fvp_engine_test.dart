@@ -95,7 +95,12 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
     seeks.add((target, ready));
     // MDK exposes the requested position before the frame has decoded.
     position = target.inMilliseconds;
-    return holdSeek ? ready.future : position;
+    final result = holdSeek ? await ready.future : position;
+    if (result >= 0) {
+      final gate = audioGate;
+      if (gate != null && !await gate.future) return -1;
+    }
+    return result;
   }
 
   @override
@@ -344,7 +349,7 @@ void main() {
       expect(engine.currentSnapshot.isSeeking, true);
       expect(engine.currentSnapshot.position, Duration.zero);
       player.events.add(FvpNativeStatus.buffered);
-      expect(engine.currentSnapshot.phase, PlaybackPhase.buffering);
+      expect(engine.currentSnapshot.isBuffering, false);
       player.seeks.single.$2.complete(9375);
       await seeking;
       expect(player.playing, true);
@@ -391,8 +396,9 @@ void main() {
         player.seeks.single.$2.complete(71133);
         await Future<void>.delayed(Duration.zero);
         expect(player.playing, false);
-        expect(engine.currentSnapshot.phase, PlaybackPhase.buffering);
-        expect(engine.currentSnapshot.position.inMilliseconds, 71133);
+        expect(engine.currentSnapshot.isSeeking, true);
+        expect(engine.currentSnapshot.isBuffering, false);
+        expect(engine.currentSnapshot.position, Duration.zero);
         if (pauseAfterVideo) await engine.pause();
         player.audioGate!.complete(true);
         await seeking;
@@ -454,7 +460,7 @@ void main() {
         await old.timeout(const Duration(milliseconds: 500));
         await Future<void>.delayed(Duration.zero);
         expect(player.seeks, hasLength(2));
-        expect(engine.currentSnapshot.phase, PlaybackPhase.buffering);
+        expect(engine.currentSnapshot.isBuffering, false);
         expect(engine.currentSnapshot.isSeeking, true);
         player.seeks.last.$2.complete(2000);
         await latest;

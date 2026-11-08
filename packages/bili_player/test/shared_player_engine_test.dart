@@ -39,6 +39,7 @@ final class _Backend extends Fake implements PlaybackBackend {
       failRelease = false;
   double volume = 0, gain = 0;
   int disposals = 0;
+  int audioConfirmations = 0, presentationConfirmations = 0;
   bool failInterrupt = false;
   bool failRetirement = false;
   bool endOnPlay = false;
@@ -78,11 +79,17 @@ final class _Backend extends Fake implements PlaybackBackend {
   }
 
   @override
-  Future<void> confirmAudio(PlaybackOperation operation) async =>
-      await audio?.future;
+  Future<void> confirmAudio(PlaybackOperation operation) async {
+    audioConfirmations++;
+    await audio?.future;
+  }
+
   @override
-  Future<void> confirmPresentation(PlaybackOperation operation) async =>
-      await presentation?.future;
+  Future<void> confirmPresentation(PlaybackOperation operation) async {
+    presentationConfirmations++;
+    await presentation?.future;
+  }
+
   @override
   Future<void> play() async {
     playing = true;
@@ -124,7 +131,9 @@ final class _Backend extends Fake implements PlaybackBackend {
     await pauseAndWait();
     final done = Completer<Duration>();
     seeks.add((target, done));
-    return holdSeeks ? done.future : target;
+    final position = holdSeeks ? await done.future : target;
+    await audio?.future;
+    return position;
   }
 
   @override
@@ -624,7 +633,7 @@ void main() {
   });
 
   test(
-    'every resume waits for fresh readiness without muting or advancing',
+    'resuming a ready source dispatches play without preparing or muting again',
     () async {
       final backend = _Backend();
       final engine = SharedPlayerEngine(createBackend: () => backend);
@@ -632,17 +641,12 @@ void main() {
       await engine.open(pair, const OpenOptions(play: true, volume: 37));
       await engine.pause();
       backend.audio = Completer<void>();
-      final playsBefore = backend.writes.where((w) => w == 'play').length;
-      final resuming = engine.play();
-      await tick();
-      expect(backend.playing, false);
-      expect(engine.currentSnapshot.isBuffering, true);
-      expect(backend.volume, 37);
-      expect(backend.writes.where((w) => w == 'play'), hasLength(playsBefore));
-      backend.audio!.complete();
-      await resuming;
+      final before = backend.writes.length;
+      await engine.play();
       expect(backend.playing, true);
-      expect(backend.writes, isNot(contains('volume:0.0')));
+      expect(backend.volume, 37);
+      expect(engine.currentSnapshot.isBuffering, false);
+      expect(backend.writes.skip(before), ['play']);
     },
   );
 
@@ -678,13 +682,9 @@ void main() {
     await latest;
     expect(engine.currentSnapshot.position, const Duration(seconds: 2));
     expect(backend.playing, true);
-    expect(
-      backend.writes.lastIndexOf('volume:100.0'),
-      lessThan(backend.writes.lastIndexOf('play')),
-    );
   });
 
-  test('seek requires fresh audio confirmation before playback', () async {
+  test('seek waits for backend target readiness before resuming', () async {
     final backend = _Backend();
     final engine = SharedPlayerEngine(createBackend: () => backend);
     addTearDown(engine.dispose);
@@ -704,6 +704,43 @@ void main() {
     expect(engine.currentSnapshot.position, const Duration(seconds: 5));
     expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
   });
+
+  for (final playing in [false, true]) {
+    test(
+      'confirmed native seek reuses readiness and cache, playing=$playing',
+      () async {
+        final backend = _Backend()
+          ..sample = const BackendHealth(buffered: Duration(seconds: 18));
+        final engine = SharedPlayerEngine(createBackend: () => backend);
+        addTearDown(engine.dispose);
+        await engine.open(pair, OpenOptions(play: playing));
+        final audio = backend.audioConfirmations;
+        final video = backend.presentationConfirmations;
+        final before = backend.writes.length;
+        final states = <PlaybackSnapshot>[];
+        engine.snapshots.listen(states.add);
+        await engine.seek(const Duration(seconds: 5));
+        expect(backend.audioConfirmations, audio);
+        expect(backend.presentationConfirmations, video);
+        expect(
+          backend.writes.skip(before),
+          playing ? ['pause', 'play'] : ['pause'],
+        );
+        expect(states.any((s) => s.isBuffering), false);
+        expect(engine.currentSnapshot.buffered, const Duration(seconds: 18));
+        expect(
+          engine.currentSnapshot.phase,
+          playing ? PlaybackPhase.playing : PlaybackPhase.paused,
+        );
+        if (!playing) {
+          final afterSeek = backend.writes.length;
+          await engine.play();
+          expect(backend.writes.skip(afterSeek), ['play']);
+          expect(backend.audioConfirmations, audio);
+        }
+      },
+    );
+  }
 
   test('replacement seeks wait for native retirement and coalesce to the latest target', () async {
     final backend = _Backend()
@@ -1111,6 +1148,28 @@ void main() {
     await replacement;
     expect(late.released, true);
     expect(calls, 2);
+  });
+
+  test('native underrun evidence survives timeline display clamping', () async {
+    final backend = _Backend();
+    final engine = SharedPlayerEngine(createBackend: () => backend);
+    addTearDown(engine.dispose);
+    final failures = <PlayerFailure>[];
+    engine.failures.listen(failures.add);
+    await engine.open(pair, const OpenOptions(play: true));
+    for (final seconds in [5, 6]) {
+      backend.sample = BackendHealth(
+        position: Duration(seconds: seconds),
+        buffered: const Duration(seconds: 2),
+        audioPosition: Duration(seconds: seconds),
+        comparePairedClocks: true,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 280));
+    }
+    expect(failures, hasLength(1));
+    expect(failures.single.kind, PlayerFailureKind.videoInterrupted);
+    expect(backend.playing, false);
+    expect(engine.currentSnapshot.buffered, engine.currentSnapshot.position);
   });
 
   test('health sampling detects lost audio activity while video position continues', () async {

@@ -378,6 +378,7 @@ class SharedPlayerEngine
         }
         _requiresVideo = tracks.hasVideo;
         _requiresAudio = !plan.silent && tracks.hasAudio;
+        _audioConfirmed = !_requiresAudio;
         final dimensions = _requiresVideo
             ? await operation.wait(backend.confirmVideo(operation))
             : null;
@@ -536,9 +537,7 @@ class SharedPlayerEngine
     if ((_opening || _confirmingAudio) &&
         event.kind == BackendEventKind.buffering) {
       _backendBuffering = event.value ?? false;
-      _publish(
-        _snapshot.copyWith(isBuffering: _waitingForPair || _backendBuffering),
-      );
+      _publish(_snapshot.copyWith(isBuffering: _backendBuffering));
       return;
     }
     if (_terminal ||
@@ -650,7 +649,9 @@ class SharedPlayerEngine
         return;
       }
       final interruption = _health.update(
-        _snapshot,
+        // The timeline clamps its display endpoint to the current position.
+        // Track health must retain the native underrun evidence underneath it.
+        _snapshot.copyWith(buffered: sample.buffered),
         monotonicNow?.call() ?? _clock.elapsed,
         paired: sample.comparePairedClocks,
         audioPosition: sample.audioPosition,
@@ -779,30 +780,21 @@ class SharedPlayerEngine
         _snapshot.desiredPlaying &&
         intent == _intentRevision &&
         !_snapshot.isSeeking;
-    _audioConfirmed = !_requiresAudio;
-    _waitingForPair = true;
-    _publish(
-      _snapshot.copyWith(phase: PlaybackPhase.buffering, isBuffering: true),
-    );
     try {
-      await finishSynchronizedStartup(
-        shouldPlay: allowed,
-        play: () => operation.wait(
-          _control(generation, (b) => b.play(), allowed: allowed),
-        ),
-        pause: () =>
-            operation.wait(_control(generation, (b) => b.pauseAndWait())),
-        confirmReady: () async {
-          if (_requiresAudio) {
-            await operation.wait(backend.confirmAudio(operation));
-          }
-          operation.check();
-          if (_requiresVideo) {
-            await operation.wait(backend.confirmPresentation(operation));
-          }
-        },
-        applyVolume: () => operation.wait(_applyVolume(generation)),
-        checkActive: operation.check,
+      if (!_audioConfirmed) {
+        _waitingForPair = true;
+        _publish(_snapshot.copyWith(phase: _phase()));
+        // preparePaused already stopped the pair and applied the user settings.
+        // A first play only needs the evidence deferred by a paused open.
+        if (_requiresAudio) {
+          await operation.wait(backend.confirmAudio(operation));
+        }
+        if (_requiresVideo) {
+          await operation.wait(backend.confirmPresentation(operation));
+        }
+      }
+      await operation.wait(
+        _control(generation, (b) => b.play(), allowed: allowed),
       );
       if (!_current(generation, backend) || !allowed()) return;
       _audioConfirmed = true;
@@ -932,9 +924,9 @@ class SharedPlayerEngine
     _publish(
       _snapshot.copyWith(
         isSeeking: true,
-        phase: _snapshot.desiredPlaying
-            ? PlaybackPhase.buffering
-            : PlaybackPhase.paused,
+        phase: _snapshot.phase == PlaybackPhase.ended
+            ? PlaybackPhase.paused
+            : null,
       ),
     );
     try {
@@ -947,27 +939,27 @@ class SharedPlayerEngine
       }
       if (!_current(generation, backend) || revision != _seekRevision) return;
       if (!_snapshot.desiredPlaying) _output.clearRetainedFrame();
-      _audioConfirmed =
-          _snapshot.duration > Duration.zero &&
-          _snapshot.duration - position <= const Duration(milliseconds: 500);
+      // seekTo owns the native target barrier. Do not pause and prepare the
+      // already-confirmed pair a second time when restoring playback intent.
+      _audioConfirmed = true;
       _resetHealth();
       _publish(
         _timeline(
           position: position,
-          // A seek starts a new contiguous cache range. The next native
-          // sample supplies its endpoint, including after backward seeks.
-          buffered: position,
+          buffered: backend.sampleHealth().buffered ?? position,
         ).copyWith(
           isSeeking: false,
           isBuffering: _backendBuffering,
-          phase: PlaybackPhase.paused,
+          phase: !_snapshot.desiredPlaying
+              ? PlaybackPhase.paused
+              : _backendBuffering
+              ? PlaybackPhase.buffering
+              : PlaybackPhase.playing,
         ),
       );
       if (!_current(generation, backend) || revision != _seekRevision) return;
       if (_snapshot.desiredPlaying) {
         await _runPlay(generation);
-      } else {
-        await operation.wait(_applyVolume(generation));
       }
       _startSampling(generation);
     } on SourceSuperseded {

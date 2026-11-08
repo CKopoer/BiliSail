@@ -9961,7 +9961,8 @@ void main() {
           final surfaceBeforeSeek = tester.state(find.byType(VideoSurface));
           engine._emit(engine.currentSnapshot.copyWith(isSeeking: true));
           await tester.pump();
-          expect(find.text('正在准备音视频…'), findsOneWidget);
+          expect(find.text('正在准备音视频…'), findsNothing);
+          expect(find.byType(CircularProgressIndicator), findsNothing);
           expect(
             tester.state(find.byType(VideoSurface)),
             same(surfaceBeforeSeek),
@@ -9971,9 +9972,12 @@ void main() {
               isSeeking: false,
               phase: PlaybackPhase.buffering,
               isBuffering: true,
+              desiredPlaying: true,
             ),
           );
           await tester.pump();
+          expect(find.text('网络缓冲中…'), findsNothing);
+          await tester.pump(const Duration(milliseconds: 300));
           expectLoading(buffering: true);
           engine._emit(
             engine.currentSnapshot.copyWith(
@@ -10113,9 +10117,11 @@ void main() {
         engine.currentSnapshot.copyWith(
           phase: PlaybackPhase.buffering,
           isBuffering: true,
+          desiredPlaying: true,
         ),
       );
       await _pumpFrames(tester);
+      await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('网络缓冲中…'), findsOneWidget);
 
       // Completion takes precedence even if a backend retains its last flag.
@@ -10144,6 +10150,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
+      await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('网络缓冲中…'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

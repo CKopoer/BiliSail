@@ -156,8 +156,8 @@ void registerMediaKitSeekSynchronizationTests({
         expect(engine.currentSnapshot.isSeeking, isTrue);
         expect(
           await native.getPropertyAsync('pause'),
-          'yes',
-          reason: 'Wait for video with both tracks paused',
+          !playing || scenario == 'immediatePause' ? 'yes' : 'no',
+          reason: 'Native seeking preserves the user pause intent',
         );
         if (audioBefore != null && audioAfter != null) {
           expect((audioAfter - audioBefore).abs(), lessThan(.1));

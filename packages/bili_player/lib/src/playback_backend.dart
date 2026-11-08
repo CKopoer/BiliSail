@@ -150,9 +150,11 @@ abstract interface class PlaybackBackend {
   Future<void> setRate(double rate);
   Future<void> setVolume(double volume);
   Future<void> setGainDb(double gainDb);
-  // Pauses/retire EOF as required by the SDK before confirming a decoded target.
+  // Confirms the native target, including required audio. Only the SDK adapter
+  // decides whether seeking needs a pause or EOF preparation.
   Future<Duration> seekTo(Duration target, PlaybackOperation operation);
-  // Completes after the previous native demuxers have retired their readers.
+  // Completes when the SDK can accept the replacement seek safely. Preserve
+  // the source and packet cache when the SDK supports native target replacement.
   Future<void> cancelSeek();
   void interrupt();
   BackendHealth sampleHealth();

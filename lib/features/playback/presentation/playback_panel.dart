@@ -33,6 +33,7 @@ import 'player_settings_dialog.dart';
 import 'player_danmaku_dialog.dart';
 import 'player_more_dialog.dart';
 import 'player_control_labels.dart';
+import 'player_loading_indicator.dart';
 import 'casting_dialog.dart';
 import '../application/casting_controller.dart';
 import 'player_swipe_controls.dart';
@@ -2098,37 +2099,20 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                 );
                               },
                             ),
-                            if (session.error == null &&
-                                (session.isResolving ||
-                                    session.isRecovering ||
-                                    snapshot.isSeeking ||
+                            if (session.error == null)
+                              PlayerLoadingIndicator(
+                                key: ValueKey((
+                                  session.sourceGeneration,
+                                  snapshot.generation,
+                                )),
+                                preparing:
+                                    session.isResolving ||
+                                    snapshot.phase == PlaybackPhase.opening,
+                                recovering: session.isRecovering,
+                                buffering:
+                                    snapshot.desiredPlaying &&
                                     snapshot.phase != PlaybackPhase.ended &&
-                                        snapshot.isBuffering ||
-                                    snapshot.phase == PlaybackPhase.opening))
-                              Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const CircularProgressIndicator(
-                                      color: Colors.white,
-                                    ),
-                                    const SizedBox(height: 14),
-                                    Text(
-                                      session.isRecovering
-                                          ? '正在恢复播放…'
-                                          : session.isResolving ||
-                                                snapshot.isSeeking ||
-                                                snapshot.phase ==
-                                                    PlaybackPhase.opening
-                                          ? '正在准备音视频…'
-                                          : '网络缓冲中…',
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                    snapshot.isBuffering,
                               ),
                             if (session.error case final String error)
                               Positioned(
