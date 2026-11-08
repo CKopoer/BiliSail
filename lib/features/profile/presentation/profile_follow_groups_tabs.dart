@@ -5,13 +5,30 @@ import '../../../domain/user.dart';
 import '../../../shared/ui/content_section_tabs.dart';
 import '../application/profile_controller.dart';
 
-class ProfileFollowGroupsTabs extends ConsumerWidget {
-  const ProfileFollowGroupsTabs({super.key, required this.id});
+class ProfileFollowGroupsTabs extends ConsumerStatefulWidget {
+  const ProfileFollowGroupsTabs({
+    super.key,
+    required this.id,
+    this.active = true,
+  });
 
   final UserId id;
+  final bool active;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileFollowGroupsTabs> createState() =>
+      _ProfileFollowGroupsTabsState();
+}
+
+class _ProfileFollowGroupsTabsState
+    extends ConsumerState<ProfileFollowGroupsTabs> {
+  bool _visited = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.active) _visited = true;
+    if (!_visited) return const SizedBox.shrink();
+    final id = widget.id;
     final (available, groups, selected, loading, message, blacklist) = ref
         .watch(
           profileControllerProvider(id).select(
@@ -25,39 +42,45 @@ class ProfileFollowGroupsTabs extends ConsumerWidget {
             ),
           ),
         );
-    if (!available || blacklist) return const SizedBox.shrink();
+    if (!available) return const SizedBox.shrink();
     final controller = ref.read(profileControllerProvider(id).notifier);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ContentSectionTabs<String>(
-          entries: [
-            ('all', '全部关注'),
-            for (final group in groups ?? []) (group.id, group.name),
-          ],
-          value: selected ?? 'all',
-          onSelected: (value) =>
-              controller.selectFollowingGroup(value == 'all' ? null : value),
-          itemKey: (value) => ValueKey('profile-follow-group-$value'),
-          scrollKey: const PageStorageKey('profile-follow-groups-scroll'),
-        ),
-        if (loading) const LinearProgressIndicator(minHeight: 2),
-        if (message != null)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const ValueKey('profile-follow-groups-retry'),
-              onPressed: controller.loadFollowGroups,
-              icon: const Icon(Icons.refresh, size: 16),
-              label: Text(
-                '$message，点击重试',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+    // This strip belongs to the profile session, like the retained content
+    // pages. Hide its layout/input/tickers while keeping its scroll state.
+    return Visibility(
+      visible: widget.active && !blacklist,
+      maintainState: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ContentSectionTabs<String>(
+            entries: [
+              ('all', '全部关注'),
+              for (final group in groups ?? []) (group.id, group.name),
+            ],
+            value: selected ?? 'all',
+            onSelected: (value) =>
+                controller.selectFollowingGroup(value == 'all' ? null : value),
+            itemKey: (value) => ValueKey('profile-follow-group-$value'),
+            scrollKey: const PageStorageKey('profile-follow-groups-scroll'),
+          ),
+          if (loading) const LinearProgressIndicator(minHeight: 2),
+          if (message != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('profile-follow-groups-retry'),
+                onPressed: controller.loadFollowGroups,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: Text(
+                  '$message，点击重试',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

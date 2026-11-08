@@ -406,8 +406,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       progress: _pagingProgress,
                       onSelected: controller.select,
                     ),
-                    if (section == ProfileSection.following)
-                      ProfileFollowGroupsTabs(id: widget.id),
+                    ProfileFollowGroupsTabs(
+                      id: widget.id,
+                      active: section == ProfileSection.following,
+                    ),
                   ],
                 ),
               ),

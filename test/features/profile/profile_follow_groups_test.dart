@@ -183,6 +183,7 @@ void main() {
     WidgetTester tester, {
     double width = 375,
     double scale = 1,
+    ProfileSection initialSection = ProfileSection.following,
   }) async {
     tester.view.physicalSize = Size(width, 900);
     tester.view.devicePixelRatio = 1;
@@ -197,11 +198,8 @@ void main() {
                 .copyWith(textScaler: TextScaler.linear(scale)),
             child: child!,
           ),
-          home: const Scaffold(
-            body: ProfileScreen(
-              id: _id,
-              initialSection: ProfileSection.following,
-            ),
+          home: Scaffold(
+            body: ProfileScreen(id: _id, initialSection: initialSection),
           ),
         ),
       ),
@@ -236,6 +234,76 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets(
+    'group strip retains its state and scroll without refetching on section switches',
+    (tester) async {
+      repo.groups = [
+        ...repo.groups,
+        for (var i = 3; i <= 18; i++)
+          ProfileFollowGroup(id: '$i', name: '兴趣分组$i'),
+      ];
+      await mount(tester);
+      final strip = find.byType(ContentSectionTabs<String>);
+      final stripState = tester.state(strip);
+      final scroll = tester
+          .widget<SingleChildScrollView>(
+            find.descendant(
+              of: strip,
+              matching: find.byType(SingleChildScrollView),
+            ),
+          )
+          .controller!;
+      scroll.jumpTo(420);
+      await tester.pumpAndSettle();
+      final offset = scroll.offset;
+      for (final section in [
+        ProfileSection.videos,
+        ProfileSection.dynamics,
+        ProfileSection.followers,
+      ]) {
+        controller().select(section);
+        await tester.pumpAndSettle();
+        expect(stripState.mounted, true);
+        expect(strip.hitTestable(), findsNothing);
+        expect(repo.groupReads, 1);
+        controller().select(ProfileSection.following);
+        await tester.pumpAndSettle();
+        expect(tester.state(strip), same(stripState));
+        expect(scroll.offset, closeTo(offset, .1));
+        expect(repo.groupReads, 1);
+      }
+      await tester.pumpWidget(const SizedBox());
+      expect(stripState.mounted, false);
+    },
+  );
+
+  testWidgets(
+    'group strip initializes on first visit and releases on session reset',
+    (tester) async {
+      await mount(tester, initialSection: ProfileSection.videos);
+      final strip = find.byType(
+        ContentSectionTabs<String>,
+        skipOffstage: false,
+      );
+      expect(strip, findsNothing);
+      expect(repo.groupReads, 0);
+      controller().select(ProfileSection.following);
+      await tester.pumpAndSettle();
+      final stripState = tester.state(strip);
+      expect(repo.groupReads, 1);
+      controller().select(ProfileSection.videos);
+      await tester.pumpAndSettle();
+      repo.epoch++;
+      auth.emit(
+        const AuthState(status: AuthStatus.signedIn, mid: '7', userName: '新会话'),
+      );
+      await tester.pumpAndSettle();
+      expect(stripState.mounted, false);
+      expect(strip, findsNothing);
+      expect(state().followGroups, isNull);
+    },
+  );
 
   testWidgets(
     'group failure keeps all followings usable; retry recovers and empty groups render',
