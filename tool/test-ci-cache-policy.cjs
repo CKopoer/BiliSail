@@ -142,3 +142,33 @@ test('restore jobs cannot automatically publish SDK or partial Pub caches', () =
   assert.match(action, /pub-cache-key: 'bilisail-pub-v2-:os:-\$\{\{ runner.arch \}\}-:version:'/);
   assert.match(action, /restore-keys:/);
 });
+
+test('composite outputs avoid step-only functions and export the requested key on hits and misses', () => {
+  const action = readFileSync('.github/actions/restore-flutter/action.yml', 'utf8');
+  const outputs = /^outputs:\r?\n([\s\S]*?)^runs:/m.exec(action)?.[1];
+  assert.ok(outputs, 'Expected composite action outputs.');
+  // Runner 2.338.2 action_yaml.json permits these functions in steps, but not
+  // output-value. Workflow-only actionlint does not validate this boundary.
+  assert.doesNotMatch(outputs, /\b(hashFiles|success|failure|cancelled|always)\s*\(/);
+  const binding = /^  pub-key:\r?\n    value: \$\{\{ (.+?) \}\}/m.exec(outputs)?.[1];
+  assert.ok(binding, 'Expected a Pub cache key output binding.');
+  const primaryKey = `${pubPrefix}requested-lock-hash`;
+  for (const cacheHit of ['true', 'false', '']) {
+    const values = { steps: { pub: { outputs: { 'cache-hit': cacheHit,
+      'cache-primary-key': primaryKey, 'cache-matched-key': `${pubPrefix}previous-lock-hash` } } } };
+    const exported = binding.split('.').reduce((value, name) => value?.[name], values);
+    assert.equal(exported, primaryKey, `Wrong save key for cache-hit=${cacheHit}`);
+  }
+});
+
+test('formatting diagnostics run only after Flutter setup succeeded', () => {
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const condition = /name: Show pinned SDK formatting differences\r?\n\s+if: (.+)/.exec(workflow)?.[1];
+  assert.ok(condition);
+  const evaluate = new Function('failure', 'steps', `return ${condition};`);
+  for (const failure of [true, false]) {
+    for (const outcome of ['success', 'failure', 'cancelled', 'skipped']) {
+      assert.equal(evaluate(() => failure, { flutter: { outcome } }), failure && outcome === 'success');
+    }
+  }
+});

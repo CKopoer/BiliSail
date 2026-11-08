@@ -174,7 +174,7 @@ jobs:
           key: ${{ steps.flutter.outputs.pub-key }}
           path: ${{ steps.flutter.outputs.pub-path }}
       - name: Show pinned SDK formatting differences
-        if: failure()
+        if: failure() && steps.flutter.outcome == 'success'
         shell: bash
         run: |
           dart format lib test integration_test packages/*/lib packages/*/test

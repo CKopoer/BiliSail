@@ -15,7 +15,7 @@ outputs:
   sdk-hit:
     value: ${{ steps.sdk.outputs.cache-hit }}
   pub-key:
-    value: ${{ steps.metadata.outputs.PUB-CACHE-KEY }}-${{ hashFiles('**/pubspec.lock') }}
+    value: ${{ steps.pub.outputs.cache-primary-key }}
   pub-path:
     value: ${{ steps.metadata.outputs.PUB-CACHE-PATH }}
   pub-hit:

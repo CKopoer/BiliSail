@@ -37,6 +37,10 @@ Linux 的 APT 下载、固定 SHA 的 linuxdeploy／GTK 工具和用户级 Flatp
 
 本轮本地验证：`tool/check.ps1 -SkipPub` 通过，根应用 4,729 项、API 719 项、播放器 358 项、弹幕 161 项、封装 5 项，共 5,972 项 Dart／Flutter 测试通过；13 项 Windows 符号链接用例因环境限制、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。最终缓存／触发策略 20 项行为回归、185 项构建计划检查、64 项 Release 回归、actionlint 1.7.12、本文本地链接和 `git diff --check` 通过，五份锁文件未改。根检查日志为 `build/ci-cache-optimization-check.log`。使用当时线上清单只读预演，识别 6 条停用／重复的默认分支缓存，合计约 4.84 GB；未实际删除缓存、推送或运行远端 CI，新的命中率、耗时与清理效果仍待默认分支工作流运行确认。
 
+后续实际 [CI 42477165794](https://github.com/CKopoer/BiliSail/actions/runs/42477165794/job/128721014814) 在 runner 2.338.2 加载组合 Action 时失败：`outputs.value` 不能直接使用 `hashFiles()`，因此尚未安装 Flutter 就终止；随后的格式诊断又因缺少 Dart 产生次生错误。修正为直接导出 Pub restore 步骤的 `cache-primary-key`，锁文件哈希仍只在步骤的 `with.key` 中计算，精确命中、前缀回退和未命中都导出本次请求键；格式诊断同时要求 Flutter setup 成功。新增回归覆盖这三个输出场景、组合 Action 输出的函数作用域及诊断执行条件；原 actionlint 检查没有覆盖这个运行器加载边界，不能将其通过等同于远端 Action 已验证。
+
+该修复的 `tool/check.ps1 -SkipPub` 通过：根应用 4,729、API 719、播放器 360、弹幕 161、封装 5，共 5,974 项 Dart／Flutter 测试通过，13 项符号链接及 10 项 mux 原生用例按上述环境限制跳过。22 项缓存／触发回归通过，并在隔离临时目录确认新增回归会拒绝原提交的错误输出写法；actionlint、本文本地链接与 `git diff --check` 通过，五份锁文件未改。日志为 `build/ci-composite-output-fix-check.log`；修复后的远端组合 Action 加载仍待新提交 CI 确认。
+
 GitHub hosted runner 存在 `/etc/apt/apt-mirrors.txt` 时，Linux 安装入口将该列表中的 Ubuntu 官方 archive／security 提到 Azure 镜像之前，保留其他条目及镜像回退；只在 `GITHUB_ACTIONS=true` 时执行，不修改本机开发环境。APT 连接／无数据超时不能保证终止持续低速传输，故调整镜像优先级与缓存配合使用。索引、apt 包安装、Flatpak Runtime／SDK 和固定打包工具分别打印分组及墙钟耗时，便于从下一次 CI 区分下载、安装和打包耗时。
 
 CI 在工作流顶层显式设置 `PUB_HOSTED_URL=https://pub.dev`，与根应用及 `bili_api`、`bili_player`、`bili_danmaku`、`bili_mux` 五份锁文件的官方 hosted 源一致；检查、三端构建和 Release 复用流程均使用此源。Dependabot 的 Pub 更新也使用官方源。严格检查和提交前，本地应先设置 `$env:PUB_HOSTED_URL = 'https://pub.dev'`（PowerShell）或 `export PUB_HOSTED_URL=https://pub.dev`（sh），再执行 `pwsh ./tool/check.ps1 -EnforceLockfile`。
