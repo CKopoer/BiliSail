@@ -2617,17 +2617,42 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   int _seekRevision = 0;
+  Duration? _seekTarget;
+  int? _seekTargetGeneration;
+
+  Future<void> seekBy(Duration offset) {
+    // Native position remains at the old frame until seek finishes. Repeated
+    // relative commands must advance the pending target instead of restarting it.
+    final position = _seekTargetGeneration == _generation
+        ? _seekTarget ?? snapshots.value.position
+        : snapshots.value.position;
+    var target = position + offset;
+    final duration = snapshots.value.duration;
+    if (target < Duration.zero) target = Duration.zero;
+    if (duration > Duration.zero && target > duration) target = duration;
+    if (target == position) return Future.value();
+    return seek(target);
+  }
 
   Future<void> seek(Duration target) async {
-    if (isLive) return;
+    if (isLive || _disposed || _closing) return;
+    if (target < Duration.zero) target = Duration.zero;
     final revision = ++_seekRevision;
     final generation = _generation;
+    _seekTarget = target;
+    _seekTargetGeneration = generation;
     if (_automaticRepeat != null) {
       _automaticRepeat = null;
       _desiredPlaying = false;
     }
     _cancelCloudResume();
-    await _command(() => engine.seek(target));
+    try {
+      await _command(() => engine.seek(target));
+    } finally {
+      if (generation == _generation && revision == _seekRevision) {
+        _seekTarget = null;
+      }
+    }
     if (_disposed ||
         _closing ||
         generation != _generation ||

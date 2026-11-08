@@ -34,6 +34,255 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final action in [
+    ShortcutAction.seekBack,
+    ShortcutAction.seekForward,
+    ShortcutAction.seekLarge,
+  ]) {
+    test(
+      'rapid $action accumulates before the backend confirms position',
+      () async {
+        final engine = _FakeEngine(openDuration: const Duration(minutes: 10));
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _FakeRepository(autoResolve: true),
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+        );
+        addTearDown(session.close);
+        await session.open(_detail('one'), _part('one'));
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            position: const Duration(seconds: 60),
+          ),
+        );
+        final shortcuts = PlaybackShortcutController(
+          session: session,
+          settings: () => const ShortcutSettings.defaults(),
+          active: () => true,
+          fullscreen: () => false,
+          toggleFullscreen: () {},
+          toggleDanmaku: () {},
+          volumeFeedback: (_) {},
+        );
+        addTearDown(shortcuts.dispose);
+        final gates = <Completer<void>>[];
+        final commands = <Future<Object?>>[];
+        for (var index = 0; index < 3; index++) {
+          final gate = Completer<void>();
+          gates.add(gate);
+          engine.nextSeek = gate;
+          // Right-arrow short taps commit on release; left-arrow also repeats.
+          if (action == ShortcutAction.seekForward) {
+            await shortcuts.execute(
+              action,
+              InputStroke(
+                identity: 'seek',
+                device: InputDevice.keyboard,
+                phase: InputPhase.down,
+                sequence: index * 2,
+                chord: const ShortcutChord('ArrowRight'),
+              ),
+            );
+          }
+          commands.add(
+            shortcuts.execute(
+              action,
+              InputStroke(
+                identity: 'seek',
+                device: InputDevice.keyboard,
+                phase: action == ShortcutAction.seekForward
+                    ? InputPhase.up
+                    : index == 0
+                    ? InputPhase.down
+                    : InputPhase.repeat,
+                sequence: index * 2 + 1,
+              ),
+            ),
+          );
+        }
+        final step = switch (action) {
+          ShortcutAction.seekBack => -3,
+          ShortcutAction.seekLarge => 90,
+          _ => 3,
+        };
+        final expected = List.generate(
+          3,
+          (index) => Duration(seconds: 60 + step * (index + 1)),
+        );
+        expect(engine.seekTargets, expected);
+        expect(engine.currentSnapshot.position, const Duration(seconds: 60));
+        for (final gate in gates) {
+          gate.complete();
+        }
+        await Future.wait(commands);
+        expect(engine.currentSnapshot.position, expected.last);
+      },
+    );
+  }
+  for (final boundary in [
+    (start: 1, step: -3, target: 0),
+    (start: 119, step: 3, target: 120),
+  ]) {
+    test(
+      'relative seek does not restart preparation at ${boundary.target}s',
+      () async {
+        final engine = _FakeEngine();
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _FakeRepository(autoResolve: true),
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+        );
+        addTearDown(session.close);
+        await session.open(_detail('one'), _part('one'));
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            position: Duration(seconds: boundary.start),
+          ),
+        );
+        final gate = Completer<void>();
+        engine.nextSeek = gate;
+        final seeking = session.seekBy(Duration(seconds: boundary.step));
+        for (var index = 0; index < 20; index++) {
+          await session.seekBy(Duration(seconds: boundary.step));
+        }
+        expect(engine.seekTargets, [Duration(seconds: boundary.target)]);
+        gate.complete();
+        await seeking;
+        await session.seekBy(Duration(seconds: boundary.step));
+        expect(engine.seekTargets, hasLength(1));
+        await session.seekBy(Duration(seconds: -boundary.step));
+        expect(
+          engine.currentSnapshot.position,
+          Duration(seconds: boundary.target - boundary.step),
+        );
+      },
+    );
+  }
+  test('relative seek follows absolute targets, direction changes and confirmed playback', () async {
+    final engine = _FakeEngine();
+    final session = PlaybackSession(
+      engine: engine,
+      repository: _FakeRepository(autoResolve: true),
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    await session.open(_detail('one'), _part('one'));
+    engine.emit(
+      engine.currentSnapshot.copyWith(position: const Duration(seconds: 60)),
+    );
+    final absoluteGate = Completer<void>();
+    engine.nextSeek = absoluteGate;
+    final absolute = session.seek(const Duration(seconds: 20));
+    final backwardGate = Completer<void>();
+    engine.nextSeek = backwardGate;
+    final backward = session.seekBy(const Duration(seconds: -3));
+    absoluteGate.complete();
+    await absolute;
+    final forwardGate = Completer<void>();
+    engine.nextSeek = forwardGate;
+    final forward = session.seekBy(const Duration(seconds: 3));
+    expect(engine.seekTargets, [
+      const Duration(seconds: 20),
+      const Duration(seconds: 17),
+      const Duration(seconds: 20),
+    ]);
+    backwardGate.complete();
+    await backward;
+    forwardGate.complete();
+    await forward;
+    engine.emit(
+      engine.currentSnapshot.copyWith(position: const Duration(seconds: 25)),
+    );
+    await session.seekBy(const Duration(seconds: -3));
+    expect(engine.seekTargets.last, const Duration(seconds: 22));
+  });
+  test(
+    'relative seek ignores old source targets and late completion',
+    () async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      engine.emit(
+        engine.currentSnapshot.copyWith(position: const Duration(seconds: 60)),
+      );
+      final oldGate = Completer<void>();
+      engine.nextSeek = oldGate;
+      final old = session.seekBy(const Duration(seconds: -3));
+      await session.open(
+        _detail('two'),
+        _part('two'),
+        position: const Duration(seconds: 30),
+      );
+      final currentGate = Completer<void>();
+      engine.nextSeek = currentGate;
+      final current = session.seekBy(const Duration(seconds: -3));
+      oldGate.complete();
+      await old;
+      final latestGate = Completer<void>();
+      engine.nextSeek = latestGate;
+      final latest = session.seekBy(const Duration(seconds: -3));
+      expect(engine.seekTargets, [
+        const Duration(seconds: 57),
+        const Duration(seconds: 27),
+        const Duration(seconds: 24),
+      ]);
+      currentGate.complete();
+      await current;
+      latestGate.complete();
+      await latest;
+      expect(engine.currentSnapshot.position, const Duration(seconds: 24));
+    },
+  );
+  for (final failure in [
+    const PlayerFailure(
+      PlayerFailureKind.nativePlayback,
+      'fixture seek failure',
+      0,
+    ),
+    StateError('fixture seek error'),
+  ]) {
+    test(
+      'relative seek discards target after ${failure.runtimeType}',
+      () async {
+        final engine = _FakeEngine();
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _FakeRepository(autoResolve: true),
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+        );
+        addTearDown(session.close);
+        await session.open(_detail('one'), _part('one'));
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            position: const Duration(seconds: 60),
+          ),
+        );
+        final gate = Completer<void>();
+        engine.nextSeek = gate;
+        final seeking = session.seekBy(const Duration(seconds: -3));
+        final result = failure is PlayerFailure
+            ? expectLater(seeking, completes)
+            : expectLater(seeking, throwsA(same(failure)));
+        gate.completeError(failure);
+        await result;
+        await session.seekBy(const Duration(seconds: -3));
+        expect(engine.seekTargets, [
+          const Duration(seconds: 57),
+          const Duration(seconds: 57),
+        ]);
+      },
+    );
+  }
   test(
     'superseded seek completion does not save an obsolete checkpoint',
     () async {

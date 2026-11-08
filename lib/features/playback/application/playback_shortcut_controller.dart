@@ -211,10 +211,7 @@ final class PlaybackShortcutController extends ChangeNotifier {
         final short = !_accelerating && _holdGeneration == generation;
         cancel();
         if (short) {
-          await session.seek(
-            session.snapshots.value.position +
-                Duration(seconds: settings().seekSeconds),
-          );
+          await session.seekBy(Duration(seconds: settings().seekSeconds));
         }
       }
       return CommandOutcome.completed;
@@ -233,19 +230,11 @@ final class PlaybackShortcutController extends ChangeNotifier {
         cancel();
         toggleFullscreen();
       case ShortcutAction.seekBack:
-        await session.seek(
-          session.snapshots.value.position -
-              Duration(seconds: settings().seekSeconds),
-        );
+        await session.seekBy(Duration(seconds: -settings().seekSeconds));
       case ShortcutAction.seekForward:
-        await session.seek(
-          session.snapshots.value.position +
-              Duration(seconds: settings().seekSeconds),
-        );
+        await session.seekBy(Duration(seconds: settings().seekSeconds));
       case ShortcutAction.seekLarge:
-        await session.seek(
-          session.snapshots.value.position + const Duration(seconds: 90),
-        );
+        await session.seekBy(const Duration(seconds: 90));
       case ShortcutAction.volumeUp:
         return adjustVolume(5);
       case ShortcutAction.volumeDown:
