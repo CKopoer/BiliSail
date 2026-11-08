@@ -6,81 +6,28 @@ on:
 permissions:
   contents: read
 jobs:
-  probe:
+  preflight:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
-      - name: Compare anonymous and authenticated official download routes
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.6'
+          channel: stable
+          cache: true
+          pub-cache-key: 'flutter-pub-:os:-:arch:-:version:'
+      - name: Check HTTP recovery and credential handling
+        run: python3 -m unittest discover -s tool -p test_sqlite_assets.py
+      - name: Resolve the unchanged baseline lockfile
+        run: flutter pub get --enforce-lockfile
+      - name: Prepare and recheck a cold SQLite binary using the CI job token
         env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
+          BILISAIL_GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python3 - <<'PY'
-          import concurrent.futures
-          import hashlib
-          import json
-          import os
-          import time
-          from urllib.error import HTTPError, URLError
-          from urllib.parse import urlparse
-          from urllib.request import Request, HTTPRedirectHandler, build_opener
-
-          API = 'https://api.github.com/repos/simolus3/sqlite3.dart/releases'
-          PRIMARY = 'https://github.com/simolus3/sqlite3.dart/releases/download/sqlite3-3.7.0/libsqlite3.x64.linux.so'
-          DIGEST = '0f947ebe629e8d9d02d7f408bef36e056bfc63ea47e02e0d45a7bae454f04ace'
-
-          def probe(route):
-              label, authenticated = route
-              results = []
-              for sample in range(2):
-                  phase = 'release' if label == 'release' else 'api-metadata'
-                  started = time.monotonic()
-                  class Redirect(HTTPRedirectHandler):
-                      def redirect_request(self, req, fp, code, msg, headers, newurl):
-                          print(json.dumps({'route': label, 'authenticated': authenticated, 'sample': sample,
-                                            'event': 'redirect', 'status': code, 'from_host': urlparse(req.full_url).hostname,
-                                            'to_host': urlparse(newurl).hostname}), flush=True)
-                          return super().redirect_request(req, fp, code, msg, headers, newurl)
-                  opener = build_opener(Redirect())
-                  def fetch(url, accept):
-                      req = Request(url, headers={'Accept': accept, 'User-Agent': 'BiliSail-CI-Download-Diagnosis'})
-                      if authenticated and urlparse(url).hostname == 'api.github.com':
-                          # These headers are intentionally absent from redirected requests.
-                          req.add_unredirected_header('Authorization', 'Bearer ' + os.environ['GH_TOKEN'])
-                      with opener.open(req, timeout=20) as response:
-                          data = response.read(4 * 1024 * 1024)
-                          print(json.dumps({'route': label, 'authenticated': authenticated, 'sample': sample,
-                                            'phase': phase, 'status': response.status, 'bytes': len(data),
-                                            'final_host': urlparse(response.geturl()).hostname,
-                                            'request_id': response.headers.get('x-github-request-id')}), flush=True)
-                          return data
-                  try:
-                      url = PRIMARY
-                      if label == 'api':
-                          release = json.loads(fetch(API + '/tags/sqlite3-3.7.0', 'application/vnd.github+json'))
-                          asset = next(x for x in release['assets'] if x['name'] == 'libsqlite3.x64.linux.so')
-                          url = API + '/assets/' + str(asset['id'])
-                          phase = 'api-asset'
-                      data = fetch(url, 'application/octet-stream')
-                      digest = hashlib.sha256(data).hexdigest()
-                      result = {'route': label, 'authenticated': authenticated, 'sample': sample,
-                                'sha256': digest, 'verified': digest == DIGEST}
-                  except HTTPError as error:
-                      data = error.read(4096)
-                      result = {'route': label, 'authenticated': authenticated, 'sample': sample, 'phase': phase,
-                                'http_error': error.code, 'body_bytes_up_to_4096': len(data),
-                                'body_sha256': hashlib.sha256(data).hexdigest(),
-                                'request_id': error.headers.get('x-github-request-id')}
-                      error.close()
-                  except (URLError, TimeoutError, ConnectionError) as error:
-                      result = {'route': label, 'authenticated': authenticated, 'sample': sample,
-                                'phase': phase, 'error_type': type(error).__name__}
-                  result['seconds'] = round(time.monotonic() - started, 2)
-                  print(json.dumps(result), flush=True)
-                  results.append(result)
-              return results
-
-          with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-              results = list(pool.map(probe, [('release', False), ('api', False), ('api', True)]))
-          print(json.dumps({'summary': results}), flush=True)
-          PY
+          python3 tool/prepare-sqlite-assets.py
+          python3 tool/prepare-sqlite-assets.py
+      - name: Verify SQLite native hook and database behavior
+        run: flutter test --no-pub test/core/storage/app_database_test.dart
