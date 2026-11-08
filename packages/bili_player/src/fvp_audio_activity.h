@@ -16,6 +16,9 @@ extern "C" {
 BILI_AUDIO_API void* bili_fvp_audio_attach(uintptr_t player_api);
 BILI_AUDIO_API uint64_t bili_fvp_audio_frames(void* activity);
 BILI_AUDIO_API void* bili_fvp_audio_clock(uintptr_t video_api, uintptr_t audio_api);
+// While paused seek decodes its target, do not wait on the frozen audio clock.
+// End this state with hold() only after both target callbacks have completed.
+BILI_AUDIO_API void bili_fvp_audio_clock_seek(void* clock);
 BILI_AUDIO_API void bili_fvp_audio_clock_hold(void* clock, int64_t position_ms);
 BILI_AUDIO_API void bili_fvp_audio_clock_play(void* clock);
 BILI_AUDIO_API void bili_fvp_audio_clock_release(void* clock);

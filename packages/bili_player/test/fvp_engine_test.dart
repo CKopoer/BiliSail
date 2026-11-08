@@ -374,6 +374,36 @@ void main() {
     );
   }
 
+  for (final pauseAfterVideo in [false, true]) {
+    test(
+      'seek ${pauseAfterVideo ? 'pause' : 'resume'} waits for audio after the video target',
+      () async {
+        final player = _Player()..holdSeek = true;
+        final engine = FvpEngine(createPlayer: () async => player);
+        addTearDown(engine.dispose);
+        await engine.open(source, const OpenOptions(play: true));
+        player.audioGate = Completer<bool>();
+        final seeking = engine.seek(const Duration(milliseconds: 71133));
+        await Future<void>.delayed(Duration.zero);
+        player.seeks.single.$2.complete(71133);
+        await Future<void>.delayed(Duration.zero);
+        expect(player.playing, false);
+        expect(engine.currentSnapshot.phase, PlaybackPhase.buffering);
+        expect(engine.currentSnapshot.position.inMilliseconds, 71133);
+        if (pauseAfterVideo) await engine.pause();
+        player.audioGate!.complete(true);
+        await seeking;
+        expect(player.playing, !pauseAfterVideo);
+        expect(engine.currentSnapshot.desiredPlaying, !pauseAfterVideo);
+        expect(engine.currentSnapshot.isSeeking, false);
+        expect(
+          engine.currentSnapshot.phase,
+          pauseAfterVideo ? PlaybackPhase.paused : PlaybackPhase.playing,
+        );
+      },
+    );
+  }
+
   test(
     'rapid seeks cancel old preparation and only resume the latest target',
     () async {

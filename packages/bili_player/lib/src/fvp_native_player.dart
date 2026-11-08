@@ -687,7 +687,9 @@ final class _MdkPlayerPort
     }
     _playingClock.stop();
     _audioCompanion?.pause();
-    _holdClock(_audioCompanion?.positionMilliseconds ?? positionMilliseconds);
+    if (_seekCancelled == null) {
+      _holdClock(_audioCompanion?.positionMilliseconds ?? positionMilliseconds);
+    }
     // Keep EOF stopped so replay can prepare it before requesting a pause.
     if (!_closed && !_ended && !_repreparing) {
       _native?.state = mdk.PlaybackState.paused;
@@ -705,7 +707,7 @@ final class _MdkPlayerPort
     if (_closing || _ended || _repreparing) return false;
     if (_audioCompanion case final companion?) {
       if (!await companion.pauseAndConfirm()) return false;
-      _holdClock(companion.positionMilliseconds);
+      if (_seekCancelled == null) _holdClock(companion.positionMilliseconds);
     }
     await _pauseAndWait();
     return !_ended && !_repreparing;
@@ -729,12 +731,17 @@ final class _MdkPlayerPort
   Future<int> seek(Duration target) async {
     final revision = ++_nativeSeekRevision;
     final cancelled = _seekCancelled = Completer<int>();
-    _holdClock(target.inMilliseconds);
+    // Freeze the old timeline until video acknowledges pause. Moving its master
+    // to a backward target before that acknowledgement can strand an old frame.
+    if (!_repreparing) {
+      _holdClock(_audioCompanion?.positionMilliseconds ?? positionMilliseconds);
+    }
     _audioCompanion?.pause();
     _playingClock.stop();
     _audioReadyPosition = target.inMilliseconds;
     _audioTargetReady = false;
     var reuseRetirement = _repreparing;
+    int? confirmedPosition;
     bool isCancelled() =>
         cancelled.isCompleted || revision != _nativeSeekRevision;
     Future<int> restoreTarget() async {
@@ -749,6 +756,7 @@ final class _MdkPlayerPort
       // busy/unloaded reply after prepare needs a fresh teardown of that load.
       reuseRetirement = false;
       if (isCancelled()) return -2;
+      audio_activity.bili_fvp_audio_clock_seek(_audioClock);
       _player.media = _mediaUri;
       _player.activeSubtitleTracks = const [];
       if (_silent || _audioCompanion != null) {
@@ -781,9 +789,12 @@ final class _MdkPlayerPort
           }
           return true;
         },
-        seek: () => _active(
-          _player.seek(position: target.inMilliseconds, flags: _preciseSeek),
-        ),
+        seek: () {
+          audio_activity.bili_fvp_audio_clock_seek(_audioClock);
+          return _active(
+            _player.seek(position: target.inMilliseconds, flags: _preciseSeek),
+          );
+        },
       );
     }
 
@@ -809,8 +820,9 @@ final class _MdkPlayerPort
         )) {
           return isCancelled() ? -2 : -8;
         }
-        _holdClock(result);
       }
+      if (isCancelled()) return -2;
+      if (result >= 0) confirmedPosition = result;
       if (result >= 0 &&
           revision == _nativeSeekRevision &&
           _dimensions == null) {
@@ -822,6 +834,13 @@ final class _MdkPlayerPort
       return result;
     } finally {
       if (revision == _nativeSeekRevision) {
+        // Only this seek may end its clock override. A retired callback cannot
+        // freeze the replacement at an old target or release its audio early.
+        _holdClock(
+          confirmedPosition ??
+              _audioCompanion?.positionMilliseconds ??
+              _audioReadyPosition,
+        );
         _seekCancelled = null;
         _repreparing = false;
         if (!_closed && !_closing) {

@@ -3,6 +3,7 @@
 #include "../third_party/mdk/Player.h"
 #include <atomic>
 #include <cmath>
+#include <limits>
 #include <new>
 
 namespace {
@@ -14,6 +15,7 @@ struct AudioClock final {
   mdkPlayerAPI* audio{nullptr};
   std::atomic<int64_t> anchor_ms{0};
   std::atomic<bool> held{true};
+  std::atomic<bool> seeking{false};
   std::atomic<uint64_t> epoch{1};
   std::atomic<uint64_t> started_epoch{0};
   std::atomic<int64_t> last_position_ms{0};
@@ -22,6 +24,12 @@ struct AudioClock final {
 double audio_clock(void* opaque) noexcept {
   auto& clock = *static_cast<AudioClock*>(opaque);
   const auto epoch = clock.epoch.load(std::memory_order_acquire);
+  // A precise seek can decode a frame slightly after the requested timestamp.
+  // MDK's TimestampEOS lets that paused target render without waiting for audio
+  // that cannot advance until the video seek callback has completed.
+  if (clock.seeking.load(std::memory_order_acquire)) {
+    return (std::numeric_limits<double>::max)();
+  }
   const auto anchor = clock.anchor_ms.load(std::memory_order_relaxed);
   if (clock.held.load(std::memory_order_acquire)) {
     return static_cast<double>(anchor) / 1000;
@@ -29,6 +37,9 @@ double audio_clock(void* opaque) noexcept {
   const auto position = clock.audio->position(clock.audio->object);
   // Audio-only MDK has no presentation clock until its first output tick.
   // Keep the confirmed target until that clock has actually entered this epoch.
+  if (clock.seeking.load(std::memory_order_acquire)) {
+    return (std::numeric_limits<double>::max)();
+  }
   if (clock.held.load(std::memory_order_acquire) ||
       epoch != clock.epoch.load(std::memory_order_acquire)) {
     return static_cast<double>(clock.anchor_ms.load(std::memory_order_relaxed)) / 1000;
@@ -87,12 +98,21 @@ void* bili_fvp_audio_clock(uintptr_t video_api, uintptr_t audio_api) {
   return clock;
 }
 
+void bili_fvp_audio_clock_seek(void* clock) {
+  if (clock == nullptr) return;
+  auto& state = *static_cast<AudioClock*>(clock);
+  state.held.store(true, std::memory_order_release);
+  state.seeking.store(true, std::memory_order_release);
+  state.epoch.fetch_add(1, std::memory_order_release);
+}
+
 void bili_fvp_audio_clock_hold(void* clock, int64_t position_ms) {
   if (clock == nullptr) return;
   auto& state = *static_cast<AudioClock*>(clock);
   state.held.store(true, std::memory_order_release);
   state.anchor_ms.store(position_ms, std::memory_order_relaxed);
   state.epoch.fetch_add(1, std::memory_order_release);
+  state.seeking.store(false, std::memory_order_release);
 }
 
 void bili_fvp_audio_clock_play(void* clock) {

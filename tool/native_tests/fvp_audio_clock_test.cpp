@@ -57,11 +57,40 @@ int main() {
   bili_fvp_audio_clock_hold(clock, 79820);
   audio_position = 90000;
   expect_clock(79.820);
+  // Precise direct-Surface targets can round to a timestamp beyond the frozen
+  // audio anchor. MDK must render that paused frame to complete its seek; waiting
+  // for the audio clock here would prevent either target from becoming ready.
+  for (const auto target_ms : {59700, 71133, 2000}) {
+    bili_fvp_audio_clock_hold(clock, target_ms);
+    expect_clock(static_cast<double>(target_ms) / 1000);
+    bili_fvp_audio_clock_seek(clock);
+    expect_clock((std::numeric_limits<double>::max)());
+    audio_position = target_ms + 33;
+    expect_clock((std::numeric_limits<double>::max)());
+    // A confirmed pair is held at its actual target before either pipe plays.
+    bili_fvp_audio_clock_hold(clock, target_ms + 33);
+    expect_clock(static_cast<double>(target_ms + 33) / 1000);
+    audio_position = 90000;  // Old output still cannot escape the new epoch.
+    bili_fvp_audio_clock_play(clock);
+    expect_clock(static_cast<double>(target_ms + 33) / 1000);
+    audio_position = target_ms + 50;
+    expect_clock(static_cast<double>(target_ms + 50) / 1000);
+  }
+  // Cancellation/failure restores a paused anchor; the next seek can still
+  // decode and confirm its own frame without inheriting that retired target.
+  bili_fvp_audio_clock_seek(clock);
+  bili_fvp_audio_clock_hold(clock, 2050);
+  expect_clock(2.050);
+  bili_fvp_audio_clock_seek(clock);
+  expect_clock((std::numeric_limits<double>::max)());
+  bili_fvp_audio_clock_hold(clock, 80000);
+  expect_clock(80);
   // The owner destroys/joins video before releasing callback state.
   sync_callback = {};
   bili_fvp_audio_clock_release(clock);
   bili_fvp_audio_clock_release(nullptr);
   bili_fvp_audio_clock_hold(nullptr, 0);
+  bili_fvp_audio_clock_seek(nullptr);
   bili_fvp_audio_clock_play(nullptr);
   std::cout << "Audio clock preparation, seek epochs, pause and resume passed\n";
 }

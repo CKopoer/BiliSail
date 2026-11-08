@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [Android fvp 直出跳转准备态](validation/android-fvp-direct-seek-2026-11-08.md) | 暂停 seek 的外部音频主时钟等待、目标图像确认与定向单元回归 |
 | [Android fvp 直出起播回归](validation/android-fvp-direct-startup-2026-11-08.md) | 已解码但零呈现的手机日志、Surface 初始化顺序、音频时钟接入与定向单元回归 |
 | [iOS 1.2.8 侧载重签兼容性](validation/ios-sideload-2026-11-08.md) | 实际 IPA 的 unsigned FAT 回归、arm64 thinning、临时签名和设备验证边界 |
 | [分轨缓冲续读与共同进度](validation/track-buffer-recovery-2026-11-08.md) | HTTP DASH 单轨静默续读、两轨连续缓存的最小值、内存上限与原生验证边界 |
