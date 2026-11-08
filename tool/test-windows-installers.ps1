@@ -68,6 +68,11 @@ try {
   if (!(Test-Path -LiteralPath (Join-Path $staging 'data/licenses/wix/installer-ui/BootstrapperApplicationTypes.h') -PathType Leaf)) {
     throw 'Moving build files must preserve the SDK header supplied with the adapted UI source.'
   }
+  Remove-Item -LiteralPath (Join-Path $staging 'vcruntime140_1.dll')
+  $rejected = $false
+  try { New-WindowsMsi 'test-wix' $staging (Join-Path $work 'missing-runtime.msi') '1.2.6+0' $work 'x64' }
+  catch { $rejected = $_.Exception.Message -eq 'Windows payload is missing vcruntime140_1.dll.' }
+  if (!$rejected) { throw 'x64 MSI accepted a missing exception-handling runtime.' }
   $expectedArchitecture = 'arm64'
   $armMsi = Join-Path $release 'BiliSail-1.2.6+0-windows-arm64.msi'
   New-WindowsMsi 'test-wix' $staging $armMsi '1.2.6+0' $work 'arm64'

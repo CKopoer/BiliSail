@@ -3,6 +3,7 @@ $script:WindowsWixVersion = '6.0.2'
 $script:WindowsPackagingRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../windows/packaging'))
 . (Join-Path $PSScriptRoot 'windows-installer-artwork.ps1')
 . (Join-Path $PSScriptRoot 'windows-installer-native.ps1')
+. (Join-Path $PSScriptRoot 'windows-runtime.ps1')
 
 function Get-WindowsMsiVersion([string]$Version) {
   if ($Version -cnotmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\+(0|[1-9]\d*)$') {
@@ -38,8 +39,8 @@ function Initialize-WindowsInstallerTools([string]$ToolsDirectory) {
 }
 
 function New-WindowsMsi([string]$Wix, [string]$Staging, [string]$Destination, [string]$Version, [string]$WorkingDirectory, [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64') {
-  $requiredFiles = @('bilisail.exe', 'flutter_windows.dll', 'libmpv-2.dll', 'data/icudtl.dat', 'data/flutter_assets/AssetManifest.bin', 'msvcp140.dll', 'vcruntime140.dll', 'THIRD_PARTY_NOTICES.md')
-  if ($Architecture -eq 'x64') { $requiredFiles += 'vcruntime140_1.dll' }
+  $requiredFiles = @('bilisail.exe', 'flutter_windows.dll', 'libmpv-2.dll', 'data/icudtl.dat', 'data/flutter_assets/AssetManifest.bin', 'THIRD_PARTY_NOTICES.md')
+  $requiredFiles += @(Get-WindowsRuntimeRequiredFiles $Architecture)
   foreach ($required in $requiredFiles) {
     if (!(Test-Path -LiteralPath (Join-Path $Staging $required) -PathType Leaf)) { throw "Windows payload is missing $required." }
   }

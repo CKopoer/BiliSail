@@ -201,6 +201,16 @@ try {
   if ($env:GITHUB_ACTIONS -eq 'true' -and $env:GITHUB_OUTPUT) {
     'pub-resolved=true' >> $env:GITHUB_OUTPUT
   }
+  if ($isWindowsTarget) {
+    # Resolve and validate app-local CRT files before the costly mux/app builds.
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+    $vcComponent = if ($windowsArch -eq 'arm64') { 'Microsoft.VisualStudio.Component.VC.Tools.ARM64' } else { 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' }
+    $visualStudio = & $vswhere -latest -products '*' -requires $vcComponent -property installationPath
+    if ($LASTEXITCODE -ne 0 -or !$visualStudio) { throw 'Visual Studio C++ installation was not found.' }
+    $runtime = Get-ChildItem "$visualStudio/VC/Redist/MSVC/*/$windowsArch/Microsoft.VC*.CRT" -Directory | Sort-Object FullName -Descending | Select-Object -First 1
+    if (!$runtime) { throw "Visual C++ $windowsArch redistributable DLLs were not found." }
+    $windowsRuntimeFiles = @(Get-WindowsRuntimeFiles $runtime.FullName $windowsArch)
+  }
   Invoke-BuildCommand python @((Join-Path $PSScriptRoot 'prepare-sqlite-assets.py'), '--target', $Target)
   if ($isWindowsTarget) {
     & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1') -Architecture $windowsArch
@@ -323,14 +333,8 @@ try {
       # An existing local build directory can still contain the pre-rename EXE.
       $oldExecutable = Join-Path $staging 'bili_lite.exe'
       if (Test-Path -LiteralPath $oldExecutable) { Remove-Item -LiteralPath $oldExecutable }
-      # Bundle the application-local VC++ runtime required on a clean machine.
-      $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-      $vcComponent = if ($windowsArch -eq 'arm64') { 'Microsoft.VisualStudio.Component.VC.Tools.ARM64' } else { 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' }
-      $visualStudio = & $vswhere -latest -products '*' -requires $vcComponent -property installationPath
-      if ($LASTEXITCODE -ne 0 -or !$visualStudio) { throw 'Visual Studio C++ installation was not found.' }
-      $runtime = Get-ChildItem "$visualStudio/VC/Redist/MSVC/*/$windowsArch/Microsoft.VC*.CRT" -Directory | Sort-Object FullName -Descending | Select-Object -First 1
-      if (!$runtime) { throw "Visual C++ $windowsArch redistributable DLLs were not found." }
-      foreach ($dll in Get-ChildItem -LiteralPath $runtime.FullName -Filter '*.dll' -File) {
+      # Copy the preflighted runtime set; keep the final whole-payload check.
+      foreach ($dll in $windowsRuntimeFiles) {
         Copy-Item -LiteralPath $dll.FullName -Destination $staging
       }
       Confirm-WindowsPayloadArchitecture $staging $windowsArch

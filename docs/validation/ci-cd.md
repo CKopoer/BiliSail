@@ -108,6 +108,16 @@ Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d1
 
 此次只读取远端 API／日志并人工审阅差异，按用户要求，**没有在本机运行测试、静态分析、actionlint、构建或 CI 验证脚本**。SMTC 兼容修复和 `/MP2` 的构建结果／耗时留待下一次远端 CI；该 push 运行也不能证明 PR 去重、过时运行取消及 Release 产物复用已实际执行。
 
+## 2026-11-08：ARM64 CRT 打包修复
+
+[CI 42491499203](https://github.com/CKopoer/BiliSail/actions/runs/42491499203) 对应源码 `2e8e9c61aa1b2bdd973d1334229b884077e4bfdd`，总墙钟 **29:01**，比上轮少 2:12。全部检查和六个构建目标通过，根应用／独立包／原生 mux 合计 6,003 项测试通过、6 项环境跳过。Windows ARM64 的 Flutter Release 编译已成功、编译错误为零，随后 staging 架构检查拒绝了 x64 `vcruntime140_1.dll`，因此仍未生成 ARM64 安装包。上轮 SMTC 协程定义已生效；WebView 的 `/MP2` 也已出现在实际编译命令，x64／ARM64 编译阶段分别约 3:31／3:27，上轮为 5:32／6:07。两次并非严格同源码性能对照。
+
+旧打包入口只依据 Visual Studio CRT 目录名选择目标，然后复制目录内全部 DLL，未逐项验证，且原日志没有记录 CRT 源路径。此次增加[运行库选择入口](../../tool/windows-runtime.ps1)，在严格 Pub 解析之后、mux／Flutter 应用编译之前完成预检，打印每个选中或排除文件的完整来源。每个文件先读取实际 PE 架构；ARM64 仅排除实际为 x64 的 `vcruntime140_1.dll`，其他架构不符或损坏文件一律失败。x64 继续要求该文件；两种目标均要求 `msvcp140.dll`、`vcruntime140.dll`，并保留目录中其他架构匹配的 CRT 文件。MSI 与预检共用同一份必需文件规则，最终整包 EXE／DLL 架构校验仍在签名前执行，不对插件或其他外来 DLL 放宽检查。
+
+现有 `test-windows-architecture.ps1` 新增混合 CRT 目录的双架构选择／复制、必需文件缺失与错架构、未知外来 DLL、损坏可选文件，以及最终 payload 拒绝外来插件的行为回归；`test-windows-installers.ps1` 验证同一缺少 `_1` 的 payload 被 x64 拒绝、可继续生成 ARM64 MSI。这两份脚本已由 CI 的 Lint 阶段调用。本次继续遵循用户要求，**未在本机运行测试、静态分析、构建或其他 CI 验证**；只人工审阅修改。新增回归、真实 CRT 目录及完整 ARM64 安装包仍待修复提交的远端 CI 确认。
+
+本次缓存仍为 14 条、8,009,383,637 bytes，关键依赖命中，继续保留现有预算／清理策略、四份根测试和 Windows `/MP2`，本修复不增加缓存快照。
+
 ## Windows ARM64 构建
 
 2026-11-07 新增 `windows-arm64`。现有 `enable_windows` 同时选择 x64 和 ARM64；push／PR 默认构建两种架构，复用调用方的 `build_targets` 可单独选择其中一种。目标、产物名、诊断目录、Release 缺失目标重建和 SHA-256 校验均独立。
