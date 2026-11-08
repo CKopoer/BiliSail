@@ -21,12 +21,13 @@ void main() {
     bool enabled = true,
     bool active = true,
     bool reduceMotion = false,
+    TargetPlatform platform = TargetPlatform.windows,
     int count = 100,
     Future<void> Function()? onRefresh,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(platform: TargetPlatform.windows),
+        theme: ThemeData(platform: platform),
         scrollBehavior: const SmoothScrollBehavior(),
         home: MediaQuery(
           data: MediaQueryData(disableAnimations: reduceMotion),
@@ -155,6 +156,79 @@ void main() {
     },
   );
 
+  for (final enabled in [true, false]) {
+    for (final distance in [-160.0, 160.0]) {
+      testWidgets(
+        'Android touch flings keep tabs still enabled=$enabled distance=$distance',
+        (tester) async {
+          await mount(
+            tester,
+            enabled: enabled,
+            platform: TargetPlatform.android,
+          );
+          controller.jumpTo(2400);
+          await tester.pumpAndSettle();
+          final tabBounds = tester.getRect(find.byKey(_tabs));
+
+          for (var swipe = 0; swipe < 3; swipe++) {
+            final previousOffset = controller.offset;
+            await tester.fling(find.byKey(_list), Offset(0, distance), 1200);
+            for (var frame = 0; frame < 40; frame++) {
+              await tester.pump(const Duration(milliseconds: 16));
+              expect(
+                tester.getRect(find.byKey(_tabs)),
+                tabBounds,
+                reason:
+                    'Pinned tabs must not stretch during swipe $swipe frame $frame',
+              );
+            }
+            expect(
+              controller.offset,
+              distance < 0
+                  ? greaterThan(previousOffset)
+                  : lessThan(previousOffset),
+            );
+            await tester.pumpAndSettle();
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets('Android list edge feedback leaves the tabs still', (
+    tester,
+  ) async {
+    await mount(tester, platform: TargetPlatform.android);
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    final tabBounds = tester.getRect(find.byKey(_tabs));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(_list)),
+    );
+    await gesture.moveBy(const Offset(0, -24));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -100));
+    await tester.pump();
+    expect(tester.getRect(find.byKey(_tabs)), tabBounds);
+    expect(
+      tester
+          .widgetList<StretchEffect>(
+            find.descendant(
+              of: find.byKey(_list),
+              matching: find.byType(StretchEffect),
+            ),
+          )
+          .any((effect) => effect.stretchStrength != 0),
+      isTrue,
+      reason: 'The body retains its normal Android edge feedback',
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.byKey(_tabs)), tabBounds);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'reverse scroll reaches list top before bringing back the header',
     (tester) async {
@@ -224,21 +298,27 @@ void main() {
     expect(tester.getTopLeft(find.byKey(_tabs)).dy, 80);
   });
 
-  testWidgets(
-    'pull-to-refresh still works after returning to the full header',
-    (tester) async {
-      var refreshes = 0;
-      await mount(tester, onRefresh: () async => refreshes++);
-      controller.jumpTo(300);
-      await tester.pumpAndSettle();
-      controller.jumpTo(0);
-      await tester.pumpAndSettle();
-      await tester.drag(find.byKey(_list), const Offset(0, 400));
-      await tester.pumpAndSettle();
-      expect(refreshes, 1);
-      expect(tester.getTopLeft(find.byKey(_tabs)).dy, 80);
-    },
-  );
+  for (final platform in [TargetPlatform.windows, TargetPlatform.android]) {
+    testWidgets(
+      '$platform pull-to-refresh still works after returning to the full header',
+      (tester) async {
+        var refreshes = 0;
+        await mount(
+          tester,
+          platform: platform,
+          onRefresh: () async => refreshes++,
+        );
+        controller.jumpTo(300);
+        await tester.pumpAndSettle();
+        controller.jumpTo(0);
+        await tester.pumpAndSettle();
+        await tester.drag(find.byKey(_list), const Offset(0, 400));
+        await tester.pumpAndSettle();
+        expect(refreshes, 1);
+        expect(tester.getTopLeft(find.byKey(_tabs)).dy, 80);
+      },
+    );
+  }
 
   testWidgets('changing width policy preserves the list position', (
     tester,
@@ -297,4 +377,26 @@ void main() {
       },
     );
   }
+
+  testWidgets('wheel over the visible header keeps smooth motion', (
+    tester,
+  ) async {
+    await mount(tester);
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(find.byKey(_header)),
+        scrollDelta: const Offset(0, 40),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 30));
+    expect(
+      tester.getTopLeft(find.byKey(_tabs)).dy,
+      inExclusiveRange(40, 80),
+      reason: 'Wheel input over the header follows the shared spring',
+    );
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.byKey(_tabs)).dy, closeTo(40, 1));
+    expect(tester.takeException(), isNull);
+  });
 }

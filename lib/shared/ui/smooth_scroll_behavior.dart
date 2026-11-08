@@ -44,7 +44,14 @@ final class SmoothScrollBehavior extends MaterialScrollBehavior {
     Widget child,
     ScrollableDetails details,
   ) {
-    final decorated = super.buildOverscrollIndicator(context, child, details);
+    final nested = context.findAncestorStateOfType<NestedScrollViewState>();
+    // The outer position can finish a fling while the body keeps scrolling.
+    // Stretching that viewport would briefly move its pinned headers too.
+    final isNestedOuter =
+        nested != null && identical(details.controller, nested.outerController);
+    final decorated = isNestedOuter
+        ? child
+        : super.buildOverscrollIndicator(context, child, details);
     final desktop = switch (getPlatform(context)) {
       TargetPlatform.windows ||
       TargetPlatform.macOS ||

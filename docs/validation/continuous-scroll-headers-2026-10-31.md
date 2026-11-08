@@ -46,3 +46,17 @@ UP 主与个人主页移除半屏高度限制和内部 `SingleChildScrollView`�
 - 真实账号页面、Windows 完整界面交互、Android／macOS 实机和 Profile／Release 性能未验收；无依赖或数据库变更，没有执行账号写操作。
 
 本机日志保存在忽略目录 `artifacts/`，前缀为 `profile-header-`。仅提交本轮布局、回归和本文档，同期消息与举报功能改动保留。
+
+## 2026-11-08：触屏滑动后的顶栏回弹
+
+Android Material 3 默认对滚动容器使用拉伸式越界反馈。共享顶部的外层 `NestedScrollView` 在列表仍可继续滚动时，已先结束自己的滚动；Flutter 3.47.6 的拉伸装饰会使用滚动结束通知中的速度启动回弹，即使没有发出越界装饰通知，也会连带吸顶子标签短暂位移。新增组件测试在修复前复现首轮滑动第 2 帧的约 1.1 逻辑像素偏移。
+
+共享 [SmoothScrollBehavior](../../lib/shared/ui/smooth_scroll_behavior.dart) 按控制器身份识别 `NestedScrollView` 的外层，仅跳过这一层的越界装饰，保留平滑滚轮与隐藏页面停止滚动的包装。此规则同时覆盖 `ScrollHeaderLayout` 与播放页的嵌套布局，内部列表保留自身的边界反馈、下拉刷新和桌面平滑滚轮；顶部按距离收起、列表先回到开头才展开顶部的规则保持。
+
+验证：
+
+- 新增 Android 回归覆盖可收起／固定顶部、双向连续三次惯性滑动的逐帧位置、列表触底反馈和回到完整顶部后的下拉刷新；另验证鼠标在可见顶部区域滚动时继续使用平滑弹簧。
+- 顶部、首页／我的、平滑滚轮、隐藏列表、用户主页及播放页布局／评论滚动定向 139 项测试通过，日志 `artifacts/touch-header-overscroll-targeted-2026-11-08.log`。
+- `tool/check.ps1 -SkipPub` 通过：格式、静态分析与打包边界检查通过；根应用 4,726、bili_api 719、bili_player 325、bili_danmaku 161、bili_mux 离线 5 项，共 5,936 项测试通过。根应用 13 项 Windows 符号链接权限用例跳过；未配置 `BILI_MUX_LIBRARY`，mux 10 项原生用例跳过，不能算作原生集成通过。日志 `artifacts/touch-header-overscroll-check-2026-11-08.log`。
+- 上述完整检查执行后，同期平台修改向 `tool/check.ps1` 新增 `test_apple_texture_handoff.py`。单独补跑这项新增检查得到 4 项通过、1 项失败：`test_apple_renderers_publish_new_buffers_after_completion` 在 Apple renderer 中仍检测到 `nextAvailable`。因此不将后来更新的完整检查脚本记为全部通过；本任务未修改 Apple 原生实现或这项新增检查，提交仅包含滚动行为、顶部回归测试和本文档。
+- 按用户要求不构建应用，不进行设备交互或性能采样；实际触屏观感由用户后续构建并实机确认。
