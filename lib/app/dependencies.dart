@@ -308,10 +308,6 @@ class AppDependencies {
           PlaybackBackendPreference.fvp => FvpEngine(
             onDiagnostic: (event) => playbackLog?.record(event, backend: 'fvp'),
           ),
-          PlaybackBackendPreference.fsplayer => FsPlayerEngine(
-            onDiagnostic: (event) =>
-                playbackLog?.record(event, backend: 'fsplayer'),
-          ),
         };
       },
     );

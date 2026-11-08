@@ -7,7 +7,7 @@
 - 游客 `GET https://api.bilibili.com/x/web-interface/view?bvid=BV1fTnZ6LEvr` 成功，内容分类为普通视频，CID 为 `43074848375`，时长约 231 秒。
 - 实际应用使用的 WBI `GET /x/player/wbi/playurl` 在 `qn=129` 和 `qn=32` 均返回 `code=0`、有效 DASH 视频轨道，同时明确返回 `audio=null`、`dolby={type:0,audio:null}`、`flac=null`。主播放重复读取三次仍为同一结果；悬停因本就允许省略音轨而可解析。
 - 独立只读诊断使用 `GET https://api.bilibili.com/x/player/playurl` 的 `fnval=0` MP4，ffprobe 检查到唯一 H.264 视频流，时长 `230.583313` 秒，无音频流。该无签名诊断端点没有加入应用运行时。
-- 原来 API 将所有缺少音频的完整播放响应判为 `unavailable`；选流与会话也无条件要求音轨，因此最终映射为该提示。底层三个播放器已经支持明确无音轨的 `DashPairSource`，本次补齐应用到此契约的传递。
+- 原来 API 将所有缺少音频的完整播放响应判为 `unavailable`；选流与会话也无条件要求音轨，因此最终映射为该提示。底层播放器已经支持明确无音轨的 `DashPairSource`，本次补齐应用到此契约的传递。
 
 ## 修复与边界
 
@@ -28,4 +28,4 @@
 - `flutter build windows --release` 通过，普通入口产物为 `build/windows/x64/runner/Release/bilisail.exe`，日志 `build/silent-video-release.log`。复用已有 Windows x64 mux 资产；CMake 沿用 WebView 插件 CMP0175 开发警告。可执行文件 SHA-256 为 `1059FFC42393B5D51057DA68FCF06CC1CF3DE5B25295DC4733369AEEE445CEDA`，运行／分发需保留整个 Release 目录。本轮未在普通 Release 界面手动操作，实播证据来自上述原生集成回归。
 - 修改文档的 322 个本地链接、源码路径与 `git diff --check` 通过。
 
-原生回归采用 Debug，仅验证功能，不作为性能结论。Android、macOS、iOS／fsplayer 的实机播放、本轮未涉及的完整原生媒体回归及长期稳定性未验证。
+原生回归采用 Debug，仅验证功能，不作为性能结论。Android、macOS、iOS 的实机播放、本轮未涉及的完整原生媒体回归及长期稳定性未验证。

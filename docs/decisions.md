@@ -544,8 +544,8 @@ Windows 保留经过验证的 ANGLE 与 EGL device-query 修正 SDK，Android �
 
 插件固定官方完整提交，MDK 原生 archive 按平台固定 Release 与 SHA-256，授权、FFmpeg 来源和未测平台单独登记。Flutter 合成和弹幕路径保留，不能从后端的硬解／零复制宣传推导应用性能。实施、分轨与首帧门槛、测试和对照方法见[可选 fvp 后端](validation/fvp-backend-2026-11-07.md)。
 
-## D74：fsplayer 作为 Android／Apple 可选后端，保留现有默认
+## D74：移除 fsplayer，保留 media_kit 默认与可选 fvp
 
-**决定（2026-11-07）**：按用户要求接入固定官方 fsplayer 1.1.2，media_kit 继续默认，fvp 保留。仅在支持的平台显示选择；下一次打开源时生效，旧会话不替换，不在失败后暗中切换核心。原生控制与纹理桥接属于 bili_player，内容身份、业务规则和 Flutter 弹幕留在既有层。
+**决定（2026-11-08，替代 2026-11-07 的接入决定）**：按用户要求完整移除 fsplayer 后端及其原生桥、依赖、资产、构建／CI 和专属验证代码。播放器包继续提供通用契约、media_kit 和 fvp，不再作为 Android／Apple 的本地播放器插件注册；fvp 的 Native Assets 构建 hook 保留。
 
-DASH 清单在有界生命周期的本机内存入口提供，由同一实例解复用和同步两轨；先取消网络以打断读取，原生释放完成后才回收纹理与 Android 文件描述符。源与原生资产固定完整提交／摘要，Apple 编译与实机验收分别记录。包数／字节缓存与精确时间窗口的差异、官方发布库 DASH 空指针绕过及 Android 完整面板对照见[实施与验证](validation/fsplayer-backend-2026-11-07.md)。
+旧 `playbackBackend: fsplayer` 通过已有未知值回退规则加载为 media_kit，下次成功保存写回有效值；不重置其他设置、不更改 SQLite schema，不改变有效的 fvp 选择或正在使用的两后端契约。实施与验证见[播放后端清理](validation/playback-backends-2026-11-08.md)。

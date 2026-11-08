@@ -70,15 +70,7 @@ Future<void> main() async {
       final config = Map<String, Object?>.from(row as Map);
       final name = config['name'] as String;
       final fvp = config['backend'] == 'fvp';
-      final fsplayer = config['backend'] == 'fsplayer';
-      if (!{
-            'mpv',
-            'media_kit',
-            'fvp',
-            'fsplayer',
-          }.contains(config['backend']) ||
-          (fsplayer &&
-              (config['direct'] == true || config['surfaceView'] == true))) {
+      if (!{'mpv', 'media_kit', 'fvp'}.contains(config['backend'])) {
         throw StateError('Unsupported benchmark backend or output');
       }
       final direct = config['direct'] == true;
@@ -98,11 +90,7 @@ Future<void> main() async {
         DeviceOrientation.landscapeLeft,
       ]);
       await Future<void>.delayed(const Duration(seconds: 1));
-      final PlayerEngine engine = fsplayer
-          ? FsPlayerEngine()
-          : fvp
-          ? FvpEngine()
-          : MediaKitEngine();
+      final PlayerEngine engine = fvp ? FvpEngine() : MediaKitEngine();
       final infoSource = engine as PlayerInformationSource;
       final failures = engine.failures.listen((failure) {
         unawaited(

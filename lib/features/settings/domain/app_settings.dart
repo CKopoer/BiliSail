@@ -58,7 +58,7 @@ enum DanmakuStylePreference { shadow, stroke, plain }
 
 enum SponsorBlockMode { disabled, manual, automatic }
 
-enum PlaybackBackendPreference { mediaKit, fvp, fsplayer }
+enum PlaybackBackendPreference { mediaKit, fvp }
 
 enum AndroidVideoOutputPreference { renderedTexture, directTexture }
 

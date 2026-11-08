@@ -13,17 +13,17 @@
 
 ## 修复边界
 
-`packages/bili_player/lib/src/playback_startup.dart` 的 `finishSynchronizedStartup` 由 media_kit、fvp 和 fsplayer 共用：后端保持静音准备，按用户意图推进或暂停，等待各自所需的轨道／输出确认，重新检查源有效性和暂停意图，最后恢复音量。失败、超时或被替换的源不能解除静音；沿用各后端已有总 deadline、取消与释放流程。
+`packages/bili_player/lib/src/playback_startup.dart` 的 `finishSynchronizedStartup` 由 media_kit 和 fvp 共用：后端保持静音准备，按用户意图推进或暂停，等待各自所需的轨道／输出确认，重新检查源有效性和暂停意图，最后恢复音量。失败、超时或被替换的源不能解除静音；沿用各后端已有总 deadline、取消与释放流程。
 
 fvp 从创建媒体开始保持零音量，全部预滚输出都等待原生暂停屏障；加载期间手动暂停也在解除静音前等待同一屏障，Android worker 将暂停确认传回 UI 进程。首次 play 需要确认实际音频帧时，同样经过共享门槛。加载期间的手动暂停以 pause revision 保留，旧自动播放意图不能覆盖。
 
-fvp／fsplayer 的共享纹理输出提供可等待的呈现确认：已有视图等待移除黑色滤镜后的下一帧；无视图的纯后台调用不依赖 Flutter 绘制；解绑和关闭释放等待，源 revision 阻止迟到回调确认新源。纯音频不创建或等待视频输出；明确无音轨视频不等待不存在的音轨。media_kit 保留自身的解码／原生输出确认，仅将起播音量放行纳入共享流程。
+fvp 的共享纹理输出提供可等待的呈现确认：已有视图等待移除黑色滤镜后的下一帧；无视图的纯后台调用不依赖 Flutter 绘制；解绑和关闭释放等待，源 revision 阻止迟到回调确认新源。纯音频不创建或等待视频输出；明确无音轨视频不等待不存在的音轨。media_kit 保留自身的解码／原生输出确认，仅将起播音量放行纳入共享流程。
 
 ## 回归与验证
 
 - 共享门槛测试覆盖音频先就绪、视频后就绪，以及取消、失败和等待期间手动暂停。
 - fvp fake port／widget 测试覆盖原生双轨、Flutter 揭示画面的帧边界、加载取消／超时／暂停；不把请求播放或 decoder 初始化当作可听输出证明。
-- 共享纹理输出测试覆盖揭示画面的下一帧、旧源回调隔离及解绑释放；fsplayer 补测 Flutter 不产生后续帧时仍能立即取消起播等待。
+- 共享纹理输出测试覆盖揭示画面的下一帧、旧源回调隔离及解绑释放。
 - `integration_test/windows_playback_startup_test.dart` 为 media_kit 和 fvp 分别添加受控 HTTP 延迟视频／音频的原生用例，验证不会提前完成打开、解除延迟后双轨解码及进度正常。
 
 本机执行结果：
@@ -35,4 +35,4 @@ fvp／fsplayer 的共享纹理输出提供可等待的呈现确认：已有视�
 - 临时独立 fvp Debug 入口加载分轨、暂停首帧及 DTD 热重载通过，未发现运行时错误；探针正常退出，不作为日常应用入口。
 - `tool/build-android-development.ps1 -Mode Release` 准备 Android arm64 原生组件并构建普通入口；最终取消边界改动后使用 `-SkipMuxBuild` 复用已构建组件重建通过。包名 `dev.bilisail.bilisail.test`，名称“BiliSail 测试版”，版本 `1.2.8+5`，不可调试，沿用原开发证书。APK 为 `build/development/android-arm64/BiliSail-test-arm64-release.apk`，SHA-256 `f3d90da459f216faef15e350d95a246ad5bebee719a70a747958460653d1d9f7`；身份、签名及 AOT 检查由开发构建脚本完成，没有安装操作。
 
-Android 当前没有连接设备；Apple 和 fsplayer 原生路径不在 Windows 主机可执行范围。受控静音素材验证不代替扬声器／耳机的物理音画同步测量，也不作为启动速度或性能结论。日志保存在忽略目录 `build/validation/playback-startup-*.log`。
+Android 当前没有连接设备；Apple 原生路径不在 Windows 主机可执行范围。受控静音素材验证不代替扬声器／耳机的物理音画同步测量，也不作为启动速度或性能结论。日志保存在忽略目录 `build/validation/playback-startup-*.log`。

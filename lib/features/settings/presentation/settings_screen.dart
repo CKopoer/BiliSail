@@ -657,13 +657,6 @@ final class _SettingsCategoryPageState
                             PlaybackBackendPreference.mediaKit: 'media_kit（默认）',
                             PlaybackBackendPreference.fvp: 'fvp（实验性）',
                           }, controller.setPlaybackBackend),
-                          if (defaultTargetPlatform == TargetPlatform.android &&
-                              s.playbackBackend ==
-                                  PlaybackBackendPreference.fsplayer)
-                            const Text(
-                              '当前 fsplayer 公开版本仅验证支持 1×；需要倍速时请选择其他后端。',
-                              style: TextStyle(fontSize: 12),
-                            ),
                           if (defaultTargetPlatform ==
                               TargetPlatform.android) ...[
                             _choices(
@@ -678,16 +671,11 @@ final class _SettingsCategoryPageState
                               controller.setAndroidVideoOutput,
                               enabled:
                                   s.videoDecoding ==
-                                      VideoDecodingPreference.automatic &&
-                                  s.playbackBackend !=
-                                      PlaybackBackendPreference.fsplayer,
+                                  VideoDecodingPreference.automatic,
                             ),
                             Text(
-                              s.playbackBackend ==
-                                      PlaybackBackendPreference.fsplayer
-                                  ? 'fsplayer 使用自身的视频输出，此选项适用于 media_kit 和 fvp；切换后恢复已保存的输出偏好。'
-                                  : s.videoDecoding ==
-                                        VideoDecodingPreference.software
+                              s.videoDecoding ==
+                                      VideoDecodingPreference.software
                                   ? '软件解码使用兼容渲染；切回硬件解码后恢复已保存的输出偏好。'
                                   : 'media_kit 和 fvp 均保留弹幕、字幕和控件。解码直出需要设备硬解支持；画面异常时切回兼容渲染。',
                               style: const TextStyle(fontSize: 12),

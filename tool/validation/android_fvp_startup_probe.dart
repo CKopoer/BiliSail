@@ -44,9 +44,11 @@ Future<void> main() async {
           },
         ),
       );
-      final fsplayer = config['backend'] == 'fsplayer';
-      final PlayerEngine engine = fsplayer ? FsPlayerEngine() : FvpEngine();
-      final information = engine as PlayerInformationSource;
+      if (config['backend'] != 'fvp') {
+        throw StateError('Unsupported startup probe backend');
+      }
+      final engine = FvpEngine();
+      final PlayerInformationSource information = engine;
       try {
         runApp(
           MaterialApp(

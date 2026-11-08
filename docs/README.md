@@ -11,7 +11,7 @@
 | [直播聊天牌子、等级与内容选择](validation/live-chat-medals-selection-2026-11-08.md) | 粉丝牌与等级字段、可选择正文、阅读快照及离线回归边界 |
 | [跨后端起播同步](validation/synchronized-playback-startup-2026-11-08.md) | 共享静音起播门槛、fvp 原生暂停与 Flutter 首帧、取消／暂停和延迟双轨验证 |
 | [fvp 中途断音检测与恢复](validation/fvp-audio-recovery-2026-11-07.md) | 本机 1.2.8 证据边界、实际外部音频解码活动、停滞恢复与原生回归 |
-| [可选 fsplayer 与三后端对照](validation/fsplayer-backend-2026-11-07.md) | Android／iOS／macOS 接入、内存 DASH、固定原生资产、功能回归和 Android 同条件对照 |
+| [播放后端清理](validation/playback-backends-2026-11-08.md) | 移除 fsplayer 实现、原生依赖与构建入口，旧设置回退和两后端回归 |
 | [Windows 硬解边缘绿线](validation/windows-amd-hwdec-edges-2026-11-07.md) | mpv D3D11/EGL 正式修复、AMD／NVIDIA 新旧 mapper 的 392 次抓图及 HEVC 未复现边界 |
 | [连续跳转只保留最新目标](validation/rapid-seek-latest-target-2026-11-07.md) | 应用后端包装层的命令分发修复、两后端原生取消、兼容／直出与暂停边界 |
 | [解码与输出设置](validation/gpu-device-settings-2026-11-07.md) | Android 直出入口常驻、后端切换、GPU 选择移除、旧设置兼容与验证边界 |
@@ -224,7 +224,7 @@
 | [密集弹幕性能优化](validation/danmaku-performance.md) | Windows Profile 热点、分帧准备、阴影图像缓存、参考实现比较与验证边界 |
 | [播放错误排查](validation/native-playback-errors.md) | 原生日志误判、错误态控制栏与本地脱敏日志 |
 | [双轨同步与自动重试](validation/audio-video-recovery-2026-10-30.md) | 单轨提前耗尽、同步暂停、无日志停滞、共享恢复预算与取消 |
-| [双轨两秒同步](validation/paired-stall-synchronization-2026-11-07.md) | 三后端共享单轨缺失截止时间、fvp 视频提前结束与整组暂停恢复 |
+| [双轨两秒同步](validation/paired-stall-synchronization-2026-11-07.md) | media_kit／fvp 共享单轨缺失截止时间、fvp 视频提前结束与整组暂停恢复 |
 | [Windows 首帧停滞修复](validation/windows-playback-flag-abi-2026-10-23.md) | libmpv FLAG 类型宽度、seek 位置确认、来源审计与诊断清理 |
 | [开发协作约定](../AGENTS.md) | 后续开发与自动化代理必须遵守的仓库规则 |
 

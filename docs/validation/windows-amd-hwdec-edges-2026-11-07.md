@@ -104,7 +104,7 @@ NVIDIA 新 mapper 的 **96 次抓图通过**，直接路径和软件参考的区
 
 ## 后续应用验收（2026-11-08）
 
-为隔离同期 fsplayer 开发，应用验收工作区位于 `build/validation/amd-hwdec-app-check/`，从已提交应用 `d081154` 出发，只叠加本次统一媒体 ref／锁文件和 SDK 校验脚本。更新前完整 `tool/check.ps1 -EnforceLockfile` 通过：根测试 4635、API 696、player 255、danmaku 161、mux 5，共 5752 项，环境跳过 13、mux 原生跳过 10；媒体 fork 此次没有 Dart／pubspec 内容变更。最终 ref 的锁定解析、静态检查与原生／应用验证另按实际完成结果记录。
+为隔离同期其他播放后端开发，应用验收工作区位于 `build/validation/amd-hwdec-app-check/`，从已提交应用 `d081154` 出发，只叠加本次统一媒体 ref／锁文件和 SDK 校验脚本。更新前完整 `tool/check.ps1 -EnforceLockfile` 通过：根测试 4635、API 696、player 255、danmaku 161、mux 5，共 5752 项，环境跳过 13、mux 原生跳过 10；媒体 fork 此次没有 Dart／pubspec 内容变更。最终 ref 的锁定解析、静态检查与原生／应用验证另按实际完成结果记录。
 
 新 SDK 的 7 项下载／解压完整性回归、9 项原生释放／队列回归通过；真实 GPU 队列和稳定纹理 ID／descriptor 生命周期／resize 回归通过。中间的应用构建因独立目录缺少 MDK 缓存、NuGet 路径和尚未生成 Flutter 头文件而重试；复用按现有清单核对 SHA-256 的 MDK 缓存、为该进程补充既有 NuGet 路径并由 Flutter 生成头文件，没有改动这些依赖或业务代码。
 

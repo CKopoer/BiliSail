@@ -77,11 +77,10 @@ void main() {
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
   testWidgets(
-    'fsplayer explains disabled Android output and restores the saved choice',
+    'backend switching preserves the saved Android output preference',
     (tester) async {
       final repository = MemorySettingsRepository()
         ..value = AppSettings(
-          playbackBackend: PlaybackBackendPreference.fsplayer,
           androidVideoOutput: AndroidVideoOutputPreference.directTexture,
         );
       await tester.pumpWidget(
@@ -106,26 +105,68 @@ void main() {
         find.ancestor(of: direct, matching: find.byType(ChoiceChip)),
       );
       expect(directChip().selected, isTrue);
-      expect(directChip().onSelected, isNull);
-      expect(find.text('fsplayer（实验性）'), findsNothing);
-      expect(
-        repository.value.playbackBackend,
-        PlaybackBackendPreference.fsplayer,
-      );
-      expect(find.textContaining('fsplayer 使用自身的视频输出'), findsOneWidget);
-      await tester.ensureVisible(find.text('fvp（实验性）'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('fvp（实验性）'));
-      await tester.pumpAndSettle();
-      expect(repository.value.playbackBackend, PlaybackBackendPreference.fvp);
       expect(directChip().onSelected, isNotNull);
-      expect(directChip().selected, isTrue);
-      expect(
-        repository.value.androidVideoOutput,
-        AndroidVideoOutputPreference.directTexture,
-      );
+      for (final (label, backend) in [
+        ('fvp（实验性）', PlaybackBackendPreference.fvp),
+        ('media_kit（默认）', PlaybackBackendPreference.mediaKit),
+      ]) {
+        await tester.ensureVisible(find.text(label));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+        expect(repository.value.playbackBackend, backend);
+        expect(directChip().onSelected, isNotNull);
+        expect(directChip().selected, isTrue);
+        expect(
+          repository.value.androidVideoOutput,
+          AndroidVideoOutputPreference.directTexture,
+        );
+      }
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+  test(
+    'removed backend falls back and saves without resetting other preferences',
+    () async {
+      final database = AppDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = SqliteSettingsRepository(database);
+      await database.writeSetting(
+        'preferences.v1',
+        jsonEncode({
+          'schemaVersion': 44,
+          'playbackBackend': 'fsplayer',
+          'videoDecoding': 'software',
+          'androidVideoOutput': 'directTexture',
+          'defaultVolume': 37,
+          'defaultPlaybackRate': 1.5,
+          'autoPlay': false,
+        }),
+      );
+      final settings = await repository.load();
+      expect(settings.playbackBackend, PlaybackBackendPreference.mediaKit);
+      expect(settings.videoDecoding, VideoDecodingPreference.software);
+      expect(
+        settings.androidVideoOutput,
+        AndroidVideoOutputPreference.directTexture,
+      );
+      expect(settings.defaultVolume, 37);
+      expect(settings.defaultPlaybackRate, 1.5);
+      expect(settings.autoPlay, isFalse);
+      await repository.save(settings.copyWith(theme: AppThemePreference.dark));
+      final snapshot = jsonDecode(
+        (await database.readSetting('preferences.v1'))!,
+      ) as Map<String, Object?>;
+      expect(snapshot['playbackBackend'], 'mediaKit');
+      final reloaded = await SqliteSettingsRepository(database).load();
+      expect(reloaded.playbackBackend, PlaybackBackendPreference.mediaKit);
+      expect(reloaded.videoDecoding, settings.videoDecoding);
+      expect(reloaded.androidVideoOutput, settings.androidVideoOutput);
+      expect(reloaded.defaultVolume, settings.defaultVolume);
+      expect(reloaded.defaultPlaybackRate, settings.defaultPlaybackRate);
+      expect(reloaded.autoPlay, settings.autoPlay);
+      expect(reloaded.theme, AppThemePreference.dark);
+    },
   );
   test('old GPU preference is ignored and removed on save without resetting settings', () async {
     final database = AppDatabase(NativeDatabase.memory());
@@ -277,7 +318,6 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('media_kit（默认）'), findsOneWidget);
-    expect(find.text('fsplayer（实验性）'), findsNothing);
     await tester.tap(fvp);
     await tester.pumpAndSettle();
     expect(repository.value.playbackBackend, PlaybackBackendPreference.fvp);
@@ -323,11 +363,6 @@ void main() {
       PlaybackBackendPreference.fvp,
     );
     expect((await repository.load()).defaultVolume, 37);
-    await controller.setPlaybackBackend(PlaybackBackendPreference.fsplayer);
-    expect(
-      (await SqliteSettingsRepository(database).load()).playbackBackend,
-      PlaybackBackendPreference.fsplayer,
-    );
     await controller.resetToDefaults();
     expect(
       (await repository.load()).playbackBackend,

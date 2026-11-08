@@ -1,12 +1,12 @@
 # 播放、直播与弹幕设计
 
-2026-11-08：media_kit／fvp／fsplayer 共用静音起播门槛，轨道和所需视频输出确认后才恢复用户音量；fvp 从准备起静音，全部预滚等待原生暂停完成，共享纹理输出等待画面揭示后的 Flutter 帧。取消、超时和加载期间手动暂停不能放行旧播放意图，纯音频和明确无音轨视频保留各自能力边界。原因、回归及未测平台见[跨后端起播同步](validation/synchronized-playback-startup-2026-11-08.md)。
+2026-11-08：media_kit／fvp 共用静音起播门槛，轨道和所需视频输出确认后才恢复用户音量；fvp 从准备起静音，全部预滚等待原生暂停完成，共享纹理输出等待画面揭示后的 Flutter 帧。取消、超时和加载期间手动暂停不能放行旧播放意图，纯音频和明确无音轨视频保留各自能力边界。原因、回归及未测平台见[跨后端起播同步](validation/synchronized-playback-startup-2026-11-08.md)。
 
 2026-11-08：UGC 接纳服务端明确声明所有音轨不存在的完整视频，并将 `isIntentionallySilent` 从协议、选流和会话传给已有 `DashPairSource`。普通缺轨响应仍执行权益诊断和有界重试；无音轨视频不提供“听视频”。响应形态、权限边界和 Windows 两后端原视频回归见[无音轨视频播放](validation/silent-video-playback-2026-11-08.md)。
 
-2026-11-07 补齐 fvp／MDK 外部音频的持续健康检测：实际播放管线的音频帧回调只递增原生原子计数，250ms 采样。后续按用户要求将单轨缺失时另一轨独自播放的上限由约 8 秒缩短到 2 秒，media_kit、fvp 与 fsplayer 复用 `NativeTrackHealth` 的截止时间，各自采集原生轨道活动；异常先暂停整组，再进入已有有界恢复。正常双轨同步 buffering 仍保留 30 秒补充缓存预算。启动探针不代替实际音轨出帧确认，暂停、seek、换源与结束保留独立边界，详见 [fvp 中途断音专项](validation/fvp-audio-recovery-2026-11-07.md)和[双轨两秒同步](validation/paired-stall-synchronization-2026-11-07.md)。
+2026-11-07 补齐 fvp／MDK 外部音频的持续健康检测：实际播放管线的音频帧回调只递增原生原子计数，250ms 采样。后续按用户要求将单轨缺失时另一轨独自播放的上限由约 8 秒缩短到 2 秒，media_kit 与 fvp 复用 `NativeTrackHealth` 的截止时间，各自采集原生轨道活动；异常先暂停整组，再进入已有有界恢复。正常双轨同步 buffering 仍保留 30 秒补充缓存预算。启动探针不代替实际音轨出帧确认，暂停、seek、换源与结束保留独立边界，详见 [fvp 中途断音专项](validation/fvp-audio-recovery-2026-11-07.md)和[双轨两秒同步](validation/paired-stall-synchronization-2026-11-07.md)。
 
-2026-11-07 增加 Android／iOS／macOS 的可选 fsplayer 后端，media_kit 仍是默认，fvp 保留。三种后端共用会话与 Flutter 前景；固定原生资产、内存 DASH、生命周期、缓存差异及逐平台验证见[fsplayer 接入与对照](validation/fsplayer-backend-2026-11-07.md)。
+2026-11-08：播放后端统一保留默认 media_kit 与可选 fvp。已移除第三后端的 Dart／原生实现、插件注册、资产、CI 和验证入口；旧设置自动回退默认值，其他偏好保持。范围与验证见[后端清理](validation/playback-backends-2026-11-08.md)。
 
 2026-11-07／08 修复 Windows x64 的 AV1 硬解底部／右缘绿线：个人 mpv 的 D3D11/EGL mapper 对有对齐填充的表面在 GPU 内复制可见区域，media-kit 分发固定 SDK，应用只升级统一依赖并保留硬解。AMD 新库 200 次、NVIDIA 新库 96 次像素抓图通过，另有同构建旧 mapper 的 96 次故障对照。合成 HEVC 未复现原问题；详见[Windows 硬解边缘绿线](validation/windows-amd-hwdec-edges-2026-11-07.md)。
 
