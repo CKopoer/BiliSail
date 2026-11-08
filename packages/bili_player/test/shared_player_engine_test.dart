@@ -35,6 +35,7 @@ final class _Backend extends Fake implements PlaybackBackend {
   final writes = <String>[];
   final seeks = <(Duration, Completer<Duration>)>[];
   Completer<void>? video, audio, presentation, preparing, releasing, pausing;
+  Completer<void>? retiring;
   bool holdSeeks = false,
       playing = false,
       released = false,
@@ -60,13 +61,13 @@ final class _Backend extends Fake implements PlaybackBackend {
   @override
   Duration get seekTimeout => const Duration(seconds: 1);
   @override
-  Future<PreparedTracks> prepareMuted(
+  Future<PreparedTracks> preparePaused(
     ValidatedSource plan,
     PlaybackOperation operation,
   ) async {
     writes.add('prepare');
     preparedPlan = plan;
-    volume = 0;
+    volume = plan.options.volume;
     await preparing?.future;
     return tracks;
   }
@@ -116,14 +117,16 @@ final class _Backend extends Fake implements PlaybackBackend {
 
   @override
   Future<Duration> seekTo(Duration target, PlaybackOperation operation) async {
+    await pauseAndWait();
     final done = Completer<Duration>();
     seeks.add((target, done));
     return holdSeeks ? done.future : target;
   }
 
   @override
-  void cancelSeek() {
+  Future<void> cancelSeek() async {
     writes.add('cancelSeek');
+    await retiring?.future;
   }
 
   @override
@@ -303,7 +306,7 @@ void main() {
       await reopening;
       final playing = engine.play();
       await tick();
-      expect(replacement.volume, 0);
+      expect(replacement.volume, 100);
       replacement.signals.add(
         const BackendEvent(
           BackendEventKind.sample,
@@ -314,7 +317,7 @@ void main() {
         const BackendEvent(BackendEventKind.buffering, value: false),
       );
       expect(engine.currentSnapshot.position, const Duration(seconds: 7));
-      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.buffering);
       replacement.audio!.complete();
       await playing;
       expect(
@@ -331,7 +334,7 @@ void main() {
     },
   );
 
-  test('autoplay waits for decoded tracks and presentation, restoring the latest volume', () async {
+  test('autoplay waits for decoded tracks and presentation, using the latest volume', () async {
     final backend = _Backend()
       ..video = Completer<void>()
       ..audio = Completer<void>()
@@ -349,11 +352,11 @@ void main() {
     await engine.setVolume(63);
     backend.video!.complete();
     await tick();
-    expect(backend.playing, true);
-    expect(backend.volume, 0);
+    expect(backend.playing, false);
+    expect(backend.volume, 37);
     backend.audio!.complete();
     await tick();
-    expect(backend.volume, 0);
+    expect(backend.volume, 37);
     backend.presentation!.complete();
     await opening;
     expect(backend.volume, 63);
@@ -368,10 +371,10 @@ void main() {
     await engine.open(pair, const OpenOptions(volume: 37));
     final playing = engine.play();
     await tick();
-    expect(backend.playing, true);
-    expect(backend.volume, 0);
+    expect(backend.playing, false);
+    expect(backend.volume, 37);
     await engine.setVolume(24);
-    expect(backend.volume, 0);
+    expect(backend.volume, 24);
     await engine.pause();
     await playing;
     backend.audio!.complete();
@@ -382,7 +385,7 @@ void main() {
     expect(backend.volume, 24);
   });
 
-  test('play arriving during paused presentation advances and confirms audio before unmuting', () async {
+  test('play arriving during paused presentation stays paused until audio is ready', () async {
     final backend = _Backend()
       ..presentation = Completer<void>()
       ..audio = Completer<void>();
@@ -393,13 +396,36 @@ void main() {
     await engine.play();
     backend.presentation!.complete();
     await tick();
-    expect(backend.playing, true);
-    expect(backend.volume, 0);
+    expect(backend.playing, false);
+    expect(backend.volume, 37);
     backend.audio!.complete();
     await opening;
     expect(backend.volume, 37);
     expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
   });
+
+  test(
+    'every resume waits for fresh readiness without muting or advancing',
+    () async {
+      final backend = _Backend();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions(play: true, volume: 37));
+      await engine.pause();
+      backend.audio = Completer<void>();
+      final playsBefore = backend.writes.where((w) => w == 'play').length;
+      final resuming = engine.play();
+      await tick();
+      expect(backend.playing, false);
+      expect(engine.currentSnapshot.isBuffering, true);
+      expect(backend.volume, 37);
+      expect(backend.writes.where((w) => w == 'play'), hasLength(playsBefore));
+      backend.audio!.complete();
+      await resuming;
+      expect(backend.playing, true);
+      expect(backend.writes, isNot(contains('volume:0.0')));
+    },
+  );
 
   test('new seek retires old completion, EOF, sample and failure; latest play intent wins', () async {
     final backend = _Backend()..holdSeeks = true;
@@ -438,6 +464,96 @@ void main() {
       lessThan(backend.writes.lastIndexOf('play')),
     );
   });
+
+  test('seek requires fresh audio confirmation before playback', () async {
+    final backend = _Backend();
+    final engine = SharedPlayerEngine(createBackend: () => backend);
+    addTearDown(engine.dispose);
+    await engine.open(pair, const OpenOptions(play: true));
+    backend.audio = Completer<void>();
+    var done = false;
+    final seeking = engine
+        .seek(const Duration(seconds: 5))
+        .then((_) => done = true);
+    await tick();
+    expect(done, false);
+    expect(backend.playing, false);
+    expect(backend.volume, 100);
+    backend.audio!.complete();
+    await seeking;
+    expect(backend.volume, 100);
+    expect(engine.currentSnapshot.position, const Duration(seconds: 5));
+    expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+  });
+
+  test('replacement seeks wait for native retirement and coalesce to the latest target', () async {
+    final backend = _Backend()
+      ..holdSeeks = true
+      ..retiring = Completer<void>();
+    final engine = SharedPlayerEngine(createBackend: () => backend);
+    addTearDown(engine.dispose);
+    await engine.open(pair, const OpenOptions());
+    final old = engine.seek(const Duration(seconds: 9));
+    await tick();
+    final intermediate = engine.seek(const Duration(seconds: 7));
+    await tick();
+    final latest = engine.seek(const Duration(seconds: 2));
+    await tick();
+    expect(backend.seeks.length, 1);
+    backend.retiring!.complete();
+    await tick();
+    expect(backend.seeks.map((s) => s.$1), [
+      const Duration(seconds: 9),
+      const Duration(seconds: 2),
+    ]);
+    backend.seeks.last.$2.complete(const Duration(seconds: 2));
+    await Future.wait([old, intermediate, latest]);
+    expect(engine.currentSnapshot.position, const Duration(seconds: 2));
+    expect(engine.currentSnapshot.desiredPlaying, false);
+  });
+
+  test('rapid input merges before dispatching a native seek', () async {
+    final backend = _Backend();
+    final engine = SharedPlayerEngine(
+      createBackend: () => backend,
+      seekCoalescingDelay: const Duration(milliseconds: 40),
+    );
+    addTearDown(engine.dispose);
+    await engine.open(pair, const OpenOptions());
+    final first = engine.seek(const Duration(seconds: 9));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final second = engine.seek(const Duration(seconds: 7));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final latest = engine.seek(const Duration(seconds: 2));
+    expect(backend.seeks, isEmpty);
+    await Future.wait([first, second, latest]);
+    expect(backend.seeks.map((s) => s.$1), [const Duration(seconds: 2)]);
+    expect(engine.currentSnapshot.position, const Duration(seconds: 2));
+  });
+
+  test(
+    'EOF during input coalescing cannot revoke the requested seek play intent',
+    () async {
+      final backend = _Backend();
+      final engine = SharedPlayerEngine(
+        createBackend: () => backend,
+        seekCoalescingDelay: const Duration(milliseconds: 40),
+      );
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions(play: true));
+      final seeking = engine.seek(const Duration(seconds: 2));
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.ended,
+          position: Duration(seconds: 20),
+        ),
+      );
+      expect(engine.currentSnapshot.desiredPlaying, true);
+      await seeking;
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      expect(engine.currentSnapshot.position, const Duration(seconds: 2));
+    },
+  );
 
   test('opening seeks coalesce and preserve a manual pause', () async {
     final backend = _Backend()..preparing = Completer<void>();

@@ -2,6 +2,8 @@
 
 日期：2026-11-08（Asia/Shanghai）。设计入口：[后端重构方案](../player-backend-refactor-design.md)，架构决定：[D75](../decisions.md#d75两个播放后端共用包内播放状态机)。
 
+后续同步门已改为暂停中确认双轨，取消静音预滚；本记录中的静音门描述为改动前快照。现行实现见[双轨同步屏障](paused-pair-synchronization-2026-11-08.md)。
+
 ## 实现与所有权
 
 - 应用继续使用原有 `PlayerEngine`、`PlaybackSession`、`PlaybackManager` 和设置工厂。`MediaKitEngine(...)`／`FvpEngine(...)` 保留构造参数、可注入 fvp 端口及原生诊断／基准入口，均委托 [SharedPlayerEngine](../../packages/bili_player/lib/src/shared_player_engine.dart)。

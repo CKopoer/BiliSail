@@ -65,9 +65,13 @@ void main() {
     if (partial) request.headers.set('Range', 'bytes=$start-${end ?? ''}');
     final response = await request.close();
     expect(response.statusCode, partial ? 206 : 200);
-    return Uint8List.fromList(
+    final data = Uint8List.fromList(
       await response.fold<List<int>>([], (a, b) => a..addAll(b)),
     );
+    // A client can consume the final bytes before the server's flush future
+    // resumes to acknowledge their delivery.
+    await Future<void>.delayed(Duration.zero);
+    return data;
   }
 
   Future<DashTrackBuffer> create({
@@ -207,6 +211,31 @@ void main() {
     expect(requests, [('/audio', 0)]);
   });
   test(
+    'cancelled seek readers release admission without retrying old ranges',
+    () async {
+      final buffer = await create();
+      final local = buffer.prepare(plan);
+      respond = (request, start, end) async {
+        /* Retired native request. */
+      };
+      for (var i = 0; i < 12; i++) {
+        final reading = read(local.media)
+            .then<void>((_) {}, onError: (Object _) {});
+        for (var wait = 0; wait < 100 && requests.length <= i; wait++) {
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+        expect(requests.length, i + 1);
+        buffer.cancelReads();
+        await reading.timeout(const Duration(seconds: 1));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(requests.length, 12);
+      respond = null;
+      expect(await read(local.media), bytes);
+      expect(await read(local.audio!), bytes);
+    },
+  );
+  test(
     'filling a gap adjacent to a cached tail ends at the requested byte',
     () async {
       final buffer = await create();
@@ -289,14 +318,47 @@ void main() {
     },
   );
   test(
-    'eviction and disjoint ranges never invent a contiguous time window',
+    'evicting retry bytes preserves the buffer already delivered to native',
     () async {
       final buffer = await create(capacity: 150);
       final local = buffer.prepare(plan);
       await read(local.media);
-      expect(buffer.buffered(Duration.zero).video, Duration.zero);
+      for (
+        var i = 0;
+        i < 200 &&
+            buffer.buffered(Duration.zero).video < const Duration(seconds: 8);
+        i++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(buffer.buffered(Duration.zero).video, const Duration(seconds: 8));
     },
   );
+  test('unknown indexes preserve native buffer evidence', () async {
+    bytes = Uint8List(64);
+    final buffer = await create();
+    final local = buffer.prepare(plan);
+    await read(local.media);
+    await read(local.audio!);
+    expect(
+      buffer.commonBuffered(
+        const Duration(seconds: 1),
+        const Duration(seconds: 9),
+      ),
+      const Duration(seconds: 9),
+    );
+  });
+  test('delivered ranges keep gaps until the missing bytes arrive', () async {
+    final buffer = await create(capacity: 150);
+    final local = buffer.prepare(plan);
+    final indexLength = bytes.length - 400;
+    await read(local.audio!, end: indexLength + 99);
+    await read(local.audio!, start: indexLength + 200);
+    await indexed(buffer);
+    expect(buffer.buffered(Duration.zero).audio, const Duration(seconds: 2));
+    await read(local.audio!, start: indexLength + 100, end: indexLength + 199);
+    expect(buffer.buffered(Duration.zero).audio, const Duration(seconds: 8));
+  });
   test(
     'closing cancels a read waiting for headers and is a shared barrier',
     () async {

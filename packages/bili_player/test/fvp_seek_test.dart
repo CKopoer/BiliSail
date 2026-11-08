@@ -4,7 +4,7 @@ import 'package:bili_player/src/fvp_seek.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  for (final code in [-2, -3]) {
+  for (final code in [-2, -3, -8]) {
     test('restores an EOF race ($code) before confirming the target', () async {
       final paused = Completer<bool>();
       final calls = <String>[];
@@ -128,7 +128,22 @@ void main() {
     expect(seeks, 2);
   });
 
-  for (final code in [-1, -2, -3, -4, -10]) {
+  test('an interrupted HTTP prepare is retired and retried once', () async {
+    var preparations = 0;
+    expect(
+      await seekFvpTarget(
+        isCancelled: () => false,
+        needsPrepare: () => true,
+        prepare: () async => preparations++ == 0 ? -8 : 325000,
+        pauseAndWait: () async => true,
+        seek: () async => 325000,
+      ),
+      325000,
+    );
+    expect(preparations, 2);
+  });
+
+  for (final code in [-1, -2, -3, -4, -8, -10]) {
     test('failure $code has a bounded recovery budget', () async {
       var preparations = 0;
       var seeks = 0;
@@ -148,7 +163,7 @@ void main() {
         ),
         code,
       );
-      expect(preparations, code == -2 || code == -3 || code == -10 ? 1 : 0);
+      expect(preparations, {-2, -3, -8, -10}.contains(code) ? 1 : 0);
       expect(seeks, preparations + 1);
     });
   }

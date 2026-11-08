@@ -53,7 +53,6 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
     MediaTrack? audio,
     OpenOptions options, {
     required bool silent,
-    MediaTrack? audioProbe,
     bool isLive = false,
   }) async {
     main = media;
@@ -90,6 +89,7 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
 
   @override
   Future<int> seek(Duration target) async {
+    pause();
     final ready = Completer<int>();
     seeks.add((target, ready));
     // MDK exposes the requested position before the frame has decoded.
@@ -98,7 +98,7 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
   }
 
   @override
-  void cancelSeek() {
+  Future<void> cancelSeek() async {
     if (seeks.isNotEmpty && !seeks.last.$2.isCompleted) {
       if (seekCancellationError case final error?) {
         seeks.last.$2.completeError(error);
@@ -123,7 +123,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final source = DashPairSource(video: track('video'), audio: track('audio'));
   testWidgets(
-    'autoplay stays muted until native A/V and revealed Flutter frame',
+    'autoplay stays paused until native A/V and revealed Flutter frame',
     (tester) async {
       final player = _Player()
         ..videoGate = Completer<bool>()
@@ -141,16 +141,16 @@ void main() {
         const OpenOptions(play: true, volume: 37),
       );
       await tester.pump();
-      expect(player.volume, 0);
+      expect(player.volume, 37);
       expect(player.playing, false);
       player.videoGate!.complete(true);
       await tester.pumpAndSettle();
-      expect(player.playing, true);
-      expect(player.volume, 0);
+      expect(player.playing, false);
+      expect(player.volume, 37);
       expect(engine.currentSnapshot.phase, PlaybackPhase.opening);
       player.audioGate!.complete(true);
       await tester.pump();
-      expect(player.volume, 0, reason: 'This frame still painted black');
+      expect(player.playing, false, reason: 'Presentation has not confirmed');
       await tester.pumpAndSettle();
       await opening;
       expect(player.volume, 37);
@@ -187,7 +187,7 @@ void main() {
         }
         await result;
         expect(player.playing, false);
-        expect(player.volume, action == 'pause' ? 37 : 0);
+        expect(player.volume, 37);
         if (action != 'pause') player.videoGate!.complete(true);
         await Future<void>.delayed(Duration.zero);
         expect(player.playing, false);
@@ -195,7 +195,7 @@ void main() {
     );
   }
   test(
-    'pause acknowledgement keeps startup muted after a user pause',
+    'pause acknowledgement keeps startup paused after a user pause',
     () async {
       final player = _Player()
         ..audioGate = Completer<bool>()
@@ -207,11 +207,11 @@ void main() {
         const OpenOptions(play: true, volume: 37),
       );
       await Future<void>.delayed(Duration.zero);
-      expect(player.playing, true);
+      expect(player.playing, false);
       final pausing = engine.pause();
       player.audioGate!.complete(true);
       await Future<void>.delayed(Duration.zero);
-      expect(player.volume, 0);
+      expect(player.volume, 37);
       player.pauseGate!.complete();
       await Future.wait([opening, pausing]);
       expect(player.playing, false);

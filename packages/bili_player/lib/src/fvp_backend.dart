@@ -45,7 +45,7 @@ final class FvpBackend implements PlaybackBackend {
   Duration get seekTimeout => const Duration(seconds: 15);
 
   @override
-  Future<PreparedTracks> prepareMuted(
+  Future<PreparedTracks> preparePaused(
     ValidatedSource plan,
     PlaybackOperation operation,
   ) async {
@@ -65,10 +65,6 @@ final class FvpBackend implements PlaybackBackend {
       final sound = plan.audio == null
           ? null
           : await operation.wait(lease(plan.audio!));
-      // A probe must not share a content provider's descriptor offset.
-      final probe = plan.audio?.uri.scheme == 'content'
-          ? await operation.wait(lease(plan.audio!))
-          : sound;
       final creating = _creating = createPlayer().then((player) {
         _player = player;
         return player;
@@ -94,6 +90,10 @@ final class FvpBackend implements PlaybackBackend {
           FvpNativeStatus.invalid => const BackendEvent(
             BackendEventKind.failure,
           ),
+          FvpNativeStatus.audioEnded => const BackendEvent(
+            BackendEventKind.failure,
+            stallReason: PlaybackStallReason.audioClock,
+          ),
           FvpNativeStatus.processExited => const BackendEvent(
             BackendEventKind.failure,
             failureKind: PlayerFailureKind.nativeProcessExited,
@@ -108,14 +108,12 @@ final class FvpBackend implements PlaybackBackend {
           sound,
           plan.options,
           silent: plan.silent,
-          audioProbe: probe,
           isLive: plan.live,
         ),
       );
       _gain = plan.options.audioGainDb;
       _dimensions = info.dimensions;
-      // prepare promises zero native volume even if a surface must pre-roll.
-      await operation.wait(setVolume(0));
+      await operation.wait(setVolume(plan.options.volume));
       return PreparedTracks(
         hasVideo: info.hasVideo,
         hasAudio: info.hasAudio,
@@ -226,7 +224,7 @@ final class FvpBackend implements PlaybackBackend {
   Future<Duration> seekTo(Duration target, PlaybackOperation operation) async {
     try {
       final position = await operation.wait(_player!.seek(target));
-      if (position < 0) throw StateError('Native seek failed');
+      if (position < 0) throw NativeSeekFailure(position);
       _nativeEnded = false;
       return Duration(milliseconds: position);
     } on FvpProcessException {
@@ -239,7 +237,7 @@ final class FvpBackend implements PlaybackBackend {
   }
 
   @override
-  void cancelSeek() => _player?.cancelSeek();
+  Future<void> cancelSeek() async => await _player?.cancelSeek();
   @override
   void interrupt() {
     _preparation?.cancel();
@@ -253,12 +251,20 @@ final class FvpBackend implements PlaybackBackend {
     final position = Duration(
       milliseconds: player.positionMilliseconds.clamp(0, 1 << 53),
     );
+    final audioPosition = player is FvpAudioClockPort
+        ? (player as FvpAudioClockPort).audioPositionMilliseconds
+        : null;
     return BackendHealth(
       position: position,
       buffered:
           position +
           Duration(milliseconds: player.bufferedMilliseconds.clamp(0, 1 << 53)),
-      audioFrames: player is FvpAudioActivityPort
+      audioPosition: audioPosition == null
+          ? null
+          : Duration(milliseconds: audioPosition),
+      audioFrames: player is FvpAudioClockPort
+          ? null
+          : player is FvpAudioActivityPort
           ? (player as FvpAudioActivityPort).decodedAudioFrames
           : null,
     );

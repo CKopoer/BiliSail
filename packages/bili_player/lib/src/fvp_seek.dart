@@ -8,12 +8,19 @@ Future<int> seekFvpTarget({
   required Future<int> Function() seek,
 }) async {
   var restore = false;
+  bool retryable(int code) => const {-2, -3, -8, -10}.contains(code);
   for (var attempt = 0; attempt < 2; attempt++) {
     if (isCancelled()) return -2;
     if (restore || needsPrepare()) {
       final result = await prepare();
       if (isCancelled()) return -2;
-      if (result < 0) return result;
+      if (result < 0) {
+        if (attempt == 0 && retryable(result)) {
+          restore = true;
+          continue;
+        }
+        return result;
+      }
     }
     final paused = await pauseAndWait();
     if (isCancelled()) return -2;
@@ -26,8 +33,9 @@ Future<int> seekFvpTarget({
     final result = await seek();
     if (isCancelled()) return -2;
     // -2: previous seek still pending; -3: media unloaded; -10: fvp's native
-    // call was rejected before accepting a seek. Restore once within the deadline.
-    if (attempt == 0 && (result == -2 || result == -3 || result == -10)) {
+    // call was rejected before accepting a seek. -8 is also observed after an
+    // interrupted HTTP restore. Retire that load once within the same deadline.
+    if (attempt == 0 && retryable(result)) {
       restore = true;
       continue;
     }

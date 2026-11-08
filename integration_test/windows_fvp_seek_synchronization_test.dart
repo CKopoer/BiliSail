@@ -13,31 +13,37 @@ void main() => registerFvpSeekSynchronizationTests();
 
 void registerFvpSeekSynchronizationTests({
   String? mediaDirectory,
+  String delayedTrack = 'video',
+  int targetMilliseconds = 9375,
+  List<String>? scenarios,
   AndroidVideoOutputMode androidVideoOutput =
       AndroidVideoOutputMode.renderedTexture,
 }) {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  for (final scenario in [
-    'playing',
-    'paused',
-    'immediatePause',
-    'pauseRequested',
-    'stop',
-    'superseded',
-    'supersededAgain',
-    'supersededAgainPaused',
-    'supersededAgainStopped',
-  ]) {
+  for (final scenario
+      in scenarios ??
+          [
+            'playing',
+            'paused',
+            'immediatePause',
+            'pauseRequested',
+            'stop',
+            'superseded',
+            'supersededAgain',
+            'supersededAgainPaused',
+            'supersededAgainStopped',
+          ]) {
     final playing = scenario != 'paused';
     testWidgets(
-      'fvp waits for decoded target before resuming both tracks: $scenario, ${androidVideoOutput.name}',
+      'fvp waits for decoded $delayedTrack target before resuming both tracks: $scenario, ${androidVideoOutput.name}',
       (tester) async {
         initializePlayerBackend();
         final fixtures =
             mediaDirectory ?? Platform.environment['BILI_TEST_MEDIA_DIR']!;
         final video = await File('$fixtures/video.mp4').readAsBytes();
+        final audio = await File('$fixtures/audio.m4a').readAsBytes();
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         final blocked = Completer<void>();
         final resumeVideo = Completer<void>();
@@ -45,28 +51,29 @@ void registerFvpSeekSynchronizationTests({
         var blockedRequests = 0;
         var delayVideo = false;
         server.listen((request) async {
+          final bytes = request.uri.path == '/audio.m4a' ? audio : video;
           final range = request.headers.value(HttpHeaders.rangeHeader);
           final start = range == null
               ? 0
               : int.parse(RegExp(r'bytes=(\d+)-').firstMatch(range)!.group(1)!);
           final response = request.response;
           response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
-          response.contentLength = video.length - start;
+          response.contentLength = bytes.length - start;
           if (range != null) {
             response.statusCode = 206;
             response.headers.set(
               HttpHeaders.contentRangeHeader,
-              'bytes $start-${video.length - 1}/${video.length}',
+              'bytes $start-${bytes.length - 1}/${bytes.length}',
             );
           }
-          if (delayVideo) {
+          if (delayVideo && request.uri.path.startsWith('/$delayedTrack.')) {
             blockedRequests++;
             if (blockedRequests == 2) secondBlocked.complete();
             if (!blocked.isCompleted) blocked.complete();
             await resumeVideo.future;
           }
           try {
-            response.add(video.sublist(start));
+            response.add(bytes.sublist(start));
             await response.close();
           } on SocketException {
             // Cancelled seeks and teardown close the old range request.
@@ -100,7 +107,7 @@ void registerFvpSeekSynchronizationTests({
                   requestPolicy: MediaRequestPolicy(),
                 ),
                 audio: MediaTrack(
-                  uri: File('$fixtures/audio.m4a').uri,
+                  uri: Uri.parse('http://127.0.0.1:${server.port}/audio.m4a'),
                   requestPolicy: MediaRequestPolicy(),
                 ),
               ),
@@ -126,11 +133,11 @@ void registerFvpSeekSynchronizationTests({
           final initialFrame = await _pixels(boundaryKey);
           delayVideo = true;
           var seekCompleted = false;
-          final seeking = engine.seek(const Duration(milliseconds: 9375)).then((
-            _,
-          ) {
-            seekCompleted = true;
-          });
+          final seeking = engine
+              .seek(Duration(milliseconds: targetMilliseconds))
+              .then((_) {
+                seekCompleted = true;
+              });
           final immediatePause = scenario == 'immediatePause'
               ? engine.pause()
               : null;
@@ -159,7 +166,8 @@ void registerFvpSeekSynchronizationTests({
           // allow that discrete seek jump, but no playback beyond the target.
           expect(
             clockSettled ||
-                Platform.isAndroid && (clockAfter - 9375).abs() < 100,
+                Platform.isAndroid &&
+                    (clockAfter - targetMilliseconds).abs() < 100,
             isTrue,
             reason: 'The paused clock may jump to the target, not play past it',
           );
@@ -233,7 +241,7 @@ void registerFvpSeekSynchronizationTests({
           final target = switch (scenario) {
             'superseded' => 2000,
             'supersededAgain' || 'supersededAgainPaused' => 375,
-            _ => 9375,
+            _ => targetMilliseconds,
           };
           expect(
             (engine.currentSnapshot.position - Duration(milliseconds: target))
@@ -246,6 +254,13 @@ void registerFvpSeekSynchronizationTests({
             closeTo(target + (shouldPlay ? 300 : 0), 300),
             reason:
                 'The MDK clock must not include time spent waiting for video',
+          );
+          final audioPosition = native.audioPositionMilliseconds;
+          expect(audioPosition, isNotNull);
+          expect(
+            (native.positionMilliseconds - audioPosition!).abs(),
+            lessThanOrEqualTo(120),
+            reason: 'The target video must follow the actual audio clock',
           );
           expect(
             await _pixels(boundaryKey),
@@ -314,10 +329,14 @@ Future<void> _withFrames(WidgetTester tester, Future<void> operation) async {
 
 // Observe the real port's commands without replacing MDK decoding or its seek
 // callback. No additional native player or playback clock is introduced.
-final class _ObservedPlayer implements FvpPlayerPort {
+final class _ObservedPlayer implements FvpPlayerPort, FvpAudioClockPort {
   _ObservedPlayer(this.delegate);
   final FvpPlayerPort delegate;
   bool playing = false;
+  @override
+  int? get audioPositionMilliseconds => delegate is FvpAudioClockPort
+      ? (delegate as FvpAudioClockPort).audioPositionMilliseconds
+      : null;
   int pendingSeeks = 0;
   int maxPendingSeeks = 0;
   int textureCreations = 0;
@@ -333,16 +352,8 @@ final class _ObservedPlayer implements FvpPlayerPort {
     MediaTrack? audio,
     OpenOptions options, {
     required bool silent,
-    MediaTrack? audioProbe,
     bool isLive = false,
-  }) => delegate.prepare(
-    media,
-    audio,
-    options,
-    silent: silent,
-    audioProbe: audioProbe,
-    isLive: isLive,
-  );
+  }) => delegate.prepare(media, audio, options, silent: silent, isLive: isLive);
   @override
   Future<int> createTexture() {
     textureCreations++;
@@ -379,6 +390,9 @@ final class _ObservedPlayer implements FvpPlayerPort {
 
   @override
   Future<int> seek(Duration target) async {
+    // The port owns seek's native pause. Clock/pixel assertions above verify
+    // that pause independently of this command ledger.
+    playing = false;
     pendingSeeks++;
     if (pendingSeeks > maxPendingSeeks) maxPendingSeeks = pendingSeeks;
     try {
@@ -389,7 +403,7 @@ final class _ObservedPlayer implements FvpPlayerPort {
   }
 
   @override
-  void cancelSeek() => delegate.cancelSeek();
+  Future<void> cancelSeek() => delegate.cancelSeek();
 
   @override
   void setRate(double rate) => delegate.setRate(rate);

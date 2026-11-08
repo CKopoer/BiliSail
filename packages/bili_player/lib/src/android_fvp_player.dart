@@ -17,6 +17,7 @@ final class AndroidFvpPlayer
         FvpPlayerPort,
         FvpInformationPort,
         FvpAudioActivityPort,
+        FvpAudioClockPort,
         FvpCommandCompletionPort,
         FvpPauseConfirmationPort {
   AndroidFvpPlayer._(this._id);
@@ -29,6 +30,9 @@ final class AndroidFvpPlayer
   final _statuses = StreamController<FvpNativeStatus>.broadcast(sync: true);
   int _position = 0, _buffered = 0;
   int _decodedAudioFrames = 0;
+  int? _audioPosition;
+  @override
+  int? get audioPositionMilliseconds => _audioPosition;
   int _seekRevision = 0;
   bool _closed = false, _lost = false;
   int? exitStatus;
@@ -59,6 +63,7 @@ final class AndroidFvpPlayer
           if (event['audioFrames'] case final int value) {
             player._decodedAudioFrames = value;
           }
+          player._audioPosition = event['audioPosition'] as int?;
         }
       },
       onError: (Object _) {
@@ -145,7 +150,6 @@ final class AndroidFvpPlayer
     MediaTrack? audio,
     OpenOptions options, {
     required bool silent,
-    MediaTrack? audioProbe,
     bool isLive = false,
   }) async {
     Map<String, Object?> track(MediaTrack value) => {
@@ -217,7 +221,7 @@ final class AndroidFvpPlayer
   }
 
   @override
-  void cancelSeek() => _command('cancelSeek');
+  Future<void> cancelSeek() async => await _call('cancelSeek');
   @override
   void setRate(double rate) => _command('rate', {'value': rate});
   @override

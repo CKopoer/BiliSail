@@ -10,6 +10,8 @@
 | --- | --- |
 | [iOS 1.2.8 侧载重签兼容性](validation/ios-sideload-2026-11-08.md) | 实际 IPA 的 unsigned FAT 回归、arm64 thinning、临时签名和设备验证边界 |
 | [分轨缓冲续读与共同进度](validation/track-buffer-recovery-2026-11-08.md) | HTTP DASH 单轨静默续读、两轨连续缓存的最小值、内存上限与原生验证边界 |
+| [双轨暂停就绪与原生音频时钟](validation/paused-pair-synchronization-2026-11-08.md) | 移除静音预滚，统一起播、seek 与继续播放；真实音频目标确认和原生音频主时钟 |
+| [缓冲条与连续跳转修复](validation/buffer-display-rapid-seek-2026-11-08.md) | 缓存淘汰与未知索引、旧 HTTP 读取撤销、原生 seek 完成屏障与 EOF 竞态 |
 | [Apple／Linux 纹理交接与 Android 检查](validation/apple-linux-texture-handoff-2026-11-08.md) | Apple 完成帧与 Metal 复制、Linux 双向屏障／软件副本、Android Surface 队列审查与验证边界 |
 | [Windows 两后端纹理交接](validation/windows-texture-handoff-2026-11-08.md) | 不可变 GPU 快照、完成查询、旧帧延后消费回归与其他平台边界 |
 | [恢复时保留画面与进度](validation/recovery-frame-retention-2026-11-08.md) | 两后端共享停帧、同位置恢复、图像容量与离线验证边界 |

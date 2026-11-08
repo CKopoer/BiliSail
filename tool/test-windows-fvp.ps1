@@ -4,6 +4,7 @@ $previousMedia = $env:BILI_TEST_MEDIA_DIR
 $previousLive = $env:BILI_FVP_LIVE_MEDIA_DIR
 Push-Location (Join-Path $PSScriptRoot '..')
 try {
+  & (Join-Path $PSScriptRoot 'test-windows-fvp-audio-clock.ps1')
   $env:BILI_TEST_MEDIA_DIR = (Resolve-Path 'test/fixtures/media').Path
   $liveDirectory = Join-Path (Get-Location) '.dart_tool/fvp_media'
   New-Item -ItemType Directory -Path $liveDirectory -Force | Out-Null

@@ -16,16 +16,3 @@ final class FvpFirstVideoFrame {
     if (!_consumed.isCompleted) _consumed.complete(true);
   }
 }
-
-/// Surface binding reopens MediaCodec asynchronously. Do not seek while that
-/// decoder is still starting, or while its playing pipeline is draining.
-Future<bool> confirmFvpSurfacePreroll({
-  required Future<bool> firstFrame,
-  required Future<void> Function() pauseAndWait,
-  Future<int> Function()? seek,
-}) async {
-  if (!await firstFrame) return false;
-  if (seek == null) return true;
-  await pauseAndWait();
-  return await seek() >= 0;
-}

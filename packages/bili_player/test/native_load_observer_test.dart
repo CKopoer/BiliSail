@@ -5,6 +5,23 @@ import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('paused track readiness belongs to the current load and seek', () async {
+    final state = NativeLoadState();
+    addTearDown(state.dispose);
+    expect(state.tracksReady, false);
+    state.started(1);
+    expect(state.tracksReady, false);
+    state.playbackRestarted();
+    expect(state.tracksReady, true);
+    state.seekStarted();
+    expect(state.tracksReady, false);
+    state.clockChanged(seconds: 20);
+    expect(state.tracksReady, false);
+    state.playbackRestarted();
+    expect(state.tracksReady, true);
+    state.started(2);
+    expect(state.tracksReady, false);
+  });
   test('replacement loads require their own playback restart', () async {
     final state = NativeLoadState();
     addTearDown(state.dispose);

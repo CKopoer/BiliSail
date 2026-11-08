@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'native_readiness.dart';
 import 'player_contract.dart';
+import 'player_diagnostics.dart';
 import 'player_playback_information.dart';
 import 'validated_source.dart';
 import 'video_output.dart';
@@ -88,6 +89,12 @@ final class PreparedTracks {
 
 enum BackendEventKind { sample, buffering, playing, ended, warning, failure }
 
+/// A numeric SDK seek result, safe to include in local diagnostics.
+final class NativeSeekFailure implements Exception {
+  const NativeSeekFailure(this.code);
+  final int code;
+}
+
 /// Evidence from the current native pipeline, never a product playback state.
 final class BackendEvent {
   const BackendEvent(
@@ -98,12 +105,14 @@ final class BackendEvent {
     this.dimensions,
     this.value,
     this.failureKind = PlayerFailureKind.nativePlayback,
+    this.stallReason,
   });
   final BackendEventKind kind;
   final Duration? position, duration, buffered;
   final VideoDimensions? dimensions;
   final bool? value;
   final PlayerFailureKind failureKind;
+  final PlaybackStallReason? stallReason;
 }
 
 final class BackendHealth {
@@ -127,7 +136,7 @@ abstract interface class PlaybackBackend {
   VideoOutput get videoOutput;
   Stream<BackendEvent> get events;
   Duration get seekTimeout;
-  Future<PreparedTracks> prepareMuted(
+  Future<PreparedTracks> preparePaused(
     ValidatedSource plan,
     PlaybackOperation operation,
   );
@@ -141,8 +150,10 @@ abstract interface class PlaybackBackend {
   Future<void> setRate(double rate);
   Future<void> setVolume(double volume);
   Future<void> setGainDb(double gainDb);
+  // Pauses/retire EOF as required by the SDK before confirming a decoded target.
   Future<Duration> seekTo(Duration target, PlaybackOperation operation);
-  void cancelSeek();
+  // Completes after the previous native demuxers have retired their readers.
+  Future<void> cancelSeek();
   void interrupt();
   BackendHealth sampleHealth();
   void resetHealth();

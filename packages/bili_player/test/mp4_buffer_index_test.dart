@@ -38,6 +38,15 @@ Uint8List indexedMedia({
 }
 
 void main() {
+  test('unsupported fragmented moov does not hide a following sidx', () {
+    final moov = box('moov', box('trak', box('mdia', [])));
+    final index = Mp4BufferIndex.parse(
+      Uint8List.fromList([...moov, ...indexedMedia()]),
+    );
+    expect(index, isNotNull);
+    expect(index!.spans.first.offset, moov.length + 80);
+    expect(index.spans.last.end, const Duration(seconds: 8));
+  });
   for (final version in [0, 1]) {
     test(
       'sidx v$version uses complete contiguous segments and exact offsets',
@@ -102,8 +111,10 @@ void main() {
     ]);
     final index = Mp4BufferIndex.parse(media)!;
     expect(index.spans.map((s) => (s.offset, s.length)), [
-      (1000, 200),
-      (1200, 200),
+      (1000, 100),
+      (1100, 100),
+      (1200, 100),
+      (1300, 100),
     ]);
     expect(
       index.buffered(Duration.zero, (offset, size) => offset < 1200),
@@ -112,6 +123,14 @@ void main() {
     expect(
       index.buffered(Duration.zero, (offset, size) => true),
       const Duration(seconds: 4),
+    );
+    expect(
+      index.buffered(
+        const Duration(milliseconds: 1500),
+        (offset, size) => offset >= 1100,
+      ),
+      const Duration(seconds: 4),
+      reason: 'A seek inside a chunk must not require its earlier samples',
     );
   });
 }

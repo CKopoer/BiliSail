@@ -110,8 +110,8 @@ final class DashTrackBuffer {
     // The native endpoint remains an upper bound: downloaded bytes must not
     // overstate the native packet window or the configured memory limits.
     final end = [
-      ends.video,
-      ends.audio,
+      if (_video._index != null) ends.video,
+      if (_audio._index != null) ends.audio,
       nativeEnd,
     ].reduce((a, b) => a < b ? a : b);
     return end < position ? position : end;
@@ -125,7 +125,7 @@ final class DashTrackBuffer {
     };
     if (_closed ||
         track == null ||
-        _requests.length >= 8 ||
+        _video.activeReads + _audio.activeReads >= 8 ||
         !{'GET', 'HEAD'}.contains(request.method)) {
       request.response.statusCode = HttpStatus.notFound;
       unawaited(request.response.close().catchError((Object _) {}));
@@ -139,6 +139,13 @@ final class DashTrackBuffer {
   /// Stop native I/O before waiting for native teardown, including pending
   /// response headers and delayed bodies; no signed address reaches disk.
   Future<void> close() => _closure ??= _close();
+
+  // Called only after native seek cancellation has retired the old readers.
+  // Keep source identity, index and cached bytes for the replacement target.
+  void cancelReads() {
+    _video.cancelReads();
+    _audio.cancelReads();
+  }
 
   Future<void> _close() async {
     _closed = true;
@@ -163,8 +170,20 @@ final class _TrackBuffer {
   final Duration inactivity, budget;
   final void Function(NativeErrorSummary)? onFailure;
   final _cache = SplayTreeMap<int, Uint8List>();
+  // The SDK owns bytes already sent to it even after our retry cache evicts
+  // them. Keep only merged range metadata, bounded independently of payloads.
+  final _delivered = <({int start, int end})>[];
   final _age = Queue<int>();
   final _clients = <HttpClient>{};
+  final _readers = <void Function()>{};
+  int get activeReads => _readers.length;
+
+  void cancelReads() {
+    for (final cancel in _readers.toList()) {
+      cancel();
+    }
+  }
+
   int _bytes = 0;
   int? _length;
   String? _etag, _modified;
@@ -177,23 +196,38 @@ final class _TrackBuffer {
       _index?.buffered(position, _contains) ?? position;
 
   bool _contains(int offset, int length) {
-    final end = offset + length;
-    while (offset < end) {
-      final key = _cache.lastKeyBefore(offset + 1);
-      if (key == null) return false;
-      final bytes = _cache[key]!;
-      if (key + bytes.length <= offset) return false;
-      offset = key + bytes.length;
+    for (final range in _delivered) {
+      if (range.start > offset) return false;
+      if (range.end >= offset + length) return true;
     }
-    return true;
+    return false;
+  }
+
+  void _recordDelivery(int start, int length) {
+    var end = start + length;
+    var i = 0;
+    while (i < _delivered.length && _delivered[i].end < start) {
+      i++;
+    }
+    while (i < _delivered.length && _delivered[i].start <= end) {
+      final range = _delivered.removeAt(i);
+      start = min(start, range.start);
+      end = max(end, range.end);
+    }
+    _delivered.insert(i, (start: start, end: end));
+    if (_delivered.length > 256) _delivered.removeAt(i == 0 ? 256 : 0);
   }
 
   Uint8List? _cached(int offset, int end) {
     if (offset > end) return null;
-    final key = _cache.lastKeyBefore(offset + 1);
+    var key = _cache.lastKeyBefore(offset + 1);
+    // Concurrent Range reads can leave a short chunk inside an older, longer
+    // chunk. Its end must not hide bytes still retained by the older chunk.
+    while (key != null && key + _cache[key]!.length <= offset) {
+      key = _cache.lastKeyBefore(key);
+    }
     if (key == null) return null;
     final bytes = _cache[key]!;
-    if (key + bytes.length <= offset) return null;
     return Uint8List.sublistView(
       bytes,
       offset - key,
@@ -361,10 +395,11 @@ final class _TrackBuffer {
     int offset,
     int end,
     void Function() changed,
+    bool Function() cancelled,
   ) async {
     var retries = 0;
     Stopwatch? recovering;
-    while (!_closed && offset <= end) {
+    while (!_closed && !cancelled() && offset <= end) {
       try {
         final response = await _open(client, offset, end);
         final last = _validate(response, offset, end);
@@ -373,7 +408,7 @@ final class _TrackBuffer {
         final iterator = StreamIterator(response);
         try {
           while (await iterator.moveNext().timeout(inactivity)) {
-            if (_closed) return;
+            if (_closed || cancelled()) return;
             final bytes = iterator.current;
             if (offset + bytes.length > last + 1) throw const _ReadFailure();
             _store(offset, bytes);
@@ -385,7 +420,7 @@ final class _TrackBuffer {
         }
         if (offset <= last) throw const _ReadFailure(retryable: true);
       } on Object catch (error) {
-        if (_closed) return;
+        if (_closed || cancelled()) return;
         final retryable =
             error is TimeoutException ||
             error is SocketException ||
@@ -409,6 +444,18 @@ final class _TrackBuffer {
       ..connectionTimeout = inactivity;
     _clients.add(client);
     var disconnected = false, headersSent = false;
+    void Function()? wakeRead;
+    void cancel() {
+      disconnected = true;
+      _readers.remove(cancel);
+      client.close(force: true);
+      wakeRead?.call();
+      // The response may be inside flush(). A deadline retires its socket
+      // without calling close() on a temporarily bound StreamSink.
+      request.response.deadline = Duration.zero;
+    }
+
+    _readers.add(cancel);
     unawaited(
       request.response.done.then<void>(
         (_) {
@@ -430,6 +477,7 @@ final class _TrackBuffer {
         request.response.statusCode = 416;
         await request.response.close();
         _clients.remove(client);
+        _readers.remove(cancel);
         client.close(force: true);
         return;
       }
@@ -441,6 +489,7 @@ final class _TrackBuffer {
       try {
         request.response.add(data);
         await request.response.flush();
+        _recordDelivery(offset, data.length);
       } on Object {
         disconnected = true;
         client.close(force: true);
@@ -502,17 +551,19 @@ final class _TrackBuffer {
         // Keep fetching this bounded block even when the SDK pauses its local
         // socket. Its inactivity timer must not wait for playback to consume
         // buffered data before resuming a stalled upstream connection.
-        filling = _fill(client, offset, end, changed).then<void>(
-          (_) {
-            done = true;
-            changed();
-          },
-          onError: (Object error) {
-            failure = error;
-            done = true;
-            changed();
-          },
-        );
+        wakeRead = changed;
+        filling = _fill(client, offset, end, changed, () => disconnected)
+            .then<void>(
+              (_) {
+                done = true;
+                changed();
+              },
+              onError: (Object error) {
+                failure = error;
+                done = true;
+                changed();
+              },
+            );
         while (!_closed && !disconnected) {
           if (_length != null) {
             headers();
@@ -554,6 +605,7 @@ final class _TrackBuffer {
       client.close(force: true);
       await filling;
       _clients.remove(client);
+      _readers.remove(cancel);
       try {
         await request.response.close();
       } on Object {

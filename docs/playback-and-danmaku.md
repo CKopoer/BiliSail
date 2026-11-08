@@ -1,6 +1,6 @@
 # 播放、直播与弹幕设计
 
-2026-11-08：HTTP DASH 分轨由两后端共用源内加载层，单轨网络读停滞从缺失字节续读，不重开播放器或改动播放进度；缓冲条显示两轨连续可用缓存与原生窗口的最小值。缓存耗尽和解码／输出故障继续沿用同步保护，索引不足时不猜测缓存时长。传输、内存、取消与逐平台证据见[分轨缓冲续读](validation/track-buffer-recovery-2026-11-08.md)。
+2026-11-08：HTTP DASH 分轨由两后端共用源内加载层，单轨网络读停滞从缺失字节续读，不重开播放器或改动播放进度；缓冲条显示两轨连续供给范围与原生窗口的最小值，保留原生播放器已接收字节的依据，未知索引沿用原生缓冲信息。取消原生 seek 时一并撤销旧读取，避免占满并发名额；恢复播放重新确认音频帧。传输、内存、取消与逐平台证据见[分轨缓冲续读](validation/track-buffer-recovery-2026-11-08.md)及[缓冲显示与连续跳转修复](validation/buffer-display-rapid-seek-2026-11-08.md)。
 
 2026-11-08 后续：Apple media_kit 的 GPU／软件输出改为发布独立完整 CoreVideo 帧，fvp 等待 Metal blit 完成后交付不可变图像；Linux media_kit 补齐跨 context 双向完成屏障与软件像素副本。Android 两后端通过系统 Surface 队列交接，未发现同类应用层覆盖路径。源码、受控回归和未实测边界见[Apple／Linux 与 Android 检查](validation/apple-linux-texture-handoff-2026-11-08.md)。
 
@@ -384,4 +384,6 @@ M0 必测：三端带真实请求头的分轨音视频、暂停/seek/倍速、�
 
 不假设单个基准能证明全部硬解/codec 可用。播放器失败记录阶段和错误分类，对媒体 URL、native 日志和 headers 脱敏。量化预算及验证记录格式见 [实施与验收](implementation-plan.md)。
 
-2026-11-08：`bili_player` 的 `MediaKitEngine`／`FvpEngine` 已委托同一 `SharedPlayerEngine`。共享层拥有快照、起播静音与首次 play、暂停意图、最新 seek、EOF／重播、250 ms 健康采样、增益平滑和释放屏障；两个适配器只执行原生命令并报告轨道、帧和时钟。应用侧 `PlayerEngine`／`PlaybackSession` 接口与恢复预算保持原边界。设计及逐平台验证见[后端重构方案](player-backend-refactor-design.md)和[实施记录](validation/player-backend-refactor-2026-11-08.md)。
+2026-11-08：`bili_player` 的 `MediaKitEngine`／`FvpEngine` 已委托同一 `SharedPlayerEngine`。共享层拥有快照、起播与每次 play 的双轨暂停就绪屏障、暂停意图、最新 seek、EOF／重播、250 ms 健康采样、增益平滑和释放屏障；两个适配器只执行原生命令并报告轨道、帧和时钟。应用侧 `PlayerEngine`／`PlaybackSession` 接口与恢复预算保持原边界。设计及逐平台验证见[后端重构方案](player-backend-refactor-design.md)和[实施记录](validation/player-backend-refactor-2026-11-08.md)。
+
+2026-11-08 后续按用户要求移除静音预滚：起播、seek 和每次恢复播放都在暂停中核对当前目标的音频／视频，确认后才推进。media_kit 等本次原生双轨 restart；fvp DASH 在同一会话内控制真实音频管线和视频管线，视频在原生线程跟随音频时钟。详细边界及新验证见[双轨同步屏障](validation/paused-pair-synchronization-2026-11-08.md)。

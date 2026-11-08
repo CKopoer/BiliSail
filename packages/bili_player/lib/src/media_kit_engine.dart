@@ -72,6 +72,7 @@ final class MediaKitEngine extends SharedPlayerEngine {
   }) : _idleOutput = idleVideoOutput,
        super(
          bufferDashTracks: true,
+         seekCoalescingDelay: const Duration(milliseconds: 40),
          initialVideoOutput: idleVideoOutput,
          schemes: {'http', 'https', 'file', if (Platform.isAndroid) 'content'},
        );

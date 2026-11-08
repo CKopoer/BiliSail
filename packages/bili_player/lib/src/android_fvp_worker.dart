@@ -47,6 +47,9 @@ void runFvpWorker(
             'seekRevision': owned.seekRevision,
             'position': port.positionMilliseconds,
             'buffered': port.bufferedMilliseconds,
+            if (port is FvpAudioClockPort)
+              'audioPosition':
+                  (port as FvpAudioClockPort).audioPositionMilliseconds,
             if (port is FvpAudioActivityPort)
               'audioFrames': (port as FvpAudioActivityPort).decodedAudioFrames,
           }),
@@ -95,9 +98,6 @@ void runFvpWorker(
             ? null
             : track(args['audio']);
         final audio = originalAudio == null ? null : await lease(originalAudio);
-        final probe = originalAudio?.uri.scheme == 'content'
-            ? await lease(originalAudio!)
-            : audio;
         final info = await port.prepare(
           media,
           audio,
@@ -116,7 +116,6 @@ void runFvpWorker(
             openTimeout: Duration(milliseconds: args['timeout'] as int),
           ),
           silent: args['silent'] == true,
-          audioProbe: probe,
           isLive: args['live'] == true,
         );
         owned.directSurface = info.directSurface;
@@ -150,7 +149,7 @@ void runFvpWorker(
       case 'interrupt':
         port.interrupt();
       case 'cancelSeek':
-        port.cancelSeek();
+        await port.cancelSeek();
       case 'seek':
         final revision = args['seekRevision'] as int;
         owned.seekRevision = revision;

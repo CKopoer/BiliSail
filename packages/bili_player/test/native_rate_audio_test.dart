@@ -34,6 +34,8 @@ void main() {
         'read:af',
         'write:autosync=30',
         'read:autosync',
+        'write:video-sync=audio',
+        'read:video-sync',
       ]);
       expect(properties['volume'], '35');
       expect(properties['replaygain-fallback'], '3');
@@ -49,6 +51,7 @@ void main() {
           'audio-buffer',
           'af',
           'autosync',
+          'video-sync',
         ]),
       );
     },
@@ -61,6 +64,7 @@ void main() {
         'audio-buffer' => '0.050000',
         'af' => 'scaletempo2',
         'autosync' => '30',
+        'video-sync' => 'audio',
         _ => throw StateError('Unexpected property: $key'),
       },
       isCurrent: () => true,

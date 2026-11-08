@@ -96,7 +96,7 @@ void main() {
             expect(
               stall.stallReason,
               audioFault
-                  ? PlaybackStallReason.audioFrames
+                  ? PlaybackStallReason.audioClock
                   : isIn([
                       PlaybackStallReason.videoClock,
                       PlaybackStallReason.videoBuffer,

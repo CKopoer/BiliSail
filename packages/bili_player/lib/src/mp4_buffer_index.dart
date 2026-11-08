@@ -20,10 +20,17 @@ final class Mp4BufferIndex {
     try {
       final root = _Box(ByteData.sublistView(prefix), 0, prefix.length);
       for (final box in root.children()) {
-        if (box.type == 'sidx') return _sidx(box);
-        if (box.type == 'moov') {
-          final index = _moov(box);
+        try {
+          final index = switch (box.type) {
+            'sidx' => _sidx(box),
+            'moov' => _moov(box),
+            _ => null,
+          };
           if (index != null) return index;
+        } on FormatException {
+          // Fragmented MP4 may have an empty/unsupported moov followed by sidx.
+        } on RangeError {
+          /* Try the next complete top-level index. */
         }
       }
     } on FormatException {
@@ -126,10 +133,14 @@ final class Mp4BufferIndex {
       }
       final samples = chunks.u32(12 + chunkEntry * 12);
       if (samples == 0 || sample + samples > sampleCount) return null;
-      final start = ticks;
+      var offset = offsets.type == 'co64'
+          ? offsets.u64(8 + (chunk - 1) * 8)
+          : offsets.u32(8 + (chunk - 1) * 4);
       var bytes = 0;
       for (var i = 0; i < samples; i++) {
-        bytes += sampleSize == 0 ? sizes.u32(12 + sample * 4) : sampleSize;
+        final start = ticks;
+        bytes = sampleSize == 0 ? sizes.u32(12 + sample * 4) : sampleSize;
+        if (bytes == 0) return null;
         sample++;
         if (timeLeft == 0) {
           if (++timeEntry >= timeEntries) return null;
@@ -139,18 +150,18 @@ final class Mp4BufferIndex {
         if (timeLeft == 0 || delta == 0) return null;
         ticks += delta;
         timeLeft--;
+        // A native seek may begin in the middle of a very large chunk.
+        // Only the current sample and its successors need to be delivered.
+        spans.add(
+          Mp4BufferSpan(
+            offset,
+            bytes,
+            _time(start - edit, scale),
+            _time(ticks - edit, scale),
+          ),
+        );
+        offset += bytes;
       }
-      final offset = offsets.type == 'co64'
-          ? offsets.u64(8 + (chunk - 1) * 8)
-          : offsets.u32(8 + (chunk - 1) * 4);
-      spans.add(
-        Mp4BufferSpan(
-          offset,
-          bytes,
-          _time(start - edit, scale),
-          _time(ticks - edit, scale),
-        ),
-      );
     }
     return sample == sampleCount ? Mp4BufferIndex(spans) : null;
   }

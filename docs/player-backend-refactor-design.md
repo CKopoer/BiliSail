@@ -70,9 +70,9 @@ flowchart TD
 ### 打开与首次播放
 
 1. `open` 同步撤销旧操作并分配新代次。打断原生等待，解绑旧输出，确认旧实例释放后才创建新实例。打开中的 seek 只排队保留最后一个目标。若用户在读取设置或创建适配器时暂停，包装层也记录此次打开的暂停意图，新实例不能按旧的 `play: true` 起播。
-2. 在同一打开预算内完成源校验、静音准备、轨道发现、初始位置及所需视频确认。用单调时钟传递剩余预算，覆盖工厂、探针、租约和原生等待。工厂迟到返回的资源也有释放者，直到能确认旧分配已收回才复用相应资源。
-3. `finishSynchronizedStartup` 控制放行。在需要推进才能取得证据时静音预滚；自动播放要等必需音频和画面就绪，暂停打开可将实际音频出帧确认推迟至首次 play。有视图时按当前输出的呈现屏障等待；纯音频、无视图和中途解绑分别处理。每次 await 后复核源与播放意图，只有当前操作可以应用**最新用户音量**。暂停发生在预滚期间时，先完成原生暂停屏障。
-4. 主播放路径通常是 `open(play: false)` 后由会话许可触发 `play()`，因此首次 play 也必须经过同一个静音门槛。现状是 fvp 的首次音频确认已经经过此门槛，media_kit 暂停打开后会在已恢复用户音量的情况下调用 play 并等待解码。此处要将保护补齐到 media_kit。首次确认只消费剩余的有效工作预算，用户停留在暂停状态的时间不计入等待。正常暂停／继续沿用已确认的当前轨道。[同步起播记录](validation/synchronized-playback-startup-2026-11-08.md)
+2. 在同一打开预算内完成源校验、暂停准备、轨道发现、初始位置及所需视频确认。用单调时钟传递剩余预算，覆盖工厂、租约和原生等待。工厂迟到返回的资源也有释放者，直到能确认旧分配已收回才复用相应资源。
+3. `finishSynchronizedStartup` 在暂停状态等待当前目标的音频和视频解码及当前输出呈现。确认期间不调用 play，不强制改变用户音量。每次 await 后复核源与播放意图；确认后应用最新用户音量、增益，再启动。需要音频时不能仅凭旧解码参数或轨道存在放行。
+4. `open(play: false)` 后的首次 play、正常暂停／继续、seek 后恢复均经过同一屏障。media_kit 核对当前 load／seek 的 PLAYBACK_RESTART，fvp DASH 核对真实音频管线的音频 seek 完成与视频目标帧，视频跟随原生音频时钟。取消、超时、用户暂停及源替换均不得启动旧操作。[现行实现与验证](validation/paused-pair-synchronization-2026-11-08.md)
 
 ### 命令、seek 与 EOF
 
@@ -80,7 +80,7 @@ flowchart TD
 
 | 事件 | 共享状态机的决定 | 适配器必须确认的事实 |
 | --- | --- | --- |
-| 用户连续拖至 A、B | 立即用 B 撤销 A。视频保留上一帧，音画一起等待。期间保留上次确认位置，忽略 A 的 EOF、失败、时间采样和完成回调。只有 B 能清除 `isSeeking` 并提交新位置 | mpv 等本次 SEEK 与 PLAYBACK_RESTART，替换在途读取走原实例 loadfile／restart 并核对目标位置；MDK 等目标解码回调，重准备时重新挂载外部音轨并保留纹理 |
+| 用户连续拖至 A、B | 立即用 B 撤销 A。视频保留上一帧，音画一起等待。期间保留上次确认位置，忽略 A 的 EOF、失败、时间采样和完成回调。只有 B 能清除 `isSeeking` 并提交新位置 | mpv 等本次 SEEK 与 PLAYBACK_RESTART，替换在途读取走原实例 loadfile／restart 并核对目标位置；MDK 等目标解码回调，重准备时同步定位音频伴随管线并保留纹理 |
 | 用户在 B 就绪前暂停、恢复或换源 | 暂停立即撤销旧播放许可，打断待放音命令。B 就绪时复核最新显式意图；只允许当前源的新 play 放音。换源／stop 后 B 不可提交 | 原生暂停确认、当前请求的回调屏障、在途网络读取可取消。Android 状态、位置与回复都校验 seek 序号 |
 | EOF 附近拖动、正常结束、重播 | 在途 seek 隔离旧 EOF；自然结束只发布一次 `ended`，清除临时标志，尾随 buffering／playing 事件不能复活播放。重播按会话既有 seek 到零再播放，恢复采样。提前断轨走中断路径 | MDK 在当前 seek 内仅对 busy／unloaded／绑定拒绝（−2／−3／−10）有界重准备一次，IO／Range 错误直接返回。mpv 保留原生事件计数与位置容差 |
 
@@ -125,7 +125,7 @@ flowchart TD
 
 | 场景 | 两端都要观察到的结果 | 测试入口 |
 | --- | --- | --- |
-| 起播／首次 play | 分别延迟音频和视频，覆盖自动播放及主应用的暂停打开后播放。遮罩撤下前原生有效音量为零；等待中调音量、静音、暂停、换源都不能被旧操作覆盖 | [共享门槛测试](../packages/bili_player/test/playback_startup_test.dart)、[延迟双轨原生夹具](../integration_test/windows_playback_startup_test.dart)。补非零用户音量的原生写入顺序断言 |
+| 起播／首次 play | 分别延迟音频和视频，覆盖自动播放及主应用的暂停打开后播放。两轨均就绪前原生播放进度不推进；等待中调音量、暂停、换源都不能被旧操作覆盖 | [共享门槛测试](../packages/bili_player/test/playback_startup_test.dart)、[延迟双轨原生夹具](../integration_test/windows_playback_startup_test.dart)。补非零用户音量的原生写入顺序断言 |
 | 输入、网络与离线 | 外部轨正确；异头、凭据、缺轨提前失败；普通无音轨视频与预览可区分。覆盖 Range、重定向、备用地址、HLS／FLV、文件分轨与封装文件、Android content 租约回收 | [fvp 来源／HTTP](../integration_test/fvp_backend_test.dart)、[完整无音轨](../integration_test/silent_video_playback_test.dart)、[听视频](../integration_test/audio_only_playback_test.dart)；补齐同素材的两端调用 |
 | 连续 seek、暂停及重播 | 延迟 A 后连续跳到片尾、再回 2 秒；A 的 EOF／异常／采样迟到不能写回，B 等目标帧且保留暂停。正常 EOF 只推进队列一次，重复重播后位置继续更新 | [mpv seek](../integration_test/windows_seek_synchronization_test.dart)、[MDK seek](../integration_test/windows_fvp_seek_synchronization_test.dart)、[连续片尾](../integration_test/fvp_seek_end_test.dart)、[重播](../integration_test/playback_replay_test.dart) |
 | 双轨健康与恢复 | 单独截断音频／视频、同时断流、短时补数、缓存充足但时钟冻结；核实原生双轨确实暂停、最后一帧保留，恢复从确认边界开始。失败事件与命令 Future 同时到达也只消费一次预算 | [健康策略](../packages/bili_player/test/native_playback_health_test.dart)、[mpv 受控停滞](../integration_test/windows_video_stall_test.dart)、[MDK 外部音轨](../integration_test/windows_fvp_audio_recovery_test.dart)、[会话预算](../test/features/playback/playback_session_test.dart) |

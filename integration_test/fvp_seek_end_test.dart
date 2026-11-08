@@ -21,7 +21,18 @@ void main() {
         'fvp repeated seeks across EOF: ${output.name}, playing=$playing',
         (tester) async {
           if (directory == null) fail('BILI_TEST_MEDIA_DIR is required');
-          final engine = FvpEngine();
+          final engine = FvpEngine(
+            onDiagnostic: (event) {
+              if (event.kind == PlayerDiagnosticKind.nativeError ||
+                  event.kind == PlayerDiagnosticKind.playbackStalled ||
+                  event.kind == PlayerDiagnosticKind.failed) {
+                debugPrint(
+                  'EOF ${event.kind} code=${event.nativeErrorCode} '
+                  'reason=${event.stallReason} position=${event.snapshot.position.inMilliseconds}',
+                );
+              }
+            },
+          );
           final failures = <PlayerFailure>[];
           final subscription = engine.failures.listen(failures.add);
           try {

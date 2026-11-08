@@ -4,7 +4,7 @@ import 'package:bili_player/src/playback_startup.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('never unmutes until both tracks and presentation confirm', () async {
+  test('stays paused until both tracks and presentation confirm', () async {
     final audio = Completer<void>(), video = Completer<void>();
     final calls = <String>[];
     final starting = finishSynchronizedStartup(
@@ -12,16 +12,16 @@ void main() {
       play: () => calls.add('play'),
       pause: () => calls.add('pause'),
       confirmReady: () => Future.wait([audio.future, video.future]),
-      restoreVolume: () => calls.add('unmute'),
+      applyVolume: () => calls.add('volume'),
       checkActive: () {},
     );
     await Future<void>.delayed(Duration.zero);
     audio.complete();
     await Future<void>.delayed(Duration.zero);
-    expect(calls, ['play']);
+    expect(calls, ['pause']);
     video.complete();
     await starting;
-    expect(calls, ['play', 'unmute']);
+    expect(calls, ['pause', 'volume', 'play']);
   });
 
   for (final outcome in ['cancel', 'failure', 'pause']) {
@@ -34,7 +34,7 @@ void main() {
         play: () => calls.add('play'),
         pause: () => calls.add('pause'),
         confirmReady: () => ready.future,
-        restoreVolume: () => calls.add('unmute'),
+        applyVolume: () => calls.add('volume'),
         checkActive: () {
           if (!active) throw StateError('cancelled');
         },
@@ -53,7 +53,7 @@ void main() {
       await result;
       expect(
         calls,
-        outcome == 'pause' ? ['play', 'pause', 'unmute'] : ['play'],
+        outcome == 'pause' ? ['pause', 'volume', 'pause'] : ['pause'],
       );
     });
   }

@@ -30,6 +30,13 @@ final class NativeLoadState {
   int get loadCount => _loadCount;
   int get restartedLoadCount => _restartedLoadCount;
 
+  // PLAYBACK_RESTART is emitted after both native decoder chains are ready,
+  // including while paused. Old audio metadata alone cannot confirm a seek.
+  bool get tracksReady =>
+      _loadCount > 0 &&
+      _restartedLoadCount == _loadCount &&
+      _restartedSeekCount == _seekCount;
+
   void seekStarted() {
     if (_disposed) return;
     _seekCount++;

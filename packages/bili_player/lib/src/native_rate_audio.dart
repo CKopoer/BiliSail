@@ -34,6 +34,7 @@ Future<void> configureNativeRateAudio({
     // Average AO clock error instead of immediately dropping late video after
     // a rate change. This is mpv's averaging factor, not a duration or FPS cap.
     'autosync': '30',
+    'video-sync': 'audio',
   }.entries) {
     final writeTimeout = remaining();
     await write(entry.key, entry.value).timeout(writeTimeout);

@@ -15,6 +15,28 @@ import 'package:meta/meta.dart' as meta;
 external ffi.Pointer<ffi.Void> bili_fvp_audio_attach(int player_api);
 
 @meta.RecordUse()
+@ffi.Native<ffi.Pointer<ffi.Void> Function(ffi.UintPtr, ffi.UintPtr)>()
+external ffi.Pointer<ffi.Void> bili_fvp_audio_clock(
+  int video_api,
+  int audio_api,
+);
+
+@meta.RecordUse()
+@ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Int64)>()
+external void bili_fvp_audio_clock_hold(
+  ffi.Pointer<ffi.Void> clock,
+  int position_ms,
+);
+
+@meta.RecordUse()
+@ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Void>)>()
+external void bili_fvp_audio_clock_play(ffi.Pointer<ffi.Void> clock);
+
+@meta.RecordUse()
+@ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Void>)>()
+external void bili_fvp_audio_clock_release(ffi.Pointer<ffi.Void> clock);
+
+@meta.RecordUse()
 @ffi.Native<ffi.Uint64 Function(ffi.Pointer<ffi.Void>)>()
 external int bili_fvp_audio_frames(ffi.Pointer<ffi.Void> activity);
 

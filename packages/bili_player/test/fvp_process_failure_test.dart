@@ -22,7 +22,6 @@ class _Port extends Fake implements FvpPlayerPort {
     MediaTrack? audio,
     OpenOptions options, {
     required bool silent,
-    MediaTrack? audioProbe,
     bool isLive = false,
   }) async =>
       await opening?.future ??
@@ -53,7 +52,7 @@ class _Port extends Fake implements FvpPlayerPort {
   Future<int> seek(Duration target) async =>
       await seeking?.future ?? target.inMilliseconds;
   @override
-  void cancelSeek() {}
+  Future<void> cancelSeek() async {}
   @override
   Future<void> dispose() async {
     disposed = true;

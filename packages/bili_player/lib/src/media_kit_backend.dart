@@ -512,7 +512,7 @@ final class MediaKitBackend implements PlaybackBackend {
   }
 
   @override
-  Future<PreparedTracks> prepareMuted(
+  Future<PreparedTracks> preparePaused(
     ValidatedSource plan,
     PlaybackOperation operation,
   ) async {
@@ -542,7 +542,7 @@ final class MediaKitBackend implements PlaybackBackend {
     final player = await operation.wait(creating);
     _creating = null;
     _player = player;
-    await operation.wait(player.setVolume(0));
+    await operation.wait(player.setVolume(options.volume));
     final platform = player;
 
     _audioGain = NativeAudioGain(
@@ -764,7 +764,7 @@ final class MediaKitBackend implements PlaybackBackend {
     if (audioReady != null) {
       _readinessStage = NativeReadinessStage.externalAudio;
       // A real embedded audio track is insufficient: confirm that mpv
-      // selected this source's external file, then verify decoding on play.
+      // selected this source's external file, then verify paused decoding.
       await waitForNativeSignal(
         signal: audioReady.future,
         superseded: () =>
@@ -902,8 +902,13 @@ final class MediaKitBackend implements PlaybackBackend {
     generation,
     () =>
         (player.state.audioParams.channelCount ?? 0) > 0 &&
-        (player.state.audioParams.sampleRate ?? 0) > 0,
-    [player.stream.audioParams, operation.changes],
+        (player.state.audioParams.sampleRate ?? 0) > 0 &&
+        _nativeLoad?.state.tracksReady == true,
+    [
+      player.stream.audioParams,
+      operation.changes,
+      if (_nativeLoad case final load?) load.state.changes,
+    ],
     operation.remaining,
     'External audio did not decode.',
     superseded: () => operation.isCancelled,
@@ -913,6 +918,8 @@ final class MediaKitBackend implements PlaybackBackend {
   Future<Duration> seekTo(Duration target, PlaybackOperation operation) async {
     operation.check();
     _seek = operation;
+    await operation.wait(pauseAndWait());
+    operation.check();
     final player = _player!;
     final generation = _generation;
     final revision = ++_seekRevision;
@@ -981,11 +988,15 @@ final class MediaKitBackend implements PlaybackBackend {
   }
 
   @override
-  void cancelSeek() {
+  Future<void> cancelSeek() async {
     if (_seek == null) return;
     _seek?.cancel();
     _replaceSeek = true;
     _seekChanges.add(++_seekRevision);
+    // Retire the previous demuxers before the shared transport closes their
+    // readers. Otherwise a truncated old response can complete the new load.
+    await _player?.native.command(['stop']);
+    await Future<void>.delayed(Duration.zero);
   }
 
   void _subscribe(mk.Player player, int generation) {
@@ -1022,14 +1033,31 @@ final class MediaKitBackend implements PlaybackBackend {
         (value) => event(BackendEvent(BackendEventKind.playing, value: value)),
       ),
       player.stream.completed.listen((value) {
-        if (value) {
-          event(
-            BackendEvent(
-              BackendEventKind.ended,
-              position: player.state.position,
-            ),
-          );
-        }
+        if (!value || _seek != null || _replaceSeek) return;
+        final revision = _seekRevision;
+        unawaited(() async {
+          try {
+            // A stop/reload can leave a completed event for the retired load.
+            final eof = await player
+                .getPropertyAsync('eof-reached')
+                .timeout(const Duration(seconds: 1));
+            if (!active() ||
+                revision != _seekRevision ||
+                eof != 'yes' ||
+                _seek != null ||
+                _replaceSeek) {
+              return;
+            }
+            event(
+              BackendEvent(
+                BackendEventKind.ended,
+                position: player.state.position,
+              ),
+            );
+          } on Object {
+            // The bounded health sampler still detects a stopped current load.
+          }
+        }());
       }),
       player.stream.log.listen((log) {
         if (!active()) return;
@@ -1095,7 +1123,7 @@ final class MediaKitBackend implements PlaybackBackend {
   void interrupt() {
     ++_generation;
     _preparation?.cancel();
-    cancelSeek();
+    unawaited(cancelSeek().catchError((Object _) {}));
     _generationChanges.add(_generation);
     _audioGain?.cancel();
     _videoOutput.cancelPendingViewport();
