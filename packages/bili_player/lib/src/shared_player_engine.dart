@@ -644,7 +644,12 @@ class SharedPlayerEngine
         return;
       }
       final sample = backend.sampleHealth();
-      _publish(_timeline(position: sample.position, buffered: sample.buffered));
+      _publish(
+        _timeline(
+          position: sample.position,
+          buffered: sample.displayBuffered ?? sample.buffered,
+        ),
+      );
       if (!_current(generation, backend) || _terminal || _seeking) {
         return;
       }

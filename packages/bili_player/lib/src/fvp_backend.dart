@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'android_fvp_player.dart';
 import 'android_media_leases.dart';
+import 'fvp_buffer.dart';
 import 'fvp_native_player.dart';
 import 'fvp_video_output.dart';
 import 'playback_backend.dart';
@@ -23,6 +24,7 @@ final class FvpBackend implements PlaybackBackend {
   final void Function(NativeReadinessStage)? onStage;
   final _output = FvpVideoOutput();
   final _leases = AndroidMediaLeases();
+  final _bufferDisplay = FvpBufferDisplay();
   final _events = StreamController<BackendEvent>.broadcast(sync: true);
   Future<FvpPlayerPort>? _creating;
   FvpPlayerPort? _player;
@@ -31,6 +33,7 @@ final class FvpBackend implements PlaybackBackend {
   PlaybackOperation? _preparation;
   bool _disposed = false;
   bool _nativeEnded = false;
+  bool _buffering = false, _live = false;
   double _volume = 0, _gain = 0;
   int? get processExitStatus => switch (_player) {
     final AndroidFvpPlayer player => player.exitStatus,
@@ -49,6 +52,8 @@ final class FvpBackend implements PlaybackBackend {
     ValidatedSource plan,
     PlaybackOperation operation,
   ) async {
+    _bufferDisplay.reset();
+    _live = plan.live;
     _preparation = operation;
     Future<MediaTrack> lease(MediaTrack track) async {
       if (isolated) return track;
@@ -73,6 +78,8 @@ final class FvpBackend implements PlaybackBackend {
       _creating = null;
       _subscription = player.statuses.listen((status) {
         if (_disposed) return;
+        if (status == FvpNativeStatus.buffering) _buffering = true;
+        if (status == FvpNativeStatus.buffered) _buffering = false;
         if (status == FvpNativeStatus.ended) _nativeEnded = true;
         _events.add(switch (status) {
           FvpNativeStatus.buffering => const BackendEvent(
@@ -222,6 +229,7 @@ final class FvpBackend implements PlaybackBackend {
 
   @override
   Future<Duration> seekTo(Duration target, PlaybackOperation operation) async {
+    _bufferDisplay.reset();
     try {
       final position = await operation.wait(_player!.seek(target));
       if (position < 0) throw NativeSeekFailure(position);
@@ -240,6 +248,7 @@ final class FvpBackend implements PlaybackBackend {
   Future<void> cancelSeek() async => await _player?.cancelSeek();
   @override
   void interrupt() {
+    _bufferDisplay.reset();
     _preparation?.cancel();
     _player?.interrupt();
   }
@@ -254,11 +263,19 @@ final class FvpBackend implements PlaybackBackend {
     final audioPosition = player is FvpAudioClockPort
         ? (player as FvpAudioClockPort).audioPositionMilliseconds
         : null;
+    final buffered =
+        position +
+        Duration(milliseconds: player.bufferedMilliseconds.clamp(0, 1 << 53));
     return BackendHealth(
       position: position,
-      buffered:
-          position +
-          Duration(milliseconds: player.bufferedMilliseconds.clamp(0, 1 << 53)),
+      buffered: buffered,
+      displayBuffered: _live
+          ? buffered
+          : _bufferDisplay.update(
+              position: position,
+              buffered: buffered,
+              buffering: _buffering,
+            ),
       audioPosition: audioPosition == null
           ? null
           : Duration(milliseconds: audioPosition),

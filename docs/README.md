@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [fvp 缓冲条小幅回缩](validation/fvp-buffer-timeline-2026-11-09.md) | 未解码包队列与呈现时钟差异、双轨端点换算、显示抖动容差和原生回归 |
 | [fvp 恢复后反复停帧](validation/fvp-resume-clock-2026-11-09.md) | 本机 Release 中断日志、首次时钟窗口锁死、PiliPlus 职责对照及原生回归 |
 | [Windows ARM64 悬停预览闪退](validation/windows-arm64-preview-crash-2026-11-09.md) | #100 的 OpenGL 能力错配、SDK 替换、原生降级与初始化错误传播、离线验证及实机边界 |
 | [官方客户端文字排版对齐](validation/official-client-typography-2026-11-09.md) | HarmonyOS 字体核对、文字层级与频道字号、评论各部分样式及昵称色、楼中楼详情返回 |

@@ -119,6 +119,7 @@ final class BackendHealth {
   const BackendHealth({
     this.position,
     this.buffered,
+    this.displayBuffered,
     this.audioPosition,
     this.audioFrames,
     this.videoFrames,
@@ -126,6 +127,8 @@ final class BackendHealth {
     this.comparePairedClocks = false,
   });
   final Duration? position, buffered, audioPosition;
+  // Optional SDK-specific display correction; health retains the raw endpoint.
+  final Duration? displayBuffered;
   final int? audioFrames, videoFrames;
   final bool? videoStarved;
   final bool comparePairedClocks;
