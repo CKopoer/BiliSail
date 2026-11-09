@@ -201,6 +201,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             visible: _active,
           ),
         );
+        _pauseInBackground(WidgetsBinding.instance.lifecycleState);
         // Give an outgoing inline or fullscreen surface a frame to unmount.
         WidgetsBinding.instance.scheduleFrame();
         await WidgetsBinding.instance.endOfFrame;
@@ -216,6 +217,19 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   }
 
   void _configure() => _session.configureSettings(widget.settings);
+
+  void _pauseInBackground(AppLifecycleState? state) {
+    // Hidden workspace pages can still own playback and must observe the same
+    // system background policy as the visible player.
+    if ((!widget.settings.backgroundPlayback ||
+            !widget.window.supportsBackgroundAudio) &&
+        _session.ownsPlayback(this) &&
+        !widget.window.hasDesktopWindow &&
+        (state == AppLifecycleState.paused ||
+            state == AppLifecycleState.hidden)) {
+      unawaited(_session.pause());
+    }
+  }
 
   void _onPlaybackCompleted() {
     final snapshot = _session.snapshots.value;
@@ -291,6 +305,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         );
       }
       if (!identical(widget.settings, oldWidget.settings)) _configure();
+      _pauseInBackground(WidgetsBinding.instance.lifecycleState);
     });
     if (sourceChanged ||
         widget.settings.shortcuts != oldWidget.settings.shortcuts) {
@@ -313,15 +328,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     } else {
       _syncDeviceOrientation();
     }
-    // A video can keep playing behind another workspace tab. System lifecycle
-    // still applies to its owner even when the page has no visible surface.
-    if (!widget.window.supportsBackgroundAudio &&
-        _session.ownsPlayback(this) &&
-        !widget.window.hasDesktopWindow &&
-        (state == AppLifecycleState.paused ||
-            state == AppLifecycleState.hidden)) {
-      unawaited(_session.pause());
-    }
+    _pauseInBackground(state);
   }
 
   @override

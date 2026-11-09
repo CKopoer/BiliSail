@@ -134,6 +134,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
   ) => update((current) => current.copyWith(danmakuSendStyle: value));
   Future<void> setAutoPlay(bool value) =>
       update((current) => current.copyWith(autoPlay: value));
+  Future<void> setBackgroundPlayback(bool value) =>
+      update((current) => current.copyWith(backgroundPlayback: value));
   Future<void> setDefaultShowComments(bool value) =>
       update((current) => current.copyWith(defaultShowComments: value));
   Future<void> setVideoCardHoverPlayback(bool value) =>

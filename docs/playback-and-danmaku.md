@@ -380,7 +380,7 @@ Android 初期只承诺前台下载与重启恢复；后台持续下载必须另
 
 2026-11-08：音视频中断后的同内容恢复共用停帧与进度保持逻辑，首次音频失败的备用线路也不先清空播放进度；旧管线释放前保存一帧，替换音视频就绪后撤下，停止／换内容清理。实现、容量和未做原生验收的边界见[恢复时保留画面与进度](validation/recovery-frame-retention-2026-11-08.md)。
 
-2026-10-30 接入系统媒体通知和控制：Android 媒体通知、Apple 正在播放、Windows SMTC、Linux MPRIS 通过共享会话管理器观察同一播放器，系统命令沿用会话和源／账号隔离；多标签只选一个系统目标。随后 Android 增加退后台自动听视频、回前台恢复原模式，前台服务保留到停止／关闭，详见[Android 后台听视频](validation/android-background-playback.md)。其他移动平台沿用后台暂停策略，逐平台构建与设备边界见[系统媒体通知与控制](validation/system-media-controls.md)。
+2026-10-30 接入系统媒体通知和控制：Android 媒体通知、Apple 正在播放、Windows SMTC、Linux MPRIS 通过共享会话管理器观察同一播放器，系统命令沿用会话和源／账号隔离；多标签只选一个系统目标。历史 Android 自动听视频已被保留原播放源的后台行为替代，Android／iOS 均支持该策略。2026-11-09 新增默认开启的“后台播放”设置，关闭后移动端 owner 在 `hidden`／`paused` 暂停，回前台保持暂停；共享控件覆盖视频、影视、直播与离线，桌面不受影响，详见[后台播放开关](validation/android-background-playback.md#后台播放开关2026-11-09)。逐平台构建与设备边界见[系统媒体通知与控制](validation/system-media-controls.md)。
 
 M0 必测：三端带真实请求头的分轨音视频、暂停/seek/倍速、音画同步、前后台、全屏、线路失效、HLS/FLV、密集弹幕以及 30 分钟持续播放。
 

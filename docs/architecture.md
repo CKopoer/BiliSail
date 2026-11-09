@@ -276,7 +276,7 @@ macOS 内容区触控板向右滑动可通过工作区原有返回入口回退�
 | PiP | M4 能力探测与独立适配 | M4 可先实现应用内小窗，系统 PiP 不承诺 | M4 验证原生能力与插件接口 |
 | 文件导出 | 系统文件选择/授权 | 用户目录/文件选择 | 沙盒授权/书签，按分发方式验证 |
 
-Android 已接入后台媒体服务与退后台自动听视频：有独立音轨的点播继续播放，直播／混合源仍暂停，返回恢复原模式；其余移动平台仍暂停。PiP 等能力未实现时隐藏入口并明确能力，不从插件支持列表推导设备已验收。
+Android 已接入后台媒体服务，当前 Android／iOS 退后台保留原播放源。设置中的“后台播放”默认开启；关闭后，移动端播放 owner 在 `hidden`／`paused` 自动暂停，返回前台后需手动继续，桌面窗口不受该开关影响。策略、历史自动听视频行为与设备验收边界见[后台播放记录](validation/android-background-playback.md#后台播放开关2026-11-09)。PiP 等能力按实际平台 capability 显示，不从插件支持列表推导设备已验收。
 
 快捷键由 MaterialApp builder 中、根 Navigator 外层的 `AppInputHost` 接收，整个窗口保留一个业务 early key handler 和一个侧键全局 pointer route。`core/input` 为纯 Dart 泛型分发器；公共 domain 持有命令目录；app 组合根编译设置和注册工作区，页面与 PlaybackPanel 注册各自能力。根与 Shell Navigator observer 共用路由账本，普通弹窗隔离底层，全屏标记为播放呈现。普通／全屏视图共享同一播放快捷键 owner，隐藏页不响应。设置保持原 JSON 格式，详细行为和实测边界见[快捷键重构实施记录](shortcut-system/implementation-results.md)。
 
