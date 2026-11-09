@@ -136,8 +136,11 @@ final class BiliApiClient {
     if (uri.scheme != 'https' ||
         uri.userInfo.isNotEmpty ||
         uri.port != 443 ||
+        (uri.host == 'app.bilibili.com' &&
+            uri.path != '/x/topic/web/details/top') ||
         !const {
           'api.bilibili.com',
+          'app.bilibili.com',
           'api.live.bilibili.com',
           'api.vc.bilibili.com',
           'message.bilibili.com',

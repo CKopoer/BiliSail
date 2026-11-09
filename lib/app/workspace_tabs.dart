@@ -20,6 +20,9 @@ final class WorkspaceTab {
   bool get isProfile =>
       location.pathSegments.length == 2 &&
       location.pathSegments.first == 'user';
+  bool get isTopic =>
+      location.pathSegments.length == 2 &&
+      location.pathSegments.first == 'topic';
   bool get isBrowse => location.path == '/';
   bool get isAccount => location.path == '/me';
   bool get isMessages => location.path == '/messages';
@@ -44,6 +47,7 @@ final class WorkspaceTab {
     if (isPgc) return '影视 · ${location.pathSegments.last}';
     if (isLive) return '直播 · ${location.pathSegments.last}';
     if (isProfile) return '用户主页 · ${location.pathSegments.last}';
+    if (isTopic) return '话题 · ${location.pathSegments.last}';
     return '浏览';
   }
 

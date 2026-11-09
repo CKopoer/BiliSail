@@ -757,6 +757,18 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   }
 
   Future<void> _openDynamicLink(Uri uri) async {
+    final query = dynamicSearchQuery(uri);
+    if (query != null) {
+      context.go(
+        Uri(path: '/search', queryParameters: {'q': query}).toString(),
+      );
+      return;
+    }
+    final topic = dynamicTopicId(uri);
+    if (topic != null) {
+      context.go('/topic/$topic');
+      return;
+    }
     final video = dynamicVideo(uri);
     if (video != null) {
       context.go('/video/${video.value}');
