@@ -1354,7 +1354,9 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                                                 ? () => onOpenUser(r.authorId!)
                                                 : null,
                                             child: Text(
-                                              '${r.author}：',
+                                              r.isUpAuthor
+                                                  ? r.author
+                                                  : '${r.author}：',
                                               style: styles.previewAuthor
                                                   .copyWith(
                                                     color:
@@ -1368,7 +1370,26 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                                             ),
                                           ),
                                           if (r.isUpAuthor)
-                                            const CommentBadge(label: 'UP'),
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const CommentBadge(label: 'UP'),
+                                                Text(
+                                                  '：',
+                                                  style: styles.previewAuthor
+                                                      .copyWith(
+                                                        color:
+                                                            r.nicknameColor !=
+                                                                null
+                                                            ? Color(
+                                                                0xFF000000 |
+                                                                    r.nicknameColor!,
+                                                              )
+                                                            : null,
+                                                      ),
+                                                ),
+                                              ],
+                                            ),
                                           if (r.isPinned)
                                             const CommentBadge(
                                               label: '置顶',
