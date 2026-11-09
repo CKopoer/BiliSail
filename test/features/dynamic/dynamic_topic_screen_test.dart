@@ -11,6 +11,8 @@ import 'package:bilisail/features/dynamic/presentation/dynamic_topic_screen.dart
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
+import 'package:bilisail/shared/ui/content_section_tabs.dart';
+import 'package:bilisail/shared/ui/dynamic_compose_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -65,13 +67,86 @@ void main() {
           posts: [DynamicPost(id: '2', text: '最新话题动态')],
           hasMore: false,
         );
-        await tester.tap(find.widgetWithText(ChoiceChip, '最新'));
+        expect(find.byType(ContentSectionTabs<int>), findsOneWidget);
+        expect(find.byType(ChoiceChip), findsNothing);
+        expect(find.byKey(const ValueKey('topic-favorite')), findsNothing);
+        await tester.tap(find.byKey(const ValueKey('topic-sort-2')));
         await tester.pumpAndSettle();
         expect(find.text('最新话题动态'), findsOneWidget);
         expect(find.text('话题动态'), findsNothing);
         expect(repository.queries.last.sort, 2);
         expect(tester.takeException(), isNull);
       },
+    );
+  }
+  for (final (width, scale) in [(320.0, 2.0), (768.0, 1.0), (1280.0, 1.0)]) {
+    testWidgets(
+      'topic sorting and participation stay pinned at $width / $scale',
+      (tester) async {
+        repository.page = DynamicTopicPage(
+          posts: [
+            for (var i = 0; i < 40; i++) DynamicPost(id: '$i', text: '话题内容 $i'),
+          ],
+          hasMore: false,
+          sorts: const [DynamicTopicSort(0, '热门'), DynamicTopicSort(2, '最新')],
+        );
+        await show(tester, width: width, scale: scale);
+        final viewport = find.byType(CustomScrollView);
+        final top = tester.getTopLeft(viewport).dy;
+        final sort = find.byKey(const ValueKey('topic-sort-2'));
+        final compose = find.byKey(const ValueKey('dynamic-compose'));
+        expect(
+          tester.getCenter(sort).dy,
+          closeTo(tester.getCenter(compose).dy, 1),
+        );
+        expect(
+          tester
+              .widget<DynamicComposeButton>(find.byType(DynamicComposeButton))
+              .compact,
+          width == 320,
+        );
+        final position = tester
+            .state<ScrollableState>(
+              find
+                  .descendant(of: viewport, matching: find.byType(Scrollable))
+                  .first,
+            )
+            .position;
+        position.jumpTo(650);
+        await tester.pumpAndSettle();
+        expect(
+          tester.getTopLeft(find.byType(DynamicComposeToolbar)).dy,
+          closeTo(top, 1),
+        );
+        expect(sort.hitTestable(), findsOneWidget);
+        expect(compose.hitTestable(), findsOneWidget);
+        position.jumpTo(1300);
+        await tester.pumpAndSettle();
+        expect(
+          tester.getTopLeft(find.byType(DynamicComposeToolbar)).dy,
+          closeTo(top, 1),
+        );
+        await tester.tap(sort);
+        await tester.pumpAndSettle();
+        expect(repository.queries.last.sort, 2);
+        expect(
+          tester
+              .widget<ContentSectionTabs<int>>(
+                find.byType(ContentSectionTabs<int>),
+              )
+              .value,
+          2,
+        );
+        expect(find.text('应用内话题').hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+      variant: TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+        TargetPlatform.windows,
+        TargetPlatform.macOS,
+        TargetPlatform.linux,
+      }),
     );
   }
   testWidgets(
@@ -252,7 +327,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pumpWidget(app('/topic/12'));
       await tester.pumpAndSettle();
-      expect(find.text('参与话题').hitTestable(), findsOneWidget);
+      expect(find.byTooltip('参与话题').hitTestable(), findsOneWidget);
       expect(find.byTooltip('返回播放').hitTestable(), findsNothing);
       expect(
         find.byKey(const ValueKey('topic-back')).hitTestable(),

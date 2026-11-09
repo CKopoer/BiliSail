@@ -13,6 +13,9 @@ import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/content_section_tabs.dart';
+import '../../../shared/ui/dynamic_compose_dialog.dart';
+import '../application/dynamic_authors_controller.dart';
+import '../application/home_controller.dart';
 import '../application/feed_controller.dart';
 import '../application/app_recommendation_identity.dart';
 import '../domain/home_channel.dart';
@@ -206,6 +209,24 @@ final class _HomeChannelPageState extends ConsumerState<_HomeChannelPage> {
   final Set<(HomeChannel, String)> _visitedSections = {};
   (List<VideoSummary>, HomeChannel, int?)? _gridVersion;
   Widget? _grid;
+
+  Future<void> _refreshDynamic() async {
+    final scope = ref.read(homeRepositoryProvider).accountScope;
+    final query = (
+      channel: HomeChannel.dynamic,
+      section: _sections[HomeChannel.dynamic] ?? '全部',
+      scope: scope,
+      folderId: null,
+    );
+    final author = ref.read(dynamicAuthorsProvider(scope)).selected?.id;
+    final provider = author == null
+        ? homeControllerProvider(query)
+        : dynamicAuthorFeedProvider((query: query, authorId: author));
+    await Future.wait([
+      ref.read(provider.notifier).refresh(),
+      ref.read(dynamicAuthorsProvider(scope).notifier).refresh(),
+    ]);
+  }
 
   Widget _videoItemsSliver(_FeedContent feed, HomeChannel channel) {
     Widget status(Widget child) =>
@@ -481,6 +502,22 @@ final class _HomeChannelPageState extends ConsumerState<_HomeChannelPage> {
       else
         for (final label in channel.sections) (label, label),
     ];
+    final sectionTabs = ContentSectionTabs<String>(
+      entries: entries,
+      value: categories != null ? feed.categoryId : section,
+      scrollKey: ValueKey('home-section-strip-${channel.name}'),
+      itemKey: (id) => ValueKey('home-section-$id'),
+      onSelected: (id) {
+        if (categories != null) {
+          controller.selectCategory(id);
+        } else {
+          setState(() => _sections[channel] = id);
+          if (widget.active && WorkspaceActivity.isActive(context)) {
+            widget.onSectionChanged?.call(id);
+          }
+        }
+      },
+    );
     return Stack(
       children: [
         Column(
@@ -488,22 +525,19 @@ final class _HomeChannelPageState extends ConsumerState<_HomeChannelPage> {
             if (entries.isNotEmpty &&
                 channel != HomeChannel.videoDynamic &&
                 (channel != HomeChannel.live || widget.showLiveSectionTabs))
-              ContentSectionTabs<String>(
-                entries: entries,
-                value: categories != null ? feed.categoryId : section,
-                scrollKey: ValueKey('home-section-strip-${channel.name}'),
-                itemKey: (id) => ValueKey('home-section-$id'),
-                onSelected: (id) {
-                  if (categories != null) {
-                    controller.selectCategory(id);
-                  } else {
-                    setState(() => _sections[channel] = id);
-                    if (widget.active && WorkspaceActivity.isActive(context)) {
-                      widget.onSectionChanged?.call(id);
-                    }
-                  }
-                },
-              ),
+              if (channel == HomeChannel.dynamic && widget.isSignedIn)
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 804),
+                    child: DynamicComposeToolbar(
+                      onLogin: widget.onLogin,
+                      onPublished: _refreshDynamic,
+                      child: sectionTabs,
+                    ),
+                  ),
+                )
+              else
+                sectionTabs,
             Expanded(
               child: _content(
                 channel: channel,
