@@ -80,17 +80,19 @@ final class WorkspacePageNavigation extends InheritedWidget {
   const WorkspacePageNavigation({
     super.key,
     required this.navigate,
+    this.updateTitle,
     required super.child,
   });
 
   final ValueChanged<Uri> navigate;
+  final ValueChanged<String>? updateTitle;
 
   static WorkspacePageNavigation? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<WorkspacePageNavigation>();
 
   @override
   bool updateShouldNotify(WorkspacePageNavigation oldWidget) =>
-      navigate != oldWidget.navigate;
+      navigate != oldWidget.navigate || updateTitle != oldWidget.updateTitle;
 }
 
 /// Builds shell navigation inside a page's own provider scope.
@@ -481,6 +483,17 @@ final class _BiliAppShellState extends State<BiliAppShell>
     }
     setState(() {});
     if (tab.id == _workspace.activeId) _commitWorkspace();
+  }
+
+  void _updatePageTitle(WorkspaceTab tab, String title) {
+    // Metadata can already be available during a retained page's build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_workspace.updateVideoTitle(tab.id, title, location: tab.location)) {
+        return;
+      }
+      setState(() {});
+    });
   }
 
   void _closeTab(String id) {
@@ -1186,6 +1199,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
                       child: WorkspacePageNavigation(
                         navigate: (location) =>
                             _updatePageLocation(view, location),
+                        updateTitle: (title) => _updatePageTitle(view, title),
                         child: TabPagingScope(
                           progress: _pagingFor(view),
                           child: PageBackScope(

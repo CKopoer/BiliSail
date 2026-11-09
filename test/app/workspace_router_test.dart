@@ -70,12 +70,89 @@ import 'package:bilisail/features/settings/application/settings_controller.dart'
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final width in [390.0, 1280.0]) {
+    for (final textScale in [1.0, 2.0]) {
+      _workspaceTestWidgets(
+        'video tab uses loaded titles and ellipsis at $width scale $textScale',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = Size(width, 900);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          addTearDown(tester.view.resetPhysicalSize);
+          const first = VideoId('BV1ab411c7mD');
+          const second = VideoId('BV1cd411c7mD');
+          const shortTitle = '短标题';
+          final longTitle = List.filled(12, '这是一个很长的视频标题').join();
+          final pending = Completer<VideoDetail>();
+          final loads = <VideoId>[];
+          final settings = _SettingsRepository(
+            navigationMode: WorkspaceNavigationMode.multipleTabs,
+          );
+          final router = createBiliRouter(
+            initialLocation: '/video/${first.value}',
+            playerBuilder: (_, _, _) => const SizedBox(),
+          );
+          addTearDown(router.dispose);
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                settingsRepositoryProvider.overrideWithValue(settings),
+                feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+                homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+                videoDetailProvider.overrideWith((ref, id) {
+                  loads.add(id);
+                  return id == first
+                      ? pending.future
+                      : Future.value(_videoWithTitle(id, longTitle));
+                }),
+              ],
+              child: InputTestApp.router(
+                routerConfig: router,
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(context)
+                      .copyWith(textScaler: TextScaler.linear(textScale)),
+                  child: child!,
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+          Finder tabTitle(String tab, String title) => find.descendant(
+            of: find.byKey(ValueKey('workspace-tab-$tab')),
+            matching: find.text(title),
+          );
+          expect(tabTitle('tab-1', first.value), findsOneWidget);
+          pending.complete(_videoWithTitle(first, shortTitle));
+          await tester.pumpAndSettle();
+          expect(tabTitle('tab-1', shortTitle), findsOneWidget);
+          expect(tabTitle('tab-1', first.value), findsNothing);
+          router.go('/video/${second.value}');
+          await tester.pumpAndSettle();
+          final label = tabTitle('tab-2', longTitle);
+          final text = tester.widget<Text>(label);
+          final paragraph = tester.renderObject<RenderParagraph>(label);
+          expect(text.maxLines, 1);
+          expect(text.overflow, TextOverflow.ellipsis);
+          expect(paragraph.didExceedMaxLines, isTrue);
+          expect(tabTitle('tab-1', shortTitle), findsOneWidget);
+          router.go('/video/${first.value}?tab=tab-1&cid=2');
+          await tester.pumpAndSettle();
+          expect(tabTitle('tab-1', shortTitle), findsOneWidget);
+          expect(find.byTooltip('关闭$shortTitle'), findsOneWidget);
+          expect(loads, [first, second]);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
   for (final mode in WorkspaceNavigationMode.values) {
     for (final width in [390.0, 1280.0]) {
       _workspaceTestWidgets(
@@ -2714,6 +2791,21 @@ void _workspaceTestWidgets(
   description,
   callback,
   variant: TargetPlatformVariant.only(platform),
+);
+
+VideoDetail _videoWithTitle(VideoId id, String title) => VideoDetail(
+  summary: VideoSummary(
+    id: id,
+    title: title,
+    coverUrl: '',
+    author: '测试 UP',
+    duration: const Duration(minutes: 2),
+  ),
+  description: '',
+  parts: const [
+    VideoPart(cid: '1', page: 1, title: '第一集', duration: Duration(minutes: 1)),
+    VideoPart(cid: '2', page: 2, title: '第二集', duration: Duration(minutes: 1)),
+  ],
 );
 
 final class _VideoRepository implements VideoRepository {

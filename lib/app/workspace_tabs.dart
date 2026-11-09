@@ -4,11 +4,13 @@ final class WorkspaceTab {
     required this.id,
     required this.location,
     this.pinned = false,
+    this.videoTitle,
   });
 
   final String id;
   final Uri location;
   final bool pinned;
+  final String? videoTitle;
 
   bool get isVideo => location.path.startsWith('/video/');
   bool get isPgc => location.path.startsWith('/pgc/');
@@ -38,7 +40,7 @@ final class WorkspaceTab {
     if (location.path == '/downloads') return '下载';
     if (location.path == '/me') return '我的';
     if (isOffline) return '离线播放';
-    if (isVideo) return location.pathSegments.last;
+    if (isVideo) return videoTitle ?? location.pathSegments.last;
     if (isPgc) return '影视 · ${location.pathSegments.last}';
     if (isLive) return '直播 · ${location.pathSegments.last}';
     if (isProfile) return '用户主页 · ${location.pathSegments.last}';
@@ -342,6 +344,31 @@ final class WorkspaceTabs {
       id: previous.id,
       location: route.replace(queryParameters: parameters),
       pinned: previous.pinned,
+      videoTitle: previous.location.path == route.path
+          ? previous.videoTitle
+          : null,
+    );
+    return true;
+  }
+
+  /// Metadata belongs to the video, independent of its selected part or queue.
+  /// Late responses must not rename a reused or closed playback tab.
+  bool updateVideoTitle(String id, String title, {required Uri location}) {
+    final index = _tabs.indexWhere((tab) => tab.id == id);
+    if (index < 0) return false;
+    final previous = _tabs[index];
+    final value = title.trim();
+    if (!previous.isVideo ||
+        previous.location.path != location.path ||
+        value.isEmpty ||
+        previous.videoTitle == value) {
+      return false;
+    }
+    _tabs[index] = WorkspaceTab(
+      id: previous.id,
+      location: previous.location,
+      pinned: previous.pinned,
+      videoTitle: value,
     );
     return true;
   }
@@ -407,11 +434,7 @@ final class WorkspaceTabs {
     final known = _tabs.indexWhere((tab) => tab.id == requestedId);
     if (known >= 0 && (!_tabs[known].pinned || target.isRoot)) {
       final previous = _tabs[known];
-      _tabs[known] = WorkspaceTab(
-        id: previous.id,
-        location: location,
-        pinned: previous.pinned,
-      );
+      updateLocation(previous.id, location);
       _activate(previous.id);
       return true;
     }
