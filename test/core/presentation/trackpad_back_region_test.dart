@@ -1,6 +1,6 @@
 import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 
-import 'package:bilisail/core/presentation/trackpad_back_region.dart';
+import 'package:bilisail/core/presentation/history_back_region.dart';
 import 'package:bilisail/core/presentation/window_input_focus.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:flutter/gestures.dart';
@@ -343,7 +343,7 @@ Widget _app({
       data: MediaQueryData(disableAnimations: reduceMotion),
       child: WorkspaceActivity(
         active: active,
-        child: TrackpadBackRegion(
+        child: HistoryBackRegion(
           enabled: enabled,
           identity: identity,
           onBack: onBack,

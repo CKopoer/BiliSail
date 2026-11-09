@@ -13,7 +13,7 @@ import '../core/presentation/workspace_activity.dart';
 import '../core/presentation/mobile_playback_status_bar.dart';
 import '../core/presentation/page_back_scope.dart';
 import '../core/presentation/predictive_back_region.dart';
-import '../core/presentation/trackpad_back_region.dart';
+import '../core/presentation/history_back_region.dart';
 import 'workspace_tabs.dart';
 import 'workspace_navigation.dart';
 import 'workspace_back_presentation.dart';
@@ -254,7 +254,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
 
   bool _goBackWithinPage() => _pageBack[_displayTab.id]?.goBack() ?? false;
 
-  bool get _canTrackpadBack => !_dualTabs && !_singlePage
+  bool get _canGestureBack => !_dualTabs && !_singlePage
       ? (_pageBack[_displayTab.id]?.canGoBack ?? false) || !_displayTab.pinned
       : _canGoBack;
 
@@ -262,7 +262,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
     if (!_goBackWithinPage()) _closeTab(_workspace.activeId);
   }
 
-  void _trackpadBack() {
+  void _gestureBack() {
     // Separate tabs close just like the close command; visit history can
     // otherwise select an old player while retaining the page being left.
     if (!_dualTabs && !_singlePage) {
@@ -720,8 +720,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
       ),
     );
     final windowBuilder = widget.playbackWindowBuilder;
-    final presented = TrackpadBackRegion(
-      enabled: _canTrackpadBack,
+    final presented = HistoryBackRegion(
+      enabled: _canGestureBack,
       identity: (
         _backIdentity(_displayTab),
         _desktopDual
@@ -729,7 +729,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
             : _workspace.backDestination()?.location,
         _pageBack[_displayTab.id]?.canGoBack ?? false,
       ),
-      onBack: _trackpadBack,
+      onBack: _gestureBack,
       child: _withBackPreview(context, main),
     );
     if (windowBuilder == null) return presented;
@@ -745,7 +745,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
           playback != null && _pageKeys[playback.id]?.currentContext != null,
       playback: playback == null
           ? null
-          : TrackpadBackRegion(
+          : HistoryBackRegion(
               enabled: true,
               identity: (
                 _backIdentity(playback),

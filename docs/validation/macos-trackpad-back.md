@@ -26,8 +26,8 @@ macOS 内容区支持触控板双指向右滑动返回。左侧圆形箭头的�
 
 ## 源码
 
-- [共享手势和箭头](../../lib/core/presentation/trackpad_back_region.dart)：识别器只收窄手势意图，Flutter 管理竞争与拖动生命周期；动画仅更新指示器子树。
-- [工作区组合](../../lib/app/shell.dart)：主窗口 `_trackpadBack` 按模式复用关闭命令或 `_goBack`，独立播放窗口复用 `_playbackWindowBack`，不另建历史。
+- [共享手势和箭头](../../lib/core/presentation/history_back_region.dart)：识别器只收窄手势意图，Flutter 管理竞争与拖动生命周期；动画仅更新指示器子树。2026-11-09 增加 iOS 边缘触摸适配，见 [iOS 返回修复](single-page-navigation.md#ios-边缘滑动返回修复2026-11-09)。
+- [工作区组合](../../lib/app/shell.dart)：主窗口 `_gestureBack` 按模式复用关闭命令或 `_goBack`，独立播放窗口复用 `_playbackWindowBack`，不另建历史。
 - [播放器进度条](../../lib/features/playback/presentation/playback_timeline_bar.dart)：保护现有 Slider 交互区域。
 - [手势测试](../../test/core/presentation/trackpad_back_region_test.dart)、[导航和进度条测试](../../test/app/macos_trackpad_back_test.dart)、[独立 View 测试](../../test/app/windowed_workspace_test.dart)。
 

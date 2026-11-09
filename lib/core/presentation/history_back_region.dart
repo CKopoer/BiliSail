@@ -24,9 +24,10 @@ class TrackpadBackBlocker extends StatelessWidget {
       : child;
 }
 
-/// macOS history navigation participates in the arena below inner drags.
-class TrackpadBackRegion extends StatefulWidget {
-  const TrackpadBackRegion({
+/// Adapts retained-page history to iOS edge swipes and macOS trackpad drags.
+/// These pages are not a Navigator stack, so Cupertino route pops cannot help.
+class HistoryBackRegion extends StatefulWidget {
+  const HistoryBackRegion({
     super.key,
     required this.enabled,
     required this.identity,
@@ -40,22 +41,27 @@ class TrackpadBackRegion extends StatefulWidget {
   final Widget child;
 
   @override
-  State<TrackpadBackRegion> createState() => _TrackpadBackRegionState();
+  State<HistoryBackRegion> createState() => _HistoryBackRegionState();
 }
 
-class _TrackpadBackRegionState extends State<TrackpadBackRegion>
+class _HistoryBackRegionState extends State<HistoryBackRegion>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  // Logical pixels, independent of display scale and release velocity.
-  static const _commitDistance = 120.0;
+  // iOS follows viewport size; macOS keeps its fixed logical-pixel threshold.
+  double get _commitDistance => _iOS
+      ? (context.size?.width ?? MediaQuery.sizeOf(context).width) / 2
+      : 120;
   late final _progress = AnimationController(vsync: this);
   final _windowFocus = WindowInputFocus.instance;
   InputScope<Object>? _input;
   bool _active = false;
   bool _macOS = false;
+  bool _iOS = false;
   bool _tracking = false;
   bool _foreground = true;
   bool _disposed = false;
   int? _viewId;
+  double get _direction =>
+      _iOS && Directionality.of(context) == TextDirection.rtl ? -1 : 1;
 
   bool get _available =>
       widget.enabled &&
@@ -78,8 +84,9 @@ class _TrackpadBackRegionState extends State<TrackpadBackRegion>
     _input = InputScope.of<Object>(context);
     _viewId = View.of(context).viewId;
     _macOS = Theme.of(context).platform == TargetPlatform.macOS;
+    _iOS = Theme.of(context).platform == TargetPlatform.iOS;
     _active =
-        _macOS &&
+        (_macOS || _iOS) &&
         WorkspaceActivity.isActive(context) &&
         TickerMode.valuesOf(context).enabled &&
         (ModalRoute.isCurrentOf(context) ?? true);
@@ -87,7 +94,7 @@ class _TrackpadBackRegionState extends State<TrackpadBackRegion>
   }
 
   @override
-  void didUpdateWidget(TrackpadBackRegion oldWidget) {
+  void didUpdateWidget(HistoryBackRegion oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.identity != widget.identity || !widget.enabled) _reset();
   }
@@ -145,12 +152,18 @@ class _TrackpadBackRegionState extends State<TrackpadBackRegion>
       _reset();
       return;
     }
-    _distance += details.primaryDelta ?? 0;
+    _distance += (details.primaryDelta ?? 0) * _direction;
     _progress.value = (_distance / _commitDistance).clamp(0, 1);
   }
 
   void _end(DragEndDetails details) {
-    final commit = _tracking && _available && _distance >= _commitDistance;
+    final velocity = (details.primaryVelocity ?? 0) * _direction;
+    final commit =
+        _tracking &&
+        _available &&
+        (_iOS && velocity.abs() >= 1000
+            ? velocity > 0 && _distance > kTouchSlop
+            : _distance >= _commitDistance);
     _cancel();
     if (!commit) return;
     _input?.dispatcher.beforeNavigation();
@@ -167,13 +180,13 @@ class _TrackpadBackRegionState extends State<TrackpadBackRegion>
   }
 
   @override
-  Widget build(BuildContext context) => !_macOS
+  Widget build(BuildContext context) => !_macOS && !_iOS
       ? widget.child
       : RawGestureDetector(
           behavior: HitTestBehavior.translucent,
           excludeFromSemantics: true,
           gestures: {
-            if (_active && widget.enabled)
+            if (_macOS && _active && widget.enabled)
               _BackDragRecognizer:
                   GestureRecognizerFactoryWithHandlers<_BackDragRecognizer>(
                     () => _BackDragRecognizer(),
@@ -191,11 +204,43 @@ class _TrackpadBackRegionState extends State<TrackpadBackRegion>
             fit: StackFit.passthrough,
             children: [
               widget.child,
+              // Like Cupertino's detector, reserve only the leading edge. A
+              // page-wide touch recognizer would compete with paging/seek.
+              if (_iOS && _active && widget.enabled)
+                PositionedDirectional(
+                  start: 0,
+                  top: 0,
+                  bottom: 0,
+                  width:
+                      (_direction > 0
+                              ? MediaQuery.paddingOf(context).left
+                              : MediaQuery.paddingOf(context).right)
+                          .clamp(20, double.infinity),
+                  child: RawGestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    excludeFromSemantics: true,
+                    gestures: {
+                      _EdgeBackDragRecognizer:
+                          GestureRecognizerFactoryWithHandlers<
+                            _EdgeBackDragRecognizer
+                          >(() => _EdgeBackDragRecognizer(), (recognizer) {
+                            recognizer
+                              ..canStart = (() => _available)
+                              ..onStart = _start
+                              ..onUpdate = _update
+                              ..onEnd = _end
+                              ..onCancel = _cancel;
+                          }),
+                    },
+                  ),
+                ),
               Positioned.fill(
                 child: IgnorePointer(
                   child: ExcludeSemantics(
                     child: Align(
-                      alignment: Alignment.centerLeft,
+                      alignment: _direction > 0
+                          ? Alignment.centerLeft
+                          : Alignment.centerRight,
                       child: AnimatedBuilder(
                         animation: _progress,
                         builder: (context, _) {
@@ -203,11 +248,18 @@ class _TrackpadBackRegionState extends State<TrackpadBackRegion>
                           final colors = Theme.of(context).colorScheme;
                           final ready = progress >= 1;
                           return Transform.translate(
-                            offset: Offset(-48 + 64 * progress, 0),
+                            offset: Offset(
+                              _direction * (-48 + 64 * progress),
+                              0,
+                            ),
                             child: Opacity(
                               opacity: progress,
                               child: Container(
-                                key: const ValueKey('trackpad-back-indicator'),
+                                key: ValueKey(
+                                  _iOS
+                                      ? 'ios-back-indicator'
+                                      : 'trackpad-back-indicator',
+                                ),
                                 width: 48,
                                 height: 48,
                                 decoration: BoxDecoration(
@@ -226,8 +278,11 @@ class _TrackpadBackRegionState extends State<TrackpadBackRegion>
                                   scale: .75 + .25 * progress,
                                   child: Icon(
                                     Icons.arrow_back_rounded,
-                                    // History direction stays left in RTL, too.
-                                    textDirection: TextDirection.ltr,
+                                    // macOS keeps its physical direction; iOS
+                                    // follows the leading edge in RTL.
+                                    textDirection: _direction > 0
+                                        ? TextDirection.ltr
+                                        : TextDirection.rtl,
                                     color: ready
                                         ? colors.onPrimaryContainer
                                         : colors.onSurface,
@@ -245,6 +300,27 @@ class _TrackpadBackRegionState extends State<TrackpadBackRegion>
             ],
           ),
         );
+}
+
+class _EdgeBackDragRecognizer extends HorizontalDragGestureRecognizer {
+  _EdgeBackDragRecognizer()
+    : super(supportedDevices: {PointerDeviceKind.touch}) {
+    dragStartBehavior = DragStartBehavior.down;
+  }
+
+  bool Function()? canStart;
+
+  @override
+  bool isPointerAllowed(PointerEvent event) =>
+      (canStart?.call() ?? false) && super.isPointerAllowed(event);
+
+  @override
+  void handleEvent(PointerEvent event) {
+    // An accepted Flutter drag reports onEnd even for pointer cancellation.
+    // Clear the pending navigation before it can be mistaken for a release.
+    if (event is PointerCancelEvent) onCancel?.call();
+    super.handleEvent(event);
+  }
 }
 
 /// Keep Flutter's drag lifecycle and arena arbitration, narrowing only intent.

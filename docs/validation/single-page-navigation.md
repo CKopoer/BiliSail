@@ -4,6 +4,16 @@
 
 2026-10-25：按用户后续要求恢复单标签，Android 默认单标签，其他平台默认双标签。设置提供单／双／多标签，保留所有已保存的有效选择；此前已保存为 `dualTabs` 的值继续按双标签读取，尚存的 `singlePage` 直接恢复，不再强制迁移。平台默认仅补缺失／非法值，数据库与设置快照版本不变。以下“恢复单标签”说明当前行为，后续旧章节保留历史记录。
 
+## iOS 边缘滑动返回修复（2026-11-09）
+
+- 原因：工作区通过 `WorkspaceTabs` 保留页面与访问历史，ShellRoute 内的 Navigator 只承载占位。存在可返回页面时外壳的 `PopScope.canPop` 为 false；iOS 的 Cupertino 路由手势在这种情况下不会检测滑动或触发返回回调，见 [Flutter PopScope](https://api.flutter.dev/flutter/widgets/PopScope-class.html)。原有手势入口只有 Android 系统预测返回和 macOS 触控板，iOS 没有将触摸映射到工作区返回。
+- 将原 `TrackpadBackRegion` 扩展并改名为 [HistoryBackRegion](../../lib/core/presentation/history_back_region.dart)，复用原有返回指示、焦点、模态、前后台与页面身份隔离。iOS 从左侧 20 个逻辑像素或更大的安全区内开始向右滑动，距离超过半屏或快速向右甩动时，松手提交一次返回；RTL 使用右侧起始边缘。短滑、反向拖回和指针取消不消耗历史。仅边缘接管触摸，内容区的分页、滚动和进度条拖动沿用原有手势。
+- 统一调用外壳既有返回命令：页内详情优先，单标签按访问历史，双标签按媒体历史／关闭浏览页，多标签关闭离开的临时标签，固定根页面保留。播放页面与会话的保留、恢复和释放规则沿用原实现。弹窗、全屏覆盖、路由／账号／模式变化、隐藏、窗口变化和退后台均不能提交旧手势。
+- 新增 [iOS 工作区回归](../../test/app/ios_swipe_back_test.dart) 和 [iOS 手势组件回归](../../test/core/presentation/ios_back_region_test.dart)。修复前双标签滑动回归失败，修复后连同 macOS 工作区／手势回归共 64 项通过；日志 `build/ios-swipe-back-targeted.log`。
+- 本次 6 个代码／测试文件的定向静态分析通过，日志 `build/ios-swipe-back-analysis.log`。`tool/check.ps1 -SkipPub` 的打包边界与格式检查通过；全量分析被同期新增的 `test/features/comments/comment_image_picker_test.dart:2` 中 `unnecessary_import` 阻塞，未修改该文件，日志 `build/ios-swipe-back-check.log`。
+- 随后单独执行根应用与四包检查：根应用 4883 项通过、13 项跳过、6 项失败；失败为同期新增 `player_danmaku_dialog_test.dart` 的四项键盘跟随断言，以及 `video_comments_controller_test.dart` 的输入框动作展开、详情返回后滚动恢复两项，日志 `build/ios-swipe-back-root.log`。这些弹窗／评论测试未引入本次手势外壳，保留同期修改，不将定向通过记为全量通过。四包共 1301 项通过（API 768、播放器 367、弹幕 161、mux 5）；10 项 mux 原生测试因未设置 `BILI_MUX_LIBRARY` 跳过，日志 `build/ios-swipe-back-packages.log`。
+- 按用户要求不构建、不执行 iOS 实机测试；构建、安装与真实手势体验由用户后续确认。本机没有可热重载的调试进程，热重载调用未能执行。
+
 ## 恢复单标签（2026-10-25）
 
 - [工作区](../../lib/app/workspace_tabs.dart)按实际访问顺序返回，不跳过播放页：视频 A → UP 空间 → 视频 B → 返回空间 → 返回 A。视频、影视、直播、离线播放共用规则。普通页面遮挡播放沿用既有策略；进入另一播放页先暂停旧会话，返回沿用源和进度，用户手动暂停／倍速保持。
