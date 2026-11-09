@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 
 import '../../domain/dynamic_post.dart';
 import '../../domain/user.dart';
+import '../../features/dynamic/domain/dynamic_link.dart';
 import 'app_network_image.dart';
 
 /// Expansion belongs to the retained list, rather than to an evictable row.
@@ -83,6 +84,9 @@ class _DynamicPostTextState extends State<DynamicPostText> {
           : part.text;
       remaining -= part.text.length;
       final image = part.imageUrl;
+      final link = part.kind == DynamicTextKind.topic
+          ? dynamicTopicDestination(name: part.text, url: part.linkUrl)
+          : part.linkUrl;
       if (part.kind == DynamicTextKind.emoji &&
           image != null &&
           ['http', 'https'].contains(image.scheme)) {
@@ -118,11 +122,10 @@ class _DynamicPostTextState extends State<DynamicPostText> {
           ),
         );
       } else if ((part.userId != null && widget.onOpenUser != null) ||
-          (part.linkUrl != null && widget.onOpenLink != null)) {
+          (link != null && widget.onOpenLink != null)) {
         final recognizer = TapGestureRecognizer()
           ..onTap = () {
             final userId = part.userId;
-            final link = part.linkUrl;
             if (userId != null && widget.onOpenUser != null) {
               widget.onOpenUser!(userId);
             } else if (link != null) {

@@ -2,6 +2,8 @@
 
 日期：2026-11-09。按用户的后续反馈修正[上一轮动态重构](dynamic-content-redesign-2026-11-09.md)：话题改为应用内阅读，移除动态的浏览器按钮，正文根据实际排版判断展开，并修复未预约却显示已预约的问题。沿用用户指定的单元／Widget 检查与提交范围，不构建应用或操作真实设备。
 
+2026-11-10 后续定位到移动端 `/topic-detail` 链接未识别、标签未优先使用 ID，导致仍落入浏览器。已改为共享的身份优先／名称回退规则并补充协议到点击回归，见[话题外跳修复](dynamic-topic-navigation-2026-11-10.md)。
+
 ## 参考与实现
 
 只读参考 PiliPlus `4fce4bb5a35c425aee759ef9263352316a29e355`：`lib/pages/dynamics_topic/{controller,view}.dart`、`lib/http/{api,dynamics,constants}.dart`、`lib/models_new/dynamic/dyn_topic_{top,feed}/`，以及 `lib/pages/dynamics/widgets/content_panel.dart`、`lib/common/widgets/text_more/{text_more,rich_text_more,paragraph_more}.dart`。参考协议身份、服务端排序与游标、折叠内容入口，以及使用排版溢出结果决定“更多”的职责。
