@@ -43,6 +43,7 @@ function(bilisail_verify_media_assets)
     list(GET MEDIA_KIT_MPV_HASHES ${index} expected)
     media_kit_verify_file("${MEDIA_KIT_MPV_SDK}/${file}" "${expected}")
   endforeach()
+  media_kit_verify_mpv_capabilities("${MEDIA_KIT_MPV_SDK}/libmpv-2.dll")
 endfunction()
 
 if(DEFINED BILISAIL_MEDIA_ASSET_CACHE)

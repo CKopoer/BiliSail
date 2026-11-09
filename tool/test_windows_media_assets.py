@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from urllib.parse import urljoin, urlparse
@@ -46,6 +47,9 @@ foreach(index RANGE 0 ${last})
   get_filename_component(parent "${sdk}/${name}" DIRECTORY)
   file(MAKE_DIRECTORY "${parent}")
   file(WRITE "${sdk}/${name}" "fixture ${name}")
+  if(name STREQUAL "libmpv-2.dll")
+    file(APPEND "${sdk}/${name}" "\nList of enabled features: ffmpeg gl egl-angle wasapi\n")
+  endif()
   file(SHA256 "${sdk}/${name}" hash)
   list(APPEND fixture_hashes "${hash}")
 endforeach()
@@ -127,6 +131,50 @@ message(STATUS "Verified ${hash_count} ${FLUTTER_TARGET_PLATFORM} assets")
                     self.assert_rejected(
                         architecture, change, "Invalid media-kit SDK manifest",
                     )
+
+    def test_loadable_dll_without_required_render_api_is_rejected(self):
+        cases = (
+            ("ffmpeg d3d11 vulkan wasapi", "gl"),
+            ("ffmpeg gl wasapi", "egl-angle"),
+            ("gl-win32 egl-angle-win32", "gl"),
+            ("", "gl"),
+        )
+        for architecture in ("x64", "arm64"):
+            for features, missing in cases:
+                with self.subTest(architecture=architecture, features=features):
+                    change = f'''
+file(WRITE "${{sdk}}/libmpv-2.dll" "List of enabled features: {features}\\n")
+file(SHA256 "${{sdk}}/libmpv-2.dll" hash)
+list(REMOVE_AT fixture_hashes 0)
+list(INSERT fixture_hashes 0 "${{hash}}")
+'''
+                    self.assert_rejected(
+                        architecture, change,
+                        f"requires {missing} rendering support",
+                    )
+
+    def test_production_renderer_initialization_with_fake_native_ports(self):
+        fork = self.owner.parents[4]
+        result = subprocess.run(
+            [sys.executable, str(fork / "native/test_windows_video_initialization.py")],
+            capture_output=True, text=True, check=False, timeout=90,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_pinned_video_sources_match_the_reviewed_manifest(self):
+        source = self.owner.parents[4] / "media_kit_video/windows"
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "verify.cmake"
+            script.write_text(
+                f'include("{source.as_posix()}/source_manifest.cmake")\n'
+                f'media_kit_verify_video_sources("{source.as_posix()}")\n',
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                ["cmake", "-P", str(script)], capture_output=True,
+                text=True, check=False, timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

@@ -20,17 +20,17 @@ dependencies:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit
-      ref: b1c7e4336140d8c4550c1e963365da8edfe56d0a
+      ref: 9858a8db83faf8bcfa39a8bfbc02dde9a2e92572
   media_kit_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit_video
-      ref: b1c7e4336140d8c4550c1e963365da8edfe56d0a
+      ref: 9858a8db83faf8bcfa39a8bfbc02dde9a2e92572
   media_kit_libs_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/universal/media_kit_libs_video
-      ref: b1c7e4336140d8c4550c1e963365da8edfe56d0a
+      ref: 9858a8db83faf8bcfa39a8bfbc02dde9a2e92572
 
 # Pub ignores overrides from transitive packages; repeat these in the app.
 dependency_overrides:
@@ -39,42 +39,42 @@ dependency_overrides:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit
-      ref: b1c7e4336140d8c4550c1e963365da8edfe56d0a
+      ref: 9858a8db83faf8bcfa39a8bfbc02dde9a2e92572
   media_kit_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit_video
-      ref: b1c7e4336140d8c4550c1e963365da8edfe56d0a
+      ref: 9858a8db83faf8bcfa39a8bfbc02dde9a2e92572
   media_kit_libs_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/universal/media_kit_libs_video
-      ref: b1c7e4336140d8c4550c1e963365da8edfe56d0a
+      ref: 9858a8db83faf8bcfa39a8bfbc02dde9a2e92572
   media_kit_libs_android_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/android/media_kit_libs_android_video
-      ref: b1c7e4336140d8c4550c1e963365da8edfe56d0a
+      ref: 9858a8db83faf8bcfa39a8bfbc02dde9a2e92572
   media_kit_libs_windows_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/windows/media_kit_libs_windows_video
-      ref: b1c7e4336140d8c4550c1e963365da8edfe56d0a
+      ref: 9858a8db83faf8bcfa39a8bfbc02dde9a2e92572
   media_kit_libs_macos_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/macos/media_kit_libs_macos_video
-      ref: b1c7e4336140d8c4550c1e963365da8edfe56d0a
+      ref: 9858a8db83faf8bcfa39a8bfbc02dde9a2e92572
   media_kit_libs_ios_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/ios/media_kit_libs_ios_video
-      ref: b1c7e4336140d8c4550c1e963365da8edfe56d0a
+      ref: 9858a8db83faf8bcfa39a8bfbc02dde9a2e92572
   media_kit_libs_linux:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/linux/media_kit_libs_linux
-      ref: b1c7e4336140d8c4550c1e963365da8edfe56d0a
+      ref: 9858a8db83faf8bcfa39a8bfbc02dde9a2e92572
 
 dev_dependencies:
   ffigen: 23.0.0

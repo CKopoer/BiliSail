@@ -10,9 +10,13 @@
 
 Windows x64 改用个人 mpv `afd6da8843a07f463ba4c736a2ea636b1a92e23e` 重建的 SDK；固定 [原生资产](https://github.com/CKopoer/media-kit/releases/tag/native-windows-hwdec-edges-2026-11-07)、源码、构建容器和完整摘要见 [Windows 来源](windows/native/mpv/SOURCE.md)。mpv 为 LGPL-2.1-or-later，本次 FFmpeg 为 LGPL-3.0-or-later；LuaJIT／libsixel 的 MIT 和 subrandr 的 MPL-2.0 原始文本、容器附带的子依赖通知随 SDK 的 `provenance/` 分发。补充许可的打包脚本逐项验证原生 DLL、import library、头文件和 JAR 与 CI 产物内容不变。应用动态加载 DLL，保留替换和对应源码／构建材料；MIT 包装许可不覆盖静态子依赖许可。ARM64 和其他平台保留既有原生资产。
 
+## 2026-11-09 Windows ARM64 OpenGL SDK
+
+Windows ARM64 的 libmpv 改用 [Carapacik/libmpv-win32-video-cmake 20261031](https://github.com/Carapacik/libmpv-win32-video-cmake/releases/tag/20261031) 的原始 LGPL SDK，归档 SHA-256 为 `497841ee27697d816ff3aa14a0e1cce0ce639b593d28b53fb4e06e4410c37df6`，逐字节镜像由个人 media-kit fork 分发。mpv 来源为 `41f6a645068483470267271e1d09966ca3b9f413`，构建材料和补丁固定为 `6b921819019b11a84554e4c65c280d2676a15dd8`；`gpl=false`，FFmpeg n9.0.2 禁用 GPL／nonfree 并开启 version3。mpv 适用 LGPL-2.1-or-later；组合 DLL 的 FFmpeg 适用 LGPL-3.0-or-later，其他子依赖许可单独保留。SDK 来源与 LGPL 文本随 Windows 包分发；ANGLE 仍使用原固定 BSD-3-Clause 资产。新 SDK 没有 Vulkan loader 硬导入，ARM64 不再分发该 loader。详情见 [修复记录](docs/validation/windows-arm64-preview-crash-2026-11-09.md)。下方初版 ARM64 SDK 与 loader 说明保留为历史。
+
 ## 2026-11-07 个人媒体 fork
 
-当前核心、视频和全部平台库插件统一来自 MIT 的 [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/b1c7e4336140d8c4550c1e963365da8edfe56d0a)，官方基线为 `c533e446755f51cf53c7e57aea873f2aa5355f81`。mpv 源码由 [CKopoer/mpv](https://github.com/CKopoer/mpv) 维护；固定资产与原来源见 [native-2026-11-07](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)。Windows、Android、Apple 的首批资产为原摘要不变的上游镜像；Linux 从个人固定源码构建，子依赖继续记录发行版来源。MIT 不替代 mpv、FFmpeg、ANGLE 或其他子依赖的许可。当前入口及验证见[实施记录](docs/validation/media-kit-personal-fork-2026-11-07.md)；下列各次切换记录保留为历史。
+当前核心、视频和全部平台库插件统一来自 MIT 的 [CKopoer/media-kit](https://github.com/CKopoer/media-kit/tree/9858a8db83faf8bcfa39a8bfbc02dde9a2e92572)，官方基线为 `c533e446755f51cf53c7e57aea873f2aa5355f81`。mpv 源码由 [CKopoer/mpv](https://github.com/CKopoer/mpv) 维护；固定资产与原来源见 [native-2026-11-07](https://github.com/CKopoer/media-kit/releases/tag/native-2026-11-07)。Windows、Android、Apple 的首批资产为原摘要不变的上游镜像；Linux 从个人固定源码构建，子依赖继续记录发行版来源。MIT 不替代 mpv、FFmpeg、ANGLE 或其他子依赖的许可。当前入口及验证见[实施记录](docs/validation/media-kit-personal-fork-2026-11-07.md)；下列各次切换记录保留为历史。
 
 
 
