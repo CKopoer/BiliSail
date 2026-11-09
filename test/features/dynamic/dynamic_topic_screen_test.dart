@@ -153,6 +153,59 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  for (final mode in WorkspaceNavigationMode.values) {
+    for (final width in [390.0, 1280.0]) {
+      testWidgets(
+        'topic route has one workspace toolbar in $mode at $width',
+        (tester) async {
+          final router = createBiliRouter(
+            initialLocation: '/topic/12',
+            playerBuilder: (_, _, _) => const SizedBox(),
+          );
+          addTearDown(router.dispose);
+          await tester.binding.setSurfaceSize(Size(width, 1000));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                authRepositoryProvider.overrideWithValue(auth),
+                settingsRepositoryProvider.overrideWithValue(_Settings(mode)),
+                dynamicTopicRepositoryProvider.overrideWithValue(repository),
+              ],
+              child: MaterialApp.router(routerConfig: router),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(find.byType(DynamicTopicScreen), findsOneWidget);
+          expect(find.text('应用内话题'), findsOneWidget);
+          expect(find.text('话题简介'), findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('workspace-common-tools')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('workspace-search')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('search-category-strip')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const ValueKey('workspace-back')),
+            mode == WorkspaceNavigationMode.multipleTabs
+                ? findsNothing
+                : findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        },
+        variant: TargetPlatformVariant({
+          TargetPlatform.android,
+          TargetPlatform.windows,
+        }),
+      );
+    }
+  }
   test(
     'topic pages retain ordinary bounded workspace identity and Back behavior',
     () {
@@ -173,10 +226,11 @@ void main() {
 }
 
 class _Settings implements SettingsRepository {
+  _Settings([this.mode = WorkspaceNavigationMode.singlePage]);
+  final WorkspaceNavigationMode mode;
   @override
-  Future<AppSettings> load() async => const AppSettings.defaults(
-    navigationMode: WorkspaceNavigationMode.singlePage,
-  );
+  Future<AppSettings> load() async =>
+      AppSettings.defaults(navigationMode: mode);
   @override
   Future<void> save(AppSettings settings) async {}
 }

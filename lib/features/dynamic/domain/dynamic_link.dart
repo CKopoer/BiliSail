@@ -16,18 +16,54 @@ String? dynamicSearchQuery(Uri target) {
 }
 
 String? dynamicTopicId(Uri target) {
-  if (target.scheme != 'https' ||
-      target.port != 443 ||
-      target.userInfo.isNotEmpty ||
-      !const {'www.bilibili.com', 'm.bilibili.com'}.contains(target.host) ||
-      !const {'/v/topic/detail', '/v/topic/detail/'}.contains(target.path)) {
+  if (target.userInfo.isNotEmpty) return null;
+  final path = target.path.endsWith('/')
+      ? target.path.substring(0, target.path.length - 1)
+      : target.path;
+  const hosts = {'www.bilibili.com', 'm.bilibili.com'};
+  const paths = {'/v/topic/detail', '/topic-detail', '/topic'};
+  final web =
+      target.scheme == 'https' &&
+      target.port == 443 &&
+      hosts.contains(target.host) &&
+      paths.contains(path);
+  final app =
+      target.scheme == 'bilibili' &&
+      !target.hasPort &&
+      ((const {'topic', 'topic-detail'}.contains(target.host) &&
+              path.isEmpty) ||
+          (hosts.contains(target.host) && paths.contains(path)));
+  if (!web && !app) {
     return null;
   }
   final id = target.queryParameters['topic_id'];
-  return id != null && id.length <= 128 && RegExp(r'^[1-9][0-9]*$').hasMatch(id)
-      ? id
-      : null;
+  return _validTopicId(id) ? id : null;
 }
+
+/// A topic tag's identity takes precedence over tracking or browser jump URLs.
+/// Name-only and unrecognised topic links remain inside application search.
+Uri? dynamicTopicDestination({String? id, required String name, Uri? url}) {
+  final topicId = _validTopicId(id)
+      ? id
+      : url == null
+      ? null
+      : dynamicTopicId(url);
+  if (topicId != null) {
+    return Uri.https('www.bilibili.com', '/v/topic/detail', {
+      'topic_id': topicId,
+    });
+  }
+  var keyword = name.trim();
+  if (keyword.length > 1 && keyword.startsWith('#') && keyword.endsWith('#')) {
+    keyword = keyword.substring(1, keyword.length - 1).trim();
+  }
+  if (keyword.isEmpty) return null;
+  if (keyword.length > 512) keyword = keyword.substring(0, 512);
+  return Uri.https('search.bilibili.com', '/all', {'keyword': keyword});
+}
+
+bool _validTopicId(String? id) =>
+    id != null && id.length <= 128 && RegExp(r'^[1-9][0-9]*$').hasMatch(id);
 
 VideoId? dynamicVideo(Uri target) {
   if (!_bilibiliTarget(target)) return null;

@@ -4,6 +4,7 @@ import '../../core/presentation/public_image_variant.dart';
 import '../../domain/dynamic_post.dart';
 import '../../domain/user.dart';
 import '../../domain/video.dart';
+import '../../features/dynamic/domain/dynamic_link.dart';
 import 'image_viewer.dart';
 import 'dynamic_content_card.dart';
 import 'dynamic_post_text.dart';
@@ -129,6 +130,14 @@ class _PostBody extends StatelessWidget {
     final userId = post.authorId;
     final video = post.video;
     final original = post.original;
+    final topic = post.topic;
+    final topicTarget = topic == null
+        ? null
+        : dynamicTopicDestination(
+            id: topic.id,
+            name: topic.name,
+            url: topic.url,
+          );
     final time = post.publishText.isNotEmpty
         ? post.publishText
         : post.publishedAt?.toLocal().toString().split('.').first ?? '';
@@ -187,7 +196,7 @@ class _PostBody extends StatelessWidget {
               ),
           ],
         ),
-        if (post.topic case final topic?) ...[
+        if (topic != null) ...[
           const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerLeft,
@@ -200,9 +209,9 @@ class _PostBody extends StatelessWidget {
                 color: scheme.primaryContainer,
                 borderRadius: BorderRadius.circular(8),
                 child: InkWell(
-                  onTap: topic.url == null || onOpenLink == null
+                  onTap: topicTarget == null || onOpenLink == null
                       ? null
-                      : () => onOpenLink!(topic.url!),
+                      : () => onOpenLink!(topicTarget),
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(

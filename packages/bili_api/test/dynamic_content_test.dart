@@ -37,6 +37,25 @@ Future<ApiDynamicPost> load(
 }
 
 void main() {
+  test(
+    'a rich topic rid takes precedence over an unrelated jump URL',
+    () async {
+      final value = await load(
+        richPost(
+          nodes: [
+            {
+              'type': 'RICH_TEXT_NODE_TYPE_TOPIC',
+              'rid': '12',
+              'text': '#话题#',
+              'jump_url': 'https://m.bilibili.com/topic-detail?topic_id=99',
+            },
+          ],
+        ),
+      );
+      expect(value.spans.single.linkUrl?.host, 'www.bilibili.com');
+      expect(value.spans.single.linkUrl?.queryParameters['topic_id'], '12');
+    },
+  );
   for (final home in [true, false]) {
     for (final (status, type, label) in const <(Object?, Object?, String)>[
       (1, 2, '预约'),

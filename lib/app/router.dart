@@ -668,61 +668,56 @@ final class _WorkspacePage extends ConsumerWidget {
                 return HistoryScreen(key: PageStorageKey('history-${tab.id}'));
               default:
                 if (tab.isTopic) {
-                  return WorkspacePageHeader.wrap(
-                    context,
-                    DynamicTopicScreen(
-                      key: PageStorageKey('topic-${tab.id}'),
-                      id: uri.pathSegments.last,
-                      onOpenUser: (user) => context.go('/user/${user.value}'),
-                      onOpenVideo: (video) =>
-                          context.go('/video/${video.id.value}'),
-                      onOpenLink: (target) async {
-                        final query = dynamicSearchQuery(target);
-                        if (query != null) {
-                          context.go(
-                            Uri(
-                              path: '/search',
-                              queryParameters: {'q': query},
-                            ).toString(),
-                          );
-                          return;
-                        }
-                        final topic = dynamicTopicId(target),
-                            video = dynamicVideo(target),
-                            room = dynamicLiveRoom(target);
-                        final pgc = dynamicPgcRoute(target);
-                        if (topic != null) {
-                          context.go('/topic/$topic');
-                          return;
-                        }
-                        if (video != null) {
-                          context.go('/video/${video.value}');
-                          return;
-                        }
-                        if (room != null) {
-                          context.go('/live/${room.value}');
-                          return;
-                        }
-                        if (pgc != null) {
-                          context.go(pgc);
-                          return;
-                        }
-                        var opened = false;
-                        try {
-                          opened = await ref.read(webLinkOpenerProvider)(
-                            target,
-                          );
-                        } on PlatformException {
-                          opened = false;
-                        }
-                        if (context.mounted && !opened) {
-                          showAppNotice(context, '无法打开链接，请稍后重试');
-                        }
-                      },
-                      onLogin: () => showAppDialog<void>(
-                        context: context,
-                        builder: (_) => const AccountDialog(),
-                      ),
+                  return DynamicTopicScreen(
+                    key: PageStorageKey('topic-${tab.id}'),
+                    id: uri.pathSegments.last,
+                    onOpenUser: (user) => context.go('/user/${user.value}'),
+                    onOpenVideo: (video) =>
+                        context.go('/video/${video.id.value}'),
+                    onOpenLink: (target) async {
+                      final query = dynamicSearchQuery(target);
+                      if (query != null) {
+                        context.go(
+                          Uri(
+                            path: '/search',
+                            queryParameters: {'q': query},
+                          ).toString(),
+                        );
+                        return;
+                      }
+                      final topic = dynamicTopicId(target),
+                          video = dynamicVideo(target),
+                          room = dynamicLiveRoom(target);
+                      final pgc = dynamicPgcRoute(target);
+                      if (topic != null) {
+                        context.go('/topic/$topic');
+                        return;
+                      }
+                      if (video != null) {
+                        context.go('/video/${video.value}');
+                        return;
+                      }
+                      if (room != null) {
+                        context.go('/live/${room.value}');
+                        return;
+                      }
+                      if (pgc != null) {
+                        context.go(pgc);
+                        return;
+                      }
+                      var opened = false;
+                      try {
+                        opened = await ref.read(webLinkOpenerProvider)(target);
+                      } on PlatformException {
+                        opened = false;
+                      }
+                      if (context.mounted && !opened) {
+                        showAppNotice(context, '无法打开链接，请稍后重试');
+                      }
+                    },
+                    onLogin: () => showAppDialog<void>(
+                      context: context,
+                      builder: (_) => const AccountDialog(),
                     ),
                   );
                 }

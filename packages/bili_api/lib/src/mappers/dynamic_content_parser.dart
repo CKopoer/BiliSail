@@ -19,10 +19,13 @@ Uri _topicUrl(String id) =>
     Uri.https('www.bilibili.com', '/v/topic/detail', {'topic_id': id});
 
 Uri? _richNodeUrl(Map<String, Object?> node, String dynamicId) {
-  final direct = _uri(node['jump_url']);
-  if (direct != null) return direct;
   final rid = node['rid'];
   final numericId = _id(rid);
+  if (node['type'] == 'RICH_TEXT_NODE_TYPE_TOPIC' && numericId != null) {
+    return _topicUrl(numericId);
+  }
+  final direct = _uri(node['jump_url']);
+  if (direct != null) return direct;
   return switch (node['type']) {
     'RICH_TEXT_NODE_TYPE_BV'
         when rid is String && RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(rid) =>
