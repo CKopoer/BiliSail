@@ -10,19 +10,20 @@ function Save-BuildStageTimings {
   } catch { Write-Warning 'Could not save build timing diagnostics; preserving the build result.' }
 }
 
-function Invoke-BuildStage([string]$Name, [scriptblock]$Action) {
+function Invoke-BuildStage([string]$StageName, [scriptblock]$Action) {
   $watch = [Diagnostics.Stopwatch]::StartNew()
   $succeeded = $false
-  Write-Host "::group::$Name"
+  Write-Host "::group::$StageName"
   try {
+    # Scriptblocks can read caller variables; do not shadow the package $name.
     & $Action
     $succeeded = $true
   } finally {
     $watch.Stop()
     $script:BuildStageTimings.Add([ordered]@{
-      stage = $Name; seconds = [Math]::Round($watch.Elapsed.TotalSeconds, 3); success = $succeeded
+      stage = $StageName; seconds = [Math]::Round($watch.Elapsed.TotalSeconds, 3); success = $succeeded
     })
-    Write-Host "$Name finished in $([Math]::Round($watch.Elapsed.TotalSeconds, 1))s (success=$succeeded)"
+    Write-Host "$StageName finished in $([Math]::Round($watch.Elapsed.TotalSeconds, 1))s (success=$succeeded)"
     Write-Host '::endgroup::'
     Save-BuildStageTimings
   }

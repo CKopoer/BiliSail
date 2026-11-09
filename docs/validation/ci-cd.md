@@ -267,6 +267,18 @@ Release 草稿及全部附件上传成功后，使用 GitHub 官方 [actions/git
 
 重跑旧 Release run 仍使用旧提交，不会取得本次脚本修复。修复进入新提交后，应先取得该提交的同版本 CI 产物，再新建启用复用的 Release；提交不同的旧产物仍不会复用。
 
+## Release #98：计时参数遮蔽源码归档名称（2026-11-09）
+
+[Release #98](https://github.com/CKopoer/BiliSail/actions/runs/42547796564/job/128936539304) 对应提交 `292befa86e68d017838fe3aa6e629b3dbda10083`、版本 `1.2.9+0`。同提交的 [CI](https://github.com/CKopoer/BiliSail/actions/runs/42545056116) 及七个平台构建通过；Release 下载 Android 复用产物后，解压 Windows x64 产物因 `Mux source archive.mux-source.zip` 已存在而失败，尚未执行来源校验及草稿创建。实际 Android artifact 也包含该错误文件名及其校验文件。
+
+新增的 [构建计时函数](../../tool/build-stage.ps1) 使用 `$Name` 参数，PowerShell 不区分变量名大小写，脚本块执行时该参数遮蔽了 [打包入口](../../tool/build-release.ps1) 的 `$name`。源码归档因此采用阶段名，丢失版本和目标前缀。现将参数改为 `$StageName`，恢复 `BiliSail-<version>-<target>.mux-source.zip` 命名，保持阶段日志、返回值、异常、文件集合和 SHA-256 校验规则。
+
+[构建回归](../../tool/test-build-optimization.ps1) 从生产脚本的 AST 取得真实源码归档脚本块，用小型源文件生成七个目标的 ZIP，逐项检查文件名和归档内的目标配置，再合并到同一目录验证没有冲突或丢失。新回归在旧计时函数上复现原错误，修复后通过；原有计时返回值、异常和阶段记录检查继续通过。此脚本已由根检查的 Lint 阶段调用。
+
+本轮 Linux／PowerShell 7.6.9 定向构建回归及 93 项 Release／CI 触发／缓存行为测试通过，修改的 PowerShell 语法、本文本地链接和 `git diff --check` 通过。`tool/check.ps1 -EnforceLockfile` 在既有 `test-macos-release-validation.ps1:318` 的停滞子进程终止检查失败，未进入 Flutter 阶段；环境也未安装 Flutter，不能计为完整检查或平台构建通过。完整检查日志保存在 `/tmp/bilisail-release-fix-check.log`。
+
+旧 artifact 的错误文件名不会随代码修复改变，重跑旧 Release 仍使用旧提交。后续先取得修复提交的同版本 CI 产物，再新建 Release 运行；来源检查继续禁止复用其他提交的产物。
+
 ## Release 产物混入 Windows 安装器中间文件（2026-11-01）
 
 [失败任务](https://github.com/CKopoer/BiliSail/actions/runs/41220937672/job/124595231809) 对应提交 `463358953dec5832ed29a831593ab0a1dd88dabd`、版本 `1.2.6+0`。六个目标都成功复用同提交的 [CI 41218198314](https://github.com/CKopoer/BiliSail/actions/runs/41218198314)；下载成功后，`verifyReleaseAssets` 因文件集合不符而停止，未执行草稿创建。
