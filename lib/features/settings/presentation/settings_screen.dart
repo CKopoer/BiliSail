@@ -173,7 +173,7 @@ final class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 progress: _progress,
                 itemKey: (category) =>
                     ValueKey('settings-category-${category.name}'),
-                buttonStyle: PageTabStyle.buttonStyle(context),
+                buttonStyle: PageTabStyle.buttonStyle(context, fontSize: 14),
                 labelBuilder: (context, category) =>
                     PageTabStyle.label(category.label),
                 onSelected: _selectCategory,
