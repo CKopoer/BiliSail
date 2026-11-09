@@ -307,7 +307,7 @@ private final class DesktopWindowController {
         result(FlutterError(code: "invalid_argument", message: "Expected a view ID.", details: nil))
         return
       }
-      let geometryCall = ["restoreGeometry", "captureGeometry", "retireGeometry"].contains(call.method)
+      let geometryCall = ["restoreGeometry", "captureGeometry", "saveGeometry", "retireGeometry"].contains(call.method)
       let owner = (args["owner"] as? NSNumber)?.int64Value ?? -1
       if geometryCall && owner <= 0 {
         result(FlutterError(code: "invalid_argument", message: "Expected a geometry owner.", details: nil))
@@ -316,15 +316,15 @@ private final class DesktopWindowController {
       let ownsGeometry = self.geometryOwner?.view == viewID && self.geometryOwner?.owner == owner
       if call.method == "retireGeometry" {
         if ownsGeometry {
-          self.miniPlayers.removeValue(forKey: viewID)?.restore()
           self.geometryTracker?.detach()
           self.geometryTracker = nil
           self.geometryOwner = nil
+          self.miniPlayers.removeValue(forKey: viewID)?.retire()
         }
         result(nil)
         return
       }
-      if call.method == "captureGeometry" && !ownsGeometry {
+      if ["captureGeometry", "saveGeometry"].contains(call.method) && !ownsGeometry {
         result(nil)
         return
       }
@@ -387,6 +387,19 @@ private final class DesktopWindowController {
         result(nil)
       case "captureGeometry":
         self.geometryTracker?.capture()
+        result(nil)
+      case "saveGeometry":
+        // Capture while the mini marker still excludes compact bounds. Closing
+        // must not rebuild the titlebar/resize a Flutter view being unmounted.
+        self.geometryTracker?.detach()
+        self.geometryTracker = nil
+        self.geometryOwner = nil
+        if let mini = self.miniPlayers.removeValue(forKey: viewID) {
+          // Fullscreen visibility belongs to the existing transition/tab-group
+          // close barrier; hiding here could also hide surviving native tabs.
+          if !window.styleMask.contains(.fullScreen) { window.orderOut(nil) }
+          mini.retire()
+        }
         result(nil)
       case "activate":
         if window.isMiniaturized { window.deminiaturize(nil) }
@@ -602,7 +615,7 @@ final class WindowFullScreenCoordinator {
 
 // Native presentation preferences are shared across accounts, with one record
 // per role. Smoke builds use no persistent state or production window geometry.
-private final class MiniPlaybackPresentation {
+final class MiniPlaybackPresentation {
   private static var active: Set<ObjectIdentifier> = []
   static func contains(_ window: NSWindow) -> Bool { active.contains(ObjectIdentifier(window)) }
   private weak var window: NSWindow?
@@ -615,9 +628,11 @@ private final class MiniPlaybackPresentation {
   private var observers: [NSObjectProtocol] = []
   private var restored = false
   private let key = "bilisail.windowGeometry.v1.miniPlayer"
+  private let defaults: UserDefaults
 
-  init(window: NSWindow) {
+  init(window: NSWindow, defaults: UserDefaults = .standard) {
     self.window = window
+    self.defaults = defaults
     identity = ObjectIdentifier(window)
     style = window.styleMask
     minimum = window.minSize
@@ -630,31 +645,31 @@ private final class MiniPlaybackPresentation {
     window.styleMask.remove(.titled)
     window.level = .floating
     var frame = NSRect(x: normalFrame.maxX - 400, y: normalFrame.maxY - 225, width: 400, height: 225)
-    if let values = UserDefaults.standard.array(forKey: key) as? [Double], values.count == 4 {
+    if let values = defaults.array(forKey: key) as? [Double], values.count == 4 {
       frame = NSRect(x: values[0], y: values[1], width: values[2], height: values[3])
     }
     if let fitted = PlaybackGeometryTracker.fitToVisibleScreen(frame) {
       window.setFrame(fitted, display: true)
     }
-    for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification, NSWindow.willCloseNotification] {
+    for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
       observers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
         self?.save()
       })
     }
+    observers.append(NotificationCenter.default.addObserver(
+      forName: NSWindow.willCloseNotification, object: window, queue: .main
+    ) { [weak self] _ in self?.retire() })
   }
 
   private func save() {
     guard let window = window, !window.isMiniaturized, PlaybackGeometryTracker.valid(window.frame) else { return }
     let frame = window.frame
-    UserDefaults.standard.set([Double(frame.minX), Double(frame.minY), Double(frame.width), Double(frame.height)], forKey: key)
+    defaults.set([Double(frame.minX), Double(frame.minY), Double(frame.width), Double(frame.height)], forKey: key)
   }
 
   func restore() {
     guard !restored else { return }
-    save()
-    restored = true
-    observers.forEach { NotificationCenter.default.removeObserver($0) }
-    observers.removeAll()
+    finish()
     if let window = window {
       window.styleMask = style
       window.minSize = minimum
@@ -664,7 +679,23 @@ private final class MiniPlaybackPresentation {
     }
     Self.active.remove(identity)
   }
-  deinit { restore() }
+
+  // Destruction/NSWindow close only releases tracking. Restoring is an explicit
+  // user action and must never run after FlutterViewController disposal.
+  func retire() {
+    guard !restored else { return }
+    finish()
+    Self.active.remove(identity)
+  }
+
+  private func finish() {
+    save()
+    restored = true
+    observers.forEach { NotificationCenter.default.removeObserver($0) }
+    observers.removeAll()
+  }
+
+  deinit { retire() }
 }
 
 private final class PersistentWindowGeometry {

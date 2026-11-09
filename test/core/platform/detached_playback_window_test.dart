@@ -9,6 +9,73 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('mini close suppresses unmount restore before saving geometry', (
+    tester,
+  ) async {
+    const channel = MethodChannel('bilisail/desktop_window');
+    final entering = Completer<void>();
+    final transitions = <bool>[];
+    final constraints = <bool>[];
+    final events = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      if (call.method == 'setMiniPlayer') {
+        final mini =
+            (call.arguments as Map<Object?, Object?>)['enabled'] as bool;
+        transitions.add(mini);
+        if (mini) await entering.future;
+      }
+      return null;
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    late _FakeWindow window;
+    Widget build(bool open) => DesktopPlaybackWindow(
+      playback: open
+          ? _DisposeProbe(
+              onDispose: () {
+                events.add('unmount');
+                unawaited(window.windowService.setMiniPlayer(false));
+              },
+            )
+          : null,
+      windowFactory: ({required title, required onCloseRequested}) =>
+          window = _FakeWindow(
+            tester.view,
+            onCloseRequested,
+            onSave: () async => events.add('save'),
+            onPrepareClose: () async => events.add('prepare'),
+            onDispose: () => events.add('destroy'),
+          ),
+      onCloseRequested: () {},
+      onError: (error) => fail('$error'),
+      child: const SizedBox(),
+    );
+    await tester.pumpWidget(build(true));
+    await tester.pumpAndSettle();
+    window.windowService.configureMiniPlayerConstraints = (mini) async =>
+        constraints.add(mini);
+    final enter = window.windowService.setMiniPlayer(true);
+    await tester.pump();
+    expect(transitions, [true]);
+    await tester.pumpWidget(build(false));
+    await tester.pump();
+    expect(events, ['unmount']);
+    expect(window.disposed, isFalse);
+    entering.complete();
+    await tester.pumpAndSettle();
+    await enter;
+    expect(transitions, [true]);
+    expect(constraints, [true]);
+    expect(events, ['unmount', 'save', 'prepare', 'destroy']);
+    expect(window.disposed, isTrue);
+  });
+
   testWidgets('new playback mounts only in its prepared view', (tester) async {
     final prepared = Completer<void>();
     final views = <int>[];

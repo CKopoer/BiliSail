@@ -40,6 +40,7 @@ void main() {
         );
         final rootWindow = WindowService();
         final controller = DesktopPlaybackWindowController();
+        final detachedOpen = ValueNotifier(true);
         WindowService window = rootWindow;
         DetachedPlaybackWindow? nativeWindow;
         final settings = AppSettings(
@@ -66,30 +67,36 @@ void main() {
             ProviderScope(
               overrides: [playbackSessionProvider.overrideWithValue(session)],
               child: detached
-                  ? DesktopPlaybackWindow(
-                      controller: controller,
-                      windowFactory:
-                          ({required title, required onCloseRequested}) {
-                            nativeWindow = DetachedPlaybackWindow.create(
-                              title: title,
-                              onCloseRequested: onCloseRequested,
-                            );
-                            return nativeWindow!;
-                          },
-                      onCloseRequested: () {},
-                      onError: (error) => throw StateError('$error'),
-                      playback: Builder(
-                        builder: (context) => WorkspacePlaybackWindow(
-                          shortcuts: const ShortcutSettings.defaults(),
-                          onBack: () {},
-                          onClose: () {},
-                          onActivateBrowser: () {},
-                          theme: BiliTheme.dark(),
-                          child: player(),
+                  ? ValueListenableBuilder<bool>(
+                      valueListenable: detachedOpen,
+                      builder: (context, open, _) => DesktopPlaybackWindow(
+                        controller: controller,
+                        waitForPlaybackRelease: session.close,
+                        windowFactory:
+                            ({required title, required onCloseRequested}) {
+                              nativeWindow = DetachedPlaybackWindow.create(
+                                title: title,
+                                onCloseRequested: onCloseRequested,
+                              );
+                              return nativeWindow!;
+                            },
+                        onCloseRequested: () => detachedOpen.value = false,
+                        onError: (error) => throw StateError('$error'),
+                        playback: open
+                            ? Builder(
+                                builder: (context) => WorkspacePlaybackWindow(
+                                  shortcuts: const ShortcutSettings.defaults(),
+                                  onBack: () {},
+                                  onClose: () => detachedOpen.value = false,
+                                  onActivateBrowser: () {},
+                                  theme: BiliTheme.dark(),
+                                  child: player(),
+                                ),
+                              )
+                            : null,
+                        child: const InputTestApp(
+                          home: Scaffold(body: SizedBox.expand()),
                         ),
-                      ),
-                      child: const InputTestApp(
-                        home: Scaffold(body: SizedBox.expand()),
                       ),
                     )
                   : InputTestApp(
@@ -153,6 +160,18 @@ void main() {
             );
             expect(native.outerSize, original);
             expect(session.sourceGeneration, generation);
+            if (detached) {
+              window.onMiniPlayerRequested!();
+              await _until(tester, () => window.miniPlayer.value);
+              native.resize(320, 180);
+              await tester.pump(const Duration(milliseconds: 100));
+              await tester.tapAt(
+                tester.getCenter(find.byTooltip('关闭小窗')),
+                view: View.of(tester.element(find.byTooltip('关闭小窗'))),
+              );
+              await _until(tester, () => !nativeWindow!.isOpen);
+              expect(find.byKey(const ValueKey('mini-player')), findsNothing);
+            }
           } else if (Platform.isAndroid) {
             await _until(
               tester,
@@ -193,6 +212,7 @@ void main() {
           await session.close();
           await controller.close();
           await rootWindow.dispose();
+          detachedOpen.dispose();
         }
       },
     );

@@ -5,6 +5,75 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
+  func testMiniPlayerRetirementNeverRestoresClosingWindow() {
+    let suite = "BiliSail.MiniRetirement.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 900, height: 600),
+      styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    defer { window.close() }
+    var mini: MiniPlaybackPresentation? = MiniPlaybackPresentation(window: window, defaults: defaults)
+    let compact = window.frame
+    let style = window.styleMask
+    let minimum = window.minSize
+    mini?.retire()
+    mini?.restore()
+    mini = nil
+    XCTAssertEqual(window.frame, compact)
+    XCTAssertEqual(window.styleMask, style)
+    XCTAssertEqual(window.minSize, minimum)
+    XCTAssertEqual(window.level, .floating)
+    XCTAssertFalse(MiniPlaybackPresentation.contains(window))
+    XCTAssertEqual(defaults.array(forKey: "bilisail.windowGeometry.v1.miniPlayer") as? [Double],
+      [Double(compact.minX), Double(compact.minY), Double(compact.width), Double(compact.height)])
+  }
+
+  func testMiniPlayerWindowCloseAndDeinitOnlyRemoveTracking() {
+    for closeFirst in [false, true] {
+      let suite = "BiliSail.MiniClose.\(UUID().uuidString)"
+      let defaults = UserDefaults(suiteName: suite)!
+      defer { defaults.removePersistentDomain(forName: suite) }
+      let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 900, height: 600),
+        styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+      window.isReleasedWhenClosed = false
+      defer { window.close() }
+      var mini: MiniPlaybackPresentation? = MiniPlaybackPresentation(window: window, defaults: defaults)
+      let compact = window.frame
+      let style = window.styleMask
+      if closeFirst {
+        window.close()
+        XCTAssertFalse(MiniPlaybackPresentation.contains(window))
+        mini?.restore()
+      }
+      mini = nil
+      XCTAssertEqual(window.frame, compact)
+      XCTAssertEqual(window.styleMask, style)
+      XCTAssertFalse(MiniPlaybackPresentation.contains(window))
+    }
+  }
+
+  func testMiniPlayerExplicitRestoreStillRestoresNormalPresentation() {
+    let suite = "BiliSail.MiniRestore.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 900, height: 600),
+      styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    defer { window.close() }
+    let frame = window.frame
+    let style = window.styleMask
+    let minimum = window.minSize
+    let mini = MiniPlaybackPresentation(window: window, defaults: defaults)
+    mini.restore()
+    mini.retire()
+    XCTAssertEqual(window.frame, frame)
+    XCTAssertEqual(window.styleMask, style)
+    XCTAssertEqual(window.minSize, minimum)
+    XCTAssertEqual(window.level, .normal)
+    XCTAssertFalse(MiniPlaybackPresentation.contains(window))
+  }
+
   func testFullscreenTabClosePreservesSurvivingTabsAndDefersDuplicateReplies() {
     var scheduled: [() -> Void] = []
     var closes = 0

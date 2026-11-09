@@ -245,6 +245,8 @@ DesktopWindowChannel::DesktopWindowChannel(flutter::BinaryMessenger* messenger,
         }
         if (call.method_name() == "retireGeometry") {
           if (geometry_.Owns(id, owner)) {
+            const auto mini = mini_players_.find(id);
+            if (mini != mini_players_.end()) mini->second->Retire();
             mini_players_.erase(id);
             geometry_.Retire(id, owner);
             if (frame_view_ == id) {
@@ -299,6 +301,8 @@ DesktopWindowChannel::DesktopWindowChannel(flutter::BinaryMessenger* messenger,
               return;
             }
           } else {
+            const auto mini = mini_players_.find(id);
+            if (mini != mini_players_.end()) mini->second->Restore();
             mini_players_.erase(id);
           }
           result->Success();
@@ -370,14 +374,14 @@ DesktopWindowChannel::DesktopWindowChannel(flutter::BinaryMessenger* messenger,
             maximized = *value;
           }
           const bool save = call.method_name() == "saveGeometry";
-          if (save) {
-            const auto mini = mini_players_.find(id);
-            if (mini != mini_players_.end()) mini->second->Save();
-            mini_players_.erase(id);
-          }
           const bool captured = save
               ? geometry_.SaveAndHide(window, id, owner, maximized)
               : geometry_.Capture(window, id, owner, maximized);
+          if (save) {
+            const auto mini = mini_players_.find(id);
+            if (mini != mini_players_.end()) mini->second->Retire();
+            mini_players_.erase(id);
+          }
           if (save && frame_view_ == id) {
             playback_frame_.reset();
             frame_view_ = -1;

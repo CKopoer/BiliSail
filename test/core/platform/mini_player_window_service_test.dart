@@ -64,6 +64,69 @@ void main() {
   );
 
   test(
+    'close drains native enter, skips queued restore and rejects late changes',
+    () async {
+      final entering = Completer<void>();
+      final calls = <bool>[];
+      final constraints = <bool>[];
+      var preparations = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'setMiniPlayer') {
+              final enabled =
+                  (call.arguments as Map<Object?, Object?>)['enabled'] as bool;
+              calls.add(enabled);
+              if (enabled) await entering.future;
+            }
+            return null;
+          });
+      final window = WindowService.forView(
+        viewId: 42,
+        setFullScreen: (_) async => fail('Closing window changed fullscreen'),
+        activate: () async {},
+        prepareToClose: () async => preparations++,
+      );
+      window.configureMiniPlayerConstraints = (mini) async =>
+          constraints.add(mini);
+      final enter = window.setMiniPlayer(true);
+      await Future<void>.delayed(Duration.zero);
+      final restore = window.setMiniPlayer(false);
+      final closing = window.prepareToClose();
+      expect(window.prepareToClose(), same(closing));
+      await Future<void>.delayed(Duration.zero);
+      expect(preparations, 0);
+      entering.complete();
+      await Future.wait([enter, restore, closing]);
+      await window.setMiniPlayer(false);
+      await window.setMiniPlayer(true);
+      await window.setAlwaysOnTop(false);
+      await window.setFullScreen(true);
+      expect(calls, [true]);
+      expect(constraints, [true]);
+      expect(preparations, 1);
+    },
+  );
+
+  test('close cancels mini enter before native dispatch', () async {
+    final constraintsReady = Completer<void>();
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call.method);
+          return null;
+        });
+    final window = _Window();
+    window.configureMiniPlayerConstraints = (_) => constraintsReady.future;
+    final entering = window.setMiniPlayer(true);
+    await Future<void>.delayed(Duration.zero);
+    final closing = window.beginClose();
+    constraintsReady.complete();
+    await Future.wait([entering, closing]);
+    expect(calls, isEmpty);
+    expect(window.miniPlayer.value, isFalse);
+  });
+
+  test(
     'failed native transition rolls constraints back and leaves mode unchanged',
     () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

@@ -77,6 +77,7 @@ class WindowService {
   bool _handlesMainWindowClose = false;
   bool _requestingExit = false;
   Future<void>? _preparingToClose;
+  bool _closing = false;
 
   final _maximized = ValueNotifier(false);
   ValueListenable<bool> get maximized => _maximized;
@@ -100,7 +101,9 @@ class WindowService {
   }
 
   Future<void> setAlwaysOnTop(bool enabled) async {
-    if (!hasDesktopWindow || _isViewAvailable?.call() == false) return;
+    if (_closing || !hasDesktopWindow || _isViewAvailable?.call() == false) {
+      return;
+    }
     if (Platform.isWindows || (Platform.isMacOS && viewId != null)) {
       await _desktopChannel
           .invokeMethod<void>('setAlwaysOnTop', {
@@ -119,14 +122,16 @@ class WindowService {
   Future<void> setMiniPlayer(bool enabled) {
     final operation = _presentationCommands.then((_) async {
       if (!supportsMiniPlayer ||
+          _closing ||
           _isViewAvailable?.call() == false ||
           miniPlayer.value == enabled) {
         return;
       }
-      if (enabled && _preparingToClose != null) return;
       if (enabled) await capturePlaybackGeometry();
+      if (_closing || _isViewAvailable?.call() == false) return;
       if (enabled) _beforeMiniPlayerTopmost = alwaysOnTop.value;
       if (enabled) await configureMiniPlayerConstraints?.call(true);
+      if (_closing || _isViewAvailable?.call() == false) return;
       try {
         await _desktopChannel
             .invokeMethod<void>('setMiniPlayer', {
@@ -135,11 +140,15 @@ class WindowService {
               'enabled': enabled,
             })
             .timeout(_geometryTimeout);
-        if (!enabled) await configureMiniPlayerConstraints?.call(false);
+        if (!_closing && !enabled) {
+          await configureMiniPlayerConstraints?.call(false);
+        }
         miniPlayer.value = enabled;
         alwaysOnTop.value = enabled ? true : _beforeMiniPlayerTopmost;
       } catch (_) {
-        if (enabled) await configureMiniPlayerConstraints?.call(false);
+        if (!_closing && enabled) {
+          await configureMiniPlayerConstraints?.call(false);
+        }
         rethrow;
       }
     });
@@ -266,7 +275,7 @@ class WindowService {
   }
 
   Future<void> savePlaybackGeometry() async {
-    if (Platform.isWindows &&
+    if ((Platform.isWindows || Platform.isMacOS) &&
         _geometryAttached &&
         _isViewAvailable?.call() != false) {
       _geometryAttached = false;
@@ -511,27 +520,37 @@ class WindowService {
 
   /// Stops accepting presentation changes and waits for AppKit to leave its
   /// asynchronous fullscreen transition before the SDK destroys this view.
-  Future<void> prepareToClose() =>
-      _preparingToClose ??= _isViewAvailable?.call() == false
-      ? Future<void>.value()
-      : _prepareViewToClose?.call() ?? Future<void>.value();
+  Future<void> prepareToClose() => _preparingToClose ??= _prepareToClose();
+
+  /// Called before unmount so page cleanup cannot restore a retiring window.
+  /// Already dispatched native mini-player changes finish before geometry is saved.
+  Future<void> beginClose() {
+    _closing = true;
+    return _presentationCommands;
+  }
+
+  Future<void> _prepareToClose() async {
+    await beginClose();
+    if (_isViewAvailable?.call() == false) return;
+    await _prepareViewToClose?.call();
+  }
 
   Future<void> setFullScreen(
     bool value, {
     FullScreenOrientation? orientation,
   }) async {
-    if (_preparingToClose != null) return;
+    if (_closing) return;
     final setViewFullScreen = _setViewFullScreen;
     if (setViewFullScreen != null) {
       if (_isViewAvailable?.call() == false) return;
       // The native fullscreen transition may replace the normal placement.
       // Capture before entering; fullscreen frames never become restore bounds.
       if (value && !_fullScreen) await capturePlaybackGeometry();
-      if (_preparingToClose != null || _isViewAvailable?.call() == false) {
+      if (_closing || _isViewAvailable?.call() == false) {
         return;
       }
       await setViewFullScreen(value);
-      if (_preparingToClose != null || _isViewAvailable?.call() == false) {
+      if (_closing || _isViewAvailable?.call() == false) {
         return;
       }
     } else if (hasDesktopWindow) {

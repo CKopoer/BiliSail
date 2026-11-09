@@ -990,19 +990,21 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _miniPlayer = false;
     _systemPip = false;
     if (restore && widget.window.hasDesktopWindow) {
+      final window = widget.window;
+      // Navigation callbacks run before the owner decides whether to close the
+      // detached view. Let that frame mark it closing before queuing a restore.
       unawaited(
-        widget.window.setMiniPlayer(false).catchError((
-          Object error,
-          StackTrace stack,
-        ) {
-          FlutterError.reportError(
-            FlutterErrorDetails(
-              exception: error,
-              stack: stack,
-              library: 'BiliSail mini player cleanup',
-            ),
-          );
-        }),
+        WidgetsBinding.instance.endOfFrame
+            .then((_) => window.setMiniPlayer(false))
+            .catchError((Object error, StackTrace stack) {
+              FlutterError.reportError(
+                FlutterErrorDetails(
+                  exception: error,
+                  stack: stack,
+                  library: 'BiliSail mini player cleanup',
+                ),
+              );
+            }),
       );
     }
   }
