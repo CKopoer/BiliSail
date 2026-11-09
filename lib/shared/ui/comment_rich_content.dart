@@ -10,6 +10,7 @@ import '../../features/comments/domain/comment_text.dart';
 import '../../features/comments/domain/comment_time.dart';
 import '../../features/comments/domain/comments_repository.dart';
 import 'comment_text_styles.dart';
+import 'comment_badge.dart';
 
 TextEditingValue insertCommentEmote(TextEditingValue value, String token) {
   final selection = value.selection;
@@ -186,6 +187,30 @@ class _CommentRichContentState extends State<CommentRichContent> {
             ),
           ),
         ),
+        if (comment.upLiked || comment.upReplied)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 4,
+              children: [
+                if (comment.upLiked)
+                  Text(
+                    'UP 主觉得很赞',
+                    style: styles.badge.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                if (comment.upReplied)
+                  Text(
+                    'UP 主回复过',
+                    style: styles.badge.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         if (comment.pictures.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -269,6 +294,8 @@ class CommentAuthorHeader extends StatelessWidget {
                 ),
               ),
             ),
+            if (c.isUpAuthor) const CommentBadge(label: 'UP'),
+            if (c.isPinned) const CommentBadge(label: '置顶', outlined: true),
             if (c.level != null && c.level! >= 0 && c.level! <= 6)
               BiliLevelBadge(level: c.level!),
             if (c.verifyType == 0 || c.verifyType == 1)

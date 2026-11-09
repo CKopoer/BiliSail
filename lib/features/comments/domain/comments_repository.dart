@@ -17,6 +17,10 @@ final class CommentEntry {
     this.ipLocation,
     this.likeCount = 0,
     this.liked = false,
+    this.isPinned = false,
+    this.isUpAuthor = false,
+    this.upLiked = false,
+    this.upReplied = false,
     this.replyCount = 0,
     this.rootId,
     this.parentId,
@@ -58,6 +62,7 @@ final class CommentEntry {
   final String? ipLocation;
   final int likeCount, replyCount;
   final bool liked;
+  final bool isPinned, isUpAuthor, upLiked, upReplied;
   final String? rootId, parentId;
   final List<CommentEntry> replies;
   CommentEntry withLike(bool value) => CommentEntry(
@@ -85,6 +90,10 @@ final class CommentEntry {
     ipLocation: ipLocation,
     likeCount: (likeCount + (value ? 1 : -1)).clamp(0, 1 << 31),
     liked: value,
+    isPinned: isPinned,
+    isUpAuthor: isUpAuthor,
+    upLiked: upLiked,
+    upReplied: upReplied,
     replyCount: replyCount,
     rootId: rootId,
     parentId: parentId,
@@ -116,6 +125,10 @@ final class CommentEntry {
         ipLocation: ipLocation,
         likeCount: likeCount,
         liked: liked,
+        isPinned: isPinned,
+        isUpAuthor: isUpAuthor,
+        upLiked: upLiked,
+        upReplied: upReplied,
         replyCount: count ?? replyCount,
         rootId: rootId,
         parentId: parentId,

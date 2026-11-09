@@ -830,21 +830,11 @@ final class BiliApiClient {
       endpoint,
       context,
     );
-    final values = <Object?>[
-      if (cursor == null) ...[
-        ..._list(data['top_replies'] ?? const [], endpoint),
-        if (_optionalMap(data['upper'])?['top']
-            case final Map<String, Object?> top)
-          top,
-      ],
-      ..._list(data['replies'] ?? const [], endpoint),
-    ];
-    final items = <ApiVideoComment>[];
-    final seen = <String>{};
-    for (final value in values.take(100)) {
-      final entry = _comment(_map(value, endpoint), endpoint);
-      if (seen.add(entry.id)) items.add(entry);
-    }
+    final items = _commentPageItems(
+      data,
+      endpoint,
+      includePinned: cursor == null,
+    );
     final paging = _map(data['cursor'], endpoint);
     final isEnd = _bool(paging['is_end']);
     if (isEnd == null) {
@@ -906,19 +896,11 @@ final class BiliApiClient {
       endpoint,
       context,
     );
-    final values = <Object?>[
-      if (page == 1 &&
-          rootId == null &&
-          _optionalMap(data['upper'])?['top'] is Map)
-        _optionalMap(data['upper'])?['top'],
-      ..._list(data['replies'] ?? const [], endpoint),
-    ];
-    final seen = <String>{};
-    final items = <ApiVideoComment>[];
-    for (final value in values.take(100)) {
-      final comment = _comment(_map(value, endpoint), endpoint);
-      if (seen.add(comment.id)) items.add(comment);
-    }
+    final items = _commentPageItems(
+      data,
+      endpoint,
+      includePinned: page == 1 && rootId == null,
+    );
     final paging = _map(data['page'], endpoint);
     final count = _requiredInt(paging['count'], endpoint);
     final size = _requiredInt(paging['size'], endpoint);
@@ -939,11 +921,52 @@ final class BiliApiClient {
     );
   }
 
+  List<ApiVideoComment> _commentPageItems(
+    Map<String, Object?> data,
+    String endpoint, {
+    required bool includePinned,
+  }) {
+    final upper = _commentMap(data['upper']);
+    final upperMid = _userMid(upper['mid']);
+    final top = _commentMap(data['top']);
+    final pinned = <Object?>[
+      if (includePinned) ...[
+        ..._list(data['top_replies'] ?? const [], endpoint).take(100),
+        if (upper['top'] is Map<String, Object?>) upper['top'],
+        for (final key in ['admin', 'upper', 'vote'])
+          if (top[key] is Map<String, Object?>) top[key],
+      ],
+    ];
+    // Parse pinned copies first so de-duplication retains their marker.
+    final values = [
+      for (final value in pinned) (value, true),
+      for (final value in _list(
+        data['replies'] ?? const [],
+        endpoint,
+      ).take(100))
+        (value, false),
+    ];
+    final seen = <String>{};
+    final items = <ApiVideoComment>[];
+    for (final (value, isPinned) in values.take(100)) {
+      final comment = _comment(
+        _map(value, endpoint),
+        endpoint,
+        isPinned: isPinned,
+        upperMid: upperMid,
+      );
+      if (seen.add(comment.id)) items.add(comment);
+    }
+    return items;
+  }
+
   ApiVideoComment _comment(
     Map<String, Object?> entry,
     String endpoint, {
     int depth = 0,
     String? submissionMessage,
+    bool isPinned = false,
+    String? upperMid,
   }) {
     final member = _map(entry['member'], endpoint);
     final content = _map(entry['content'], endpoint);
@@ -960,6 +983,9 @@ final class BiliApiClient {
     )?.trim();
     final card = _commentMap(_commentMap(member['user_sailing'])['cardbg']);
     final fan = _commentMap(card['fan']);
+    final authorMid =
+        _userMid(member['mid']) ?? _userMid(entry['mid_str'] ?? entry['mid']);
+    final upAction = _commentMap(entry['up_action']);
     String? optionalId(Object? value) =>
         value == null || value == 0 || value == '0'
         ? null
@@ -967,7 +993,13 @@ final class BiliApiClient {
     return ApiVideoComment(
       id: _id(entry['rpid_str'] ?? entry['rpid'], endpoint),
       author: _requiredString(member['uname'], endpoint),
-      authorMid: _userMid(member['mid']),
+      authorMid: authorMid,
+      isPinned:
+          isPinned ||
+          _bool(_commentMap(entry['reply_control'])['is_up_top']) == true,
+      isUpAuthor: upperMid != null && authorMid == upperMid,
+      upLiked: _bool(upAction['like']) ?? false,
+      upReplied: _bool(upAction['reply']) ?? false,
       state: _int(entry['state']),
       invisible: _bool(entry['invisible']) ?? false,
       submissionMessage: submissionMessage,
@@ -1016,6 +1048,7 @@ final class BiliApiClient {
                       _map(value, endpoint),
                       endpoint,
                       depth: depth + 1,
+                      upperMid: upperMid,
                     ),
                   ),
             ),

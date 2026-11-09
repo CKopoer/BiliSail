@@ -166,6 +166,10 @@ final class ApiVideoComment {
     required this.publishedAt,
     this.ipLocation,
     this.liked = false,
+    this.isPinned = false,
+    this.isUpAuthor = false,
+    this.upLiked = false,
+    this.upReplied = false,
     this.replyCount = 0,
     this.rootId,
     this.parentId,
@@ -206,6 +210,7 @@ final class ApiVideoComment {
   final Map<String, String> mentionedUsers;
   final List<Uri> pictures;
   final bool liked;
+  final bool isPinned, isUpAuthor, upLiked, upReplied;
   final int replyCount;
   final String? rootId;
   final String? parentId;
