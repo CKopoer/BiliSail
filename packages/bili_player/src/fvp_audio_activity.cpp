@@ -2,6 +2,7 @@
 #include "fvp_audio_activity.h"
 #include "../third_party/mdk/Player.h"
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <new>
@@ -19,7 +20,13 @@ struct AudioClock final {
   std::atomic<uint64_t> epoch{1};
   std::atomic<uint64_t> started_epoch{0};
   std::atomic<int64_t> last_position_ms{0};
+  std::atomic<int64_t> resumed_at_ns{0};
 };
+
+int64_t monotonic_nanoseconds() noexcept {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 double audio_clock(void* opaque) noexcept {
   auto& clock = *static_cast<AudioClock*>(opaque);
@@ -45,7 +52,18 @@ double audio_clock(void* opaque) noexcept {
     return static_cast<double>(clock.anchor_ms.load(std::memory_order_relaxed)) / 1000;
   }
   if (clock.started_epoch.load(std::memory_order_relaxed) != epoch) {
-    if (std::abs(static_cast<double>(position) - static_cast<double>(anchor)) > 100) {
+    // onSync runs when video is about to render, not when audio starts. A
+    // delayed renderer can miss the first 100ms of a healthy audio epoch. Only
+    // reject positions outside the range audio could have reached since play;
+    // never synthesize a clock from elapsed time or require that narrow tick.
+    const auto elapsed_ns = monotonic_nanoseconds() -
+        clock.resumed_at_ns.load(std::memory_order_relaxed);
+    const auto native_rate = clock.audio->playbackRate == nullptr
+        ? 1.0 : static_cast<double>(clock.audio->playbackRate(clock.audio->object));
+    const auto rate = std::isfinite(native_rate) && native_rate > 0 ? native_rate : 1.0;
+    const auto elapsed_ms = elapsed_ns > 0 ? static_cast<double>(elapsed_ns) / 1000000 : 0;
+    const auto offset_ms = static_cast<double>(position) - static_cast<double>(anchor);
+    if (offset_ms < -100 || offset_ms > 100 + elapsed_ms * rate) {
       return static_cast<double>(anchor) / 1000;
     }
     clock.started_epoch.store(epoch, std::memory_order_relaxed);
@@ -117,7 +135,11 @@ void bili_fvp_audio_clock_hold(void* clock, int64_t position_ms) {
 
 void bili_fvp_audio_clock_play(void* clock) {
   if (clock != nullptr) {
-    static_cast<AudioClock*>(clock)->held.store(false, std::memory_order_release);
+    auto& state = *static_cast<AudioClock*>(clock);
+    if (state.held.load(std::memory_order_acquire)) {
+      state.resumed_at_ns.store(monotonic_nanoseconds(), std::memory_order_relaxed);
+      state.held.store(false, std::memory_order_release);
+    }
   }
 }
 

@@ -6,15 +6,20 @@ namespace {
 mdkSyncCallback sync_callback{};
 int sync_interval = 0;
 int64_t audio_position = 0;
+float audio_rate = 1;
 
 void install_sync(mdkPlayer*, mdkSyncCallback callback, int interval) {
   sync_callback = callback;
   sync_interval = interval;
 }
 int64_t position(mdkPlayer*) { return audio_position; }
+float playback_rate(mdkPlayer*) { return audio_rate; }
 void expect_clock(double expected) {
-  if (std::abs(sync_callback.cb(sync_callback.opaque) - expected) > 0.000001) {
-    std::cerr << "Unexpected audio master clock\n";
+  const auto actual = sync_callback.cb(sync_callback.opaque);
+  if (std::abs(actual - expected) > 0.000001) {
+    std::cerr << "Unexpected audio master clock: expected=" << expected
+              << " actual=" << actual << " audio=" << audio_position
+              << " rate=" << audio_rate << '\n';
     std::exit(1);
   }
 }
@@ -24,6 +29,7 @@ int main() {
   mdkPlayerAPI video{}, audio{};
   video.onSync = install_sync;
   audio.position = position;
+  audio.playbackRate = playback_rate;
   if (bili_fvp_audio_clock(0, 0) != nullptr) return 1;
   auto* clock = bili_fvp_audio_clock(reinterpret_cast<uintptr_t>(&video),
                                     reinterpret_cast<uintptr_t>(&audio));
@@ -44,6 +50,48 @@ int main() {
   expect_clock(402);
   bili_fvp_audio_clock_hold(clock, 80000);
   expect_clock(80);
+  // The renderer can first consult the master after audio has already moved
+  // past the old 100ms admission window (especially at 2x after recovery).
+  // This is still the real audio clock and must not freeze video at its anchor.
+  for (const auto rate : {0.25f, 1.0f, 2.0f, 4.0f, 8.0f}) {
+    for (const auto anchor : {0, 2050, 207133, 400000}) {
+      audio_rate = rate;
+      bili_fvp_audio_clock_hold(clock, anchor);
+      bili_fvp_audio_clock_play(clock);
+      auto& state = *static_cast<AudioClock*>(clock);
+      // Advance only the admission clock, without wall-clock sleeps.
+      state.resumed_at_ns.store(monotonic_nanoseconds() - 1500000000);
+      audio_position = anchor + static_cast<int64_t>(1500 * rate);
+      expect_clock(static_cast<double>(audio_position) / 1000);
+      const auto last = audio_position;
+      // Neither a stopped output nor natural EOS may advance the video master.
+      expect_clock(static_cast<double>(last) / 1000);
+      audio_position = 0;
+      expect_clock(static_cast<double>(last) / 1000);
+    }
+  }
+  audio_rate = 2;
+  bili_fvp_audio_clock_hold(clock, 207133);
+  bili_fvp_audio_clock_play(clock);
+  // Old clocks ahead of or behind the new target still cannot escape it.
+  audio_position = 211366;
+  expect_clock(207.133);
+  audio_position = 193366;
+  expect_clock(207.133);
+  static_cast<AudioClock*>(clock)->resumed_at_ns.store(
+      monotonic_nanoseconds() - 1500000000);
+  audio_position = 210133;
+  expect_clock(210.133);
+  // A normal repeated play must not reset a running admission window.
+  bili_fvp_audio_clock_hold(clock, 207133);
+  bili_fvp_audio_clock_play(clock);
+  static_cast<AudioClock*>(clock)->resumed_at_ns.store(
+      monotonic_nanoseconds() - 1500000000);
+  bili_fvp_audio_clock_play(clock);
+  expect_clock(210.133);
+  audio_rate = 1;
+  bili_fvp_audio_clock_hold(clock, 80000);
+  audio_position = 0;
   bili_fvp_audio_clock_play(clock);
   expect_clock(80);
   audio_position = 80015;
