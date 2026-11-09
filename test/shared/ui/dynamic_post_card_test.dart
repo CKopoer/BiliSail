@@ -294,44 +294,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('long mention wraps and short rich content is never collapsed', (
-    tester,
-  ) async {
-    final id = UserId.tryParse('42');
-    UserId? opened;
-    await tester.binding.setSurfaceSize(const Size(375, 1000));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: DynamicPostCard(
-              post: DynamicPost(
-                id: 'mention',
-                spans: [
-                  DynamicTextSpan(
-                    kind: DynamicTextKind.mention,
-                    text: '@${List.filled(80, '名字').join()}',
-                    userId: id,
-                  ),
-                ],
+  testWidgets(
+    'mention truncation follows rendered lines and preserves navigation',
+    (tester) async {
+      final id = UserId.tryParse('42');
+      UserId? opened;
+      await tester.binding.setSurfaceSize(const Size(375, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: DynamicPostCard(
+                post: DynamicPost(
+                  id: 'mention',
+                  spans: [
+                    DynamicTextSpan(
+                      kind: DynamicTextKind.mention,
+                      text: '@${List.filled(80, '名字').join()}',
+                      userId: id,
+                    ),
+                  ],
+                ),
+                onOpenUser: (value) => opened = value,
               ),
-              onOpenUser: (value) => opened = value,
             ),
           ),
         ),
-      ),
-    );
-    final rich = tester
-        .widgetList<Text>(find.byType(Text))
-        .firstWhere((text) => text.textSpan != null);
-    expect(rich.maxLines, isNull);
-    final span = (rich.textSpan as TextSpan).children!.single as TextSpan;
-    expect(span.recognizer, isNotNull);
-    (span.recognizer as TapGestureRecognizer).onTap!();
-    expect(opened, id);
-    expect(tester.takeException(), isNull);
-  });
+      );
+      final rich = tester
+          .widgetList<Text>(find.byType(Text))
+          .firstWhere((text) => text.textSpan != null);
+      expect(rich.maxLines, 6);
+      final span = (rich.textSpan as TextSpan).children!.single as TextSpan;
+      expect(span.recognizer, isNotNull);
+      (span.recognizer as TapGestureRecognizer).onTap!();
+      expect(opened, id);
+      await tester.tap(find.text('展开全文'));
+      await tester.pump();
+      expect(
+        tester
+            .widgetList<Text>(find.byType(Text))
+            .firstWhere((text) => text.textSpan != null)
+            .maxLines,
+        isNull,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'forwarded nine images and video have correct navigation at large scale',
@@ -368,8 +378,9 @@ void main() {
       expect(find.byType(Image), findsNWidgets(9));
       await tester.tap(find.text('视频标题'));
       expect(opened, video);
-      await tester.tap(find.byTooltip('在浏览器打开原动态'));
-      expect(links.single.path, '/original');
+      expect(find.byTooltip('在浏览器打开原动态'), findsNothing);
+      expect(find.byTooltip('在浏览器打开动态'), findsNothing);
+      expect(links, isEmpty);
       expect(tester.takeException(), isNull);
     },
   );

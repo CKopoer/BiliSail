@@ -35,6 +35,8 @@ export 'src/clients/profile_client.dart';
 export 'src/clients/search_client.dart';
 export 'src/models/search_models.dart';
 export 'src/models/dynamic_models.dart';
+export 'src/models/dynamic_topic_models.dart';
+export 'src/clients/dynamic_topic_client.dart';
 export 'src/clients/dynamic_client.dart';
 export 'src/clients/pgc_client.dart';
 export 'src/clients/live_client.dart';

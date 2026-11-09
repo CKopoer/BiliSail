@@ -80,6 +80,7 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
       children: [
         DynamicPostCard(
           post: current,
+          inDetail: inDetail,
           expansionState: expansionState,
           onOpenUser: onOpenUser,
           onOpenVideo: onOpenVideo,

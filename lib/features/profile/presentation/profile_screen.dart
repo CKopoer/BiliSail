@@ -42,6 +42,8 @@ class ProfileScreen extends ConsumerStatefulWidget {
     this.onOpenLiveRoom,
     this.onOpenSeason,
     this.onOpenEpisode,
+    this.onOpenTopic,
+    this.onSearchQuery,
     this.onMessage,
     this.onLogin,
     this.isSelf = false,
@@ -54,6 +56,8 @@ class ProfileScreen extends ConsumerStatefulWidget {
   final void Function(RoomId)? onOpenLiveRoom;
   final ValueChanged<String>? onOpenSeason;
   final ValueChanged<String>? onOpenEpisode;
+  final ValueChanged<String>? onOpenTopic;
+  final ValueChanged<String>? onSearchQuery;
   final ValueChanged<UserProfile>? onMessage;
   final VoidCallback? onLogin;
   final bool isSelf;
@@ -432,6 +436,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 onOpenLiveRoom: widget.onOpenLiveRoom,
                 onOpenSeason: widget.onOpenSeason,
                 onOpenEpisode: widget.onOpenEpisode,
+                onOpenTopic: widget.onOpenTopic,
+                onSearchQuery: widget.onSearchQuery,
               ),
             ),
           ),
@@ -454,6 +460,8 @@ class _ProfileSectionPage extends ConsumerStatefulWidget {
     this.onOpenLiveRoom,
     this.onOpenSeason,
     this.onOpenEpisode,
+    this.onOpenTopic,
+    this.onSearchQuery,
   });
 
   final UserId id;
@@ -465,6 +473,8 @@ class _ProfileSectionPage extends ConsumerStatefulWidget {
   final ValueChanged<RoomId>? onOpenLiveRoom;
   final ValueChanged<String>? onOpenSeason;
   final ValueChanged<String>? onOpenEpisode;
+  final ValueChanged<String>? onOpenTopic;
+  final ValueChanged<String>? onSearchQuery;
 
   @override
   ConsumerState<_ProfileSectionPage> createState() =>
@@ -524,6 +534,16 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
   }
 
   Future<void> _openLink(Uri uri) async {
+    final query = dynamicSearchQuery(uri);
+    if (query != null && widget.onSearchQuery != null) {
+      widget.onSearchQuery!(query);
+      return;
+    }
+    final topic = dynamicTopicId(uri);
+    if (topic != null && widget.onOpenTopic != null) {
+      widget.onOpenTopic!(topic);
+      return;
+    }
     final video = dynamicVideo(uri);
     if (video != null && widget.onOpenVideo != null) {
       widget.onOpenVideo!(

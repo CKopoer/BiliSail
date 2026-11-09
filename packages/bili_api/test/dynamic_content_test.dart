@@ -37,6 +37,97 @@ Future<ApiDynamicPost> load(
 }
 
 void main() {
+  for (final home in [true, false]) {
+    for (final (status, type, label) in const <(Object?, Object?, String)>[
+      (1, 2, '预约'),
+      (2, 2, '已预约'),
+      (1, 1, '已预约'),
+      (1, 3, '预约'),
+      (3, 3, '已预约'),
+      ('1', '2', '预约'),
+      (null, 2, '查看详情'),
+      (1, null, '查看详情'),
+      (null, null, '查看详情'),
+      (0, 0, '查看详情'),
+      ('1万', '1万', '查看详情'),
+      (1.0, 1, '查看详情'),
+      (-1, 2, '查看详情'),
+    ]) {
+      test(
+        '${home ? 'feed' : 'space'} reservation status=$status type=$type shows $label',
+        () async {
+          final value = await load(
+            richPost(
+              additional: {
+                'type': 'ADDITIONAL_TYPE_RESERVE',
+                'reserve': {
+                  'title': '视频预约',
+                  'button': {
+                    'status': status,
+                    'type': type,
+                    'check': {'text': '已预约'},
+                    'uncheck': {'text': '预约'},
+                  },
+                },
+              },
+            ),
+            home: home,
+          );
+          expect(value.contentCards.single.actionLabel, label);
+        },
+      );
+    }
+  }
+  test(
+    'known reservation state uses matching default labels when text is omitted',
+    () async {
+      for (final (status, label) in [(1, '预约'), (2, '已预约')]) {
+        final value = await load(
+          richPost(
+            additional: {
+              'type': 'ADDITIONAL_TYPE_RESERVE',
+              'reserve': {
+                'title': '视频预约',
+                'button': {'status': status, 'type': 2},
+              },
+            },
+          ),
+        );
+        expect(value.contentCards.single.actionLabel, label);
+      }
+    },
+  );
+  test('reservation jump text takes priority over a state label', () async {
+    final value = await load(
+      richPost(
+        additional: {
+          'type': 'ADDITIONAL_TYPE_RESERVE',
+          'reserve': {
+            'title': '视频预约',
+            'button': {
+              'status': 1,
+              'type': 2,
+              'jump_style': {'text': '观看视频'},
+              'jump_url': 'https://www.bilibili.com/video/BV1234567890',
+              'check': {'text': '已预约'},
+              'uncheck': {'text': '预约'},
+            },
+          },
+        },
+      ),
+    );
+    expect(value.contentCards.single.actionLabel, '观看视频');
+    expect(value.contentCards.single.actionUrl?.path, '/video/BV1234567890');
+  });
+  test(
+    'a topic without an id retains its name as a search destination',
+    () async {
+      final value = await load(richPost(topic: {'name': '只有名称的话题'}));
+      expect(value.topic?.id, isNull);
+      expect(value.topic?.url?.host, 'search.bilibili.com');
+      expect(value.topic?.url?.queryParameters['keyword'], '只有名称的话题');
+    },
+  );
   test('a tied match preserves both zero scores in server order', () async {
     final value = await load(
       richPost(
@@ -88,6 +179,7 @@ void main() {
               'state': -1,
               'button': {
                 'status': 1,
+                'type': 1,
                 'check': {'text': '已预约'},
               },
             },
@@ -234,6 +326,7 @@ void main() {
                 'status': 1,
                 'check': {'text': '已预约'},
                 'jump_url': 'https://www.bilibili.com/opus/13',
+                'type': 1,
               },
               'match_info': {
                 'left_team': {'name': '蓝队'},

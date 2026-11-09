@@ -7,7 +7,11 @@ ApiDynamicTopic? _topic(Map<String, Object?> value) {
   return ApiDynamicTopic(
     name: name,
     id: id,
-    url: _uri(value['jump_url']) ?? (id == null ? null : _topicUrl(id)),
+    url:
+        _uri(value['jump_url']) ??
+        (id == null
+            ? Uri.https('search.bilibili.com', '/all', {'keyword': name})
+            : _topicUrl(id)),
   );
 }
 
@@ -222,10 +226,29 @@ List<ApiDynamicContentCard> _contentCards(
     final left = _map(match['left_team']);
     final right = _map(match['right_team']);
     final ended = value['state'] == -1;
-    final status = button['status'];
+    final status = _buttonNumber(button['status']);
+    final buttonType = _buttonNumber(button['type']);
+    final reservation = kind == ApiDynamicCardKind.reservation;
+    final knownReservation =
+        status != null && buttonType != null && buttonType > 0;
+    // Reservation status is relative to this button's type. A status of 1
+    // alone does not establish that this account has reserved the content.
+    final checked = reservation
+        ? knownReservation && status == buttonType
+        : status == 1;
+    final stateLabel = reservation && !knownReservation
+        ? '查看详情'
+        : _text(
+            _map(button[checked ? 'check' : 'uncheck'])['text'],
+            fallback: reservation
+                ? checked
+                      ? '已预约'
+                      : '预约'
+                : '',
+          );
     final actionLabel = _text(
       _map(button['jump_style'])['text'],
-      fallback: _text(_map(button[status == 1 ? 'check' : 'uncheck'])['text']),
+      fallback: stateLabel,
     );
     result.add(
       ApiDynamicContentCard(
@@ -286,3 +309,14 @@ String _display(Object? value) => value is int
     : value is double && value.isFinite
     ? '$value'
     : _text(value);
+
+int? _buttonNumber(Object? value) {
+  final number = value is int
+      ? value
+      : value is String &&
+            value.length <= 20 &&
+            RegExp(r'^[0-9]+$').hasMatch(value)
+      ? int.tryParse(value)
+      : null;
+  return number != null && number >= 0 ? number : null;
+}
