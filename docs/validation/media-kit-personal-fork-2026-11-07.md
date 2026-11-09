@@ -1,6 +1,8 @@
 # 官方基线与个人媒体 fork 统一维护
 
-2026-11-08 Apple／Linux 后续：现行源码统一固定到 `b1c7e4336140d8c4550c1e963365da8edfe56d0a`，修复 Apple 完成帧发布与旧缓冲重用、Linux GPU 跨 context 同步和软件帧交付；Windows 修复及全部 SDK 资产继续沿用。实现与未测项见[跨平台纹理交接](apple-linux-texture-handoff-2026-11-08.md)。以下各条保留对应专项当时的固定引用。
+2026-11-09 后续：现行媒体依赖统一固定到 `9858a8db83faf8bcfa39a8bfbc02dde9a2e92572`，替换 Windows ARM64 中禁用 OpenGL 的 SDK，修复渲染降级与初始化错误传播；其他平台资产保持原内容。来源、自动检查和未构建／实机边界见 [ARM64 闪退修复](windows-arm64-preview-crash-2026-11-09.md)。
+
+2026-11-08 Apple／Linux 后续：当时源码统一固定到 `b1c7e4336140d8c4550c1e963365da8edfe56d0a`，修复 Apple 完成帧发布与旧缓冲重用、Linux GPU 跨 context 同步和软件帧交付；Windows 修复及全部 SDK 资产继续沿用。实现与未测项见[跨平台纹理交接](apple-linux-texture-handoff-2026-11-08.md)。以下各条保留对应专项当时的固定引用。
 
 2026-11-08 后续：现行媒体依赖统一固定到 `ba68fe1c56d46ed5d0e651da8d15e803e45038cb`，Windows 两后端共用已完成、不可变的 GPU 快照；原 SDK／ANGLE／MDK 资产未改变。修复、旧帧延后消费与慢 GPU 回归及跨平台边界见[纹理交接记录](windows-texture-handoff-2026-11-08.md)。以下保留迁移当时的来源与验证快照。
 
@@ -66,6 +68,8 @@ Windows、Android 和 Apple 首批资产是保留原 SHA-256 的上游二进制�
 本轮开始时无 Android ADB 设备，开发 Release 仅构建，不安装、不卸载、不清数据或复制正式包凭据。Apple 本平台构建与设备不可用。Linux CI 为 native 构建／ABI 检查，完整应用构建、安装及图形播放待对应主机验证。mux 与播放器的 FFmpeg 保持独立。
 
 ## 2026-11-07：Windows ARM64 扩展
+
+2026-11-09：下述初版 ARM64 SDK 经 #100 排查确认禁用了 OpenGL／ANGLE，已替换为具备相应能力的 LGPL SDK，并修复原生渲染降级和错误传播。当前来源、摘要与未构建／实机边界见 [Windows ARM64 闪退修复](windows-arm64-preview-crash-2026-11-09.md)；下列归档及 Vulkan loader 记录作为历史保留。
 
 应用与 `bili_player` 的八个媒体包及两份锁文件统一更新到 `f57d7c5ffd564d7a91c45769943831d468caeb2f`。该次修改集中在 Windows 库插件、视频链接和验证工具；其他平台的媒体实现与原固定资产继续沿用。
 

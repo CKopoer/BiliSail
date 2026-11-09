@@ -172,6 +172,8 @@ Windows MSVC／Visual Studio 下，CI 的 runner 与 WebView 私有 `/MP` 并行
 
 ## Windows ARM64 构建
 
+2026-11-09：针对 #100，固定依赖已替换旧 ARM64 SDK 中禁用 OpenGL 的 DLL，增加实际编译能力校验，并修复原生软件降级。SDK 仍以 7-Zip 解压，新 DLL 不再需要 Vulkan loader；当前来源、自动验证和用户自行构建设备测试的边界见 [修复记录](windows-arm64-preview-crash-2026-11-09.md)。本轮未触发新的远端构建。
+
 2026-11-07 新增 `windows-arm64`。现有 `enable_windows` 同时选择 x64 和 ARM64；push／PR 默认构建两种架构，复用调用方的 `build_targets` 可单独选择其中一种。目标、产物名、诊断目录、Release 缺失目标重建和 SHA-256 校验均独立。
 
 固定 Flutter 3.47.6 的 `build windows` 根据 Dart 进程 ABI 选择目标，没有可用的 Windows 交叉编译参数，因此 ARM64 使用 `windows-11-arm` runner。Flutter Action 先取得 x64 发行配置，再通过 [ARM64 引导脚本](../../tool/setup-windows-arm64-flutter.ps1) 检查 Dart PE 架构；必要时调用该固定 SDK 自带的 `update_dart_sdk.ps1` 下载对应 engine 的原生 ARM64 Dart 并重建工具 snapshot。拒绝 x64 回退，SDK 缓存按目标隔离。不能将 matrix 的发行 `arch: x64` 当成应用目标架构。入口在非匹配 Windows 主机上立即拒绝构建，避免把 x64 包重命名为 ARM64。
