@@ -55,3 +55,6 @@ app.*.map.json
 /artifacts/
 
 promo-video/
+
+# Local release skill and its helpers; never publish to the repository.
+/.agents/skills/bilisail-release/
