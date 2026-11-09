@@ -1372,7 +1372,12 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                                   ),
                                 ),
                               ),
-                          Text('共 ${c.replyCount} 条回复 ›', style: styles.link),
+                          Text(
+                            '共 ${c.replyCount} 条回复 ›',
+                            style: styles.link.copyWith(
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
                         ],
                       ),
                     ),
