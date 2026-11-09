@@ -56,6 +56,56 @@ final _season = PgcSeason(
 
 void main() {
   for (final pgc in [false, true]) {
+    for (final size in [const Size(390, 800), const Size(844, 390)]) {
+      testWidgets(
+        '${pgc ? 'PGC' : 'video'} composer stays above a changing mobile keyboard at $size',
+        (tester) async {
+          await _mount(tester, pgc: pgc, size: size, signedIn: true);
+          addTearDown(tester.view.resetViewInsets);
+          final player = tester.element(find.byKey(_player));
+          final field = find.descendant(
+            of: find.byType(CommentsPanel),
+            matching: find.byType(TextField),
+          );
+          await tester.ensureVisible(field);
+          await tester.tap(field);
+          await tester.enterText(field, '保留草稿\n第二行');
+          await tester.pumpAndSettle();
+          final focus = FocusManager.instance.primaryFocus;
+          for (final inset in [100.0, 180.0, 240.0, 200.0, 120.0]) {
+            tester.view.viewInsets = FakeViewPadding(bottom: inset);
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 16));
+            final keyboardTop = size.height - inset;
+            expect(
+              tester.getRect(field).bottom,
+              lessThanOrEqualTo(keyboardTop),
+            );
+            expect(
+              tester.getRect(find.text('发布')).bottom,
+              lessThanOrEqualTo(keyboardTop),
+            );
+            expect(find.text('发布').hitTestable(), findsOneWidget);
+            expect(FocusManager.instance.primaryFocus, same(focus));
+            expect(tester.element(find.byKey(_player)), same(player));
+            expect(
+              tester.widget<TextField>(field).controller!.text,
+              '保留草稿\n第二行',
+            );
+            expect(tester.takeException(), isNull);
+          }
+          tester.view.resetViewInsets();
+          await tester.pumpAndSettle();
+          expect(tester.widget<TextField>(field).controller!.text, '保留草稿\n第二行');
+          expect(tester.takeException(), isNull);
+        },
+        variant: const TargetPlatformVariant({
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+        }),
+      );
+    }
+
     testWidgets(
       '${pgc ? 'PGC' : 'video'} comments automatically paginate inside the nested player layout',
       (tester) async {
@@ -219,9 +269,11 @@ Future<ProviderContainer> _mount(
   required bool pgc,
   VideoDimensions dimensions = const VideoDimensions(1080, 1920),
   _Comments? comments,
+  Size size = const Size(390, 800),
+  bool signedIn = false,
 }) async {
   tester.view.devicePixelRatio = 1;
-  tester.view.physicalSize = const Size(390, 800);
+  tester.view.physicalSize = size;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   final session = PlaybackLayoutSessionFake();
@@ -233,7 +285,7 @@ Future<ProviderContainer> _mount(
     ProviderScope(
       overrides: [
         playbackSessionProvider.overrideWithValue(session),
-        authControllerProvider.overrideWith(_Guest.new),
+        authControllerProvider.overrideWith(() => _Guest(signedIn)),
         videoCommentsRepositoryProvider.overrideWithValue(
           comments ?? _Comments(),
         ),
@@ -276,8 +328,12 @@ Widget _buildPlayer(BuildContext context) {
 }
 
 class _Guest extends AuthController {
+  _Guest([this.signedIn = false]);
+  final bool signedIn;
   @override
-  AuthState build() => const AuthState();
+  AuthState build() => signedIn
+      ? const AuthState(status: AuthStatus.signedIn, mid: '7')
+      : const AuthState();
 }
 
 class _Comments extends Fake implements CommentsRepository {

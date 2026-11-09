@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -406,7 +407,18 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       child: CustomMultiChildLayout(
         delegate: _CommentsLayoutDelegate(),
         children: [
-          LayoutId(id: _CommentsSlot.header, child: _header()),
+          LayoutId(
+            id: _CommentsSlot.header,
+            child: ClipRect(
+              child: OverflowBox(
+                minHeight: 0,
+                maxHeight: double.infinity,
+                fit: OverflowBoxFit.deferToChild,
+                alignment: Alignment.topCenter,
+                child: _header(),
+              ),
+            ),
+          ),
           LayoutId(id: _CommentsSlot.list, child: _list()),
           LayoutId(id: _CommentsSlot.composer, child: _composer()),
         ],
@@ -1381,23 +1393,23 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
 
 enum _CommentsSlot { header, list, composer }
 
-/// Measure controls and the draft first. When a keyboard leaves too little
-/// height, the composer scrolls within the real remaining space.
+/// Reserve the draft before the header/list. A landscape keyboard may leave
+/// room only for editing; the reading controls must yield that space first.
 class _CommentsLayoutDelegate extends MultiChildLayoutDelegate {
   @override
   void performLayout(Size size) {
-    final header = layoutChild(
-      _CommentsSlot.header,
+    final composer = layoutChild(
+      _CommentsSlot.composer,
       BoxConstraints.tightFor(width: size.width)
           .copyWith(maxHeight: size.height),
     );
-    positionChild(_CommentsSlot.header, Offset.zero);
-    final available = (size.height - header.height).clamp(0.0, size.height);
-    final composer = layoutChild(
-      _CommentsSlot.composer,
+    final available = (size.height - composer.height).clamp(0.0, size.height);
+    final header = layoutChild(
+      _CommentsSlot.header,
       BoxConstraints.tightFor(width: size.width).copyWith(maxHeight: available),
     );
-    final listHeight = (available - composer.height).clamp(0.0, available);
+    positionChild(_CommentsSlot.header, Offset.zero);
+    final listHeight = (available - header.height).clamp(0.0, available);
     layoutChild(
       _CommentsSlot.list,
       BoxConstraints.tight(Size(size.width, listHeight)),

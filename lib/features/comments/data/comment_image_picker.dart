@@ -1,26 +1,43 @@
 import 'dart:ui' as ui;
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../domain/app_failure.dart';
 import '../domain/comment_composer.dart';
 
-Future<List<CommentLocalImage>> pickCommentImages(int remaining) async {
-  final files = await openFiles(
-    acceptedTypeGroups: const [
-      XTypeGroup(
-        label: '评论图片',
-        extensions: ['jpg', 'jpeg', 'png', 'gif'],
-        mimeTypes: ['image/jpeg', 'image/png', 'image/gif'],
-        uniformTypeIdentifiers: [
-          'public.jpeg',
-          'public.png',
-          'com.compuserve.gif',
-        ],
-      ),
-    ],
-  );
-  if (files.length > remaining) {
+Future<List<CommentLocalImage>> pickCommentImages(
+  int remaining, {
+  ImagePicker? imagePicker,
+}) async {
+  final limit = remaining.clamp(0, CommentLocalImage.maxCount);
+  if (limit == 0) return const [];
+  final mobile =
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+  final files = mobile
+      ? await (imagePicker ?? ImagePicker()).pickMultiImage(
+          limit: limit,
+          // Only selected image contents are needed, not the complete library
+          // or extra metadata permissions on iOS.
+          requestFullMetadata: false,
+        )
+      : await openFiles(
+          acceptedTypeGroups: const [
+            XTypeGroup(
+              label: '评论图片',
+              extensions: ['jpg', 'jpeg', 'png', 'gif'],
+              mimeTypes: ['image/jpeg', 'image/png', 'image/gif'],
+              uniformTypeIdentifiers: [
+                'public.jpeg',
+                'public.png',
+                'com.compuserve.gif',
+              ],
+            ),
+          ],
+        );
+  if (files.length > limit) {
     throw const AppFailure(AppFailureKind.storage, '评论最多可添加 9 张图片，请重新选择');
   }
   final images = <CommentLocalImage>[];

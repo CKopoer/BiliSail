@@ -43,6 +43,7 @@ dependencies:
   bili_mux:
     path: packages/bili_mux
   flutter_inappwebview: 6.2.0-beta.3
+  image_picker: 1.2.4
 
 # Keep core, video output and native library manifests on one reviewed fork commit.
 dependency_overrides:
