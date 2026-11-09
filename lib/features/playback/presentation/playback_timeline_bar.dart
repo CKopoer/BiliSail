@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../../core/presentation/trackpad_back_region.dart';
+import '../../../core/presentation/history_back_region.dart';
 import '../../../shared/ui/storyboard_thumbnail.dart';
 
 import '../domain/playback_timeline.dart';
