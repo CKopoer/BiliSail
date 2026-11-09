@@ -102,8 +102,66 @@ try {
   if ($result -cne 'preserved return value') { throw 'Timing wrapper changed command output.' }
   Assert-BuildRejected { Invoke-BuildStage 'failure fixture' { throw 'original build failure' } } 'original build failure'
   $timings = @(Get-Content -LiteralPath $script:BuildTimingFile -Raw | ConvertFrom-Json)
-  if ($timings.Count -ne 2 -or !$timings[0].success -or $timings[1].success -or $timings[1].seconds -lt 0) {
+  if ($timings.Count -ne 2 -or $timings[0].stage -cne 'success fixture' -or
+      $timings[1].stage -cne 'failure fixture' -or !$timings[0].success -or
+      $timings[1].success -or $timings[1].seconds -lt 0) {
     throw 'Stage timings did not preserve success/failure results.'
+  }
+
+  # Run the production archive stage against tiny sources. A wrapper parameter
+  # must not shadow the caller's package name when the scriptblock reads it.
+  $releaseAst = [Management.Automation.Language.Parser]::ParseFile(
+    (Join-Path $PSScriptRoot 'build-release.ps1'), [ref]$null, [ref]$null)
+  $archiveStages = @($releaseAst.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.CommandAst] -and
+      $node.GetCommandName() -eq 'Invoke-BuildStage' -and
+      $node.CommandElements[1].Value -eq 'Mux source archive'
+  }, $true))
+  if ($archiveStages.Count -ne 1) { throw 'Expected one production mux archive stage.' }
+  $archiveAction = $archiveStages[0].CommandElements[2].ScriptBlock.GetScriptBlock()
+  foreach ($relativePath in @('packages/bili_mux/README.md', 'packages/bili_mux/LICENSE-FFmpeg.txt',
+      'build/download_mux/n9.0.2.tar.gz')) {
+    $fixtureFile = Join-Path $source $relativePath
+    New-Item -ItemType Directory -Path (Split-Path $fixtureFile -Parent) -Force | Out-Null
+    [IO.File]::WriteAllText($fixtureFile, 'archive fixture')
+  }
+  $mergedArchives = Join-Path $testRoot 'release-assets'
+  New-Item -ItemType Directory -Path $mergedArchives | Out-Null
+  $archiveTargets = @('android-arm64', 'windows-x64', 'windows-arm64', 'macos-arm64', 'macos-x64', 'ios-arm64', 'linux-x64')
+  Push-Location $source
+  try {
+    foreach ($archiveTarget in $archiveTargets) {
+      & {
+        param($Target)
+        $Version = '1.2.9+0'
+        $name = "BiliSail-$Version-$Target"
+        $outputRoot = Join-Path $testRoot "archives/$Target"
+        $releaseDir = Join-Path $outputRoot 'release'
+        $isWindowsTarget = $Target.StartsWith('windows-')
+        $configuration = Join-Path $native "prebuilt/$Target/configure.log"
+        New-Item -ItemType Directory -Path $releaseDir, (Split-Path $configuration -Parent) -Force | Out-Null
+        [IO.File]::WriteAllText($configuration, $Target)
+        Invoke-BuildStage 'Mux source archive' $archiveAction
+        $expectedName = "$name.mux-source.zip"
+        $files = @(Get-ChildItem -LiteralPath $releaseDir -File)
+        if ($files.Count -ne 1 -or $files[0].Name -cne $expectedName) {
+          throw "Incorrect mux archive name for ${Target}: $($files.Name -join ', '). Expected $expectedName."
+        }
+        $archive = [IO.Compression.ZipFile]::OpenRead($files[0].FullName)
+        try {
+          $reader = [IO.StreamReader]::new($archive.GetEntry('configure.log').Open())
+          try {
+            if ($reader.ReadToEnd() -cne $Target) { throw 'Mux archive contains another target configuration.' }
+          } finally { $reader.Dispose() }
+        } finally { $archive.Dispose() }
+        if (Test-Path -LiteralPath (Join-Path $mergedArchives $expectedName)) { throw 'Platform mux archives collide.' }
+        Move-Item -LiteralPath $files[0].FullName -Destination $mergedArchives
+      } $archiveTarget
+    }
+  } finally { Pop-Location }
+  if (@(Get-ChildItem -LiteralPath $mergedArchives -File).Count -ne $archiveTargets.Count) {
+    throw 'Release merge lost a platform mux archive.'
   }
 
   # Exercise the real early-exit path in an isolated checkout. A stub ensures a
