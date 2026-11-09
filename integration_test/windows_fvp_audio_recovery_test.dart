@@ -15,9 +15,16 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
   for (final audioFault in [false, true]) {
-    for (final automatic in [false, true]) {
+    for (final scenario in [
+      (false, 1.0),
+      (true, 1.0),
+      (false, 2.0),
+      (true, 2.0),
+    ]) {
+      final automatic = scenario.$1;
+      final rate = scenario.$2;
       testWidgets(
-        'fvp mid-play ${audioFault ? 'audio' : 'video'} EOF; automatic=$automatic',
+        'fvp mid-play ${audioFault ? 'audio' : 'video'} EOF; automatic=$automatic rate=$rate',
         (tester) async {
           final directory = Platform.environment['BILI_FVP_LIVE_MEDIA_DIR']!;
           MediaTrack track(String file) => MediaTrack(
@@ -56,7 +63,11 @@ void main() {
                 )
               : null;
           session?.configureSettings(
-            AppSettings(autoPlay: true, resumePlayback: false),
+            AppSettings(
+              autoPlay: true,
+              resumePlayback: false,
+              defaultPlaybackRate: rate,
+            ),
           );
           try {
             await tester.pumpWidget(
@@ -67,10 +78,11 @@ void main() {
               session == null
                   ? engine.open(
                       source,
-                      const OpenOptions(play: true, volume: 0),
+                      OpenOptions(play: true, volume: 0, rate: rate),
                     )
                   : session.open(_detail, _part, volume: 0),
             );
+            expect(engine.currentSnapshot.rate, rate);
             final first = ports.single as FvpAudioActivityPort;
             expect(
               first.decodedAudioFrames,
@@ -126,6 +138,7 @@ void main() {
               expect(repository.opens, 2);
               expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
               expect(engine.currentSnapshot.desiredPlaying, isTrue);
+              expect(engine.currentSnapshot.rate, rate);
               expect(session.error, isNull);
               expect(
                 engine.currentSnapshot.position,
@@ -151,7 +164,7 @@ void main() {
               expect(engine.currentSnapshot.position, stoppedAt);
             }
             debugPrint(
-              'FVP_TRACK_EOF audioFault=$audioFault automatic=$automatic stalledAt=${stall.snapshot.position.inMilliseconds} '
+              'FVP_TRACK_EOF audioFault=$audioFault automatic=$automatic rate=$rate stalledAt=${stall.snapshot.position.inMilliseconds} '
               'waited=${stall.stalledFor!.inMilliseconds} opens=${ports.length}',
             );
           } finally {
