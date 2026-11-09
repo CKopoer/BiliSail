@@ -19,6 +19,7 @@ const _reply = CommentEntry(
   authorId: UserId('7'),
   message: '作者回复正文',
   isUpAuthor: true,
+  nicknameColor: 0x123456,
 );
 const _root = CommentEntry(
   id: '10',
@@ -71,6 +72,7 @@ void main() {
           );
           expect(find.text('置顶'), findsOneWidget);
           expect(find.text('UP'), findsOneWidget);
+          _expectUpAfterAuthor(tester, find.text('有较长名称的作者'));
           expect(find.text('UP 主觉得很赞'), findsOneWidget);
           expect(find.text('UP 主回复过'), findsOneWidget);
           expect(
@@ -138,9 +140,11 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('置顶'), findsOneWidget);
         expect(find.text('UP'), findsOneWidget);
+        _expectUpAfterAuthor(tester, find.text('作者'));
+        _expectUpBeforeColon(tester);
         expect(find.text('UP 主觉得很赞'), findsOneWidget);
         expect(find.text('UP 主回复过'), findsOneWidget);
-        await tester.tap(find.text('作者：'));
+        await tester.tap(find.text('作者'));
         await tester.pumpAndSettle();
         expect(opened, const UserId('7'));
         expect(find.text('共 1 条回复 ›'), findsOneWidget);
@@ -150,15 +154,41 @@ void main() {
         expect(find.text('UP'), findsOneWidget);
         expect(find.text('UP 主回复过'), findsOneWidget);
         expect(find.text('作者'), findsOneWidget);
+        _expectUpAfterAuthor(tester, find.text('作者'));
         await tester.tap(find.byTooltip('返回评论'));
         await tester.pumpAndSettle();
-        expect(find.text('作者：'), findsOneWidget);
+        expect(find.text('作者'), findsOneWidget);
+        _expectUpAfterAuthor(tester, find.text('作者'));
+        _expectUpBeforeColon(tester);
         expect(find.text('UP'), findsOneWidget);
         expect(find.text('置顶'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
   }
+}
+
+void _expectUpAfterAuthor(WidgetTester tester, Finder author) {
+  final badge = tester.getRect(find.text('UP'));
+  final name = tester.getRect(author);
+  final sameRow = badge.top < name.bottom && name.top < badge.bottom;
+  expect(
+    sameRow ? name.right <= badge.left : name.bottom <= badge.top,
+    isTrue,
+    reason:
+        'The UP badge must appear after the author, including after wrapping.',
+  );
+}
+
+void _expectUpBeforeColon(WidgetTester tester) {
+  final badge = tester.getRect(find.text('UP'));
+  final colon = tester.getRect(find.text('：'));
+  expect(badge.right, lessThanOrEqualTo(colon.left));
+  expect(badge.center.dy, closeTo(colon.center.dy, 1));
+  expect(
+    tester.widget<Text>(find.text('：')).style?.color,
+    tester.widget<Text>(find.text('作者')).style?.color,
+  );
 }
 
 class _Guest extends AuthController {
