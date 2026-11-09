@@ -12,6 +12,7 @@ import 'package:bilisail/shared/ui/comments_panel.dart';
 import 'package:bilisail/features/dynamic/application/dynamic_actions_controller.dart';
 import 'package:bilisail/features/dynamic/domain/dynamic_repository.dart';
 import 'package:bilisail/shared/ui/dynamic_post_interactions.dart';
+import 'package:bilisail/shared/ui/dynamic_detail_layout.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -250,6 +251,90 @@ void main() {
     expect(comments.reads, ['11']);
     expect(types, [CommentTargetType.album]);
     expect(comments.writes, isEmpty);
+  });
+
+  testWidgets(
+    'wide detail places post left and comments right, resizing retains the draft and replies',
+    (tester) async {
+      await show(tester, width: 1280);
+      await tester.tap(find.byTooltip('查看动态详情'));
+      await tester.pumpAndSettle();
+      final dialog = find.byType(Dialog);
+      final content = find.descendant(of: dialog, matching: find.text('动态正文'));
+      final panel = find.byType(CommentsPanel);
+      expect(
+        tester.getRect(content).right,
+        lessThan(tester.getRect(panel).left),
+      );
+      final panelState = tester.state(panel);
+      await tester.tap(find.bySemanticsLabel('回复评论'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '窗口缩放保留草稿');
+      await tester.binding.setSurfaceSize(const Size(375, 900));
+      await tester.pumpAndSettle();
+      expect(tester.state(panel), same(panelState));
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        '窗口缩放保留草稿',
+      );
+      expect(
+        tester.getRect(content).bottom,
+        lessThanOrEqualTo(tester.getRect(panel).top),
+      );
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      await tester.pumpAndSettle();
+      expect(tester.state(panel), same(panelState));
+      await tester.tap(find.text('发布'));
+      await tester.pumpAndSettle();
+      expect(comments.writes.single, ('11', '窗口缩放保留草稿', '50', '50'));
+      expect(comments.reads, ['11']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'narrow detail scrolls the whole post away and keeps comments reachable',
+    (tester) async {
+      await show(
+        tester,
+        width: 375,
+        value: DynamicPost(
+          id: '100',
+          text: List.filled(30, '长动态正文').join('\n'),
+          commentTarget: post.commentTarget,
+        ),
+      );
+      await tester.tap(find.byTooltip('查看动态详情'));
+      await tester.pumpAndSettle();
+      final nested = find.descendant(
+        of: find.byType(DynamicDetailLayout),
+        matching: find.byType(NestedScrollView),
+      );
+      final state = tester.state<NestedScrollViewState>(nested);
+      expect(state.outerController.position.maxScrollExtent, greaterThan(500));
+      await tester.drag(nested, const Offset(0, -1600));
+      await tester.pumpAndSettle();
+      expect(state.outerController.offset, greaterThan(500));
+      expect(find.text('测试评论'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('closed comments still allow reading content in detail', (
+    tester,
+  ) async {
+    await show(
+      tester,
+      value: DynamicPost(id: 'closed', text: '仅展示正文', commentForbidden: true),
+    );
+    await tester.tap(find.byTooltip('查看动态详情'));
+    await tester.pumpAndSettle();
+    expect(find.text('该动态已关闭评论'), findsOneWidget);
+    expect(find.byType(CommentsPanel), findsNothing);
+    expect(comments.reads, isEmpty);
+    expect(repository.likes, isEmpty);
+    expect(repository.reposts, isEmpty);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('closing the card during a like ignores the late completion', (

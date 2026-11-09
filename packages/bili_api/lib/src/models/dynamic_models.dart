@@ -2,6 +2,49 @@ import '../models.dart';
 
 enum ApiDynamicTextKind { plain, emoji, mention, topic, link }
 
+enum ApiDynamicCardKind {
+  article,
+  pgc,
+  course,
+  season,
+  music,
+  medialist,
+  live,
+  ugc,
+  goods,
+  reservation,
+  vote,
+  lottery,
+  match,
+  common,
+  unknown,
+}
+
+final class ApiDynamicTopic {
+  const ApiDynamicTopic({required this.name, this.id, this.url});
+  final String name;
+  final String? id;
+  final Uri? url;
+}
+
+/// A displayable major or additional module, without account write semantics.
+final class ApiDynamicContentCard {
+  const ApiDynamicContentCard({
+    required this.kind,
+    required this.title,
+    this.description = '',
+    this.detail = '',
+    this.badge = '',
+    this.coverUrl,
+    this.url,
+    this.actionLabel = '',
+    this.actionUrl,
+  });
+  final ApiDynamicCardKind kind;
+  final String title, description, detail, badge, actionLabel;
+  final Uri? coverUrl, url, actionUrl;
+}
+
 final class ApiDynamicTextSpan {
   const ApiDynamicTextSpan({
     this.kind = ApiDynamicTextKind.plain,
@@ -29,6 +72,10 @@ final class ApiDynamicPost {
     this.publishText = '',
     this.actionText = '',
     this.text = '',
+    this.topic,
+    this.badge = '',
+    this.notice = '',
+    List<ApiDynamicContentCard> contentCards = const [],
     List<ApiDynamicTextSpan> spans = const [],
     List<Uri> imageUrls = const [],
     Map<Uri, double> imageAspectRatios = const {},
@@ -49,7 +96,8 @@ final class ApiDynamicPost {
     this.repostForbidden = false,
     this.likeForbidden = false,
     this.unavailable = false,
-  }) : spans = List.unmodifiable(spans),
+  }) : contentCards = List.unmodifiable(contentCards),
+       spans = List.unmodifiable(spans),
        imageUrls = List.unmodifiable(imageUrls),
        imageAspectRatios = Map.unmodifiable(imageAspectRatios);
   final String id,
@@ -62,6 +110,9 @@ final class ApiDynamicPost {
       linkTitle,
       linkDescription;
   final String? authorId;
+  final ApiDynamicTopic? topic;
+  final String badge, notice;
+  final List<ApiDynamicContentCard> contentCards;
   final Uri? authorAvatarUrl, linkCoverUrl, linkUrl;
   final DateTime? publishedAt;
   final List<ApiDynamicTextSpan> spans;

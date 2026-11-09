@@ -757,12 +757,28 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   }
 
   Future<void> _openDynamicLink(Uri uri) async {
+    final video = dynamicVideo(uri);
+    if (video != null) {
+      context.go('/video/${video.value}');
+      return;
+    }
+    final pgc = dynamicPgcRoute(uri);
+    if (pgc != null) {
+      context.go(pgc);
+      return;
+    }
     final room = dynamicLiveRoom(uri);
     if (room != null) {
       context.go('/live/${room.value}');
       return;
     }
-    await _openLink(uri);
+    var opened = false;
+    try {
+      opened = await ref.read(webLinkOpenerProvider)(uri);
+    } on PlatformException {
+      opened = false;
+    }
+    if (mounted && !opened) showAppNotice(context, '无法打开链接，请稍后重试');
   }
 
   Future<void> _openLink(Uri uri) async {

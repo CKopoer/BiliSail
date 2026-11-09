@@ -41,6 +41,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
     this.onOpenPlaylist,
     this.onOpenLiveRoom,
     this.onOpenSeason,
+    this.onOpenEpisode,
     this.onMessage,
     this.onLogin,
     this.isSelf = false,
@@ -52,6 +53,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
   final void Function(VideoSummary, String queueId)? onOpenPlaylist;
   final void Function(RoomId)? onOpenLiveRoom;
   final ValueChanged<String>? onOpenSeason;
+  final ValueChanged<String>? onOpenEpisode;
   final ValueChanged<UserProfile>? onMessage;
   final VoidCallback? onLogin;
   final bool isSelf;
@@ -429,6 +431,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 onOpenPlaylist: widget.onOpenPlaylist,
                 onOpenLiveRoom: widget.onOpenLiveRoom,
                 onOpenSeason: widget.onOpenSeason,
+                onOpenEpisode: widget.onOpenEpisode,
               ),
             ),
           ),
@@ -450,6 +453,7 @@ class _ProfileSectionPage extends ConsumerStatefulWidget {
     this.onOpenPlaylist,
     this.onOpenLiveRoom,
     this.onOpenSeason,
+    this.onOpenEpisode,
   });
 
   final UserId id;
@@ -460,6 +464,7 @@ class _ProfileSectionPage extends ConsumerStatefulWidget {
   final void Function(VideoSummary, String queueId)? onOpenPlaylist;
   final ValueChanged<RoomId>? onOpenLiveRoom;
   final ValueChanged<String>? onOpenSeason;
+  final ValueChanged<String>? onOpenEpisode;
 
   @override
   ConsumerState<_ProfileSectionPage> createState() =>
@@ -518,13 +523,41 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
     widget.onOpenPlaylist?.call(queue.items[index].video, queue.id);
   }
 
-  void _openLink(Uri uri) {
+  Future<void> _openLink(Uri uri) async {
+    final video = dynamicVideo(uri);
+    if (video != null && widget.onOpenVideo != null) {
+      widget.onOpenVideo!(
+        VideoSummary(
+          id: video,
+          title: '',
+          coverUrl: '',
+          author: '',
+          duration: Duration.zero,
+        ),
+      );
+      return;
+    }
+    final pgc = dynamicPgcRoute(uri);
+    if (pgc != null) {
+      final episode = pgc.startsWith('/pgc/episode/');
+      final callback = episode ? widget.onOpenEpisode : widget.onOpenSeason;
+      if (callback != null) {
+        callback(pgc.split('/').last);
+        return;
+      }
+    }
     final room = dynamicLiveRoom(uri);
     if (room != null && widget.onOpenLiveRoom != null) {
       widget.onOpenLiveRoom!(room);
       return;
     }
-    ref.read(externalLinkOpenerProvider)(uri);
+    var opened = false;
+    try {
+      opened = await ref.read(webLinkOpenerProvider)(uri);
+    } on PlatformException {
+      opened = false;
+    }
+    if (mounted && !opened) showAppNotice(context, '无法打开链接，请稍后重试');
   }
 
   Future<void> _playAll() async {
