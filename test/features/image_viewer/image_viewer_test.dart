@@ -12,15 +12,16 @@ import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Future<Uint8List> png() async {
+Future<Uint8List> png({int width = 24, int height = 16}) async {
   final recorder = ui.PictureRecorder();
   Canvas(recorder).drawColor(Colors.blue, BlendMode.src);
   final picture = recorder.endRecording();
-  final image = await picture.toImage(24, 16);
+  final image = await picture.toImage(width, height);
   final data = await image.toByteData(format: ui.ImageByteFormat.png);
   image.dispose();
   picture.dispose();
@@ -146,6 +147,108 @@ void main() {
   );
 
   for (final size in [const Size(1100, 740), const Size(360, 640)]) {
+    testWidgets(
+      'viewer ${size.width} keeps original painting stable on hover',
+      (tester) async {
+        await tester.binding.setSurfaceSize(size);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final repository = _PendingRepository();
+        final sources = await _openViewer(
+          tester,
+          repository,
+          pending: true,
+          exporter: _ExportService(),
+        );
+        final previewImage = (await _swipeRepository(tester)).image;
+        repository.reads.single.result.complete(previewImage);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('查看原图'));
+        await tester.pump();
+        final bytes = await tester.runAsync(
+          () => png(width: 2400, height: 1600),
+        );
+        if (bytes == null) throw StateError('PNG missing');
+        repository.reads.last.result.complete(
+          OriginalImage(bytes: bytes, width: 2400, height: 1600),
+        );
+        await tester.pumpAndSettle();
+        final images = find.descendant(
+          of: find.byType(ImageViewer),
+          matching: find.byType(Image),
+        );
+        await tester.runAsync(
+          () => Future.wait([
+            for (final image in tester.widgetList<Image>(images))
+              precacheImage(image.image, tester.element(images.first)),
+          ]),
+        );
+        await tester.pumpAndSettle();
+        final renderedImages = tester
+            .renderObjectList<RenderImage>(find.byType(RawImage))
+            .toList();
+        expect(renderedImages, hasLength(2));
+        expect(renderedImages.every((image) => image.image != null), isTrue);
+        final transform = tester
+            .widget<InteractiveViewer>(find.byType(InteractiveViewer))
+            .transformationController!;
+        final fitted = transform.value.clone();
+        expect(fitted.getMaxScaleOnAxis(), lessThan(1));
+
+        final paints = <RenderObject>[];
+        final previous = debugOnProfilePaint;
+        debugOnProfilePaint = (object) {
+          previous?.call(object);
+          paints.add(object);
+        };
+        try {
+          final mouse = await tester.createGesture(
+            kind: PointerDeviceKind.mouse,
+          );
+          await mouse.addPointer(location: Offset.zero);
+          addTearDown(mouse.removePointer);
+          for (final tooltip in ['保存图片', '复制图片', '适应窗口', '实际大小', '缩小', '放大']) {
+            paints.clear();
+            await mouse.moveTo(tester.getCenter(find.byTooltip(tooltip)));
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 80));
+            await tester.pump(const Duration(milliseconds: 600));
+            await tester.pumpAndSettle();
+            expect(
+              paints,
+              isNotEmpty,
+              reason: 'The hover animation must paint',
+            );
+            expect(
+              paints.where(renderedImages.contains),
+              isEmpty,
+              reason: 'Hovering $tooltip must not repaint the image or blur',
+            );
+          }
+          expect(transform.value, fitted);
+          expect(repository.sources, [preview(sources[1]), sources[1]]);
+          expect(find.text('2 / 3'), findsOneWidget);
+          paints.clear();
+          await tester.tap(find.byTooltip('放大'));
+          await tester.pumpAndSettle();
+          expect(
+            transform.value.getMaxScaleOnAxis(),
+            greaterThan(fitted.getMaxScaleOnAxis()),
+          );
+          expect(paints.where(renderedImages.contains), isNotEmpty);
+          await tester.tap(find.byTooltip('下一张'));
+          await tester.pump();
+          repository.reads.last.result.complete(previewImage);
+          await tester.pumpAndSettle();
+          expect(find.bySemanticsLabel('预览图 3'), findsOneWidget);
+          expect(repository.sources.last, preview(sources[2]));
+          expect(tester.takeException(), isNull);
+        } finally {
+          debugOnProfilePaint = previous;
+        }
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.windows),
+    );
+
     testWidgets('viewer ${size.width} requests original only after tapping', (
       tester,
     ) async {

@@ -51,3 +51,17 @@ Android 剪贴板保留最近四份文件，最多 128 MiB，关闭查看器不�
 [组件回归](../../test/features/image_viewer/image_viewer_test.dart)新增宽／窄视口的左右切图、首尾边界、短／竖向拖动、取消、双指放大缩小、单指续拖、放大平移、切图恢复适应窗口，以及加载失败／迟到响应和单图行为。连同[双窗口回归](../../test/app/workspace_image_viewer_test.dart)共 14 项通过。本轮未构建安装包，未进行 Windows／Android／macOS 实机触控或触控板验收；不以组件测试代替设备验收。
 
 本次两个改动 Dart 文件的定向静态分析通过。`tool/check.ps1 -SkipPub` 的打包边界及各目录格式检查通过，全量分析被同期工作区的 `playback_panel.dart` 多余导入和 `window_orientation_host_test.dart` 缺少花括号阻断。随后分别执行根应用与四包测试阶段：根应用 3,324 项通过、4 项失败、13 项因 Windows 符号链接权限不足跳过；失败分别为 `navigation_bar_mode_test.dart` 的两项导航布局断言、`playback_panel_test.dart` 的宽屏旋转全屏保持断言、`dpi_adaptation_test.dart` 的逻辑几何断言，均未由本任务修改。四包分别为 492／83／116／5 项通过，mux 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。本轮全量检查未记为通过，未改动上述同期文件；日志为 `build/validation/image-viewer-swipe-{check,root-tests,package-tests}.log`。文档相对链接及 `git diff --check` 通过。
+
+## 2026-11-09 原图查看器悬停重绘隔离
+
+[Issue #106](https://github.com/CKopoer/BiliSail/issues/106) 报告 Windows 查看评论原图后，在底部控件间移动鼠标会看到图片闪烁。共享查看器的 `InteractiveViewer` 原先没有独立重绘边界；底部按钮的悬停与提示动画会使同层的静态主图一起重绘。离线回归在 1100 × 740 和 360 × 640 两种视口中均确认：仅悬停“保存图片”就会再次绘制已加载的原图，图片来源、序号和缩放矩阵均未改变。
+
+[共享查看器](../../lib/shared/ui/image_viewer.dart) 现将整个 `InteractiveViewer` 放在 `RepaintBoundary` 内，把变换后的可见视口与工具栏动画分离。边界位于缩放变换外，图片的缩放、平移与切图仍正常更新；评论、动态、私信和空间入口共用此修复。重绘隔离的机制见 [Flutter RepaintBoundary 文档](https://api.flutter.dev/flutter/widgets/RepaintBoundary-class.html)。
+
+[组件回归](../../test/features/image_viewer/image_viewer_test.dart) 实际生成并解码 2400 × 1600 图片，通过“查看原图”升级后，用 `debugOnProfilePaint` 记录绘制：依次悬停保存、复制、适应窗口、实际大小、缩小和放大，并等待提示动画，主图与模糊背景均不再随这些动画重绘。随后主动放大仍触发图片重绘，切图仍显示新图片，悬停期间没有重复读取或改变缩放状态。新增的宽／窄屏用例在修复前均失败、修复后均通过。
+
+图片查看器的仓储、控制器、系统栏、双窗口，以及评论、动态、私信和空间相关定向回归共 **79 项通过**，日志为本机忽略目录 `build/validation/issue106-targeted-tests.log`。
+
+`tool/check.ps1 -SkipPub` 完整通过：格式、静态分析、打包边界检查通过；根应用与四包分别 **4819／748／360／161／5 项通过**，Flutter／Dart 离线测试合计 **6093 项通过**。根应用 13 项因 Windows 符号链接权限跳过，mux 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，Apple 库脚本 2 项因缺少 `make` 跳过；这些跳过项不记为原生验证通过。全量日志为 `build/validation/issue106-check.log`；文档相对链接及 `git diff --check` 通过。
+
+按本次要求未构建或执行设备测试；本机未发现运行中的 DTD／调试应用，无法热重载。上述回归确认应用侧重绘隔离，不代替 issue 所述 Windows／显卡上的实际闪烁验收，后续由用户自行构建确认。
