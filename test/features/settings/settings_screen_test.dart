@@ -13,6 +13,42 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final failSave in [false, true]) {
+    testWidgets('background playback saves, reloads or rolls back: $failSave', (
+      tester,
+    ) async {
+      final repository = _SettingsRepository()..failSave = failSave;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+          child: MaterialApp(
+            builder: AppNoticeHost.builder,
+            home: const Scaffold(
+              body: SettingsScreen(category: SettingsCategory.playback),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final toggle = find.widgetWithText(SwitchListTile, '后台播放');
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(toggle).value, failSave);
+      expect(repository.settings.backgroundPlayback, failSave);
+      if (failSave) {
+        expect(find.text('设置保存失败，请重试'), findsOneWidget);
+      }
+      ProviderScope.containerOf(tester.element(toggle))
+          .invalidate(settingsControllerProvider);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(toggle).value, failSave);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final player in [false, true]) {
     testWidgets(
       'custom rates are editable from settings entry player=$player',

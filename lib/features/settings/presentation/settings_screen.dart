@@ -503,6 +503,12 @@ final class _SettingsCategoryPageState
                             '打开视频后开始播放',
                           ),
                           _toggle(
+                            '后台播放',
+                            s.backgroundPlayback,
+                            controller.setBackgroundPlayback,
+                            '允许移动端在后台继续播放；关闭后切到后台自动暂停，回到前台后需手动继续',
+                          ),
+                          _toggle(
                             '视频卡悬停播放',
                             s.videoCardHoverPlayback,
                             controller.setVideoCardHoverPlayback,

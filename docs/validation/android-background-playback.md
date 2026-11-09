@@ -2,6 +2,18 @@
 
 日期：2026-10-30。
 
+## 后台播放开关（2026-11-09）
+
+设置 → 播放新增“后台播放”，默认开启，兼容已有后台行为。当前 Android／iOS 已沿用原播放源继续播放，不再因退后台自动切换独立音轨；下方自动听视频及其原生验证是历史记录。
+
+关闭开关后，共享 `PlaybackPanel` 在移动端收到 `hidden`／`paused` 时调用当前 owner 的 `PlaybackSession.pause()`。视频、影视、直播、离线及手动听视频共用此策略，隐藏在其他工作区页面后的播放 owner 同样处理；临时 `inactive` 和桌面窗口不触发该暂停。暂停同步更新播放意图，阻止迟到的媒体解析自动起播；返回前台或重新打开开关均不会自动恢复播放。后台期间设置或播放源更新也重新检查策略。
+
+`backgroundPlayback` 沿用 `AppSettings`、`SettingsController` 和 SQLite `preferences.v1`，JSON 快照版本升至 45，数据库表结构不变。缺失或非法值回退为开启，有效布尔值跨重载保留；恢复默认开启，保存失败回退原设置。
+
+对应设置及播放测试覆盖默认／复制、旧快照／非法值、保存／重载／恢复默认、失败回退，以及 Android／iOS 生命周期、各内容类型、手动暂停、隐藏 owner、迟到解析和桌面隔离。按本轮用户要求不构建、不执行实机测试；锁屏、系统后台与 PiP 等原生行为由后续设备验收确认。
+
+本轮设置目录、听视频组件、播放会话、连播及系统媒体控制共 **697 项测试通过**；`tool/check.ps1 -SkipPub -Stage Lint` 的打包边界、全仓格式、静态分析通过。四份相关文档的 165 条本地链接与 `git diff --check` 通过。日志位于 `build/validation/background-playback-setting/regression-tests.log` 和 `lint-final.log`。没有可连接的 DTD 调试应用，未执行热重载；未运行全量根／子包测试或 mux 原生测试。
+
 ## 行为与边界
 
 - Android 收到 `hidden`／`paused` 后，当前播放 owner 自动切换独立音轨并继续播放；只进入 `inactive`（例如临时系统遮挡）不切源。隐藏的工作区播放页仍按播放所有权处理系统生命周期。

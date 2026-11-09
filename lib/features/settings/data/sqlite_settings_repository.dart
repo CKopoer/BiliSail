@@ -139,6 +139,7 @@ class SqliteSettingsRepository implements SettingsRepository {
           ? danmakuFontScale
           : defaultDanmakuFontScale,
       autoPlay: boolean('autoPlay', true),
+      backgroundPlayback: boolean('backgroundPlayback', true),
       defaultShowComments: boolean('defaultShowComments', false),
       videoCardHoverPlayback: boolean(
         'videoCardHoverPlayback',
@@ -278,7 +279,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 44,
+        'schemaVersion': 45,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -308,6 +309,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'danmakuShowVip': value.danmakuShowVip,
         'danmakuFontScale': value.danmakuFontScale,
         'autoPlay': value.autoPlay,
+        'backgroundPlayback': value.backgroundPlayback,
         'defaultShowComments': value.defaultShowComments,
         'videoCardHoverPlayback': value.videoCardHoverPlayback,
         'continuousPlayback': value.continuousPlayback,

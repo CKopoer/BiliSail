@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:bili_player/bili_player.dart';
 import 'package:bilisail/core/platform/window_service.dart';
+import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
@@ -48,6 +49,211 @@ void main() {
     session = _session(engine, repository, listeningMode);
   });
   tearDown(() => session.close());
+
+  Future<void> mountPlayer(
+    WidgetTester tester, {
+    bool backgroundPlayback = false,
+    bool active = true,
+    bool desktop = false,
+    ContentPlaybackTarget? target,
+  }) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [playbackSessionProvider.overrideWithValue(session)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: WorkspaceActivity(
+              active: active,
+              child: PlaybackPanel(
+                detail: _detail,
+                part: _part,
+                target: target,
+                settings: AppSettings(
+                  backgroundPlayback: backgroundPlayback,
+                  danmakuEnabled: false,
+                  resumePlayback: false,
+                ),
+                window: desktop ? _Window() : _AndroidWindow(),
+                onToggleComments: () {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 12; i++) {
+      // Settings/source rebuilds are explicitly driven even while the simulated
+      // platform has stopped scheduling frames in the background.
+      tester.binding.scheduleForcedFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+  }
+
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    for (final target in <ContentPlaybackTarget?>[
+      null,
+      const PgcPlaybackTarget('42', cid: 'one'),
+      const OfflinePlaybackTarget('local'),
+      const LivePlaybackTarget('42'),
+    ]) {
+      testWidgets('background disabled pauses $platform target=$target', (
+        tester,
+      ) async {
+        addTearDown(() {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+        });
+        await mountPlayer(tester, target: target);
+        await session.seek(const Duration(minutes: 3));
+        await session.setRate(1.5);
+        await session.setVolume(32);
+        final opens = engine.sources.length;
+        final generation = session.sourceGeneration;
+        final before = engine.currentSnapshot;
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        await tester.pump();
+        expect(engine.currentSnapshot.desiredPlaying, isTrue);
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        await tester.pump();
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        await tester.pump();
+        expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(engine.currentSnapshot.position, before.position);
+        expect(engine.currentSnapshot.rate, before.rate);
+        expect(engine.currentSnapshot.volume, before.volume);
+        expect(engine.sources, hasLength(opens));
+        expect(session.sourceGeneration, generation);
+        await tester.pumpWidget(const SizedBox.shrink());
+      }, variant: TargetPlatformVariant({platform}));
+    }
+  }
+
+  for (final paused in [false, true]) {
+    testWidgets(
+      'background disabled also pauses manual listening paused=$paused',
+      (tester) async {
+        addTearDown(() {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+        });
+        await mountPlayer(tester);
+        await session.setAudioOnly(true);
+        if (paused) await session.pause();
+        final opens = engine.sources.length;
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        await tester.pump();
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        expect(session.audioOnly, isTrue);
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        expect(engine.sources, hasLength(opens));
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
+  testWidgets('desktop keeps playing when background playback is disabled', (
+    tester,
+  ) async {
+    addTearDown(() {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    });
+    await mountPlayer(tester, desktop: true);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    expect(engine.currentSnapshot.desiredPlaying, isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'background disabled pauses the owner behind another workspace page',
+    (tester) async {
+      addTearDown(() {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+      });
+      await mountPlayer(tester);
+      await mountPlayer(tester, active: false);
+      expect(engine.currentSnapshot.desiredPlaying, isTrue);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'disabling in background pauses immediately without resuming on enable',
+    (tester) async {
+      addTearDown(() {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+      });
+      await mountPlayer(tester, backgroundPlayback: true);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(engine.currentSnapshot.desiredPlaying, isTrue);
+      await mountPlayer(tester);
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      await mountPlayer(tester, backgroundPlayback: true);
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  for (final initiallyBackground in [false, true]) {
+    testWidgets(
+      'background disabled blocks late autoplay initiallyBackground=$initiallyBackground',
+      (tester) async {
+        addTearDown(() {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+        });
+        final pending = Completer<PlaybackMedia>();
+        repository.pending = pending;
+        if (initiallyBackground) {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.paused,
+          );
+        }
+        await mountPlayer(tester);
+        if (!initiallyBackground) {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.paused,
+          );
+        }
+        pending.complete(repository.media);
+        for (var i = 0; i < 12; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        expect(engine.sources, hasLength(1));
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        expect(engine.currentSnapshot.desiredPlaying, isFalse);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
 
   testWidgets('listening uses custom rate options', (tester) async {
     session.configureSettings(
