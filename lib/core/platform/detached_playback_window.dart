@@ -324,10 +324,11 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
   void _disposeAfterFrame(DetachedPlaybackWindow window) {
     final disposed = Completer<void>();
     final waitForPlaybackRelease = widget.waitForPlaybackRelease;
-    // Start the capture now, before a rapid new open queues its restore. Native
-    // geometry is owner checked, so late capture/retire cannot change that view.
-    final saved = window
-        .saveGeometry()
+    // Stop cleanup restores before unmount, then drain native presentation and
+    // save before a rapid reopen. Geometry calls also check the native owner.
+    final saved = window.windowService
+        .beginClose()
+        .then((_) => window.saveGeometry())
         .timeout(const Duration(seconds: 2))
         .catchError((Object error, StackTrace stack) {
           if (error is PlatformException &&

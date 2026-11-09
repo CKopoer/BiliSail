@@ -787,6 +787,7 @@ void RunMiniPlayerTests() {
     MINMAXINFO limits{};
     SendMessage(window.get(), WM_GETMINMAXINFO, 0, reinterpret_cast<LPARAM>(&limits));
     Require(limits.ptMinTrackSize.x >= 240 && limits.ptMinTrackSize.y >= 135, "Mini player lost resize minimum.");
+    reopened.Restore();
   }
   ShowWindow(window.get(), SW_MAXIMIZE);
   {
@@ -794,6 +795,43 @@ void RunMiniPlayerTests() {
     Require(zoomed.Enter(), "Cannot enter mini player from maximized window.");
     zoomed.Restore();
     Require(IsZoomed(window.get()) != FALSE, "Mini player lost normal maximize state.");
+  }
+  for (const bool maximized : {false, true}) {
+    const TestWindow closing;
+    playback_window::WindowGeometrySession ordinary(
+        playback_window::WindowGeometryStore(L"playback", key));
+    Require(ordinary.Restore(closing.get(), 7, 8), "Cannot prepare closing window.");
+    ShowWindow(closing.get(), maximized ? SW_MAXIMIZE : SW_SHOWNORMAL);
+    Require(ordinary.Capture(closing.get(), 7, 8), "Cannot capture before mini player.");
+    const auto normal_width = ordinary.saved().normal()->width;
+    {
+      playback_window::MiniPlayerWindow mini(closing.get(), store);
+      Require(mini.Enter(), "Cannot enter closing mini player.");
+      SetWindowPos(closing.get(), nullptr, 110, 120, 360, 203, SWP_NOZORDER | SWP_NOACTIVATE);
+      Require(ordinary.SaveAndHide(closing.get(), 7, 8), "Cannot hide closing mini player.");
+      if (maximized) {
+        mini.Retire();
+        mini.Retire();
+        mini.Restore();
+      }
+    }
+    Require(IsWindowVisible(closing.get()) == FALSE, "Retirement showed the closing window.");
+    Require(IsZoomed(closing.get()) == FALSE, "Retirement maximized the closing window.");
+    RECT compact{};
+    GetWindowRect(closing.get(), &compact);
+    Require(compact.right - compact.left == 360 && compact.bottom - compact.top == 203,
+            "Retirement resized the closing mini player.");
+    Require((GetWindowLongPtr(closing.get(), GWL_STYLE) & WS_CAPTION) == 0,
+            "Retirement restored the closing caption.");
+    Require(GetPropW(closing.get(), L"BiliSail.MiniPlayer.Store") == nullptr,
+            "Retirement left a dangling store pointer.");
+    playback_window::GeometrySession saved;
+    playback_window::WindowGeometryStore(L"playback", key).Load(saved);
+    Require(saved.normal()->width == normal_width && saved.maximized() == maximized,
+            "Closing mini player overwrote ordinary geometry.");
+    store.Load(saved);
+    Require(saved.normal()->width == 360 && saved.normal()->height == 203,
+            "Closing mini player did not save compact geometry.");
   }
   RegDeleteTreeW(HKEY_CURRENT_USER, key.c_str());
 }

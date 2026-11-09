@@ -18,7 +18,7 @@ class MiniPlayerWindow {
     store_.Load(geometry_);
     geometry_.Begin(1, 1);
   }
-  ~MiniPlayerWindow() { Restore(); }
+  ~MiniPlayerWindow() { Retire(); }
   MiniPlayerWindow(const MiniPlayerWindow&) = delete;
   MiniPlayerWindow& operator=(const MiniPlayerWindow&) = delete;
 
@@ -87,6 +87,17 @@ class MiniPlayerWindow {
     if (placement_.showCmd == SW_SHOWMAXIMIZED) ShowWindow(window_, SW_MAXIMIZE);
     SetWindowPos(window_, topmost_ ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    RemovePropW(window_, L"BiliSail.MiniPlayer");
+  }
+
+  // A closing view must never resize/zoom back to its ordinary presentation.
+  void Retire() {
+    if (!active_) return;
+    Save();
+    active_ = false;
+    if (!IsWindow(window_)) return;
+    RemoveWindowSubclass(window_, WindowProc, SubclassId());
+    RemovePropW(window_, L"BiliSail.MiniPlayer.Store");
     RemovePropW(window_, L"BiliSail.MiniPlayer");
   }
 
