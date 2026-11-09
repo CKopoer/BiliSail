@@ -410,10 +410,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    ProfileSectionNavigation(
-                      section: section,
-                      progress: _pagingProgress,
-                      onSelected: controller.select,
+                    DynamicComposeToolbar(
+                      visible:
+                          signedIn &&
+                          isSelf &&
+                          section == ProfileSection.dynamics,
+                      onLogin: widget.onLogin,
+                      onPublished: () => controller.load(
+                        refresh: true,
+                        targetSection: ProfileSection.dynamics,
+                      ),
+                      child: ProfileSectionNavigation(
+                        section: section,
+                        progress: _pagingProgress,
+                        onSelected: controller.select,
+                      ),
                     ),
                     ProfileFollowGroupsTabs(
                       id: widget.id,
@@ -701,14 +712,6 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (widget.section == ProfileSection.dynamics &&
-                      ref.watch(authControllerProvider).mid == widget.id.value)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: DynamicComposeButton(
-                        onPublished: () => controller.load(refresh: true),
-                      ),
-                    ),
                   if (widget.section == ProfileSection.following &&
                       followingQuery.$4) ...[
                     ProfileFollowingTools(id: widget.id),

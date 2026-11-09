@@ -2,6 +2,8 @@ import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/features/dynamic/application/dynamic_composer_controller.dart';
 import 'package:bilisail/features/feed/application/dynamic_authors_controller.dart';
 import 'package:bilisail/features/feed/application/feed_controller.dart';
 import 'package:bilisail/features/feed/application/home_controller.dart';
@@ -11,11 +13,15 @@ import 'package:bilisail/features/feed/presentation/dynamic_author_filter.dart';
 import 'package:bilisail/features/feed/presentation/feed_screen.dart';
 import 'package:bilisail/features/feed/presentation/home_content.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
+import 'package:bilisail/shared/ui/dynamic_compose_dialog.dart';
+import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/dynamic_author_fakes.dart';
+import '../../support/dynamic_composer_fakes.dart';
+import '../../support/dynamic_fakes.dart';
 
 void main() {
   for (final (width, scale, wide) in [
@@ -37,6 +43,20 @@ void main() {
         find.byType(DynamicAuthorFilter),
       );
       expect(filter.wide, wide);
+      final compose = find.byKey(const ValueKey('dynamic-compose'));
+      final sections = find.byKey(const ValueKey('home-section-strip-dynamic'));
+      expect(compose.hitTestable(), findsOneWidget);
+      expect(tester.getCenter(compose).dy, tester.getCenter(sections).dy);
+      expect(
+        tester
+            .widget<DynamicComposeButton>(find.byType(DynamicComposeButton))
+            .compact,
+        width < 480 + (scale - 1) * 13 * 8,
+      );
+      expect(
+        find.descendant(of: find.byType(CustomScrollView), matching: compose),
+        findsNothing,
+      );
       final choice = find.byKey(const ValueKey('dynamic-author-1'));
       final content = find.byType(HomeContent);
       expect(
@@ -86,6 +106,7 @@ void main() {
       await tester.pumpAndSettle();
       selected.value = HomeChannel.videoDynamic;
       await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('dynamic-compose')), findsNothing);
       expect(tester.state(filter), same(filterState));
       expect(tester.state<ScrollableState>(scroll).position, same(position));
       expect(position.pixels, 650);
@@ -96,6 +117,10 @@ void main() {
       expect(find.text('筛选 1 视频 1'), findsOneWidget);
       selected.value = HomeChannel.dynamic;
       await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('dynamic-compose')).hitTestable(),
+        findsOneWidget,
+      );
       expect(repository.feedCalls, hasLength(2));
       expect(contentPosition.pixels, 150);
       // Resizing changes the selector's axis without replacing its owner/feed.
@@ -113,6 +138,63 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final authorId in [null, const UserId('1')]) {
+    testWidgets(
+      'publication refreshes the visible dynamic query for $authorId',
+      (tester) async {
+        _size(tester, 375);
+        final repository = DynamicAuthorRepository();
+        final composer = DynamicComposerFake();
+        final auth = DynamicAuthFake();
+        addTearDown(() => auth.stream.close());
+        final selected = ValueNotifier(HomeChannel.dynamic);
+        addTearDown(selected.dispose);
+        await tester.pumpWidget(
+          _app(repository, selected, auth: auth, composer: composer),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('home-section-图文')));
+        await tester.pumpAndSettle();
+        if (authorId != null) {
+          await tester.tap(
+            find.byKey(ValueKey('dynamic-author-${authorId.value}')),
+          );
+          await tester.pumpAndSettle();
+        }
+        final allReads = repository.allReads;
+        final filteredReads = repository.feedCalls.length;
+        final authorReads = repository.authorCalls.length;
+        final compose = find.byKey(const ValueKey('dynamic-compose'));
+        final initialTop = tester.getTopLeft(compose).dy;
+        await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(compose).dy, initialTop);
+        await tester.tap(compose);
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('dynamic-compose-text')),
+          '新的动态',
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('dynamic-compose-submit')));
+        await tester.pumpAndSettle();
+        expect(composer.drafts.single.text, '新的动态');
+        expect(repository.authorCalls, hasLength(authorReads + 1));
+        expect(repository.allReads, allReads + (authorId == null ? 1 : 0));
+        expect(
+          repository.feedCalls,
+          hasLength(filteredReads + (authorId == null ? 0 : 1)),
+        );
+        if (authorId != null) {
+          expect(repository.feedCalls.last.query.section, '图文');
+          expect(repository.feedCalls.last.authorId, authorId);
+        }
+        expect(find.byType(DynamicComposeDialog), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets(
     'changing author cancels stale reads and only loads visible content',
@@ -250,17 +332,22 @@ Widget _app(
   ValueNotifier<HomeChannel> selected, {
   double scale = 1,
   bool signedIn = true,
+  DynamicAuthFake? auth,
+  DynamicComposerFake? composer,
 }) => ProviderScope(
   overrides: [
     homeRepositoryProvider.overrideWithValue(repository),
     feedRepositoryProvider.overrideWithValue(_Feed()),
+    if (auth != null) authRepositoryProvider.overrideWithValue(auth),
+    if (composer != null)
+      dynamicComposerRepositoryProvider.overrideWithValue(composer),
   ],
   child: MaterialApp(
     scrollBehavior: const SmoothScrollBehavior(),
     builder: (context, child) => MediaQuery(
       data: MediaQuery.of(context)
           .copyWith(textScaler: TextScaler.linear(scale)),
-      child: child!,
+      child: AppNoticeHost(child: child!),
     ),
     home: Scaffold(
       body: ValueListenableBuilder(

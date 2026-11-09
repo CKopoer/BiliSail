@@ -9,6 +9,52 @@ import '../../features/dynamic/domain/dynamic_composer_repository.dart';
 import 'app_dialog.dart';
 import 'app_notice.dart';
 
+class DynamicComposeToolbar extends StatelessWidget {
+  const DynamicComposeToolbar({
+    super.key,
+    required this.child,
+    this.topic,
+    this.onPublished,
+    this.onLogin,
+    this.label = '发布动态',
+    this.enabled = true,
+    this.visible = true,
+  });
+
+  final Widget child;
+  final DynamicComposeTopic? topic;
+  final Future<void> Function()? onPublished;
+  final VoidCallback? onLogin;
+  final String label;
+  final bool enabled;
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final extraTextWidth =
+          (MediaQuery.textScalerOf(context).scale(13) - 13) * 8;
+      return Row(
+        children: [
+          Expanded(child: child),
+          if (visible)
+            Padding(
+              padding: const EdgeInsets.only(left: 8, right: 12),
+              child: DynamicComposeButton(
+                compact: constraints.maxWidth < 480 + extraTextWidth,
+                topic: topic,
+                onPublished: onPublished,
+                onLogin: onLogin,
+                label: label,
+                enabled: enabled,
+              ),
+            ),
+        ],
+      );
+    },
+  );
+}
+
 class DynamicComposeButton extends ConsumerWidget {
   const DynamicComposeButton({
     super.key,
@@ -17,19 +63,33 @@ class DynamicComposeButton extends ConsumerWidget {
     this.onLogin,
     this.label = '发布动态',
     this.enabled = true,
+    this.compact = false,
   });
   final DynamicComposeTopic? topic;
   final Future<void> Function()? onPublished;
   final VoidCallback? onLogin;
   final String label;
   final bool enabled;
+  final bool compact;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => FilledButton.icon(
-    key: const ValueKey('dynamic-compose'),
-    icon: Icon(topic == null ? Icons.edit_outlined : Icons.tag),
-    label: Text(label),
-    onPressed: !enabled
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final style = TextButton.styleFrom(
+      foregroundColor: theme.colorScheme.primary,
+      backgroundColor: theme.colorScheme.primary.withValues(alpha: .07),
+      disabledBackgroundColor: theme.colorScheme.surfaceContainerLow,
+      minimumSize: const Size(44, 44),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      textStyle: theme.textTheme.labelLarge?.copyWith(fontSize: 13),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+    final icon = Icon(
+      topic == null ? Icons.edit_outlined : Icons.tag,
+      size: 20,
+    );
+    final VoidCallback? onPressed = !enabled
         ? null
         : () async {
             if (!ref.read(authControllerProvider).isSignedIn) {
@@ -53,8 +113,24 @@ class DynamicComposeButton extends ConsumerWidget {
               showAppNotice(context, '动态发布成功');
               await onPublished?.call();
             }
-          },
-  );
+          };
+    if (compact) {
+      return IconButton(
+        key: const ValueKey('dynamic-compose'),
+        tooltip: label,
+        style: style,
+        icon: icon,
+        onPressed: onPressed,
+      );
+    }
+    return TextButton.icon(
+      key: const ValueKey('dynamic-compose'),
+      style: style,
+      icon: icon,
+      label: Text(label, maxLines: 1),
+      onPressed: onPressed,
+    );
+  }
 }
 
 class DynamicComposeDialog extends ConsumerStatefulWidget {

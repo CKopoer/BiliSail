@@ -18,6 +18,7 @@ import 'package:bilisail/features/profile/presentation/profile_header.dart';
 import 'package:bilisail/features/video/application/video_author_controller.dart';
 import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
+import 'package:bilisail/shared/ui/dynamic_compose_dialog.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -100,6 +101,72 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  for (final (width, scale) in [(320.0, 2.0), (768.0, 1.0), (1280.0, 1.0)]) {
+    testWidgets(
+      'own dynamic compose action shares retained profile tabs at $width/$scale',
+      (tester) async {
+        auth.state = const AuthState(status: AuthStatus.signedIn, mid: '7');
+        await mount(
+          tester,
+          width: width,
+          scale: scale,
+          initialSection: ProfileSection.dynamics,
+        );
+        final navigation = find.byType(ProfileSectionNavigation);
+        final compose = find.byKey(const ValueKey('dynamic-compose'));
+        expect(compose.hitTestable(), findsOneWidget);
+        expect(
+          tester.getCenter(compose).dy,
+          closeTo(tester.getCenter(navigation).dy, 1),
+        );
+        final scroll = find.descendant(
+          of: navigation,
+          matching: find.byType(Scrollable),
+        );
+        final navigationState = tester.state<ScrollableState>(scroll);
+        expect(
+          tester
+              .widget<DynamicComposeButton>(find.byType(DynamicComposeButton))
+              .compact,
+          width == 320,
+        );
+        controller().select(ProfileSection.videos);
+        await tester.pumpAndSettle();
+        expect(compose, findsNothing);
+        expect(tester.state(scroll), same(navigationState));
+        controller().select(ProfileSection.dynamics);
+        await tester.pumpAndSettle();
+        expect(compose.hitTestable(), findsOneWidget);
+        expect(tester.state(scroll), same(navigationState));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'other profiles and signed-out profiles hide the compose action',
+    (tester) async {
+      await mount(
+        tester,
+        initialSection: ProfileSection.dynamics,
+        isSelf: false,
+      );
+      expect(find.byKey(const ValueKey('dynamic-compose')), findsNothing);
+      auth.emit(const AuthState(status: AuthStatus.signedIn, mid: '7'));
+      await tester.pumpAndSettle();
+      controller().select(ProfileSection.dynamics);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('dynamic-compose')).hitTestable(),
+        findsOneWidget,
+      );
+      auth.emit(const AuthState());
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('dynamic-compose')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final (width, scale) in [(320.0, 2.0), (375.0, 1.0), (900.0, 1.0)]) {
     testWidgets(

@@ -10,6 +10,7 @@ import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/dynamic_compose_dialog.dart';
 import '../../../shared/ui/app_dialog.dart';
 import '../../../shared/ui/app_notice.dart';
+import '../../../shared/ui/content_section_tabs.dart';
 import '../../auth/application/auth_controller.dart';
 import '../domain/dynamic_composer_repository.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
@@ -197,40 +198,9 @@ class DynamicTopicScreen extends ConsumerWidget {
                                   SelectableText(detail.description),
                                 ],
                                 const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 16,
-                                  runSpacing: 8,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    Text(
-                                      '${compactCount(detail.viewCount)}浏览 · ${compactCount(detail.discussCount)}讨论',
-                                      style: theme.textTheme.bodySmall,
-                                    ),
-                                    OutlinedButton.icon(
-                                      key: const ValueKey('topic-favorite'),
-                                      onPressed:
-                                          state.loading ||
-                                              state.actionBusy ||
-                                              state.favoriteUncertain
-                                          ? null
-                                          : () async {
-                                              if (!signedIn) {
-                                                login();
-                                              } else {
-                                                await controller
-                                                    .toggleFavorite();
-                                              }
-                                            },
-                                      icon: Icon(
-                                        detail.isFavorite
-                                            ? Icons.star_rounded
-                                            : Icons.star_outline_rounded,
-                                      ),
-                                      label: Text(
-                                        '${detail.isFavorite ? '已收藏' : '收藏'} ${compactCount(detail.favoriteCount)}',
-                                      ),
-                                    ),
-                                  ],
+                                Text(
+                                  '${compactCount(detail.viewCount)}浏览 · ${compactCount(detail.discussCount)}讨论',
+                                  style: theme.textTheme.bodySmall,
                                 ),
                               ],
                               if (state.actionMessage case final message?)
@@ -243,23 +213,37 @@ class DynamicTopicScreen extends ConsumerWidget {
                                     ),
                                   ),
                                 ),
-                              if (state.sorts.isNotEmpty) ...[
-                                const SizedBox(height: 16),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 4,
-                                  children: [
-                                    for (final sort in state.sorts)
-                                      ChoiceChip(
-                                        label: Text(sort.name),
-                                        selected: state.sort == sort.id,
-                                        onSelected: (_) =>
-                                            controller.selectSort(sort.id),
-                                      ),
-                                  ],
-                                ),
-                              ],
                             ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  PinnedHeaderSliver(
+                    key: const ValueKey('topic-pinned-toolbar'),
+                    child: Material(
+                      color: theme.colorScheme.surface,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 804),
+                          child: DynamicComposeToolbar(
+                            topic: detail == null
+                                ? null
+                                : DynamicComposeTopic(id, detail.name),
+                            label: '参与话题',
+                            enabled: detail != null,
+                            onLogin: onLogin,
+                            onPublished: controller.refresh,
+                            child: ContentSectionTabs<int>(
+                              entries: [
+                                for (final sort in state.sorts)
+                                  (sort.id, sort.name),
+                              ],
+                              value: state.sort,
+                              scrollKey: ValueKey('topic-sort-strip-$id'),
+                              itemKey: (sort) => ValueKey('topic-sort-$sort'),
+                              onSelected: controller.selectSort,
+                            ),
                           ),
                         ),
                       ),
@@ -347,21 +331,6 @@ class DynamicTopicScreen extends ConsumerWidget {
                     ),
                 ],
               ),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: DynamicComposeButton(
-              topic: detail == null
-                  ? null
-                  : DynamicComposeTopic(id, detail.name),
-              label: '参与话题',
-              enabled: detail != null,
-              onLogin: onLogin,
-              onPublished: controller.refresh,
             ),
           ),
         ),
