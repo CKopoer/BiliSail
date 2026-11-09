@@ -9,6 +9,7 @@ import 'cookies.dart';
 import 'decoding/pgc_season_decoder.dart';
 import 'models.dart';
 import 'models/popular_models.dart';
+import 'models/dynamic_composer_models.dart';
 import 'models/pgc_models.dart';
 import 'mappers/video_access_parser.dart';
 import 'mappers/dash_audio_parser.dart';
@@ -137,7 +138,10 @@ final class BiliApiClient {
         uri.userInfo.isNotEmpty ||
         uri.port != 443 ||
         (uri.host == 'app.bilibili.com' &&
-            uri.path != '/x/topic/web/details/top') ||
+            !const {
+              '/x/topic/web/details/top',
+              '/x/topic/pub/search',
+            }.contains(uri.path)) ||
         !const {
           'api.bilibili.com',
           'app.bilibili.com',
@@ -424,6 +428,9 @@ final class BiliApiClient {
       '/x/relation/tag/update',
       '/x/relation/tag/del',
       '/x/relation/tags/update_sort',
+      '/x/topic/fav/sub/add',
+      '/x/topic/fav/sub/cancel',
+      '/x/topic/report',
     }.contains(path)) {
       throw ArgumentError('Unsupported mutation');
     }
@@ -1281,13 +1288,38 @@ final class BiliApiClient {
     Uint8List bytes,
     String mimeType, {
     ApiRequestContext? context,
+  }) => _uploadDailyPicture(bytes, mimeType, 'comment_picture_upload', context);
+
+  Future<ApiDynamicPicture> uploadDynamicPicture(
+    Uint8List bytes,
+    String mimeType, {
+    ApiRequestContext? context,
   }) async {
+    final picture = await _uploadDailyPicture(
+      bytes,
+      mimeType,
+      'dynamic_picture_upload',
+      context,
+    );
+    return ApiDynamicPicture(
+      picture.url,
+      picture.width,
+      picture.height,
+      picture.sizeKiB,
+    );
+  }
+
+  Future<ApiCommentPicture> _uploadDailyPicture(
+    Uint8List bytes,
+    String mimeType,
+    String endpoint,
+    ApiRequestContext? context,
+  ) async {
     if (bytes.isEmpty ||
         bytes.length > 10 * 1024 * 1024 ||
         !const {'image/jpeg', 'image/png', 'image/gif'}.contains(mimeType)) {
       throw ArgumentError('Invalid comment image');
     }
-    const endpoint = 'comment_picture_upload';
     final data = _map(
       await _submitForm(
         _api.replace(path: '/x/dynamic/feed/draw/upload_bfs'),
@@ -1304,13 +1336,20 @@ final class BiliApiClient {
     if (url == null ||
         url.scheme != 'https' ||
         url.userInfo.isNotEmpty ||
+        url.port != 443 ||
         url.hasQuery ||
-        !(url.host == 'hdslb.com' || url.host.endsWith('.hdslb.com')) ||
+        url.hasFragment ||
+        !(url.host == 'hdslb.com' ||
+            url.host.endsWith('.hdslb.com') ||
+            url.host.endsWith('.biliimg.com')) ||
         width == null ||
         width <= 0 ||
         height == null ||
-        height <= 0) {
-      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+        height <= 0 ||
+        width > 20000 ||
+        height > 20000 ||
+        width * height > 40000000) {
+      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
     return ApiCommentPicture(url, width, height, bytes.length / 1024);
   }

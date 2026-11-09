@@ -1,4 +1,5 @@
 import 'package:bilisail/app/router.dart';
+import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/workspace_tabs.dart';
 import 'package:bilisail/core/platform/external_links.dart';
 import 'package:bilisail/domain/app_failure.dart';
@@ -156,7 +157,7 @@ void main() {
   for (final mode in WorkspaceNavigationMode.values) {
     for (final width in [390.0, 1280.0]) {
       testWidgets(
-        'topic route has one workspace toolbar in $mode at $width',
+        'topic route owns navigation without workspace tools in $mode at $width',
         (tester) async {
           final router = createBiliRouter(
             initialLocation: '/topic/12',
@@ -181,21 +182,22 @@ void main() {
           expect(find.text('话题简介'), findsOneWidget);
           expect(
             find.byKey(const ValueKey('workspace-common-tools')),
-            findsOneWidget,
+            findsNothing,
           );
-          expect(
-            find.byKey(const ValueKey('workspace-search')),
-            findsOneWidget,
-          );
+          expect(find.byKey(const ValueKey('workspace-search')), findsNothing);
           expect(
             find.byKey(const ValueKey('search-category-strip')),
             findsNothing,
           );
+          expect(find.byKey(const ValueKey('workspace-back')), findsNothing);
+          expect(find.byKey(const ValueKey('topic-back')), findsOneWidget);
           expect(
-            find.byKey(const ValueKey('workspace-back')),
-            mode == WorkspaceNavigationMode.multipleTabs
-                ? findsNothing
-                : findsOneWidget,
+            find.byKey(const ValueKey('home-channel-strip')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const ValueKey('workspace-bottom-navigation')),
+            findsNothing,
           );
           expect(tester.takeException(), isNull);
         },
@@ -221,6 +223,42 @@ void main() {
         workspace.tabs.length,
         lessThanOrEqualTo(WorkspaceTabs.maximumTabs),
       );
+    },
+  );
+  testWidgets(
+    'compact topic participation stays clear of the workspace playback button',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      Widget app(String location) => ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(auth),
+          dynamicTopicRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.android),
+          home: BiliAppShell(
+            key: const ValueKey('topic-workspace'),
+            location: location,
+            navigationMode: WorkspaceNavigationMode.dualTabs,
+            pageBuilder: (_, tab) => tab.isTopic
+                ? const DynamicTopicScreen(id: '12')
+                : const SizedBox.expand(),
+            child: const SizedBox.shrink(),
+          ),
+        ),
+      );
+      await tester.pumpWidget(app('/video/BV17x411w7KC'));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(app('/topic/12'));
+      await tester.pumpAndSettle();
+      expect(find.text('参与话题').hitTestable(), findsOneWidget);
+      expect(find.byTooltip('返回播放').hitTestable(), findsNothing);
+      expect(
+        find.byKey(const ValueKey('topic-back')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
     },
   );
 }

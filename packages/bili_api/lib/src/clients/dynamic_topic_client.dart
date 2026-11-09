@@ -39,7 +39,38 @@ final class DynamicTopicClient {
       creatorId: _id(creator['uid']),
       creatorName: _text(creator['name']),
       creatorAvatar: _uri(creator['face']),
+      favoriteCount: _count(item['fav']),
+      isFavorite: item['is_fav'] == true || item['is_fav'] == 1,
     );
+  }
+
+  Future<void> favorite(
+    String id,
+    bool favorite, {
+    ApiRequestContext? context,
+  }) async {
+    _validate(id);
+    await api.submitForm(
+      favorite ? '/x/topic/fav/sub/add' : '/x/topic/fav/sub/cancel',
+      'dynamic_topic_favorite',
+      {'topic_id': id},
+      context: context,
+    );
+  }
+
+  Future<void> report(
+    String id,
+    String reason, {
+    ApiRequestContext? context,
+  }) async {
+    _validate(id);
+    if (reason.trim().isEmpty || reason.runes.length > 1000) {
+      throw ArgumentError('Invalid topic report');
+    }
+    await api.submitForm('/x/topic/report', 'dynamic_topic_report', {
+      'topic_id': id,
+      'reason': reason,
+    }, context: context);
   }
 
   Future<ApiDynamicTopicPage> feed(

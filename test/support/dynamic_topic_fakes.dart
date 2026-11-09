@@ -14,6 +14,30 @@ typedef TopicQuery = ({
 });
 
 class DynamicTopicRepositoryFake implements DynamicTopicRepository {
+  final favorites = <(String, bool)>[];
+  final reports = <(String, String)>[];
+  Future<void> Function(RequestCancellation)? onWrite;
+  @override
+  Future<void> favorite(
+    String id,
+    bool value,
+    RequestCancellation cancellation,
+  ) async {
+    favorites.add((id, value));
+    await onWrite?.call(cancellation);
+    header = header.withFavorite(value);
+  }
+
+  @override
+  Future<void> report(
+    String id,
+    String reason,
+    RequestCancellation cancellation,
+  ) async {
+    reports.add((id, reason));
+    await onWrite?.call(cancellation);
+  }
+
   @override
   String accountScope = 'user:7';
   @override

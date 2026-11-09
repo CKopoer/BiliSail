@@ -212,6 +212,7 @@
 | [动态内容与详情重构](validation/dynamic-content-redesign-2026-11-09.md) | PiliPlus 类型对照、话题／商品／附加卡片、宽屏分栏与窄屏滚动、草稿保留及离线验证 |
 | [应用内话题与动态展示修复](validation/dynamic-topics-and-text-2026-11-09.md) | 话题简介／排序／分页／折叠、内部导航与名称搜索、右上角详情、真实排版截断及预约状态 |
 | [动态话题外跳与顶部栏修复](validation/dynamic-topic-navigation-2026-11-10.md) | 移动端话题链接、ID 优先与名称回退、协议到点击回归、工作区顶部栏去重 |
+| [独立话题页与动态发布](validation/dynamic-publishing-and-topic-page-2026-11-10.md) | 页内返回／发起人、话题收藏与原生举报、共享文字／图片／话题发布及账号隔离 |
 | [用户页、倍速与标签播放](validation/profile-playback-rates.md) | 紧凑资料/工具条、固定倍速档位和普通标签继续播放 |
 | [应用会话内继承倍速与音量](validation/session-playback-rate.md) | 后续播放继承调速／音量、全局音量记忆开关、重启恢复与验证边界 |
 | [触摸长按临时倍速](validation/touch-hold-playback-rate.md) | 画面长按使用已有延迟／倍速、松开恢复、全屏与取消边界 |
