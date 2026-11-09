@@ -98,8 +98,14 @@ void main() {
     },
   );
   test('PGC read and write carry real episode and season identity', () async {
-    await client.read(_bvid, _cid, episodeId: '7', seasonId: '8');
+    transport.data = _pgcProgress('7', 426);
+    expect(
+      await client.read(_bvid, _cid, episodeId: '7', seasonId: '8'),
+      const Duration(seconds: 426),
+    );
+    expect(transport.reads.single.path, '/pgc/view/web/season');
     expect(transport.reads.last.queryParameters['ep_id'], '7');
+    expect(transport.reads.last.queryParameters['season_id'], '8');
     await client.report(
       _bvid,
       _cid,
@@ -113,6 +119,49 @@ void main() {
     expect(transport.posts.last.fields['sid'], '8');
     expect(transport.posts.last.fields['type'], '4');
   });
+  for (final (id, time, expected) in <(Object?, Object?, Duration?)>[
+    ('7', 0, Duration.zero),
+    ('7', -1, Duration.zero),
+    ('7', '42', Duration(seconds: 42)),
+    ('8', 42, null),
+    (null, 42, null),
+    ('7', null, null),
+    ('7', -2, null),
+    ('7', 604801, null),
+  ]) {
+    test('PGC history validates episode and seconds: $id / $time', () async {
+      transport.data = _pgcProgress(id, time);
+      expect(await client.read(_bvid, _cid, episodeId: '7'), expected);
+      expect(transport.reads.single.path, '/pgc/view/web/season');
+    });
+  }
+
+  test(
+    'PGC progress discards a response after account epoch changes',
+    () async {
+      transport.pendingRead = Completer<ApiHttpResponse>();
+      final result = client.read(
+        _bvid,
+        _cid,
+        episodeId: '7',
+        context: ApiRequestContext(sessionEpoch: session.sessionEpoch),
+      );
+      final assertion = expectLater(
+        result,
+        throwsA(
+          isA<ApiFailure>().having(
+            (e) => e.category,
+            'category',
+            ApiFailureCategory.cancelled,
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      session.sessionEpoch++;
+      transport.pendingRead!.complete(_response(_pgcProgress('7', 42)));
+      await assertion;
+    },
+  );
   test('guest cannot submit a heartbeat', () async {
     api.cookieJar.clear();
     await expectLater(
@@ -185,6 +234,15 @@ ApiHttpResponse _response(Object? data, {int status = 200}) => ApiHttpResponse(
   const {},
 );
 
+Map<String, Object?> _pgcProgress(Object? id, Object? time) => {
+  'season_id': '8',
+  'title': '测试番剧',
+  'episodes': [],
+  'user_status': {
+    'progress': {'last_ep_id': id, 'last_time': time},
+  },
+};
+
 final class _Session implements ApiSessionProvider {
   @override
   int sessionEpoch = 1;
@@ -196,6 +254,7 @@ final class _Transport implements ApiTransport, ApiFormTransport {
   final posts = <({Uri uri, Map<String, String> fields})>[];
   String? failure;
   Completer<ApiHttpResponse>? pending;
+  Completer<ApiHttpResponse>? pendingRead;
   @override
   Future<ApiHttpResponse> get(
     Uri uri, {
@@ -212,7 +271,7 @@ final class _Transport implements ApiTransport, ApiFormTransport {
         },
       });
     }
-    return _response(data);
+    return pendingRead?.future ?? _response(data);
   }
 
   @override

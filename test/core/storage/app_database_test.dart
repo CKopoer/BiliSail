@@ -10,6 +10,48 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('PGC memory finds the latest watched episode within this season and account', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    var scope = 'user:1';
+    final history = SqliteLibraryRepository(
+      database,
+      accountScope: () => scope,
+    );
+    Future<void> save(String id, int seconds) => history.saveProgress(
+      scope: scope,
+      video: video,
+      part: VideoPart(cid: id, page: 1, title: id, duration: part.duration),
+      position: Duration(seconds: seconds),
+      duration: part.duration,
+      episodeId: id,
+    );
+    expect(await history.latestPgcEpisode(scope, ['1', '2']), isNull);
+    await save('1', 20);
+    await save('2', 40);
+    await save('3', 50); // Another season must not choose its episode.
+    expect(await history.latestPgcEpisode(scope, ['1', '2']), '2');
+    // Rewatching an earlier episode, including at zero or completion, wins.
+    await save('1', 0);
+    expect(await history.latestPgcEpisode(scope, ['1', '2']), '1');
+    await save('2', part.duration.inSeconds);
+    expect(await history.latestPgcEpisode(scope, ['1', '2']), '2');
+    expect(
+      await history.latestPgcEpisode(
+        scope,
+        List.generate(5000, (index) => '${index + 1}'),
+      ),
+      '2',
+    );
+    scope = 'user:2';
+    expect(await history.latestPgcEpisode(scope, ['1', '2']), isNull);
+    expect(await history.latestPgcEpisode('user:1', ['1', '2']), isNull);
+    scope = 'user:1';
+    final pending = history.latestPgcEpisode(scope, ['1', '2']);
+    scope = 'user:2';
+    expect(await pending, isNull);
+  });
+
   test(
     'missing local progress differs from zero and completed progress',
     () async {

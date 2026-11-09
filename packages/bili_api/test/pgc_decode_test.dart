@@ -28,6 +28,7 @@ Uint8List _body({
   int padding = 0,
   Object? lastId,
   int code = 0,
+  Object? progress,
 }) => Uint8List.fromList(
   utf8.encode(
     jsonEncode({
@@ -36,6 +37,7 @@ Uint8List _body({
         'season_id': '42',
         'title': '测试季',
         'evaluate': 'x' * padding,
+        'user_status': {'progress': progress},
         'episodes': [
           for (var i = 0; i < count; i++)
             {
@@ -59,6 +61,41 @@ Matcher _failure(ApiFailureCategory category) => isA<ApiFailure>()
 Future<void> _turn() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  for (final padding in [0, 512 * 1024]) {
+    test(
+      'season preserves account episode and seconds progress ($padding)',
+      () async {
+        final result = await PgcClient(
+          BiliApiClient(
+            transport: _Transport(
+              _body(
+                padding: padding,
+                progress: {'last_ep_id': '9007199254740993', 'last_time': 426},
+              ),
+            ),
+          ),
+        ).getSeason(seasonId: '42');
+        expect(result.lastEpisodeId, '9007199254740993');
+        expect(result.lastPosition, const Duration(seconds: 426));
+      },
+    );
+  }
+  for (final progress in [
+    null,
+    'invalid',
+    {'last_ep_id': 0, 'last_time': -2},
+    {'last_ep_id': 1.2, 'last_time': 1.2},
+  ]) {
+    test(
+      'optional malformed season progress does not hide metadata: $progress',
+      () {
+        final result = decodePgcSeasonBytes(_body(progress: progress));
+        expect(result.lastEpisodeId, isNull);
+        expect(result.lastPosition, isNull);
+        expect(result.episodes, isNotEmpty);
+      },
+    );
+  }
   test('small season stays local and preserves entitlement metadata', () async {
     var workers = 0;
     final client = PgcClient(

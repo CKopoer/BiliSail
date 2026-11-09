@@ -69,6 +69,7 @@ ApiPgcSeason parsePgcSeasonData(Map<String, Object?> data) {
   final rating = _mapOrEmpty(data['rating']);
   final stat = _mapOrEmpty(data['stat']);
   final publish = _mapOrEmpty(data['publish']);
+  final progress = _mapOrEmpty(_mapOrEmpty(data['user_status'])['progress']);
   return ApiPgcSeason(
     seasonId: _id(data['season_id'], endpoint),
     title: _requiredText(data['title'] ?? data['season_title'], endpoint),
@@ -82,6 +83,13 @@ ApiPgcSeason parsePgcSeasonData(Map<String, Object?> data) {
     danmakuCount: _int(stat['danmakus']),
     followCount: _int(stat['favorites']),
     publishText: _text(publish['pub_time_show'] ?? publish['pub_time']),
+    lastEpisodeId: _optionalId(progress['last_ep_id']),
+    // Season history uses seconds, unlike player/v2's milliseconds.
+    lastPosition: switch (_int(progress['last_time'])) {
+      final seconds? when seconds >= -1 && seconds <= 7 * 24 * 60 * 60 =>
+        Duration(seconds: seconds < 0 ? 0 : seconds),
+      _ => null,
+    },
   );
 }
 

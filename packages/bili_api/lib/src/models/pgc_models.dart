@@ -1,4 +1,4 @@
-/// Public PGC metadata. IDs stay as decimal strings to avoid precision loss.
+/// PGC metadata and optional account progress. IDs remain decimal strings.
 final class ApiPgcSeason {
   const ApiPgcSeason({
     required this.seasonId,
@@ -13,6 +13,8 @@ final class ApiPgcSeason {
     this.danmakuCount,
     this.followCount,
     this.publishText,
+    this.lastEpisodeId,
+    this.lastPosition,
   });
 
   final String seasonId;
@@ -26,6 +28,8 @@ final class ApiPgcSeason {
   final int? danmakuCount;
   final int? followCount;
   final String? publishText;
+  final String? lastEpisodeId;
+  final Duration? lastPosition;
   final List<ApiPgcSeasonSummary> relatedSeasons;
 }
 

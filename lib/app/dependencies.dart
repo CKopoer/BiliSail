@@ -100,6 +100,7 @@ import '../features/playback/data/api_playback_history_repository.dart';
 import '../features/playback/data/api_content_playback_repository.dart';
 import '../features/pgc/application/pgc_controller.dart';
 import '../features/pgc/data/api_pgc_repository.dart';
+import '../features/pgc/data/local_pgc_resume_repository.dart';
 import '../features/pgc/application/pgc_danmaku_controller.dart';
 import '../features/pgc/data/api_pgc_danmaku_repository.dart';
 import '../features/live/application/live_danmaku_controller.dart';
@@ -535,6 +536,12 @@ class AppDependencies {
             PgcClient(api),
             requests,
             accountScope: () => session.accountScope,
+          ),
+        ),
+        pgcResumeRepositoryProvider.overrideWithValue(
+          LocalPgcResumeRepository(
+            resumeEnabled: () async => (await settings.load()).resumePlayback,
+            latestEpisode: library.latestPgcEpisode,
           ),
         ),
         pgcDanmakuRepositoryProvider.overrideWithValue(

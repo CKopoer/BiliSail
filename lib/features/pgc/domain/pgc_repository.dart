@@ -104,6 +104,7 @@ final class PgcSeason {
     this.danmakuCount,
     this.followCount,
     this.publishText,
+    this.lastEpisodeId,
   }) : episodes = List.unmodifiable(episodes),
        relatedSeasons = List.unmodifiable(relatedSeasons);
   final PgcSeasonId id;
@@ -112,6 +113,7 @@ final class PgcSeason {
   final int? type, playCount, danmakuCount, followCount;
   final double? rating;
   final String? publishText;
+  final PgcEpisodeId? lastEpisodeId;
   final List<PgcEpisode> episodes;
   final List<PgcSeasonSummary> relatedSeasons;
   // The immutable season owns all episode derivations. A refreshed season gets

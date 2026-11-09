@@ -13,6 +13,10 @@ PgcSeason mapApiPgcSeason(ApiPgcSeason result) => PgcSeason(
   danmakuCount: result.danmakuCount,
   followCount: result.followCount,
   publishText: result.publishText,
+  lastEpisodeId: switch (result.lastEpisodeId) {
+    final id? => PgcEpisodeId(id),
+    null => null,
+  },
   relatedSeasons: result.relatedSeasons
       .map(
         (related) => PgcSeasonSummary(

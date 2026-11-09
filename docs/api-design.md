@@ -161,7 +161,7 @@ ApiPage<T> { items, nextCursor, hasMore }
 
 ## 5. 会话与凭据
 
-普通视频/影视云端进度按用户要求接入 Web GET `/x/player/wbi/v2` 与 POST `/x/click-interface/web/heartbeat`：本地优先、云端仅在本地缺失时补充，上报使用已有 Web Cookie/CSRF，单次写入不重放，不使用参考实现的 App 签名。字段单位、容量、取消和验证边界见 [云端播放进度](validation/cloud-playback-progress.md)。上表 `/x/v2/history/report` 保留参考源码定位，不是本项目的 Web 上报端点。
+普通视频云端进度使用 Web GET `/x/player/wbi/v2`；2026-11-09 修复影视续播，PGC 改读 GET `/pgc/view/web/season` 的 `user_status.progress`（`last_ep_id` 十进制 ID，`last_time` 秒），仅恢复匹配剧集的位置。两类点播继续 POST `/x/click-interface/web/heartbeat`：本地优先、云端仅在本地缺失时补充，上报使用已有 Web Cookie/CSRF，单次写入不重放，不使用参考实现的 App 签名。字段单位、容量、取消和验证边界见 [云端播放进度](validation/cloud-playback-progress.md)和[番剧续播修复](validation/pgc-resume-2026-11-09.md)。上表 `/x/v2/history/report` 保留参考源码定位，不是本项目的 Web 上报端点。
 
 观看历史页面另由 `WatchHistoryClient` / `ApiLibraryRepository` 读取 Web Cookie GET `/x/web-interface/history/cursor`，使用服务端三字段游标分页，以视频详情补齐统计并显示观看日期。卡片菜单用 POST `/x/v2/history/delete` 按原始 `history.business + "_" + kid` 删除记录；顶部清空按钮经确认后用 POST `/x/v2/history/clear` 清空当前账号全部云端历史。两项写入均为 Web Cookie/CSRF 表单、JSON 响应，无 WBI/分页，单次提交不自动重试。该列表和写操作不改本地续播记录；端点、容量、来源和验证边界见 [云端观看历史](validation/cloud-watch-history.md)。
 
