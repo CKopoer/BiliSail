@@ -6,6 +6,7 @@ import '../../domain/dynamic_post.dart';
 import '../../domain/user.dart';
 import '../../domain/video.dart';
 import 'image_viewer.dart';
+import 'dynamic_content_card.dart';
 import 'network_avatar.dart';
 import 'bili_icons.dart';
 import 'video_card.dart';
@@ -37,6 +38,7 @@ class DynamicPostCard extends StatelessWidget {
     this.onOpenUser,
     this.onOpenVideo,
     this.onOpenLink,
+    this.onOpenDetail,
     this.onShare,
     this.onComment,
     this.onLike,
@@ -57,6 +59,7 @@ class DynamicPostCard extends StatelessWidget {
   }) : _layoutOnly = true,
        onOpenUser = null,
        onOpenVideo = null,
+       onOpenDetail = null,
        onShare = null,
        onComment = null,
        onLike = null,
@@ -71,6 +74,7 @@ class DynamicPostCard extends StatelessWidget {
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<VideoSummary>? onOpenVideo;
   final ValueChanged<Uri>? onOpenLink;
+  final VoidCallback? onOpenDetail;
   final VoidCallback? onShare, onComment, onLike;
   final bool? liked;
   final int? likeCount, repostCount;
@@ -79,25 +83,30 @@ class DynamicPostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: Theme.of(context).colorScheme.surfaceContainerLow,
-    borderRadius: BorderRadius.circular(8),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: _PostBody(
-        post: post,
-        layoutOnly: _layoutOnly,
-        expansionState: expansionState,
-        onOpenUser: onOpenUser,
-        onOpenVideo: onOpenVideo,
-        onOpenLink: onOpenLink,
-        actions: _DynamicActions(
+    borderRadius: BorderRadius.circular(12),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onOpenDetail,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: _PostBody(
           post: post,
-          onShare: onShare,
-          onComment: onComment,
-          onLike: onLike,
-          liked: liked ?? post.liked,
-          likeCount: likeCount ?? post.likeCount,
-          repostCount: repostCount ?? post.repostCount,
-          busy: busy,
+          onOpenDetail: onOpenDetail,
+          layoutOnly: _layoutOnly,
+          expansionState: expansionState,
+          onOpenUser: onOpenUser,
+          onOpenVideo: onOpenVideo,
+          onOpenLink: onOpenLink,
+          actions: _DynamicActions(
+            post: post,
+            onShare: onShare,
+            onComment: onComment,
+            onLike: onLike,
+            liked: liked ?? post.liked,
+            likeCount: likeCount ?? post.likeCount,
+            repostCount: repostCount ?? post.repostCount,
+            busy: busy,
+          ),
         ),
       ),
     ),
@@ -110,6 +119,7 @@ class _PostBody extends StatelessWidget {
     this.onOpenUser,
     this.onOpenVideo,
     this.onOpenLink,
+    this.onOpenDetail,
     this.depth = 0,
     this.actions,
     this.layoutOnly = false,
@@ -119,6 +129,7 @@ class _PostBody extends StatelessWidget {
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<VideoSummary>? onOpenVideo;
   final ValueChanged<Uri>? onOpenLink;
+  final VoidCallback? onOpenDetail;
   final int depth;
   final Widget? actions;
   final bool layoutOnly;
@@ -180,6 +191,12 @@ class _PostBody extends StatelessWidget {
                 ),
               ),
             ),
+            if (depth == 0)
+              IconButton(
+                tooltip: '查看动态详情',
+                onPressed: onOpenDetail,
+                icon: const Icon(Icons.chevron_right, size: 20),
+              ),
             if (onOpenLink != null)
               IconButton(
                 tooltip: depth == 0 ? '在浏览器打开动态' : '在浏览器打开原动态',
@@ -189,6 +206,57 @@ class _PostBody extends StatelessWidget {
               ),
           ],
         ),
+        if (post.topic case final topic?) ...[
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Semantics(
+              label: '查看话题 ${topic.name}',
+              button: true,
+              // RawChip's Ink decoration requires a mounted render tree.
+              // Keep this pill safe for the detached list extent measurement.
+              child: Material(
+                color: scheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  onTap: topic.url == null || onOpenLink == null
+                      ? null
+                      : () => onOpenLink!(topic.url!),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.tag, size: 18, color: scheme.primary),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            topic.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: scheme.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (post.badge.isNotEmpty || post.typeLabel.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            [post.badge, post.typeLabel].where((s) => s.isNotEmpty).join(' · '),
+            style: Theme.of(context).textTheme.labelMedium
+                ?.copyWith(color: scheme.primary),
+          ),
+        ],
         if (post.title.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(post.title, style: Theme.of(context).textTheme.titleSmall),
@@ -210,75 +278,75 @@ class _PostBody extends StatelessWidget {
           ),
         if (video != null) ...[
           const SizedBox(height: 12),
-          InkWell(
-            onTap: onOpenVideo == null ? null : () => onOpenVideo!(video),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final coverWidth = constraints.maxWidth < 360 ? 112.0 : 160.0;
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: coverWidth,
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            _image(
-                              Uri.tryParse(video.coverUrl),
-                              layoutOnly: layoutOnly,
-                              fit: BoxFit.cover,
-                              decodeWidth: 480,
-                            ),
-                            Positioned(
-                              right: 4,
-                              bottom: 4,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: .7),
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 2,
-                                  ),
-                                  child: Text(
-                                    durationLabel(video.duration),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
+          Material(
+            color: scheme.surfaceContainerHighest.withValues(alpha: .55),
+            borderRadius: BorderRadius.circular(10),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onOpenVideo == null ? null : () => onOpenVideo!(video),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _image(
+                          Uri.tryParse(video.coverUrl),
+                          layoutOnly: layoutOnly,
+                          fit: BoxFit.cover,
+                          decodeWidth: 960,
+                        ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Colors.transparent, Colors.black87],
                               ),
                             ),
-                          ],
+                            child: Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              spacing: 8,
+                              children: [
+                                Text(
+                                  '${compactCount(video.playCount)}播放 · ${compactCount(video.danmakuCount)}弹幕',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                Text(
+                                  durationLabel(video.duration),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            video.title,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${compactCount(video.playCount)}播放 · ${compactCount(video.danmakuCount)}弹幕',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      video.title,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall,
                     ),
-                  ],
-                );
-              },
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -349,7 +417,23 @@ class _PostBody extends StatelessWidget {
               },
             ),
         ],
-        if (post.linkTitle.isNotEmpty) ...[
+        for (final card in post.contentCards) ...[
+          const SizedBox(height: 10),
+          DynamicContentCardView(
+            card: card,
+            onOpenLink: onOpenLink,
+            layoutOnly: layoutOnly,
+          ),
+        ],
+        if (post.notice.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            post.notice,
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ],
+        if (post.contentCards.isEmpty && post.linkTitle.isNotEmpty) ...[
           const SizedBox(height: 12),
           InkWell(
             onTap: post.linkUrl != null && onOpenLink != null

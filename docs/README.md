@@ -209,6 +209,7 @@
 | [账号菜单与消息](validation/account-messages.md) | 头像资料/入口、五类收件箱、私信分页/发送/已读、账号隔离与 Windows 只读实测 |
 | [主页卡片与富动态](validation/profile-dynamic-style.md) | UWP 横向投稿卡、居中动态列表、行内表情与转发内容、验证边界 |
 | [动态分享、评论与点赞](validation/dynamic-interactions.md) | Web 评论身份、共用评论区、复制/转发、单次写与会话隔离 |
+| [动态内容与详情重构](validation/dynamic-content-redesign-2026-11-09.md) | PiliPlus 类型对照、话题／商品／附加卡片、宽屏分栏与窄屏滚动、草稿保留及离线验证 |
 | [用户页、倍速与标签播放](validation/profile-playback-rates.md) | 紧凑资料/工具条、固定倍速档位和普通标签继续播放 |
 | [应用会话内继承倍速与音量](validation/session-playback-rate.md) | 后续播放继承调速／音量、全局音量记忆开关、重启恢复与验证边界 |
 | [触摸长按临时倍速](validation/touch-hold-playback-rate.md) | 画面长按使用已有延迟／倍速、松开恢复、全屏与取消边界 |

@@ -11,6 +11,7 @@ import '../../domain/video.dart';
 DynamicPost mapDynamicPost(ApiDynamicPost p) {
   final v = p.video;
   final original = p.original;
+  final topic = p.topic;
   return DynamicPost(
     id: p.id,
     title: p.title,
@@ -21,6 +22,26 @@ DynamicPost mapDynamicPost(ApiDynamicPost p) {
     publishText: p.publishText,
     actionText: p.actionText,
     text: p.text,
+    topic: topic == null
+        ? null
+        : DynamicTopic(name: topic.name, id: topic.id, url: topic.url),
+    badge: p.badge,
+    notice: p.notice,
+    contentCards: p.contentCards
+        .map(
+          (card) => DynamicContentCard(
+            kind: DynamicCardKind.values.byName(card.kind.name),
+            title: card.title,
+            description: card.description,
+            detail: card.detail,
+            badge: card.badge,
+            coverUrl: card.coverUrl,
+            url: card.url,
+            actionLabel: card.actionLabel,
+            actionUrl: card.actionUrl,
+          ),
+        )
+        .toList(),
     spans: p.spans
         .map(
           (s) => DynamicTextSpan(

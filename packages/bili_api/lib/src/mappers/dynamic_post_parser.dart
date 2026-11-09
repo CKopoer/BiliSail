@@ -3,6 +3,8 @@ import '../models.dart';
 import 'video_access_parser.dart';
 import '../models/dynamic_models.dart';
 
+part 'dynamic_content_parser.dart';
+
 /// Web dynamic responses are bounded before entering application state.
 ApiDynamicPost parseDynamicPost(
   Map<String, Object?> item,
@@ -28,18 +30,32 @@ ApiDynamicPost parseDynamicPost(
   for (final raw in _list(summary['rich_text_nodes']).take(256)) {
     final node = _map(raw);
     final emoji = _map(node['emoji']);
-    var text = _text(node['text'], fallback: _text(emoji['text']));
+    var text = _text(
+      node['text'],
+      fallback: _text(node['orig_text'], fallback: _text(emoji['text'])),
+    );
     if (text.length > remaining) text = text.substring(0, remaining);
     remaining -= text.length;
     final type = _text(node['type']);
-    final image = _uri(emoji['icon_url']);
+    final image =
+        _uri(emoji['webp_url']) ??
+        _uri(emoji['gif_url']) ??
+        _uri(emoji['icon_url']);
     if (text.isEmpty && image == null) continue;
     final kind = switch (type) {
       'RICH_TEXT_NODE_TYPE_EMOJI' when image != null =>
         ApiDynamicTextKind.emoji,
       'RICH_TEXT_NODE_TYPE_AT' => ApiDynamicTextKind.mention,
       'RICH_TEXT_NODE_TYPE_TOPIC' => ApiDynamicTextKind.topic,
-      'RICH_TEXT_NODE_TYPE_WEB' => ApiDynamicTextKind.link,
+      'RICH_TEXT_NODE_TYPE_WEB' ||
+      'RICH_TEXT_NODE_TYPE_BV' ||
+      'RICH_TEXT_NODE_TYPE_AV' ||
+      'RICH_TEXT_NODE_TYPE_CV' ||
+      'RICH_TEXT_NODE_TYPE_GOODS' ||
+      'RICH_TEXT_NODE_TYPE_VOTE' ||
+      'RICH_TEXT_NODE_TYPE_LOTTERY' ||
+      'RICH_TEXT_NODE_TYPE_VIEW_PICTURE' ||
+      'RICH_TEXT_NODE_TYPE_OGV_SEASON' => ApiDynamicTextKind.link,
       _ => ApiDynamicTextKind.plain,
     };
     spans.add(
@@ -47,7 +63,7 @@ ApiDynamicPost parseDynamicPost(
         kind: kind,
         text: text,
         imageUrl: kind == ApiDynamicTextKind.emoji ? image : null,
-        linkUrl: _uri(node['jump_url']),
+        linkUrl: _richNodeUrl(node, id),
         userId: kind == ApiDynamicTextKind.mention ? _id(node['rid']) : null,
         emojiSize: emoji['size'] == 2 ? 2 : 1,
       ),
@@ -110,6 +126,8 @@ ApiDynamicPost parseDynamicPost(
       : common.isNotEmpty
       ? common
       : live;
+  final cards = _contentCards(major, content, live, id);
+  final topic = _topic(_map(content['topic']));
   final counts = _map(modules['module_stat']);
   final original = _map(item['orig']);
   final basic = _map(item['basic']);
@@ -124,6 +142,16 @@ ApiDynamicPost parseDynamicPost(
     publishedAt: _date(author['pub_ts']),
     publishText: _text(author['pub_time']),
     actionText: _text(author['pub_action']),
+    topic: topic,
+    badge: _text(
+      _map(archive['badge'])['text'],
+      fallback: _text(_map(modules['module_tag'])['text']),
+    ),
+    notice: _text(
+      _map(modules['module_dispute'])['desc'],
+      fallback: _text(_map(modules['module_blocked'])['hint_message']),
+    ),
+    contentCards: unavailable ? const [] : cards,
     text: unavailable
         ? _text(_map(major['none'])['tips'], fallback: '该动态已删除或不可见')
         : spans.isNotEmpty
@@ -134,6 +162,7 @@ ApiDynamicPost parseDynamicPost(
                 video == null &&
                     images.isEmpty &&
                     link.isEmpty &&
+                    cards.isEmpty &&
                     original.isEmpty
                 ? '暂不支持该动态内容，请在官方页面查看'
                 : '',
@@ -157,6 +186,11 @@ ApiDynamicPost parseDynamicPost(
     likeCount: _number(_map(counts['like'])['count']),
     typeLabel: switch (type) {
       'DYNAMIC_TYPE_ARTICLE' => '专栏',
+      'DYNAMIC_TYPE_PGC' || 'DYNAMIC_TYPE_PGC_UNION' => '影视',
+      'DYNAMIC_TYPE_COURSES_SEASON' => '课程',
+      'DYNAMIC_TYPE_UGC_SEASON' => '合集',
+      'DYNAMIC_TYPE_MUSIC' => '音乐',
+      'DYNAMIC_TYPE_MEDIALIST' => '收藏列表',
       'DYNAMIC_TYPE_LIVE_RCMD' || 'DYNAMIC_TYPE_LIVE' => '直播',
       'DYNAMIC_TYPE_SUBSCRIPTION_NEW' when live.isNotEmpty => '直播',
       'DYNAMIC_TYPE_FORWARD' => '转发',
@@ -254,11 +288,9 @@ Uri? _officialUri(Object? v) {
   final uri = _uri(v);
   return uri != null &&
           uri.port == 443 &&
-          const [
-            'www.bilibili.com',
-            'live.bilibili.com',
-            't.bilibili.com',
-          ].contains(uri.host)
+          (uri.host == 'bilibili.com' ||
+              uri.host.endsWith('.bilibili.com') ||
+              uri.host == 'b23.tv')
       ? uri
       : null;
 }
@@ -285,9 +317,15 @@ bool _hasReadableBody(Map<String, Object?> body) {
   return _list(body['rich_text_nodes']).take(256).any((raw) {
     final node = _map(raw);
     final emoji = _map(node['emoji']);
-    return _text(node['text'], fallback: _text(emoji['text'])).isNotEmpty ||
+    return _text(
+          node['text'],
+          fallback: _text(node['orig_text'], fallback: _text(emoji['text'])),
+        ).isNotEmpty ||
         node['type'] == 'RICH_TEXT_NODE_TYPE_EMOJI' &&
-            _uri(emoji['icon_url']) != null;
+            (_uri(emoji['webp_url']) ??
+                    _uri(emoji['gif_url']) ??
+                    _uri(emoji['icon_url'])) !=
+                null;
   });
 }
 
@@ -312,7 +350,8 @@ bool _hasReadableBody(Map<String, Object?> body) {
     'DYNAMIC_TYPE_LIVE' ||
     'DYNAMIC_TYPE_LIVE_RCMD' => (id, 17),
     'DYNAMIC_TYPE_AV' => (_id(_map(major['archive'])['aid']) ?? rid, 1),
-    'DYNAMIC_TYPE_PGC' => (_id(_map(major['pgc'])['aid']) ?? rid, 1),
+    'DYNAMIC_TYPE_PGC' ||
+    'DYNAMIC_TYPE_PGC_UNION' => (_id(_map(major['pgc'])['aid']) ?? rid, 1),
     'DYNAMIC_TYPE_DRAW' => (_id(_map(major['draw'])['id']) ?? rid, 11),
     'DYNAMIC_TYPE_ARTICLE' => (_id(_map(major['article'])['id']) ?? rid, 12),
     'DYNAMIC_TYPE_MUSIC' => (_id(_map(major['music'])['id']) ?? rid, 14),

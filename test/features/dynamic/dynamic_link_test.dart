@@ -3,6 +3,33 @@ import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('video and PGC cards use explicit content identities', () {
+    expect(
+      dynamicVideo(
+        Uri.parse('https://www.bilibili.com/video/BV1234567890?from=dynamic'),
+      )?.value,
+      'BV1234567890',
+    );
+    expect(
+      dynamicPgcRoute(Uri.parse('https://www.bilibili.com/bangumi/play/ep123')),
+      '/pgc/episode/123',
+    );
+    expect(
+      dynamicPgcRoute(
+        Uri.parse('https://www.bilibili.com/bangumi/play/ss456/'),
+      ),
+      '/pgc/season/456',
+    );
+    for (final url in [
+      'https://www.bilibili.com.evil.test/bangumi/play/ep123',
+      'https://user@www.bilibili.com/bangumi/play/ep123',
+      'https://www.bilibili.com:8443/bangumi/play/ep123',
+      'https://www.bilibili.com/bangumi/play/ep0',
+    ]) {
+      expect(dynamicPgcRoute(Uri.parse(url)), isNull);
+      expect(dynamicVideo(Uri.parse(url)), isNull);
+    }
+  });
   test(
     'public live links retain decimal IDs and ignore tracking parameters',
     () {
