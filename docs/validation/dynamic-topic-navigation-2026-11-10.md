@@ -2,6 +2,8 @@
 
 日期：2026-11-10。用户反馈[应用内话题页](dynamic-topics-and-text-2026-11-09.md)加入后，点击动态中的话题仍会外跳，话题页还出现双重顶部栏。本次保留不构建、不操作真实设备的范围，定位点击链与工作区页面组合并补充回归。
 
+同日按用户后续要求，话题页进一步改为页内独立导航，不再显示通用工作区工具栏，并加入收藏、举报和参与发布；该布局取代本文先前保留单个通用栏的方案，见[后续实现与验证](dynamic-publishing-and-topic-page-2026-11-10.md)。
+
 ## 原因与复现
 
 旧 `dynamicTopicId` 只接受 `www/m.bilibili.com/v/topic/detail`。动态内容还可能提供移动端 `/topic-detail`，例如 `https://m.bilibili.com/topic-detail?topic_id=1028161&frommodule=H5`；该形式可以在本地 PiliPlus `4fce4bb5a35c425aee759ef9263352316a29e355` 的 `lib/utils/app_scheme.dart` 及其话题分发中核对。

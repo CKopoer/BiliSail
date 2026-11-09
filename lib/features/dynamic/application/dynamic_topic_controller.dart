@@ -7,6 +7,7 @@ import '../../../domain/dynamic_post.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../auth/application/auth_controller.dart';
 import '../domain/dynamic_topic_repository.dart';
+import '../domain/dynamic_repository.dart';
 
 final dynamicTopicRepositoryProvider = Provider<DynamicTopicRepository?>(
   (ref) => null,
@@ -28,6 +29,11 @@ final class DynamicTopicState {
     this.foldDescription = '',
     this.foldLoading = false,
     this.foldError,
+    this.actionBusy = false,
+    this.favoriteUncertain = false,
+    this.reportUncertain = false,
+    this.reported = false,
+    this.actionMessage,
   });
   final DynamicTopicDetail? detail;
   final List<DynamicPost> posts;
@@ -36,6 +42,8 @@ final class DynamicTopicState {
   final bool loading, hasMore, foldLoading;
   final Object? error, foldError;
   final String foldDescription;
+  final bool actionBusy, favoriteUncertain, reportUncertain, reported;
+  final String? actionMessage;
 
   DynamicTopicState copy({
     DynamicTopicDetail? detail,
@@ -48,6 +56,11 @@ final class DynamicTopicState {
     String? foldDescription,
     bool? foldLoading,
     Object? foldError,
+    bool? actionBusy,
+    bool? favoriteUncertain,
+    bool? reportUncertain,
+    bool? reported,
+    String? actionMessage,
   }) => DynamicTopicState(
     detail: detail ?? this.detail,
     posts: posts ?? this.posts,
@@ -59,6 +72,11 @@ final class DynamicTopicState {
     foldDescription: foldDescription ?? this.foldDescription,
     foldLoading: foldLoading ?? this.foldLoading,
     foldError: foldError,
+    actionBusy: actionBusy ?? this.actionBusy,
+    favoriteUncertain: favoriteUncertain ?? this.favoriteUncertain,
+    reportUncertain: reportUncertain ?? this.reportUncertain,
+    reported: reported ?? this.reported,
+    actionMessage: actionMessage,
   );
 }
 
@@ -67,6 +85,8 @@ class DynamicTopicController extends Notifier<DynamicTopicState> {
   static const maximumPosts = 500;
   final String id;
   RequestCancellation? _request, _foldRequest;
+  RequestCancellation? _actionRequest;
+  int _actionGeneration = 0;
   int _generation = 0;
   String? _cursor;
   final _seenCursors = <String>{};
@@ -75,25 +95,31 @@ class DynamicTopicController extends Notifier<DynamicTopicState> {
 
   @override
   DynamicTopicState build() {
-    ref.watch(dynamicTopicRepositoryProvider);
+    final repository = ref.watch(dynamicTopicRepositoryProvider);
     ref.watch(
-      authControllerProvider.select((value) => (value.status, value.mid)),
+      authControllerProvider.select(
+        (value) => (value.status, value.mid, repository?.sessionEpoch ?? 0),
+      ),
     );
     ref.onDispose(() {
       _generation++;
       _request?.cancel();
       _foldRequest?.cancel();
+      _actionRequest?.cancel();
+      _actionGeneration++;
     });
     Future<void>.microtask(refresh);
     return const DynamicTopicState(loading: true);
   }
 
-  Future<void> refresh() => _load(first: true, header: true);
+  Future<void> refresh() =>
+      state.actionBusy ? Future.value() : _load(first: true, header: true);
   Future<void> retry() => _load(first: _failedFirst, header: _failedHeader);
   Future<void> loadMore() =>
       !state.loading && state.hasMore ? _load(first: false) : Future.value();
   Future<void> selectSort(int sort) async {
-    if (sort == state.sort ||
+    if (state.actionBusy ||
+        sort == state.sort ||
         sort < 0 ||
         sort > 255 ||
         state.sorts.isNotEmpty && !state.sorts.any((s) => s.id == sort)) {
@@ -109,7 +135,7 @@ class DynamicTopicController extends Notifier<DynamicTopicState> {
   }
 
   Future<void> _load({required bool first, bool header = false}) async {
-    if (!ref.mounted) return;
+    if (!ref.mounted || state.actionBusy) return;
     final repository = ref.read(dynamicTopicRepositoryProvider);
     if (repository == null) {
       state = state.copy(
@@ -171,6 +197,7 @@ class DynamicTopicController extends Notifier<DynamicTopicState> {
       final selected = page.selectedSort;
       state = state.copy(
         detail: detail,
+        favoriteUncertain: header ? false : null,
         posts: posts,
         sorts: page.sorts.isEmpty ? state.sorts : page.sorts,
         sort:
@@ -255,5 +282,84 @@ class DynamicTopicController extends Notifier<DynamicTopicState> {
       unique[post.id] = post;
     }
     return List.unmodifiable(unique.values);
+  }
+
+  Future<bool> toggleFavorite() async {
+    final detail = state.detail;
+    if (detail == null || state.favoriteUncertain) return false;
+    final value = !detail.isFavorite;
+    if (!await _action(
+      (repository, request) => repository.favorite(id, value, request),
+      favorite: true,
+    )) {
+      return false;
+    }
+    state = state.copy(detail: state.detail?.withFavorite(value));
+    return true;
+  }
+
+  Future<bool> report(String reason) async {
+    if (state.reported ||
+        state.reportUncertain ||
+        reason.trim().isEmpty ||
+        reason.runes.length > 1000) {
+      return false;
+    }
+    if (!await _action(
+      (repository, request) => repository.report(id, reason, request),
+      favorite: false,
+    )) {
+      return false;
+    }
+    state = state.copy(reported: true);
+    return true;
+  }
+
+  Future<bool> _action(
+    Future<void> Function(DynamicTopicRepository, RequestCancellation)
+    operation, {
+    required bool favorite,
+  }) async {
+    if (state.actionBusy ||
+        state.loading ||
+        !ref.read(authControllerProvider).isSignedIn) {
+      return false;
+    }
+    final repository = ref.read(dynamicTopicRepositoryProvider);
+    if (repository == null) return false;
+    final scope = repository.accountScope, epoch = repository.sessionEpoch;
+    final generation = ++_actionGeneration;
+    final request = _actionRequest = RequestCancellation();
+    bool current() =>
+        ref.mounted &&
+        generation == _actionGeneration &&
+        !request.isCancelled &&
+        repository.accountScope == scope &&
+        repository.sessionEpoch == epoch;
+    state = state.copy(actionBusy: true);
+    try {
+      await operation(repository, request);
+      if (!current()) return false;
+      state = state.copy(actionBusy: false);
+      return true;
+    } catch (error) {
+      if (!current()) return false;
+      final uncertain = error is DynamicWriteUncertain;
+      state = state.copy(
+        actionBusy: false,
+        favoriteUncertain: favorite && uncertain ? true : null,
+        reportUncertain: !favorite && uncertain ? true : null,
+        actionMessage: uncertain
+            ? favorite
+                  ? '收藏结果暂未确认，请刷新话题后核对。'
+                  : '举报结果暂未确认，请勿重复提交。'
+            : error is AppFailure
+            ? error.kind == AppFailureKind.cancelled
+                  ? null
+                  : error.message
+            : '操作失败，请稍后重试',
+      );
+      return false;
+    }
   }
 }

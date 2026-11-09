@@ -12,11 +12,35 @@ final class DynamicTopicDetail {
     this.creatorId,
     this.creatorName = '',
     this.creatorAvatar,
+    this.favoriteCount = 0,
+    this.isFavorite = false,
   });
   final String id, name, description, creatorName;
   final int viewCount, discussCount;
   final UserId? creatorId;
   final Uri? creatorAvatar;
+  final int favoriteCount;
+  final bool isFavorite;
+
+  DynamicTopicDetail withFavorite(bool value) => DynamicTopicDetail(
+    id: id,
+    name: name,
+    description: description,
+    viewCount: viewCount,
+    discussCount: discussCount,
+    creatorId: creatorId,
+    creatorName: creatorName,
+    creatorAvatar: creatorAvatar,
+    isFavorite: value,
+    favoriteCount:
+        (favoriteCount +
+                (value == isFavorite
+                    ? 0
+                    : value
+                    ? 1
+                    : -1))
+            .clamp(0, 0x7fffffffffffffff),
+  );
 }
 
 final class DynamicTopicSort {
@@ -57,4 +81,14 @@ abstract interface class DynamicTopicRepository {
     bool folded = false,
     required RequestCancellation cancellation,
   });
+  Future<void> favorite(
+    String id,
+    bool value,
+    RequestCancellation cancellation,
+  );
+  Future<void> report(
+    String id,
+    String reason,
+    RequestCancellation cancellation,
+  );
 }

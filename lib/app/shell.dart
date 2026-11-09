@@ -202,6 +202,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
 
   bool _frameShowsBack(BuildContext context) {
     final tab = _frameTab(context);
+    if (tab.isTopic) return false;
     return (_dualTabs || _singlePage) &&
         _canGoBack &&
         (!(tab.pinned && tab.isRoot) ||
@@ -782,6 +783,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
                 _dualTabs &&
                 !_desktopDual &&
                 !tab.isPlayback &&
+                !tab.isTopic &&
                 _workspace.playbackId != null &&
                 !(_gestureDestination?.id == tab.id &&
                     (_gestureSource?.isPlayback ?? false) &&
@@ -885,6 +887,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                               tab.location.path != '/search' &&
                                               !tab.isPlayback &&
                                               !tab.isProfile &&
+                                              !tab.isTopic &&
                                               !tab.isMessages &&
                                               sectionForLocation(
                                                     tab.location,
@@ -898,6 +901,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                           if (tab.location.path != '/search' &&
                                               !tab.isPlayback &&
                                               !tab.isProfile &&
+                                              !tab.isTopic &&
                                               !tab.isMessages)
                                             LayoutBuilder(
                                               builder: (context, bounds) =>
@@ -940,7 +944,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
                       ],
                     ),
                   ),
-                  if (compact && !tab.isPlayback && !tab.isProfile)
+                  if (compact &&
+                      !tab.isPlayback &&
+                      !tab.isProfile &&
+                      !tab.isTopic)
                     _animatedBottomNavigation(context),
                 ],
               );
@@ -1214,6 +1221,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                       _desktopDual &&
                                           tab.id == _workspace.playbackId
                                       ? _playbackWindowBack
+                                      : view.isTopic
+                                      ? _gestureBack
                                       : () {
                                           _goBack();
                                         },

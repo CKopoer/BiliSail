@@ -41,6 +41,8 @@ Map<String, Object?> top({Object id = '9007199254740993123'}) => {
       'description': '话题简介',
       'view': 123,
       'discuss': 45,
+      'fav': 10,
+      'is_fav': true,
     },
     'topic_creator': {
       'uid': '9007199254740993124',
@@ -95,6 +97,7 @@ void main() {
         ('话题名称', '话题简介', 123, 45),
       );
       expect(value.creatorId, '9007199254740993124');
+      expect((value.isFavorite, value.favoriteCount), (true, 10));
       expect(value.creatorAvatar?.scheme, 'https');
       expect(transport.requests.single.host, 'app.bilibili.com');
       expect(transport.requests.single.path, '/x/topic/web/details/top');

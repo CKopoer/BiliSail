@@ -84,6 +84,9 @@ import '../features/comments/application/comment_link_resolver.dart';
 import '../features/comments/data/public_comment_video_link_repository.dart';
 import '../features/dynamic/application/dynamic_actions_controller.dart';
 import '../features/dynamic/data/api_dynamic_repository.dart';
+import '../features/dynamic/application/dynamic_composer_controller.dart';
+import '../features/dynamic/data/api_dynamic_composer_repository.dart';
+import '../core/platform/local_image_picker.dart';
 import '../features/playback/data/api_sponsor_repository.dart';
 import '../features/video/data/api_video_repository.dart';
 import '../features/video/application/video_extras_controller.dart';
@@ -696,6 +699,16 @@ class AppDependencies {
         dynamicRepositoryProvider.overrideWithValue(
           ApiDynamicRepository(
             DynamicClient(api),
+            requests,
+            accountScope: () => session.accountScope,
+          ),
+        ),
+        dynamicImagePickerProvider.overrideWithValue(
+          (remaining) => pickLocalImages(remaining, label: '动态图片'),
+        ),
+        dynamicComposerRepositoryProvider.overrideWithValue(
+          ApiDynamicComposerRepository(
+            DynamicPublishClient(api),
             requests,
             accountScope: () => session.accountScope,
           ),

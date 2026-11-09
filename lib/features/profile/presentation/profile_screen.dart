@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../../shared/ui/dynamic_compose_dialog.dart';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -698,6 +701,14 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.section == ProfileSection.dynamics &&
+                      ref.watch(authControllerProvider).mid == widget.id.value)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: DynamicComposeButton(
+                        onPublished: () => controller.load(refresh: true),
+                      ),
+                    ),
                   if (widget.section == ProfileSection.following &&
                       followingQuery.$4) ...[
                     ProfileFollowingTools(id: widget.id),

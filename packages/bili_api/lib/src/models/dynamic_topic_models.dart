@@ -10,11 +10,15 @@ final class ApiDynamicTopicDetail {
     this.creatorId,
     this.creatorName = '',
     this.creatorAvatar,
+    this.favoriteCount = 0,
+    this.isFavorite = false,
   });
   final String id, name, description, creatorName;
   final int viewCount, discussCount;
   final String? creatorId;
   final Uri? creatorAvatar;
+  final int favoriteCount;
+  final bool isFavorite;
 }
 
 final class ApiDynamicTopicSort {

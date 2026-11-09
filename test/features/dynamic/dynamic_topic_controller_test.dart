@@ -6,6 +6,7 @@ import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/dynamic/application/dynamic_topic_controller.dart';
 import 'package:bilisail/features/dynamic/domain/dynamic_topic_repository.dart';
+import 'package:bilisail/features/dynamic/domain/dynamic_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -41,6 +42,75 @@ void main() {
   tearDown(() async {
     container.dispose();
     await auth.stream.close();
+  });
+
+  test('favorite serializes writes and updates server-backed count only on success', () async {
+    await flush();
+    final pending = Completer<void>();
+    repository.onWrite = (_) => pending.future;
+    final controller = container.read(provider.notifier);
+    final action = controller.toggleFavorite();
+    expect(await controller.toggleFavorite(), isFalse);
+    await controller.refresh();
+    expect(repository.details, hasLength(1));
+    expect(container.read(provider).detail?.isFavorite, isFalse);
+    pending.complete();
+    expect(await action, isTrue);
+    expect(
+      (
+        container.read(provider).detail?.isFavorite,
+        container.read(provider).detail?.favoriteCount,
+      ),
+      (true, 1),
+    );
+    repository.onWrite = null;
+    expect(await controller.toggleFavorite(), isTrue);
+    expect(container.read(provider).detail?.favoriteCount, 0);
+  });
+
+  test(
+    'uncertain favorite blocks replay until a successful header refresh',
+    () async {
+      await flush();
+      repository.onWrite = (_) async => throw const DynamicWriteUncertain();
+      final controller = container.read(provider.notifier);
+      expect(await controller.toggleFavorite(), isFalse);
+      expect(await controller.toggleFavorite(), isFalse);
+      expect(repository.favorites, hasLength(1));
+      expect(container.read(provider).favoriteUncertain, isTrue);
+      repository.onWrite = null;
+      await controller.refresh();
+      expect(container.read(provider).favoriteUncertain, isFalse);
+      expect(await controller.toggleFavorite(), isTrue);
+    },
+  );
+
+  test('report has guest protection, preserves raw reason and prevents duplicate submission', () async {
+    await flush();
+    final controller = container.read(provider.notifier);
+    expect(await controller.report('广告：&+=%/#'), isTrue);
+    expect(repository.reports.single, ('12', '广告：&+=%/#'));
+    expect(await controller.report('广告'), isFalse);
+    auth.change(const AuthState());
+    await flush();
+    expect(await controller.report('广告'), isFalse);
+    expect(await controller.toggleFavorite(), isFalse);
+    expect(repository.reports, hasLength(1));
+  });
+
+  test('account change cancels a write and ignores its late success', () async {
+    await flush();
+    final pending = Completer<void>();
+    repository.onWrite = (_) => pending.future;
+    final action = container.read(provider.notifier).toggleFavorite();
+    repository.sessionEpoch++;
+    repository.accountScope = 'user:8';
+    auth.change(const AuthState(status: AuthStatus.signedIn, mid: '8'));
+    await flush();
+    pending.complete();
+    expect(await action, isFalse);
+    expect(container.read(provider).detail?.isFavorite, isFalse);
+    expect(container.read(provider).actionBusy, isFalse);
   });
 
   test('loads metadata and server sorts, deduplicates pages and preserves exact cursor', () async {

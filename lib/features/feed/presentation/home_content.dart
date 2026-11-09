@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/ui/app_dialog.dart';
+import '../../../shared/ui/dynamic_compose_dialog.dart';
 import '../../../core/platform/external_links.dart';
 import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
@@ -237,6 +238,20 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
               SliverCardGridPadding(
                 sliver: SliverMainAxisGroup(
                   slivers: [
+                    if (widget.channel == HomeChannel.dynamic ||
+                        widget.channel == HomeChannel.videoDynamic)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: DynamicComposeButton(
+                              onLogin: widget.onLogin,
+                              onPublished: refresh,
+                            ),
+                          ),
+                        ),
+                      ),
                     if (liveBrowse && areas != null)
                       SliverToBoxAdapter(
                         child: areas.items.when(

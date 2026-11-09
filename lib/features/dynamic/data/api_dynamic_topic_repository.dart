@@ -5,6 +5,7 @@ import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../../../shared/data/dynamic_post_mapper.dart';
 import '../domain/dynamic_topic_repository.dart';
+import '../domain/dynamic_repository.dart';
 
 final class ApiDynamicTopicRepository implements DynamicTopicRepository {
   ApiDynamicTopicRepository(
@@ -35,8 +36,50 @@ final class ApiDynamicTopicRepository implements DynamicTopicRepository {
       creatorId: UserId.tryParse(value.creatorId),
       creatorName: value.creatorName,
       creatorAvatar: value.creatorAvatar,
+      favoriteCount: value.favoriteCount,
+      isFavorite: value.isFavorite,
     );
   }, cancellation: cancellation);
+
+  Future<void> _write(
+    Future<void> Function(ApiRequestContext) action,
+    RequestCancellation cancellation,
+  ) => requests.run((context) async {
+    try {
+      await action(context);
+    } on ApiFailure catch (error) {
+      if (context.cancellation?.isCancelled == true) rethrow;
+      if (const {
+        ApiFailureCategory.network,
+        ApiFailureCategory.timeout,
+        ApiFailureCategory.protocol,
+        ApiFailureCategory.http,
+      }.contains(error.category)) {
+        throw const DynamicWriteUncertain();
+      }
+      rethrow;
+    }
+  }, cancellation: cancellation);
+
+  @override
+  Future<void> favorite(
+    String id,
+    bool value,
+    RequestCancellation cancellation,
+  ) => _write(
+    (context) => client.favorite(id, value, context: context),
+    cancellation,
+  );
+
+  @override
+  Future<void> report(
+    String id,
+    String reason,
+    RequestCancellation cancellation,
+  ) => _write(
+    (context) => client.report(id, reason, context: context),
+    cancellation,
+  );
 
   @override
   Future<DynamicTopicPage> feed(
