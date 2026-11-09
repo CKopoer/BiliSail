@@ -31,6 +31,27 @@ void main() {
       ]) {
         final root = page.items.single;
         expect(root.ipLocation, 'IP属地：广东');
+        for (final entry in [
+          root,
+          root.withLike(true),
+          root.withReplies(root.replies),
+        ]) {
+          expect(entry.isPinned, isTrue);
+          expect(entry.isUpAuthor, isFalse);
+          expect(entry.upLiked, isTrue);
+          expect(entry.upReplied, isTrue);
+          expect(entry.replies.single.isUpAuthor, isTrue);
+          expect(entry.replies.single.isPinned, isFalse);
+        }
+        for (final entry in [
+          root.replies.single.withLike(true),
+          root.replies.single.withReplies(const []),
+        ]) {
+          expect(entry.isUpAuthor, isTrue);
+          expect(entry.isPinned, isFalse);
+          expect(entry.upLiked, isFalse);
+          expect(entry.upReplied, isFalse);
+        }
         expect(root.nicknameColor, 0xfb7299);
         expect(root.withLike(true).nicknameColor, 0xfb7299);
         expect(root.withReplies(root.replies).nicknameColor, 0xfb7299);
@@ -98,10 +119,12 @@ final class _Transport implements ApiTransport {
                 : {
                     'cursor': {'is_end': true, 'all_count': 1},
                     'page': {'count': 1, 'size': 20},
+                    'upper': {'mid': '9007199254740993'},
                     'replies': [
                       {
                         'rpid': '10',
                         'state': 17,
+                        'up_action': {'like': true, 'reply': true},
                         'member': {
                           'uname': 'reader',
                           'vip': {'nickname_color': '#fb7299'},
@@ -110,13 +133,17 @@ final class _Transport implements ApiTransport {
                           'message': 'comment',
                           'at_name_to_mid_str': {'reader': '9007199254740993'},
                         },
-                        'reply_control': {'location': 'IP属地：广东'},
+                        'reply_control': {
+                          'location': 'IP属地：广东',
+                          'is_up_top': true,
+                        },
                         'replies': [
                           {
                             'rpid': '11',
                             'state': 0,
                             'member': {
                               'uname': 'reply author',
+                              'mid': '9007199254740993',
                               'vip': {'nickname_color': '#123456'},
                             },
                             'content': {
