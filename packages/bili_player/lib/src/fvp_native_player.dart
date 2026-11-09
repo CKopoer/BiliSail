@@ -8,6 +8,7 @@ import 'package:fvp/mdk.dart' as mdk;
 import 'android_fvp_player.dart';
 import 'android_fvp_worker.dart';
 import 'player_contract.dart';
+import 'fvp_buffer.dart';
 import 'fvp_playback_information.dart';
 import 'fvp_video_decoders.dart';
 import 'fvp_surface_preroll.dart';
@@ -351,9 +352,13 @@ final class _MdkPlayerPort
   @override
   int get bufferedMilliseconds {
     if (_closed) return 0;
-    final video = _native?.buffered() ?? 0;
-    final audio = _audioCompanion?.bufferedMilliseconds;
-    return audio != null && audio < video ? audio : video;
+    final audio = _audioCompanion;
+    return fvpBufferedMilliseconds(
+      position: positionMilliseconds,
+      buffered: _native?.buffered() ?? 0,
+      audioPosition: audio?.positionMilliseconds,
+      audioBuffered: audio?.bufferedMilliseconds,
+    );
   }
 
   @override

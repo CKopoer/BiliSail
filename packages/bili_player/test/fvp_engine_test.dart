@@ -24,6 +24,7 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
   Completer<void>? pauseGate;
   int interrupts = 0;
   int position = 1000;
+  int buffered = 2000;
   Duration duration = const Duration(seconds: 12);
   final seeks = <(Duration, Completer<int>)>[];
   bool holdSeek = false;
@@ -47,7 +48,7 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
   @override
   int get positionMilliseconds => position;
   @override
-  int get bufferedMilliseconds => 2000;
+  int get bufferedMilliseconds => buffered;
   @override
   Future<FvpMediaInfo> prepare(
     MediaTrack media,
@@ -128,6 +129,57 @@ final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final source = DashPairSource(video: track('video'), audio: track('audio'));
+  testWidgets(
+    'buffer display correction preserves raw health and resets on seek',
+    (tester) async {
+      final player = _Player()
+        ..duration = const Duration(seconds: 120)
+        ..position = 10000
+        ..buffered = 10000;
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      await engine.open(source, const OpenOptions());
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(engine.currentSnapshot.buffered, const Duration(seconds: 20));
+
+      player
+        ..position = 10250
+        ..buffered = 9670;
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(engine.currentSnapshot.buffered, const Duration(seconds: 20));
+      expect(
+        engine.activeBackend!.sampleHealth().buffered,
+        const Duration(milliseconds: 19920),
+      );
+
+      player.events.add(FvpNativeStatus.buffering);
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(
+        engine.currentSnapshot.buffered,
+        const Duration(milliseconds: 19920),
+      );
+      player.events.add(FvpNativeStatus.buffered);
+
+      player.buffered = 10000;
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(
+        engine.currentSnapshot.buffered,
+        const Duration(milliseconds: 20250),
+      );
+      player.buffered = 9200;
+      await engine.seek(const Duration(seconds: 11));
+      expect(
+        engine.currentSnapshot.buffered,
+        const Duration(milliseconds: 20200),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(
+        engine.currentSnapshot.buffered,
+        const Duration(milliseconds: 20200),
+      );
+      await tester.runAsync(engine.dispose);
+    },
+  );
   testWidgets(
     'autoplay stays paused until native A/V and revealed Flutter frame',
     (tester) async {
