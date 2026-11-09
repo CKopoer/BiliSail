@@ -1,7 +1,8 @@
 import '../api_client.dart';
 import '../models.dart';
+import 'pgc_client.dart';
 
-/// Web Cookie history. Reads return milliseconds; heartbeat writes use seconds.
+/// Web Cookie history. UGC reads use milliseconds; PGC and heartbeats use seconds.
 final class PlaybackHistoryClient {
   const PlaybackHistoryClient(this.api);
   final BiliApiClient api;
@@ -14,6 +15,13 @@ final class PlaybackHistoryClient {
     ApiRequestContext? context,
   }) async {
     _identity(bvid, cid, episodeId, seasonId);
+    if (episodeId != null) {
+      final season = await PgcClient(
+        api,
+      ).getSeason(episodeId: episodeId, seasonId: seasonId, context: context);
+      // PGC history belongs to an episode, not the UGC player/v2 part record.
+      return season.lastEpisodeId == episodeId ? season.lastPosition : null;
+    }
     const endpoint = 'playback_history_read';
     final data = await api.requestWbiJson(
       '/x/player/wbi/v2',

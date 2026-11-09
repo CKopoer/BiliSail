@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-09 番剧续播只读参考 PiliPlus `4fce4bb5a35c425aee759ef9263352316a29e355` 的 `lib/utils/page_utils.dart`、`lib/models_new/pgc/pgc_info_model/{result,user_status,user_progress}.dart`、`lib/http/{search,video}.dart` 和 `lib/pages/video/controller.dart`。借鉴明确剧集／最近观看剧集／首集的选择顺序，以及 PGC 独立进度职责；独立实现本地优先、Web season 秒数读取和账号／取消边界，未复制 GPLv3 应用源码、资源或引入依赖，未修改相邻仓库。字段单位另核对本地 bili-kernel `PgcDetailResponse.cs`。精确来源和离线验证见[番剧续播修复](validation/pgc-resume-2026-11-09.md)。
+
 2026-11-08 Android fvp 音频定位修复继续只读参考 PiliPlus `265f879fa85973b4bf885bde2562f1007f1013b8` 的 `lib/plugin/pl_player/controller.dart`，借鉴原生同步／缓存和薄控制器职责，独立处理 MDK 暂停音频 seek 的平台限制。Windows 对照、实际 SDK 产物偏差、GPLv3／SDK 范围及回归见[音频定位记录](validation/android-fvp-seek-audio-2026-11-08.md)。
 
 2026-11-08 后续跳转／准备流程继续只读参考 PiliPlus `265f879fa85973b4bf885bde2562f1007f1013b8` 的播放器控制器、视图和缓存设置，独立实现两后端共用的一次目标确认、直接继续和实际缓冲提示。许可、源码范围、原生差异及本次验证见[专项记录](validation/piliplus-seek-flow-2026-11-08.md)。

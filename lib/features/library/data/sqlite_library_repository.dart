@@ -72,6 +72,31 @@ class SqliteLibraryRepository {
         : Duration(milliseconds: position);
   }
 
+  Future<String?> latestPgcEpisode(
+    String scope,
+    Iterable<String> episodeIds,
+  ) async {
+    if (scope != accountScope()) return null;
+    final ids = episodeIds.toSet();
+    if (ids.isEmpty) return null;
+    // Progress is already bounded to 500 rows per account. Match IDs in Dart
+    // instead of exceeding SQLite's parameter limit on long-running seasons.
+    final rows = await database
+        .customSelect(
+          '''SELECT pgc_episode_id FROM playback_progress
+      WHERE scope = ? AND pgc_episode_id IS NOT NULL
+      ORDER BY updated_at_ms DESC, rowid DESC LIMIT 500''',
+          variables: [Variable<String>(scope)],
+        )
+        .get();
+    if (scope != accountScope()) return null;
+    for (final row in rows) {
+      final id = row.read<String>('pgc_episode_id');
+      if (ids.contains(id)) return id;
+    }
+    return null;
+  }
+
   Future<void> saveProgress({
     required String scope,
     required VideoSummary video,

@@ -24,6 +24,9 @@ final class _Transport implements ApiTransport {
           'result': {
             'season_id': '42',
             'title': '本篇',
+            'user_status': {
+              'progress': {'last_ep_id': '9007199254740993', 'last_time': 42},
+            },
             'episodes': const [],
             'seasons': [
               {
@@ -57,6 +60,7 @@ void main() {
         cancellation: RequestCancellation(),
       );
       expect(season.relatedSeasons.single.id.value, '9007199254740993');
+      expect(season.lastEpisodeId, const PgcEpisodeId('9007199254740993'));
       expect(season.relatedSeasons.single.title, '续作');
       expect(season.relatedSeasons.single.coverUrl, isNull);
       expect(

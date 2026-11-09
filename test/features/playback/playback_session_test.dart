@@ -4062,6 +4062,45 @@ void main() {
     );
   }
 
+  for (final local in [null, Duration.zero, const Duration(seconds: 19)]) {
+    test(
+      'selected PGC episode restores its position with local precedence: $local',
+      () async {
+        final engine = _FakeEngine();
+        final progress = _FakeProgress()..readValue = local;
+        final history = _FakeHistory()..readValue = const Duration(seconds: 42);
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _FakeRepository(autoResolve: true),
+          contentRepository: _FakeContentRepository(),
+          progress: progress,
+          historyRepository: history,
+          accountScope: () => 'user:1',
+        );
+        addTearDown(session.close);
+        await session.open(
+          _detail('22'),
+          _part('22'),
+          target: const PgcPlaybackTarget('2', cid: '22', seasonId: '42'),
+        );
+        await _flush();
+        expect(engine.openOptions.single.startPosition, local ?? Duration.zero);
+        expect(
+          engine.currentSnapshot.position,
+          local ?? const Duration(seconds: 42),
+        );
+        if (local == null) {
+          expect(history.reads.single.target.episodeId, '2');
+          expect(history.reads.single.target.seasonId, '42');
+          expect(history.reads.single.target.cid, '22');
+        } else {
+          expect(history.reads, isEmpty);
+        }
+        expect(engine.openedUris, hasLength(1));
+      },
+    );
+  }
+
   test(
     'cloud read failure starts at zero without failing media preparation',
     () async {

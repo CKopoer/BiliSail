@@ -6,9 +6,14 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../auth/application/auth_controller.dart';
 import '../domain/pgc_repository.dart';
+import '../domain/pgc_resume_repository.dart';
 
 final pgcRepositoryProvider = Provider<PgcRepository>(
   (ref) => throw UnimplementedError('PgcRepository must be provided by app'),
+);
+
+final pgcResumeRepositoryProvider = Provider<PgcResumeRepository?>(
+  (ref) => null,
 );
 
 final pgcControllerProvider = NotifierProvider.autoDispose
@@ -102,12 +107,32 @@ final class PgcController extends Notifier<PgcState> {
       if (!_isCurrent(generation, cancellation, repository, scope, epoch)) {
         return;
       }
-      final preferred = requestedEpisode ?? previous.selectedEpisodeId;
+      var preferred = requestedEpisode ?? previous.selectedEpisodeId;
+      String? resumeMessage;
+      if (preferred == null) {
+        try {
+          preferred = await ref
+              .read(pgcResumeRepositoryProvider)
+              ?.resumeEpisode(season, scope: scope, cancellation: cancellation)
+              .timeout(const Duration(seconds: 3));
+        } catch (_) {
+          resumeMessage = '观看记录读取失败，本次从首集播放';
+        }
+      }
+      if (!_isCurrent(generation, cancellation, repository, scope, epoch)) {
+        return;
+      }
+      // A selection made while refresh/history was pending wins over its result.
+      preferred = state.selectedEpisodeId ?? preferred;
       final selected =
           season.episode(preferred) ??
           season.firstPlayableEpisode ??
           season.episodes.firstOrNull;
-      state = PgcState(season: season, selectedEpisodeId: selected?.id);
+      state = PgcState(
+        season: season,
+        selectedEpisodeId: selected?.id,
+        message: resumeMessage,
+      );
     } on AppFailure catch (error) {
       if (!_isCurrent(generation, cancellation, repository, scope, epoch)) {
         return;
