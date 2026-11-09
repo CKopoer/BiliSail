@@ -35,7 +35,8 @@ Future<T?> showAppDialog<T>({
   return navigator.push<T>(
     DialogRoute<T>(
       context: context,
-      builder: builder,
+      builder: (context) =>
+          _KeyboardAvoidingDialog(child: Builder(builder: builder)),
       themes: InheritedTheme.capture(from: context, to: navigator.context),
       barrierDismissible: barrierDismissible,
       barrierColor:
@@ -52,6 +53,24 @@ Future<T?> showAppDialog<T>({
       fullscreenDialog: fullscreenDialog,
       requestFocus: requestFocus,
       animationStyle: animationStyle,
+    ),
+  );
+}
+
+/// The OS already animates the keyboard inset. Consume it immediately before
+/// Dialog adds its margins, so Dialog's default animation cannot lag behind
+/// the keyboard. Keep the child mounted and avoid applying the inset twice.
+class _KeyboardAvoidingDialog extends StatelessWidget {
+  const _KeyboardAvoidingDialog({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+    child: MediaQuery.removeViewInsets(
+      context: context,
+      removeBottom: true,
+      child: child,
     ),
   );
 }
