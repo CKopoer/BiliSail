@@ -2,6 +2,68 @@ import 'package:bilisail/app/workspace_tabs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'video titles survive route commits, part changes and tab selection',
+    () {
+      final workspace = WorkspaceTabs();
+      final location = Uri.parse('/video/BV1ab411c7mD');
+      workspace.acceptRoute(location);
+      final id = workspace.activeId;
+      expect(workspace.active.title, 'BV1ab411c7mD');
+      expect(
+        workspace.updateVideoTitle(id, '视频标题', location: location),
+        isTrue,
+      );
+      workspace.acceptRoute(workspace.active.route);
+      expect(workspace.active.title, '视频标题');
+      workspace.updateLocation(id, Uri.parse('$location?cid=2'));
+      expect(workspace.active.title, '视频标题');
+      workspace.select('home');
+      workspace.select(id);
+      expect(workspace.active.title, '视频标题');
+      expect(workspace.active.location.queryParameters['cid'], '2');
+      expect(
+        workspace.updateVideoTitle(id, '视频标题', location: location),
+        isFalse,
+      );
+      expect(workspace.updateVideoTitle(id, '  ', location: location), isFalse);
+      expect(workspace.active.title, '视频标题');
+    },
+  );
+
+  test('video replacement clears its title and rejects stale metadata', () {
+    final workspace = WorkspaceTabs()..setDualMode(true);
+    final first = Uri.parse('/video/BV1ab411c7mD');
+    final second = Uri.parse('/video/BV1cd411c7mD');
+    workspace.acceptRoute(first);
+    final id = workspace.activeId;
+    workspace.updateVideoTitle(id, '第一个视频', location: first);
+    workspace.acceptRoute(second);
+    expect(workspace.activeId, id);
+    expect(workspace.active.title, 'BV1cd411c7mD');
+    expect(workspace.updateVideoTitle(id, '迟到的标题', location: first), isFalse);
+    expect(workspace.updateVideoTitle(id, '第二个视频', location: second), isTrue);
+    expect(workspace.active.title, '第二个视频');
+    workspace.close(id);
+    expect(workspace.updateVideoTitle(id, '已关闭', location: second), isFalse);
+    expect(workspace.tabs, hasLength(1));
+  });
+
+  test('background video metadata renames only its owning tab', () {
+    final workspace = WorkspaceTabs();
+    final first = Uri.parse('/video/BV1ab411c7mD');
+    workspace.acceptRoute(first);
+    final id = workspace.activeId;
+    workspace.acceptRoute(Uri.parse('/video/BV1cd411c7mD'));
+    final activeId = workspace.activeId;
+    workspace.updateVideoTitle(id, '后台视频', location: first);
+    expect(workspace.activeId, activeId);
+    expect(workspace.active.title, 'BV1cd411c7mD');
+    expect(workspace.tabs.firstWhere((tab) => tab.id == id).title, '后台视频');
+    workspace.updateLocation(id, Uri.parse('/search?q=测试'));
+    expect(workspace.tabs.firstWhere((tab) => tab.id == id).title, '搜索：测试');
+  });
+
   test('latest playback follows visits and falls back when pages close', () {
     final workspace = WorkspaceTabs();
     expect(workspace.latestPlayback, isNull);

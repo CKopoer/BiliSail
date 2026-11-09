@@ -600,6 +600,18 @@ final class _WorkspacePage extends ConsumerWidget {
             ),
           )
         : false;
+    if (tab.isVideo) {
+      final id = VideoId(tab.location.pathSegments.last);
+      final title = id.isValid
+          ? ref.watch(
+              videoDetailProvider(id)
+                  .select((detail) => detail.value?.summary.title),
+            )
+          : null;
+      if (title != null) {
+        WorkspacePageNavigation.maybeOf(context)?.updateTitle?.call(title);
+      }
+    }
     final account = observeAccount
         ? ref.watch(
             authControllerProvider.select(
