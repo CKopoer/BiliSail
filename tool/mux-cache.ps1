@@ -3,6 +3,9 @@
 function Get-MuxCacheIdentity([string]$SourceRoot, [string]$Target, [string]$Toolchain) {
   $paths = @('packages/bili_mux/tool/build.sh', 'packages/bili_mux/tool/package-apple-framework.sh',
     'tool/build-download-mux.ps1', 'tool/mux-cache.ps1')
+  if ($Target.StartsWith('windows-')) {
+    $paths += @('tool/windows-mux-toolchain.ps1', 'tool/windows-mux-toolchains.json', 'tool/mux-source.ps1')
+  }
   $paths += @(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'packages/bili_mux/native') -File |
     ForEach-Object { "packages/bili_mux/native/$($_.Name)" })
   $inputs = @(foreach ($path in ($paths | Sort-Object)) {
@@ -80,7 +83,7 @@ function Confirm-MuxSnapshot([string]$Directory, [string]$Target, [string]$Ident
   $required = @('configure.log', 'COPYING.LGPLv2.1', 'source.txt')
   if ($Target.StartsWith('windows-')) {
     $binary = 'bili_mux.dll'
-    $required += @('bili_mux.LGPL.txt', 'bili_mux.source.txt', 'bili_mux.configuration.txt')
+    $required += @('bili_mux.LGPL.txt', 'bili_mux.source.txt', 'bili_mux.configuration.txt', 'toolchain.txt')
   } elseif ($Target.StartsWith('macos-') -or $Target.StartsWith('ios-')) {
     $binary = 'BiliMux.framework/BiliMux'
     $required += 'BiliMux.framework/Info.plist'

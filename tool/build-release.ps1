@@ -25,8 +25,8 @@ function Invoke-BuildCommand([string]$Executable, [string[]]$Parameters) {
 function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [string]$Version, [string]$Wix, [string]$WorkingDirectory, [ValidateSet('x64', 'arm64')][string]$Architecture) {
   $msi = [System.IO.Path]::ChangeExtension($Destination, '.msi')
   $setup = [System.IO.Path]::ChangeExtension($Destination, '.exe')
-  $installerResources = Initialize-WindowsInstallerResources $WorkingDirectory $Architecture
-  New-WindowsMsi $Wix $Staging $msi $Version $WorkingDirectory $Architecture -Resources $installerResources
+  $installerResources = Invoke-BuildStage 'Windows installer helper and artwork' { Initialize-WindowsInstallerResources $WorkingDirectory $Architecture }
+  Invoke-BuildStage 'Windows MSI compression' { New-WindowsMsi $Wix $Staging $msi $Version $WorkingDirectory $Architecture -Resources $installerResources }
   $sdkTool = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/makeappx.exe" |
     Sort-Object FullName -Descending | Select-Object -First 1
   if (!$sdkTool) { throw 'Windows SDK MakeAppx.exe was not found.' }
@@ -79,7 +79,7 @@ function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [stri
   try {
     Invoke-BuildCommand $makePri @('new', '/pr', $Staging, '/cf', (Join-Path $repoRoot 'windows/packaging/priconfig.xml'), '/mn', (Join-Path $Staging 'AppxManifest.xml'), '/of', (Join-Path $Staging 'resources.pri'), '/o') | Out-Host
   } finally { Remove-Item -LiteralPath $resourceList }
-  Invoke-BuildCommand $sdkTool.FullName @('pack', '/d', $Staging, '/p', $Destination, '/o') | Out-Host
+  Invoke-BuildStage 'Windows MSIX compression' { Invoke-BuildCommand $sdkTool.FullName @('pack', '/d', $Staging, '/p', $Destination, '/o') | Out-Host }
   $archive = [System.IO.Compression.ZipFile]::OpenRead($Destination)
   try {
     $reader = [System.IO.StreamReader]::new($archive.GetEntry('AppxManifest.xml').Open())
@@ -114,16 +114,22 @@ function New-SignedWindowsPackages([string]$Staging, [string]$Destination, [stri
       $signing = 'self-signed-preview'
     }
     if ($certificate.NotAfter -le (Get-Date)) { throw 'The MSIX signing certificate has expired.' }
-    Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $Destination) | Out-Host
-    Confirm-WindowsMsixSignature $Destination $certificate.Thumbprint
-    Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $msi) | Out-Host
-    $unsignedBundle = Join-Path $WorkingDirectory 'unsigned-setup.exe'
-    New-WindowsBundle $Wix $msi $unsignedBundle $Version $Architecture -Resources $installerResources
-    Complete-WindowsBundleSigning $Wix $unsignedBundle $setup $WorkingDirectory {
-      param($file)
-      Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $file)
+    Invoke-BuildStage 'Windows MSIX and MSI signing' {
+      Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $Destination) | Out-Host
+      Confirm-WindowsMsixSignature $Destination $certificate.Thumbprint
+      Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $msi) | Out-Host
     }
-    & (Join-Path $PSScriptRoot 'test-windows-installer-packages.ps1') -Wix $Wix -Msi $msi -Bundle $setup -WorkingDirectory $WorkingDirectory -Architecture $Architecture | Out-Host
+    $unsignedBundle = Join-Path $WorkingDirectory 'unsigned-setup.exe'
+    Invoke-BuildStage 'Windows Burn bundle' { New-WindowsBundle $Wix $msi $unsignedBundle $Version $Architecture -Resources $installerResources }
+    Invoke-BuildStage 'Windows Burn signing' {
+      Complete-WindowsBundleSigning $Wix $unsignedBundle $setup $WorkingDirectory {
+        param($file)
+        Invoke-BuildCommand $signTool @('sign', '/fd', 'SHA256', '/sha1', $certificate.Thumbprint, '/s', 'My', $file)
+      }
+    }
+    Invoke-BuildStage 'Windows installer package validation' {
+      & (Join-Path $PSScriptRoot 'test-windows-installer-packages.ps1') -Wix $Wix -Msi $msi -Bundle $setup -WorkingDirectory $WorkingDirectory -Architecture $Architecture | Out-Host
+    }
     Export-Certificate -Cert $certificate -FilePath ([System.IO.Path]::ChangeExtension($Destination, '.cer')) | Out-Null
     return $signing
   } finally {
@@ -247,7 +253,12 @@ try {
     Copy-Item -LiteralPath 'packages/bili_mux/README.md', 'packages/bili_mux/LICENSE-FFmpeg.txt' -Destination (Join-Path $muxSources 'packages/bili_mux')
     Copy-Item -LiteralPath 'build/download_mux/n9.0.2.tar.gz' -Destination $ffmpegSources
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Destination $buildToolSources
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'mux-cache.ps1'), (Join-Path $PSScriptRoot 'mux-source.ps1'),
+      (Join-Path $PSScriptRoot 'windows-mux-toolchain.ps1'), (Join-Path $PSScriptRoot 'windows-mux-toolchains.json') -Destination $buildToolSources
     Copy-Item -LiteralPath "packages/bili_mux/native/prebuilt/$Target/configure.log" -Destination $muxSources
+    if ($isWindowsTarget -and (Test-Path -LiteralPath "packages/bili_mux/native/prebuilt/$Target/toolchain.txt")) {
+      Copy-Item -LiteralPath "packages/bili_mux/native/prebuilt/$Target/toolchain.txt" -Destination $muxSources
+    }
     Compress-Archive -Path (Join-Path $muxSources '*') -DestinationPath (Join-Path $releaseDir "$name.mux-source.zip") -CompressionLevel Optimal
   }
 

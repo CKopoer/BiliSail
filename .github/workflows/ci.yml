@@ -190,7 +190,7 @@ jobs:
           ruby -c tool/media-kit-apple-pods.rb
           bash tool/test-linux-downloads.sh
           bash packages/bili_mux/tool/test-apple-framework.sh
-          for script in tool/package-linux.sh tool/setup-linux-build.sh tool/linux-downloads.sh tool/linux-runtime-validation.sh; do
+          for script in tool/package-linux.sh tool/setup-linux-build.sh tool/linux-downloads.sh tool/linux-appimage.sh tool/linux-runtime-validation.sh; do
             bash -n "$script"
           done
 
@@ -320,29 +320,6 @@ jobs:
         timeout-minutes: 10
         shell: pwsh
         run: ./tool/setup-windows-arm64-flutter.ps1
-      - name: Set up the Windows mux compiler
-        id: windows-mux
-        if: startsWith(matrix.target, 'windows-')
-        continue-on-error: true
-        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
-        with:
-          cache: ${{ needs.prepare.outputs.cache-write == 'true' }}
-          msystem: ${{ matrix.target == 'windows-arm64' && 'CLANGARM64' || 'UCRT64' }}
-          install: ${{ matrix.target == 'windows-arm64' && 'make mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-llvm mingw-w64-ucrt-x86_64-libarchive' || 'make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libarchive' }}
-      - name: Retry Windows mux compiler setup
-        id: windows-mux-retry
-        if: startsWith(matrix.target, 'windows-') && steps.windows-mux.outcome == 'failure'
-        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
-        with:
-          cache: ${{ needs.prepare.outputs.cache-write == 'true' }}
-          msystem: ${{ matrix.target == 'windows-arm64' && 'CLANGARM64' || 'UCRT64' }}
-          install: ${{ matrix.target == 'windows-arm64' && 'make mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-llvm mingw-w64-ucrt-x86_64-libarchive' || 'make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libarchive' }}
-      - name: Set up LZMA support for Windows Native Assets
-        if: startsWith(matrix.target, 'windows-')
-        shell: pwsh
-        env:
-          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux-retry.outputs.msys2-location || steps.windows-mux.outputs.msys2-location }}
-        run: ./tool/setup-windows-native-tar.ps1 -MsysRoot $env:BILI_MUX_MSYS_ROOT
       - name: Set up the Android mux compiler
         if: matrix.target == 'android-arm64'
         shell: bash
@@ -412,10 +389,27 @@ jobs:
           reserve-bytes: '1200000000'
       - uses: ./.github/actions/restore-mux
         id: mux-cache
-        env:
-          BILI_MUX_MSYS_ROOT: ${{ steps.windows-mux-retry.outputs.msys2-location || steps.windows-mux.outputs.msys2-location }}
         with:
           target: ${{ matrix.target }}
+      # Resolve the locked identity and validate the DLL before paying for
+      # MSYS2. Warm Windows builds need only the verified source tarball.
+      - name: Set up the Windows mux compiler on cache miss
+        id: windows-mux
+        if: startsWith(matrix.target, 'windows-') && steps.mux-cache.outputs.valid != 'true'
+        continue-on-error: true
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        with:
+          cache: ${{ needs.prepare.outputs.cache-write == 'true' }}
+          msystem: ${{ steps.mux-cache.outputs.msystem }}
+          install: ${{ steps.mux-cache.outputs.install }}
+      - name: Retry Windows mux compiler setup
+        id: windows-mux-retry
+        if: startsWith(matrix.target, 'windows-') && steps.windows-mux.outcome == 'failure'
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        with:
+          cache: ${{ needs.prepare.outputs.cache-write == 'true' }}
+          msystem: ${{ steps.mux-cache.outputs.msystem }}
+          install: ${{ steps.mux-cache.outputs.install }}
       - name: Build and package preview
         id: package
         timeout-minutes: ${{ startsWith(matrix.target, 'macos-') && 30 || 90 }}
@@ -435,6 +429,22 @@ jobs:
           MSIX_CERTIFICATE_BASE64: ${{ startsWith(matrix.target, 'windows-') && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_BASE64 || '' }}
           MSIX_CERTIFICATE_PASSWORD: ${{ startsWith(matrix.target, 'windows-') && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_PASSWORD || '' }}
         run: ./tool/build-release.ps1 -Target $env:BUILD_TARGET -Version $env:BUILD_VERSION -AndroidPreviewSigning:($env:ANDROID_PREVIEW_SIGNING -eq 'true')
+      - name: Exercise Windows mux reuse without MSYS2
+        if: startsWith(matrix.target, 'windows-')
+        shell: pwsh
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+          BILISAIL_MUX_CACHE: 'true'
+        run: |
+          $component = "packages/bili_mux/native/prebuilt/$env:BUILD_TARGET"
+          if (Test-Path -LiteralPath "$component/cache-manifest.json") {
+            $before = (Get-Item -LiteralPath "$component/bili_mux.dll").LastWriteTimeUtc
+            $absentCompiler = Join-Path $env:RUNNER_TEMP "absent-mux-$([guid]::NewGuid().ToString('N'))"
+            ./tool/build-download-mux.ps1 -Target $env:BUILD_TARGET -MsysRoot $absentCompiler
+            if ((Get-Item -LiteralPath "$component/bili_mux.dll").LastWriteTimeUtc -ne $before) {
+              throw 'A verified Windows mux cache hit recompiled the DLL.'
+            }
+          }
       - name: Save verified native mux component
         if: >-
           !cancelled() && needs.prepare.outputs.cache-write == 'true' && matrix.mux_cache_writer &&

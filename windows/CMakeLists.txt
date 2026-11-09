@@ -63,6 +63,12 @@ include(flutter/generated_plugins.cmake)
 if(MSVC AND TARGET flutter_inappwebview_windows_plugin)
   target_compile_definitions(flutter_inappwebview_windows_plugin PRIVATE
     _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+  # Reuse the expensive SDK/codec headers within this plugin only. CMake 3.14
+  # remains supported; older generators simply retain the normal build path.
+  if(COMMAND target_precompile_headers AND CMAKE_GENERATOR MATCHES "^Visual Studio")
+    target_precompile_headers(flutter_inappwebview_windows_plugin PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}/patches/inappwebview/precompiled.h")
+  endif()
 endif()
 
 # MSBuild project parallelism still compiles each project's sources serially.

@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $buildScript = Join-Path $repoRoot 'packages/bili_mux/tool/build.sh'
 $cacheEnabled = $Mode -eq 'Build' -and $env:BILISAIL_MUX_CACHE -eq 'true'
+$publishCache = $cacheEnabled
 $reuse = $false
 if ($cacheEnabled) {
   . (Join-Path $PSScriptRoot 'mux-cache.ps1')
@@ -17,6 +18,15 @@ if ($cacheEnabled) {
     try { Confirm-MuxSnapshot $component $Target $identity; $reuse = $true }
     catch { Write-Warning "Mux cache validation failed; rebuilding: $($_.Exception.Message)"; Clear-MuxSnapshot $repoRoot $Target }
   }
+}
+if ($IsWindows -and $Target.StartsWith('windows-') -and $reuse) {
+  # A validated DLL needs only its matching source tarball for distribution.
+  # Avoid installing MSYS2 or extracting all of FFmpeg on this path.
+  . (Join-Path $PSScriptRoot 'mux-source.ps1')
+  Save-VerifiedMuxSourceArchive $repoRoot | Out-Null
+  if ($env:GITHUB_OUTPUT) { 'mux-ready=true' >> $env:GITHUB_OUTPUT }
+  Write-Output "Reused verified mux component for $Target without installing MSYS2; source archive verified."
+  return
 }
 $scriptMode = if ($reuse) { 'archive' } else { $Mode.ToLowerInvariant() }
 if ($Target -eq 'android-arm64') {
@@ -39,6 +49,18 @@ if ($Target -eq 'android-arm64') {
   $env:ANDROID_NDK_HOME = [System.IO.Path]::GetFullPath($AndroidNdk)
 }
 if ($IsWindows) {
+  if ($cacheEnabled -and $Target.StartsWith('windows-')) {
+    . (Join-Path $PSScriptRoot 'windows-mux-toolchain.ps1')
+    $installed = @(Get-WindowsMuxInstalledPackages $MsysRoot)
+    $toolchainProvenance = $installed -join "`n"
+    try { Confirm-WindowsMuxPackages (Get-WindowsMuxToolchain $repoRoot $Target) $installed }
+    catch {
+      # A repository toolchain update may still build a valid component. Never
+      # publish it under the old locked identity; preserve the uncached build.
+      $publishCache = $false
+      Write-Warning "$($_.Exception.Message) Continuing without saving a mux snapshot."
+    }
+  }
   $bash = Join-Path $MsysRoot 'usr/bin/bash.exe'
   if (!(Test-Path -LiteralPath $bash)) {
     throw 'Install MSYS2 and make + mingw-w64-ucrt-x86_64-gcc, or pass -MsysRoot.'
@@ -62,7 +84,8 @@ if ($LASTEXITCODE -ne 0) {
   throw "Download mux component build failed. Inspect build/download_mux/$Target/*.log."
 }
 if ($cacheEnabled) {
+  if ($IsWindows -and $Target.StartsWith('windows-')) { [IO.File]::WriteAllText((Join-Path $component 'toolchain.txt'), $toolchainProvenance + "`n") }
   if ($reuse) { Write-Output "Reused verified mux component for $Target; source archive verified." }
-  $ready = if ($reuse) { $true } else { Write-MuxSnapshot $component $Target $identity }
+  $ready = if ($reuse) { $true } elseif ($publishCache) { Write-MuxSnapshot $component $Target $identity } else { $false }
   if ($ready -and $env:GITHUB_OUTPUT) { 'mux-ready=true' >> $env:GITHUB_OUTPUT }
 }

@@ -75,7 +75,7 @@ try {
       $machine = if ($isX64) { 0x8664 } else { 0xaa64 }
       [BitConverter]::GetBytes([uint16]$machine).CopyTo($bytes, 132)
       $binaryName = 'bili_mux.dll'
-      foreach ($name in @('bili_mux.LGPL.txt', 'bili_mux.source.txt', 'bili_mux.configuration.txt')) { [IO.File]::WriteAllText((Join-Path $directory $name), $name) }
+      foreach ($name in @('bili_mux.LGPL.txt', 'bili_mux.source.txt', 'bili_mux.configuration.txt', 'toolchain.txt')) { [IO.File]::WriteAllText((Join-Path $directory $name), $name) }
     } elseif ($target.StartsWith('macos-') -or $target.StartsWith('ios-')) {
       $bytes = [byte[]]::new(24)
       [BitConverter]::GetBytes([uint32]4277009103).CopyTo($bytes, 0)

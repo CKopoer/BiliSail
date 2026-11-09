@@ -71,7 +71,9 @@ runtime_offset="$("$work/tools/linuxdeploy-x86_64.AppImage" --appimage-offset)"
 [[ "$runtime_offset" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid AppImage runtime offset' >&2; exit 1; }
 export LDAI_RUNTIME_FILE="$work/tools/appimage-runtime"
 dd if="$work/tools/linuxdeploy-x86_64.AppImage" of="$LDAI_RUNTIME_FILE" bs=1 count="$runtime_offset" status=none
-run_stage 'Build AppImage' "$work/tools/linuxdeploy-x86_64.AppImage" --appdir "$work/AppDir" --output appimage
+source "$repo/tool/linux-appimage.sh"
+run_stage 'Build AppImage' build_appimage_from_appdir "$work/tools/linuxdeploy-x86_64.AppImage" \
+  "$work/AppDir" "$work/tools/appimage-output"
 [[ -s "$LDAI_OUTPUT" ]] || { echo 'AppImage was not produced' >&2; exit 1; }
 
 cp "$repo/linux/packaging/dev.bilisail.bilisail.json" "$work/manifest.json"

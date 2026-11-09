@@ -153,6 +153,23 @@ Windows MSVC／Visual Studio 下，CI 的 runner 与 WebView 私有 `/MP` 并行
 
 新增离线回归覆盖固定版本漂移、归档损坏阻止解压、原生解压参数、revision／必要文件／Dart 架构校验，以及 ARM64 已自举 SDK 的识别。按用户此前要求，**没有在本机执行测试、构建、分析或 CI 验证**；只读取远端结果和官方发布元数据、人工审阅修改。新 Windows 安装路径和并行度留待推送后的远端 CI，不将上述已完成运行算作新改动通过。
 
+## 2026-11-09：暖 mux 跳过工具链与打包去重
+
+[CI 42505582201](https://github.com/CKopoer/BiliSail/actions/runs/42505582201)，提交 `3f7d516aa620b00821c993c5e4fe0b5c8da91e58`，全部检查及七个平台构建通过；总墙钟 **17:27**，上一轮 **24:37**。Windows ARM64／x64 为 **14:34／11:23**，Linux **8:49**，macOS ARM64／x64 为 **7:21／7:15**，iOS **5:47**，Android **5:26**。Windows ARM64 的 mux 准备从 242.1 秒降到 8.6 秒，SDK／Pub 准备从 194 秒降到 127 秒，Flutter Windows 构建从 500.5 秒降到 402.7 秒；缓存命中、原生解压和 `/MP4` 均已实际执行，单次 runner 波动不作为严格 A/B 因果结论。
+
+本轮基于剩余热点作以下调整：
+
+- Linux 的 AppDir 已完成依赖部署、RPATH 处理和许可校验后，直接调用同一份已校验 linuxdeploy 归档内的 AppImage 输出插件。原日志的 73 秒阶段中约 60 秒重复扫描／修改 ELF，实际输出插件约 14 秒；新的[输出入口](../../tool/linux-appimage.sh)只解出固定工具并调用插件，不再执行第二轮部署。归档摘要、自定义固定 Runtime、版本与输出名、Flatpak 安装后 Runtime 检查均保留。插件路径来自[固定 linuxdeploy 的构建布局](https://github.com/linuxdeploy/linuxdeploy/blob/cc7b864/ci/build.sh#L65-L79)，不下载新的移动版本工具。
+- 删除旧 `setup-windows-native-tar.ps1`、`BILISAIL_NATIVE_TAR` 注入及额外 x64 libarchive 安装。当前个人 media-kit／fvp 由 CMake 或原生 7-Zip 解压，SQLite 下载独立二进制，已无该环境变量的使用方。
+- Windows mux 在安装 MSYS2 前恢复并逐文件验证组件。身份由原生源码／构建脚本、[工具链清单](../../tool/windows-mux-toolchains.json)、runner image 和编译环境生成，不依赖先执行编译器。清单记录上述成功运行的 x64 GCC 16.2.0-4、ARM64 Clang／LLVM 22.1.8-3 及其运行库／CRT 包版本，MSYS2 Action 固定提交也参与身份。仅未命中时安装清单内工具，实际 `pacman -Q` 与固定清单匹配才允许保存快照；仓库版本漂移时继续源码构建并保存实际工具链来源，但不写入旧身份的缓存。更新清单需审阅新版本，不自动忽略差异。
+- Windows 命中路径通过 [PowerShell 来源入口](../../tool/mux-source.ps1)下载并校验既定 FFmpeg 原始 tarball，不安装 MSYS2、不展开源码树。组件仍校验每个文件和 PE 架构，Windows 快照额外保留实际 `toolchain.txt`，源码分发包包含清单、来源与所需辅助脚本。打包后以不存在的 MSYS2 路径再调用真实复用入口，检查 DLL 修改时间不变，确认暖路径不依赖机器上已有编译器。
+- WebView 仅在支持预编译头的 MSVC／Visual Studio 配置中使用私有 SDK／Flutter codec 预编译头；保持 C++17、原协程兼容定义和 `/MP` 上限四，不修改 Pub 缓存或其他插件。旧 CMake 版本保留普通编译路径。
+- Windows 将辅助 DLL／美术资源、MSI 压缩、MSIX 压缩、包签名、Burn 生成／签名及安装器检查分别计时，仍执行既有签名和 67 项安装器检查。暂不降低压缩等级；下一轮先取得各部分真实耗时。
+
+缓存清单仍为 **20 条／7,823,322,397 bytes**，七份 mux 合计 **4,194,191 bytes**；本轮不增加大型 SDK、对象目录或构建产物缓存。公共 mux 构建脚本／验证逻辑变化会令各目标下一次重新填充小型组件快照，属于一次性冷构建；Windows 后续命中才省去约 31／100 秒的 MSYS2 准备。冷构建完成后同一任务内的真实暖路径回归也会执行。现有预算、每族单代际清理、质量门禁和 Release 复用要求不变。
+
+新增回归覆盖 AppImage 直接输出、解包／插件失败与路径含空格，Windows 工具链缺失／漂移、身份受 flags／清单变更影响、源码下载及缓存摘要校验、失败清理，以及工作流先查缓存再安装的条件。**按用户要求未在本机执行 CI、测试、构建、分析或语法验证**；仅人工审阅源码与差异。以上新改动的兼容性和耗时收益待推送后的远端 CI 确认，不能用已完成的 `3f7d516a` 运行证明本次改动通过。
+
 ## Windows ARM64 构建
 
 2026-11-07 新增 `windows-arm64`。现有 `enable_windows` 同时选择 x64 和 ARM64；push／PR 默认构建两种架构，复用调用方的 `build_targets` 可单独选择其中一种。目标、产物名、诊断目录、Release 缺失目标重建和 SHA-256 校验均独立。

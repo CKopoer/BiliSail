@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "setupAction": "ec48f7c5447b3140e2b088413ae3a55687bccb6e",
+  "toolchains": {
+    "windows-x64": {
+      "msystem": "UCRT64",
+      "install": "make mingw-w64-ucrt-x86_64-binutils mingw-w64-ucrt-x86_64-cc-libs mingw-w64-ucrt-x86_64-crt mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gettext-runtime mingw-w64-ucrt-x86_64-gmp mingw-w64-ucrt-x86_64-headers mingw-w64-ucrt-x86_64-isl mingw-w64-ucrt-x86_64-libatomic mingw-w64-ucrt-x86_64-libgcc mingw-w64-ucrt-x86_64-libiconv mingw-w64-ucrt-x86_64-libquadmath mingw-w64-ucrt-x86_64-libstdc++ mingw-w64-ucrt-x86_64-libwinpthread mingw-w64-ucrt-x86_64-mpc mingw-w64-ucrt-x86_64-mpfr mingw-w64-ucrt-x86_64-tzdata mingw-w64-ucrt-x86_64-windows-default-manifest mingw-w64-ucrt-x86_64-winpthreads mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-zstd",
+      "packages": {
+        "make": "4.4.1-3",
+        "mingw-w64-ucrt-x86_64-binutils": "2.47-3",
+        "mingw-w64-ucrt-x86_64-cc-libs": "16.2.0-4",
+        "mingw-w64-ucrt-x86_64-crt": "14.0.0.r426.g4564ee4b5-1",
+        "mingw-w64-ucrt-x86_64-gcc": "16.2.0-4",
+        "mingw-w64-ucrt-x86_64-gettext-runtime": "1.0-1",
+        "mingw-w64-ucrt-x86_64-gmp": "6.3.0-2",
+        "mingw-w64-ucrt-x86_64-headers": "14.0.0.r426.g4564ee4b5-1",
+        "mingw-w64-ucrt-x86_64-isl": "0.28-1",
+        "mingw-w64-ucrt-x86_64-libatomic": "16.2.0-4",
+        "mingw-w64-ucrt-x86_64-libgcc": "16.2.0-4",
+        "mingw-w64-ucrt-x86_64-libiconv": "1.19-1",
+        "mingw-w64-ucrt-x86_64-libquadmath": "16.2.0-4",
+        "mingw-w64-ucrt-x86_64-libstdc++": "16.2.0-4",
+        "mingw-w64-ucrt-x86_64-libwinpthread": "14.0.0.r426.g4564ee4b5-1",
+        "mingw-w64-ucrt-x86_64-mpc": "1.4.1-1",
+        "mingw-w64-ucrt-x86_64-mpfr": "4.2.2-3",
+        "mingw-w64-ucrt-x86_64-tzdata": "2026d-1",
+        "mingw-w64-ucrt-x86_64-windows-default-manifest": "20260815-1",
+        "mingw-w64-ucrt-x86_64-winpthreads": "14.0.0.r426.g4564ee4b5-1",
+        "mingw-w64-ucrt-x86_64-zlib": "1.3.2-2",
+        "mingw-w64-ucrt-x86_64-zstd": "1.5.7-2"
+      }
+    },
+    "windows-arm64": {
+      "msystem": "CLANGARM64",
+      "install": "make mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-clang-libs mingw-w64-clang-aarch64-compiler-rt mingw-w64-clang-aarch64-crt mingw-w64-clang-aarch64-headers mingw-w64-clang-aarch64-libc++ mingw-w64-clang-aarch64-libffi mingw-w64-clang-aarch64-libiconv mingw-w64-clang-aarch64-libunwind mingw-w64-clang-aarch64-libwinpthread mingw-w64-clang-aarch64-libxml2 mingw-w64-clang-aarch64-lld mingw-w64-clang-aarch64-llvm mingw-w64-clang-aarch64-llvm-libs mingw-w64-clang-aarch64-llvm-tools mingw-w64-clang-aarch64-winpthreads mingw-w64-clang-aarch64-zlib mingw-w64-clang-aarch64-zstd",
+      "packages": {
+        "make": "4.4.1-3",
+        "mingw-w64-clang-aarch64-clang": "22.1.8-3",
+        "mingw-w64-clang-aarch64-clang-libs": "22.1.8-3",
+        "mingw-w64-clang-aarch64-compiler-rt": "22.1.8-3",
+        "mingw-w64-clang-aarch64-crt": "14.0.0.r426.g4564ee4b5-1",
+        "mingw-w64-clang-aarch64-headers": "14.0.0.r426.g4564ee4b5-1",
+        "mingw-w64-clang-aarch64-libc++": "22.1.8-1",
+        "mingw-w64-clang-aarch64-libffi": "3.8.0-1",
+        "mingw-w64-clang-aarch64-libiconv": "1.19-1",
+        "mingw-w64-clang-aarch64-libunwind": "22.1.8-1",
+        "mingw-w64-clang-aarch64-libwinpthread": "14.0.0.r426.g4564ee4b5-1",
+        "mingw-w64-clang-aarch64-libxml2": "2.15.4-1",
+        "mingw-w64-clang-aarch64-lld": "22.1.8-3",
+        "mingw-w64-clang-aarch64-llvm": "22.1.8-3",
+        "mingw-w64-clang-aarch64-llvm-libs": "22.1.8-3",
+        "mingw-w64-clang-aarch64-llvm-tools": "22.1.8-3",
+        "mingw-w64-clang-aarch64-winpthreads": "14.0.0.r426.g4564ee4b5-1",
+        "mingw-w64-clang-aarch64-zlib": "1.3.2-2",
+        "mingw-w64-clang-aarch64-zstd": "1.5.7-2"
+      }
+    }
+  }
+}

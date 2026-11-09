@@ -11,6 +11,10 @@ outputs:
     value: ${{ steps.identity.outputs.path }}
   valid:
     value: ${{ steps.verify.outputs.valid }}
+  msystem:
+    value: ${{ steps.identity.outputs.msystem }}
+  install:
+    value: ${{ steps.identity.outputs.install }}
 runs:
   using: composite
   steps:

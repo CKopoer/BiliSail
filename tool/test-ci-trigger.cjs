@@ -95,3 +95,24 @@ test('platform builds overlap root tests while the required quality gate still w
   const mux = readFileSync('.github/actions/restore-mux/action.yml', 'utf8');
   assert.doesNotMatch(mux, /restore-keys:/);
 });
+
+test('Windows compiler installation follows validated mux restore and skips warm builds', () => {
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const compiler = /- name: Set up the Windows mux compiler on cache miss\r?\n([\s\S]*?)- name: Retry Windows mux/.exec(workflow)?.[1];
+  assert.ok(compiler);
+  assert.ok(workflow.indexOf('id: mux-cache') < workflow.indexOf('id: windows-mux'));
+  const condition = /if: (.+)/.exec(compiler)?.[1];
+  const evaluate = new Function('matrix', 'steps', 'startsWith',
+    `return ${condition.replace('steps.mux-cache', 'steps["mux-cache"]')};`);
+  for (const target of ['windows-x64', 'windows-arm64', 'linux-x64']) {
+    for (const valid of ['true', 'false', undefined]) {
+      assert.equal(evaluate({ target }, { 'mux-cache': { outputs: { valid } } },
+        (value, prefix) => value.startsWith(prefix)), target.startsWith('windows-') && valid !== 'true');
+    }
+  }
+  const lock = JSON.parse(readFileSync('tool/windows-mux-toolchains.json', 'utf8'));
+  assert.equal(workflow.split(`uses: msys2/setup-msys2@${lock.setupAction}`).length - 1, 2);
+  assert.match(compiler, /install: \$\{\{ steps.mux-cache.outputs.install \}\}/);
+  assert.doesNotMatch(workflow, /libarchive|setup-windows-native-tar/);
+  assert.match(workflow, /-MsysRoot \$absentCompiler/);
+});

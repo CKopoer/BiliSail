@@ -8,7 +8,15 @@ $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $identityFile = Join-Path $repo "build/ci-mux/$Target/identity.txt"
 $directory = Join-Path $repo "packages/bili_mux/native/prebuilt/$Target"
 if ($Mode -eq 'Prepare') {
-  $toolchain = (& (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Target $Target -Mode Identity) -join "`n"
+  if ($Target.StartsWith('windows-')) {
+    . (Join-Path $PSScriptRoot 'windows-mux-toolchain.ps1')
+    $spec = Get-WindowsMuxToolchain $repo $Target
+    $toolchain = Get-WindowsMuxCacheToolchain $repo $Target
+    "msystem=$($spec.msystem)" >> $env:GITHUB_OUTPUT
+    "install=$($spec.install)" >> $env:GITHUB_OUTPUT
+  } else {
+    $toolchain = (& (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Target $Target -Mode Identity) -join "`n"
+  }
   $identity = Get-MuxCacheIdentity $repo $Target $toolchain
   New-Item -ItemType Directory -Path (Split-Path $identityFile -Parent) -Force | Out-Null
   [IO.File]::WriteAllText($identityFile, $identity)
