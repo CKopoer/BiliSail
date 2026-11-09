@@ -351,22 +351,23 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                                     },
                                     child: ValueListenableBuilder<Matrix4>(
                                       valueListenable: _transform,
-                                      builder: (_, _, child) =>
-                                          InteractiveViewer(
-                                            transformationController:
-                                                _transform,
-                                            panEnabled: !_canSwipe,
-                                            constrained: false,
-                                            minScale: .0001,
-                                            maxScale: 8,
-                                            boundaryMargin:
-                                                const EdgeInsets.all(
-                                                  double.infinity,
-                                                ),
-                                            // The hit area follows the transformed image, leaving
-                                            // the surrounding viewport available for dismissal.
-                                            child: child!,
+                                      // Keep the scaled image in its own display list;
+                                      // toolbar hover/tooltip animations must not repaint it.
+                                      builder: (_, _, child) => RepaintBoundary(
+                                        child: InteractiveViewer(
+                                          transformationController: _transform,
+                                          panEnabled: !_canSwipe,
+                                          constrained: false,
+                                          minScale: .0001,
+                                          maxScale: 8,
+                                          boundaryMargin: const EdgeInsets.all(
+                                            double.infinity,
                                           ),
+                                          // The hit area follows the transformed image, leaving
+                                          // the surrounding viewport available for dismissal.
+                                          child: child!,
+                                        ),
+                                      ),
                                       child: GestureDetector(
                                         excludeFromSemantics: true,
                                         onTap: () {},
