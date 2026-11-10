@@ -1,6 +1,5 @@
 # Pin the experimental SDK independently of the unchanged media-kit assets.
-file(READ "${CMAKE_CURRENT_LIST_DIR}/assets.lock.json" _bilisail_fvp_manifest)
-string(JSON _bilisail_fvp_base GET "${_bilisail_fvp_manifest}" baseUrl)
+include("${CMAKE_CURRENT_LIST_DIR}/resolve.cmake")
 if(WIN32)
   if(FLUTTER_TARGET_PLATFORM STREQUAL "windows-arm64")
     set(_bilisail_fvp_platform windows-arm64)
@@ -14,12 +13,13 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
 else()
   message(FATAL_ERROR "The experimental fvp SDK is only pinned for Linux x64 and Windows x64/ARM64")
 endif()
-string(JSON _bilisail_fvp_archive GET "${_bilisail_fvp_manifest}" assets "${_bilisail_fvp_platform}" archive)
-string(JSON _bilisail_fvp_sha GET "${_bilisail_fvp_manifest}" assets "${_bilisail_fvp_platform}" sha256)
+bilisail_fvp_asset("${_bilisail_fvp_platform}"
+  _bilisail_fvp_base _bilisail_fvp_archive _bilisail_fvp_sha)
 if(WIN32)
   # Upstream fvp uses a generic filename; the fixed release adds the toolchain
   # suffix. Stage its verified bytes under that alias in the build directory.
-  set(_bilisail_fvp_stage "${CMAKE_BINARY_DIR}/fvp-deps")
+  # Isolate SDK revisions, including partial downloads with the same filename.
+  set(_bilisail_fvp_stage "${CMAKE_BINARY_DIR}/fvp-deps/${_bilisail_fvp_sha}")
   file(MAKE_DIRECTORY "${_bilisail_fvp_stage}")
   set(_bilisail_fvp_sdk "${_bilisail_fvp_stage}/${_bilisail_fvp_alias}")
   set(_bilisail_fvp_cached_sha "")
