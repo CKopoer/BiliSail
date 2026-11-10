@@ -18,6 +18,12 @@ class MacOSApplicationWindow {
   static const _channel = MethodChannel('bilisail/application_window');
   final DetachedPlaybackWindow window;
 
+  // Native code accepts this only for the explicit packaging startup probe.
+  // Establish foreground activation before creating any Flutter window.
+  static Future<void> prepareForegroundStartupProbe() => _channel
+      .invokeMethod<void>('prepareForegroundStartup')
+      .timeout(const Duration(seconds: 15));
+
   static Future<MacOSApplicationWindow?> create() async {
     if (!Platform.isMacOS) return null;
     await DetachedPlaybackWindow.prepareMacOSWindowing();

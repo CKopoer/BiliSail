@@ -7,6 +7,39 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/detached_window_fake.dart';
 
 void main() {
+  testWidgets('foreground startup activation finishes before window creation', (
+    tester,
+  ) async {
+    const channel = MethodChannel('bilisail/application_window');
+    final calls = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      calls.add(call.method);
+      return null;
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    await MacOSApplicationWindow.prepareForegroundStartupProbe();
+    final native = _window(tester, 41);
+    addTearDown(native.dispose);
+    await MacOSApplicationWindow(native).prepare();
+    expect(calls, ['prepareForegroundStartup', 'attachMainWindow']);
+
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (_) async => throw PlatformException(code: 'startup_activation_timeout'),
+    );
+    await expectLater(
+      MacOSApplicationWindow.prepareForegroundStartupProbe(),
+      throwsA(isA<PlatformException>()),
+    );
+  });
+
   testWidgets('main window handshake sends its own view identity', (
     tester,
   ) async {

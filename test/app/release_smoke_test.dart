@@ -8,6 +8,7 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/feed/data/app_recommendation_identity_store.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -139,20 +140,54 @@ void main() {
     },
   );
 
-  test('background smoke gets a first frame after window activation', () async {
-    final frame = Completer<void>();
-    var completed = false;
-    unawaited(
-      request('startup')
-          .waitForFirstFrame(
-            activate: () async => frame.complete(),
-            rasterized: () => frame.future,
-          )
-          .then((_) => completed = true),
-    );
-    await Future<void>.delayed(Duration.zero);
-    expect(completed, isTrue);
-  });
+  for (final state in [AppLifecycleState.resumed, AppLifecycleState.inactive]) {
+    testWidgets('startup requires a normal frame after rasterization: $state', (
+      tester,
+    ) async {
+      tester.binding.handleAppLifecycleStateChanged(state);
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      final rasterized = Completer<void>();
+      var completed = false;
+      final pending = request('startup')
+          .waitForFirstFrame(rasterized: () => rasterized.future)
+          .then((_) => completed = true);
+      await tester.idle();
+      expect(completed, isFalse);
+      rasterized.complete();
+      await tester.idle();
+      expect(completed, isFalse);
+      await tester.pump();
+      await pending;
+      expect(completed, isTrue);
+    });
+  }
+
+  for (final state in [
+    AppLifecycleState.hidden,
+    AppLifecycleState.paused,
+    AppLifecycleState.detached,
+  ]) {
+    testWidgets('a rasterized warm-up cannot hide disabled frames: $state', (
+      tester,
+    ) async {
+      tester.binding.handleAppLifecycleStateChanged(state);
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      await expectLater(
+        request('startup').waitForFirstFrame(rasterized: () async {}),
+        throwsStateError,
+      );
+      expect(tester.binding.lifecycleState, state);
+      expect(tester.binding.framesEnabled, isFalse);
+    });
+  }
 
   test(
     'macOS uses system Keychain without provisioning; other defaults stay',
