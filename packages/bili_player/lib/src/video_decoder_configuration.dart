@@ -8,7 +8,6 @@ import 'player_contract.dart';
 mkv.VideoControllerConfiguration videoDecoderConfiguration({
   required bool isAndroid,
   required VideoDecodingMode decoding,
-  bool isWindowsArm64 = false,
   AndroidVideoOutputMode androidOutput = AndroidVideoOutputMode.renderedTexture,
   bool Function()? usesDolbyVisionRenderer,
 }) => isAndroid && usesDolbyVisionRenderer != null
@@ -18,17 +17,12 @@ mkv.VideoControllerConfiguration videoDecoderConfiguration({
         usesDolbyVisionRenderer,
       )
     : mkv.VideoControllerConfiguration(
-        // Decoder fallback alone cannot bypass a Windows ARM64 driver's
-        // ANGLE/shared-texture output path, which can remain black (#100).
-        // Use libmpv's CPU render API on native Windows ARM64; copy decoders
-        // may still accelerate decoding without D3D11/EGL texture interop.
-        enableHardwareAcceleration: !isWindowsArm64,
+        // Software decoding still uses the GPU video output. Desktop defaults remain
+        // owned by the SDK; Android follows PiliPlus's MediaCodec preference order.
         hwdec: decoding == VideoDecodingMode.software
             ? 'no'
             : isAndroid
             ? 'mediacodec,auto-safe'
-            : isWindowsArm64
-            ? 'auto-copy'
             : null,
         vo:
             isAndroid &&
