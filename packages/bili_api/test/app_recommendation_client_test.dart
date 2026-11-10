@@ -154,7 +154,7 @@ void main() {
       final expected = md5
           .convert(
             utf8.encode(
-              'access_key=fixture-token&appkey=dfca71928277209b&empty&text=a%20b%25%E4%B8%AD&ts=1234567890b5475a8825547a4fc26c7d518eaaa02e',
+              'access_key=fixture-token&appkey=dfca71928277209b&empty=&text=a%20b%25%E4%B8%AD&ts=1234567890b5475a8825547a4fc26c7d518eaaa02e',
             ),
           )
           .toString();
@@ -273,7 +273,7 @@ void main() {
   );
 
   test(
-    'feed query matches the PiliPlus Android profile for refresh and pagination',
+    'feed query and empty-value signature match the PiliPlus profile for refresh and pagination',
     () async {
       final transport = _Transport();
       final client = AppRecommendationClient(
@@ -323,6 +323,13 @@ void main() {
           'appkey': 'dfca71928277209b',
           'ts': '1234567890',
         });
+        // Fixed vectors include splash_id= in the independently encoded input.
+        expect(
+          transport.uris.last.queryParameters['sign'],
+          page == 1
+              ? 'da12923170737313c3a72f2f934b127a'
+              : '7c6fc8da7dc0d173fb1e14922e606110',
+        );
       }
     },
   );

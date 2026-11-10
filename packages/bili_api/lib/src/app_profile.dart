@@ -51,11 +51,11 @@ abstract final class AppProfile {
     values['appkey'] = appKey;
     values['ts'] = '${now.millisecondsSinceEpoch ~/ 1000}';
     final keys = values.keys.toList()..sort();
+    // Empty values still include '=', notably the feed's splash_id.
     final query = keys
         .map(
-          (key) => values[key]!.isEmpty
-              ? Uri.encodeComponent(key)
-              : '${Uri.encodeComponent(key)}=${Uri.encodeComponent(values[key]!)}',
+          (key) =>
+              '${Uri.encodeComponent(key)}=${Uri.encodeComponent(values[key]!)}',
         )
         .join('&');
     return {
