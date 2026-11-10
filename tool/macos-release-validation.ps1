@@ -45,7 +45,7 @@ function Get-MacOSSmokeDiagnosticLines([string]$Text) {
   foreach ($line in ($Text -split '\r?\n')) {
     if ($line -cmatch '^BILISAIL_FOCUS_STAGE:(foreground|foreground-focus|foreground-ready|prepare|present|primary|space|passed|bind|reactivate|reactivated|unbind|geometry|detach|retire|retired)$' -or
         $line -cmatch '^BILISAIL_NATIVE_STAGE:(application|engine-create|plugins-register|plugins-ready|engine-run|engine-running)$' -or
-        $line -cmatch '^BILISAIL_RELEASE_STAGE:(dart-entry|foreground-startup|window-create|window-ready|dependencies|dependencies-ready|first-frame-wait|first-frame|playback-windows|credentials|closed)$' -or
+        $line -cmatch '^BILISAIL_RELEASE_STAGE:(dart-entry|headless-startup|headless-hidden|window-create|window-ready|dependencies|dependencies-ready|first-frame-wait|first-frame|playback-windows|credentials|closed)$' -or
         $line -cmatch '^BILISAIL_CREDENTIAL_STAGE:(empty|write-first|read-first|write-second|read-second|read-restart|delete|deleted|cleanup-bootstrap|cleanup-recommendation)$' -or
         $line -cmatch '^BILISAIL_RELEASE_SMOKE_FAILED:(startup|write|read-delete|verify-deleted|cleanup)$' -or
         $line -cmatch '^BILISAIL_RELEASE_SMOKE_ERROR:(timeout|platform|state|format|framework|asynchronous|other)$') {

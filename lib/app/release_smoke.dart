@@ -225,8 +225,8 @@ class ReleaseSmokeRequest {
         keyPrefix: '$prefix.recommendation',
       );
 
-  // Foreground activation happens before window creation. Do not activate here:
-  // that would repair a stale hidden lifecycle and mask a frozen loading page.
+  // The headless probe establishes hidden before window creation. Do not
+  // activate here: that would mask a missing main-window lifecycle recovery.
   Future<void> waitForFirstFrame({
     required Future<void> Function() rasterized,
   }) async {
