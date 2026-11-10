@@ -48,6 +48,7 @@
 | [项目宣传视频脚本](marketing/promotional-video-script.md) | 2026-10-30 第三版，按使用场景介绍发现、导航、播放、听视频、互动与离线，含分镜、素材和导出记录 |
 | [推荐流设置](recommendation-settings-design.md) | PiliPlus 11 项对应、查询级过滤与刷新保留、性能约束及验证 |
 | [App 推荐接入](app-recommendation-design.md) | Web/App 来源、独立设备标识、扫码授权、安全凭据及服务端反馈 |
+| [App 推荐有效性调查](validation/app-recommendation-investigation-2026-11-10.md) | #107 的实际接口与身份、PiliPlus 空参数签名差异、其他客户端对照及游客验证边界 |
 | [界面改版候选方案](ui-redesign/proposals.md) | 晴湾／素白／映厅三套视觉与用户最终选择，功能保留清单及双标签设计 |
 | [晴湾与双标签实施](ui-redesign/implementation.md) | 共享外观、桌面分组与窄屏四项导航、双标签会话及状态保留、验证边界 |
 | [晴湾第二轮调整](ui-redesign/refinement-plan.md) | 桌面独立播放窗口、正式图标、侧栏底部入口、页面工具栏与独立我的页 |
