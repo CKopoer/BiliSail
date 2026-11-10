@@ -21,7 +21,7 @@ macOS 使用传统系统 Keychain，不降级为明文文件或数据库。Andro
 调用链继续为 `release.yml → ci.yml → tool/build-release.ps1`。macOS 分支构建、验证对应的 arm64／x86_64 架构、使用 `ditto` 复制后，由 [验证辅助脚本](../../tool/macos-release-validation.ps1) 检查待打包 bundle。下面的完整运行流程适用于 arm64，以及未传 `-SkipRuntimeSmoke` 的手动验证；x64 打包只执行第 1 项及可执行文件检查，随后进入 DMG 打包。没有另编译测试应用，也没有通过重新签名规避检查。
 
 1. `codesign --verify --deep --strict` 校验应用及嵌套代码的签名完整性；从 `codesign --display --entitlements :-` 提取最终主程序权限。接受并要求启用 Sandbox、客户端网络和图片目录读写权限（2026-10-25 为原图保存新增 `com.apple.security.assets.pictures.read-write`，见[图片查看器保存与长图](image-viewer-export-long-images.md)）；空 Sharing、其他额外权限、重复／缺失／禁用权限均失败。禁止携带机器专用 `embedded.provisionprofile`。
-2. 运行同一 `Contents/MacOS/BiliSail` 的 `startup` 阶段：从 headless engine 创建明确的主浏览窗，执行正常应用依赖组装与 `BiliApp`，等待首帧 rasterize，继续运行三秒，再实际创建／挂载／激活／回收两轮独立播放窗，验证新增 view 与视口及标题栏返回通道。最后卸载 UI 并关闭应用资源。应用内回退、Flutter／未处理异步错误均使探测失败。窗口初始化原因见[双标签崩溃修复](macos-dual-playback-crash.md)。
+2. 运行同一 `Contents/MacOS/BiliSail` 的 `startup` 阶段：先在 headless engine 尚无窗口时回放原生激活生命周期，确认 Dart 收到 `hidden` 且已禁帧，再创建明确的主浏览窗，执行正常应用依赖组装与 `BiliApp`。等待首帧 rasterize，并确认调度已启用且另一个正常帧完成；继续运行三秒，再实际创建／挂载／激活／回收两轮独立播放窗，验证新增 view 与视口及标题栏返回通道。最后卸载 UI 并关闭应用资源。应用内回退、Flutter／未处理异步错误均使探测失败。窗口初始化原因见[双标签崩溃修复](macos-dual-playback-crash.md)，前台冷启动门槛及 CI 激活前提修复见[2026-11-10 修复](macos-foreground-startup-2026-11-10.md)。
 3. 全新进程执行 `write`：直接通过真实默认 `SystemCredentialStore` 写入非敏感合成值，读取核对，再写第二份快照并读取，覆盖双 slot 和 active 切换。凭据阶段只启动同一应用的 headless engine／插件，不创建窗口、不组装首页业务依赖；完整应用及窗口初始化由前一 `startup` 阶段单独验证。
 4. 再启动同一应用执行 `read-delete`：读取上一进程保存的值并核对，删除，仅检查本次探测的 active／a／b 三个 key。
 5. 再次启动执行 `verify-deleted`，核对三个 key 均不存在。启动、写入和读取阶段使用同一 UUID 前缀，避免“重启后重新写值”掩盖持久化失败。
@@ -35,7 +35,7 @@ macOS 使用传统系统 Keychain，不降级为明文文件或数据库。Andro
 
 测试 key 为 `bilisail.release_smoke.v1.<UUID>.active/a/b`，只保存合成字符串；不调用 `deleteAll`，不读取正式登录 key。最终权限和脱敏的阶段／退出码／确认状态按目标保存在 `artifacts/macos-arm64/validation/` 或 `artifacts/macos-x64/validation/`，不保存原生／网络原始输出。失败任务仅上传白名单的脱敏 `*.result.json`、`*.crash.json` 和 `*.sample.json`；x64 打包不再生成运行 smoke 结果。metadata 不含真实凭据、测试值或 Keychain 内容。
 
-Intel CI 首次执行启动探测时曾达到原有 60 秒上限。固定 SDK 的普通窗口构造不会激活应用，而原探测在首帧完成后才激活；显式 smoke 现在先激活主窗口再等待首帧，避免后台显示前提造成的等待环。探测监督脚本实时排空两路输出，只导出固定启动阶段、数字焦点状态和脱敏 JSON；不保存原生／网络原始行。普通启动不启用这些探测日志。
+Intel CI 首次执行启动探测时曾达到原有 60 秒上限。固定 SDK 的普通窗口构造不会激活应用，而早期探测在首帧完成后才激活；当时改为先激活已创建的主窗口再等待首帧。2026-11-10 的[前台冷启动修复](macos-foreground-startup-2026-11-10.md)先在无窗口阶段回放引擎激活生命周期并断言禁帧，再要求建窗后恢复正常调度，避免激活已建窗口掩盖启动生命周期缺口；该前置探测不依赖 CI 进程取得真实系统前台。探测监督脚本实时排空两路输出，只导出固定启动阶段、数字焦点状态和脱敏 JSON；不保存原生／网络原始行。普通启动不启用这些探测日志。
 
 ## CI #222：凭据探测隔离（2026-10-29）
 

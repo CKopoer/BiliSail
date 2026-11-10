@@ -18,6 +18,34 @@ class MacOSApplicationWindow {
   static const _channel = MethodChannel('bilisail/application_window');
   final DetachedPlaybackWindow window;
 
+  // Native code replays activation without a window only in explicit smoke.
+  // Confirm the real engine disabled frames before testing main-window recovery.
+  static Future<void> prepareHeadlessStartupProbe() async {
+    final binding = WidgetsBinding.instance;
+    final hidden = Completer<void>();
+    final listener = AppLifecycleListener(
+      onStateChange: (state) {
+        if (state == AppLifecycleState.hidden && !hidden.isCompleted) {
+          hidden.complete();
+        }
+      },
+    );
+    try {
+      await _channel
+          .invokeMethod<void>('prepareHeadlessStartup')
+          .timeout(const Duration(seconds: 5));
+      if (binding.lifecycleState != AppLifecycleState.hidden) {
+        await hidden.future.timeout(const Duration(seconds: 5));
+      }
+      if (binding.lifecycleState != AppLifecycleState.hidden ||
+          binding.framesEnabled) {
+        throw StateError('Headless startup probe did not disable frames');
+      }
+    } finally {
+      listener.dispose();
+    }
+  }
+
   static Future<MacOSApplicationWindow?> create() async {
     if (!Platform.isMacOS) return null;
     await DetachedPlaybackWindow.prepareMacOSWindowing();
