@@ -572,6 +572,7 @@ final class BiliApiClient {
     if (!const {
       '/x/dynamic/feed/dyn/thumb',
       '/x/dynamic/feed/create/dyn',
+      '/x/vote/create',
     }.contains(path)) {
       throw ArgumentError('Unsupported dynamic mutation');
     }
@@ -588,6 +589,16 @@ final class BiliApiClient {
       jsonBody: body,
     );
   }
+
+  Future<Object?> createDynamicReserve(
+    Map<String, String> fields, {
+    ApiRequestContext? context,
+  }) => _submitForm(
+    _api.replace(path: '/x/new-reserve/up/reserve/create'),
+    'dynamic_reserve_create',
+    fields,
+    context,
+  );
 
   ({String cookie, String csrf}) _mutationCredentials(
     Uri uri,
@@ -1293,6 +1304,7 @@ final class BiliApiClient {
   Future<ApiDynamicPicture> uploadDynamicPicture(
     Uint8List bytes,
     String mimeType, {
+    bool forPoll = false,
     ApiRequestContext? context,
   }) async {
     final picture = await _uploadDailyPicture(
@@ -1300,6 +1312,7 @@ final class BiliApiClient {
       mimeType,
       'dynamic_picture_upload',
       context,
+      biz: forPoll ? 'vote' : 'new_dyn',
     );
     return ApiDynamicPicture(
       picture.url,
@@ -1313,8 +1326,9 @@ final class BiliApiClient {
     Uint8List bytes,
     String mimeType,
     String endpoint,
-    ApiRequestContext? context,
-  ) async {
+    ApiRequestContext? context, {
+    String biz = 'new_dyn',
+  }) async {
     if (bytes.isEmpty ||
         bytes.length > 10 * 1024 * 1024 ||
         !const {'image/jpeg', 'image/png', 'image/gif'}.contains(mimeType)) {
@@ -1324,7 +1338,7 @@ final class BiliApiClient {
       await _submitForm(
         _api.replace(path: '/x/dynamic/feed/draw/upload_bfs'),
         endpoint,
-        {'category': 'daily', 'biz': 'new_dyn'},
+        {'category': 'daily', 'biz': biz},
         context,
         upload: (bytes: bytes, mimeType: mimeType),
       ),
