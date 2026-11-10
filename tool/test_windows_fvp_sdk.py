@@ -128,6 +128,27 @@ message(STATUS "SELECTED=${{base}}/${{archive}};${{hash}}")
         self.assertIn("SHA-256 does not match the lock", result.stderr)
         self.assertFalse(target.exists())
 
+        # A rejected download must not poison subsequent configure attempts.
+        archive.write_bytes(b"SDK")
+        result = self.stage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(target.read_bytes(), b"SDK")
+
+    def test_corrupt_partial_download_is_discarded_after_hash_rejection(self):
+        _, target = self.fixture_asset("arm64", b"SDK")
+        target.parent.mkdir(parents=True)
+        partial = target.with_suffix(".7z.part")
+        partial.write_bytes(b"bad")
+
+        result = self.stage()
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("SHA-256 does not match the lock", result.stderr)
+        self.assertFalse(partial.exists())
+
+        result = self.stage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(target.read_bytes(), b"SDK")
+
     def test_invalid_hash_is_rejected_before_download(self):
         _, target = self.fixture_asset("arm64", b"SDK")
         self.lock["assets"]["windows-arm64"]["sha256"] = "bad"

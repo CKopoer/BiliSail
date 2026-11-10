@@ -39,6 +39,8 @@ if(WIN32)
     endif()
     file(SHA256 "${_bilisail_fvp_sdk}.part" _bilisail_fvp_download_sha)
     if(NOT _bilisail_fvp_download_sha STREQUAL _bilisail_fvp_sha)
+      # Rejected bytes cannot be resumed safely on the next configure attempt.
+      file(REMOVE "${_bilisail_fvp_sdk}.part")
       message(FATAL_ERROR "The fvp SDK archive SHA-256 does not match the lock")
     endif()
     file(RENAME "${_bilisail_fvp_sdk}.part" "${_bilisail_fvp_sdk}")
