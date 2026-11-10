@@ -704,7 +704,11 @@ class AppDependencies {
           ),
         ),
         dynamicImagePickerProvider.overrideWithValue(
-          (remaining) => pickLocalImages(remaining, label: '动态图片'),
+          (remaining) => pickLocalImages(
+            remaining,
+            label: '动态图片',
+            maxCount: DynamicComposerState.maxImages,
+          ),
         ),
         dynamicComposerRepositoryProvider.overrideWithValue(
           ApiDynamicComposerRepository(

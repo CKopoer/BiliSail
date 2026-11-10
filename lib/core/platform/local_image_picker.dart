@@ -11,8 +11,9 @@ Future<List<LocalImage>> pickLocalImages(
   int remaining, {
   ImagePicker? imagePicker,
   String label = '图片',
+  int maxCount = LocalImage.maxCount,
 }) async {
-  final limit = remaining.clamp(0, LocalImage.maxCount);
+  final limit = remaining.clamp(0, maxCount.clamp(1, 18));
   if (limit == 0) return const [];
   final mobile =
       defaultTargetPlatform == TargetPlatform.android ||
@@ -39,7 +40,7 @@ Future<List<LocalImage>> pickLocalImages(
           ],
         );
   if (files.length > limit) {
-    throw const AppFailure(AppFailureKind.storage, '最多可添加 9 张图片，请重新选择');
+    throw AppFailure(AppFailureKind.storage, '本次最多可添加 $limit 张图片，请重新选择');
   }
   final images = <LocalImage>[];
   for (final file in files) {

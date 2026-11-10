@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/core/platform/local_image_picker.dart';
 import 'package:bilisail/features/comments/data/comment_image_picker.dart';
 import 'package:bilisail/features/comments/domain/comment_composer.dart';
 import 'package:flutter/foundation.dart';
@@ -18,6 +19,23 @@ void main() {
   tearDown(() => debugDefaultTargetPlatformOverride = null);
 
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    test(
+      '$platform dynamic drafts request 18 slots without changing the comment default',
+      () async {
+        debugDefaultTargetPlatformOverride = platform;
+        final picker = _Picker(List.generate(18, (_) => _image()));
+        expect(
+          await pickLocalImages(18, imagePicker: picker, maxCount: 18),
+          hasLength(18),
+        );
+        expect(picker.limit, 18);
+        await expectLater(
+          pickLocalImages(18, imagePicker: picker),
+          throwsA(isA<AppFailure>()),
+        );
+        expect(picker.limit, 9);
+      },
+    );
     for (final remaining in [1, 2, 9]) {
       test('$platform opens the photo library with $remaining slots', () async {
         debugDefaultTargetPlatformOverride = platform;

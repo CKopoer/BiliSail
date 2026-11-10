@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [动态发布能力与自适应编辑器](validation/dynamic-publishing-parity-2026-11-11.md) | B站表情、@用户、18图与裁剪、权限／定时、投票／直播预约及验证边界 |
 | [Windows ARM64 黑屏与 MDK 过期提示](validation/windows-arm64-black-video-2026-11-10.md) | #100 保留 GPU 默认路径、撤回统一降级、ARM64 SDK 刷新与黑屏未定位边界 |
 | [macOS 前台冷启动停滞](validation/macos-foreground-startup-2026-11-10.md) | headless 激活与窗口可见性同步、禁帧生命周期回放及首帧后正常刷新检查 |
 | [fvp 缓冲条小幅回缩](validation/fvp-buffer-timeline-2026-11-09.md) | 未解码包队列与呈现时钟差异、双轨端点换算、显示抖动容差和原生回归 |

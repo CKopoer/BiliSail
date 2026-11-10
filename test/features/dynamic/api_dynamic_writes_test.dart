@@ -10,6 +10,7 @@ import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/dynamic/data/api_dynamic_composer_repository.dart';
 import 'package:bilisail/features/dynamic/data/api_dynamic_topic_repository.dart';
 import 'package:bilisail/features/dynamic/domain/dynamic_repository.dart';
+import 'package:bilisail/features/dynamic/domain/dynamic_draft.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _Transport
@@ -20,6 +21,7 @@ class _Transport
         ApiMultipartTransport {
   int status = 503, code = 0, posts = 0;
   Completer<ApiHttpResponse>? pending;
+  Map<String, Object?>? json;
   Future<ApiHttpResponse> result() async {
     posts++;
     return pending?.future ??
@@ -59,7 +61,11 @@ class _Transport
     required Map<String, String> headers,
     required Duration timeout,
     ApiCancellation? cancellation,
-  }) => result();
+  }) {
+    json = body;
+    return result();
+  }
+
   @override
   Future<ApiHttpResponse> postMultipart(
     Uri uri, {
@@ -178,5 +184,60 @@ void main() {
       ),
     );
     expect(transport.posts, 1);
+  });
+  test('repository maps rich ranges, Bili emotes, poll and reserve without DTOs in UI', () async {
+    transport.status = 200;
+    await composer.create(
+      mid: '7',
+      text: '😀@用户[doge]',
+      pictures: [],
+      title: '标题',
+      spans: const [
+        DynamicTextSpan(
+          2,
+          5,
+          DynamicTextKind.mention,
+          id: '9007199254740993123',
+        ),
+        DynamicTextSpan(5, 11, DynamicTextKind.emote),
+      ],
+      pollId: '123',
+      pollTitle: '投票',
+      reserveId: '456',
+      cancellation: RequestCancellation(),
+    );
+    final req = transport.json!['dyn_req'] as Map;
+    expect(req['content'], {
+      'title': '标题',
+      'contents': [
+        {'raw_text': '😀', 'type': 1, 'biz_id': ''},
+        {'raw_text': '@用户', 'type': 2, 'biz_id': '9007199254740993123'},
+        {'raw_text': '[doge]', 'type': 9, 'biz_id': ''},
+        {'raw_text': '投票', 'type': 4, 'biz_id': '123'},
+      ],
+    });
+  });
+  test('uncertain attachment creation is classified and never automatically retried', () async {
+    await expectLater(
+      composer.createPoll(
+        DynamicPollDraft(
+          title: '投票',
+          options: const [DynamicPollOption('一'), DynamicPollOption('二')],
+          endsAt: DateTime.now().add(const Duration(days: 1)),
+        ),
+        [],
+        '7',
+        RequestCancellation(),
+      ),
+      throwsA(isA<DynamicWriteUncertain>()),
+    );
+    await expectLater(
+      composer.createReserve(
+        DynamicReserveDraft('直播', DateTime.now().add(const Duration(days: 1))),
+        RequestCancellation(),
+      ),
+      throwsA(isA<DynamicWriteUncertain>()),
+    );
+    expect(transport.posts, 2);
   });
 }
