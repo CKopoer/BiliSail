@@ -2,6 +2,8 @@
 
 ## 2026-11-07 可选 fvp 后端
 
+2026-11-10：Windows ARM64 的 MDK 更新为官方 v0.40.1 完整 Windows SDK，修复旧 SDK 过期二维码。其他平台保留下述 v0.39.0；实际逐平台版本、URL 与归档摘要以 `native/fvp/assets.lock.json` 为准。保留 Flutter key 与 SDK 授权检查，来源、C API 兼容性核对和设备边界见[ARM64 后续修复](docs/validation/windows-arm64-black-video-2026-11-10.md)。
+
 音频健康采样桥接使用 MDK 0.39 的三个未修改 C API 头文件；来源、摘要和许可范围见 [头文件来源](packages/bili_player/third_party/mdk/SOURCE.md)，原许可通知随 `native/fvp/NOTICE.md` 分发。桥接只统计音频解码活动，不额外链接 MDK／FFmpeg。
 
 实验后端新增 BSD-3-Clause 的 [wang-bin/fvp](https://github.com/wang-bin/fvp/tree/e81637411c58a9ae28de246ee73ad06e3418f10e)，固定完整提交 `e81637411c58a9ae28de246ee73ad06e3418f10e`；其 MDK 核心固定官方 v0.39.0，逐平台 URL／SHA-256 见 `native/fvp/assets.lock.json`。MDK 的 SDK 授权与 Flutter 插件分别处理，官方说明 Flutter 用户可免费商用；原 SDK 许可保留在 `native/fvp/mdk.podspec`，SDK 附带 FFmpeg、libass 和可选专业解码插件的许可不能被插件 BSD 许可覆盖。接入方式、验证与分发边界见[可选 fvp 记录](docs/validation/fvp-backend-2026-11-07.md)。media_kit 和 bili_mux 的既有来源及许可继续独立保留。

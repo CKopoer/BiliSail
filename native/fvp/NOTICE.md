@@ -14,15 +14,25 @@ build/apple-plugins and replaces MetalTexture using native/fvp/apple. It publish
 write-once IOSurfaces only after Metal command completion. The original BSD
 license, MDK command queue and fixed SDK binaries are preserved.
 
-MDK SDK version 0.39.0 is copyright Wang Bin. The upstream author permits free
+MDK SDK versions 0.39.0 and 0.40.1 (Windows ARM64) are copyright Wang Bin.
+The upstream author permits free
 use, including commercial use, through Flutter's fvp plugin, which installs the
 bundled Flutter key. The SDK has its own license; the upstream license text is
 preserved in mdk.podspec. Binary sources and archive hashes: assets.lock.json.
 https://github.com/wang-bin/mdk-sdk/tree/v0.39.0
+https://github.com/wang-bin/mdk-sdk/tree/v0.40.1
 
-The Windows SDK's ffmpeg-9.dll reports LGPL version 2.1 or later and version
-git-2026-09-17-590fb40-avbuild. Corresponding FFmpeg source:
+Windows ARM64 uses the official complete vs2026 SDK from v0.40.1, which includes
+bin/arm64 and lib/arm64. Its per-platform version, release URL and archive hash
+override the 0.39.0 defaults in assets.lock.json. The refreshed SDK replaces the
+expired 0.39.0 build reported in issue #100; the plugin's bundled Flutter key and
+SDK license checks are preserved. SDK revisions use separate build directories.
+
+The Windows SDK's ffmpeg-9.dll reports LGPL version 2.1 or later. The x64 SDK
+reports version git-2026-09-17-590fb40-avbuild. Corresponding FFmpeg source:
 https://github.com/wang-bin/FFmpeg/tree/590fb407b09bbf19aac0ea2fbd0ba16f93494601
+The updated ARM64 SDK reports git-2026-10-25-464fc8c-avbuild. Corresponding source:
+https://github.com/wang-bin/FFmpeg/tree/464fc8c2ed53648b9ede81555921e3995d32bbe5
 Build scripts and upstream binary distribution:
 https://github.com/wang-bin/avbuild
 https://sourceforge.net/projects/avbuild/files/windows-desktop/

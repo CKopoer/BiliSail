@@ -101,6 +101,7 @@ void main() {
       decoding: VideoDecodingMode.automatic,
     );
     expect(configuration.hwdec, isNull);
+    expect(configuration.enableHardwareAcceleration, isTrue);
     expect(configuration.vo, isNull);
     expect(configuration.androidAttachSurfaceAfterVideoParameters, isNull);
   });

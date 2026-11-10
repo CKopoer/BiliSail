@@ -54,6 +54,7 @@ try {
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_ios_*.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_sqlite_assets.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_android_fvp_sdk.py')
+    Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_windows_fvp_sdk.py')
   }
   # A cold Windows SDK can emit pub bootstrap output before the machine JSON.
   Invoke-Check flutter @('--version')
