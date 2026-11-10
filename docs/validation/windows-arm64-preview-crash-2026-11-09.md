@@ -2,6 +2,8 @@
 
 日期：2026-11-09。关联 [issue #100](https://github.com/CKopoer/BiliSail/issues/100)。
 
+2026-11-10：用户反馈新构建不再闪退，但仍黑屏，另有 fvp 的 MDK 过期二维码。后续保留 ARM64 GPU 默认路径、撤回统一降级及 SDK 更新见[专项记录](windows-arm64-black-video-2026-11-10.md)；本页初始化检查不能证明已完成实际画面验收。
+
 ## 原因与影响
 
 用户报告 Surface Pro X / SQ1 / Windows 11 ARM64 使用 1.2.8+5 时，悬停视频卡片后卡死退出；切换 fvp 后正常。日志停在 media_kit 的 `openStarted`，不能单凭该事件确定原生崩溃指令。
