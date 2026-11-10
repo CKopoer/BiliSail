@@ -107,8 +107,9 @@ Future<void> main(List<String> arguments) async {
       exit(0);
     }
     if (smoke != null) {
-      smokeStage('foreground-startup');
-      await MacOSApplicationWindow.prepareForegroundStartupProbe();
+      smokeStage('headless-startup');
+      await MacOSApplicationWindow.prepareHeadlessStartupProbe();
+      smokeStage('headless-hidden');
     }
     smokeStage('window-create');
     applicationWindow = await MacOSApplicationWindow.create();

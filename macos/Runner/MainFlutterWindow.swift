@@ -39,14 +39,24 @@ final class MacOSApplication {
         result(self.windowFocusSnapshot())
         return
       }
-      if call.method == "prepareForegroundStartup" {
+      if call.method == "prepareHeadlessStartup" {
         guard ProcessInfo.processInfo.arguments.contains("--bilisail-release-smoke"),
-              ProcessInfo.processInfo.arguments.contains("startup"),
-              self.mainGeometry == nil else {
+              ProcessInfo.processInfo.arguments.contains("startup") else {
           result(FlutterMethodNotImplemented)
           return
         }
-        self.prepareForegroundStartupProbe(result)
+        guard self.mainGeometry == nil, self.engine.viewController == nil,
+              !NSApp.windows.contains(where: { $0.isVisible }) else {
+          result(FlutterError(code: "startup_probe_has_window",
+                              message: "Startup lifecycle probe requires a windowless engine.", details: nil))
+          return
+        }
+        // Replay the engine-side activation that caused the cold-start defect.
+        // A directly launched CI process cannot rely on AppKit granting focus.
+        // Dart must observe hidden/disabled frames before it creates a window;
+        // attachMainWindow then reconciles with the real AppKit state.
+        synchronizeApplicationLifecycle(self.engine, isActive: true)
+        result(nil)
         return
       }
       if call.method == "probeWindowSpace" {
@@ -224,38 +234,6 @@ final class MacOSApplication {
             responderInView ? 1 : 0)
     }
     return result
-  }
-
-  private func prepareForegroundStartupProbe(_ result: @escaping FlutterResult) {
-    let center = NotificationCenter.default
-    var observer: NSObjectProtocol?
-    var timeout: DispatchWorkItem?
-    var completed = false
-    func finish(_ error: FlutterError?) {
-      guard !completed else { return }
-      completed = true
-      if let observer = observer { center.removeObserver(observer) }
-      observer = nil
-      timeout?.cancel()
-      timeout = nil
-      if error == nil {
-        // Reproduce activation while the engine still has no native window.
-        // A later activation after creating the window would hide the defect.
-        synchronizeApplicationLifecycle(self.engine, isActive: NSApp.isActive)
-      }
-      result(error)
-    }
-    if NSApp.isActive { finish(nil); return }
-    observer = center.addObserver(forName: NSApplication.didBecomeActiveNotification,
-                                  object: NSApp, queue: .main) { _ in finish(nil) }
-    let deadline = DispatchWorkItem {
-      finish(FlutterError(code: "startup_activation_timeout",
-                          message: "Startup probe could not activate the application.", details: nil))
-    }
-    timeout = deadline
-    DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: deadline)
-    NSApp.activate(ignoringOtherApps: true)
-    if NSApp.isActive { finish(nil) }
   }
 
   deinit {
