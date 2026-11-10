@@ -1,6 +1,6 @@
 # 播放、直播与弹幕设计
 
-2026-11-10 Windows ARM64 兼容修复：media_kit 在原生 ARM64 进程使用 libmpv 软件渲染，自动解码允许 `auto-copy`，显式软件解码为 `no`，从而绕开 ANGLE/D3D11 共享纹理路径；x64 进程继续原路径。fvp 的 ARM64 SDK 单独固定到官方 MDK v0.40.1，并按归档摘要隔离下载缓存。原因、性能代价和实机未测边界见[黑屏与 MDK 过期提示](validation/windows-arm64-black-video-2026-11-10.md)。
+2026-11-10 Windows ARM64：按用户要求撤回强制软件渲染与 `auto-copy` 的统一降级，media_kit 在 ARM64／x64 上继续使用相同 GPU 输出与 SDK 自动解码默认值，显式软件解码仍为 `hwdec=no`。保留 fvp ARM64 SDK 更新：单独固定到官方 MDK v0.40.1，并按归档摘要隔离下载缓存。#100 黑屏的具体原因仍待定位，不能将上述 SDK 更新或自动检查表述为黑屏已修复；证据与实机未测边界见[黑屏与 MDK 过期提示](validation/windows-arm64-black-video-2026-11-10.md)。
 
 2026-11-09 移动输入修复：评论区在键盘可见时按实际剩余空间布局，优先保留编辑器，横屏头部让出高度；共享弹窗立即跟随键盘 inset，避免二次动画造成短暂遮挡。移动图片入口改用系统相册并保留原校验。定位、依赖和自动检查／实机边界见[移动评论与弹幕输入](validation/mobile-composer-keyboard-gallery-2026-11-09.md)。
 

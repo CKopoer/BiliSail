@@ -101,24 +101,8 @@ void main() {
       decoding: VideoDecodingMode.automatic,
     );
     expect(configuration.hwdec, isNull);
+    expect(configuration.enableHardwareAcceleration, isTrue);
     expect(configuration.vo, isNull);
     expect(configuration.androidAttachSurfaceAfterVideoParameters, isNull);
-  });
-
-  test('Windows ARM64 avoids shared GPU output in both decoding modes', () {
-    for (final decoding in VideoDecodingMode.values) {
-      final configuration = videoDecoderConfiguration(
-        isAndroid: false,
-        isWindowsArm64: true,
-        decoding: decoding,
-      );
-      expect(configuration.enableHardwareAcceleration, isFalse);
-      expect(
-        configuration.hwdec,
-        decoding == VideoDecodingMode.software ? 'no' : 'auto-copy',
-      );
-      // The SW render context still belongs to libmpv, not a standalone VO.
-      expect(configuration.vo, isNull);
-    }
   });
 }

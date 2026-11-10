@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ffi' show Abi;
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -307,7 +306,6 @@ final class MediaKitVideoOutput
       player,
       configuration: videoDecoderConfiguration(
         isAndroid: Platform.isAndroid,
-        isWindowsArm64: Abi.current() == Abi.windowsArm64,
         decoding: decoding,
         androidOutput: androidOutput,
         usesDolbyVisionRenderer: () => _androidDolbyVision,

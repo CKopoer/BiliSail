@@ -8,7 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [Windows ARM64 黑屏与 MDK 过期提示](validation/windows-arm64-black-video-2026-11-10.md) | #100 的兼容输出路径、copy 硬解、ARM64 SDK 刷新、缓存隔离及实机边界 |
+| [Windows ARM64 黑屏与 MDK 过期提示](validation/windows-arm64-black-video-2026-11-10.md) | #100 保留 GPU 默认路径、撤回统一降级、ARM64 SDK 刷新与黑屏未定位边界 |
 | [fvp 缓冲条小幅回缩](validation/fvp-buffer-timeline-2026-11-09.md) | 未解码包队列与呈现时钟差异、双轨端点换算、显示抖动容差和原生回归 |
 | [fvp 恢复后反复停帧](validation/fvp-resume-clock-2026-11-09.md) | 本机 Release 中断日志、首次时钟窗口锁死、PiliPlus 职责对照及原生回归 |
 | [Windows ARM64 悬停预览闪退](validation/windows-arm64-preview-crash-2026-11-09.md) | #100 的 OpenGL 能力错配、SDK 替换、原生降级与初始化错误传播、离线验证及实机边界 |
