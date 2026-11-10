@@ -39,6 +39,16 @@ final class MacOSApplication {
         result(self.windowFocusSnapshot())
         return
       }
+      if call.method == "prepareForegroundStartup" {
+        guard ProcessInfo.processInfo.arguments.contains("--bilisail-release-smoke"),
+              ProcessInfo.processInfo.arguments.contains("startup"),
+              self.mainGeometry == nil else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        self.prepareForegroundStartupProbe(result)
+        return
+      }
       if call.method == "probeWindowSpace" {
         // Only the explicit packaging smoke can inject this fixed, harmless
         // event into its own key window. Never use a global event tap or post.
@@ -98,6 +108,10 @@ final class MacOSApplication {
       window.center()
       self.mainGeometry = PersistentWindowGeometry(window: window, role: "main")
       self.desktopWindows?.trackPresentation(window, viewID: viewID)
+      // Activation may have reached the headless engine before this window
+      // existed, leaving Flutter hidden. Refresh the engine's own visibility
+      // and activity state; the app's input-focus snapshot cannot enable frames.
+      synchronizeApplicationLifecycle(self.engine, isActive: NSApp.isActive)
       result(nil)
     }
 
@@ -212,6 +226,38 @@ final class MacOSApplication {
     return result
   }
 
+  private func prepareForegroundStartupProbe(_ result: @escaping FlutterResult) {
+    let center = NotificationCenter.default
+    var observer: NSObjectProtocol?
+    var timeout: DispatchWorkItem?
+    var completed = false
+    func finish(_ error: FlutterError?) {
+      guard !completed else { return }
+      completed = true
+      if let observer = observer { center.removeObserver(observer) }
+      observer = nil
+      timeout?.cancel()
+      timeout = nil
+      if error == nil {
+        // Reproduce activation while the engine still has no native window.
+        // A later activation after creating the window would hide the defect.
+        synchronizeApplicationLifecycle(self.engine, isActive: NSApp.isActive)
+      }
+      result(error)
+    }
+    if NSApp.isActive { finish(nil); return }
+    observer = center.addObserver(forName: NSApplication.didBecomeActiveNotification,
+                                  object: NSApp, queue: .main) { _ in finish(nil) }
+    let deadline = DispatchWorkItem {
+      finish(FlutterError(code: "startup_activation_timeout",
+                          message: "Startup probe could not activate the application.", details: nil))
+    }
+    timeout = deadline
+    DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: deadline)
+    NSApp.activate(ignoringOtherApps: true)
+    if NSApp.isActive { finish(nil) }
+  }
+
   deinit {
     mainGeometry?.detach()
     for observer in focusObservers { NotificationCenter.default.removeObserver(observer) }
@@ -232,6 +278,21 @@ final class MacOSApplication {
     NativeLifecycleEvent.engineShutdownBegin.record()
     engine.shutDownEngine()
     NativeLifecycleEvent.engineShutdownEnd.record()
+  }
+}
+
+// Use the public lifecycle delegate API so the engine's cached activity and
+// visibility agree with AppKit, including background/hidden launches. Do not
+// force a Dart resumed state or keep rendering genuinely hidden windows.
+private func synchronizeApplicationLifecycle(_ delegate: FlutterAppLifecycleDelegate, isActive: Bool) {
+  delegate.handleDidChangeOcclusionState?(
+    Notification(name: NSApplication.didChangeOcclusionStateNotification, object: NSApp))
+  if isActive {
+    delegate.handleWillBecomeActive?(
+      Notification(name: NSApplication.willBecomeActiveNotification, object: NSApp))
+  } else {
+    delegate.handleWillResignActive?(
+      Notification(name: NSApplication.willResignActiveNotification, object: NSApp))
   }
 }
 

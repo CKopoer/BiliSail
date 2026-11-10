@@ -106,6 +106,10 @@ Future<void> main(List<String> arguments) async {
       await stdout.flush();
       exit(0);
     }
+    if (smoke != null) {
+      smokeStage('foreground-startup');
+      await MacOSApplicationWindow.prepareForegroundStartupProbe();
+    }
     smokeStage('window-create');
     applicationWindow = await MacOSApplicationWindow.create();
     await applicationWindow?.prepare();
@@ -132,7 +136,6 @@ Future<void> main(List<String> arguments) async {
       }
       smokeStage('first-frame-wait');
       await smoke.waitForFirstFrame(
-        activate: mainWindow.service.activate,
         rasterized: () => WidgetsBinding.instance.waitUntilFirstFrameRasterized,
       );
       smokeStage('first-frame');

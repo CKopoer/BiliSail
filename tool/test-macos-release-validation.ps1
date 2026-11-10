@@ -54,6 +54,7 @@ Assert-Rejected { Confirm-MacOSSmokeResult 0 $marker 'write' 'fedcba9876543210fe
 Write-Output 'macOS release entitlement and smoke acknowledgement checks passed (25 cases).'
 $safe = @(Get-MacOSSmokeDiagnosticLines @'
 BILISAIL_RELEASE_STAGE:first-frame-wait
+BILISAIL_RELEASE_STAGE:foreground-startup
 BILISAIL_FOCUS_STAGE:foreground
 BILISAIL_FOCUS_STAGE:foreground-focus
 BILISAIL_FOCUS_STAGE:foreground-ready
@@ -75,7 +76,7 @@ BILISAIL_CREDENTIAL_STAGE:https://example.invalid/?token=private
 BILISAIL_RELEASE_STAGE:https://example.invalid/?token=private
 native https://example.invalid/?token=private
 '@)
-if ($safe.Count -ne 14 -or ($safe -join "`n") -match 'private|FlutterView|https:') {
+if ($safe.Count -ne 15 -or ($safe -join "`n") -match 'private|FlutterView|https:') {
   throw 'macOS smoke diagnostics leaked non-whitelisted output.'
 }
 
