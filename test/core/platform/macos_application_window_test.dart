@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bilisail/core/platform/macos_application_window.dart';
 import 'package:bilisail/core/platform/window_service.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +9,127 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/detached_window_fake.dart';
 
 void main() {
+  testWidgets('headless startup disables frames before window creation', (
+    tester,
+  ) async {
+    const channel = MethodChannel('bilisail/application_window');
+    final calls = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      calls.add(call.method);
+      if (call.method == 'prepareHeadlessStartup') {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+      }
+      tester.binding.handleAppLifecycleStateChanged(
+        call.method == 'prepareHeadlessStartup'
+            ? AppLifecycleState.hidden
+            : AppLifecycleState.resumed,
+      );
+      return null;
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    addTearDown(
+      () => tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      ),
+    );
+    await MacOSApplicationWindow.prepareHeadlessStartupProbe();
+    expect(tester.binding.lifecycleState, AppLifecycleState.hidden);
+    expect(tester.binding.framesEnabled, isFalse);
+    final native = _window(tester, 41);
+    addTearDown(native.dispose);
+    await MacOSApplicationWindow(native).prepare();
+    expect(calls, ['prepareHeadlessStartup', 'attachMainWindow']);
+    expect(tester.binding.framesEnabled, isTrue);
+
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (_) async => throw PlatformException(code: 'startup_probe_has_window'),
+    );
+    await expectLater(
+      MacOSApplicationWindow.prepareHeadlessStartupProbe(),
+      throwsA(isA<PlatformException>()),
+    );
+  });
+
+  testWidgets('headless startup waits for the engine lifecycle message', (
+    tester,
+  ) async {
+    const channel = MethodChannel('bilisail/application_window');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (_) async => null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    addTearDown(
+      () => tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      ),
+    );
+    var completed = false;
+    final pending = MacOSApplicationWindow.prepareHeadlessStartupProbe().then(
+      (_) => completed = true,
+    );
+    await tester.idle();
+    expect(completed, isFalse);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await tester.idle();
+    await pending;
+    expect(completed, isTrue);
+    expect(tester.binding.framesEnabled, isFalse);
+  });
+
+  for (final state in [
+    AppLifecycleState.resumed,
+    AppLifecycleState.inactive,
+    AppLifecycleState.paused,
+    AppLifecycleState.detached,
+  ]) {
+    testWidgets(
+      'headless startup rejects a missing hidden transition: $state',
+      (tester) async {
+        const channel = MethodChannel('bilisail/application_window');
+        tester.binding.handleAppLifecycleStateChanged(state);
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          (_) async => null,
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            channel,
+            null,
+          ),
+        );
+        addTearDown(
+          () => tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          ),
+        );
+        final pending = expectLater(
+          MacOSApplicationWindow.prepareHeadlessStartupProbe(),
+          throwsA(isA<TimeoutException>()),
+        );
+        await tester.idle();
+        await tester.pump(const Duration(seconds: 5));
+        await pending;
+      },
+    );
+  }
+
   testWidgets('main window handshake sends its own view identity', (
     tester,
   ) async {

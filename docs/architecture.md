@@ -212,6 +212,8 @@ Riverpod 负责状态订阅和注入，不承担弹幕逐帧广播。路由 prov
 5. 深链解析为类型化 route，恢复播放进度先询问页面策略，不自动执行账户写操作。
 6. 后台/退出时提交本地进度和任务断点；强杀时依靠周期性持久化，不依赖最后一次 dispose 一定执行。
 
+macOS 使用 headless engine 后再创建明确的主窗口；主窗挂接完成后通过公开原生生命周期接口同步实际可见性和激活状态，避免激活早于窗口创建时保留禁帧状态。普通启动不强制激活；发布 smoke 在无窗口引擎回放激活生命周期、确认禁帧后，再验证主窗创建与首帧后的正常刷新，见[前台冷启动修复](validation/macos-foreground-startup-2026-11-10.md)。
+
 ## 7. 存储与缓存
 
 2026-10-27 推荐流设置以独立 `RecommendationSettings` 嵌入 `AppSettings`，沿用偏好快照、串行保存及失败回退。查询级过滤在应用层执行，普通分页只筛选新响应，调整规则重筛已加载索引，相关视频复用原始远端 Provider；关闭过滤复用原分块快照。刷新可保留最多 200 条旧推荐。App 来源通过 `AppRecommendationFeedRepository` 能力端口接入；身份仓储管理 buvid 和旧授权兼容读取；SessionRepository 统一保存 Cookie 及可选 App token，HD 扫码取得两种凭据，内嵌官网密码/短信仅保存 Web 会话，不再执行 Cookie 换 token 或提供推荐专属扫码。无 App 凭据时仍可使用游客 App 推荐，设置只显示当前推荐身份，设备标识保留内部自动管理。来源/身份版本变更只取消并清空推荐查询及反馈上下文，其他频道、播放器继续保留；隐藏推荐不发起刷新。API 包负责签名、DTO 和 aid 本地转换，不持有产品偏好。设计与验证见[推荐流设置](recommendation-settings-design.md)、[App 推荐](app-recommendation-design.md)、[统一登录](unified-login-design.md)。

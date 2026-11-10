@@ -225,14 +225,19 @@ class ReleaseSmokeRequest {
         keyPrefix: '$prefix.recommendation',
       );
 
-  // Direct binary launches on CI can remain in the background. Establish the
-  // foreground precondition before waiting for the compositor's first frame.
+  // The headless probe establishes hidden before window creation. Do not
+  // activate here: that would mask a missing main-window lifecycle recovery.
   Future<void> waitForFirstFrame({
-    required Future<void> Function() activate,
     required Future<void> Function() rasterized,
   }) async {
-    await activate();
     await rasterized();
+    final binding = WidgetsBinding.instance;
+    if (!binding.framesEnabled) {
+      throw StateError('Startup window cannot schedule frames');
+    }
+    // The warm-up frame can render even when lifecycle disables later frames.
+    // Require another normally scheduled frame before accepting startup.
+    await binding.endOfFrame.timeout(releaseSmokeFocusTimeout);
   }
 
   static ReleaseSmokeRequest? parse(List<String> arguments) {
