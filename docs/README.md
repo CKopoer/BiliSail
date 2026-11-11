@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [fvp 倍速暂停后继续](validation/fvp-pause-resume-synchronization-2026-11-12.md) | 视频停住而音频推进的现场日志、同管线目标确认及单元回归边界 |
 | [fvp HTTP 断流与有界续读](validation/fvp-http-read-recovery-2026-11-11.md) | 现场音频提前 EOF、socket 断开／无响应复现、Range 续读及归因边界 |
 | [请求风控与设备上下文](validation/api-risk-control-2026-11-11.md) | 热门 WBI、共享 buvid、风控／验证码识别、冷却与未实机边界 |
 | [动态投票查看与参与](validation/dynamic-poll-viewing-2026-11-11.md) | 卡片／正文／转发的应用内投票、选项与结果、匿名参与及验证边界 |

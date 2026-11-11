@@ -13,7 +13,8 @@ import 'validated_source.dart';
 import 'video_output.dart';
 
 /// MDK commands and observations, shared by the local and Android IPC ports.
-final class FvpBackend implements PlaybackBackend {
+final class FvpBackend
+    implements PlaybackBackend, PlaybackResumeSynchronization {
   FvpBackend({
     required this.createPlayer,
     required this.isolated,
@@ -34,6 +35,10 @@ final class FvpBackend implements PlaybackBackend {
   bool _disposed = false;
   bool _nativeEnded = false;
   bool _buffering = false, _live = false;
+  bool _paired = false, _hasPlayed = false, _resumeNeedsSync = false;
+  int _pauseRevision = 0;
+  @override
+  bool get needsResumeSeek => _resumeNeedsSync;
   double _volume = 0, _gain = 0;
   int? get processExitStatus => switch (_player) {
     final AndroidFvpPlayer player => player.exitStatus,
@@ -70,6 +75,7 @@ final class FvpBackend implements PlaybackBackend {
       final sound = plan.audio == null
           ? null
           : await operation.wait(lease(plan.audio!));
+      _paired = sound != null;
       final creating = _creating = createPlayer().then((player) {
         _player = player;
         return player;
@@ -182,10 +188,16 @@ final class FvpBackend implements PlaybackBackend {
     } else {
       player.play();
     }
+    _hasPlayed = true;
+    _resumeNeedsSync = false;
   }
 
   @override
   Future<bool> pauseAndWait() async {
+    if (_paired && _hasPlayed && !_live) {
+      ++_pauseRevision;
+      _resumeNeedsSync = true;
+    }
     final player = _player;
     if (player is FvpPauseConfirmationPort) {
       return (player as FvpPauseConfirmationPort).pauseAndConfirm();
@@ -232,11 +244,13 @@ final class FvpBackend implements PlaybackBackend {
 
   @override
   Future<Duration> seekTo(Duration target, PlaybackOperation operation) async {
+    final pauseRevision = _pauseRevision;
     _bufferDisplay.reset();
     try {
       final position = await operation.wait(_player!.seek(target));
       if (position < 0) throw NativeSeekFailure(position);
       _nativeEnded = false;
+      if (pauseRevision == _pauseRevision) _resumeNeedsSync = false;
       return Duration(milliseconds: position);
     } on FvpProcessException {
       throw PlayerFailure(
