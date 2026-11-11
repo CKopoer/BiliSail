@@ -1708,7 +1708,7 @@ void main() {
       expect(find.text('1234.0万播放'), findsOneWidget);
       expect(find.text('视频选集 · 2 P'), findsNothing);
       final tile = find
-          .ancestor(of: find.text('合集第10集'), matching: find.byType(Column))
+          .ancestor(of: find.text('合集第10集'), matching: find.byType(Material))
           .first;
       await tester.tap(
         find.descendant(of: tile, matching: find.byTooltip('展开分 P')),
@@ -1874,7 +1874,13 @@ void main() {
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: const Offset(100, 100));
     addTearDown(mouse.removePointer);
-    final location = tester.getCenter(find.text('推荐视频 0'));
+    final location = tester.getCenter(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is VideoCardCover &&
+            widget.video.id == const VideoId('BV0000000000'),
+      ),
+    );
     await mouse.moveTo(location);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 210));
@@ -2081,6 +2087,10 @@ void main() {
     testWidgets(
       'related author without a usable space link ($authorId, $provideNavigation)',
       (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1100, 800);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
         final operations = _RelatedCardOperations();
         addTearDown(() => unawaited(operations.previews.close()));
         var opened = 0;

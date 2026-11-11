@@ -3,12 +3,13 @@ import 'watch_later_queue.dart';
 
 typedef VideoSequenceTarget = ({VideoId id, String? cid});
 
-/// Playback order follows metadata, independently of the sidebar's sorting.
+/// Parts keep metadata order; collection direction is independent of UI sorting.
 VideoSequenceTarget? adjacentVideoSource(
   VideoDetail video,
   String cid,
   int direction, {
   WatchLaterQueue? queue,
+  bool reverseCollection = false,
 }) {
   final index = video.parts.indexWhere((part) => part.cid == cid);
   if (index < 0 || (direction != -1 && direction != 1)) return null;
@@ -24,7 +25,7 @@ VideoSequenceTarget? adjacentVideoSource(
   final entries = video.collection?.entries;
   if (entries == null) return null;
   final current = entries.indexWhere((entry) => entry.id == video.summary.id);
-  final next = current + direction;
+  final next = current + (reverseCollection ? -direction : direction);
   if (current < 0 || next < 0 || next >= entries.length) return null;
   final entry = entries[next];
   return (id: entry.id, cid: entry.parts.firstOrNull?.cid);
@@ -34,6 +35,7 @@ VideoSequenceTarget? adjacentVideoSource(
 VideoSequenceTarget? firstVideoSource(
   VideoDetail video, {
   WatchLaterQueue? queue,
+  bool reverseCollection = false,
 }) {
   if (queue != null) {
     if (queue.hasPrevious) return null;
@@ -44,7 +46,9 @@ VideoSequenceTarget? firstVideoSource(
     if (!collection.entries.any((entry) => entry.id == video.summary.id)) {
       return null;
     }
-    final first = collection.entries.firstOrNull;
+    final first = reverseCollection
+        ? collection.entries.lastOrNull
+        : collection.entries.firstOrNull;
     return first == null
         ? null
         : (id: first.id, cid: first.parts.firstOrNull?.cid);

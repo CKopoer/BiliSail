@@ -27,6 +27,7 @@ import 'package:bilisail/features/video/domain/video_playback_sequence.dart';
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -92,6 +93,149 @@ final _season = PgcSeason(
 );
 
 void main() {
+  test(
+    'reverse collection preserves part order, boundaries and outer queues',
+    () {
+      final a = _video(_a, _parts), b = _video(_b, [_third]);
+      expect(adjacentVideoSource(a, '101', 1, reverseCollection: true), (
+        id: _a,
+        cid: '102',
+      ));
+      expect(adjacentVideoSource(a, '102', 1, reverseCollection: true), isNull);
+      expect(adjacentVideoSource(b, '103', 1, reverseCollection: true), (
+        id: _a,
+        cid: '101',
+      ));
+      expect(adjacentVideoSource(a, '101', -1, reverseCollection: true), (
+        id: _b,
+        cid: '103',
+      ));
+      expect(
+        adjacentVideoSource(b, '103', -1, reverseCollection: true),
+        isNull,
+      );
+      expect(firstVideoSource(a, reverseCollection: true), (
+        id: _b,
+        cid: '103',
+      ));
+      final queue = WatchLaterQueue(
+        id: 'queue',
+        scope: 'guest',
+        sessionEpoch: 0,
+        items: [
+          WatchLaterQueueItem(video: a.summary),
+          WatchLaterQueueItem(video: b.summary),
+        ],
+      );
+      expect(
+        adjacentVideoSource(a, '102', 1, queue: queue, reverseCollection: true),
+        (id: _b, cid: null),
+      );
+      expect(firstVideoSource(b, queue: queue, reverseCollection: true), (
+        id: _a,
+        cid: null,
+      ));
+    },
+  );
+
+  for (final mode in [PlaybackMode.continuous, PlaybackMode.listLoop]) {
+    testWidgets(
+      'reverse collection uses $mode without reopening the current source',
+      (tester) async {
+        final engine = _Engine();
+        final session = _session(engine);
+        addTearDown(session.close);
+        final a = _video(_a, _parts), b = _video(_b, [_third]);
+        var id = _b;
+        String? cid = '103';
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              playbackSessionProvider.overrideWithValue(session),
+              authControllerProvider.overrideWith(_Auth.new),
+              for (final video in [a, b]) ...[
+                videoDetailProvider(video.summary.id)
+                    .overrideWith((_) => video),
+                relatedVideosProvider(video.summary.id)
+                    .overrideWith((_) => const []),
+                videoTagsProvider(video.summary.id)
+                    .overrideWith((_) => const []),
+              ],
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: StatefulBuilder(
+                  builder: (_, update) => VideoScreen(
+                    id: id,
+                    initialCid: cid,
+                    onPartChanged: (part) => update(() => cid = part.cid),
+                    onAdvanceVideo: (next, nextCid) => update(() {
+                      id = next;
+                      cid = nextCid;
+                    }),
+                    playerBuilder: (_, detail, part) => PlaybackPanel(
+                      detail: detail,
+                      part: part,
+                      settings: AppSettings(
+                        playbackMode: mode,
+                        danmakuEnabled: false,
+                      ),
+                      window: _Window(),
+                      onToggleComments: () {},
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await _frames(tester);
+        final commands = tester.widget<PlaybackPageCommands>(
+          find.byType(PlaybackPageCommands),
+        );
+        final opens = engine.opens;
+        await tester.ensureVisible(find.byTooltip('倒序播放'));
+        await tester.tap(find.byTooltip('倒序播放'));
+        await _frames(tester);
+        expect(engine.opens, opens);
+        expect(session.detail?.summary.id, _b);
+        commands.previousPart();
+        await _frames(tester);
+        expect(engine.opens, opens);
+        await tester.tap(find.byTooltip('倒序'));
+        await _frames(tester);
+        engine.end();
+        await _frames(tester);
+        expect(session.detail?.summary.id, _a);
+        expect(session.part?.cid, '101');
+        expect(find.byTooltip('正序播放'), findsOneWidget);
+        expect(find.byTooltip('顺序'), findsOneWidget);
+        engine.end();
+        await _frames(tester);
+        expect(session.part?.cid, '102');
+        engine.end();
+        await _frames(tester);
+        expect(
+          session.detail?.summary.id,
+          mode == PlaybackMode.listLoop ? _b : _a,
+        );
+        expect(
+          session.part?.cid,
+          mode == PlaybackMode.listLoop ? '103' : '102',
+        );
+        expect(
+          session.snapshots.value.phase,
+          mode == PlaybackMode.listLoop
+              ? PlaybackPhase.playing
+              : PlaybackPhase.ended,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await _frames(tester);
+      },
+    );
+  }
+
   test(
     'video order prioritizes parts, then collection or originating queue',
     () {

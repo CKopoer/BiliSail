@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [视频合集定位与播放顺序](validation/video-collection-controls-2026-11-12.md) | 顶部／底部／当前分 P 定位、显示排序与倒序播放、队列边界及回归验证 |
 | [fvp 倍速暂停后继续](validation/fvp-pause-resume-synchronization-2026-11-12.md) | 视频停住而音频推进的现场日志、同管线目标确认及单元回归边界 |
 | [fvp HTTP 断流与有界续读](validation/fvp-http-read-recovery-2026-11-11.md) | 现场音频提前 EOF、socket 断开／无响应复现、Range 续读及归因边界 |
 | [请求风控与设备上下文](validation/api-risk-control-2026-11-11.md) | 热门 WBI、共享 buvid、风控／验证码识别、冷却与未实机边界 |

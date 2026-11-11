@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-12 视频合集工具栏只读参考 PiliPlus `cab0114a21ce7fad5b90b9a4d788d35d313d25f9` 的 `lib/pages/episode_panel/view.dart` 和 `lib/pages/video/view.dart`，核对实际 overrides／锁文件。仅借鉴定位、显示排序与倒序播放职责，独立实现合集卡片与领域播放顺序，未复制 GPLv3 应用源码／资源、修改相邻仓库或依赖，见[来源与验证](validation/video-collection-controls-2026-11-12.md)。
+
 2026-11-11 风控处理只读参考 PiliPlus `cab0114a21ce7fad5b90b9a4d788d35d313d25f9` 的热门精选、设备 SPI／激活及 Gaia 验证职责。独立实现共享请求策略、设备上下文和测试，未复制 GPLv3 应用代码、随机指纹或资源，未修改相邻仓库或依赖；精确路径、采用边界与未线上验收项见[请求风控](validation/api-risk-control-2026-11-11.md)。
 
 2026-11-11 动态菜单与投票只读参考 PiliPlus `4fce4bb5a35c425aee759ef9263352316a29e355` 的动态作者菜单、详情、保存、投票和 HTTP／模型职责；核对实际 overrides／锁文件，独立实现本项目管理端口、状态覆盖、编辑草稿及响应式投票，无源码／资源复制或依赖变化。路径、采用限制和验证见[动态操作菜单与投票](validation/dynamic-operations-and-voting-2026-11-11.md)。

@@ -4,12 +4,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/app_notice.dart';
-import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/scroll_boundary_handoff.dart';
 import '../../../shared/ui/video_card.dart';
 import '../application/collection_subscription_controller.dart';
 import '../application/video_controller.dart';
 import '../domain/collection_subscription_repository.dart';
+
+typedef _CollectionRow = ({
+  VideoCollectionEntry entry,
+  VideoPart? part,
+  bool heading,
+});
 
 /// One bounded card owns the collection heading, selection and nested parts.
 final class VideoCollectionPanel extends ConsumerStatefulWidget {
@@ -20,12 +25,20 @@ final class VideoCollectionPanel extends ConsumerStatefulWidget {
     required this.onSelectPart,
     this.onLogin,
     this.onOpenVideoPart,
+    this.playbackReversed = false,
+    this.onTogglePlaybackOrder,
+    this.displayReversed = false,
+    this.onToggleDisplayOrder,
   });
   final VideoDetail video;
   final VideoPart selected;
   final ValueChanged<VideoPart> onSelectPart;
   final VoidCallback? onLogin;
   final void Function(VideoId, String?)? onOpenVideoPart;
+  final bool playbackReversed;
+  final VoidCallback? onTogglePlaybackOrder;
+  final bool displayReversed;
+  final VoidCallback? onToggleDisplayOrder;
 
   @override
   ConsumerState<VideoCollectionPanel> createState() =>
@@ -37,8 +50,8 @@ final class _VideoCollectionPanelState
   bool _expanded = true;
   bool _partsExpanded = true;
   final Set<VideoId> _expandedEntries = {};
-  late final ScrollController _scroll;
-  bool _scrollInitialized = false;
+  final ScrollController _scroll = ScrollController();
+  List<_CollectionRow> _rows = const [];
 
   double get _rowHeight =>
       40 *
@@ -50,16 +63,17 @@ final class _VideoCollectionPanelState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_scrollInitialized) return;
-    _scrollInitialized = true;
-    final index =
-        widget.video.collection?.entries.indexWhere(
-          (entry) => entry.id == widget.video.summary.id,
-        ) ??
-        -1;
-    _scroll = ScrollController(
-      initialScrollOffset: index > 0 ? index * _rowHeight : 0,
-    );
+    _scheduleScrollToCurrent();
+  }
+
+  @override
+  void didUpdateWidget(covariant VideoCollectionPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.video.summary.id != widget.video.summary.id ||
+        oldWidget.selected.cid != widget.selected.cid ||
+        oldWidget.displayReversed != widget.displayReversed) {
+      _scheduleScrollToCurrent();
+    }
   }
 
   @override
@@ -91,6 +105,7 @@ final class _VideoCollectionPanelState
         ) ??
         -1;
     final standaloneParts = widget.video.parts.length > 1 && index < 0;
+    _rows = _expanded ? _collectionRows() : const [];
     return Material(
       color: theme.colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(6),
@@ -145,7 +160,8 @@ final class _VideoCollectionPanelState
                   ),
                 ),
               ),
-            if (_expanded)
+            if (_expanded) ...[
+              _toolbar(index >= 0),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 224),
                 child: ScrollBoundaryHandoff(
@@ -156,17 +172,150 @@ final class _VideoCollectionPanelState
                       primary: false,
                       shrinkWrap: true,
                       padding: const EdgeInsets.only(bottom: 4),
-                      itemCount: collection.entries.length,
-                      itemBuilder: (_, index) =>
-                          _entry(collection.entries[index]),
+                      itemExtent: _rowHeight,
+                      itemCount: _rows.length,
+                      itemBuilder: (_, index) {
+                        final row = _rows[index];
+                        if (row.heading) return _entry(row.entry);
+                        if (row.part case final part?) {
+                          return _partRow(row.entry.id, part, nested: true);
+                        }
+                        return _partsStatus(row.entry);
+                      },
                     ),
                   ),
                 ),
               ),
+            ],
           ],
         ],
       ),
     );
+  }
+
+  List<_CollectionRow> _collectionRows() {
+    final entries = widget.video.collection?.entries ?? const [];
+    final rows = <_CollectionRow>[];
+    for (final entry in widget.displayReversed ? entries.reversed : entries) {
+      rows.add((entry: entry, part: null, heading: true));
+      if (!_expandedEntries.contains(entry.id)) continue;
+      var parts = entry.id == widget.video.summary.id
+          ? widget.video.parts
+          : entry.parts;
+      if (parts.isEmpty) {
+        parts =
+            ref.watch(videoDetailProvider(entry.id)).asData?.value.parts ??
+            const [];
+      }
+      if (parts.isEmpty) {
+        rows.add((entry: entry, part: null, heading: false));
+      } else {
+        for (final part in parts) {
+          rows.add((entry: entry, part: part, heading: false));
+        }
+      }
+    }
+    return rows;
+  }
+
+  Widget _toolbar(bool hasCurrent) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
+      child: Wrap(
+        spacing: 2,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          _toolButton('跳至顶部', Icons.vertical_align_top, () => _scrollTo(0)),
+          _toolButton(
+            '跳至底部',
+            Icons.vertical_align_bottom,
+            () => _scrollTo(
+              _scroll.hasClients ? _scroll.position.maxScrollExtent : 0,
+            ),
+          ),
+          _toolButton(
+            '跳至当前',
+            Icons.my_location,
+            hasCurrent ? _jumpToCurrent : null,
+          ),
+          _toolButton(
+            widget.playbackReversed ? '正序播放' : '倒序播放',
+            Icons.playlist_play,
+            widget.onTogglePlaybackOrder,
+            selected: widget.playbackReversed,
+          ),
+          Tooltip(
+            message: widget.displayReversed ? '顺序' : '倒序',
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.onSurfaceVariant,
+                minimumSize: const Size(0, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+              onPressed: widget.onToggleDisplayOrder,
+              icon: const Icon(Icons.swap_vert, size: 18),
+              label: Text(widget.displayReversed ? '倒序' : '顺序'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _toolButton(
+    String tooltip,
+    IconData icon,
+    VoidCallback? onPressed, {
+    bool selected = false,
+  }) => IconButton(
+    tooltip: tooltip,
+    onPressed: onPressed,
+    isSelected: selected,
+    icon: Icon(icon, size: 18),
+    style: IconButton.styleFrom(
+      foregroundColor: selected
+          ? Theme.of(context).colorScheme.primary
+          : Theme.of(context).colorScheme.onSurfaceVariant,
+      backgroundColor: selected
+          ? Theme.of(context).colorScheme.primaryContainer
+          : null,
+      minimumSize: const Size(36, 36),
+      padding: const EdgeInsets.all(8),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+    ),
+  );
+
+  void _scrollTo(double offset) {
+    if (!_scroll.hasClients) return;
+    _scroll.jumpTo(offset.clamp(0, _scroll.position.maxScrollExtent));
+  }
+
+  void _jumpToCurrent() {
+    if (widget.video.parts.length > 1) {
+      setState(() => _expandedEntries.add(widget.video.summary.id));
+    }
+    _scheduleScrollToCurrent();
+  }
+
+  void _scheduleScrollToCurrent() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_expanded) return;
+      final partIndex = _rows.indexWhere(
+        (row) =>
+            row.entry.id == widget.video.summary.id &&
+            row.part?.cid == widget.selected.cid,
+      );
+      final index = partIndex >= 0
+          ? partIndex
+          : _rows.indexWhere((row) => row.entry.id == widget.video.summary.id);
+      if (index >= 0) _scrollTo(index * _rowHeight);
+    });
   }
 
   Widget _heading(
@@ -323,56 +472,45 @@ final class _VideoCollectionPanelState
                 Duration.zero,
                 (sum, part) => sum + part.duration,
               ));
-    return Column(
-      children: [
-        _row(
-          title: entry.title,
-          selected: current,
-          duration: duration,
-          onTap: () => _open(entry.id, parts.firstOrNull),
-          trailing: parts.length != 1
-              ? IconButton(
-                  tooltip: expanded ? '收起分 P' : '展开分 P',
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(
-                    expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                  ),
-                  onPressed: () => setState(() {
-                    if (!_expandedEntries.remove(entry.id)) {
-                      _expandedEntries.add(entry.id);
-                    }
-                  }),
-                )
-              : null,
-        ),
-        if (expanded) ...[
-          if (parts.isNotEmpty)
-            for (final part in parts) _partRow(entry.id, part, nested: true)
-          else
-            ref
-                .watch(videoDetailProvider(entry.id))
-                .when(
-                  loading: () => const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: LinearProgressIndicator(),
-                  ),
-                  error: (error, _) => StateView.error(
-                    message: error is AppFailure ? error.message : '分 P 加载失败',
-                    onAction: () =>
-                        ref.invalidate(videoDetailProvider(entry.id)),
-                  ),
-                  data: (video) => Column(
-                    children: [
-                      for (final part in video.parts)
-                        _partRow(entry.id, part, nested: true),
-                    ],
-                  ),
-                ),
-        ],
-      ],
+    return _row(
+      title: entry.title,
+      selected: current,
+      duration: duration,
+      onTap: () => _open(entry.id, parts.firstOrNull),
+      trailing: parts.length != 1
+          ? IconButton(
+              tooltip: expanded ? '收起分 P' : '展开分 P',
+              visualDensity: VisualDensity.compact,
+              icon: Icon(
+                expanded ? Icons.expand_less : Icons.expand_more,
+                size: 16,
+              ),
+              onPressed: () => setState(() {
+                if (!_expandedEntries.remove(entry.id)) {
+                  _expandedEntries.add(entry.id);
+                }
+              }),
+            )
+          : null,
     );
   }
+
+  Widget _partsStatus(VideoCollectionEntry entry) => ref
+      .watch(videoDetailProvider(entry.id))
+      .when(
+        loading: () => const Padding(
+          padding: EdgeInsets.all(12),
+          child: Center(child: LinearProgressIndicator()),
+        ),
+        error: (error, _) => _row(
+          title: error is AppFailure ? error.message : '分 P 加载失败',
+          selected: false,
+          nested: true,
+          onTap: () => ref.invalidate(videoDetailProvider(entry.id)),
+          trailing: const Icon(Icons.refresh, size: 16),
+        ),
+        data: (_) => const Center(child: Text('暂无分 P')),
+      );
 
   Widget _partRow(VideoId id, VideoPart part, {bool nested = false}) => _row(
     title: nested ? 'P${part.page} ${part.title}' : part.title,
