@@ -724,6 +724,48 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.widget<Slider>(slider).value, 240);
     });
+    testWidgets('sponsor button distance saves 240 px (player: $inPlayer)', (
+      tester,
+    ) async {
+      final repository = _SettingsRepository();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+          child: MaterialApp(
+            home: Scaffold(
+              body: inPlayer
+                  ? Builder(
+                      builder: (context) => TextButton(
+                        onPressed: () => showPlayerSettings(context, tab: 3),
+                        child: const Text('空降设置'),
+                      ),
+                    )
+                  : const SettingsScreen(
+                      category: SettingsCategory.sponsorBlock,
+                    ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      if (inPlayer) {
+        await tester.tap(find.text('空降设置'));
+        await tester.pumpAndSettle();
+      }
+      final slider = find.byWidgetPredicate(
+        (widget) => widget is Slider && widget.max == 240,
+      );
+      await tester.ensureVisible(slider);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Slider>(slider).value, 120);
+      await tester.drag(slider, const Offset(800, 0));
+      await tester.pumpAndSettle();
+      expect(repository.settings.sponsorBlockBottomPadding, 240);
+      final container = ProviderScope.containerOf(tester.element(slider));
+      container.invalidate(settingsControllerProvider);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Slider>(slider).value, 240);
+    });
   }
   for (final inPlayer in [false, true]) {
     testWidgets(

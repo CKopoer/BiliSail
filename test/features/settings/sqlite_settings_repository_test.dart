@@ -544,6 +544,40 @@ void main() {
       );
     },
   );
+  test(
+    'sponsor button distance migrates, normalizes and survives reload',
+    () async {
+      expect((await repository.load()).sponsorBlockBottomPadding, 120);
+      for (final invalid in ['null', '"invalid"', 'true', '1e999']) {
+        await database.writeSetting(
+          'preferences.v1',
+          '{"theme":"dark","sponsorBlockBottomPadding":$invalid}',
+        );
+        final loaded = await repository.load();
+        expect(loaded.sponsorBlockBottomPadding, 120);
+        expect(loaded.theme, AppThemePreference.dark);
+      }
+      await database.writeSetting('preferences.v1', '{"theme":"dark"}');
+      expect((await repository.load()).sponsorBlockBottomPadding, 120);
+      for (final (chosen, expected) in [
+        (-1.0, 0.0),
+        (0.0, 0.0),
+        (80.0, 80.0),
+        (120.0, 120.0),
+        (240.0, 240.0),
+        (999.0, 240.0),
+        (double.nan, 120.0),
+      ]) {
+        await repository.save(
+          (await repository.load()).copyWith(sponsorBlockBottomPadding: chosen),
+        );
+        final reloaded = await SqliteSettingsRepository(database).load();
+        expect(reloaded.sponsorBlockBottomPadding, expected);
+        expect(reloaded.theme, AppThemePreference.dark);
+      }
+      expect(database.schemaVersion, 3);
+    },
+  );
   test('wheel damping migrates and survives save and reload', () async {
     expect((await repository.load()).wheelDampingRatio, 1.3);
     for (final invalid in ['null', '"invalid"', 'true', '1e999']) {

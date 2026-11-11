@@ -227,6 +227,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(subtitleBottomPadding: value));
   Future<void> setSponsorBlockMode(SponsorBlockMode value) =>
       update((current) => current.copyWith(sponsorBlockMode: value));
+  Future<void> setSponsorBlockBottomPadding(double value) =>
+      update((current) => current.copyWith(sponsorBlockBottomPadding: value));
   Future<void> setSponsorBlockCategories(List<String> value) =>
       update((current) => current.copyWith(sponsorBlockCategories: value));
 

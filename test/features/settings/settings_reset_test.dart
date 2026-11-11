@@ -72,6 +72,7 @@ void main() {
           danmakuBlockedWords: ['blocked'],
           subtitlesEnabled: true,
           sponsorBlockMode: SponsorBlockMode.disabled,
+          sponsorBlockBottomPadding: 40,
           sponsorBlockCategories: [],
           shortcuts: const ShortcutSettings.defaults()
               .withEnabled(false)

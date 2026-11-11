@@ -270,6 +270,10 @@ class SqliteSettingsRepository implements SettingsRepository {
         'sponsorBlockCategories',
         AppSettings.supportedSponsorCategories,
       ),
+      sponsorBlockBottomPadding: number(
+        'sponsorBlockBottomPadding',
+        defaults.sponsorBlockBottomPadding,
+      ),
     ).normalized();
   }
 
@@ -279,7 +283,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 45,
+        'schemaVersion': 46,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -356,6 +360,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'subtitleBackgroundOpacity': value.subtitleBackgroundOpacity,
         'subtitleBottomPadding': value.subtitleBottomPadding,
         'sponsorBlockMode': value.sponsorBlockMode.name,
+        'sponsorBlockBottomPadding': value.sponsorBlockBottomPadding,
         'sponsorBlockCategories': value.sponsorBlockCategories,
       }),
     );

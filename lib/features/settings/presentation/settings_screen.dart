@@ -768,6 +768,14 @@ final class _SettingsCategoryPageState
                             SponsorBlockMode.manual: '手动提示',
                             SponsorBlockMode.automatic: '自动跳过',
                           }, controller.setSponsorBlockMode),
+                          _slider(
+                            '跳过按钮底部距离',
+                            s.sponsorBlockBottomPadding,
+                            0,
+                            240,
+                            controller.setSponsorBlockBottomPadding,
+                            ' px',
+                          ),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,

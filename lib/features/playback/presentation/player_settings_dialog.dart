@@ -470,6 +470,14 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                             },
                           ),
                         ),
+                        _slider(
+                          '跳过按钮底部距离',
+                          s.sponsorBlockBottomPadding,
+                          0,
+                          240,
+                          (c, v) => c.copyWith(sponsorBlockBottomPadding: v),
+                          suffix: '${s.sponsorBlockBottomPadding.round()} px',
+                        ),
                         for (final category
                             in AppSettings.supportedSponsorCategories)
                           CheckboxListTile(
