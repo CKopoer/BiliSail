@@ -25,31 +25,27 @@ class CommentActions extends StatelessWidget {
       padding: const EdgeInsets.only(top: 4, bottom: 6),
       child: Row(
         children: [
+          Flexible(
+            child: _CommentActionButton(
+              icon: comment.liked
+                  ? Icons.thumb_up_alt
+                  : Icons.thumb_up_alt_outlined,
+              label: '${comment.likeCount}',
+              semanticLabel: comment.liked ? '取消点赞评论' : '点赞评论',
+              selected: comment.liked,
+              style: comment.liked
+                  ? style.copyWith(color: theme.colorScheme.primary)
+                  : style,
+              onPressed: busy ? null : onLike,
+            ),
+          ),
+          const SizedBox(width: 12),
           _CommentActionButton(
             icon: BiliIcons.reply,
             label: '回复',
             semanticLabel: '回复评论',
             style: style,
             onPressed: busy ? null : onReply,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: _CommentActionButton(
-                icon: comment.liked
-                    ? Icons.thumb_up_alt
-                    : Icons.thumb_up_alt_outlined,
-                label: '${comment.likeCount}',
-                semanticLabel: comment.liked ? '取消点赞评论' : '点赞评论',
-                selected: comment.liked,
-                style: comment.liked
-                    ? style.copyWith(color: theme.colorScheme.primary)
-                    : style,
-                alignment: Alignment.centerRight,
-                onPressed: busy ? null : onLike,
-              ),
-            ),
           ),
         ],
       ),
@@ -65,7 +61,6 @@ class _CommentActionButton extends StatelessWidget {
     required this.style,
     required this.onPressed,
     this.selected,
-    this.alignment = Alignment.centerLeft,
   });
 
   final IconData icon;
@@ -73,7 +68,6 @@ class _CommentActionButton extends StatelessWidget {
   final TextStyle style;
   final VoidCallback? onPressed;
   final bool? selected;
-  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -89,7 +83,7 @@ class _CommentActionButton extends StatelessWidget {
       style: TextButton.styleFrom(
         padding: EdgeInsets.zero,
         minimumSize: const Size(48, 32),
-        alignment: alignment,
+        alignment: Alignment.centerLeft,
         visualDensity: VisualDensity.standard,
         tapTargetSize: Theme.of(context).materialTapTargetSize,
         foregroundColor: style.color,

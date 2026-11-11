@@ -14,6 +14,7 @@ import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -295,7 +296,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  for (final width in [180.0, 320.0]) {
+  for (final width in [180.0, 260.0, 320.0]) {
     testWidgets('decoration image and fan serial fit $width pixel header', (
       tester,
     ) async {
@@ -340,22 +341,35 @@ void main() {
       );
       expect(image.url, 'https://i0.hdslb.com/card.png');
       expect(image.cacheWidth, isNull);
-      expect(image.cacheHeight, 38);
+      expect(image.cacheHeight, 52);
       expect(image.fit, BoxFit.contain);
-      expect(image.height, 38);
-      expect(serial.style?.fontSize, 8);
+      expect(image.height, 52);
+      expect(serial.style?.fontSize, 12);
+      final serialText = tester.renderObject<RenderParagraph>(
+        find.descendant(
+          of: find.text('NO.\n0014931'),
+          matching: find.byType(RichText),
+        ),
+      );
+      expect(serialText.didExceedMaxLines, isFalse);
       final decorationRect = tester.getRect(
         find.byType(CommentAuthorDecoration),
       );
+      expect(decorationRect.size, const Size(152, 52));
       expect(decorationRect.right, width);
       expect(
         tester.getRect(find.text('NO.\n0014931')).right,
         decorationRect.right,
       );
-      if (width >= 220) {
+      if (width >= 300) {
         expect(
           decorationRect.left,
           greaterThan(tester.getRect(find.byType(BiliLevelBadge)).right),
+        );
+      } else {
+        expect(
+          decorationRect.top,
+          greaterThan(tester.getRect(find.text('IP属地：内蒙古')).bottom),
         );
       }
       expect(tester.takeException(), isNull);

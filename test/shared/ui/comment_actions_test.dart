@@ -78,6 +78,12 @@ void main() {
               matching: find.byIcon(BiliIcons.reply),
             ),
           );
+          final likeIcon = tester.getRect(
+            find.descendant(
+              of: actions,
+              matching: find.byIcon(Icons.thumb_up_alt_outlined),
+            ),
+          );
           final reply = tester.getRect(
             find.descendant(of: actions, matching: find.text('回复')),
           );
@@ -90,6 +96,15 @@ void main() {
               matching: find.widgetWithIcon(TextButton, BiliIcons.reply),
             ),
           );
+          final likeButton = tester.getRect(
+            find.descendant(
+              of: actions,
+              matching: find.widgetWithIcon(
+                TextButton,
+                Icons.thumb_up_alt_outlined,
+              ),
+            ),
+          );
           final preview = tester.getRect(
             find
                 .ancestor(
@@ -98,8 +113,11 @@ void main() {
                 )
                 .first,
           );
-          expect(replyIcon.left, closeTo(body.left, .01));
-          expect(count.right, closeTo(preview.right, .01));
+          expect(likeIcon.left, closeTo(body.left, .01));
+          expect(count.left, greaterThan(likeIcon.right));
+          expect(replyIcon.left, closeTo(replyButton.left, .01));
+          expect(replyButton.left - likeButton.right, closeTo(12, .01));
+          expect(replyButton.right, lessThanOrEqualTo(body.right));
           expect(reply.center.dy, closeTo(count.center.dy, .01));
           expect(replyButton.top, greaterThan(body.bottom));
           expect(replyButton.bottom, lessThan(preview.top));

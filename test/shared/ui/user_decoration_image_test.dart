@@ -67,15 +67,15 @@ void main() {
         );
         await tester.pump();
         final raw = tester.widgetList<RawImage>(find.byType(RawImage));
-        if (raw.isNotEmpty && raw.single.image?.height == (38 * dpr).ceil()) {
+        if (raw.isNotEmpty && raw.single.image?.height == (52 * dpr).ceil()) {
           break;
         }
       }
       final decoded = tester.widget<RawImage>(find.byType(RawImage)).image!;
-      expect(decoded.height, (38 * dpr).ceil());
+      expect(decoded.height, (52 * dpr).ceil());
       expect(decoded.width, decoded.height * 6);
       final imageRect = tester.getRect(find.byType(UserDecorationImage));
-      expect(imageRect.size, const Size(228, 38));
+      expect(imageRect.size, const Size(312, 52));
       expect(tester.getRect(find.text('NO.\n000123')).right, imageRect.right);
       // Wide card canvases have a large transparent left margin. The art
       // stays left of the serial, which overlays the transparent right.

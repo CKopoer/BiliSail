@@ -341,7 +341,7 @@ class CommentAuthorHeader extends StatelessWidget {
     if (c.decorationImageUrl == null) return identity;
     final decoration = CommentAuthorDecoration(comment: c);
     return LayoutBuilder(
-      builder: (context, constraints) => constraints.maxWidth >= 220
+      builder: (context, constraints) => constraints.maxWidth >= 300
           ? Row(
               children: [
                 Expanded(child: identity),
@@ -380,8 +380,8 @@ class CommentAuthorDecoration extends StatelessWidget {
       image: true,
       excludeSemantics: true,
       child: SizedBox(
-        width: 112,
-        height: 38,
+        width: 152,
+        height: 52,
         child: Stack(
           // Wide canvases include transparent left margins. Keep their natural
           // width instead of shrinking the character to fit the reserved slot.
@@ -391,14 +391,14 @@ class CommentAuthorDecoration extends StatelessWidget {
               right: 0,
               top: 0,
               bottom: 0,
-              child: UserDecorationImage(url: url, height: 38),
+              child: UserDecorationImage(url: url, height: 52),
             ),
             if (number != null && number.isNotEmpty)
               Positioned(
                 right: 0,
                 top: 0,
                 bottom: 0,
-                width: 60,
+                width: 92,
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Text(
@@ -407,7 +407,7 @@ class CommentAuthorDecoration extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     textScaler: TextScaler.noScaling,
                     style: TextStyle(
-                      fontSize: 8,
+                      fontSize: 12,
                       height: 1.1,
                       fontWeight: FontWeight.bold,
                       fontFeatures: const [FontFeature.tabularFigures()],
