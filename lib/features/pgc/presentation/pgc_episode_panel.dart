@@ -280,7 +280,7 @@ final class _PgcEpisodePanelState extends State<PgcEpisodePanel> {
                     episode.displayTitle,
                     maxLines: grid ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: selected ? colors.primary : colors.onSurface,
                       fontWeight: selected
                           ? FontWeight.w700
