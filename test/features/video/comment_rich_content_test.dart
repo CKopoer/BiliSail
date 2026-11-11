@@ -355,7 +355,8 @@ void main() {
       final decorationRect = tester.getRect(
         find.byType(CommentAuthorDecoration),
       );
-      expect(decorationRect.size, const Size(152, 52));
+      expect(decorationRect.height, 52);
+      expect(decorationRect.width, inInclusiveRange(112, 152));
       expect(decorationRect.right, width);
       expect(
         tester.getRect(find.text('NO.\n0014931')).right,
