@@ -156,12 +156,14 @@ class SharedPlayerEngine
     PlayerFailureKind? failureKind,
     NativePlaybackInterruption? interruption,
     int? nativeErrorCode,
+    NativeReadEvidence? nativeRead,
   }) => onDiagnostic?.call(
     PlayerDiagnosticEvent(
       kind: kind,
       snapshot: _snapshot,
       nativeError: nativeError,
       nativeErrorCode: nativeErrorCode,
+      nativeRead: nativeRead,
       failureKind: failureKind,
       stallReason: interruption?.reason,
       stalledFor: interruption?.stalledFor,
@@ -617,6 +619,7 @@ class SharedPlayerEngine
           _diagnose(
             PlayerDiagnosticKind.playbackStalled,
             failureKind: event.failureKind,
+            nativeRead: event.nativeRead,
             interruption: NativePlaybackInterruption(
               kind: event.failureKind,
               position: _snapshot.position,

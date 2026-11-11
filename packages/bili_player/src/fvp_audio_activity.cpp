@@ -15,7 +15,9 @@ struct AudioActivity final {
 };
 
 struct AudioClock final {
+  mdkPlayerAPI* video{nullptr};
   mdkPlayerAPI* audio{nullptr};
+  std::atomic<bool> detached{false};
   std::atomic<int64_t> anchor_ms{0};
   std::atomic<bool> held{true};
   std::atomic<bool> seeking{false};
@@ -133,6 +135,7 @@ void* bili_fvp_audio_clock(uintptr_t video_api, uintptr_t audio_api) {
   auto* clock = new (std::nothrow) AudioClock;
   if (clock == nullptr) return nullptr;
   clock->audio = audio;
+  clock->video = video;
   video->onSync(video->object, {audio_clock, clock}, 10);
   return clock;
 }
@@ -143,6 +146,17 @@ void bili_fvp_audio_clock_seek(void* clock) {
   state.held.store(true, std::memory_order_release);
   state.seeking.store(true, std::memory_order_release);
   state.epoch.fetch_add(1, std::memory_order_release);
+  if (state.detached.exchange(false, std::memory_order_acq_rel)) {
+    state.video->onSync(state.video->object, {audio_clock, &state}, 10);
+  }
+}
+
+void bili_fvp_audio_clock_end(void* clock) {
+  if (clock == nullptr) return;
+  auto& state = *static_cast<AudioClock*>(clock);
+  if (!state.detached.exchange(true, std::memory_order_acq_rel)) {
+    state.video->onSync(state.video->object, {nullptr, nullptr}, 10);
+  }
 }
 
 void bili_fvp_audio_clock_hold(void* clock, int64_t position_ms) {

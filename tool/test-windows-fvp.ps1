@@ -21,6 +21,8 @@ try {
   [IO.File]::WriteAllBytes((Join-Path $liveDirectory 'truncated-audio.m4a'), $audioBytes[0..59999])
   $videoBytes = [IO.File]::ReadAllBytes((Join-Path $liveDirectory 'long-video.mp4'))
   [IO.File]::WriteAllBytes((Join-Path $liveDirectory 'truncated-video.mp4'), $videoBytes[0..179999])
+  & flutter test integration_test/windows_fvp_http_recovery_test.dart -d windows
+  if ($LASTEXITCODE -ne 0) { throw "Windows fvp HTTP recovery failed: $LASTEXITCODE" }
   & flutter test integration_test/windows_fvp_audio_recovery_test.dart -d windows
   if ($LASTEXITCODE -ne 0) { throw "Windows fvp audio recovery failed: $LASTEXITCODE" }
   & flutter test integration_test/fvp_backend_test.dart -d windows

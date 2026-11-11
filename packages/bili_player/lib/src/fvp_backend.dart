@@ -97,9 +97,12 @@ final class FvpBackend implements PlaybackBackend {
           FvpNativeStatus.invalid => const BackendEvent(
             BackendEventKind.failure,
           ),
-          FvpNativeStatus.audioEnded => const BackendEvent(
+          FvpNativeStatus.audioEnded => BackendEvent(
             BackendEventKind.failure,
             stallReason: PlaybackStallReason.audioClock,
+            nativeRead: player is FvpReadEvidencePort
+                ? (player as FvpReadEvidencePort).readEvidence
+                : null,
           ),
           FvpNativeStatus.processExited => const BackendEvent(
             BackendEventKind.failure,

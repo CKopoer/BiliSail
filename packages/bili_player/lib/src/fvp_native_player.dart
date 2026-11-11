@@ -8,8 +8,10 @@ import 'package:fvp/mdk.dart' as mdk;
 import 'android_fvp_player.dart';
 import 'android_fvp_worker.dart';
 import 'player_contract.dart';
+import 'player_diagnostics.dart';
 import 'fvp_buffer.dart';
 import 'fvp_audio_end.dart';
+import 'fvp_http_options.dart';
 import 'fvp_playback_information.dart';
 import 'fvp_video_decoders.dart';
 import 'fvp_surface_preroll.dart';
@@ -88,6 +90,10 @@ abstract interface class FvpAudioClockPort {
   int? get audioPositionMilliseconds;
 }
 
+abstract interface class FvpReadEvidencePort {
+  NativeReadEvidence get readEvidence;
+}
+
 /// IPC acknowledgement for commands used by playback barriers.
 /// Legacy in-process/test ports can keep their synchronous command API.
 abstract interface class FvpCommandCompletionPort {
@@ -152,6 +158,7 @@ final class _MdkPlayerPort
         FvpInformationPort,
         FvpAudioActivityPort,
         FvpAudioClockPort,
+        FvpReadEvidencePort,
         FvpPauseConfirmationPort {
   _MdkPlayerPort({this.windowsAdapterIndex, this.audioOnly = false});
 
@@ -165,6 +172,21 @@ final class _MdkPlayerPort
   int _durationMilliseconds = 0;
   int _mediaStartMilliseconds = 0;
   bool _videoBuffering = false, _audioBuffering = false;
+
+  @override
+  NativeReadEvidence get readEvidence {
+    final audio = _audioCompanion;
+    return NativeReadEvidence(
+      videoBufferedMs: _native?.buffered() ?? 0,
+      videoStatus: _native?.mediaStatus.rawValue ?? 0,
+      audioPositionMs: audio?.positionMilliseconds,
+      audioBufferedMs: audio?._native?.buffered(),
+      audioDecodedEndMs: audio?._decodedAudioEndMilliseconds,
+      audioDurationMs: audio?._durationMilliseconds,
+      audioStatus: audio?._native?.mediaStatus.rawValue,
+    );
+  }
+
   final _playingClock = Stopwatch();
   double _rate = 1;
   int _audioReadyPosition = 0;
@@ -259,9 +281,9 @@ final class _MdkPlayerPort
         )) {
           _statuses.add(FvpNativeStatus.audioEnded);
         } else {
-          // Preserve real terminal audio evidence while the final video drains;
-          // neither native AO reset nor the Android sample can imply a dropout.
-          _holdClock(_durationMilliseconds);
+          // A stopped companion has no advancing clock. Let MDK's own video
+          // clock drain the tail instead of freezing at a synthetic endpoint.
+          audio_activity.bili_fvp_audio_clock_end(_audioClock);
         }
     }
   }
@@ -460,9 +482,9 @@ final class _MdkPlayerPort
           .map((entry) => '${entry.key}: ${entry.value}\r\n')
           .join(),
     );
-    // The application owns bounded retries and source refreshes.
-    _player.setProperty('avio.reconnect', '0');
-    _player.setProperty('avio.rw_timeout', '30000000');
+    for (final option in fvpHttpOptions(media.uri, isLive: isLive).entries) {
+      _player.setProperty(option.key, option.value);
+    }
     _player.setBufferRange(
       min: options.maxBufferAhead.inMilliseconds.clamp(1, 1000),
       max: options.maxBufferAhead.inMilliseconds.clamp(
