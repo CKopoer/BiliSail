@@ -205,6 +205,65 @@ void main() {
     },
   );
   test(
+    'comments and replies prefer enhanced decorations and fall back safely',
+    () async {
+      for (final enhanced in [
+        '//i0.hdslb.com/enhanced.webp',
+        'file:///bad',
+        '',
+        null,
+      ]) {
+        final client = BiliApiClient(
+          transport: _FakeTransport(
+            (_, _) async => _jsonResponse({
+              'code': 0,
+              'data': {
+                'page': {'num': 1, 'size': 20, 'count': 1},
+                'replies': [
+                  {
+                    'rpid': 1,
+                    'member': {
+                      'uname': 'reader',
+                      'pendant': {
+                        'image': '//i0.hdslb.com/pendant.png',
+                        'image_enhance': enhanced,
+                      },
+                      'user_sailing': {
+                        'cardbg': {
+                          'image': '//i0.hdslb.com/card.png',
+                          'image_enhance': enhanced,
+                        },
+                      },
+                    },
+                    'content': {'message': 'comment'},
+                  },
+                ],
+              },
+            }),
+          ),
+        );
+        for (final replies in [false, true]) {
+          final page = replies
+              ? await client.getVideoReplies('42', '10')
+              : await client.getVideoComments('42');
+          final c = page.items.single;
+          expect(
+            c.pendantUrl.toString(),
+            enhanced == '//i0.hdslb.com/enhanced.webp'
+                ? 'https://i0.hdslb.com/enhanced.webp'
+                : 'https://i0.hdslb.com/pendant.png',
+          );
+          expect(
+            c.decorationImageUrl.toString(),
+            enhanced == '//i0.hdslb.com/enhanced.webp'
+                ? 'https://i0.hdslb.com/enhanced.webp'
+                : 'https://i0.hdslb.com/card.png',
+          );
+        }
+      }
+    },
+  );
+  test(
     'comments reject unsafe decorations and malformed nickname or fan colors',
     () async {
       final values = <Object?>[null, -1, 0x1000000, 1.5, 'bad', {}, []];

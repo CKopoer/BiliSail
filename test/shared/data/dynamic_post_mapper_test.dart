@@ -16,6 +16,7 @@ void main() {
         id: '1',
         original: ApiDynamicPost(
           id: '2',
+          authorPendantUrl: target,
           topic: ApiDynamicTopic(
             id: '9007199254740993123',
             name: '话题',
@@ -44,6 +45,7 @@ void main() {
     expect(value.contentCards, isEmpty);
     expect(original.topic?.id, '9007199254740993123');
     expect(original.topic?.url, topicUrl);
+    expect(original.authorPendantUrl, target);
     expect(original.badge, '置顶');
     expect(original.notice, '内容声明');
     expect(original.contentCards.map((e) => e.kind), DynamicCardKind.values);
