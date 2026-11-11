@@ -188,30 +188,6 @@ class _CommentRichContentState extends State<CommentRichContent> {
             ),
           ),
         ),
-        if (comment.upLiked || comment.upReplied)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 4,
-              children: [
-                if (comment.upLiked)
-                  Text(
-                    'UP 主觉得很赞',
-                    style: styles.badge.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                if (comment.upReplied)
-                  Text(
-                    'UP 主回复过',
-                    style: styles.badge.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-              ],
-            ),
-          ),
         if (comment.pictures.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -248,6 +224,30 @@ class _CommentRichContentState extends State<CommentRichContent> {
                           ),
                         ),
                       ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        if (comment.upLiked || comment.upReplied)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 4,
+              children: [
+                if (comment.upLiked)
+                  Text(
+                    'UP 主觉得很赞',
+                    style: styles.badge.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                if (comment.upReplied)
+                  Text(
+                    'UP 主回复过',
+                    style: styles.badge.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
               ],
