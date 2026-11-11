@@ -6,6 +6,7 @@ import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/comments/application/comments_controller.dart';
 import 'package:bilisail/features/comments/domain/comments_repository.dart';
+import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/comment_badge.dart';
 import 'package:bilisail/shared/ui/comment_rich_content.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
@@ -88,6 +89,65 @@ void main() {
           expect(tester.takeException(), isNull);
         },
       );
+    }
+  }
+
+  for (final compact in [false, true]) {
+    for (final pictureCount in [1, 3]) {
+      for (final scale in [1.0, 2.0]) {
+        testWidgets('UP markers follow all $pictureCount pictures '
+            'in ${compact ? 'preview' : 'full'} content at $scale text scale', (
+          tester,
+        ) async {
+          final comment = CommentEntry(
+            id: '1',
+            author: '读者',
+            message: '图片评论正文',
+            upLiked: true,
+            upReplied: true,
+            pictures: List.generate(
+              pictureCount,
+              (index) => Uri.https('i0.hdslb.com', '/comment-$index.png'),
+            ),
+          );
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: BiliTheme.light(),
+              home: MediaQuery(
+                data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                child: Scaffold(
+                  body: SizedBox(
+                    width: 220,
+                    child: CommentRichContent(
+                      comment: comment,
+                      compact: compact,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final images = find.byType(AppNetworkImage);
+          expect(images, findsNWidgets(pictureCount));
+          final body = tester.getRect(find.byType(SelectionArea));
+          var lastImageBottom = body.bottom;
+          for (var index = 0; index < pictureCount; index++) {
+            final image = tester.getRect(images.at(index));
+            expect(image.top, greaterThanOrEqualTo(body.bottom + 8));
+            if (image.bottom > lastImageBottom) {
+              lastImageBottom = image.bottom;
+            }
+          }
+          for (final label in ['UP 主觉得很赞', 'UP 主回复过']) {
+            expect(
+              tester.getRect(find.text(label)).top,
+              greaterThanOrEqualTo(lastImageBottom + 6),
+            );
+          }
+          expect(tester.takeException(), isNull);
+        });
+      }
     }
   }
 
