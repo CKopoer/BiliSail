@@ -1105,10 +1105,16 @@ void main() {
     expect(find.text('评论详情'), findsOneWidget);
     expect(find.byTooltip('关闭评论详情'), findsNothing);
     expect(find.byTooltip('返回评论'), findsOneWidget);
-    expect(find.text('回复'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(CommentRichContent),
+        matching: find.text('回复'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('IP属地：广东'), findsOneWidget);
     expect(find.text('IP属地：上海'), findsOneWidget);
-    await tester.tap(find.widgetWithIcon(IconButton, BiliIcons.reply).last);
+    await tester.tap(find.widgetWithIcon(TextButton, BiliIcons.reply).last);
     await tester.pumpAndSettle();
     expect(find.text('回复 @乙'), findsOneWidget);
     await tester.enterText(find.byType(TextField), '保留这条回复');
@@ -1284,8 +1290,8 @@ void main() {
     expect(builds, isEmpty, reason: 'busy should rebuild controls only');
     expect(
       tester
-          .widget<IconButton>(
-            find.widgetWithIcon(IconButton, BiliIcons.reply).first,
+          .widget<TextButton>(
+            find.widgetWithIcon(TextButton, BiliIcons.reply).first,
           )
           .onPressed,
       isNull,
@@ -1297,8 +1303,8 @@ void main() {
     expect(state().items.first.liked, isTrue);
     expect(
       tester
-          .widget<IconButton>(
-            find.widgetWithIcon(IconButton, BiliIcons.reply).first,
+          .widget<TextButton>(
+            find.widgetWithIcon(TextButton, BiliIcons.reply).first,
           )
           .onPressed,
       isNotNull,
@@ -1478,8 +1484,8 @@ void main() {
       );
       expect(
         tester
-            .widget<IconButton>(
-              find.widgetWithIcon(IconButton, BiliIcons.reply).first,
+            .widget<TextButton>(
+              find.widgetWithIcon(TextButton, BiliIcons.reply).first,
             )
             .onPressed,
         isNull,
@@ -1489,8 +1495,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<IconButton>(
-              find.widgetWithIcon(IconButton, BiliIcons.reply).first,
+            .widget<TextButton>(
+              find.widgetWithIcon(TextButton, BiliIcons.reply).first,
             )
             .onPressed,
         isNotNull,
