@@ -6,6 +6,50 @@ final class DynamicPollClient {
   const DynamicPollClient(this.api);
   final BiliApiClient api;
 
+  Future<List<ApiDynamicPollFollowee>> followees(
+    String id, {
+    ApiRequestContext? context,
+  }) async {
+    _requireId(id);
+    const endpoint = 'dynamic_poll_followees';
+    final data = await api.requestJson(
+      Uri.https('api.vc.bilibili.com', '/vote_svr/v1/vote_svr/followee_votes', {
+        'vote_id': id,
+      }),
+      endpoint,
+      context: context,
+    );
+    final rows = data['votes'];
+    if (rows == null) return const [];
+    if (rows is! List<Object?>) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    final result = <ApiDynamicPollFollowee>[];
+    for (final row in rows.take(100)) {
+      if (row is! Map<String, Object?> ||
+          _id(row['uid']) == null ||
+          row['name'] is! String) {
+        continue;
+      }
+      final votes = row['votes'];
+      if (votes is! List<Object?> ||
+          votes.length > 20 ||
+          votes.any((v) => _number(v) == null)) {
+        throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+      }
+      final name = row['name'] as String;
+      result.add(
+        ApiDynamicPollFollowee(
+          _id(row['uid'])!,
+          name.substring(0, name.length.clamp(0, 100)),
+          List.unmodifiable(votes.map((v) => _number(v)!)),
+          _image(row['face']),
+        ),
+      );
+    }
+    return List.unmodifiable(result);
+  }
+
   Future<ApiDynamicPoll> detail(String id, {ApiRequestContext? context}) async {
     _requireId(id);
     const endpoint = 'dynamic_poll_detail';
@@ -153,6 +197,7 @@ ApiDynamicPoll _parse(
     joinCount: joinCount,
     options: options,
     myVotes: myVotes,
+    authorId: _id(info['vote_publisher'] ?? info['uid']),
   );
 }
 

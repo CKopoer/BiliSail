@@ -7,6 +7,7 @@ import '../../auth/application/auth_controller.dart';
 import '../domain/dynamic_composer_repository.dart';
 import '../domain/dynamic_repository.dart';
 import '../domain/dynamic_draft.dart';
+import '../domain/dynamic_management_repository.dart';
 
 final dynamicComposerClockProvider = Provider<DateTime Function()>(
   (ref) => DateTime.now,
@@ -43,6 +44,10 @@ final class DynamicComposerState {
     this.options = const DynamicPublishOptions(),
     this.poll,
     this.reserve,
+    this.existingPictures = const [],
+    this.editId,
+    this.repostId,
+    this.reserveId,
   });
   final String text, accountScope;
   final String? mid, message;
@@ -56,6 +61,8 @@ final class DynamicComposerState {
   final DynamicPublishOptions options;
   final DynamicPollDraft? poll;
   final DynamicReserveDraft? reserve;
+  final List<DynamicPicture> existingPictures;
+  final String? editId, repostId, reserveId;
   bool get canPublish =>
       mid != null &&
       !busy &&
@@ -64,6 +71,8 @@ final class DynamicComposerState {
       text.runes.length + (poll?.title.runes.length ?? 0) <= 1000 &&
       (text.trim().isNotEmpty ||
           images.isNotEmpty ||
+          existingPictures.isNotEmpty ||
+          reserveId != null ||
           poll != null ||
           reserve != null);
   DynamicComposerState copy({
@@ -82,6 +91,7 @@ final class DynamicComposerState {
     DynamicReserveDraft? reserve,
     bool clearPoll = false,
     bool clearReserve = false,
+    List<DynamicPicture>? existingPictures,
   }) => DynamicComposerState(
     text: text ?? this.text,
     images: images ?? this.images,
@@ -98,10 +108,17 @@ final class DynamicComposerState {
     options: options ?? this.options,
     poll: clearPoll ? null : poll ?? this.poll,
     reserve: clearReserve ? null : reserve ?? this.reserve,
+    existingPictures: existingPictures ?? this.existingPictures,
+    editId: editId,
+    repostId: repostId,
+    reserveId: reserveId,
   );
 }
 
 class DynamicComposerController extends Notifier<DynamicComposerState> {
+  DynamicComposerController({this.editDraft});
+  final DynamicEditDraft? editDraft;
+  bool _seeded = false;
   RequestCancellation? _request;
   int _generation = 0;
   final _pictures = <LocalImage, DynamicPicture>{};
@@ -123,10 +140,27 @@ class DynamicComposerController extends Notifier<DynamicComposerState> {
       _request?.cancel();
       _pictures.clear();
     });
+    final seed = editDraft;
+    final maySeed = !_seeded;
+    _seeded = true;
+    final matches =
+        account.$1 &&
+        (seed == null || (maySeed && seed.authorId == account.$2));
     return DynamicComposerState(
       accountScope: repository?.accountScope ?? 'guest',
       sessionEpoch: repository?.sessionEpoch ?? 0,
-      mid: account.$1 ? account.$2 : null,
+      mid: matches ? account.$2 : null,
+      text: matches ? seed?.text ?? '' : '',
+      title: matches ? seed?.title ?? '' : '',
+      spans: matches ? seed?.spans ?? const [] : const [],
+      existingPictures: matches ? seed?.pictures ?? const [] : const [],
+      topic: matches ? seed?.topic : null,
+      options: matches
+          ? seed?.options ?? const DynamicPublishOptions()
+          : const DynamicPublishOptions(),
+      editId: seed?.id,
+      repostId: seed?.repostId,
+      reserveId: seed?.reserveId,
     );
   }
 
@@ -180,7 +214,7 @@ class DynamicComposerController extends Notifier<DynamicComposerState> {
   }
 
   void setPoll(DynamicPollDraft? poll) {
-    if (state.busy || state.uncertain) return;
+    if (state.busy || state.uncertain || state.editId != null) return;
     final retained = {...state.images, ...?poll?.options.map((o) => o.image)};
     _pictures.removeWhere((image, _) => !retained.contains(image));
     _pollId = null;
@@ -188,7 +222,7 @@ class DynamicComposerController extends Notifier<DynamicComposerState> {
   }
 
   void setReserve(DynamicReserveDraft? reserve) {
-    if (state.busy || state.uncertain) return;
+    if (state.busy || state.uncertain || state.editId != null) return;
     _reserveId = null;
     state = state.copy(reserve: reserve, clearReserve: reserve == null);
   }
@@ -211,7 +245,8 @@ class DynamicComposerController extends Notifier<DynamicComposerState> {
                 'image/gif',
               }.contains(image.mimeType),
         ) ||
-        state.images.length + images.length > DynamicComposerState.maxImages) {
+        state.images.length + state.existingPictures.length + images.length >
+            DynamicComposerState.maxImages) {
       state = state.copy(message: '最多添加18张图片，每张不超过10 MB');
       return;
     }
@@ -260,6 +295,15 @@ class DynamicComposerController extends Notifier<DynamicComposerState> {
     );
   }
 
+  void removeExistingPicture(DynamicPicture picture) {
+    if (state.busy) return;
+    state = state.copy(
+      existingPictures: List.unmodifiable(
+        state.existingPictures.where((p) => !identical(p, picture)),
+      ),
+    );
+  }
+
   void clear() {
     if (state.busy || state.uncertain) return;
     _pictures.clear();
@@ -267,6 +311,7 @@ class DynamicComposerController extends Notifier<DynamicComposerState> {
     state = state.copy(
       text: '',
       images: const [],
+      existingPictures: const [],
       clearTopic: true,
       uploaded: 0,
       title: '',
@@ -315,7 +360,7 @@ class DynamicComposerController extends Notifier<DynamicComposerState> {
         isCurrent(draft.accountScope, draft.sessionEpoch);
     state = state.copy(busy: true, uploaded: 0);
     try {
-      final pictures = <DynamicPicture>[];
+      final pictures = <DynamicPicture>[...draft.existingPictures];
       for (final image in draft.images) {
         if (!current()) return false;
         final picture =
@@ -323,7 +368,10 @@ class DynamicComposerController extends Notifier<DynamicComposerState> {
         if (!current()) return false;
         _pictures[image] = picture;
         pictures.add(picture);
-        state = state.copy(uploaded: pictures.length, busy: true);
+        state = state.copy(
+          uploaded: pictures.length - draft.existingPictures.length,
+          busy: true,
+        );
       }
       if (!current()) return false;
       if (draft.poll case final poll? when _pollId == null) {
@@ -353,24 +401,44 @@ class DynamicComposerController extends Notifier<DynamicComposerState> {
         if (!current()) return false;
         _reserveId = id;
       }
-      await repository.create(
-        mid: mid,
-        text: draft.text,
-        pictures: pictures,
-        topic: draft.topic,
-        title: draft.title,
-        spans: draft.spans,
-        options: draft.options,
-        pollId: _pollId,
-        pollTitle: draft.poll?.title,
-        reserveId: _reserveId,
-        cancellation: request,
-      );
+      if (draft.editId case final editId?) {
+        if (repository is! DynamicEditRepository) {
+          throw const AppFailure(AppFailureKind.permission, '编辑服务暂不可用');
+        }
+        await (repository as DynamicEditRepository).edit(
+          mid: mid,
+          id: editId,
+          title: draft.title,
+          text: draft.text,
+          spans: draft.spans,
+          pictures: pictures,
+          topic: draft.topic,
+          options: draft.options,
+          repostId: draft.repostId,
+          reserveId: draft.reserveId,
+          cancellation: request,
+        );
+      } else {
+        await repository.create(
+          mid: mid,
+          text: draft.text,
+          pictures: pictures,
+          topic: draft.topic,
+          title: draft.title,
+          spans: draft.spans,
+          options: draft.options,
+          pollId: _pollId,
+          pollTitle: draft.poll?.title,
+          reserveId: _reserveId,
+          cancellation: request,
+        );
+      }
       if (!current()) return false;
       state = state.copy(
         busy: false,
         text: '',
         images: const [],
+        existingPictures: const [],
         clearTopic: true,
         uploaded: 0,
         title: '',

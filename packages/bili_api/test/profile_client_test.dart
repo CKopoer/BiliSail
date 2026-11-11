@@ -631,7 +631,7 @@ void main() {
                       'title': '图文',
                       'summary': {'text': '正文'},
                       'pics': List.generate(
-                        12,
+                        20,
                         (i) => {'src': 'http://i0.hdslb.com/$i.jpg'},
                       ),
                     },
@@ -645,7 +645,7 @@ void main() {
     ).loadDynamics('1');
     expect(page.items.single.title, '图文');
     expect(page.items.single.subtitle, '正文');
-    expect(page.items.single.imageUrls.length, 9);
+    expect(page.items.single.imageUrls.length, 18);
     expect(page.items.single.imageUrls.first.scheme, 'https');
     expect(page.hasMore, isTrue);
     expect(page.nextCursor, 'opaque-next');

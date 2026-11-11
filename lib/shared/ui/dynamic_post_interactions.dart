@@ -13,7 +13,10 @@ import 'dynamic_post_card.dart';
 import 'comments_panel.dart';
 import 'dynamic_detail_layout.dart';
 import '../../features/dynamic/application/dynamic_actions_controller.dart';
-import '../../features/dynamic/domain/dynamic_poll.dart';
+import '../../features/dynamic/application/dynamic_content_state.dart';
+import '../../features/dynamic/application/dynamic_management_controller.dart';
+import '../../features/dynamic/domain/dynamic_link.dart';
+import 'dynamic_post_menu.dart';
 import 'dynamic_poll_dialog.dart';
 
 class InteractiveDynamicPostCard extends ConsumerWidget {
@@ -40,23 +43,50 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
     final provider = dynamicActionsProvider(post.id);
     final state = ref.watch(provider);
     final controller = ref.read(provider.notifier);
-    final current = state.detail ?? post;
-    void login() =>
-        onLogin != null ? onLogin!() : showAppNotice(context, '请先登录后操作');
-    void openLink(Uri uri) {
-      final pollId = dynamicPollIdFromUri(uri);
-      if (pollId == null) {
-        onOpenLink?.call(uri);
-        return;
-      }
-      unawaited(
-        showDynamicPollDialog(
-          context,
-          pollId,
-          dynamicId: _pollDynamicId(current, pollId),
-          onLogin: login,
+    final content = ref.watch(dynamicContentProvider);
+    final management = ref.watch(dynamicManagementProvider(post.id));
+    final current = content.posts[post.id] ?? state.detail ?? post;
+    if (content.hidden(current)) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          content.removed.contains(current.id) ? '动态已删除' : '该UP主已临时屏蔽',
         ),
       );
+    }
+    void share() {
+      final container = ProviderScope.containerOf(context);
+      unawaited(
+        showAppDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => UncontrolledProviderScope(
+            container: container,
+            child: _ShareDialog(post: current, onLogin: onLogin),
+          ),
+        ),
+      );
+    }
+
+    void login() =>
+        onLogin != null ? onLogin!() : showAppNotice(context, '请先登录后操作');
+    void link(Uri url) {
+      final poll = dynamicPollId(url);
+      if (poll != null) {
+        unawaited(
+          showDynamicPollDialog(
+            context,
+            poll,
+            dynamicId:
+                url.queryParameters['dynamic_id'] ??
+                _pollDynamicId(current, poll),
+            onLogin: login,
+            onOpenUser: onOpenUser,
+          ),
+        );
+      } else {
+        onOpenLink?.call(url);
+      }
     }
 
     void message() {
@@ -102,25 +132,20 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
           expansionState: expansionState,
           onOpenUser: onOpenUser,
           onOpenVideo: onOpenVideo,
-          onOpenLink: openLink,
+          onOpenLink: link,
           liked: state.liked,
           likeCount: state.likeCount,
           repostCount: state.repostCount,
-          busy: state.busy,
+          busy: state.busy || management.busy,
+          onMore: () => showDynamicPostMenu(
+            context,
+            current,
+            onShare: share,
+            onOpenLink: onOpenLink,
+            onLogin: onLogin,
+          ),
           onOpenDetail: inDetail ? null : () => unawaited(details()),
-          onShare: () {
-            final container = ProviderScope.containerOf(context);
-            unawaited(
-              showAppDialog<void>(
-                context: context,
-                barrierDismissible: false,
-                builder: (_) => UncontrolledProviderScope(
-                  container: container,
-                  child: _ShareDialog(post: current, onLogin: onLogin),
-                ),
-              ),
-            );
-          },
+          onShare: share,
           onComment: inDetail || current.unavailable || current.commentForbidden
               ? null
               : () => unawaited(details(focusComments: true)),
@@ -156,12 +181,11 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
 
 String? _pollDynamicId(DynamicPost post, String pollId) {
   if (post.contentCards.any(
-        (card) => card.url != null && dynamicPollIdFromUri(card.url!) == pollId,
+        (card) => card.url != null && dynamicPollId(card.url!) == pollId,
       ) ||
       post.spans.any(
         (span) =>
-            span.linkUrl != null &&
-            dynamicPollIdFromUri(span.linkUrl!) == pollId,
+            span.linkUrl != null && dynamicPollId(span.linkUrl!) == pollId,
       )) {
     return post.id;
   }

@@ -1,6 +1,6 @@
 import '../../../domain/local_image.dart';
 
-enum DynamicTextKind { mention, emote }
+enum DynamicTextKind { mention, emote, vote }
 
 final class DynamicTextSpan {
   const DynamicTextSpan(this.start, this.end, this.kind, {this.id = ''});

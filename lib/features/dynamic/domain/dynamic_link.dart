@@ -1,6 +1,35 @@
 import '../../live/domain/live_room.dart';
 import '../../../domain/video.dart';
 
+String? dynamicPollId(Uri target) {
+  if (target.userInfo.isNotEmpty) return null;
+  final path = target.path.endsWith('/')
+      ? target.path.substring(0, target.path.length - 1)
+      : target.path;
+  final web =
+      target.scheme == 'https' &&
+      target.port == 443 &&
+      const {
+        't.bilibili.com',
+        'www.bilibili.com',
+        'm.bilibili.com',
+      }.contains(target.host) &&
+      const {'/vote/h5/index', '/h5/vote'}.contains(path);
+  final app =
+      target.scheme == 'bilibili' &&
+      !target.hasPort &&
+      target.host == 'following' &&
+      path == '/vote';
+  final ids = target.queryParametersAll['vote_id'];
+  if (ids == null || ids.length != 1) return null;
+  final id = ids.single;
+  return (web || app) &&
+          RegExp(r'^[1-9][0-9]{0,18}$').hasMatch(id) &&
+          int.tryParse(id) != null
+      ? id
+      : null;
+}
+
 String? dynamicSearchQuery(Uri target) {
   if (target.scheme != 'https' ||
       target.port != 443 ||

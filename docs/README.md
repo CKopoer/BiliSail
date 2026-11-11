@@ -214,6 +214,7 @@
 | [账号菜单与消息](validation/account-messages.md) | 头像资料/入口、五类收件箱、私信分页/发送/已读、账号隔离与 Windows 只读实测 |
 | [主页卡片与富动态](validation/profile-dynamic-style.md) | UWP 横向投稿卡、居中动态列表、行内表情与转发内容、验证边界 |
 | [动态分享、评论与点赞](validation/dynamic-interactions.md) | Web 评论身份、共用评论区、复制/转发、单次写与会话隔离 |
+| [动态操作菜单与投票](validation/dynamic-operations-and-voting-2026-11-11.md) | 置顶／编辑／删除／举报、共享屏蔽与状态、Web IM 分享、应用内投票及响应式验证 |
 | [动态内容与详情重构](validation/dynamic-content-redesign-2026-11-09.md) | PiliPlus 类型对照、话题／商品／附加卡片、宽屏分栏与窄屏滚动、草稿保留及离线验证 |
 | [应用内话题与动态展示修复](validation/dynamic-topics-and-text-2026-11-09.md) | 话题简介／排序／分页／折叠、内部导航与名称搜索、右上角详情、真实排版截断及预约状态 |
 | [动态话题外跳与顶部栏修复](validation/dynamic-topic-navigation-2026-11-10.md) | 移动端话题链接、ID 优先与名称回退、协议到点击回归、工作区顶部栏去重 |

@@ -1,285 +1,283 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/user.dart';
+import '../../features/auth/application/auth_controller.dart';
 import '../../features/dynamic/application/dynamic_poll_controller.dart';
-import '../../features/dynamic/domain/dynamic_poll.dart';
 import 'app_dialog.dart';
 import 'app_network_image.dart';
+import 'dynamic_publish_forms.dart';
+import 'image_viewer.dart';
 
 Future<void> showDynamicPollDialog(
   BuildContext context,
   String id, {
   String? dynamicId,
   VoidCallback? onLogin,
-}) {
-  final container = ProviderScope.containerOf(context);
-  return showAppDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => UncontrolledProviderScope(
-      container: container,
-      child: DynamicPollDialog(id: id, dynamicId: dynamicId, onLogin: onLogin),
-    ),
-  );
-}
+  ValueChanged<UserId>? onOpenUser,
+}) => showAppDialog<void>(
+  context: context,
+  builder: (_) => DynamicPollDialog(
+    id: id,
+    dynamicId: dynamicId,
+    onLogin: onLogin,
+    onOpenUser: onOpenUser,
+  ),
+);
 
-class DynamicPollDialog extends ConsumerWidget {
+class DynamicPollDialog extends ConsumerStatefulWidget {
   const DynamicPollDialog({
     super.key,
     required this.id,
     this.dynamicId,
     this.onLogin,
+    this.onOpenUser,
   });
   final String id;
   final String? dynamicId;
   final VoidCallback? onLogin;
-
+  final ValueChanged<UserId>? onOpenUser;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(dynamicPollProvider(id));
-    final controller = ref.read(dynamicPollProvider(id).notifier);
-    final poll = state.poll;
-    final theme = Theme.of(context);
-    final ended = poll?.endedAt(ref.read(dynamicPollClockProvider)()) ?? false;
-    final canChoose = controller.canChoose;
-    return PopScope(
-      canPop: !state.submitting,
-      child: Dialog(
-        insetPadding: const EdgeInsets.all(12),
-        clipBehavior: Clip.antiAlias,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640, maxHeight: 800),
-          child: SizedBox(
-            width: 640,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text('投票详情', style: theme.textTheme.titleMedium),
-                      ),
-                      IconButton(
-                        tooltip: '刷新投票',
-                        onPressed: state.busy
-                            ? null
-                            : () => unawaited(controller.load()),
-                        icon: const Icon(Icons.refresh),
-                      ),
-                      IconButton(
-                        tooltip: '关闭投票',
-                        onPressed: state.submitting
-                            ? null
-                            : () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                ),
-                if (state.busy) const LinearProgressIndicator(),
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (poll != null) ...[
-                          Text(poll.title, style: theme.textTheme.titleLarge),
-                          if (poll.description.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text(poll.description),
-                          ],
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 16,
-                            runSpacing: 6,
-                            children: [
-                              Text('${poll.joinCount}人参与'),
-                              Text(
-                                poll.maxChoices == 1
-                                    ? '单选'
-                                    : '最多选择${poll.maxChoices}项',
-                              ),
-                              Text(
-                                ended
-                                    ? '已结束'
-                                    : poll.hasVoted
-                                    ? '已投票'
-                                    : '进行中',
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '截止时间 ${_dateLabel(poll.endsAt)}',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 16),
-                          for (final option in poll.options) ...[
-                            _PollOption(
-                              option: option,
-                              selected: state.selected.contains(option.index),
-                              showResults: state.showResults,
-                              totalVotes: poll.totalVotes,
-                              onTap: canChoose
-                                  ? () => controller.select(option.index)
-                                  : null,
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                          if (canChoose || state.uncertain) ...[
-                            Wrap(
-                              spacing: 8,
-                              children: [
-                                FilterChip(
-                                  label: const Text('显示比例'),
-                                  selected: state.showResults,
-                                  onSelected: controller.setShowResults,
-                                ),
-                                FilterChip(
-                                  label: const Text('匿名投票'),
-                                  selected: state.anonymous,
-                                  onSelected: canChoose
-                                      ? controller.setAnonymous
-                                      : null,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                        ],
-                        if (state.message case final message?)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Text(message),
-                          ),
-                        if (poll == null && !state.busy)
-                          OutlinedButton(
-                            onPressed: () => unawaited(controller.load()),
-                            child: const Text('重试'),
-                          ),
-                        if (poll != null && !ended && !poll.hasVoted)
-                          FilledButton(
-                            onPressed:
-                                state.busy ||
-                                    state.uncertain ||
-                                    (state.signedIn && state.selected.isEmpty)
-                                ? null
-                                : () {
-                                    if (!state.signedIn) {
-                                      if (onLogin != null) {
-                                        Navigator.pop(context);
-                                        onLogin!();
-                                      }
-                                      return;
-                                    }
-                                    unawaited(
-                                      controller.submit(dynamicId: dynamicId),
-                                    );
-                                  },
-                            child: Text(
-                              state.submitting
-                                  ? '正在投票…'
-                                  : state.signedIn
-                                  ? '投票'
-                                  : '登录后投票',
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  ConsumerState<DynamicPollDialog> createState() => _DynamicPollDialogState();
 }
 
-class _PollOption extends StatelessWidget {
-  const _PollOption({
-    required this.option,
-    required this.selected,
-    required this.showResults,
-    required this.totalVotes,
-    this.onTap,
-  });
-  final DynamicPollOption option;
-  final bool selected, showResults;
-  final int totalVotes;
-  final VoidCallback? onTap;
-
+class _DynamicPollDialogState extends ConsumerState<DynamicPollDialog> {
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final ratio = totalVotes == 0 ? 0.0 : option.count / totalVotes;
-    return Semantics(
-      selected: selected,
-      child: Material(
-        color: selected
-            ? scheme.secondaryContainer
-            : scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          key: ValueKey('poll-option-${option.index}'),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (option.imageUrl case final image?) ...[
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 180),
-                    child: AppNetworkImage(
-                      url: image.toString(),
-                      cacheWidth: 640,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) => const SizedBox(
-                        height: 80,
-                        child: Icon(Icons.broken_image_outlined),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    final provider = dynamicPollProvider(widget.id),
+        state = ref.watch(provider),
+        controller = ref.read(provider.notifier);
+    final signedIn = ref.watch(
+      authControllerProvider.select((a) => a.isSignedIn),
+    );
+    final poll = state.poll, now = ref.read(dynamicPollClockProvider)();
+    final open = poll?.openAt(now) == true;
+    final results = state.showResults || !open;
+    return PopScope(
+      canPop: !state.submitting,
+      child: DynamicFormDialog(
+        title: '投票详情',
+        closeTooltip: '关闭投票',
+        canClose: !state.submitting,
+        body: state.loading && poll == null
+            ? const Center(child: LinearProgressIndicator())
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(child: Text(option.text)),
-                    if (selected) ...[
-                      const SizedBox(width: 8),
-                      Icon(Icons.check_circle, size: 20, color: scheme.primary),
+                    if (poll != null) ...[
+                      Text(
+                        poll.title,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      if (poll.description.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(poll.description),
+                        ),
+                      Wrap(
+                        spacing: 12,
+                        children: [
+                          Text('${poll.joinCount}人参与'),
+                          Text(
+                            poll.maxChoices == 1
+                                ? '单选'
+                                : '最多选${poll.maxChoices}项',
+                          ),
+                        ],
+                      ),
+                      Text('截止 ${dynamicDateLabel(poll.endsAt.toLocal())}'),
+                      const SizedBox(height: 12),
+                      for (final option in poll.options)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Material(
+                            color: state.selected.contains(option.index)
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              key: ValueKey('poll-option-${option.index}'),
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: open && !state.busy && !state.uncertain
+                                  ? () => controller.select(option.index)
+                                  : null,
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    if (option.imageUrl case final image?)
+                                      GestureDetector(
+                                        onLongPress: () => showImageViewer(
+                                          context,
+                                          [image],
+                                          0,
+                                        ),
+                                        onSecondaryTap: () => showImageViewer(
+                                          context,
+                                          [image],
+                                          0,
+                                        ),
+                                        child: AppNetworkImage(
+                                          url: image.toString(),
+                                          height: 140,
+                                          fit: BoxFit.contain,
+                                          cacheWidth: 600,
+                                          errorBuilder: (_, _, _) =>
+                                              const SizedBox(
+                                                height: 140,
+                                                child: Icon(
+                                                  Icons.broken_image_outlined,
+                                                ),
+                                              ),
+                                        ),
+                                      ),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          state.selected.contains(option.index)
+                                              ? Icons.check_circle
+                                              : Icons.radio_button_unchecked,
+                                          size: 22,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(child: Text(option.text)),
+                                      ],
+                                    ),
+                                    if (results) ...[
+                                      const SizedBox(height: 8),
+                                      LinearProgressIndicator(
+                                        value: poll.fraction(option.index),
+                                      ),
+                                      Text(
+                                        '${option.count}票 · ${(poll.fraction(option.index) * 100).toStringAsFixed(1)}%',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (open)
+                        Wrap(
+                          spacing: 12,
+                          children: [
+                            FilterChip(
+                              label: const Text('显示比例'),
+                              selected: state.showResults,
+                              onSelected: controller.setShowResults,
+                            ),
+                            FilterChip(
+                              label: const Text('匿名投票'),
+                              selected: state.anonymous,
+                              onSelected: state.busy || state.uncertain
+                                  ? null
+                                  : controller.setAnonymous,
+                            ),
+                          ],
+                        ),
+                      if (state.followees.isNotEmpty) ...[
+                        const Divider(),
+                        const Text('关注的人的投票'),
+                        for (final person in state.followees)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(person.name),
+                            subtitle: Text(
+                              [
+                                for (final c in poll.options)
+                                  if (person.votes.contains(c.index)) c.text,
+                              ].join('、'),
+                            ),
+                            onTap: widget.onOpenUser == null
+                                ? null
+                                : () {
+                                    Navigator.pop(context);
+                                    widget.onOpenUser!(person.id);
+                                  },
+                          ),
+                      ],
                     ],
+                    if (state.message case final message?)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(message),
+                      ),
+                    if (poll == null && !state.busy)
+                      OutlinedButton(
+                        onPressed: controller.load,
+                        child: const Text('重试'),
+                      ),
                   ],
                 ),
-                if (showResults) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '${option.count}票 · ${(ratio * 100).toStringAsFixed(1)}%',
-                  ),
-                  const SizedBox(height: 4),
-                  LinearProgressIndicator(value: ratio),
-                ],
-              ],
-            ),
+              ),
+        actions: [
+          if (poll != null && !open)
+            Text(poll.myVotes.isNotEmpty ? '已投票' : '已结束'),
+          TextButton(
+            onPressed: state.busy ? null : controller.load,
+            child: const Text('刷新投票'),
           ),
-        ),
+          if (state.canConfirmNotVoted)
+            TextButton(
+              onPressed: () async {
+                final confirmed = await showAppDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('确认投票结果'),
+                    content: const Text('刷新后尚未查到已投记录。请确认这次投票没有成功，再解除重试限制。'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('继续核对'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('确认未投票'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true && mounted) controller.confirmNotVoted();
+              },
+              child: const Text('已核对，确认未投票'),
+            ),
+          if (open)
+            FilledButton(
+              key: const ValueKey('dynamic-poll-submit'),
+              onPressed:
+                  state.busy ||
+                      state.uncertain ||
+                      (signedIn && state.selected.isEmpty)
+                  ? null
+                  : () async {
+                      if (!signedIn) {
+                        if (widget.onLogin != null) {
+                          Navigator.pop(context);
+                          widget.onLogin!();
+                        }
+                        return;
+                      }
+                      await controller.submit(dynamicId: widget.dynamicId);
+                    },
+              child: Text(
+                state.busy
+                    ? '投票中…'
+                    : signedIn
+                    ? '投票'
+                    : '登录后投票',
+              ),
+            ),
+        ],
       ),
     );
   }
-}
-
-String _dateLabel(DateTime time) {
-  final local = time.toLocal();
-  String two(int value) => value.toString().padLeft(2, '0');
-  return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
 }

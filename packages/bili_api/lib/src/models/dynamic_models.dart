@@ -97,6 +97,9 @@ final class ApiDynamicPost {
     this.repostForbidden = false,
     this.likeForbidden = false,
     this.unavailable = false,
+    this.pinned = false,
+    this.onlySelf = false,
+    this.editable = false,
   }) : contentCards = List.unmodifiable(contentCards),
        spans = List.unmodifiable(spans),
        imageUrls = List.unmodifiable(imageUrls),
@@ -127,6 +130,9 @@ final class ApiDynamicPost {
   final String? commentOid;
   final int? commentType;
   final bool unavailable,
+      pinned,
+      onlySelf,
+      editable,
       liked,
       commentForbidden,
       repostForbidden,

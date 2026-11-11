@@ -116,6 +116,7 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
     }
     if (kind == _ContentKind.dynamics) {
       return SliverDynamicPostList(
+        pinnedFirst: true,
         posts: _posts ??= [
           for (final entry in widget.entries) ?entry.dynamicPost,
         ],

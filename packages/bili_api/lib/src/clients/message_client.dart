@@ -329,6 +329,53 @@ final class MessageClient {
     }, context: context);
   }
 
+  Future<void> shareDynamic(
+    String sender,
+    String receiver, {
+    required String id,
+    required String title,
+    required String author,
+    required String authorId,
+    required int source,
+    Uri? thumbnail,
+    ApiRequestContext? context,
+  }) async {
+    const endpoint = 'message_share_dynamic';
+    _decimal(sender, endpoint);
+    _decimal(receiver, endpoint);
+    _decimal(id, endpoint);
+    _decimal(authorId, endpoint);
+    if (!const {2, 6, 11}.contains(source) ||
+        title.runes.length > 32768 ||
+        author.length > 200 ||
+        (thumbnail != null &&
+            (thumbnail.scheme != 'https' || thumbnail.userInfo.isNotEmpty))) {
+      throw ArgumentError('Invalid dynamic share');
+    }
+    await api.submitMessageForm('/web_im/v1/web_im/send_msg', endpoint, {
+      'msg[sender_uid]': sender,
+      'msg[receiver_id]': receiver,
+      'msg[receiver_type]': '1',
+      'msg[msg_type]': '7',
+      'msg[msg_status]': '0',
+      'msg[content]': jsonEncode({
+        'id': id,
+        'title': title.substring(0, title.length.clamp(0, 1000)),
+        'headline': '',
+        'source': source,
+        if (thumbnail != null) 'thumb': thumbnail.toString(),
+        'author': author,
+        'author_id': authorId,
+      }),
+      'msg[timestamp]': '${DateTime.now().millisecondsSinceEpoch ~/ 1000}',
+      'msg[dev_id]': '0',
+      'msg[new_face_version]': '1',
+      'from_firework': '0',
+      'build': '0',
+      'mobi_app': 'web',
+    }, context: context);
+  }
+
   Future<List<ApiMessageEmotePackage>> emotes({
     ApiRequestContext? context,
   }) async {

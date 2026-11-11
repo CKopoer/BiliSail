@@ -14,6 +14,9 @@ DynamicPost mapDynamicPost(ApiDynamicPost p) {
   final topic = p.topic;
   return DynamicPost(
     id: p.id,
+    pinned: p.pinned,
+    onlySelf: p.onlySelf,
+    editable: p.editable,
     title: p.title,
     authorName: p.authorName,
     authorId: UserId.tryParse(p.authorId),

@@ -8,8 +8,10 @@ import 'app_dialog.dart';
 import 'dynamic_compose_editor.dart';
 export 'dynamic_compose_editor.dart' show DynamicComposeDialog;
 import 'app_notice.dart';
+import '../../features/dynamic/application/dynamic_content_state.dart';
+import 'dynamic_post_menu.dart';
 
-class DynamicComposeToolbar extends StatelessWidget {
+class DynamicComposeToolbar extends ConsumerWidget {
   const DynamicComposeToolbar({
     super.key,
     required this.child,
@@ -30,13 +32,19 @@ class DynamicComposeToolbar extends StatelessWidget {
   final bool visible;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
+  Widget build(BuildContext context, WidgetRef ref) => LayoutBuilder(
     builder: (context, constraints) {
       final extraTextWidth =
           (MediaQuery.textScalerOf(context).scale(13) - 13) * 8;
       return Row(
         children: [
           Expanded(child: child),
+          if (ref.watch(dynamicContentProvider).hiddenAuthors.isNotEmpty)
+            IconButton(
+              tooltip: '临时屏蔽的UP主',
+              onPressed: () => showTemporaryDynamicBlocks(context),
+              icon: const Icon(Icons.visibility_off_outlined),
+            ),
           if (visible)
             Padding(
               padding: const EdgeInsets.only(left: 8, right: 12),

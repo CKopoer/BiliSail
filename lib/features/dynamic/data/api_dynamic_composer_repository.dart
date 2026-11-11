@@ -6,8 +6,10 @@ import '../../../domain/request_cancellation.dart';
 import '../domain/dynamic_composer_repository.dart';
 import '../domain/dynamic_repository.dart';
 import '../domain/dynamic_draft.dart';
+import '../domain/dynamic_management_repository.dart';
 
-final class ApiDynamicComposerRepository implements DynamicComposerRepository {
+final class ApiDynamicComposerRepository
+    implements DynamicComposerRepository, DynamicEditRepository {
   ApiDynamicComposerRepository(
     this.client,
     this.requests, {
@@ -20,6 +22,41 @@ final class ApiDynamicComposerRepository implements DynamicComposerRepository {
   String get accountScope => _scope();
   @override
   int get sessionEpoch => requests.sessionEpoch;
+
+  @override
+  Future<void> edit({
+    required String mid,
+    required String id,
+    required String title,
+    required String text,
+    required List<DynamicTextSpan> spans,
+    required List<DynamicPicture> pictures,
+    DynamicComposeTopic? topic,
+    required DynamicPublishOptions options,
+    String? repostId,
+    String? reserveId,
+    required RequestCancellation cancellation,
+  }) => _write((context) async {
+    await client.create(
+      mid: mid,
+      text: text,
+      title: title,
+      contents: _contents(text, spans, null, null),
+      pictures: [
+        for (final p in pictures)
+          ApiDynamicPicture(p.url, p.width, p.height, p.sizeKiB),
+      ],
+      topic: topic == null
+          ? null
+          : ApiDynamicComposeTopic(topic.id, topic.name),
+      onlySelf: options.onlySelf,
+      replyPolicy: options.replyPolicy.index,
+      editId: id,
+      repostId: repostId,
+      reserveId: reserveId,
+      context: context,
+    );
+  }, cancellation);
 
   @override
   Future<List<DynamicEmotePackage>> emotes(RequestCancellation cancellation) =>
@@ -202,7 +239,11 @@ List<ApiDynamicContent> _contents(
     result.add(
       ApiDynamicContent(
         text.substring(span.start, span.end),
-        span.kind == DynamicTextKind.mention ? 2 : 9,
+        switch (span.kind) {
+          DynamicTextKind.mention => 2,
+          DynamicTextKind.vote => 4,
+          DynamicTextKind.emote => 9,
+        },
         id: span.id,
       ),
     );
