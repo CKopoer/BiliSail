@@ -12,6 +12,7 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import '../core/network/api_requests.dart';
+import '../core/network/web_device_store.dart';
 import '../domain/media_cdn.dart';
 import '../domain/audio_quality.dart';
 import '../core/logging/playback_diagnostic_log.dart';
@@ -255,7 +256,15 @@ class AppDependencies {
         },
       ),
     );
-    final api = BiliApiClient(sessionProvider: requests);
+    final webDevice = WebDeviceStore(
+      SystemCredentialStore(keyPrefix: 'bilisail.web_device.v1'),
+    );
+    final api = BiliApiClient(
+      sessionProvider: requests,
+      prepareWebRequests: true,
+      loadWebDevice: webDevice.load,
+      saveWebDevice: webDevice.save,
+    );
     late final SessionRepository session;
     late final AppDependencies dependencies;
     final library = SqliteLibraryRepository(
@@ -406,6 +415,11 @@ class AppDependencies {
       },
     );
     session = SessionRepository(
+      loginClientFactory: () => BiliApiClient(
+        prepareWebRequests: true,
+        loadWebDevice: webDevice.load,
+        saveWebDevice: webDevice.save,
+      ),
       loadAppDevice: () => dependencies.appRecommendationIdentity.deviceId(),
       api: api,
       requests: requests,

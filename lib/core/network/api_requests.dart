@@ -134,9 +134,13 @@ AppFailure mapApiFailure(ApiFailure error) => switch (error.category) {
       _ => '当前账号没有观看权限，或内容存在地区限制',
     },
   ),
-  ApiFailureCategory.rateLimited => const AppFailure(
+  ApiFailureCategory.rateLimited => AppFailure(
     AppFailureKind.rateLimited,
-    '服务暂时限制了请求，请稍后再试',
+    error.requiresVerification
+        ? '请求需要安全验证，请前往哔哩哔哩官网完成验证后重试'
+        : error.retryAfter != null
+        ? '请求触发了限流或风控，请等待 ${error.retryAfter!.inSeconds + 1} 秒后重试；若持续出现，请前往哔哩哔哩官网检查登录和验证状态'
+        : '请求触发了限流或风控，请稍后重试；若持续出现，请前往哔哩哔哩官网检查登录和验证状态',
   ),
   ApiFailureCategory.notFound => const AppFailure(
     AppFailureKind.notFound,

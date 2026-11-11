@@ -2,8 +2,13 @@ import 'dart:io';
 
 final class ApiCookieJar {
   final List<_StoredCookie> _cookies = [];
+  int _generation = 0;
+  int get generation => _generation;
 
-  void clear() => _cookies.clear();
+  void clear() {
+    _generation++;
+    _cookies.clear();
+  }
 
   /// Serialize only into a platform credential store, never ordinary settings.
   Map<String, Object?> exportForSecureStorage() => {
@@ -73,6 +78,7 @@ final class ApiCookieJar {
         ),
       );
     }
+    _generation++;
     _cookies
       ..clear()
       ..addAll(restored);

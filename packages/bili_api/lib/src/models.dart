@@ -26,6 +26,7 @@ final class ApiFailure implements Exception {
     this.businessCode,
     this.retryAfter,
     this.videoAccessKind,
+    this.requiresVerification = false,
   });
 
   final ApiFailureCategory category;
@@ -34,6 +35,7 @@ final class ApiFailure implements Exception {
   final int? businessCode;
   final Duration? retryAfter;
   final ApiVideoAccessKind? videoAccessKind;
+  final bool requiresVerification;
 
   @override
   String toString() =>

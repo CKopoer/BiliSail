@@ -156,6 +156,7 @@ final class LiveClient {
   }) async {
     _validateId(roomId);
     final origin = Uri.https('api.live.bilibili.com', '/');
+    if (api.prepareWebRequests) await api.prepareWebContext(context: context);
     var cookie = _cookieValues(api.cookieJar.headerFor(origin));
     var device = cookie['buvid3'];
     if (device == null || device.isEmpty) {

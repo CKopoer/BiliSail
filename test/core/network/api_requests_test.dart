@@ -7,6 +7,25 @@ import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('risk guidance distinguishes verification from cooldown', () {
+    final verification = mapApiFailure(
+      const ApiFailure(
+        ApiFailureCategory.rateLimited,
+        'search',
+        requiresVerification: true,
+      ),
+    );
+    expect(verification.kind, AppFailureKind.rateLimited);
+    expect(verification.message, contains('安全验证'));
+    final cooldown = mapApiFailure(
+      const ApiFailure(
+        ApiFailureCategory.rateLimited,
+        'weekly',
+        retryAfter: Duration(seconds: 30),
+      ),
+    );
+    expect(cooldown.message, allOf(contains('风控'), contains('31 秒')));
+  });
   test(
     'session advance cancels an old response even if transport errors',
     () async {
