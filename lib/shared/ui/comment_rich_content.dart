@@ -344,9 +344,21 @@ class CommentAuthorHeader extends StatelessWidget {
       builder: (context, constraints) => constraints.maxWidth >= 300
           ? Row(
               children: [
-                Expanded(child: identity),
+                // Let author badges use the decoration's spare transparent
+                // padding, while keeping at least 112px for its art and serial.
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth - 112 - 8,
+                  ),
+                  child: identity,
+                ),
                 const SizedBox(width: 8),
-                decoration,
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: decoration,
+                  ),
+                ),
               ],
             )
           : Column(
