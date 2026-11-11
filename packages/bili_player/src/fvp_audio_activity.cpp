@@ -1,6 +1,7 @@
 // Copyright (c) 2026 BiliSail contributors. All rights reserved.
 #include "fvp_audio_activity.h"
 #include "../third_party/mdk/Player.h"
+#include "../third_party/mdk/AudioFrame.h"
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -10,6 +11,7 @@
 namespace {
 struct AudioActivity final {
   std::atomic<uint64_t> frames{0};
+  std::atomic<int64_t> end_ms{-1};
 };
 
 struct AudioClock final {
@@ -82,8 +84,22 @@ int observe_audio(mdkAudioFrameAPI** frame, int, void* opaque) noexcept {
   // Keep PCM and borrowed frame pointers in MDK. This callback must never call
   // Dart, allocate, wait, or modify the frame/filter's pending-frame count.
   if (frame != nullptr && *frame != nullptr) {
-    static_cast<AudioActivity*>(opaque)->frames.fetch_add(
-        1, std::memory_order_relaxed);
+    auto& activity = *static_cast<AudioActivity*>(opaque);
+    activity.frames.fetch_add(1, std::memory_order_relaxed);
+    const auto* api = *frame;
+    if (api->timestamp != nullptr && api->duration != nullptr &&
+        api->samplesPerChannel != nullptr && api->samplesPerChannel(api->object) > 0) {
+      const auto timestamp = api->timestamp(api->object);
+      const auto duration = api->duration(api->object);
+      const auto end_ms = (timestamp + duration) * 1000;
+      // EOS has TimestampEOS and no samples. Never let it, NaN or an invalid
+      // timestamp conceal a truncated stream. No PCM or frame pointer escapes.
+      if (std::isfinite(timestamp) && timestamp >= 0 &&
+          std::isfinite(duration) && duration >= 0 && std::isfinite(end_ms) &&
+          end_ms >= 0 && end_ms < static_cast<double>((std::numeric_limits<int64_t>::max)())) {
+        activity.end_ms.store(static_cast<int64_t>(end_ms), std::memory_order_relaxed);
+      }
+    }
   }
   return 0;
 }
@@ -101,6 +117,11 @@ void* bili_fvp_audio_attach(uintptr_t player_api) {
 
 uint64_t bili_fvp_audio_frames(void* activity) {
   return activity == nullptr ? 0 : static_cast<AudioActivity*>(activity)->frames.load(
+      std::memory_order_relaxed);
+}
+
+int64_t bili_fvp_audio_end(void* activity) {
+  return activity == nullptr ? -1 : static_cast<AudioActivity*>(activity)->end_ms.load(
       std::memory_order_relaxed);
 }
 

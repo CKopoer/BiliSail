@@ -7,6 +7,25 @@ mdkSyncCallback sync_callback{};
 int sync_interval = 0;
 int64_t audio_position = 0;
 float audio_rate = 1;
+mdkAudioCallback audio_callback{};
+double frame_timestamp = 0, frame_duration = 0;
+int frame_samples = 1024;
+
+void install_audio(mdkPlayer*, mdkAudioCallback callback) {
+  audio_callback = callback;
+}
+double timestamp(mdkAudioFrame*) { return frame_timestamp; }
+double duration(mdkAudioFrame*) { return frame_duration; }
+int samples(mdkAudioFrame*) { return frame_samples; }
+
+void expect_audio_end(void* activity, int64_t expected) {
+  const auto actual = bili_fvp_audio_end(activity);
+  if (actual != expected) {
+    std::cerr << "Unexpected decoded audio endpoint: expected=" << expected
+              << " actual=" << actual << '\n';
+    std::exit(1);
+  }
+}
 
 void install_sync(mdkPlayer*, mdkSyncCallback callback, int interval) {
   sync_callback = callback;
@@ -27,6 +46,42 @@ void expect_clock(double expected) {
 
 int main() {
   mdkPlayerAPI video{}, audio{};
+  audio.onAudio = install_audio;
+  auto* activity = bili_fvp_audio_attach(reinterpret_cast<uintptr_t>(&audio));
+  if (activity == nullptr) return 1;
+  expect_audio_end(activity, -1);
+  expect_audio_end(nullptr, -1);
+  mdkAudioFrameAPI frame{};
+  frame.timestamp = timestamp;
+  frame.duration = duration;
+  frame.samplesPerChannel = samples;
+  auto* frame_api = &frame;
+  frame_timestamp = 163.2;
+  frame_duration = 0.02;
+  audio_callback.cb(&frame_api, 0, audio_callback.opaque);
+  expect_audio_end(activity, 163220);
+  // Natural EOS resets output position and supplies a sentinel frame. Retain
+  // the real decoded endpoint instead of classifying it from that reset clock.
+  frame_timestamp = (std::numeric_limits<double>::max)();
+  frame_samples = 0;
+  audio_position = 0;
+  audio_callback.cb(&frame_api, 0, audio_callback.opaque);
+  expect_audio_end(activity, 163220);
+  // A backward seek replaces the endpoint; old future frames cannot validate
+  // a subsequently truncated stream, nor can NaN, negatives or EOS markers.
+  frame_samples = 1024;
+  frame_timestamp = 11.98;
+  audio_callback.cb(&frame_api, 0, audio_callback.opaque);
+  expect_audio_end(activity, 12000);
+  for (const auto invalid : {-1.0, (std::numeric_limits<double>::max)(),
+                            std::numeric_limits<double>::quiet_NaN()}) {
+    frame_timestamp = invalid;
+    audio_callback.cb(&frame_api, 0, audio_callback.opaque);
+    expect_audio_end(activity, 12000);
+  }
+  if (bili_fvp_audio_frames(activity) != 6) return 1;
+  audio_callback = {};
+  bili_fvp_audio_release(activity);
   video.onSync = install_sync;
   audio.position = position;
   audio.playbackRate = playback_rate;

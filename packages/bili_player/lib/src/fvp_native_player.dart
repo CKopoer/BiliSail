@@ -9,6 +9,7 @@ import 'android_fvp_player.dart';
 import 'android_fvp_worker.dart';
 import 'player_contract.dart';
 import 'fvp_buffer.dart';
+import 'fvp_audio_end.dart';
 import 'fvp_playback_information.dart';
 import 'fvp_video_decoders.dart';
 import 'fvp_surface_preroll.dart';
@@ -162,6 +163,7 @@ final class _MdkPlayerPort
   StreamSubscription<FvpNativeStatus>? _audioSubscription;
   Pointer<Void> _audioClock = nullptr;
   int _durationMilliseconds = 0;
+  int _mediaStartMilliseconds = 0;
   bool _videoBuffering = false, _audioBuffering = false;
   final _playingClock = Stopwatch();
   double _rate = 1;
@@ -216,6 +218,11 @@ final class _MdkPlayerPort
       _audioCompanion?.decodedAudioFrames ??
       audio_activity.bili_fvp_audio_frames(_audioActivity);
 
+  int get _decodedAudioEndMilliseconds => fvpAudioEndPosition(
+    frameEndMilliseconds: audio_activity.bili_fvp_audio_end(_audioActivity),
+    mediaStartMilliseconds: _mediaStartMilliseconds,
+  );
+
   void _buffering(bool value, {bool audio = false}) {
     if (audio) {
       _audioBuffering = value;
@@ -241,18 +248,19 @@ final class _MdkPlayerPort
           FvpNativeStatus.audioEnded:
         _statuses.add(status);
       case FvpNativeStatus.ended:
-        // MDK may reset audio.position to zero as the output reaches EOS.
-        // The still displayed video frame confirms a natural paired ending.
-        final audioPosition = _audioCompanion?.positionMilliseconds ?? 0;
+        final audio = _audioCompanion;
+        final decodedEnd = audio?._decodedAudioEndMilliseconds ?? -1;
         final videoPosition = _native?.position ?? 0;
-        final position = audioPosition > videoPosition
-            ? audioPosition
-            : videoPosition;
-        if (_durationMilliseconds - position > 500) {
+        if (!fvpAudioEndedNaturally(
+          decodedEndMilliseconds: decodedEnd,
+          audioDurationMilliseconds: audio?._durationMilliseconds ?? 0,
+          videoPositionMilliseconds: videoPosition,
+          videoDurationMilliseconds: _durationMilliseconds,
+        )) {
           _statuses.add(FvpNativeStatus.audioEnded);
         } else {
-          // Natural audio EOS has no further clock ticks. Drain only the
-          // paired final video frame, instead of waiting on a reset AO clock.
+          // Preserve real terminal audio evidence while the final video drains;
+          // neither native AO reset nor the Android sample can imply a dropout.
           _holdClock(_durationMilliseconds);
         }
     }
@@ -333,6 +341,10 @@ final class _MdkPlayerPort
   @override
   int get positionMilliseconds {
     if (_closed) return 0;
+    if (_ended && _dimensions == null) {
+      final decodedEnd = _decodedAudioEndMilliseconds;
+      if (decodedEnd >= 0) return decodedEnd;
+    }
     final position = _native?.position ?? 0;
     // Pure audio has no presentation clock until first play. Use the native
     // prepare/seek confirmation while paused, then retire it on the first tick.
@@ -482,6 +494,7 @@ final class _MdkPlayerPort
     final info = _player.mediaInfo;
     _live = isLive || _player.isLive;
     _durationMilliseconds = info.duration;
+    _mediaStartMilliseconds = info.startTime;
     final video = info.video?.firstOrNull;
     if ((video == null || audioOnly) && !_live) {
       // Pure audio never enters confirmVideoFrame. Confirm its resume target

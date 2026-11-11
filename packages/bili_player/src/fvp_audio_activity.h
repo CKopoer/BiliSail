@@ -15,6 +15,9 @@ extern "C" {
 // The caller owns this state until native player destruction has completed.
 BILI_AUDIO_API void* bili_fvp_audio_attach(uintptr_t player_api);
 BILI_AUDIO_API uint64_t bili_fvp_audio_frames(void* activity);
+// Last decoded audio frame endpoint in media milliseconds, or -1 if unknown.
+// Retained across the output clock's EOF reset, overwritten by each new frame.
+BILI_AUDIO_API int64_t bili_fvp_audio_end(void* activity);
 BILI_AUDIO_API void* bili_fvp_audio_clock(uintptr_t video_api, uintptr_t audio_api);
 // While paused seek decodes its target, do not wait on the frozen audio clock.
 // End this state with hold() only after both target callbacks have completed.
