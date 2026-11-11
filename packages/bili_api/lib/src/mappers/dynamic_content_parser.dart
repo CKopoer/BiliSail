@@ -18,11 +18,17 @@ ApiDynamicTopic? _topic(Map<String, Object?> value) {
 Uri _topicUrl(String id) =>
     Uri.https('www.bilibili.com', '/v/topic/detail', {'topic_id': id});
 
+Uri _voteUrl(String id) =>
+    Uri.https('t.bilibili.com', '/vote/h5/index/', {'vote_id': id});
+
 Uri? _richNodeUrl(Map<String, Object?> node, String dynamicId) {
   final rid = node['rid'];
   final numericId = _id(rid);
   if (node['type'] == 'RICH_TEXT_NODE_TYPE_TOPIC' && numericId != null) {
     return _topicUrl(numericId);
+  }
+  if (node['type'] == 'RICH_TEXT_NODE_TYPE_VOTE' && numericId != null) {
+    return _voteUrl(numericId);
   }
   final direct = _uri(node['jump_url']);
   if (direct != null) return direct;
@@ -217,14 +223,15 @@ List<ApiDynamicContentCard> _contentCards(
     final button = _map(value['button']);
     final actionUrl = _uri(button['jump_url']);
     final voteId = _id(value['vote_id']);
-    final target =
-        _uri(value['jump_url']) ??
-        actionUrl ??
-        (voteId == null
-            ? fallback
-            : Uri.https('t.bilibili.com', '/vote/h5/index/', {
-                'vote_id': voteId,
-              }));
+    final target = kind == ApiDynamicCardKind.vote && voteId != null
+        ? _voteUrl(voteId)
+        : _uri(value['jump_url']) ??
+              actionUrl ??
+              (voteId == null
+                  ? fallback
+                  : Uri.https('t.bilibili.com', '/vote/h5/index/', {
+                      'vote_id': voteId,
+                    }));
     final match = _map(value['match_info']);
     final left = _map(match['left_team']);
     final right = _map(match['right_team']);
@@ -258,7 +265,9 @@ List<ApiDynamicContentCard> _contentCards(
         kind: kind,
         title: _text(
           value['title'],
-          fallback: _text(match['title'], fallback: label),
+          fallback: kind == ApiDynamicCardKind.vote
+              ? _text(value['desc'], fallback: label)
+              : _text(match['title'], fallback: label),
         ),
         description: kind == ApiDynamicCardKind.vote
             ? '${_number(value['join_num']) ?? 0}人参与'
@@ -291,7 +300,9 @@ List<ApiDynamicContentCard> _contentCards(
             : actionLabel.isEmpty
             ? '查看详情'
             : actionLabel,
-        actionUrl: actionUrl ?? target,
+        actionUrl: kind == ApiDynamicCardKind.vote
+            ? target
+            : actionUrl ?? target,
       ),
     );
   }

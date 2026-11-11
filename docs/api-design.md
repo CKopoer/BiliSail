@@ -1,5 +1,7 @@
 # API、鉴权与数据边界
 
+2026-11-11 动态投票补齐 Web GET `/x/vote/vote_info` 与 JSON POST `/x/vote/do_vote`，复用 Cookie／CSRF、25 秒 deadline 和单次写入通道。卡片及正文保留投票身份，在应用内查看和参与；服务端选项索引、本人选择、账号隔离及结果不明处理见[动态投票查看与参与](validation/dynamic-poll-viewing-2026-11-11.md)。
+
 2026-11-11 动态投稿补齐B站表情、@用户、18图、标题／评论／私密／定时设置及投票／直播预约。新增 Web Cookie 用户候选读取、单次投票JSON与预约form创建，富文本保留type及biz_id；附件创建不明与动态创建不明共用显式核对锁定。端点、参数、容量及验证边界见[动态发布能力](validation/dynamic-publishing-parity-2026-11-11.md)。
 
 2026-11-08 我的关注增加 Web Cookie 全量搜索（WBI `/x/relation/followings/search`）、黑名单分页、关注排序及分组新建／重命名／删除／排序。写入沿用 Web Cookie／CSRF 单次提交，结果不明需刷新，管理端口只允许本人账号。端点、字段、取消与验证边界见[关注／粉丝卡片与管理](validation/profile-relations-2026-11-08.md)。

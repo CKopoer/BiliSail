@@ -13,6 +13,8 @@ import 'dynamic_post_card.dart';
 import 'comments_panel.dart';
 import 'dynamic_detail_layout.dart';
 import '../../features/dynamic/application/dynamic_actions_controller.dart';
+import '../../features/dynamic/domain/dynamic_poll.dart';
+import 'dynamic_poll_dialog.dart';
 
 class InteractiveDynamicPostCard extends ConsumerWidget {
   const InteractiveDynamicPostCard({
@@ -41,6 +43,22 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
     final current = state.detail ?? post;
     void login() =>
         onLogin != null ? onLogin!() : showAppNotice(context, '请先登录后操作');
+    void openLink(Uri uri) {
+      final pollId = dynamicPollIdFromUri(uri);
+      if (pollId == null) {
+        onOpenLink?.call(uri);
+        return;
+      }
+      unawaited(
+        showDynamicPollDialog(
+          context,
+          pollId,
+          dynamicId: _pollDynamicId(current, pollId),
+          onLogin: login,
+        ),
+      );
+    }
+
     void message() {
       if (!context.mounted) return;
       final message = ref.read(provider).message;
@@ -84,7 +102,7 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
           expansionState: expansionState,
           onOpenUser: onOpenUser,
           onOpenVideo: onOpenVideo,
-          onOpenLink: onOpenLink,
+          onOpenLink: openLink,
           liked: state.liked,
           likeCount: state.likeCount,
           repostCount: state.repostCount,
@@ -134,6 +152,21 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
       ],
     );
   }
+}
+
+String? _pollDynamicId(DynamicPost post, String pollId) {
+  if (post.contentCards.any(
+        (card) => card.url != null && dynamicPollIdFromUri(card.url!) == pollId,
+      ) ||
+      post.spans.any(
+        (span) =>
+            span.linkUrl != null &&
+            dynamicPollIdFromUri(span.linkUrl!) == pollId,
+      )) {
+    return post.id;
+  }
+  final original = post.original;
+  return original == null ? null : _pollDynamicId(original, pollId);
 }
 
 class _DynamicDetailDialog extends ConsumerStatefulWidget {
