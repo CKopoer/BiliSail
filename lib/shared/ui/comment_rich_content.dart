@@ -343,6 +343,7 @@ class CommentAuthorHeader extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) => constraints.maxWidth >= 300
           ? Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Let author badges use the decoration's spare transparent
                 // padding, while keeping at least 112px for its art and serial.
