@@ -131,8 +131,10 @@ class DynamicFormDialog extends StatelessWidget {
     required this.body,
     this.actions = const [],
     this.canClose = true,
+    this.closeTooltip = '关闭',
   });
   final String title;
+  final String closeTooltip;
   final Widget body;
   final List<Widget> actions;
   final bool canClose;
@@ -156,7 +158,7 @@ class DynamicFormDialog extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: '关闭',
+                  tooltip: closeTooltip,
                   onPressed: canClose ? () => Navigator.pop(context) : null,
                   icon: const Icon(Icons.close),
                 ),

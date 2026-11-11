@@ -18,8 +18,11 @@ ApiDynamicTopic? _topic(Map<String, Object?> value) {
 Uri _topicUrl(String id) =>
     Uri.https('www.bilibili.com', '/v/topic/detail', {'topic_id': id});
 
-Uri _voteUrl(String id) =>
-    Uri.https('t.bilibili.com', '/vote/h5/index/', {'vote_id': id});
+Uri _voteUrl(String id, String dynamicId) => Uri.https(
+  't.bilibili.com',
+  '/vote/h5/index/',
+  {'vote_id': id, 'dynamic_id': dynamicId},
+);
 
 Uri? _richNodeUrl(Map<String, Object?> node, String dynamicId) {
   final rid = node['rid'];
@@ -28,7 +31,7 @@ Uri? _richNodeUrl(Map<String, Object?> node, String dynamicId) {
     return _topicUrl(numericId);
   }
   if (node['type'] == 'RICH_TEXT_NODE_TYPE_VOTE' && numericId != null) {
-    return _voteUrl(numericId);
+    return _voteUrl(numericId, dynamicId);
   }
   final direct = _uri(node['jump_url']);
   if (direct != null) return direct;
@@ -224,7 +227,7 @@ List<ApiDynamicContentCard> _contentCards(
     final actionUrl = _uri(button['jump_url']);
     final voteId = _id(value['vote_id']);
     final target = kind == ApiDynamicCardKind.vote && voteId != null
-        ? _voteUrl(voteId)
+        ? _voteUrl(voteId, id)
         : _uri(value['jump_url']) ??
               actionUrl ??
               (voteId == null

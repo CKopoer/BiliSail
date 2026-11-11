@@ -14,3 +14,7 @@ abstract interface class DynamicPollRepository {
     String? dynamicId,
   });
 }
+
+abstract interface class DynamicPollSocialRepository {
+  Future<List<DynamicPollFollowee>> followees(String id, RequestCancellation c);
+}

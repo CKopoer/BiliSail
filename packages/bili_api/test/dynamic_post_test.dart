@@ -442,7 +442,7 @@ void main() {
             major: {
               'draw': {
                 'items': List.generate(
-                  12,
+                  20,
                   (i) => {'src': '//i0.hdslb.com/$i.jpg'},
                 ),
               },
@@ -469,7 +469,7 @@ void main() {
         expect(p.spans[4].userId, '123');
         expect(p.spans[5].userId, isNull);
         expect(p.spans[6].linkUrl, isNull);
-        expect(p.imageUrls.length, 9);
+        expect(p.imageUrls.length, 18);
         expect(p.likeCount, isNull);
         expect(p.commentCount, 4);
         expect(() => p.imageUrls.clear(), throwsUnsupportedError);

@@ -10,6 +10,8 @@ import 'app_dialog.dart';
 import 'app_notice.dart';
 import 'dynamic_publish_forms.dart';
 import 'dynamic_image_editor.dart';
+import 'app_network_image.dart';
+import 'image_viewer.dart';
 
 class DynamicComposeDialog extends ConsumerStatefulWidget {
   const DynamicComposeDialog({super.key});
@@ -50,7 +52,9 @@ class _DynamicComposeDialogState extends ConsumerState<DynamicComposeDialog> {
     setState(() => _picking = true);
     try {
       final images = await ref.read(dynamicImagePickerProvider)(
-        DynamicComposerState.maxImages - draft.images.length,
+        DynamicComposerState.maxImages -
+            draft.images.length -
+            draft.existingPictures.length,
       );
       if (mounted &&
           controller.isCurrent(draft.accountScope, draft.sessionEpoch)) {
@@ -190,7 +194,10 @@ class _DynamicComposeDialogState extends ConsumerState<DynamicComposeDialog> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text('发布动态', style: theme.textTheme.titleLarge),
+                      child: Text(
+                        state.editId == null ? '发布动态' : '编辑动态',
+                        style: theme.textTheme.titleLarge,
+                      ),
                     ),
                     IconButton(
                       tooltip: '清空草稿',
@@ -204,7 +211,7 @@ class _DynamicComposeDialogState extends ConsumerState<DynamicComposeDialog> {
                       icon: const Icon(Icons.delete_sweep_outlined),
                     ),
                     IconButton(
-                      tooltip: '关闭并保留草稿',
+                      tooltip: state.editId == null ? '关闭并保留草稿' : '关闭编辑',
                       onPressed: busy ? null : () => Navigator.pop(context),
                       icon: const Icon(Icons.close),
                     ),
@@ -215,6 +222,52 @@ class _DynamicComposeDialogState extends ConsumerState<DynamicComposeDialog> {
                   child: ListView(
                     key: const ValueKey('dynamic-compose-scroll'),
                     children: [
+                      if (state.existingPictures.isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final (i, picture)
+                                in state.existingPictures.indexed)
+                              SizedBox(
+                                width: 100,
+                                height: 100,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    InkWell(
+                                      onTap: () => showImageViewer(
+                                        context,
+                                        state.existingPictures
+                                            .map((p) => p.url)
+                                            .toList(),
+                                        i,
+                                      ),
+                                      child: AppNetworkImage(
+                                        url: picture.url.toString(),
+                                        fit: BoxFit.cover,
+                                        cacheWidth: 240,
+                                      ),
+                                    ),
+                                    Align(
+                                      alignment: Alignment.topRight,
+                                      child: IconButton.filledTonal(
+                                        tooltip: '移除已有图片${i + 1}',
+                                        onPressed: enabled
+                                            ? () => controller
+                                                  .removeExistingPicture(
+                                                    picture,
+                                                  )
+                                            : null,
+                                        icon: const Icon(Icons.close, size: 18),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      if (state.reserveId != null) const Text('已保留原直播预约'),
                       if (state.topic case final topic?)
                         Align(
                           alignment: Alignment.centerLeft,
@@ -493,7 +546,10 @@ class _DynamicComposeDialogState extends ConsumerState<DynamicComposeDialog> {
                             )
                           else
                             OutlinedButton.icon(
-                              onPressed: enabled && !options.onlySelf
+                              onPressed:
+                                  enabled &&
+                                      !options.onlySelf &&
+                                      state.editId == null
                                   ? _time
                                   : null,
                               icon: const Icon(Icons.schedule, size: 18),
@@ -562,7 +618,11 @@ class _DynamicComposeDialogState extends ConsumerState<DynamicComposeDialog> {
                   children: [
                     IconButton(
                       tooltip: '添加图片',
-                      onPressed: enabled && state.images.length < 18
+                      onPressed:
+                          enabled &&
+                              state.images.length +
+                                      state.existingPictures.length <
+                                  18
                           ? _pickImages
                           : null,
                       icon: const Icon(Icons.add_photo_alternate_outlined),
@@ -584,12 +644,18 @@ class _DynamicComposeDialogState extends ConsumerState<DynamicComposeDialog> {
                     ),
                     IconButton(
                       tooltip: '投票',
-                      onPressed: enabled && !state.uncertain ? _poll : null,
+                      onPressed:
+                          enabled && !state.uncertain && state.editId == null
+                          ? _poll
+                          : null,
                       icon: const Icon(Icons.poll_outlined),
                     ),
                     IconButton(
                       tooltip: '直播预约',
-                      onPressed: enabled && !state.uncertain ? _reserve : null,
+                      onPressed:
+                          enabled && !state.uncertain && state.editId == null
+                          ? _reserve
+                          : null,
                       icon: const Icon(Icons.live_tv),
                     ),
                     FilledButton(
@@ -605,6 +671,8 @@ class _DynamicComposeDialogState extends ConsumerState<DynamicComposeDialog> {
                       child: Text(
                         state.busy
                             ? '发布中…'
+                            : state.editId != null
+                            ? '保存修改'
                             : options.publishAt != null
                             ? '定时发布'
                             : '发布',

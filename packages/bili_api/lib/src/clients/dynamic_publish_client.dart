@@ -191,12 +191,16 @@ final class DynamicPublishClient {
     int replyPolicy = 0,
     DateTime? publishAt,
     String? reserveId,
+    String? editId,
+    String? repostId,
     ApiRequestContext? context,
   }) async {
     final rich = contents ?? [ApiDynamicContent(text, 1)];
     final raw = rich.map((c) => c.text).join();
     final now = DateTime.now();
     if (_id(mid) == null ||
+        (editId != null && _id(editId) == null) ||
+        (repostId != null && (editId == null || _id(repostId) == null)) ||
         title.runes.length > 20 ||
         rich.length > 1000 ||
         raw != text ||
@@ -236,66 +240,78 @@ final class DynamicPublishClient {
           picture.height > 20000 ||
           picture.width * picture.height > 40000000 ||
           !picture.sizeKiB.isFinite ||
-          picture.sizeKiB <= 0 ||
+          (editId == null ? picture.sizeKiB <= 0 : picture.sizeKiB < 0) ||
           picture.sizeKiB > 10240) {
         throw ArgumentError('Invalid dynamic picture');
       }
     }
     const endpoint = 'dynamic_publish';
+    final uploadId =
+        '${mid}_${DateTime.now().millisecondsSinceEpoch ~/ 1000}_${1000 + Random.secure().nextInt(9000)}';
+    final body = <String, Object?>{
+      'dyn_id_str': ?editId,
+      if (repostId != null) 'web_repost_src': {'dyn_id_str': repostId},
+      'dyn_req': {
+        'scene': repostId != null
+            ? 4
+            : pictures.isEmpty
+            ? 1
+            : 2,
+        'content': {
+          if (title.isNotEmpty) 'title': title,
+          'contents': [
+            for (final c in rich)
+              {'raw_text': c.text, 'type': c.type, 'biz_id': c.id},
+          ],
+        },
+        if (onlySelf || replyPolicy != 0 || publishAt != null)
+          'option': {
+            if (onlySelf) 'private_pub': 1,
+            if (replyPolicy == 1) 'close_comment': 1,
+            if (replyPolicy == 2) 'up_choose_comment': 1,
+            if (publishAt != null)
+              'timer_pub_time': publishAt.millisecondsSinceEpoch ~/ 1000,
+          },
+        if (reserveId != null)
+          'attach_card': {
+            'common_card': {
+              'type': 14,
+              'biz_id': int.parse(reserveId),
+              'reserve_source': 0,
+              'reserve_lottery': 0,
+            },
+          },
+        if (pictures.isNotEmpty)
+          'pics': [
+            for (final picture in pictures)
+              {
+                'img_src': picture.url.toString(),
+                'img_width': picture.width,
+                'img_height': picture.height,
+                if (picture.sizeKiB > 0) 'img_size': picture.sizeKiB,
+              },
+          ],
+        if (topic != null)
+          'topic': {
+            'id': int.parse(topic.id),
+            'name': topic.name,
+            'from_source': 'dyn.web.list',
+            'from_topic_id': 0,
+          },
+        'upload_id': uploadId,
+        'meta': {
+          'app_meta': {'from': 'create.dynamic.web', 'mobi_app': 'web'},
+        },
+      },
+    };
+    if (editId != null) {
+      await api.editDynamic(body, uploadId: uploadId, context: context);
+      return editId;
+    }
     final result = await api.submitDynamicJson(
       '/x/dynamic/feed/create/dyn',
       endpoint,
-      {
-        'dyn_req': {
-          'scene': pictures.isEmpty ? 1 : 2,
-          'content': {
-            if (title.isNotEmpty) 'title': title,
-            'contents': [
-              for (final c in rich)
-                {'raw_text': c.text, 'type': c.type, 'biz_id': c.id},
-            ],
-          },
-          if (onlySelf || replyPolicy != 0 || publishAt != null)
-            'option': {
-              if (onlySelf) 'private_pub': 1,
-              if (replyPolicy == 1) 'close_comment': 1,
-              if (replyPolicy == 2) 'up_choose_comment': 1,
-              if (publishAt != null)
-                'timer_pub_time': publishAt.millisecondsSinceEpoch ~/ 1000,
-            },
-          if (reserveId != null)
-            'attach_card': {
-              'common_card': {
-                'type': 14,
-                'biz_id': int.parse(reserveId),
-                'reserve_source': 0,
-                'reserve_lottery': 0,
-              },
-            },
-          if (pictures.isNotEmpty)
-            'pics': [
-              for (final picture in pictures)
-                {
-                  'img_src': picture.url.toString(),
-                  'img_width': picture.width,
-                  'img_height': picture.height,
-                  'img_size': picture.sizeKiB,
-                },
-            ],
-          if (topic != null)
-            'topic': {
-              'id': int.parse(topic.id),
-              'name': topic.name,
-              'from_source': 'dyn.web.list',
-              'from_topic_id': 0,
-            },
-          'upload_id':
-              '${mid}_${DateTime.now().millisecondsSinceEpoch ~/ 1000}_${1000 + Random.secure().nextInt(9000)}',
-          'meta': {
-            'app_meta': {'from': 'create.dynamic.web', 'mobi_app': 'web'},
-          },
-        },
-      },
+      body,
       context: context,
     );
     final id = result is Map<String, Object?>

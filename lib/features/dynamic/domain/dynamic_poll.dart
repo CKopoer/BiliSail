@@ -1,3 +1,6 @@
+import '../../../domain/user.dart';
+import 'dynamic_link.dart';
+
 final class DynamicPollOption {
   const DynamicPollOption({
     required this.index,
@@ -30,18 +33,24 @@ final class DynamicPoll {
   bool get hasVoted => myVotes.isNotEmpty;
   bool endedAt(DateTime now) => !endsAt.isAfter(now);
   int get totalVotes => options.fold(0, (sum, option) => sum + option.count);
+  bool openAt(DateTime now) => !endedAt(now) && !hasVoted;
+  double fraction(int index) => totalVotes == 0
+      ? 0
+      : (options.firstWhere((o) => o.index == index).count / totalVotes).clamp(
+          0,
+          1,
+        );
+}
+
+final class DynamicPollFollowee {
+  const DynamicPollFollowee(this.id, this.name, this.votes, this.avatar);
+  final UserId id;
+  final String name;
+  final List<int> votes;
+  final Uri? avatar;
 }
 
 /// Only recognized official vote pages open the native poll dialog.
 String? dynamicPollIdFromUri(Uri uri) {
-  if (!{'https', 'http'}.contains(uri.scheme) ||
-      uri.userInfo.isNotEmpty ||
-      uri.host != 't.bilibili.com' ||
-      !{'/vote/h5/index', '/vote/h5/index/'}.contains(uri.path)) {
-    return null;
-  }
-  final ids = uri.queryParametersAll['vote_id'];
-  if (ids == null || ids.length != 1) return null;
-  final id = ids.single;
-  return id.length <= 128 && RegExp(r'^[1-9][0-9]*$').hasMatch(id) ? id : null;
+  return dynamicPollId(uri);
 }

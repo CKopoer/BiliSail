@@ -35,7 +35,7 @@ final class DynamicAuthFake implements AuthRepository {
   Future<void> signOut() async => change(const AuthState());
 }
 
-final class DynamicRepositoryFake implements DynamicRepository {
+class DynamicRepositoryFake implements DynamicRepository {
   @override
   String accountScope = 'user:7';
   @override

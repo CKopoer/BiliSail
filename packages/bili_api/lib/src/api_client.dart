@@ -574,20 +574,35 @@ final class BiliApiClient {
       '/x/dynamic/feed/create/dyn',
       '/x/vote/create',
       '/x/vote/do_vote',
+      '/x/dynamic/feed/operate/remove',
+      '/x/dynamic/feed/dyn/private_pub_setting',
+      '/x/dynamic/feed/space/set_top',
+      '/x/dynamic/feed/space/rm_top',
     }.contains(path)) {
       throw ArgumentError('Unsupported dynamic mutation');
     }
+    final uri = _api.replace(path: path);
+    final voteCsrf = path == '/x/vote/do_vote'
+        ? _mutationCredentials(uri, endpoint).csrf
+        : null;
     return _submitForm(
       _api.replace(
         path: path,
-        queryParameters: path == '/x/dynamic/feed/create/dyn'
+        queryParameters:
+            const {
+              '/x/dynamic/feed/create/dyn',
+              '/x/dynamic/feed/operate/remove',
+              '/x/dynamic/feed/dyn/private_pub_setting',
+            }.contains(path)
             ? const {'platform': 'web'}
             : null,
       ),
       endpoint,
       const {},
       context,
-      jsonBody: body,
+      jsonBody: voteCsrf == null
+          ? body
+          : {...body, 'csrf': voteCsrf, 'csrf_token': voteCsrf},
     );
   }
 
@@ -600,6 +615,77 @@ final class BiliApiClient {
     fields,
     context,
   );
+
+  Future<Object?> submitDynamicForm(
+    String path,
+    String endpoint,
+    Map<String, String> fields, {
+    ApiRequestContext? context,
+  }) {
+    if (!const {
+      '/x/dynamic/feed/space/set_top',
+      '/x/dynamic/feed/space/rm_top',
+      '/x/dynamic/feed/dynamic_report/add',
+      '/x/v2/reply/subject/modify',
+    }.contains(path)) {
+      throw ArgumentError('Unsupported dynamic form');
+    }
+    return _submitForm(_api.replace(path: path), endpoint, fields, context);
+  }
+
+  Future<void> editDynamic(
+    Map<String, Object?> body, {
+    required String uploadId,
+    ApiRequestContext? context,
+  }) async {
+    const endpoint = 'dynamic_edit';
+    final uri = _api.replace(path: '/x/dynamic/feed/edit/dyn');
+    final credentials = _mutationCredentials(uri, endpoint);
+    final parameters = await _signed({
+      'platform': 'web',
+      'csrf': credentials.csrf,
+      'x-bili-device-req-json':
+          '{"platform":"web","device":"pc","spmid":"333.1368"}',
+      'w_dyn_req.upload_id': uploadId,
+      'w_dyn_req.meta':
+          '{"app_meta":{"from":"create.dynamic.web","mobi_app":"web"}}',
+    }, context);
+    // Signing reads may refresh their key; the mutation itself is attempted once.
+    await _submitForm(
+      uri.replace(queryParameters: parameters),
+      endpoint,
+      const {},
+      context,
+      jsonBody: body,
+    );
+  }
+
+  Future<Map<String, Object?>> publicDynamicDetail(
+    String id, {
+    ApiRequestContext? context,
+  }) async {
+    if (!RegExp(r'^[1-9][0-9]{0,18}$').hasMatch(id)) {
+      throw ArgumentError('Invalid dynamic identity');
+    }
+    final publicApi = BiliApiClient(
+      transport: _transport,
+      sessionProvider: _sessionProvider,
+      timeout: timeout,
+      clock: _clock,
+    );
+    try {
+      return await publicApi.requestJson(
+        Uri.https('api.bilibili.com', '/x/polymer/web-dynamic/v1/detail', {
+          'id': id,
+          'features': 'itemOpusStyle',
+        }),
+        'dynamic_public_check',
+        context: context,
+      );
+    } finally {
+      publicApi.close();
+    }
+  }
 
   ({String cookie, String csrf}) _mutationCredentials(
     Uri uri,
@@ -708,9 +794,7 @@ final class BiliApiClient {
               uri.replace(
                 queryParameters: {...uri.queryParameters, 'csrf': csrf},
               ),
-              body: uri.path == '/x/vote/do_vote'
-                  ? {...jsonBody, 'csrf': csrf, 'csrf_token': csrf}
-                  : jsonBody,
+              body: jsonBody,
               headers: headers,
               timeout: budget,
               cancellation: context?.cancellation,

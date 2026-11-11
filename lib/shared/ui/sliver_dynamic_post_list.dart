@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../features/dynamic/application/dynamic_content_state.dart';
 
 import '../../domain/dynamic_post.dart';
 import '../../domain/user.dart';
@@ -10,7 +13,7 @@ import 'dynamic_post_interactions.dart';
 /// Natural-height, lazy dynamic cards with a known extent for every loaded post.
 /// SliverList's visible-row average is unsuitable for heterogeneous dynamic
 /// cards: it changes the scrollbar range whenever a different row is visible.
-class SliverDynamicPostList extends StatefulWidget {
+class SliverDynamicPostList extends ConsumerWidget {
   const SliverDynamicPostList({
     super.key,
     required this.posts,
@@ -19,6 +22,7 @@ class SliverDynamicPostList extends StatefulWidget {
     this.onOpenVideo,
     this.onOpenLink,
     this.onLogin,
+    this.pinnedFirst = false,
   });
 
   final List<DynamicPost> posts;
@@ -27,12 +31,63 @@ class SliverDynamicPostList extends StatefulWidget {
   final ValueChanged<VideoSummary>? onOpenVideo;
   final ValueChanged<Uri>? onOpenLink;
   final VoidCallback? onLogin;
+  final bool pinnedFirst;
 
   @override
-  State<SliverDynamicPostList> createState() => _SliverDynamicPostListState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final content = ref.watch(dynamicContentProvider);
+    final pinned = {
+      for (final p in content.posts.values)
+        if (p.pinned && p.authorId != null) p.authorId!.value: p.id,
+    };
+    final visible = [
+      for (final post in posts)
+        if (!content.hidden(post)) content.posts[post.id] ?? post,
+    ];
+    for (var i = 0; i < visible.length; i++) {
+      final p = visible[i], chosen = pinned[p.authorId?.value];
+      if (p.pinned && chosen != null && chosen != p.id) {
+        visible[i] = p.withManagement(pinned: false);
+      }
+    }
+    final ordered = pinnedFirst
+        ? [
+            ...visible.where((p) => p.pinned),
+            ...visible.where((p) => !p.pinned),
+          ]
+        : visible;
+    return _RetainedDynamicPostList(
+      posts: ordered,
+      spacing: spacing,
+      onOpenUser: onOpenUser,
+      onOpenVideo: onOpenVideo,
+      onOpenLink: onOpenLink,
+      onLogin: onLogin,
+    );
+  }
 }
 
-class _SliverDynamicPostListState extends State<SliverDynamicPostList> {
+class _RetainedDynamicPostList extends StatefulWidget {
+  const _RetainedDynamicPostList({
+    required this.posts,
+    required this.spacing,
+    this.onOpenUser,
+    this.onOpenVideo,
+    this.onOpenLink,
+    this.onLogin,
+  });
+  final List<DynamicPost> posts;
+  final double spacing;
+  final ValueChanged<UserId>? onOpenUser;
+  final ValueChanged<VideoSummary>? onOpenVideo;
+  final ValueChanged<Uri>? onOpenLink;
+  final VoidCallback? onLogin;
+  @override
+  State<_RetainedDynamicPostList> createState() =>
+      _SliverDynamicPostListState();
+}
+
+class _SliverDynamicPostListState extends State<_RetainedDynamicPostList> {
   final _extents = <String, (DynamicPost, double)>{};
   final _pendingSizes = <String, (DynamicPost, double)>{};
   final _expansionState = DynamicPostExpansionState();
@@ -86,7 +141,7 @@ class _SliverDynamicPostListState extends State<SliverDynamicPostList> {
   }
 
   @override
-  void didUpdateWidget(SliverDynamicPostList oldWidget) {
+  void didUpdateWidget(_RetainedDynamicPostList oldWidget) {
     super.didUpdateWidget(oldWidget);
     _sliver = null;
     if (oldWidget.spacing != widget.spacing ||

@@ -143,7 +143,7 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
-  for (final count in [4, 9]) {
+  for (final count in [4, 9, 18]) {
     testWidgets('$count pictures retain two or three columns on desktop', (
       tester,
     ) async {
@@ -164,6 +164,7 @@ void main() {
           ),
         ),
       );
+      expect(find.byType(AppNetworkImage), findsNWidgets(count));
       final columns = count == 4 ? 2 : 3;
       final first = tester.getRect(find.byType(AppNetworkImage).first);
       final lastInRow = tester.getRect(

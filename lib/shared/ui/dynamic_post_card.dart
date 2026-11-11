@@ -26,6 +26,7 @@ class DynamicPostCard extends StatelessWidget {
     this.onShare,
     this.onComment,
     this.onLike,
+    this.onMore,
     this.liked,
     this.likeCount,
     this.repostCount,
@@ -49,6 +50,7 @@ class DynamicPostCard extends StatelessWidget {
        onShare = null,
        onComment = null,
        onLike = null,
+       onMore = null,
        liked = null,
        likeCount = null,
        repostCount = null,
@@ -63,6 +65,7 @@ class DynamicPostCard extends StatelessWidget {
   final ValueChanged<Uri>? onOpenLink;
   final VoidCallback? onOpenDetail;
   final VoidCallback? onShare, onComment, onLike;
+  final VoidCallback? onMore;
   final bool? liked;
   final int? likeCount, repostCount;
   final bool busy;
@@ -74,6 +77,8 @@ class DynamicPostCard extends StatelessWidget {
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: onOpenDetail,
+      onLongPress: onMore,
+      onSecondaryTap: onMore,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: _PostBody(
@@ -85,6 +90,7 @@ class DynamicPostCard extends StatelessWidget {
           onOpenUser: onOpenUser,
           onOpenVideo: onOpenVideo,
           onOpenLink: onOpenLink,
+          onMore: onMore,
           actions: _DynamicActions(
             post: post,
             onShare: onShare,
@@ -108,6 +114,7 @@ class _PostBody extends StatelessWidget {
     this.onOpenVideo,
     this.onOpenLink,
     this.onOpenDetail,
+    this.onMore,
     this.depth = 0,
     this.actions,
     this.layoutOnly = false,
@@ -119,6 +126,7 @@ class _PostBody extends StatelessWidget {
   final ValueChanged<VideoSummary>? onOpenVideo;
   final ValueChanged<Uri>? onOpenLink;
   final VoidCallback? onOpenDetail;
+  final VoidCallback? onMore;
   final int depth;
   final Widget? actions;
   final bool layoutOnly, inDetail;
@@ -195,6 +203,12 @@ class _PostBody extends StatelessWidget {
                 onPressed: onOpenDetail,
                 icon: const Icon(Icons.chevron_right, size: 20),
               ),
+            if (depth == 0)
+              IconButton(
+                tooltip: '更多动态操作',
+                onPressed: onMore,
+                icon: const Icon(Icons.more_horiz, size: 20),
+              ),
           ],
         ),
         if (topic != null) ...[
@@ -248,6 +262,15 @@ class _PostBody extends StatelessWidget {
                 ?.copyWith(color: scheme.primary),
           ),
         ],
+        if (post.pinned || post.onlySelf)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              [if (post.pinned) '置顶', if (post.onlySelf) '仅自己可见'].join(' · '),
+              style: Theme.of(context).textTheme.labelMedium
+                  ?.copyWith(color: scheme.primary),
+            ),
+          ),
         if (post.title.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(post.title, style: Theme.of(context).textTheme.titleSmall),
@@ -386,7 +409,7 @@ class _PostBody extends StatelessWidget {
                       runSpacing: 6,
                       children: [
                         for (final (index, image)
-                            in post.imageUrls.take(9).indexed)
+                            in post.imageUrls.take(18).indexed)
                           SizedBox.square(
                             dimension: width,
                             child: ClipRRect(
