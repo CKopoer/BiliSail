@@ -13,6 +13,7 @@ import 'package:bilisail/shared/ui/bili_icons.dart';
 import 'package:bilisail/shared/ui/comment_actions.dart';
 import 'package:bilisail/shared/ui/comment_rich_content.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
+import 'package:bilisail/shared/ui/network_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -62,6 +63,10 @@ void main() {
             dark: dark,
           );
           final tile = find.byKey(const ValueKey(('comment', '10')));
+          expect(
+            tester.getTopLeft(find.text(_root.author)).dy,
+            closeTo(tester.getTopLeft(find.byType(NetworkAvatar)).dy, .01),
+          );
           await _snapshot(tester, tile, '${type.name}-${width.toInt()}-$scale');
           final actions = find.descendant(
             of: tile,
@@ -122,6 +127,63 @@ void main() {
           expect(replyButton.top, greaterThan(body.bottom));
           expect(replyButton.bottom, lessThan(preview.top));
           expect(preview.left, closeTo(body.left, .01));
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
+    for (final (width, scale) in [
+      (320.0, 1.0),
+      (390.0, 1.0),
+      (640.0, 1.0),
+      (390.0, 2.0),
+    ]) {
+      testWidgets(
+        '${type.name} decorated author aligns with avatar at $width / $scale',
+        (tester) async {
+          final comment = CommentEntry(
+            id: '10',
+            author: '测试用户',
+            message: '16pro出之前这玩意399',
+            publishedAt: DateTime(2026, 10, 16),
+            ipLocation: 'IP属地：浙江',
+            level: 6,
+            vipLabel: '大会员',
+            decorationImageUrl: Uri.https('i0.hdslb.com', '/card.png'),
+            decorationFanNumber: '020451',
+          );
+          await _mount(
+            tester,
+            _Comments(root: comment),
+            type: type,
+            width: width,
+            scale: scale,
+            dark: scale == 2,
+          );
+          final tile = find.byKey(const ValueKey(('comment', '10')));
+          await _snapshot(
+            tester,
+            tile,
+            'avatar-${type.name}-${width.toInt()}-$scale',
+          );
+          final avatar = tester.getRect(find.byType(NetworkAvatar));
+          final header = tester.getRect(find.byType(CommentAuthorHeader));
+          final author = tester.getRect(find.text(comment.author));
+          final metadata = tester.getRect(find.text('IP属地：浙江'));
+          final decoration = tester.getRect(
+            find.byType(CommentAuthorDecoration),
+          );
+          final body = tester.getRect(find.byType(CommentRichContent));
+          expect(header.top, closeTo(avatar.top, .01));
+          expect(author.top, closeTo(avatar.top, .01));
+          expect(metadata.top, greaterThanOrEqualTo(author.bottom));
+          expect(body.top, greaterThanOrEqualTo(header.bottom + 8));
+          expect(decoration.height, 52);
+          if (width >= 390) {
+            expect(decoration.top, closeTo(avatar.top, .01));
+          } else {
+            expect(decoration.top, greaterThan(metadata.bottom));
+          }
           expect(tester.takeException(), isNull);
         },
       );
@@ -260,6 +322,9 @@ class _SignedIn extends AuthController {
 }
 
 class _Comments extends Fake implements CommentsRepository {
+  _Comments({this.root = _root});
+
+  final CommentEntry root;
   final likes = <bool>[];
   Completer<void>? pending;
   @override
@@ -273,7 +338,7 @@ class _Comments extends Fake implements CommentsRepository {
     CommentSort sort,
     RequestCancellation cancellation, {
     String? cursor,
-  }) async => const CommentPage(items: [_root], hasMore: false);
+  }) async => CommentPage(items: [root], hasMore: false);
   @override
   Future<CommentPage> replies(
     String oid,
