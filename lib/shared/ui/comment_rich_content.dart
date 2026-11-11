@@ -10,6 +10,7 @@ import '../../features/comments/domain/comment_text.dart';
 import '../../features/comments/domain/comment_time.dart';
 import '../../features/comments/domain/comments_repository.dart';
 import 'comment_text_styles.dart';
+import 'user_decoration_image.dart';
 import 'comment_badge.dart';
 
 TextEditingValue insertCommentEmote(TextEditingValue value, String token) {
@@ -380,48 +381,42 @@ class CommentAuthorDecoration extends StatelessWidget {
       excludeSemantics: true,
       child: SizedBox(
         width: 112,
-        height: 40,
-        child: ClipRect(
-          child: Stack(
-            children: [
-              // 装扮画布右侧带留白；平移画布并裁剪，让可见图案靠右。
+        height: 38,
+        child: Stack(
+          // Wide canvases include transparent left margins. Keep their natural
+          // width instead of shrinking the character to fit the reserved slot.
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: UserDecorationImage(url: url, height: 38),
+            ),
+            if (number != null && number.isNotEmpty)
               Positioned(
-                left: 40,
-                right: -40,
+                right: 0,
                 top: 0,
                 bottom: 0,
-                child: AppNetworkImage(
-                  url: publicImageThumbnail(
-                    url,
-                    width: 336,
-                    height: 120,
-                  ).toString(),
-                  cacheWidth: 336,
-                  cacheHeight: 120,
-                  fit: BoxFit.cover,
+                width: 60,
+                child: Align(
                   alignment: Alignment.centerRight,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                ),
-              ),
-              if (number != null && number.isNotEmpty)
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 60,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'NO.\n$number',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textScaler: TextScaler.noScaling,
-                      style: TextStyle(fontSize: 10, height: 1.1, color: color),
+                  child: Text(
+                    'NO.\n$number',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      fontSize: 8,
+                      height: 1.1,
+                      fontWeight: FontWeight.bold,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: color,
                     ),
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );

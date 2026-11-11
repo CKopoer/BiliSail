@@ -68,6 +68,7 @@ final class ApiDynamicPost {
     this.authorName = '',
     this.authorId,
     this.authorAvatarUrl,
+    this.authorPendantUrl,
     this.publishedAt,
     this.publishText = '',
     this.actionText = '',
@@ -113,7 +114,7 @@ final class ApiDynamicPost {
   final ApiDynamicTopic? topic;
   final String badge, notice;
   final List<ApiDynamicContentCard> contentCards;
-  final Uri? authorAvatarUrl, linkCoverUrl, linkUrl;
+  final Uri? authorAvatarUrl, authorPendantUrl, linkCoverUrl, linkUrl;
   final DateTime? publishedAt;
   final List<ApiDynamicTextSpan> spans;
   final List<Uri> imageUrls;

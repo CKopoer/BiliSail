@@ -31,6 +31,7 @@ final class CommentEntry {
     this.nicknameColor,
     this.medalName,
     this.medalLevel,
+    this.pendantUrl,
     this.decorationImageUrl,
     this.decorationName,
     this.decorationFanNumber,
@@ -47,7 +48,7 @@ final class CommentEntry {
   final String? vipLabel, medalName;
   // Optional 24-bit RGB; presentation supplies the opaque alpha channel.
   final int? nicknameColor;
-  final Uri? decorationImageUrl;
+  final Uri? pendantUrl, decorationImageUrl;
   final String? decorationName, decorationFanNumber;
 
   /// 24-bit RGB; Flutter colors are constructed only in presentation.
@@ -77,6 +78,7 @@ final class CommentEntry {
     nicknameColor: nicknameColor,
     medalName: medalName,
     medalLevel: medalLevel,
+    pendantUrl: pendantUrl,
     decorationImageUrl: decorationImageUrl,
     decorationName: decorationName,
     decorationFanNumber: decorationFanNumber,
@@ -112,6 +114,7 @@ final class CommentEntry {
         nicknameColor: nicknameColor,
         medalName: medalName,
         medalLevel: medalLevel,
+        pendantUrl: pendantUrl,
         decorationImageUrl: decorationImageUrl,
         decorationName: decorationName,
         decorationFanNumber: decorationFanNumber,

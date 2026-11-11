@@ -69,6 +69,7 @@ final class DynamicPost {
     this.authorName = '',
     this.authorId,
     this.authorAvatarUrl,
+    this.authorPendantUrl,
     this.publishedAt,
     this.publishText = '',
     this.actionText = '',
@@ -113,7 +114,7 @@ final class DynamicPost {
   final DynamicTopic? topic;
   final String badge, notice;
   final List<DynamicContentCard> contentCards;
-  final Uri? authorAvatarUrl, linkCoverUrl, linkUrl;
+  final Uri? authorAvatarUrl, authorPendantUrl, linkCoverUrl, linkUrl;
   final DateTime? publishedAt;
   final List<DynamicTextSpan> spans;
   final List<Uri> imageUrls;

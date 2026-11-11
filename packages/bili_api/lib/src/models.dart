@@ -180,6 +180,7 @@ final class ApiVideoComment {
     this.nicknameColor,
     this.medalName,
     this.medalLevel,
+    this.pendantUrl,
     this.decorationImageUrl,
     this.decorationName,
     this.decorationFanNumber,
@@ -199,7 +200,7 @@ final class ApiVideoComment {
   final String? vipLabel, medalName;
   // Optional 24-bit RGB nickname color supplied by the response.
   final int? nicknameColor;
-  final Uri? decorationImageUrl;
+  final Uri? pendantUrl, decorationImageUrl;
   final String? decorationName, decorationFanNumber;
 
   /// Optional 24-bit RGB color of the decoration's fan serial number.

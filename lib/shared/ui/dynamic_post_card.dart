@@ -156,6 +156,7 @@ class _PostBody extends StatelessWidget {
                   children: [
                     NetworkAvatar(
                       url: layoutOnly ? null : post.authorAvatarUrl,
+                      pendantUrl: layoutOnly ? null : post.authorPendantUrl,
                       name: post.authorName,
                       radius: depth == 0 ? 20 : 14,
                     ),

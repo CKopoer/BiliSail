@@ -41,3 +41,21 @@
 本次 `tool/check.ps1 -SkipPub` 首次被同期改动的 `test/app/comment_detail_navigation_test.dart` 格式检查阻断；后续全根目录格式复查通过，根应用与四个包的静态分析、四包格式及测试、打包边界脚本通过。根应用全量测试为 2,216 项通过、2 项失败：同期新增的桌面双标签视频／PGC 评论详情模态测试找不到“评论详情”文本，均位于该文件，本任务未修改它。四包分别为 446／81／93／2 项通过，mux 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。日志保存在本机忽略目录 `build/validation/image-viewer-loading-{check,root-format,root-analyze,root-tests,packages}.log`，未将全量检查记为通过。
 
 本次未构建或执行 Windows／Android／macOS 实机验收。DTD 未发现运行中的调试应用，热重载调用因无活动连接未能执行；上述双窗口验证使用真实 Flutter 组件与 fake view，不代表真实原生窗口验收。
+
+## 2026-11-11 与 PiliPlus 对齐装扮显示（issue #113）
+
+基线 `01e2df8b41272130aca8c5ba1efe87f3c461e554`，对应 [issue #113](https://github.com/CKopoer/BiliSail/issues/113)。只读核对 PiliPlus `cab0114a21ce7fad5b90b9a4d788d35d313d25f9` 的 [评论头部](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/cab0114a21ce7fad5b90b9a4d788d35d313d25f9/lib/pages/video/reply/widgets/reply_item_grpc.dart)、[头像挂件](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/cab0114a21ce7fad5b90b9a4d788d35d313d25f9/lib/common/widgets/pendant_avatar.dart)、`lib/utils/image_utils.dart` 和 `lib/utils/extension/num_ext.dart`。独立修改现有组件；未复制其 GPLv3 源码、图片或数字字体，未新增依赖。编号使用应用现有字体的粗体和等宽数字特性。
+
+旧评论组件将带透明留白的装扮画布转为 336×120 缩略图，再用 `BoxFit.cover` 和 40 像素偏移裁剪，图片与编号位置也与参考相反。现通过 [UserDecorationImage](../../lib/shared/ui/user_decoration_image.dart) 加载原始图片，保留透明画布，以 38 逻辑像素高度、单一物理高度解码，按屏幕 DPI 向上取整；编号以 8 号字叠在画布右侧。原有窄屏换行、编号前导零、颜色、无障碍标签和加载失败处理继续保留。视频、PGC、动态评论和楼中楼使用同一共享评论组件。
+
+头像框统一由 [NetworkAvatar](../../lib/shared/ui/network_avatar.dart) 处理：有挂件时头像直径相对占位缩小 6 像素，挂件画布为头像的 1.75 倍，居中绘制，挂件不截获点击。个人空间原 64 像素头像的挂件画布从 88 调整为 112；评论与首页／空间／转发动态补齐挂件字段。优先使用安全的 `image_enhance`，缺失或非法时回退到 `image`；点赞与楼中楼更新保留装扮信息。纯布局测量不请求动态挂件。
+
+回归验证使用自行生成的 1800×300（6∶1）透明 PNG，检查 1／1.25／3／4 倍 DPI 下实际解码尺寸、画布宽高比、透明左边距、编号左侧的不透明图案和右侧透明区，以及编号位置。另覆盖挂件比例与点击、放大字号的窄／宽评论、缺失字段、增强图片回退、评论复制、直接及转发动态的字段解析和共享映射。
+
+匿名只读请求 `/x/v2/reply?type=1&oid=170001&sort=2&ps=20&pn=1` 返回成功，取得一张 972×162 的真实装扮画布，确认装扮素材存在大幅透明留白；原图仅用于本地核对，未提交用户内容或图片。
+
+使用固定 Flutter 3.47.6／Dart 3.13.5，五份锁文件的 `pub get --enforce-lockfile` 均通过。按 `tool/check.ps1` 的三个阶段执行：`-Stage Lint -SkipPub`、`-Stage RootTests -SkipPub`、`-Stage PackageTests -SkipPub` 全部通过。根应用 **5,082**，`bili_api` **852**、`bili_player` **372**、`bili_danmaku` **161**、`bili_mux` **5**，合计 **6,472 项通过**；格式、静态分析和打包边界检查通过。根应用 6 项按环境条件跳过，mux 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生覆盖。
+
+云环境最初缺少 Flutter、Clang、PowerShell 和 CMake，已在用户目录准备工具，未修改 SDK／Pub 缓存源码。初次完整检查的 macOS 子进程终止用例被云容器 PID 1 遗留的僵尸子进程阻塞；为测试入口增加会话临时 subreaper，真实回收孤儿进程后，同一未修改的检查脚本通过。该辅助入口仅用于本次环境，不属于应用修改。
+
+未进行 Windows／Android／macOS 实机验收或真实账号写入。

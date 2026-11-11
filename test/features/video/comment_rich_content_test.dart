@@ -338,12 +338,20 @@ void main() {
       final image = tester.widget<AppNetworkImage>(
         find.byType(AppNetworkImage),
       );
-      expect(image.url, 'https://i0.hdslb.com/card.png@336w_120h_0e.webp');
-      expect(image.alignment, Alignment.centerRight);
+      expect(image.url, 'https://i0.hdslb.com/card.png');
+      expect(image.cacheWidth, isNull);
+      expect(image.cacheHeight, 38);
+      expect(image.fit, BoxFit.contain);
+      expect(image.height, 38);
+      expect(serial.style?.fontSize, 8);
       final decorationRect = tester.getRect(
         find.byType(CommentAuthorDecoration),
       );
       expect(decorationRect.right, width);
+      expect(
+        tester.getRect(find.text('NO.\n0014931')).right,
+        decorationRect.right,
+      );
       if (width >= 220) {
         expect(
           decorationRect.left,
@@ -494,6 +502,7 @@ void main() {
       decorationName: '装扮名称',
       decorationFanNumber: '0014931',
       decorationFanColor: 0xabcdef,
+      pendantUrl: Uri.https('i0.hdslb.com', '/pendant.png'),
       emotes: {'[笑]': Uri.https('i0.hdslb.com', '/e.png')},
       pictures: [Uri.https('i0.hdslb.com', '/p.png')],
     );
@@ -502,6 +511,7 @@ void main() {
       expect(changed.ipLocation, 'IP属地：广东');
       expect(changed.medalName, 'medal');
       expect(changed.medalLevel, 5);
+      expect(changed.pendantUrl, c.pendantUrl);
       expect(changed.decorationImageUrl, c.decorationImageUrl);
       expect(changed.decorationName, '装扮名称');
       expect(changed.decorationFanNumber, '0014931');

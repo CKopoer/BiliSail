@@ -18,6 +18,7 @@ DynamicPost mapDynamicPost(ApiDynamicPost p) {
     authorName: p.authorName,
     authorId: UserId.tryParse(p.authorId),
     authorAvatarUrl: p.authorAvatarUrl,
+    authorPendantUrl: p.authorPendantUrl,
     publishedAt: p.publishedAt,
     publishText: p.publishText,
     actionText: p.actionText,

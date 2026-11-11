@@ -5,6 +5,7 @@ import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/profile/presentation/profile_header.dart';
 import 'package:bilisail/shared/ui/app_cover_image.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
+import 'package:bilisail/shared/ui/user_decoration_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -78,11 +79,9 @@ void main() {
       );
       expect(
         tester
-            .widget<AppCoverImage>(
-              find.byKey(const ValueKey('profile-avatar-pendant')),
-            )
+            .widget<UserDecorationImage>(find.byType(UserDecorationImage))
             .url,
-        decorated.pendantUrl.toString(),
+        decorated.pendantUrl,
       );
       expect(
         tester

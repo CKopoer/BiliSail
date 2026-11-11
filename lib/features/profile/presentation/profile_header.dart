@@ -309,23 +309,12 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                                   children: [
                                     NetworkAvatar(
                                       url: profile.avatarUrl,
+                                      pendantUrl: profile.pendantUrl,
                                       name: profile.name,
-                                      radius: 32,
+                                      radius: profile.pendantUrl == null
+                                          ? 32
+                                          : 35,
                                     ),
-                                    if (profile.pendantUrl case final pendant?)
-                                      IgnorePointer(
-                                        child: AppCoverImage(
-                                          key: const ValueKey(
-                                            'profile-avatar-pendant',
-                                          ),
-                                          url: pendant.toString(),
-                                          width: 88,
-                                          height: 88,
-                                          fit: BoxFit.contain,
-                                          errorBuilder: (_, _, _) =>
-                                              const SizedBox.shrink(),
-                                        ),
-                                      ),
                                     if (profile.verifyType case final type?
                                         when type == 0 || type == 1)
                                       Positioned(

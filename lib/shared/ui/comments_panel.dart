@@ -1258,7 +1258,12 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
             onTap: c.authorId?.isValid == true && onOpenUser != null
                 ? () => onOpenUser(c.authorId!)
                 : null,
-            child: NetworkAvatar(url: c.avatarUrl, name: c.author, radius: 15),
+            child: NetworkAvatar(
+              url: c.avatarUrl,
+              pendantUrl: c.pendantUrl,
+              name: c.author,
+              radius: 15,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

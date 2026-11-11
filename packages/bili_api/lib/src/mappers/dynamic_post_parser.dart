@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import '../models.dart';
 import 'video_access_parser.dart';
 import '../models/dynamic_models.dart';
@@ -139,6 +140,9 @@ ApiDynamicPost parseDynamicPost(
     authorName: _text(author['name']),
     authorId: _id(author['mid']),
     authorAvatarUrl: _uri(author['face']),
+    authorPendantUrl:
+        _uri(_map(author['pendant'])['image_enhance']) ??
+        _uri(_map(author['pendant'])['image']),
     publishedAt: _date(author['pub_ts']),
     publishText: _text(author['pub_time']),
     actionText: _text(author['pub_action']),
