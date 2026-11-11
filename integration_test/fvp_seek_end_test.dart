@@ -16,6 +16,64 @@ void main() {
       in Platform.isAndroid
           ? AndroidVideoOutputMode.values
           : [AndroidVideoOutputMode.renderedTexture]) {
+    for (final rate in [1.0, 2.0]) {
+      testWidgets(
+        'fvp natural DASH EOF and replay: ${output.name}, rate=$rate',
+        (tester) async {
+          if (directory == null) fail('BILI_TEST_MEDIA_DIR is required');
+          final engine = FvpEngine();
+          final failures = <PlayerFailure>[];
+          final subscription = engine.failures.listen(failures.add);
+          try {
+            await tester.pumpWidget(
+              MaterialApp(home: VideoSurface(engine: engine)),
+            );
+            MediaTrack track(String name) => MediaTrack(
+              uri: File('$directory/$name').uri,
+              requestPolicy: MediaRequestPolicy(),
+            );
+            await _withFrames(
+              tester,
+              engine.open(
+                DashPairSource(
+                  video: track('video.mp4'),
+                  audio: track('audio.m4a'),
+                ),
+                OpenOptions(
+                  play: true,
+                  volume: 0,
+                  rate: rate,
+                  androidVideoOutput: output,
+                ),
+              ),
+            );
+            final end = engine.currentSnapshot.duration;
+            expect(end, greaterThan(const Duration(seconds: 3)));
+            final deadline = Duration(
+              milliseconds: (end.inMilliseconds / rate).ceil() + 5000,
+            );
+            final watch = Stopwatch()..start();
+            while (engine.currentSnapshot.phase != PlaybackPhase.ended &&
+                failures.isEmpty &&
+                watch.elapsed < deadline) {
+              await tester.pump(const Duration(milliseconds: 20));
+            }
+            expect(failures, isEmpty);
+            expect(engine.currentSnapshot.phase, PlaybackPhase.ended);
+            await _withFrames(tester, engine.seek(Duration.zero));
+            await _withFrames(tester, engine.play());
+            await tester.pump(const Duration(milliseconds: 750));
+            expect(engine.currentSnapshot.position, greaterThan(Duration.zero));
+            expect(engine.currentSnapshot.desiredPlaying, isTrue);
+            expect(failures, isEmpty);
+          } finally {
+            await _withFrames(tester, engine.dispose());
+            await subscription.cancel();
+            await tester.pumpWidget(const SizedBox.shrink());
+          }
+        },
+      );
+    }
     for (final playing in [true, false]) {
       testWidgets(
         'fvp repeated seeks across EOF: ${output.name}, playing=$playing',

@@ -15,6 +15,7 @@ const recordUseMapping = {
   'bili_fvp_audio_clock_play': 'bili_fvp_audio_clock_play',
   'bili_fvp_audio_clock_release': 'bili_fvp_audio_clock_release',
   'bili_fvp_audio_clock_seek': 'bili_fvp_audio_clock_seek',
+  'bili_fvp_audio_end': 'bili_fvp_audio_end',
   'bili_fvp_audio_frames': 'bili_fvp_audio_frames',
   'bili_fvp_audio_release': 'bili_fvp_audio_release',
 };

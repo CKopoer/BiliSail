@@ -18,7 +18,16 @@ Header SHA-256:
 - `global.h`: `d74e9043e49161b84e09b493aec5d2d5bf911fdc7e79be0bde68d74fcad64f16`
 - `RenderAPI.h`: `05a4a9836e536a2d400e772dbeda0ba3baa6628a653c1cd0f51f5f05207b2e03`
 
-The three-symbol Dart interface is generated from the project's own
+`AudioFrame.h` is unmodified `include/mdk/c/AudioFrame.h` from the same official
+MDK v0.39.0 Linux x64 SDK, archive `mdk-sdk-linux-x64.tar.xz`, SHA-256
+`0394c7443060f29bb420aa0ec8b278ec5ef61d3e84d1d3877c41c967c614980a`
+(also pinned in `native/fvp/assets.lock.json`). Header SHA-256:
+`747084a652a29c69ab381fb21719b5fd5e5ed26968c1382a2322c4a8c140a268`.
+The audio callback reads only its public timestamp/duration/sample-count
+metadata to retain the last decoded endpoint across the output clock's EOF
+reset. It does not read PCM, retain frames, or call Dart from the callback.
+
+The Dart interface is generated from the project's own
 `src/fvp_audio_activity.h` with ffigen 23.0.0:
 
 ```powershell
@@ -28,5 +37,6 @@ dart run tool/ffigen.dart
 
 The package build hook compiles the small C++17 helper with native_toolchain_c
 0.19.5. It neither links another MDK/FFmpeg nor reads audio samples, URLs, or
-headers. Decoder callbacks increment an atomic counter; Dart samples it every
-250ms. Counter memory is retained until MDK's native destruction completes.
+headers. Decoder callbacks update atomic scalar observations; Dart samples the
+counter every 250ms and reads the endpoint when classifying audio EOF. Observation
+memory is retained until MDK's native destruction completes.
