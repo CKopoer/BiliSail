@@ -106,6 +106,7 @@ final class BackendEvent {
     this.value,
     this.failureKind = PlayerFailureKind.nativePlayback,
     this.stallReason,
+    this.nativeRead,
   });
   final BackendEventKind kind;
   final Duration? position, duration, buffered;
@@ -113,6 +114,7 @@ final class BackendEvent {
   final bool? value;
   final PlayerFailureKind failureKind;
   final PlaybackStallReason? stallReason;
+  final NativeReadEvidence? nativeRead;
 }
 
 final class BackendHealth {

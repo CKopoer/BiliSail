@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [fvp HTTP 断流与有界续读](validation/fvp-http-read-recovery-2026-11-11.md) | 现场音频提前 EOF、socket 断开／无响应复现、Range 续读及归因边界 |
 | [请求风控与设备上下文](validation/api-risk-control-2026-11-11.md) | 热门 WBI、共享 buvid、风控／验证码识别、冷却与未实机边界 |
 | [动态投票查看与参与](validation/dynamic-poll-viewing-2026-11-11.md) | 卡片／正文／转发的应用内投票、选项与结果、匿名参与及验证边界 |
 | [动态发布能力与自适应编辑器](validation/dynamic-publishing-parity-2026-11-11.md) | B站表情、@用户、18图与裁剪、权限／定时、投票／直播预约及验证边界 |

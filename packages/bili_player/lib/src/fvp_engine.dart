@@ -36,6 +36,7 @@ final class FvpEngine extends SharedPlayerEngine {
             stallReason: event.stallReason,
             stalledFor: event.stalledFor,
             audioPosition: event.audioPosition,
+            nativeRead: event.nativeRead,
           ),
         );
       },

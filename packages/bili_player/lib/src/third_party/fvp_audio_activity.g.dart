@@ -22,6 +22,10 @@ external ffi.Pointer<ffi.Void> bili_fvp_audio_clock(
 );
 
 @meta.RecordUse()
+@ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Void>)>()
+external void bili_fvp_audio_clock_end(ffi.Pointer<ffi.Void> clock);
+
+@meta.RecordUse()
 @ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Int64)>()
 external void bili_fvp_audio_clock_hold(
   ffi.Pointer<ffi.Void> clock,

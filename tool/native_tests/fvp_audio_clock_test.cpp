@@ -105,6 +105,18 @@ int main() {
   expect_clock(402);
   bili_fvp_audio_clock_hold(clock, 80000);
   expect_clock(80);
+  bili_fvp_audio_clock_end(clock);
+  if (sync_callback.cb != nullptr) return 1;
+  // Pause/hold cannot restore a stopped audio clock. Replay/seek can.
+  bili_fvp_audio_clock_hold(clock, 80000);
+  if (sync_callback.cb != nullptr) return 1;
+  bili_fvp_audio_clock_end(clock);
+  bili_fvp_audio_clock_seek(clock);
+  if (sync_callback.cb == nullptr) return 1;
+  expect_clock((std::numeric_limits<double>::max)());
+  bili_fvp_audio_clock_hold(clock, 2000);
+  expect_clock(2);
+  bili_fvp_audio_clock_end(nullptr);
   // The renderer can first consult the master after audio has already moved
   // past the old 100ms admission window (especially at 2x after recovery).
   // This is still the real audio clock and must not freeze video at its anchor.

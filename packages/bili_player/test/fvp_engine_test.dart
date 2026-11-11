@@ -11,7 +11,18 @@ MediaTrack track(String path, {Map<String, String> headers = const {}}) =>
       requestPolicy: MediaRequestPolicy(headers: headers),
     );
 
-final class _Player extends Fake implements FvpPlayerPort, FvpInformationPort {
+final class _Player extends Fake
+    implements FvpPlayerPort, FvpInformationPort, FvpReadEvidencePort {
+  @override
+  final readEvidence = const NativeReadEvidence(
+    videoBufferedMs: 8000,
+    videoStatus: 24,
+    audioPositionMs: 4000,
+    audioBufferedMs: 0,
+    audioDecodedEndMs: 4000,
+    audioDurationMs: 12000,
+    audioStatus: 64,
+  );
   final events = StreamController<FvpNativeStatus>.broadcast(sync: true);
   Completer<FvpMediaInfo>? preparation;
   Completer<int>? texture;
@@ -385,6 +396,28 @@ void main() {
             .stallReason,
         PlaybackStallReason.videoBuffer,
       );
+    },
+  );
+
+  test(
+    'audio EOF preserves scalar read evidence through engine diagnostics',
+    () async {
+      final player = _Player();
+      final events = <PlayerDiagnosticEvent>[];
+      final engine = FvpEngine(
+        createPlayer: () async => player,
+        onDiagnostic: events.add,
+      );
+      addTearDown(engine.dispose);
+      await engine.open(source, const OpenOptions(play: true));
+      player.events.add(FvpNativeStatus.audioEnded);
+      await Future<void>.delayed(Duration.zero);
+      final event = events.singleWhere(
+        (e) => e.kind == PlayerDiagnosticKind.playbackStalled,
+      );
+      expect(event.nativeRead, same(player.readEvidence));
+      expect(event.toJson()['nativeRead'], player.readEvidence.toJson());
+      expect(event.toJson().toString(), isNot(contains('private')));
     },
   );
 
