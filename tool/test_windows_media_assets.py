@@ -176,6 +176,14 @@ list(INSERT fixture_hashes 0 "${{hash}}")
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_production_egl_surface_remains_writable_after_resize(self):
+        fork = self.owner.parents[4]
+        result = subprocess.run(
+            [sys.executable, str(fork / "native/test_windows_egl_surface.py")],
+            capture_output=True, text=True, check=False, timeout=90,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

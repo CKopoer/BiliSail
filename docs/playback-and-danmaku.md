@@ -2,7 +2,9 @@
 
 2026-11-11：修复 fvp 显式关闭 HTTP reconnect 后，瞬断音轨耗尽缓存才整源恢复的问题。HTTP(S) 点播在原生层按字节位置有界续读，读取无响应以 5 秒截止；自然 EOF、非 seekable 流、直播及本地源保留各自边界，不扩大应用恢复次数。Windows 音频提前结束事件补充脱敏的原生解码端点、队列与状态。现场归因限制、原视频公开流及受控断流验证见[HTTP 续读记录](validation/fvp-http-read-recovery-2026-11-11.md)。
 
-2026-11-10 Windows ARM64：按用户要求撤回强制软件渲染与 `auto-copy` 的统一降级，media_kit 在 ARM64／x64 上继续使用相同 GPU 输出与 SDK 自动解码默认值，显式软件解码仍为 `hwdec=no`。保留 fvp ARM64 SDK 更新：单独固定到官方 MDK v0.40.1，并按归档摘要隔离下载缓存。#100 黑屏的具体原因仍待定位，不能将上述 SDK 更新或自动检查表述为黑屏已修复；证据与实机未测边界见[黑屏与 MDK 过期提示](validation/windows-arm64-black-video-2026-11-10.md)。
+2026-11-12 Windows ARM64：#100 后续排查发现 ANGLE 生产者 pbuffer 在 resize 后被绑定成采样纹理，却继续用于绘制，违反 EGL 表面读写契约。个人 media-kit 修复该生命周期，应用升级固定提交；保留两种解码模式与 GPU 输出默认值。新增回归在旧代码失败、修复后通过，Surface Pro X 实际显示效果仍待确认，见[生产者表面修复](validation/windows-arm64-egl-surface-2026-11-12.md)。
+
+2026-11-10 Windows ARM64：按用户要求撤回强制软件渲染与 `auto-copy` 的统一降级，media_kit 在 ARM64／x64 上继续使用相同 GPU 输出与 SDK 自动解码默认值，显式软件解码仍为 `hwdec=no`。保留 fvp ARM64 SDK 更新：单独固定到官方 MDK v0.40.1，并按归档摘要隔离下载缓存。当时未定位 #100 黑屏的具体原因，不能将上述 SDK 更新或自动检查表述为黑屏已修复；证据与实机未测边界见[黑屏与 MDK 过期提示](validation/windows-arm64-black-video-2026-11-10.md)。
 
 2026-11-09 移动输入修复：评论区在键盘可见时按实际剩余空间布局，优先保留编辑器，横屏头部让出高度；共享弹窗立即跟随键盘 inset，避免二次动画造成短暂遮挡。移动图片入口改用系统相册并保留原校验。定位、依赖和自动检查／实机边界见[移动评论与弹幕输入](validation/mobile-composer-keyboard-gallery-2026-11-09.md)。
 

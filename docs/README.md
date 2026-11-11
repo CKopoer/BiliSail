@@ -13,7 +13,8 @@
 | [请求风控与设备上下文](validation/api-risk-control-2026-11-11.md) | 热门 WBI、共享 buvid、风控／验证码识别、冷却与未实机边界 |
 | [动态投票查看与参与](validation/dynamic-poll-viewing-2026-11-11.md) | 卡片／正文／转发的应用内投票、选项与结果、匿名参与及验证边界 |
 | [动态发布能力与自适应编辑器](validation/dynamic-publishing-parity-2026-11-11.md) | B站表情、@用户、18图与裁剪、权限／定时、投票／直播预约及验证边界 |
-| [Windows ARM64 黑屏与 MDK 过期提示](validation/windows-arm64-black-video-2026-11-10.md) | #100 保留 GPU 默认路径、撤回统一降级、ARM64 SDK 刷新与黑屏未定位边界 |
+| [Windows ARM64 EGL 表面修复](validation/windows-arm64-egl-surface-2026-11-12.md) | #100 生产者采样绑定与绘制冲突、resize 生命周期、受控回归及实机边界 |
+| [Windows ARM64 黑屏与 MDK 过期提示](validation/windows-arm64-black-video-2026-11-10.md) | #100 前期保留 GPU 默认路径、撤回统一降级、ARM64 SDK 刷新与当时定位边界 |
 | [macOS 前台冷启动停滞](validation/macos-foreground-startup-2026-11-10.md) | headless 激活与窗口可见性同步、禁帧生命周期回放及首帧后正常刷新检查 |
 | [fvp 缓冲条小幅回缩](validation/fvp-buffer-timeline-2026-11-09.md) | 未解码包队列与呈现时钟差异、双轨端点换算、显示抖动容差和原生回归 |
 | [fvp 恢复后反复停帧](validation/fvp-resume-clock-2026-11-09.md) | 本机 Release 中断日志、首次时钟窗口锁死、PiliPlus 职责对照及原生回归 |
