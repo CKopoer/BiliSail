@@ -138,6 +138,7 @@ final class AppSettings {
     this.subtitleBackgroundOpacity = 0.45,
     this.subtitleBottomPadding = 24.0,
     this.sponsorBlockMode = SponsorBlockMode.manual,
+    this.sponsorBlockBottomPadding = 120.0,
     List<String> sponsorBlockCategories = supportedSponsorCategories,
   }) : playbackMode =
            playbackMode ??
@@ -225,6 +226,7 @@ final class AppSettings {
        subtitleBackgroundOpacity = 0.45,
        subtitleBottomPadding = 24.0,
        sponsorBlockMode = SponsorBlockMode.manual,
+       sponsorBlockBottomPadding = 120.0,
        _danmakuBlockedWords = const [],
        _sponsorBlockCategories = supportedSponsorCategories;
 
@@ -322,6 +324,7 @@ final class AppSettings {
   final double subtitleBackgroundOpacity;
   final double subtitleBottomPadding;
   final SponsorBlockMode sponsorBlockMode;
+  final double sponsorBlockBottomPadding;
   final List<String> _sponsorBlockCategories;
   List<String> get sponsorBlockCategories => _sponsorBlockCategories;
 
@@ -400,6 +403,7 @@ final class AppSettings {
     double? subtitleBackgroundOpacity,
     double? subtitleBottomPadding,
     SponsorBlockMode? sponsorBlockMode,
+    double? sponsorBlockBottomPadding,
     List<String>? sponsorBlockCategories,
   }) => AppSettings(
     shortcuts: shortcuts ?? this.shortcuts,
@@ -503,6 +507,8 @@ final class AppSettings {
         subtitleBackgroundOpacity ?? this.subtitleBackgroundOpacity,
     subtitleBottomPadding: subtitleBottomPadding ?? this.subtitleBottomPadding,
     sponsorBlockMode: sponsorBlockMode ?? this.sponsorBlockMode,
+    sponsorBlockBottomPadding:
+        sponsorBlockBottomPadding ?? this.sponsorBlockBottomPadding,
     sponsorBlockCategories: List.unmodifiable(
       sponsorBlockCategories ?? this.sponsorBlockCategories,
     ),
@@ -591,6 +597,12 @@ final class AppSettings {
       subtitleFontScale: bounded(subtitleFontScale, .5, 2, 1),
       subtitleBackgroundOpacity: bounded(subtitleBackgroundOpacity, 0, 1, .45),
       subtitleBottomPadding: bounded(subtitleBottomPadding, 0, 240, 24),
+      sponsorBlockBottomPadding: bounded(
+        sponsorBlockBottomPadding,
+        0,
+        240,
+        120,
+      ),
       sponsorBlockCategories: sponsorBlockCategories
           .where(supportedSponsorCategories.contains)
           .toSet()

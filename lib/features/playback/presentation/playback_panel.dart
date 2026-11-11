@@ -2078,35 +2078,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                 ),
                               ),
                             ),
-                            PlaybackSnapshotBuilder(
-                              snapshots: session.snapshots,
-                              select: (_) => session.currentSponsor,
-                              builder: (context, _) {
-                                final segment = session.currentSponsor;
-                                if (segment == null) {
-                                  return const SizedBox.shrink();
-                                }
-                                return Positioned(
-                                  right: 16,
-                                  bottom: controls ? 120 : 40,
-                                  child: FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                      visualDensity: VisualDensity.compact,
-                                      minimumSize: const Size(0, 32),
-                                    ),
-                                    onPressed: () =>
-                                        unawaited(session.skipSponsor(segment)),
-                                    icon: const Icon(
-                                      Icons.fast_forward,
-                                      size: 18,
-                                    ),
-                                    label: Text(
-                                      '跳过${sponsorCategoryLabel(segment.category)}',
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
                             if (session.error == null)
                               PlayerLoadingIndicator(
                                 key: ValueKey((
@@ -2268,7 +2239,42 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                 controlsVisible: controls && widget.active,
                                 subtitleBottomPadding:
                                     settings.subtitleBottomPadding,
+                                sponsorBlockBottomPadding:
+                                    settings.sponsorBlockBottomPadding,
                                 children: [
+                                  LayoutId(
+                                    id: _BottomPlayerSlot.sponsor,
+                                    child: PlaybackSnapshotBuilder(
+                                      snapshots: session.snapshots,
+                                      select: (_) => session.currentSponsor,
+                                      builder: (context, _) {
+                                        final segment = session.currentSponsor;
+                                        if (segment == null) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return FilledButton.icon(
+                                          key: const ValueKey(
+                                            'player-sponsor-skip',
+                                          ),
+                                          style: FilledButton.styleFrom(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            minimumSize: const Size(0, 32),
+                                          ),
+                                          onPressed: () => unawaited(
+                                            session.skipSponsor(segment),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.fast_forward,
+                                            size: 18,
+                                          ),
+                                          label: Text(
+                                            '跳过${sponsorCategoryLabel(segment.category)}',
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
                                   PlaybackSnapshotBuilder(
                                     snapshots: session.snapshots,
                                     select: (snapshot) =>
@@ -2546,7 +2552,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   }
 }
 
-enum _BottomPlayerSlot { controls, subtitle, subtitleMessage }
+enum _BottomPlayerSlot { controls, subtitle, subtitleMessage, sponsor }
 
 // Progress, subtitle layout and control fades change independently of video.
 // Keep their paint invalidations inside this layer even when a cue changes size.
@@ -2554,11 +2560,13 @@ class _BottomPlayerLayers extends StatelessWidget {
   const _BottomPlayerLayers({
     required this.controlsVisible,
     required this.subtitleBottomPadding,
+    required this.sponsorBlockBottomPadding,
     required this.children,
   });
 
   final bool controlsVisible;
   final double subtitleBottomPadding;
+  final double sponsorBlockBottomPadding;
   final List<Widget> children;
 
   @override
@@ -2567,6 +2575,7 @@ class _BottomPlayerLayers extends StatelessWidget {
       delegate: _BottomPlayerLayout(
         controlsVisible: controlsVisible,
         subtitleBottomPadding: subtitleBottomPadding,
+        sponsorBlockBottomPadding: sponsorBlockBottomPadding,
       ),
       children: children,
     ),
@@ -2577,10 +2586,12 @@ class _BottomPlayerLayout extends MultiChildLayoutDelegate {
   _BottomPlayerLayout({
     required this.controlsVisible,
     required this.subtitleBottomPadding,
+    required this.sponsorBlockBottomPadding,
   });
 
   final bool controlsVisible;
   final double subtitleBottomPadding;
+  final double sponsorBlockBottomPadding;
 
   @override
   void performLayout(Size size) {
@@ -2617,12 +2628,32 @@ class _BottomPlayerLayout extends MultiChildLayoutDelegate {
         ),
       );
     }
+    if (hasChild(_BottomPlayerSlot.sponsor)) {
+      final childSize = layoutChild(
+        _BottomPlayerSlot.sponsor,
+        BoxConstraints.loose(
+          Size((size.width - 32).clamp(0, size.width), size.height),
+        ),
+      );
+      final bottom =
+          controlsVisible && controlsHeight + 8 > sponsorBlockBottomPadding
+          ? controlsHeight + 8
+          : sponsorBlockBottomPadding;
+      positionChild(
+        _BottomPlayerSlot.sponsor,
+        Offset(
+          (size.width - 16 - childSize.width).clamp(0, size.width),
+          (size.height - bottom - childSize.height).clamp(0, size.height),
+        ),
+      );
+    }
   }
 
   @override
   bool shouldRelayout(_BottomPlayerLayout oldDelegate) =>
       controlsVisible != oldDelegate.controlsVisible ||
-      subtitleBottomPadding != oldDelegate.subtitleBottomPadding;
+      subtitleBottomPadding != oldDelegate.subtitleBottomPadding ||
+      sponsorBlockBottomPadding != oldDelegate.sponsorBlockBottomPadding;
 }
 
 // Keep the subtree alive until fade-out finishes, while immediately releasing

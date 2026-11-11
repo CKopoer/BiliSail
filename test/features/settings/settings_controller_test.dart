@@ -9,6 +9,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'sponsor button distance saves, reloads and rolls back a failed save',
+    () async {
+      final repository = _DeferredSettingsRepository();
+      final container = ProviderContainer(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+      await container.read(settingsControllerProvider.future);
+      final controller = container.read(settingsControllerProvider.notifier);
+      final save = controller.setSponsorBlockBottomPadding(180);
+      await Future<void>.delayed(Duration.zero);
+      repository.completeNext();
+      await save;
+      container.invalidate(settingsControllerProvider);
+      expect(
+        (await container.read(settingsControllerProvider.future))
+            .sponsorBlockBottomPadding,
+        180,
+      );
+      final failed = container
+          .read(settingsControllerProvider.notifier)
+          .setSponsorBlockBottomPadding(40);
+      final assertion = expectLater(failed, throwsStateError);
+      await Future<void>.delayed(Duration.zero);
+      repository.failNext();
+      await assertion;
+      expect(
+        container
+            .read(settingsControllerProvider)
+            .requireValue
+            .sponsorBlockBottomPadding,
+        180,
+      );
+      expect(repository.stored.sponsorBlockBottomPadding, 180);
+    },
+  );
   test('global send style queues with other settings, rolls back failures and resets', () async {
     final repository = _DeferredSettingsRepository();
     final container = ProviderContainer(
