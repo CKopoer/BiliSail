@@ -29,7 +29,7 @@ void main() {
     );
     expect(result.chapterFailure, isNull);
     expect(result.subtitleFailure, isNull);
-    expect(transport.headers.last['User-Agent'], 'BiliSail/0.1');
+    expect(transport.headers.last['User-Agent'], startsWith('Mozilla/5.0'));
   });
 
   test('absent optional metadata is a supported empty capability', () async {
@@ -105,7 +105,7 @@ void main() {
     expect(transport.uris.first.queryParameters.containsKey('index'), isFalse);
     expect(transport.uris.first.queryParameters['cid'], '9007199254740995');
     expect(transport.uris.last.toString(), 'https://boss.hdslb.com/2.bin');
-    expect(transport.headers.first['User-Agent'], 'Mozilla/5.0');
+    expect(transport.headers.first['User-Agent'], startsWith('Mozilla/5.0'));
     expect(transport.headers.last['Referer'], 'https://www.bilibili.com/');
     expect(transport.limits, [40002]);
   });

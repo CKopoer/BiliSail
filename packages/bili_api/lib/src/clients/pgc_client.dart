@@ -66,7 +66,7 @@ final class PgcClient {
         switch (innerCode) {
           -101 || -111 => ApiFailureCategory.authentication,
           -404 || 62002 || 62004 => ApiFailureCategory.notFound,
-          -412 || -352 => ApiFailureCategory.rateLimited,
+          -412 || -352 || -509 || -799 => ApiFailureCategory.rateLimited,
           _ => ApiFailureCategory.permission,
         },
         endpoint,

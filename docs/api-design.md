@@ -1,5 +1,7 @@
 # API、鉴权与数据边界
 
+2026-11-11 共享请求管线补齐 Web 设备上下文、安全持久化、风控／验证码识别与端点冷却；热门精选增加 WBI 和页面上下文。业务拒绝不自动重试，账户写入继续单次提交；协议、PiliPlus 来源、离线回归与线上未验收边界见[请求风控](validation/api-risk-control-2026-11-11.md)。
+
 2026-11-11 动态增加管理和应用内投票：Web Cookie／CSRF 单次删除、置顶、可见性、互动和举报，WBI 单次编辑，Web IM 卡片分享与投票参与；游客可见性检查使用独立空 CookieJar。端点、容量、账号隔离与验证见[动态操作菜单与投票](validation/dynamic-operations-and-voting-2026-11-11.md)。
 
 2026-11-11 动态投票补齐 Web GET `/x/vote/vote_info` 与 JSON POST `/x/vote/do_vote`，复用 Cookie／CSRF、25 秒 deadline 和单次写入通道。卡片及正文保留投票身份，在应用内查看和参与；服务端选项索引、本人选择、账号隔离及结果不明处理见[动态投票查看与参与](validation/dynamic-poll-viewing-2026-11-11.md)。

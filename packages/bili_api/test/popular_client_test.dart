@@ -10,7 +10,8 @@ void main() {
     final api = BiliApiClient(
       transport: _Transport((uri) async {
         expect(uri.path, '/x/web-interface/popular/series/list');
-        expect(uri.queryParameters, isEmpty);
+        expect(uri.queryParameters['web_location'], '333.934');
+        expect(uri.queryParameters['w_rid'], hasLength(32));
         return _response({
           'list': [
             {'number': 396, 'name': '第396期', 'subject': '本周主题'},
@@ -64,9 +65,12 @@ void main() {
       final week = await api.getPopularWeek(number: 396);
       final precious = await api.getPreciousVideos();
       expect(requests.first.path, '/x/web-interface/popular/series/one');
-      expect(requests.first.queryParameters, {'number': '396'});
+      expect(requests.first.queryParameters['number'], '396');
+      expect(requests.first.queryParameters['w_rid'], hasLength(32));
       expect(requests.last.path, '/x/web-interface/popular/precious');
-      expect(requests.last.queryParameters, {'page_size': '100', 'page': '1'});
+      expect(requests.last.queryParameters['page_size'], '100');
+      expect(requests.last.queryParameters['page'], '1');
+      expect(requests.last.queryParameters['w_rid'], hasLength(32));
       for (final page in [week, precious]) {
         expect(page.hasMore, isFalse);
         expect(page.items.single.bvid, 'BV1234567890');
@@ -169,5 +173,20 @@ class _Transport implements ApiTransport {
     required Map<String, String> headers,
     required Duration timeout,
     ApiCancellation? cancellation,
-  }) => respond(uri);
+  }) async {
+    if (uri.path == '/x/web-interface/nav') {
+      return _response({
+        'wbi_img': {
+          'img_url':
+              'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+          'sub_url':
+              'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+        },
+      });
+    }
+    expect(headers['User-Agent'], startsWith('Mozilla/5.0'));
+    expect(headers['Origin'], 'https://www.bilibili.com');
+    expect(headers['Referer'], contains('/v/popular/'));
+    return respond(uri);
+  }
 }

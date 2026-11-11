@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../models.dart';
 import '../models/pgc_models.dart';
+import '../risk_control.dart';
 
 /// Pure bounded PGC metadata decoding, safe to run in a worker isolate.
 ApiPgcSeason decodePgcSeasonBytes(Uint8List bytes) {
@@ -17,6 +18,13 @@ ApiPgcSeason decodePgcSeasonBytes(Uint8List bytes) {
     throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
   }
   final root = _map(decoded, endpoint);
+  if (hasRiskVoucher(root)) {
+    throw const ApiFailure(
+      ApiFailureCategory.rateLimited,
+      endpoint,
+      requiresVerification: true,
+    );
+  }
   final code = _int(root['code']);
   if (code == null) {
     throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
@@ -26,7 +34,7 @@ ApiPgcSeason decodePgcSeasonBytes(Uint8List bytes) {
       switch (code) {
         -101 || -111 || -400 => ApiFailureCategory.authentication,
         -403 || -404 => ApiFailureCategory.permission,
-        -412 || -352 => ApiFailureCategory.rateLimited,
+        -412 || -352 || -509 || -799 => ApiFailureCategory.rateLimited,
         62002 || 62004 => ApiFailureCategory.notFound,
         _ => ApiFailureCategory.unavailable,
       },

@@ -8,6 +8,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [请求风控与设备上下文](validation/api-risk-control-2026-11-11.md) | 热门 WBI、共享 buvid、风控／验证码识别、冷却与未实机边界 |
 | [动态投票查看与参与](validation/dynamic-poll-viewing-2026-11-11.md) | 卡片／正文／转发的应用内投票、选项与结果、匿名参与及验证边界 |
 | [动态发布能力与自适应编辑器](validation/dynamic-publishing-parity-2026-11-11.md) | B站表情、@用户、18图与裁剪、权限／定时、投票／直播预约及验证边界 |
 | [Windows ARM64 黑屏与 MDK 过期提示](validation/windows-arm64-black-video-2026-11-10.md) | #100 保留 GPU 默认路径、撤回统一降级、ARM64 SDK 刷新与黑屏未定位边界 |
