@@ -199,7 +199,9 @@ final class ProfileClient {
       mid: mid,
       name: _text(card['name'], e),
       avatarUrl: _uri(card['face']),
-      pendantUrl: _uri(_optionalMap(card['pendant'])['image']),
+      pendantUrl:
+          _uri(_optionalMap(card['pendant'])['image_enhance']) ??
+          _uri(_optionalMap(card['pendant'])['image']),
       bannerUrl:
           _uri(_optionalMap(data['space'])['l_img']) ??
           _uri(_optionalMap(data['space'])['s_img']),

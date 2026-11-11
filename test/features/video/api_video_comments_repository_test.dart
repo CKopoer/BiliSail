@@ -36,6 +36,10 @@ void main() {
           root.withLike(true),
           root.withReplies(root.replies),
         ]) {
+          expect(
+            entry.pendantUrl.toString(),
+            'https://i0.hdslb.com/pendant.webp',
+          );
           expect(entry.isPinned, isTrue);
           expect(entry.isUpAuthor, isFalse);
           expect(entry.upLiked, isTrue);
@@ -127,6 +131,9 @@ final class _Transport implements ApiTransport {
                         'up_action': {'like': true, 'reply': true},
                         'member': {
                           'uname': 'reader',
+                          'pendant': {
+                            'image_enhance': '//i0.hdslb.com/pendant.webp',
+                          },
                           'vip': {'nickname_color': '#fb7299'},
                         },
                         'content': {

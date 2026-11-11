@@ -1004,6 +1004,7 @@ final class BiliApiClient {
     )?.trim();
     final card = _commentMap(_commentMap(member['user_sailing'])['cardbg']);
     final fan = _commentMap(card['fan']);
+    final pendant = _commentMap(member['pendant']);
     final authorMid =
         _userMid(member['mid']) ?? _userMid(entry['mid_str'] ?? entry['mid']);
     final upAction = _commentMap(entry['up_action']);
@@ -1038,7 +1039,11 @@ final class BiliApiClient {
           : null,
       medalName: _text(_commentMap(member['fans_detail'])['medal_name']),
       medalLevel: _int(_commentMap(member['fans_detail'])['level']),
-      decorationImageUrl: _commentImage(card['image']),
+      pendantUrl:
+          _commentImage(pendant['image_enhance']) ??
+          _commentImage(pendant['image']),
+      decorationImageUrl:
+          _commentImage(card['image_enhance']) ?? _commentImage(card['image']),
       decorationName: _text(card['name']),
       decorationFanNumber: _text(fan['num_desc']),
       decorationFanColor: _commentColor(fan['color']),

@@ -44,6 +44,7 @@ final class ApiCommentsRepository
     nicknameColor: v.nicknameColor,
     medalName: v.medalName,
     medalLevel: v.medalLevel,
+    pendantUrl: v.pendantUrl,
     decorationImageUrl: v.decorationImageUrl,
     decorationName: v.decorationName,
     decorationFanNumber: v.decorationFanNumber,
