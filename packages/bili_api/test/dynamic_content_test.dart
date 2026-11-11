@@ -37,6 +37,41 @@ Future<ApiDynamicPost> load(
 }
 
 void main() {
+  for (final home in [true, false]) {
+    test(
+      'poll identities override unrelated links in ${home ? "home" : "space"}',
+      () async {
+        final value = await load(
+          richPost(
+            nodes: [
+              {
+                'type': 'RICH_TEXT_NODE_TYPE_VOTE',
+                'rid': '9007199254740993123',
+                'text': '正文投票',
+                'jump_url': 'https://t.bilibili.com/123',
+              },
+            ],
+            additional: {
+              'type': 'ADDITIONAL_TYPE_VOTE',
+              'vote': {
+                'vote_id': '9007199254740993123',
+                'desc': '投票标题后备',
+                'jump_url': 'https://t.bilibili.com/123',
+              },
+            },
+          ),
+          home: home,
+        );
+        final card = value.contentCards.single;
+        expect(card.kind, ApiDynamicCardKind.vote);
+        expect(card.title, '投票标题后备');
+        expect(card.url?.path, '/vote/h5/index/');
+        expect(card.url?.queryParameters['vote_id'], '9007199254740993123');
+        expect(card.actionUrl, card.url);
+        expect(value.spans.single.linkUrl, card.url);
+      },
+    );
+  }
   test(
     'a rich topic rid takes precedence over an unrelated jump URL',
     () async {

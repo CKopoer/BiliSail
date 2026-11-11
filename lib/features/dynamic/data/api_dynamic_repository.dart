@@ -5,8 +5,11 @@ import '../../../domain/dynamic_post.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../shared/data/dynamic_post_mapper.dart';
 import '../domain/dynamic_repository.dart';
+import '../domain/dynamic_poll.dart';
+import '../domain/dynamic_poll_repository.dart';
 
-final class ApiDynamicRepository implements DynamicRepository {
+final class ApiDynamicRepository
+    implements DynamicRepository, DynamicPollRepository {
   ApiDynamicRepository(
     this.client,
     this.requests, {
@@ -27,6 +30,37 @@ final class ApiDynamicRepository implements DynamicRepository {
             mapDynamicPost(await client.detail(id, context: context)),
         cancellation: cancellation,
       );
+
+  @override
+  Future<DynamicPoll> poll(String id, RequestCancellation cancellation) =>
+      requests.run(
+        (context) async => _poll(
+          await DynamicPollClient(client.api).detail(id, context: context),
+        ),
+        cancellation: cancellation,
+      );
+
+  @override
+  Future<DynamicPoll> vote(
+    String id,
+    String voterId,
+    List<int> choices,
+    bool anonymous,
+    RequestCancellation cancellation, {
+    String? dynamicId,
+  }) => _write(
+    (context) async => _poll(
+      await DynamicPollClient(client.api).vote(
+        id: id,
+        voterId: voterId,
+        choices: choices,
+        anonymous: anonymous,
+        dynamicId: dynamicId,
+        context: context,
+      ),
+    ),
+    cancellation,
+  );
 
   Future<T> _write<T>(
     Future<T> Function(ApiRequestContext) operation,
@@ -64,3 +98,22 @@ final class ApiDynamicRepository implements DynamicRepository {
     cancellation,
   );
 }
+
+DynamicPoll _poll(ApiDynamicPoll poll) => DynamicPoll(
+  id: poll.id,
+  title: poll.title,
+  description: poll.description,
+  maxChoices: poll.maxChoices,
+  endsAt: poll.endsAt,
+  joinCount: poll.joinCount,
+  options: [
+    for (final option in poll.options)
+      DynamicPollOption(
+        index: option.index,
+        text: option.text,
+        count: option.count,
+        imageUrl: option.imageUrl,
+      ),
+  ],
+  myVotes: poll.myVotes,
+);

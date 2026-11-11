@@ -573,6 +573,7 @@ final class BiliApiClient {
       '/x/dynamic/feed/dyn/thumb',
       '/x/dynamic/feed/create/dyn',
       '/x/vote/create',
+      '/x/vote/do_vote',
     }.contains(path)) {
       throw ArgumentError('Unsupported dynamic mutation');
     }
@@ -707,7 +708,9 @@ final class BiliApiClient {
               uri.replace(
                 queryParameters: {...uri.queryParameters, 'csrf': csrf},
               ),
-              body: jsonBody,
+              body: uri.path == '/x/vote/do_vote'
+                  ? {...jsonBody, 'csrf': csrf, 'csrf_token': csrf}
+                  : jsonBody,
               headers: headers,
               timeout: budget,
               cancellation: context?.cancellation,
