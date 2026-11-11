@@ -34,6 +34,7 @@ final class _Player extends Fake
   Completer<bool>? videoGate;
   Completer<void>? pauseGate;
   int interrupts = 0;
+  int preparations = 0;
   int position = 1000;
   int buffered = 2000;
   Duration duration = const Duration(seconds: 12);
@@ -68,6 +69,7 @@ final class _Player extends Fake
     required bool silent,
     bool isLive = false,
   }) async {
+    preparations++;
     main = media;
     sound = audio;
     return await preparation?.future ??
@@ -140,6 +142,224 @@ final class _Player extends Fake
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final source = DashPairSource(video: track('video'), audio: track('audio'));
+  for (final rate in [1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 8.0]) {
+    for (final pausedFor in [Duration.zero, const Duration(minutes: 10)]) {
+      testWidgets(
+        'resume at ${rate}x after ${pausedFor.inMinutes}m pause confirms the cached pair before audio',
+        (tester) async {
+          final player = _Player()
+            ..duration = const Duration(milliseconds: 458269)
+            ..position = 204400;
+          var allocations = 0;
+          final engine = FvpEngine(
+            createPlayer: () async {
+              allocations++;
+              return player;
+            },
+          );
+          addTearDown(engine.dispose);
+          final failures = <PlayerFailure>[];
+          engine.failures.listen(failures.add);
+          try {
+            await engine.open(
+              source,
+              OpenOptions(play: true, rate: rate, volume: 37),
+            );
+            await tester.pump(const Duration(milliseconds: 250));
+            await engine.pause();
+            await tester.pump(pausedFor);
+            expect(engine.currentSnapshot.position.inMilliseconds, 204400);
+            expect(player.playing, false);
+            expect(player.seeks, isEmpty);
+
+            player
+              ..holdSeek = true
+              ..audioGate = Completer<bool>();
+            final resuming = engine.play();
+            await tester.pump();
+            expect(player.playing, false);
+            expect(player.seeks.single.$1.inMilliseconds, 204400);
+            expect(engine.currentSnapshot.isSeeking, true);
+            player.events.add(FvpNativeStatus.buffered);
+            await tester.pump(const Duration(seconds: 3));
+            expect(player.playing, false);
+            expect(failures, isEmpty);
+
+            player.seeks.single.$2.complete(204433);
+            await tester.pump();
+            expect(
+              player.playing,
+              false,
+              reason: 'Audio target is still pending',
+            );
+            player.audioGate!.complete(true);
+            await tester.pumpAndSettle();
+            await resuming;
+            expect(player.playing, true);
+            expect(engine.currentSnapshot.position.inMilliseconds, 204433);
+            expect(engine.currentSnapshot.rate, rate);
+            expect(player.volume, 37);
+            expect(allocations, 1);
+            expect(player.preparations, 1);
+            expect(player.interrupts, 0);
+            expect(failures, isEmpty);
+          } finally {
+            await tester.runAsync(engine.dispose);
+          }
+        },
+      );
+    }
+  }
+
+  for (final action in ['pause', 'stop', 'seek']) {
+    testWidgets('a pending resume target respects a later $action', (
+      tester,
+    ) async {
+      final player = _Player();
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      await engine.open(source, const OpenOptions(play: true));
+      await tester.pump(const Duration(milliseconds: 250));
+      await engine.pause();
+      player.holdSeek = true;
+      final resuming = engine.play();
+      await tester.pump();
+      expect(player.seeks, hasLength(1));
+      if (action == 'pause') {
+        await engine.pause();
+        player.seeks.first.$2.complete(1000);
+      } else if (action == 'stop') {
+        await tester.runAsync(engine.stop);
+        player.seeks.first.$2.complete(1000);
+      } else {
+        final latest = engine.seek(const Duration(seconds: 7));
+        await tester.pump();
+        expect(player.seeks, hasLength(2));
+        player.seeks.last.$2.complete(7000);
+        await tester.pumpAndSettle();
+        await latest;
+      }
+      await tester.pumpAndSettle();
+      await resuming;
+      expect(player.playing, action == 'seek');
+      expect(engine.currentSnapshot.desiredPlaying, action == 'seek');
+      if (action == 'seek') {
+        expect(engine.currentSnapshot.position.inSeconds, 7);
+      } else if (action == 'pause') {
+        expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+        player.holdSeek = false;
+        await engine.play();
+        expect(player.seeks, hasLength(2));
+        expect(player.playing, true);
+      } else {
+        expect(player.released, true);
+      }
+      await tester.runAsync(engine.dispose);
+    });
+  }
+
+  test('a confirmed user seek and repeated play do not seek again', () async {
+    final player = _Player();
+    final engine = FvpEngine(createPlayer: () async => player);
+    addTearDown(engine.dispose);
+    await engine.open(source, const OpenOptions(play: true));
+    await engine.pause();
+    await engine.seek(const Duration(seconds: 7));
+    await engine.play();
+    await engine.play();
+    expect(player.seeks, hasLength(1));
+    expect(player.preparations, 1);
+  });
+
+  test(
+    'rapid pause and play wait for pause before reconfirming the pair',
+    () async {
+      final player = _Player();
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      await engine.open(source, const OpenOptions(play: true));
+      player
+        ..pauseGate = Completer<void>()
+        ..holdSeek = true;
+      final pausing = engine.pause();
+      final resuming = engine.play();
+      await Future<void>.delayed(Duration.zero);
+      expect(player.playing, false);
+      expect(player.seeks, isEmpty);
+      player.pauseGate!.complete();
+      await pausing;
+      await Future<void>.delayed(Duration.zero);
+      expect(player.seeks, hasLength(1));
+      expect(player.playing, false);
+      player.seeks.single.$2.complete(1000);
+      await resuming;
+      expect(player.playing, true);
+      expect(player.preparations, 1);
+    },
+  );
+
+  test(
+    'failed resume target keeps both tracks paused without reopening',
+    () async {
+      final player = _Player();
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      await engine.open(source, const OpenOptions(play: true));
+      await engine.pause();
+      player.holdSeek = true;
+      final resuming = engine.play();
+      final failed = expectLater(resuming, throwsA(isA<PlayerFailure>()));
+      await Future<void>.delayed(Duration.zero);
+      player.seeks.single.$2.complete(-1);
+      await failed;
+      expect(player.playing, false);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+      expect(engine.currentSnapshot.desiredPlaying, false);
+      expect(player.preparations, 1);
+    },
+  );
+
+  test(
+    'pause and play during resume reuse the target already being confirmed',
+    () async {
+      final player = _Player();
+      final engine = FvpEngine(createPlayer: () async => player);
+      addTearDown(engine.dispose);
+      await engine.open(source, const OpenOptions(play: true));
+      await engine.pause();
+      player.holdSeek = true;
+      final resuming = engine.play();
+      await Future<void>.delayed(Duration.zero);
+      await engine.pause();
+      await engine.play();
+      player.seeks.single.$2.complete(1000);
+      await resuming.timeout(const Duration(seconds: 1));
+      expect(player.playing, true);
+      expect(player.seeks, hasLength(1));
+      await engine.play();
+      expect(player.seeks, hasLength(1));
+    },
+  );
+
+  for (final single in [
+    ProgressiveSource(track('progressive')),
+    ManifestSource(track('live'), isLive: true),
+  ]) {
+    test(
+      'single-pipeline ${single.runtimeType} resume does not seek',
+      () async {
+        final player = _Player();
+        final engine = FvpEngine(createPlayer: () async => player);
+        addTearDown(engine.dispose);
+        await engine.open(single, const OpenOptions(play: true));
+        await engine.pause();
+        await engine.play();
+        expect(player.playing, true);
+        expect(player.seeks, isEmpty);
+        expect(player.preparations, 1);
+      },
+    );
+  }
   testWidgets(
     'buffer display correction preserves raw health and resets on seek',
     (tester) async {

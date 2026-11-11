@@ -777,6 +777,22 @@ class SharedPlayerEngine
     if (!_current(generation) || backend == null || !_snapshot.desiredPlaying) {
       return;
     }
+    if (backend is PlaybackResumeSynchronization) {
+      // A rapid pause/play can arrive before native pause acknowledgement.
+      await _controls;
+      if (!_current(generation, backend) ||
+          _failing != null ||
+          !_snapshot.desiredPlaying) {
+        return;
+      }
+      if (_seekOperation == null &&
+          (backend as PlaybackResumeSynchronization).needsResumeSeek) {
+        // Reuse the source and the latest-target seek/cancellation machinery.
+        // The idle video frame and its audio must be ready before either plays.
+        await seek(_snapshot.position);
+        return;
+      }
+    }
     _playOperation?.cancel();
     final operation = _playOperation = PlaybackOperation(
       generation,

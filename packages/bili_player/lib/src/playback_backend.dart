@@ -136,6 +136,12 @@ final class BackendHealth {
   final bool comparePairedClocks;
 }
 
+/// Native backends whose idle paired tracks need a fresh paused target.
+abstract interface class PlaybackResumeSynchronization {
+  /// Reconfirm an idle pair through the existing cancellable seek barrier.
+  bool get needsResumeSeek;
+}
+
 /// Package-private SDK boundary. Each instance belongs to exactly one source.
 abstract interface class PlaybackBackend {
   VideoOutput get videoOutput;
