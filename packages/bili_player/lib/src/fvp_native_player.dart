@@ -72,6 +72,11 @@ abstract interface class FvpPlayerPort {
   Future<void> dispose();
 }
 
+/// Reuse is advertised only by ports that can confirm source teardown.
+abstract interface class FvpReusablePlayerPort {
+  Future<void> resetForNextSource();
+}
+
 /// Optional statistics capability, independent of playback commands so remote
 /// or test adapters can be introduced without inventing native observations.
 abstract interface class FvpInformationPort {
@@ -159,7 +164,8 @@ final class _MdkPlayerPort
         FvpAudioActivityPort,
         FvpAudioClockPort,
         FvpReadEvidencePort,
-        FvpPauseConfirmationPort {
+        FvpPauseConfirmationPort,
+        FvpReusablePlayerPort {
   _MdkPlayerPort({this.windowsAdapterIndex, this.audioOnly = false});
 
   final int? windowsAdapterIndex;
@@ -201,10 +207,10 @@ final class _MdkPlayerPort
   StreamSubscription<Object?>? _statusSubscription;
   StreamSubscription<Object?>? _eventSubscription;
   StreamSubscription<Object?>? _stateSubscription;
-  final _audioOpened = Completer<bool>();
-  final _firstFrame = FvpFirstVideoFrame();
-  final _prepared = Completer<bool>();
-  final _paused = Completer<void>();
+  var _audioOpened = Completer<bool>();
+  var _firstFrame = FvpFirstVideoFrame();
+  var _prepared = Completer<bool>();
+  var _paused = Completer<void>();
   Future<int>? _textureCreation;
   bool _closed = false;
   bool _closing = false;
@@ -215,6 +221,7 @@ final class _MdkPlayerPort
   int? _preparedAudioPosition;
   VideoDimensions? _dimensions;
   Future<void>? _disposal;
+  Future<void>? _sourceReset;
   Completer<int>? _seekCancelled;
   Future<void>? _retiringSeek;
   bool _repreparing = false;
@@ -235,15 +242,21 @@ final class _MdkPlayerPort
   VideoDimensions? _textureDimensions;
   Pointer<Void> _audioActivity = nullptr;
 
+  int _audioFrameBase = 0;
+
   @override
   int get decodedAudioFrames =>
       _audioCompanion?.decodedAudioFrames ??
-      audio_activity.bili_fvp_audio_frames(_audioActivity);
+      audio_activity.bili_fvp_audio_frames(_audioActivity) - _audioFrameBase;
 
-  int get _decodedAudioEndMilliseconds => fvpAudioEndPosition(
-    frameEndMilliseconds: audio_activity.bili_fvp_audio_end(_audioActivity),
-    mediaStartMilliseconds: _mediaStartMilliseconds,
-  );
+  int get _decodedAudioEndMilliseconds => decodedAudioFrames == 0
+      ? -1
+      : fvpAudioEndPosition(
+          frameEndMilliseconds: audio_activity.bili_fvp_audio_end(
+            _audioActivity,
+          ),
+          mediaStartMilliseconds: _mediaStartMilliseconds,
+        );
 
   void _buffering(bool value, {bool audio = false}) {
     if (audio) {
@@ -289,10 +302,14 @@ final class _MdkPlayerPort
   }
 
   void _initializePlayer() {
-    _native = mdk.Player();
-    _audioActivity = audio_activity.bili_fvp_audio_attach(_player.nativeHandle);
-    if (_audioActivity == nullptr) {
-      throw StateError('MDK audio activity observation unavailable');
+    if (_native == null) {
+      _native = mdk.Player();
+      _audioActivity = audio_activity.bili_fvp_audio_attach(
+        _player.nativeHandle,
+      );
+      if (_audioActivity == nullptr) {
+        throw StateError('MDK audio activity observation unavailable');
+      }
     }
     _eventSubscription = _player.onEvent.listen((event) {
       if (_closed) return;
@@ -442,7 +459,7 @@ final class _MdkPlayerPort
     if (audio != null) {
       // Keep a real paused audio player. Both native targets are decoded before
       // play, and video follows this player's native audio presentation clock.
-      final companion = _audioCompanion = _MdkPlayerPort(audioOnly: true);
+      final companion = _audioCompanion ??= _MdkPlayerPort(audioOnly: true);
       final info = await _active(
         companion.prepare(audio, null, options, silent: false),
       );
@@ -997,12 +1014,69 @@ final class _MdkPlayerPort
   }
 
   @override
+  Future<void> resetForNextSource() => _sourceReset ??= _resetSource();
+
+  Future<void> _resetSource() async {
+    if (_closed || _closing || _interrupted.isCompleted) {
+      throw StateError('MDK player cannot be reused');
+    }
+    _repreparing = true;
+    _holdClock(0);
+    // waitFor(stopped) joins the old source work; queued Dart callbacks are
+    // drained by _retireSeek before resetting its single prepare-result slot.
+    await _retireSeek().timeout(const Duration(seconds: 5));
+    await _audioCompanion?.resetForNextSource();
+    if (_closed || _closing || _interrupted.isCompleted) {
+      throw StateError('MDK source reset cancelled');
+    }
+    audio_activity.bili_fvp_audio_clock_seek(_audioClock);
+    _holdClock(0);
+    await _audioSubscription?.cancel();
+    await _statusSubscription?.cancel();
+    await _eventSubscription?.cancel();
+    await _stateSubscription?.cancel();
+    _audioSubscription = null;
+    _audioOpened = Completer<bool>();
+    _prepared = Completer<bool>();
+    _paused = Completer<void>();
+    _firstFrame = FvpFirstVideoFrame();
+    _audioFrameBase = audio_activity.bili_fvp_audio_frames(_audioActivity);
+    _playingClock
+      ..stop()
+      ..reset();
+    _durationMilliseconds = 0;
+    _mediaStartMilliseconds = 0;
+    _videoBuffering = _audioBuffering = false;
+    _audioReadyPosition = 0;
+    _audioTargetReady = false;
+    _preparedAudioPosition = null;
+    _dimensions = _textureDimensions = null;
+    _textureCreation = null;
+    _ended = false;
+    _observedState = mdk.PlaybackState.stopped;
+    _externalAudio = null;
+    _videoDecoder = null;
+    _videoDecoded = _audioDecoded = _videoRendered = false;
+    _primingDirectSurface = _mutedAudioSeek = false;
+    _appliedGainDb = null;
+    _retiringSeek = null;
+    _seekCancelled = null;
+    _repreparing = false;
+    _sourceReset = null;
+  }
+
+  @override
   Future<void> dispose() => _disposal ??= _dispose();
 
   Future<void> _dispose() async {
     if (_closed) return;
     _closing = true;
     interrupt();
+    try {
+      await _sourceReset;
+    } on Object {
+      // Cancellation retires reset before freeing native clock/activity state.
+    }
 
     // Own a late CreateRT reply before deleting the native player.
     try {

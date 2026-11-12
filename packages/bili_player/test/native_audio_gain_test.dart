@@ -5,6 +5,19 @@ import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('a new source clears gain inherited from a reused player', () async {
+    final values = <String, String>{};
+    NativeAudioGain sourceControl() => NativeAudioGain(
+      write: (key, value) async => values[key] = value,
+      read: (key) async => values[key] ?? '',
+      isCurrent: () => true,
+    );
+    final previous = sourceControl();
+    await previous.apply(8, smooth: false);
+    previous.cancel();
+    await sourceControl().apply(0, smooth: false);
+    expect(values['replaygain-fallback'], '0.0');
+  });
   test(
     'native gain preserves user volume and ramps to exact targets',
     () async {

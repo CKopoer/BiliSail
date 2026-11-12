@@ -142,7 +142,19 @@ abstract interface class PlaybackResumeSynchronization {
   bool get needsResumeSeek;
 }
 
-/// Package-private SDK boundary. Each instance belongs to exactly one source.
+/// A backend may retain its native player after a fully settled source.
+/// resetForNextSource must stop/unload and drain callbacks before returning.
+/// Failed, cancelled and configuration-incompatible opens use full disposal.
+abstract interface class ReusablePlaybackBackend {
+  bool canReuse(ValidatedSource plan);
+  Future<void> resetForNextSource(PlaybackOperation operation);
+}
+
+/// SDK streams already provide position/buffering/error events. Such backends
+/// do not need the shared periodic native health sampler.
+abstract interface class EventDrivenPlaybackBackend {}
+
+/// Package-private SDK boundary. One source is active at a time.
 abstract interface class PlaybackBackend {
   VideoOutput get videoOutput;
   Stream<BackendEvent> get events;

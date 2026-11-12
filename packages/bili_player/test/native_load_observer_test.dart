@@ -15,8 +15,6 @@ void main() {
     expect(state.tracksReady, true);
     state.seekStarted();
     expect(state.tracksReady, false);
-    state.clockChanged(seconds: 20);
-    expect(state.tracksReady, false);
     state.playbackRestarted();
     expect(state.tracksReady, true);
     state.started(2);
@@ -55,7 +53,6 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(ready, isFalse);
     state.seekStarted();
-    state.clockChanged(seconds: 9);
     await Future<void>.delayed(Duration.zero);
     expect(ready, isFalse);
     state.playbackRestarted();
@@ -65,26 +62,20 @@ void main() {
     expect(state.restartedSeekCount, lessThan(state.seekCount));
   });
 
-  test(
-    'seek restarts invalidate clocks and cannot cross source disposal',
-    () async {
-      final state = NativeLoadState();
-      state.clockChanged(seconds: 1, epoch: 0);
-      state.seekStarted();
-      state.clockChanged(seconds: 1, epoch: 0);
-      expect(state.audioPosition, isNull);
-      state.playbackRestarted();
-      await state.dispose();
-      state.seekStarted();
-      state.playbackRestarted();
-      expect(state.seekCount, 1);
-      expect(state.restartedSeekCount, 1);
-      final replacement = NativeLoadState();
-      addTearDown(replacement.dispose);
-      expect(replacement.seekCount, 0);
-      expect(replacement.restartedSeekCount, 0);
-    },
-  );
+  test('seek restarts cannot cross source disposal', () async {
+    final state = NativeLoadState();
+    state.seekStarted();
+    state.playbackRestarted();
+    await state.dispose();
+    state.seekStarted();
+    state.playbackRestarted();
+    expect(state.seekCount, 1);
+    expect(state.restartedSeekCount, 1);
+    final replacement = NativeLoadState();
+    addTearDown(replacement.dispose);
+    expect(replacement.seekCount, 0);
+    expect(replacement.restartedSeekCount, 0);
+  });
 
   test('output color confirmation can follow decoded dimensions', () async {
     final state = NativeLoadState();
@@ -118,34 +109,6 @@ void main() {
       expect(old.videoOutputDriver, 'gpu-next');
     },
   );
-  test('seek and pause invalidate pending clock replies', () async {
-    final state = NativeLoadState();
-    state.clockChanged(seconds: 10, epoch: 0);
-    state.resetClocks();
-    state.clockChanged(seconds: 10, epoch: 0);
-    expect(state.audioPosition, isNull);
-    state.clockChanged(seconds: 40, epoch: 1);
-    expect(state.audioPosition, const Duration(seconds: 40));
-    await state.dispose();
-  });
-
-  test(
-    'clock cache validates native samples and ignores disposed replies',
-    () async {
-      final state = NativeLoadState();
-      state.clockChanged(seconds: 12.25);
-      expect(state.audioPosition, const Duration(milliseconds: 12250));
-      for (final invalid in [null, double.nan, double.infinity, -0.1]) {
-        state.clockChanged(seconds: invalid);
-        expect(state.audioPosition, isNull);
-      }
-      state.clockChanged(seconds: 12.25);
-      await state.dispose();
-      state.clockChanged(seconds: 50);
-      expect(state.audioPosition, const Duration(milliseconds: 12250));
-    },
-  );
-
   test(
     'preparation keeps the original failure and ignores late errors',
     () async {

@@ -7,7 +7,14 @@ import 'player_playback_information.dart';
 import 'switching_video_output.dart';
 import 'video_output.dart';
 
-/// Resolves the saved backend on each open, after the old runtime is released.
+/// Select settings once, then allocate only when their backend identity changes.
+final class PlayerEngineSelection {
+  const PlayerEngineSelection(this.key, this.create);
+  final Object key;
+  final Future<PlayerEngine> Function() create;
+}
+
+/// Resolves the saved backend on each open and reuses compatible runtimes.
 /// A settings change never replaces the runtime of an already playing source.
 final class ConfigurablePlayerEngine
     implements
@@ -15,9 +22,18 @@ final class ConfigurablePlayerEngine
         VideoOutputSource,
         AudioGainControl,
         PlayerInformationSource {
-  ConfigurablePlayerEngine({required this.createEngine});
+  ConfigurablePlayerEngine({
+    required Future<PlayerEngine> Function() createEngine,
+  }) : selectEngine = (() async =>
+           PlayerEngineSelection(Object(), createEngine)),
+       _reuseSelection = false;
 
-  final Future<PlayerEngine> Function() createEngine;
+  ConfigurablePlayerEngine.select({required this.selectEngine})
+    : _reuseSelection = true;
+
+  final Future<PlayerEngineSelection> Function() selectEngine;
+  final bool _reuseSelection;
+  Object? _engineKey;
   final _output = SwitchingVideoOutput();
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   final _failures = StreamController<PlayerFailure>.broadcast(sync: true);
@@ -90,6 +106,7 @@ final class ConfigurablePlayerEngine
     // Retain a failed release so a later open cannot overlap an uncertain core.
     if (old != null) await old.dispose();
     _engine = null;
+    _engineKey = null;
   }
 
   Future<void> _requestStop() async {
@@ -114,6 +131,16 @@ final class ConfigurablePlayerEngine
       );
     }
     final previous = _snapshot;
+    final keepEngine =
+        _reuseSelection &&
+        _engine != null &&
+        const {
+          PlaybackPhase.ready,
+          PlaybackPhase.playing,
+          PlaybackPhase.paused,
+          PlaybackPhase.buffering,
+          PlaybackPhase.ended,
+        }.contains(previous.phase);
     final generation = ++_generation;
     _opening?.cancel();
     final operation = _opening = PlaybackOperation(
@@ -123,15 +150,22 @@ final class ConfigurablePlayerEngine
     _desiredPlaying = options.play;
     // Invalidate a pending child open before waiting for the command queue.
     if (!options.retainPresentation) _output.clearRetainedFrame();
+    Future<void> suspend() async {
+      if (keepEngine) {
+        await _engine?.pause();
+      } else {
+        await _requestStop();
+      }
+    }
+
     final stopped = options.retainPresentation
         ? () async {
             await _output.retainFrame();
-            if (!_disposed && generation == _generation) await _requestStop();
+            if (!_disposed && generation == _generation) await suspend();
           }()
-        : _requestStop();
+        : suspend();
     return _enqueue(() async {
       await stopped;
-      await _release();
       if (_disposed || generation != _generation) return;
       _publish(
         PlaybackSnapshot(
@@ -152,14 +186,29 @@ final class ConfigurablePlayerEngine
           volume: options.volume,
         ),
       );
+      var releasing = false;
       try {
         if (_disposed || generation != _generation) return;
-        final creating = _creating = createEngine().then((selected) {
-          _engine = selected;
-          return selected;
-        });
-        final selected = await operation.wait(creating);
-        _creating = null;
+        final selection = await operation.wait(selectEngine());
+        if (!keepEngine || selection.key != _engineKey) {
+          releasing = true;
+          await _release();
+          releasing = false;
+          operation.check();
+          final creating = _creating = selection.create().then((selected) {
+            _engine = selected;
+            _engineKey = selection.key;
+            return selected;
+          });
+          await operation.wait(creating);
+          _creating = null;
+        } else {
+          for (final subscription in _subscriptions) {
+            await subscription.cancel();
+          }
+          _subscriptions.clear();
+        }
+        final selected = _engine!;
         if (_disposed || generation != _generation) {
           await _release();
           return;
@@ -227,6 +276,7 @@ final class ConfigurablePlayerEngine
       } on SourceSuperseded {
         return;
       } on Object catch (error) {
+        if (releasing) rethrow;
         if (_disposed || generation != _generation) return;
         final failure = error is PlayerFailure
             ? PlayerFailure(error.kind, error.message, generation)

@@ -81,6 +81,45 @@ void main() {
   final source = ProgressiveSource(
     MediaTrack(uri: Uri.file('video.mp4'), requestPolicy: MediaRequestPolicy()),
   );
+  test(
+    'same settings reuse the engine; switching backend awaits disposal',
+    () async {
+      final first = _Engine(), second = _Engine();
+      var key = 'mpv';
+      var allocations = 0;
+      final engine = ConfigurablePlayerEngine.select(
+        selectEngine: () async => PlayerEngineSelection(key, () async {
+          allocations++;
+          return key == 'mpv' ? first : second;
+        }),
+      );
+      await engine.open(source, const OpenOptions(play: true));
+      await engine.open(
+        source,
+        const OpenOptions(play: false, startPosition: Duration(seconds: 4)),
+      );
+      expect(allocations, 1);
+      expect(first.disposed, false);
+      expect(engine.currentSnapshot.position, const Duration(seconds: 4));
+      expect(engine.currentSnapshot.generation, 2);
+      key = 'fvp';
+      first.release = Completer<void>();
+      final switching = engine.open(source, const OpenOptions(play: false));
+      await Future<void>.delayed(Duration.zero);
+      expect(allocations, 1);
+      first.release!.complete();
+      await switching;
+      expect(first.disposed, true);
+      expect(allocations, 2);
+      first.events.add(
+        const PlaybackSnapshot(phase: PlaybackPhase.playing, generation: 1),
+      );
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      await engine.dispose();
+      await first.closeStreams();
+      await second.closeStreams();
+    },
+  );
   test('same-content recovery preserves the timeline across child selection and readiness', () async {
     final first = _Engine();
     final second = _Engine()..openGate = Completer<void>();

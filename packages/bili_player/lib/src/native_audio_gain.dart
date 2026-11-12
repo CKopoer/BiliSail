@@ -19,6 +19,7 @@ final class NativeAudioGain {
   double gainDb = 0;
   int _revision = 0;
   bool _configured = false;
+  bool _gainApplied = false;
 
   static bool valid(double gain) => gain.isFinite && gain >= -60 && gain <= 30;
 
@@ -54,6 +55,7 @@ final class NativeAudioGain {
         throw StateError('The native backend did not apply audio gain.');
       }
       gainDb = value;
+      _gainApplied = true;
     }
 
     check();
@@ -67,7 +69,8 @@ final class NativeAudioGain {
       }
       _configured = true;
     }
-    if (gainDb == target) return;
+    // A new source controller may inherit a nonzero gain on a reused player.
+    if (_gainApplied && gainDb == target) return;
     if (smooth) {
       final from = math.pow(10, gainDb / 20).toDouble();
       final to = math.pow(10, target / 20).toDouble();

@@ -55,6 +55,7 @@ class FvpProcessHandler private constructor(context: Context, engine: FlutterEng
         var surface: Surface? = null
         var direct = false
         var frameAcknowledged = false
+        var sourceRevision = 0
         fun release() {
             texture?.setOnFrameConsumedListener(null)
             surface?.release(); surface = null
@@ -154,15 +155,17 @@ class FvpProcessHandler private constructor(context: Context, engine: FlutterEng
             if (player.texture != null) { result.success(player.texture!!.id()); return }
             val texture = registry.createSurfaceTexture()
             texture.surfaceTexture().setDefaultBufferSize(player.width, player.height)
+            val sourceRevision = player.sourceRevision
             texture.setOnFrameConsumedListener {
                 handler.post {
-                    if (player.direct && !player.frameAcknowledged && !player.lost && players[id] === player) {
+                    if (player.direct && sourceRevision == player.sourceRevision &&
+                        !player.frameAcknowledged && !player.lost && players[id] === player) {
                         // Flutter can consume the initial empty texture (timestamp 0)
                         // before MediaCodec reopens against this Surface. Keep the
                         // video pipe running until a video buffer was acquired.
                         if (texture.surfaceTexture().timestamp <= 0L) return@post
                         player.frameAcknowledged = true
-                        try { remote?.send(Message.obtain(null, 5).apply { arg1 = id }) }
+                        try { remote?.send(Message.obtain(null, 5).apply { arg1 = id; arg2 = sourceRevision }) }
                         catch (_: android.os.RemoteException) { lost() }
                     }
                 }
@@ -173,6 +176,11 @@ class FvpProcessHandler private constructor(context: Context, engine: FlutterEng
         } else {
             @Suppress("UNCHECKED_CAST")
             val args = call.arguments as? Map<String, Any?> ?: emptyMap()
+            if (call.method == "resetSource") {
+                player.sourceRevision = (args["sourceRevision"] as Number).toInt()
+                player.direct = false
+                player.frameAcknowledged = false
+            }
             if (call.method == "prepare") player.direct = args["directSurface"] == true && args["software"] != true
             request(call.method, id, args, result) { value ->
                 if (call.method == "prepare" && value is Map<*, *>) {
@@ -180,6 +188,9 @@ class FvpProcessHandler private constructor(context: Context, engine: FlutterEng
                     player.height = (value["height"] as? Number)?.toInt() ?: 0
                     player.direct = value["direct"] == true
                 }
+                // The worker has stopped decoding and detached its borrowed
+                // Surface. Release this source's texture before binding another.
+                if (call.method == "resetSource") player.release()
                 if (call.method == "dispose") { players.remove(id)?.release() }
                 result.success(value)
             }

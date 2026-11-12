@@ -8,8 +8,8 @@ const dolbyVisionSdrFilter =
     'libplacebo=apply_dolbyvision=1:colorspace=bt709:'
     'color_primaries=bt709:color_trc=iec61966-2-1:format=yuv420p10le]';
 
-/// Runs in on_preloaded, before track selection and decoder initialization.
-/// Uses demuxer metadata, including local media without a supplied codec tag.
+/// Configures paused output after track discovery, before presentation is
+/// admitted. Uses demuxer metadata, including local media without a codec tag.
 bool configureNativeVideoColor({
   required String Function(String) read,
   required void Function(String, String) write,

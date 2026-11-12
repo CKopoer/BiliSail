@@ -315,17 +315,21 @@ class AppDependencies {
             const FileAccessService().trustedDownloadDocumentsDirectory,
       ),
     );
-    PlayerEngine createPlayerEngine() => ConfigurablePlayerEngine(
-      createEngine: () async {
+    PlayerEngine createPlayerEngine() => ConfigurablePlayerEngine.select(
+      selectEngine: () async {
         final saved = await settings.load();
-        return switch (saved.playbackBackend) {
-          PlaybackBackendPreference.mediaKit => MediaKitEngine(
-            onDiagnostic: playbackLog?.record,
-          ),
-          PlaybackBackendPreference.fvp => FvpEngine(
-            onDiagnostic: (event) => playbackLog?.record(event, backend: 'fvp'),
-          ),
-        };
+        return PlayerEngineSelection(
+          saved.playbackBackend,
+          () async => switch (saved.playbackBackend) {
+            PlaybackBackendPreference.mediaKit => MediaKitEngine(
+              onDiagnostic: playbackLog?.record,
+            ),
+            PlaybackBackendPreference.fvp => FvpEngine(
+              onDiagnostic: (event) =>
+                  playbackLog?.record(event, backend: 'fvp'),
+            ),
+          },
+        );
       },
     );
     final cardPreviews = VideoCardPreviewPlayback(

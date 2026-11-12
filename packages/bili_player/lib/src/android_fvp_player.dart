@@ -19,7 +19,8 @@ final class AndroidFvpPlayer
         FvpAudioActivityPort,
         FvpAudioClockPort,
         FvpCommandCompletionPort,
-        FvpPauseConfirmationPort {
+        FvpPauseConfirmationPort,
+        FvpReusablePlayerPort {
   AndroidFvpPlayer._(this._id);
 
   static const channel = MethodChannel('dev.bilisail/fvp_process');
@@ -33,7 +34,7 @@ final class AndroidFvpPlayer
   int? _audioPosition;
   @override
   int? get audioPositionMilliseconds => _audioPosition;
-  int _seekRevision = 0;
+  int _seekRevision = 0, _sourceRevision = 0;
   bool _closed = false, _lost = false;
   int? exitStatus;
   Future<void>? _disposal;
@@ -50,14 +51,20 @@ final class AndroidFvpPlayer
           }
           player._processExited();
         } else if (event['kind'] == 'status') {
-          if ((event['seekRevision'] ?? 0) != player._seekRevision) return;
+          if ((event['sourceRevision'] ?? 0) != player._sourceRevision ||
+              (event['seekRevision'] ?? 0) != player._seekRevision) {
+            return;
+          }
           final name = event['status'];
           final status = FvpNativeStatus.values
               .where((s) => s.name == name)
               .firstOrNull;
           if (status != null) player._statuses.add(status);
         } else if (event['kind'] == 'sample') {
-          if ((event['seekRevision'] ?? 0) != player._seekRevision) return;
+          if ((event['sourceRevision'] ?? 0) != player._sourceRevision ||
+              (event['seekRevision'] ?? 0) != player._seekRevision) {
+            return;
+          }
           if (event['position'] case final int value) player._position = value;
           if (event['buffered'] case final int value) player._buffered = value;
           if (event['audioFrames'] case final int value) {
@@ -143,6 +150,14 @@ final class AndroidFvpPlayer
   }) async => decodeFvpInformation(
     await _call('information', {'generation': generation, 'gain': audioGainDb}),
   );
+
+  @override
+  Future<void> resetForNextSource() async {
+    ++_sourceRevision;
+    await _call('resetSource', {'sourceRevision': _sourceRevision});
+    _position = _buffered = _decodedAudioFrames = 0;
+    _audioPosition = null;
+  }
 
   @override
   Future<FvpMediaInfo> prepare(

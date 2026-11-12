@@ -2,9 +2,8 @@ import 'dart:async';
 import 'dart:ffi';
 
 import 'package:media_kit/media_kit.dart' as mk;
-import 'package:media_kit/generated/libmpv/bindings.dart'
-    show mpv_event_hook, mpv_event_property, mpv_event_id;
-import 'package:ffi/ffi.dart';
+
+import 'package:media_kit/generated/libmpv/bindings.dart' show mpv_event_id;
 
 import 'native_readiness.dart';
 
@@ -19,7 +18,6 @@ final class NativeLoadState {
   bool _preparationFailed = false;
   Object? _preparationError;
   bool _disposed = false;
-  Duration? audioPosition;
   String? videoOutputMatrix;
   String? videoOutputDriver;
   int _seekCount = 0, _restartedSeekCount = 0;
@@ -40,7 +38,6 @@ final class NativeLoadState {
   void seekStarted() {
     if (_disposed) return;
     _seekCount++;
-    resetClocks();
     _changes.add(null);
   }
 
@@ -62,20 +59,6 @@ final class NativeLoadState {
     _changes.add(null);
   }
 
-  int _clockEpoch = 0;
-
-  void resetClocks() {
-    _clockEpoch++;
-    audioPosition = null;
-  }
-
-  void clockChanged({double? seconds, int? epoch}) {
-    if (_disposed || epoch != null && epoch != _clockEpoch) return;
-    audioPosition = seconds != null && seconds.isFinite && seconds >= 0
-        ? Duration(microseconds: (seconds * 1000000).round())
-        : null;
-  }
-
   Stream<void> get changes => _changes.stream;
   int? get errorCode => _errorCode;
   bool get preparationFailed => _preparationFailed;
@@ -92,7 +75,6 @@ final class NativeLoadState {
     if (_disposed) return;
     _entryId = entryId;
     _loadCount++;
-    resetClocks();
     _changes.add(null);
   }
 
@@ -115,265 +97,110 @@ final class NativeLoadState {
   }
 }
 
-/// A weak client has a separate event queue: never consume media_kit's events
-/// or replace its wakeup callback. Owned and released before its native Player.
+/// Adds listeners to media_kit's existing event route. No second mpv client,
+/// wakeup callback, hook or polling loop is owned by the application.
 final class NativeLoadObserver {
-  NativeLoadObserver._(
-    this.state,
-    this._sampleClocks,
-    this._pause,
-    this._detach,
-  );
-
-  final NativeLoadState state;
-  final void Function() _sampleClocks;
-  final Future<void> Function() _pause;
-  final void Function() _detach;
+  NativeLoadObserver._(this._platform, this._onFailure);
+  final mk.NativePlayer _platform;
+  final void Function(int) _onFailure;
+  NativeLoadState state = NativeLoadState();
+  final _events = <int>[];
+  final _properties = <String>[];
   bool _disposed = false;
-
-  void sampleClocks() {
-    if (!_disposed) _sampleClocks();
-  }
-
-  Future<void> pause() =>
-      _disposed ? Future.error(const SourceSuperseded()) : _pause();
+  bool _idle = false;
+  final _idleChanges = StreamController<void>.broadcast(sync: true);
 
   static Future<NativeLoadObserver> attach(
     mk.NativePlayer platform, {
-    required bool Function() isCurrent,
     required void Function(int errorCode) onFailure,
-    void Function(String filename)? onExternalAudio,
-    FutureOr<void> Function()? onPreloaded,
   }) async {
-    final handle = platform.ctx.address;
-    if (!isCurrent()) throw const SourceSuperseded();
-    final mpv = platform.mpv;
-    final client = mpv.mpv_create_weak_client(
-      Pointer.fromAddress(handle),
-      nullptr,
-    );
-    if (client == nullptr) {
-      throw StateError('Native load observer unavailable.');
-    }
-    final state = NativeLoadState();
-    var detached = false;
-    int? pendingClockEpoch;
-    Completer<void>? pausing;
-    void sampleClocks() {
-      // At most one async read may be pending, even if the core never replies.
-      if (pendingClockEpoch != null) return;
-      pendingClockEpoch = state._clockEpoch;
-      final property = 'audio-pts'.toNativeUtf8();
-      try {
-        if (mpv.mpv_get_property_async(client, 3, property.cast(), 5) < 0) {
-          pendingClockEpoch = null;
-        }
-      } finally {
-        calloc.free(property);
-      }
-    }
-
-    Future<void> pause() {
-      if (pausing case final pending?) return pending.future;
-      final pending = pausing = Completer<void>();
-      final name = 'pause'.toNativeUtf8();
-      // MPV_FORMAT_FLAG requires a C int, never a one-byte Dart Bool.
-      final value = calloc<Int>()..value = 1;
-      try {
-        if (mpv.mpv_set_property_async(
-              client,
-              5,
-              name.cast(),
-              3,
-              value.cast(),
-            ) <
-            0) {
-          pending.completeError(StateError('Native pause request rejected.'));
-          pausing = null;
-        }
-      } finally {
-        calloc.free(name);
-        calloc.free(value);
-      }
-      return pending.future;
-    }
-
-    Future<void> prepare(int hookId) async {
-      try {
-        await onPreloaded!();
-      } on Object catch (error) {
-        if (!detached && isCurrent()) {
-          // Keep a safe typed output failure when supplied by the caller.
-          state.failPreparation(error: error);
-          platform.setProperty('vid', 'no');
-        }
-      } finally {
-        // Detaching destroys the weak client and releases its pending hooks.
-        // A late platform-channel reply must not access that destroyed client.
-        if (!detached) mpv.mpv_hook_continue(client, hookId);
-      }
-    }
-
-    // NativeCallable.listener only posts a message from the foreign thread;
-    // draining runs on the Dart isolate after the native callback has returned.
-    void drain(Pointer<Void> _) {
-      if (detached) return;
-      while (!detached) {
-        final event = mpv.mpv_wait_event(client, 0).ref;
-        if (event.event_id == 0) break;
-        if (!isCurrent()) continue;
-        if (event.event_id == 4 && event.reply_userdata == 5) {
-          final pending = pausing;
-          pausing = null;
-          if (pending != null && !pending.isCompleted) {
-            if (event.error < 0) {
-              pending.completeError(StateError('Native pause request failed.'));
-            } else {
-              pending.complete();
-            }
-          }
-          continue;
-        }
-        if (event.event_id == 3 &&
-            event.reply_userdata == 3 &&
-            pendingClockEpoch != null) {
-          final epoch = pendingClockEpoch;
-          pendingClockEpoch = null;
-          final property = event.data == nullptr
-              ? null
-              : event.data.cast<mpv_event_property>().ref;
-          state.clockChanged(
-            epoch: epoch,
-            seconds:
-                event.error >= 0 &&
-                    property != null &&
-                    property.format == 5 &&
-                    property.data != nullptr
-                ? property.data.cast<Double>().value
-                : null,
-          );
-          continue;
-        }
-        // These notifications carry no data. A command reply or time-pos
-        // update can precede the target frame; wait for the matching restart.
-        if (event.event_id == mpv_event_id.MPV_EVENT_SEEK) {
-          state.seekStarted();
-          continue;
-        }
-        if (event.event_id == mpv_event_id.MPV_EVENT_PLAYBACK_RESTART) {
-          state.playbackRestarted();
-          continue;
-        }
-        if (event.data == nullptr) continue;
-        if (event.event_id == 25 && onPreloaded != null) {
-          final hookId = event.data.cast<mpv_event_hook>().ref.id;
-          unawaited(prepare(hookId));
-        } else if (event.event_id == 22) {
-          final property = event.data.cast<mpv_event_property>().ref;
-          if (event.reply_userdata == 6 || event.reply_userdata == 7) {
-            final value = property.format == 1 && property.data != nullptr
-                ? property.data.cast<Pointer<Utf8>>().value
-                : nullptr;
-            state.outputChanged(
-              event.reply_userdata == 6
-                  ? NativeOutputProperty.colorMatrix
-                  : NativeOutputProperty.driver,
-              value == nullptr ? null : value.toDartString(),
-            );
-          }
-          if (event.reply_userdata == 1 &&
-              onExternalAudio != null &&
-              property.format == 1 &&
-              property.data != nullptr) {
-            final value = property.data.cast<Pointer<Utf8>>().value;
-            if (value != nullptr) onExternalAudio(value.toDartString());
-          }
-        } else if (event.event_id == 6) {
-          state.started(event.data.cast<Int64>().value);
-        } else if (event.event_id == 7) {
-          final end = event.data.cast<_MpvEndFile>().ref;
-          final code = end.error;
-          if (state.ended(
-            entryId: end.entryId,
-            reason: end.reason,
-            error: code,
-          )) {
-            onFailure(code);
-          }
-        }
-      }
-    }
-
-    final wakeup = NativeCallable<Void Function(Pointer<Void>)>.listener(drain);
+    final observer = NativeLoadObserver._(platform, onFailure);
     try {
-      if (onPreloaded != null) {
-        // Output color/VO confirmation can follow decoded dimensions. Keep a
-        // source-owned event cache instead of polling the core during startup.
-        for (final (id, property) in [
-          (6, 'video-out-params/colormatrix'),
-          (7, 'current-vo'),
-        ]) {
-          final name = property.toNativeUtf8();
-          try {
-            if (mpv.mpv_observe_property(client, id, name.cast(), 1) < 0) {
-              throw StateError('Native video output observation unavailable.');
-            }
-          } finally {
-            calloc.free(name);
+      for (final id in const [
+        mpv_event_id.MPV_EVENT_START_FILE,
+        mpv_event_id.MPV_EVENT_END_FILE,
+        mpv_event_id.MPV_EVENT_SEEK,
+        mpv_event_id.MPV_EVENT_PLAYBACK_RESTART,
+      ]) {
+        await platform.observeEvent(id, (event) async {
+          if (observer._disposed) return;
+          final state = observer.state;
+          // Copy scalar payloads before returning to the SDK event loop.
+          switch (id) {
+            case mpv_event_id.MPV_EVENT_START_FILE:
+              if (event.ref.data != nullptr) {
+                observer._idle = false;
+                state.started(event.ref.data.cast<Int64>().value);
+              }
+            case mpv_event_id.MPV_EVENT_END_FILE:
+              if (event.ref.data != nullptr) {
+                final end = event.ref.data.cast<_MpvEndFile>().ref;
+                if (state.ended(
+                  entryId: end.entryId,
+                  reason: end.reason,
+                  error: end.error,
+                )) {
+                  observer._onFailure(end.error);
+                }
+              }
+            case mpv_event_id.MPV_EVENT_SEEK:
+              state.seekStarted();
+            case mpv_event_id.MPV_EVENT_PLAYBACK_RESTART:
+              state.playbackRestarted();
           }
-        }
-        final name = 'on_preloaded'.toNativeUtf8();
-        try {
-          if (mpv.mpv_hook_add(client, 2, name.cast(), 0) < 0) {
-            throw StateError('Native video preparation hook unavailable.');
-          }
-        } finally {
-          calloc.free(name);
-        }
+        });
+        observer._events.add(id);
       }
-      if (onExternalAudio != null) {
-        final property = 'current-tracks/audio/external-filename'
-            .toNativeUtf8();
-        try {
-          final result = mpv.mpv_observe_property(
-            client,
-            1,
-            property.cast(),
-            1,
-          );
-          if (result < 0) {
-            throw StateError('External audio observation unavailable.');
+      for (final (name, property) in const [
+        ('video-out-params/colormatrix', NativeOutputProperty.colorMatrix),
+        ('current-vo', NativeOutputProperty.driver),
+      ]) {
+        await platform.observeProperty(name, (value) async {
+          if (!observer._disposed) {
+            observer.state.outputChanged(property, value);
           }
-        } finally {
-          calloc.free(property);
-        }
+        });
+        observer._properties.add(name);
       }
-      mpv.mpv_set_wakeup_callback(client, wakeup.nativeFunction, nullptr);
+      await platform.observeProperty('idle-active', (value) async {
+        if (observer._disposed) return;
+        observer._idle = value == 'yes';
+        observer._idleChanges.add(null);
+      });
+      observer._properties.add('idle-active');
+      return observer;
     } on Object {
-      mpv.mpv_destroy(client);
-      wakeup.close();
-      await state.dispose();
+      await observer.dispose();
       rethrow;
     }
-    return NativeLoadObserver._(state, sampleClocks, pause, () {
-      detached = true;
-      final pending = pausing;
-      if (pending != null && !pending.isCompleted) {
-        pending.completeError(const SourceSuperseded());
-      }
-      mpv.mpv_set_wakeup_callback(client, nullptr, nullptr);
-      mpv.mpv_destroy(client);
-      // Destroy/unregister first; queued Dart callbacks see detached and never
-      // dereference the now invalid client or event data.
-      wakeup.close();
-    });
+  }
+
+  Future<void> waitUntilIdle() => waitForNativeState(
+    ready: () => _idle,
+    superseded: () => _disposed,
+    changes: [_idleChanges.stream],
+    timeout: const Duration(seconds: 5),
+  );
+
+  /// Called only after Player.stop and its event queue have settled.
+  Future<void> reset() async {
+    if (_disposed) throw const SourceSuperseded();
+    final previous = state;
+    state = NativeLoadState();
+    await previous.dispose();
   }
 
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    _detach();
+    for (final name in _properties) {
+      await _platform.unobserveProperty(name);
+    }
+    for (final id in _events) {
+      await _platform.unobserveEvent(id);
+    }
     await state.dispose();
+    await _idleChanges.close();
   }
 }
 

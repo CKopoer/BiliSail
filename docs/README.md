@@ -89,6 +89,7 @@
 | [搜索历史与热搜](validation/search-discovery-2026-11-01.md) | 居中搜索动效、宽窄屏入口、账号历史存储、热搜协议与自动验证边界 |
 | [密码、短信与移动登录窗口](validation/password-sms-login.md) | 三种 Web 登录、交互验证码、安全会话与小屏/键盘布局 |
 | [播放、直播与弹幕](playback-and-danmaku.md) | DASH 分轨、播放状态机、直播连接、渲染时钟与性能 |
+| [PiliPlus 播放入口与双后端换源复用](validation/player-source-reuse-2026-11-12.md) | EDL、SDK 事件、取消额外音频轮询、兼容实例复用与 fvp 平台边界 |
 | [media_kit 与 fvp 播放后端重构方案](player-backend-refactor-design.md) | 共享状态机、原生适配接口、两端行为差异、迁移顺序与验收矩阵；[实施与验证](validation/player-backend-refactor-2026-11-08.md) |
 | [播放器实时播放信息](validation/player-information-tab-2026-11-07.md) | 设置内实时参数、当前后端、解码／输出／缓存／同步观测与采样生命周期 |
 | [缓冲充足时的播放冻结检测](validation/buffered-playback-stall-2026-11-06.md) | #83 非阻塞时钟采样、静默停滞、抖动保护与恢复验证 |

@@ -11,7 +11,7 @@ MediaTrack track(String path, {Map<String, String> headers = const {}}) =>
       requestPolicy: MediaRequestPolicy(headers: headers),
     );
 
-final class _Player extends Fake
+class _Player extends Fake
     implements FvpPlayerPort, FvpInformationPort, FvpReadEvidencePort {
   @override
   final readEvidence = const NativeReadEvidence(
@@ -139,9 +139,50 @@ final class _Player extends Fake
   }
 }
 
+final class _ReusablePlayer extends _Player implements FvpReusablePlayerPort {
+  int resets = 0;
+  @override
+  Future<void> resetForNextSource() async {
+    resets++;
+    playing = false;
+    events.add(FvpNativeStatus.ended); // retired source is unsubscribed
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final source = DashPairSource(video: track('video'), audio: track('audio'));
+  test(
+    'fvp reuses a compatible native pair and resets old EOF and intent',
+    () async {
+      final player = _ReusablePlayer();
+      var allocations = 0;
+      final engine = FvpEngine(
+        createPlayer: () async {
+          allocations++;
+          return player;
+        },
+      );
+      await engine.open(source, const OpenOptions(play: true));
+      await engine.open(
+        DashPairSource(video: track('v2'), audio: track('a2')),
+        const OpenOptions(play: false, rate: 2, volume: 27),
+      );
+      expect(allocations, 1);
+      expect(player.preparations, 2);
+      expect(player.resets, 1);
+      expect(player.main?.uri.path, '/v2');
+      expect(player.sound?.uri.path, '/a2');
+      expect(player.volume, 27);
+      expect(player.playing, false);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(engine.currentSnapshot.rate, 2);
+      expect(player.released, false);
+      await engine.dispose();
+      expect(player.released, true);
+    },
+  );
+
   for (final rate in [1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 8.0]) {
     for (final pausedFor in [Duration.zero, const Duration(minutes: 10)]) {
       testWidgets(

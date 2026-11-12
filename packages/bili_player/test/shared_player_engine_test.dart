@@ -27,7 +27,7 @@ final class _Output implements FlutterVideoOutput, VideoFrameReadiness {
   Widget buildVideoSurface() => const ColoredBox(color: Color(0xFF123456));
 }
 
-final class _Backend extends Fake implements PlaybackBackend {
+class _Backend extends Fake implements PlaybackBackend {
   final signals = StreamController<BackendEvent>.broadcast(sync: true);
   final writes = <String>[];
   final seeks = <(Duration, Completer<Duration>)>[];
@@ -168,6 +168,26 @@ final class _Backend extends Fake implements PlaybackBackend {
   }
 }
 
+final class _ReusableBackend extends _Backend
+    implements ReusablePlaybackBackend, EventDrivenPlaybackBackend {
+  int resets = 0;
+  bool compatible = true;
+  bool failReset = false;
+  Completer<void>? resetGate;
+  @override
+  bool canReuse(ValidatedSource plan) => compatible;
+  @override
+  Future<void> resetForNextSource(PlaybackOperation operation) async {
+    resets++;
+    playing = false;
+    await resetGate?.future;
+    if (failReset) throw StateError('unconfirmed stop');
+  }
+
+  @override
+  BackendHealth sampleHealth() => throw StateError('must use SDK events');
+}
+
 Future<void> tick() => Future<void>.delayed(Duration.zero);
 
 MediaTrack track(String name) => MediaTrack(
@@ -178,6 +198,104 @@ MediaTrack track(String name) => MediaTrack(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final pair = DashPairSource(video: track('v'), audio: track('a'));
+  test(
+    'event backend reuses a stopped source and never polls native health',
+    () async {
+      final backend = _ReusableBackend();
+      var allocations = 0;
+      final engine = SharedPlayerEngine(
+        createBackend: () {
+          allocations++;
+          return backend;
+        },
+      );
+      await engine.open(pair, const OpenOptions(play: false));
+      await engine.open(
+        pair,
+        const OpenOptions(play: true, rate: 1.5, volume: 32),
+      );
+      expect(allocations, 1);
+      expect(backend.resets, 1);
+      expect(backend.disposals, 0);
+      expect(engine.currentSnapshot.generation, 2);
+      expect(engine.currentSnapshot.rate, 1.5);
+      expect(backend.volume, 32);
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: 3),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(engine.currentSnapshot.position, const Duration(seconds: 3));
+      await engine.dispose();
+      expect(backend.disposals, 1);
+    },
+  );
+  test(
+    'a failed reuse barrier disposes before allowing any replacement',
+    () async {
+      final first = _ReusableBackend();
+      final next = _Backend();
+      var allocations = 0;
+      final engine = SharedPlayerEngine(
+        createBackend: () => ++allocations == 1 ? first : next,
+      );
+      await engine.open(pair, const OpenOptions(play: false));
+      first.failReset = true;
+      await expectLater(
+        engine.open(pair, const OpenOptions(play: false)),
+        throwsA(isA<PlayerFailure>()),
+      );
+      expect(first.disposals, 1);
+      expect(allocations, 1);
+      await engine.open(pair, const OpenOptions(play: false));
+      expect(allocations, 2);
+      await engine.dispose();
+    },
+  );
+  test('incompatible source configuration retires reusable backend', () async {
+    final first = _ReusableBackend();
+    final next = _Backend();
+    var allocations = 0;
+    final engine = SharedPlayerEngine(
+      createBackend: () => ++allocations == 1 ? first : next,
+    );
+    await engine.open(pair, const OpenOptions(play: false));
+    first.compatible = false;
+    await engine.open(
+      pair,
+      const OpenOptions(play: false, videoDecoding: VideoDecodingMode.software),
+    );
+    expect(first.resets, 0);
+    expect(first.disposals, 1);
+    expect(allocations, 2);
+    await engine.dispose();
+  });
+  test(
+    'superseding a source reset never prepares a cancelled source',
+    () async {
+      final first = _ReusableBackend();
+      final next = _Backend();
+      var allocations = 0;
+      final engine = SharedPlayerEngine(
+        createBackend: () => ++allocations == 1 ? first : next,
+      );
+      await engine.open(pair, const OpenOptions(play: false));
+      first.resetGate = Completer<void>();
+      final obsolete = engine.open(pair, const OpenOptions(play: true));
+      await tick();
+      final replacement = engine.open(pair, const OpenOptions(play: false));
+      await obsolete;
+      first.resetGate!.complete();
+      await replacement;
+      expect(first.writes.where((e) => e == 'prepare'), hasLength(1));
+      expect(first.disposals, 1);
+      expect(engine.currentSnapshot.generation, 3);
+      expect(engine.currentSnapshot.desiredPlaying, false);
+      await engine.dispose();
+    },
+  );
 
   test(
     'native preparation receives the original tracks, headers and window',
