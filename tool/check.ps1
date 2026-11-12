@@ -68,7 +68,6 @@ try {
     & (Join-Path $PSScriptRoot 'test-macos-release-validation.ps1')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_macos_*.py')
     & (Join-Path $PSScriptRoot 'test-ios-package-validation.ps1')
-    Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_ios_*.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_sqlite_assets.py')
   }
   # A cold Windows SDK can emit pub bootstrap output before the machine JSON.
@@ -90,6 +89,9 @@ try {
     }
   }
   if ($runLint) {
+    # Native-source checks resolve the locked package through package_config.
+    # A cold CI checkout must finish Pub before loading these test modules.
+    Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_ios_*.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_windows_media_assets.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_texture_handoff.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_media_libs.py')

@@ -1,5 +1,7 @@
 # 官方基线与个人媒体 fork 统一维护
 
+2026-11-13 Apple 生命周期后续：媒体包统一固定到 `302d60eedc55ca677e911e529569b1e14d8c2e7e`，修复销毁响应早于渲染结束、Flutter 保留纹理时的原生上下文释放、无界通知积压及软件输出初始化/关闭竞态。21 项受控 Swift 检查和 Windows 9 项原生回归通过，Apple SDK 编译和实机边界见[iOS 专项](ios-video-playback-crash-2026-11-13.md)。
+
 2026-11-13 iOS 后续：媒体包统一固定到 `ba953612ebfa83a4590f374c78a1ba479e1ea1df`，修复每帧输出分配/纹理导入失败的强制解包、无效 FBO 后退出进程、CoreVideo 纹理释放和 mpv 参数指针作用域。原 SDK 资产不变；受控 Swift 回归通过，iOS SDK 编译与真机闪退接受度未验证，见[iOS 专项](ios-video-playback-crash-2026-11-13.md)。下文固定引用按各次验证的历史状态保留。
 
 2026-11-09 后续：现行媒体依赖统一固定到 `9858a8db83faf8bcfa39a8bfbc02dde9a2e92572`，替换 Windows ARM64 中禁用 OpenGL 的 SDK，修复渲染降级与初始化错误传播；其他平台资产保持原内容。来源、自动检查和未构建／实机边界见 [ARM64 闪退修复](windows-arm64-preview-crash-2026-11-09.md)。
