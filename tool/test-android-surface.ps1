@@ -4,7 +4,6 @@ param(
   [Parameter(Mandatory)][ValidatePattern('^[a-z0-9_-]+$')][string]$Label,
   [switch]$SkipReleaseBuild,
   [switch]$EnableHcpp,
-  [switch]$StartupOnly,
   [switch]$Online,
   [switch]$SkipMuxBuild
 )
@@ -18,7 +17,6 @@ if (!$Online) {
     }
   }
 }
-if ($StartupOnly -and $EnableHcpp) { throw 'Startup regression uses Flutter Texture, not HCPP.' }
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'android-development.ps1')
 Push-Location $repoRoot
@@ -41,9 +39,8 @@ try {
       '<meta-data android:name="io.flutter.embedding.android.EnableHcpp" android:value="true" /></application>'))
   }
   # Pub is required to regenerate mode-specific native plugin registration.
-  $probeTarget = if ($StartupOnly) { 'tool/validation/android_fvp_startup_probe.dart' } else { 'tool/validation/android_surface_probe.dart' }
   & flutter build apk --profile --target-platform android-arm64 --split-per-abi `
-    --target $probeTarget $AndroidDevelopmentBuildArgument `
+    --target tool/validation/android_surface_probe.dart $AndroidDevelopmentBuildArgument `
     "--dart-define=BILISAIL_RELEASE_VERSION=$version"
   if ($LASTEXITCODE -ne 0) { throw 'Surface probe Profile build failed' }
   if ($null -ne $manifestBackup) { [IO.File]::WriteAllBytes($manifest, $manifestBackup); $manifestBackup = $null }

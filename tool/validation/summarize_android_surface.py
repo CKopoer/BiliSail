@@ -14,7 +14,7 @@ def percentile(values, fraction):
 
 
 def cpu_summary(trace, binary, start, end):
-    # Count the UI and isolated fvp worker together via Android UID.
+    # Count application CPU work via Android UID.
     sql = f"""WITH offset AS (SELECT AVG(ts-clock_value) AS ns FROM clock_snapshot WHERE clock_id=3),
 requested AS (SELECT {start['monoUs']}*1000+ns AS first,{end['monoUs']}*1000+ns AS last FROM offset),
 available AS (SELECT MIN(ts) AS first,

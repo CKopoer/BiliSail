@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'native_error_monitor.dart';
-import 'native_playback_health.dart';
 import 'native_readiness.dart';
 import 'playback_backend.dart';
 import 'playback_startup.dart';
@@ -24,7 +23,6 @@ class SharedPlayerEngine
     required this.createBackend,
     this.schemes = const {'http', 'https', 'file'},
     this.onDiagnostic,
-    this.monotonicNow,
     this.seekCoalescingDelay = Duration.zero,
     VideoOutput? initialVideoOutput,
   }) {
@@ -38,13 +36,10 @@ class SharedPlayerEngine
   final FutureOr<PlaybackBackend> Function() createBackend;
   final Set<String> schemes;
   final void Function(PlayerDiagnosticEvent)? onDiagnostic;
-  final Duration Function()? monotonicNow;
   final Duration seekCoalescingDelay;
-  final _clock = Stopwatch()..start();
   final _output = SwitchingVideoOutput();
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   final _failures = StreamController<PlayerFailure>.broadcast(sync: true);
-  final _health = NativePlaybackHealth();
   late final NativeErrorMonitor _errors;
   PlaybackBackend? _backend;
   PlaybackBackend? get activeBackend => _backend;
@@ -60,7 +55,6 @@ class SharedPlayerEngine
   Future<PlayerFailure>? _failing;
   PlaybackOperation? _openOperation, _playOperation, _seekOperation;
   PlaybackOperation? _nativeSeekOperation;
-  Timer? _timer;
   int _generation = 0,
       _seekRevision = 0,
       _intentRevision = 0,
@@ -154,20 +148,16 @@ class SharedPlayerEngine
     PlayerDiagnosticKind kind, {
     NativeErrorSummary? nativeError,
     PlayerFailureKind? failureKind,
-    NativePlaybackInterruption? interruption,
+    PlaybackStallReason? stallReason,
     int? nativeErrorCode,
-    NativeReadEvidence? nativeRead,
   }) => onDiagnostic?.call(
     PlayerDiagnosticEvent(
       kind: kind,
       snapshot: _snapshot,
       nativeError: nativeError,
       nativeErrorCode: nativeErrorCode,
-      nativeRead: nativeRead,
       failureKind: failureKind,
-      stallReason: interruption?.reason,
-      stalledFor: interruption?.stalledFor,
-      audioPosition: interruption?.audioPosition,
+      stallReason: stallReason,
     ),
   );
 
@@ -237,10 +227,7 @@ class SharedPlayerEngine
     _seekRetirement = Future.value();
     _pendingSeek?.complete();
     _pendingSeek = null;
-    _timer?.cancel();
-    _timer = null;
     _errors.reset();
-    _health.reset();
     if (!retainPresentation) {
       _output.clearRetainedFrame();
       if (!keepBackend) _interrupt(_backend);
@@ -285,7 +272,6 @@ class SharedPlayerEngine
       await old.dispose();
       if (identical(old, _backend)) _backend = null;
     }
-    _health.reset();
   }
 
   @override
@@ -485,7 +471,6 @@ class SharedPlayerEngine
         if (!_current(generation, backend)) return;
         _publish(_snapshot.copyWith(phase: _phase()));
         if (!_current(generation, backend)) return;
-        _startSampling(generation);
         _diagnose(PlayerDiagnosticKind.openReady);
       } on SourceSuperseded {
         // The queued lifecycle operation owns release; don't dispose a newer source.
@@ -541,16 +526,6 @@ class SharedPlayerEngine
     }
     if (event.kind == BackendEventKind.ended &&
         (_pendingSeek != null || _snapshot.isSeeking)) {
-      return;
-    }
-    if (event.kind == BackendEventKind.failure &&
-        event.failureKind == PlayerFailureKind.nativeProcessExited) {
-      if (_failing != null) return;
-      _diagnose(
-        PlayerDiagnosticKind.nativeProcessExited,
-        failureKind: event.failureKind,
-      );
-      unawaited(_fail(event.failureKind));
       return;
     }
     if ((_opening || _confirmingAudio) &&
@@ -618,12 +593,7 @@ class SharedPlayerEngine
           _diagnose(
             PlayerDiagnosticKind.playbackStalled,
             failureKind: PlayerFailureKind.videoInterrupted,
-            interruption: NativePlaybackInterruption(
-              kind: PlayerFailureKind.videoInterrupted,
-              position: position,
-              reason: PlaybackStallReason.videoBuffer,
-              stalledFor: Duration.zero,
-            ),
+            stallReason: PlaybackStallReason.videoBuffer,
           );
           if (!_current(generation, backend) || revision != _seekRevision) {
             return;
@@ -631,9 +601,6 @@ class SharedPlayerEngine
           unawaited(_fail(PlayerFailureKind.videoInterrupted));
           return;
         }
-        _timer?.cancel();
-        _timer = null;
-        _health.reset();
         _publish(
           _snapshot.copyWith(
             phase: PlaybackPhase.ended,
@@ -650,75 +617,11 @@ class SharedPlayerEngine
           _diagnose(
             PlayerDiagnosticKind.playbackStalled,
             failureKind: event.failureKind,
-            nativeRead: event.nativeRead,
-            interruption: NativePlaybackInterruption(
-              kind: event.failureKind,
-              position: _snapshot.position,
-              reason: reason,
-              stalledFor: Duration.zero,
-            ),
+            stallReason: reason,
           );
         }
         unawaited(_fail(event.failureKind));
     }
-  }
-
-  void _startSampling(int generation) {
-    if (!_current(generation) ||
-        _terminal ||
-        _timer != null ||
-        _backend is EventDrivenPlaybackBackend) {
-      return;
-    }
-    _timer = Timer.periodic(NativePlaybackHealth.sampleInterval, (_) {
-      final backend = _backend;
-      if (!_current(generation) ||
-          backend == null ||
-          _opening ||
-          _confirmingAudio ||
-          _snapshot.isSeeking ||
-          _seeking ||
-          _terminal ||
-          _failing != null) {
-        return;
-      }
-      final sample = backend.sampleHealth();
-      _publish(
-        _timeline(
-          position: sample.position,
-          buffered: sample.displayBuffered ?? sample.buffered,
-        ),
-      );
-      if (!_current(generation, backend) || _terminal || _seeking) {
-        return;
-      }
-      final interruption = _health.update(
-        // The timeline clamps its display endpoint to the current position.
-        // Track health must retain the native underrun evidence underneath it.
-        _snapshot.copyWith(buffered: sample.buffered),
-        monotonicNow?.call() ?? _clock.elapsed,
-        paired: sample.comparePairedClocks,
-        audioPosition: sample.audioPosition,
-        audioFrames: sample.audioFrames,
-        videoFrames: sample.videoFrames,
-        videoStarved: sample.videoStarved,
-        requiresAudio: _requiresAudio,
-        requiresVideo: _requiresVideo,
-      );
-      if (interruption != null) {
-        _diagnose(
-          PlayerDiagnosticKind.playbackStalled,
-          failureKind: interruption.kind,
-          interruption: interruption,
-        );
-        unawaited(_fail(interruption.kind));
-      }
-    });
-  }
-
-  void _resetHealth() {
-    _health.reset();
-    _backend?.resetHealth();
   }
 
   Future<PlayerFailure> _fail(
@@ -729,7 +632,6 @@ class SharedPlayerEngine
     final generation = _generation;
     final backend = _backend;
     final failure = PlayerFailure(kind, switch (kind) {
-      PlayerFailureKind.nativeProcessExited => '播放器异常退出，请退出播放页后重新打开',
       PlayerFailureKind.unsupportedVideoColor => '当前播放后端无法正确显示此视频色彩',
       PlayerFailureKind.videoInterrupted => '视频加载中断，已暂停播放',
       PlayerFailureKind.invalidSource => '无效的媒体源或播放参数',
@@ -743,14 +645,11 @@ class SharedPlayerEngine
     }
     _playOperation?.cancel();
     _seekOperation?.cancel();
-    _timer?.cancel();
-    _timer = null;
     _errors.reset();
-    _resetHealth();
     unawaited(() async {
       var released = false;
       try {
-        if (backend != null && kind != PlayerFailureKind.nativeProcessExited) {
+        if (backend != null) {
           var paused = false;
           try {
             paused = await backend.pauseAndWait().timeout(
@@ -813,22 +712,6 @@ class SharedPlayerEngine
     if (!_current(generation) || backend == null || !_snapshot.desiredPlaying) {
       return;
     }
-    if (backend is PlaybackResumeSynchronization) {
-      // A rapid pause/play can arrive before native pause acknowledgement.
-      await _controls;
-      if (!_current(generation, backend) ||
-          _failing != null ||
-          !_snapshot.desiredPlaying) {
-        return;
-      }
-      if (_seekOperation == null &&
-          (backend as PlaybackResumeSynchronization).needsResumeSeek) {
-        // Reuse the source and the latest-target seek/cancellation machinery.
-        // The idle video frame and its audio must be ready before either plays.
-        await seek(_snapshot.position);
-        return;
-      }
-    }
     _playOperation?.cancel();
     final operation = _playOperation = PlaybackOperation(
       generation,
@@ -860,11 +743,9 @@ class SharedPlayerEngine
       _audioConfirmed = true;
       _waitingForPair = false;
       _output.clearRetainedFrame();
-      _resetHealth();
       _publish(
         _snapshot.copyWith(phase: _phase(), isBuffering: _backendBuffering),
       );
-      _startSampling(generation);
     } on SourceSuperseded {
       final failing = _failing;
       if (_current(generation, backend) && failing != null) throw await failing;
@@ -894,7 +775,6 @@ class SharedPlayerEngine
     _playOperation?.cancel();
     _waitingForPair = false;
     final generation = _generation;
-    _resetHealth();
     _publish(
       _snapshot.copyWith(
         desiredPlaying: false,
@@ -980,7 +860,6 @@ class SharedPlayerEngine
       backend.seekTimeout,
       revision: revision,
     );
-    _resetHealth();
     _publish(
       _snapshot.copyWith(
         isSeeking: true,
@@ -1002,11 +881,10 @@ class SharedPlayerEngine
       // seekTo owns the native target barrier. Do not pause and prepare the
       // already-confirmed pair a second time when restoring playback intent.
       _audioConfirmed = true;
-      _resetHealth();
       _publish(
         _timeline(
           position: position,
-          buffered: backend.sampleHealth().buffered ?? position,
+          buffered: backend.buffered ?? position,
         ).copyWith(
           isSeeking: false,
           isBuffering: _backendBuffering,
@@ -1021,7 +899,6 @@ class SharedPlayerEngine
       if (_snapshot.desiredPlaying) {
         await _runPlay(generation);
       }
-      _startSampling(generation);
     } on SourceSuperseded {
       final failing = _failing;
       if (_current(generation, backend) && failing != null) {
@@ -1032,12 +909,6 @@ class SharedPlayerEngine
       if (_current(generation, backend) &&
           revision == _seekRevision &&
           !operation.isCancelled) {
-        if (error is NativeSeekFailure) {
-          _diagnose(
-            PlayerDiagnosticKind.nativeError,
-            nativeErrorCode: error.code,
-          );
-        }
         throw await _fail(
           error is PlayerFailure
               ? error.kind
@@ -1057,7 +928,6 @@ class SharedPlayerEngine
   Future<void> setRate(double rate) {
     if (!rate.isFinite || rate <= 0) throw ArgumentError.value(rate, 'rate');
     if (_disposed || _live) return Future.value();
-    _resetHealth();
     _publish(_snapshot.copyWith(rate: rate));
     if (_opening) return Future.value();
     return _control(_generation, (b) => b.setRate(_snapshot.rate));
@@ -1148,7 +1018,6 @@ class SharedPlayerEngine
     final releasing = _serial(() async {
       await _release();
       _output.dispose();
-      _clock.stop();
       await _snapshots.close();
       await _failures.close();
     });

@@ -1,16 +1,18 @@
 import 'dart:async';
 
 import 'player_contract.dart';
-import 'native_playback_health.dart';
 
 /// media_kit's error stream includes mpv log lines, not just terminal failures.
 /// Give a running source time to demonstrate recovery through confirmed position.
 final class NativeErrorMonitor {
+  static const stallTimeout = Duration(seconds: 2);
+  static const bufferingTimeout = Duration(seconds: 30);
+
   NativeErrorMonitor({
     required this.onStalled,
     required this.onRecovered,
-    this.gracePeriod = NativePlaybackHealth.stallTimeout,
-    this.bufferingGracePeriod = NativePlaybackHealth.bufferingTimeout,
+    this.gracePeriod = stallTimeout,
+    this.bufferingGracePeriod = bufferingTimeout,
   });
 
   final void Function(int generation) onStalled;

@@ -88,9 +88,7 @@ set_target_properties(${BINARY_NAME}
 # and has no JVM integration. Do not let a host JDK make the optional jni plugin
 # bundle libdartjni.so linked to the runner's libjvm.so.
 set(CMAKE_DISABLE_FIND_PACKAGE_JNI TRUE)
-include(../native/fvp/configure.cmake)
 include(flutter/generated_plugins.cmake)
-list(FILTER PLUGIN_BUNDLED_LIBRARIES EXCLUDE REGEX "/libmdk-(braw|r3d|nvjp2k)\\.so")
 
 
 # === Installation ===

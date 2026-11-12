@@ -16,7 +16,7 @@ $cases = @(
   @{ Message = 'Server returned HTTP response code: 504 for URL: https://example.invalid/gradle.zip'; Failures = 1; Attempts = 2; Rejected = $false },
   @{ Message = 'curl: (22) The requested URL returned error: 504'; Failures = 9; Attempts = 3; Rejected = $true },
   @{ Message = 'media-kit native download failed for https://example.invalid/ANGLE.7z: 22;"HTTP response code said error"'; Failures = 2; Attempts = 3; Rejected = $false },
-  @{ Message = 'Failed to download https://example.invalid/mdk.tar.xz: "HTTP response code said error"'; Failures = 1; Attempts = 2; Rejected = $false },
+  @{ Message = 'Failed to download https://example.invalid/native-sdk.tar.xz: "HTTP response code said error"'; Failures = 1; Attempts = 2; Rejected = $false },
   @{ Message = 'curl: (28) Operation timed out'; Failures = 1; Attempts = 2; Rejected = $false },
   @{ Message = 'curl: (22) HTTP error 504; SHA-256 mismatch'; Failures = 9; Attempts = 1; Rejected = $true },
   @{ Message = "curl: (22) HTTP error 504`nerror: invalid source code"; Failures = 9; Attempts = 1; Rejected = $true },

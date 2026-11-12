@@ -114,9 +114,8 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
         final dimensions = snapshot.videoDimensions;
         final bufferAhead = snapshot.buffered - snapshot.position;
         final summary = info.hasSource ? '约每秒刷新 · 未提供的参数显示为 —' : '当前没有已加载的媒体';
-        final notes = native?.backend == 'fvp / MDK'
-            ? 'fvp 的源帧率、标称码率和色彩信息来自 MDK 媒体参数，实际硬解栏显示成功打开的解码器名称；MFT 名称不代表零复制。实时码率仅在主媒体为单流时提供。分轨音频参数及解码就绪来自首播静音探测。MDK 当前接口未提供滤镜输出帧率、独立音视频时钟、音画差、丢帧、缓存字节数和读取速度，显示为 —。'
-            : '帧率为播放器估算值；缓存速度不是总网速。音画差为音频时钟减视频时钟，正值表示音频领先。丢帧计数随媒体源重建而重置。';
+        const notes =
+            '帧率为播放器估算值；缓存速度不是总网速。音画差为音频时钟减视频时钟，正值表示音频领先。丢帧计数随媒体源重建而重置。';
         final sections = <(String, List<(String, String)>)>[
           (
             '播放状态',

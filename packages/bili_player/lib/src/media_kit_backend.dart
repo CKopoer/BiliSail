@@ -13,7 +13,7 @@ import 'playback_backend.dart';
 import 'validated_source.dart';
 import 'native_media_options.dart';
 import 'native_player_properties.dart';
-import 'native_playback_health.dart';
+import 'native_error_monitor.dart';
 import 'native_load_observer.dart';
 import 'native_audio_gain.dart';
 import 'native_video_frame_queue.dart';
@@ -24,10 +24,7 @@ import 'video_output.dart';
 
 /// mpv commands and observations for one source; owns no playback state.
 final class MediaKitBackend
-    implements
-        PlaybackBackend,
-        ReusablePlaybackBackend,
-        EventDrivenPlaybackBackend {
+    implements PlaybackBackend, ReusablePlaybackBackend {
   MediaKitBackend({
     required this.snapshot,
     this.onDiagnostic,
@@ -378,7 +375,7 @@ final class MediaKitBackend
       'cache-pause': 'yes',
       // Allow transient network stalls to refill using native cache events.
       // Open/seek still have their own shared cancellation and deadlines.
-      'network-timeout': NativePlaybackHealth.bufferingTimeout.inSeconds
+      'network-timeout': NativeErrorMonitor.bufferingTimeout.inSeconds
           .toString(),
       // Avoid resuming on the first small burst after an underrun. Live also
       // builds a short cushion before starting; previews keep quick startup.
@@ -972,7 +969,7 @@ final class MediaKitBackend
               ),
             );
           } on Object {
-            // The bounded health sampler still detects a stopped current load.
+            // The active load continues to receive SDK state and error events.
           }
         }());
       }),
@@ -1022,14 +1019,7 @@ final class MediaKitBackend
   Future<void> setGainDb(double gainDb) =>
       _audioGain!.apply(gainDb, smooth: false);
   @override
-  BackendHealth sampleHealth() {
-    final state = _player?.state;
-
-    return BackendHealth(position: state?.position, buffered: state?.buffer);
-  }
-
-  @override
-  void resetHealth() {}
+  Duration? get buffered => _player?.state.buffer;
   @override
   void interrupt() {
     ++_generation;

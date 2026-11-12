@@ -195,6 +195,7 @@ class SqliteSettingsRepository implements SettingsRepository {
               .where((item) => item.name == decoded['videoDecoding'])
               .firstOrNull ??
           VideoDecodingPreference.automatic,
+      // Unknown or retired backends fall back without resetting the snapshot.
       playbackBackend:
           PlaybackBackendPreference.values
               .where((item) => item.name == decoded['playbackBackend'])

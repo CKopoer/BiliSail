@@ -10,10 +10,6 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Forward buffer audio fixture generation failed.' }
   Copy-Item -LiteralPath 'test/fixtures/media/video_preview.mp4' -Destination (Join-Path $fixtureDir 'short.mp4') -Force
   $env:BILI_TEST_BUFFER_DIR = $fixtureDir
-  & flutter test integration_test/windows_fvp_buffer_timeline_test.dart -d windows
-  if ($LASTEXITCODE -ne 0) { throw "Windows fvp buffer timeline failed: $LASTEXITCODE" }
-  & flutter test integration_test/windows_fvp_audio_seek_test.dart -d windows
-  if ($LASTEXITCODE -ne 0) { throw "Windows audio seek synchronization failed: $LASTEXITCODE" }
   & flutter test integration_test/windows_buffer_ahead_test.dart -d windows
   if ($LASTEXITCODE -ne 0) { throw "Windows forward buffer validation failed: $LASTEXITCODE" }
   & flutter test integration_test/native_seek_cache_test.dart -d windows

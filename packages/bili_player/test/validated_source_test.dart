@@ -11,78 +11,70 @@ MediaTrack track({
 );
 
 void main() {
-  for (final name in ['media_kit', 'fvp']) {
-    test(
-      '$name rejects the same invalid sources before native allocation',
-      () async {
-        final PlayerEngine engine = name == 'media_kit'
-            ? MediaKitEngine()
-            : FvpEngine(
-                createPlayer: () => throw StateError('must not allocate'),
-              );
-        addTearDown(engine.dispose);
-        for (final (source, options, kind) in [
-          (
-            DashPairSource(video: track(), audio: null),
-            const OpenOptions(),
-            PlayerFailureKind.invalidSource,
+  test(
+    'media_kit rejects the same invalid sources before native allocation',
+    () async {
+      final PlayerEngine engine = MediaKitEngine();
+      addTearDown(engine.dispose);
+      for (final (source, options, kind) in [
+        (
+          DashPairSource(video: track(), audio: null),
+          const OpenOptions(),
+          PlayerFailureKind.invalidSource,
+        ),
+        (
+          DashVideoSource(track()),
+          const OpenOptions(),
+          PlayerFailureKind.invalidSource,
+        ),
+        (
+          ProgressiveSource(track()),
+          const OpenOptions(rate: double.nan),
+          PlayerFailureKind.invalidSource,
+        ),
+        (
+          ProgressiveSource(track()),
+          const OpenOptions(audioGainDb: 31),
+          PlayerFailureKind.invalidSource,
+        ),
+        (
+          ProgressiveSource(track()),
+          const OpenOptions(maxBufferAhead: Duration(minutes: 3)),
+          PlayerFailureKind.invalidSource,
+        ),
+        (
+          ProgressiveSource(track(uri: 'https://user:password@example.com/v')),
+          const OpenOptions(),
+          PlayerFailureKind.invalidSource,
+        ),
+        (
+          ProgressiveSource(track(headers: {'Cookie': 'private'})),
+          const OpenOptions(),
+          PlayerFailureKind.unsupportedHeaders,
+        ),
+        (
+          ProgressiveSource(
+            track(headers: {'Referer': 'ok\r\nCookie: private'}),
           ),
-          (
-            DashVideoSource(track()),
-            const OpenOptions(),
-            PlayerFailureKind.invalidSource,
+          const OpenOptions(),
+          PlayerFailureKind.unsupportedHeaders,
+        ),
+        (
+          DashPairSource(
+            video: track(headers: {'Accept': 'a'}),
+            audio: track(headers: {'accept': 'b'}),
           ),
-          (
-            ProgressiveSource(track()),
-            const OpenOptions(rate: double.nan),
-            PlayerFailureKind.invalidSource,
-          ),
-          (
-            ProgressiveSource(track()),
-            const OpenOptions(audioGainDb: 31),
-            PlayerFailureKind.invalidSource,
-          ),
-          (
-            ProgressiveSource(track()),
-            const OpenOptions(maxBufferAhead: Duration(minutes: 3)),
-            PlayerFailureKind.invalidSource,
-          ),
-          (
-            ProgressiveSource(
-              track(uri: 'https://user:password@example.com/v'),
-            ),
-            const OpenOptions(),
-            PlayerFailureKind.invalidSource,
-          ),
-          (
-            ProgressiveSource(track(headers: {'Cookie': 'private'})),
-            const OpenOptions(),
-            PlayerFailureKind.unsupportedHeaders,
-          ),
-          (
-            ProgressiveSource(
-              track(headers: {'Referer': 'ok\r\nCookie: private'}),
-            ),
-            const OpenOptions(),
-            PlayerFailureKind.unsupportedHeaders,
-          ),
-          (
-            DashPairSource(
-              video: track(headers: {'Accept': 'a'}),
-              audio: track(headers: {'accept': 'b'}),
-            ),
-            const OpenOptions(),
-            PlayerFailureKind.unsupportedHeaders,
-          ),
-        ]) {
-          await expectLater(
-            engine.open(source, options),
-            throwsA(isA<PlayerFailure>().having((e) => e.kind, 'kind', kind)),
-          );
-        }
-      },
-    );
-  }
+          const OpenOptions(),
+          PlayerFailureKind.unsupportedHeaders,
+        ),
+      ]) {
+        await expectLater(
+          engine.open(source, options),
+          throwsA(isA<PlayerFailure>().having((e) => e.kind, 'kind', kind)),
+        );
+      }
+    },
+  );
   test('normalizes header names and preserves distinct silent, preview and audio requirements', () {
     final paired = ValidatedSource.validate(
       DashPairSource(

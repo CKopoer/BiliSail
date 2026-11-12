@@ -89,12 +89,6 @@ final class PreparedTracks {
 
 enum BackendEventKind { sample, buffering, playing, ended, warning, failure }
 
-/// A numeric SDK seek result, safe to include in local diagnostics.
-final class NativeSeekFailure implements Exception {
-  const NativeSeekFailure(this.code);
-  final int code;
-}
-
 /// Evidence from the current native pipeline, never a product playback state.
 final class BackendEvent {
   const BackendEvent(
@@ -106,7 +100,6 @@ final class BackendEvent {
     this.value,
     this.failureKind = PlayerFailureKind.nativePlayback,
     this.stallReason,
-    this.nativeRead,
   });
   final BackendEventKind kind;
   final Duration? position, duration, buffered;
@@ -114,32 +107,6 @@ final class BackendEvent {
   final bool? value;
   final PlayerFailureKind failureKind;
   final PlaybackStallReason? stallReason;
-  final NativeReadEvidence? nativeRead;
-}
-
-final class BackendHealth {
-  const BackendHealth({
-    this.position,
-    this.buffered,
-    this.displayBuffered,
-    this.audioPosition,
-    this.audioFrames,
-    this.videoFrames,
-    this.videoStarved,
-    this.comparePairedClocks = false,
-  });
-  final Duration? position, buffered, audioPosition;
-  // Optional SDK-specific display correction; health retains the raw endpoint.
-  final Duration? displayBuffered;
-  final int? audioFrames, videoFrames;
-  final bool? videoStarved;
-  final bool comparePairedClocks;
-}
-
-/// Native backends whose idle paired tracks need a fresh paused target.
-abstract interface class PlaybackResumeSynchronization {
-  /// Reconfirm an idle pair through the existing cancellable seek barrier.
-  bool get needsResumeSeek;
 }
 
 /// A backend may retain its native player after a fully settled source.
@@ -149,10 +116,6 @@ abstract interface class ReusablePlaybackBackend {
   bool canReuse(ValidatedSource plan);
   Future<void> resetForNextSource(PlaybackOperation operation);
 }
-
-/// SDK streams already provide position/buffering/error events. Such backends
-/// do not need the shared periodic native health sampler.
-abstract interface class EventDrivenPlaybackBackend {}
 
 /// Package-private SDK boundary. One source is active at a time.
 abstract interface class PlaybackBackend {
@@ -180,8 +143,7 @@ abstract interface class PlaybackBackend {
   // the source and packet cache when the SDK supports native target replacement.
   Future<void> cancelSeek();
   void interrupt();
-  BackendHealth sampleHealth();
-  void resetHealth();
+  Duration? get buffered;
   Future<PlayerPlaybackInformation?> inspectPlaybackInformation(int generation);
   Future<void> dispose();
 }

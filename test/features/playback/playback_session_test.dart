@@ -859,17 +859,6 @@ void main() {
       );
     }
 
-    test('a dead native process waits for explicit reopen instead of automatic retry', () async {
-      interrupt(kind: PlayerFailureKind.nativeProcessExited);
-      await _flush();
-      expect(engine.openOptions, hasLength(1));
-      expect(session.error, 'video interrupted');
-      expect(session.isRecovering, false);
-      await session.open(_detail('two'), _part('two'));
-      expect(engine.openOptions, hasLength(2));
-      expect(session.error, isNull);
-    });
-
     test('reloads at video boundary, retaining quality/rate/volume', () async {
       interrupt();
       await _flush();

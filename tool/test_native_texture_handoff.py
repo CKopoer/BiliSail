@@ -67,23 +67,6 @@ class NativeTextureHandoffTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Published before producer GPU completion", result.stderr)
 
-    def test_metal_adapter_objcpp_arc_syntax_with_controlled_api_declarations(self):
-        if "clang" not in Path(self.compiler).name:
-            self.skipTest("Clang is required for Objective-C++ ARC syntax checks")
-        with tempfile.TemporaryDirectory() as directory:
-            output = Path(directory)
-            (output / "dispatch").mkdir()
-            (output / "dispatch/dispatch.h").write_text(
-                "typedef void* dispatch_queue_t;\n"
-                "dispatch_queue_t dispatch_get_main_queue();\n"
-                "void dispatch_async(dispatch_queue_t, void (^block)(void));\n", encoding="utf-8")
-            result = subprocess.run([
-                self.compiler, "-std=c++17", "-x", "objective-c++", "-fobjc-arc", "-fblocks",
-                "-fobjc-runtime=gnustep-2.0", "-fsyntax-only", "-Wall", "-Wextra", "-Werror",
-                "-Wno-unused-parameter", "-I", str(output), "-I", str(ROOT / "native/fvp/apple"),
-                str(ROOT / "tool/native_tests/metal_texture_syntax.mm"),
-            ], capture_output=True, text=True, timeout=30)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

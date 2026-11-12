@@ -241,7 +241,6 @@ enum PlayerFailureKind {
   unsupportedHeaders,
   unsupportedVideoColor,
   nativePlayback,
-  nativeProcessExited,
   videoInterrupted,
   disposed,
 }

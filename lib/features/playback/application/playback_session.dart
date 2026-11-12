@@ -104,9 +104,7 @@ class PlaybackSession extends ChangeNotifier {
         if (_scheduleRecovery(failure)) {
           return;
         }
-        error =
-            contentTarget is OfflinePlaybackTarget &&
-                failure.kind != PlayerFailureKind.nativeProcessExited
+        error = contentTarget is OfflinePlaybackTarget
             ? '本地视频播放失败，文件可能无法解码或已不可访问'
             : failure.message;
         _notify();
@@ -1452,8 +1450,7 @@ class PlaybackSession extends ChangeNotifier {
             ? target is OfflinePlaybackTarget
                   ? '当前设备无法正确显示此离线视频的杜比视界格式'
                   : '当前设备无法正确显示此视频格式，未取得兼容视频流'
-            : contentTarget is OfflinePlaybackTarget &&
-                  failure.kind != PlayerFailureKind.nativeProcessExited
+            : contentTarget is OfflinePlaybackTarget
             ? '无法播放本地视频，文件可能无法解码或已不可访问'
             : failure.message;
         _resolving = false;

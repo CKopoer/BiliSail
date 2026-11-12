@@ -16,7 +16,6 @@ try {
   if ($Online) { $silentArguments += '--dart-define=BILI_ONLINE_SMOKE=true' }
   & flutter @silentArguments
   if ($LASTEXITCODE -ne 0) { throw 'Windows silent video validation failed' }
-  & (Join-Path $PSScriptRoot 'test-windows-fvp.ps1')
   & (Join-Path $PSScriptRoot 'test-windows-buffer.ps1')
 } finally {
   $env:BILI_TEST_SYSTEM_MEDIA_SCRIPT = $previousSystemMediaScript

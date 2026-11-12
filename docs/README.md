@@ -1,5 +1,7 @@
 # BiliSail（哔帆）设计文档
 
+2026-11-12：已移除 fvp／MDK，当前仅使用 media_kit。历史文档中的双后端实现、SDK、命令及测试记录保留当时事实，不再作为现行入口；清理与设置兼容见[移除记录](validation/fvp-removal-2026-11-12.md)。
+
 设计与实现日期：2026-10-05。状态：已创建 0.1.0 Windows 预览工程；完整设计仍是后续路线，当前能力与验证边界见 [M0 实测记录](validation/m0-results.md) 和 [根 README](../README.md)。
 
 本项目采用 **Flutter + Dart 构建客户端，独立 API 包承接 Bilibili 协议，播放器与弹幕各自封装，Rust 按证据引入**。首批目标为 Android、Windows、macOS；参考 `biliuwp-lite` 的客户端能力和 `bili-kernel` 的 API 分层。
@@ -8,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [移除 fvp 播放后端](validation/fvp-removal-2026-11-12.md) | 统一 media_kit、旧设置回退、原生／依赖／脚本清理及验证边界 |
 | [番剧、国创与放映厅追番](validation/pgc-follow.md) | 追番／追剧与取消、登录和状态核对、账号隔离及离线验证 |
 | [视频合集定位与播放顺序](validation/video-collection-controls-2026-11-12.md) | 顶部／底部／当前分 P 定位、显示排序与倒序播放、队列边界及回归验证 |
 | [fvp 倍速暂停后继续](validation/fvp-pause-resume-synchronization-2026-11-12.md) | 视频停住而音频推进的现场日志、同管线目标确认及单元回归边界 |

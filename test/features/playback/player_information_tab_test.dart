@@ -96,7 +96,7 @@ Future<void> _show(
 
 void main() {
   testWidgets(
-    'fvp copies native fields, nominal bitrate fallback and limitations',
+    'copies native fields, nominal bitrate fallback and unavailable metrics',
     (tester) async {
       String? copied;
       final messenger = tester.binding.defaultBinaryMessenger;
@@ -112,10 +112,10 @@ void main() {
       final engine = _Engine()
         ..information = const PlayerPlaybackInformation(
           generation: 1,
-          backend: 'fvp / MDK',
+          backend: 'media_kit / mpv',
           videoCodec: 'h264',
           audioCodec: 'aac',
-          hardwareDecoder: 'MFT',
+          hardwareDecoder: 'd3d11va',
           sourceFps: 24,
           videoNominalBitrate: 2000000,
           audioNominalBitrate: 128000,
@@ -155,7 +155,7 @@ void main() {
       await _show(tester, session: session);
       await tester.tap(find.text('复制全部信息'));
       await tester.pump();
-      expect(copied, contains('播放后端：fvp / MDK'));
+      expect(copied, contains('播放后端：media_kit / mpv'));
       expect(copied, contains('源帧率：24.00 fps'));
       expect(copied, contains('解码尺寸：320 × 180'));
       expect(copied, contains('采样率：48000 Hz'));
@@ -165,7 +165,7 @@ void main() {
       expect(copied, contains('原生缓存时长：2.50 s'));
       expect(copied, contains('音画差（A−V）：—'));
       expect(copied, contains('输出丢帧（累计）：—'));
-      expect(copied, contains('MDK 当前接口未提供'));
+      expect(copied, contains('帧率为播放器估算值'));
     },
   );
   testWidgets(

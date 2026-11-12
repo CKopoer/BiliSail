@@ -22,13 +22,9 @@ flutter_ios_podfile_setup
 
 target 'Runner' do
   use_frameworks!
-  pod 'mdk', :podspec => '../native/fvp/mdk.podspec'
   flutter_install_all_ios_pods __dir__
   unless system('python3', File.expand_path('../tool/prepare-apple-media-libs.py', __dir__), 'ios')
     raise 'Could not prepare the pinned mpv frameworks'
-  end
-  unless system('python3', File.expand_path('../tool/prepare-fvp-apple.py', __dir__), 'ios')
-    raise 'Could not prepare the pinned fvp Apple texture renderer'
   end
   target 'RunnerTests' do
     inherit! :search_paths

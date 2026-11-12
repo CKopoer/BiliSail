@@ -38,7 +38,7 @@ BiliSail（哔帆）是一个专注观看体验的跨平台 Bilibili 第三方�
 | 路由 | `go_router` | 声明式路由、导航栈、深链入口 |
 | API | 纯 Dart `bili_api` + `dio` | 便于单测和协议调整；HTTP 客户端不泄漏到界面 |
 | 数据模型 | Dart 不可变类型；复杂联合状态按需用 `freezed`，JSON 按需生成 | Domain 不依赖 JSON/Protobuf 字段；避免为简单类型强制生成 |
-| 播放 | `bili_player` 封装 `media_kit`、`media_kit_video`、视频原生库和可选后端 | media_kit 默认；fvp／MDK 可选；后端清理与旧设置兼容见[清理记录](validation/playback-backends-2026-11-08.md)；逐平台 DASH、请求头和输出验收分别记录 |
+| 播放 | `bili_player` 封装 `media_kit`、`media_kit_video` 和视频原生库 | 仅保留 media_kit；已删除或未识别的历史后端设置回退，见[清理记录](validation/fvp-removal-2026-11-12.md)；逐平台 DASH、请求头和输出验收分别记录 |
 | 下载合并 | `bili_mux` 的精简原生 MP4 封装与 Dart FFI | 只读写已下载的本地文件，不访问播放器内部 ABI；三端验证见[合并记录](validation/download-muxing-results.md) |
 | 弹幕 | `bili_danmaku`：Dart 调度 + `canvas_danmaku` 绘制适配 | 保留确认媒体／到达时钟、布局、字体效果和有界缓存；上游负责批量 Canvas 合成，见[迁移](predidit-media-migration.md) |
 | 持久化 | Drift/SQLite、安全存储、文件缓存 | 结构化数据、凭据、媒体文件分别管理 |

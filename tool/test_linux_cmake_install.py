@@ -26,7 +26,6 @@ class LinuxCmakeInstallTests(unittest.TestCase):
         self.write("linux/CMakeLists.txt", (ROOT / "linux/CMakeLists.txt").read_text())
         # Replace external dependencies, retaining the complete application
         # CMakeLists and its real configure/build/install behavior.
-        self.write("native/fvp/configure.cmake", "")
         self.write("linux/cmake/FindPkgConfig.cmake", """
 set(PkgConfig_FOUND TRUE)
 macro(pkg_check_modules)
