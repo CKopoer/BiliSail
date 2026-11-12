@@ -65,10 +65,17 @@ final class HomeEntry {
 }
 
 final class HomePage {
-  const HomePage(this.items, {required this.hasMore, this.nextCursor});
+  const HomePage(
+    this.items, {
+    required this.hasMore,
+    this.nextCursor,
+    this.favoriteFolderId,
+  });
   final List<HomeEntry> items;
   final bool hasMore;
   final String? nextCursor;
+  // Keep the server folder identity separate from local snapshot cursors.
+  final String? favoriteFolderId;
 }
 
 typedef HomeQuery = ({
@@ -91,6 +98,21 @@ abstract interface class HomeRepository {
 /// Optional write capability of the account's collected folders/UGC collections.
 abstract interface class HomeSubscriptionRepository {
   Future<void> unsubscribeFavorite(
+    HomeEntry entry, {
+    required String scope,
+    required RequestCancellation cancellation,
+  });
+}
+
+abstract interface class HomeFavoriteRepository {
+  Future<void> removeFavorite(
+    HomeEntry entry, {
+    required String folderId,
+    required String scope,
+    required RequestCancellation cancellation,
+  });
+
+  Future<void> deleteFavoriteFolder(
     HomeEntry entry, {
     required String scope,
     required RequestCancellation cancellation,

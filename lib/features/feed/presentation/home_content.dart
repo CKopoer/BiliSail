@@ -71,6 +71,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   Set<String>? _bodyWatchLaterPending;
   bool? _bodyHasLogin;
   bool? _bodyCanUnsubscribe;
+  bool? _bodyCanFavorite;
   Widget? _bodySliver;
   FavoriteQueueRequest? _favoriteRequest;
   UserId? _dynamicAuthor;
@@ -83,6 +84,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
     _bodyWatchLaterPending = null;
     _bodyHasLogin = null;
     _bodyCanUnsubscribe = null;
+    _bodyCanFavorite = null;
     _bodySliver = null;
   }
 
@@ -373,6 +375,8 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   }) {
     final canUnsubscribe =
         ref.read(homeRepositoryProvider) is HomeSubscriptionRepository;
+    final canFavorite =
+        ref.read(homeRepositoryProvider) is HomeFavoriteRepository;
     final cached = _bodySliver;
     if (cached != null &&
         identical(items, _bodyItems) &&
@@ -380,7 +384,8 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
         setEquals(feed.unsubscribing, _bodyUnsubscribing) &&
         setEquals(watchLaterActions?.pending, _bodyWatchLaterPending) &&
         (widget.onLogin != null) == _bodyHasLogin &&
-        canUnsubscribe == _bodyCanUnsubscribe) {
+        canUnsubscribe == _bodyCanUnsubscribe &&
+        canFavorite == _bodyCanFavorite) {
       return cached;
     }
     // Pagination status only changes the footer. Preserve the child delegate
@@ -388,6 +393,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
     _bodyItems = items;
     _bodyQuery = query;
     _bodyUnsubscribing = feed.unsubscribing;
+    _bodyCanFavorite = canFavorite;
     _bodyWatchLaterPending = watchLaterActions?.pending;
     _bodyHasLogin = widget.onLogin != null;
     _bodyCanUnsubscribe = canUnsubscribe;
@@ -424,7 +430,9 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
         if (widget.channel == HomeChannel.favorites ||
             widget.channel == HomeChannel.watchLater) {
           if (item.kind == HomeEntryKind.video &&
-              (item.bvid != null || widget.channel == HomeChannel.watchLater)) {
+              (item.bvid != null ||
+                  item.aid != null ||
+                  widget.channel == HomeChannel.watchLater)) {
             return HomeVideoCard(
               key: key,
               entry: item,
@@ -435,6 +443,17 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                       busy:
                           watchLaterActions?.pending.contains(item.id) == true,
                       onSelected: (_) => _removeWatchLater(item, query.scope),
+                    )
+                  : canFavorite && controller.canRemoveFavorite(item)
+                  ? VideoCardMenu(
+                      actions: const [VideoCardMenuAction.removeFavorite],
+                      busy: feed.unsubscribing.contains((item.kind, item.id)),
+                      onSelected: (_) => _removeFavoriteEntry(
+                        controller,
+                        item,
+                        query,
+                        deleteFolder: false,
+                      ),
                     )
                   : null,
               onOpenUser: (id) => context.go('/user/${id.value}'),
@@ -454,6 +473,18 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                   widget.section == '我创建的收藏夹' &&
                       item.kind == HomeEntryKind.folder
                   ? () => _editFolder(item, query.scope)
+                  : null,
+              onDelete:
+                  widget.section == '我创建的收藏夹' &&
+                      query.folderId == null &&
+                      item.kind == HomeEntryKind.folder &&
+                      canFavorite
+                  ? () => _removeFavoriteEntry(
+                      controller,
+                      item,
+                      query,
+                      deleteFolder: true,
+                    )
                   : null,
               unsubscribing: feed.unsubscribing.contains((item.kind, item.id)),
               onUnsubscribe:
@@ -646,6 +677,94 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                 error.kind != AppFailureKind.timeout
             ? error.message
             : '取消订阅结果未确认，请刷新列表查看',
+      );
+    }
+  }
+
+  Future<void> _removeFavoriteEntry(
+    HomeController controller,
+    HomeEntry entry,
+    HomeQuery query, {
+    required bool deleteFolder,
+  }) async {
+    final epoch = ref.read(sessionEpochProvider)();
+    bool current() =>
+        mounted &&
+        widget.active &&
+        widget.isSignedIn &&
+        WorkspaceActivity.isActive(context) &&
+        _bodyQuery == query &&
+        ref.read(homeRepositoryProvider).accountScope == query.scope &&
+        ref.read(sessionEpochProvider)() == epoch;
+    if (!current()) return;
+    final label = deleteFolder ? '删除收藏夹' : '取消收藏';
+    final confirmed = await showAppDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        scrollable: true,
+        title: Text(label),
+        content: Text(
+          deleteFolder
+              ? '确定删除收藏夹“${entry.title}”吗？夹内的收藏记录也会一并删除，此操作不可恢复。'
+              : '确定将“${entry.title}”从当前收藏夹中移除吗？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(deleteFolder ? '确认删除' : '确认取消'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || !current()) return;
+    try {
+      final removed = deleteFolder
+          ? await controller.deleteFavoriteFolder(entry)
+          : await controller.removeFavorite(entry);
+      if (!mounted || !current() || !removed) return;
+      showAppNotice(context, deleteFolder ? '收藏夹已删除' : '已取消收藏');
+      if (deleteFolder) {
+        final children = _visitedQueries
+            .where((q) => q.scope == query.scope && q.folderId == entry.id)
+            .toList();
+        for (final child in children) {
+          _visitedQueries.remove(child);
+          ref.invalidate(homeControllerProvider(child));
+        }
+      } else {
+        if (_favoriteRequest case final request?) {
+          ref.invalidate(favoritePlaybackQueueProvider(request));
+        }
+        if (query.folderId != null) {
+          await ref
+              .read(
+                homeControllerProvider((
+                  channel: HomeChannel.favorites,
+                  section: '我创建的收藏夹',
+                  scope: query.scope,
+                  folderId: null,
+                )).notifier,
+              )
+              .refresh();
+        }
+      }
+    } catch (error) {
+      if (!mounted ||
+          !current() ||
+          error is AppFailure && error.kind == AppFailureKind.cancelled) {
+        return;
+      }
+      showAppNotice(
+        context,
+        error is UnknownWriteOutcome
+            ? '$label结果未确认，请刷新列表查看'
+            : error is AppFailure
+            ? error.message
+            : '$label失败，请重试',
       );
     }
   }

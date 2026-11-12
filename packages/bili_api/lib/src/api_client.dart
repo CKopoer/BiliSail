@@ -436,6 +436,8 @@ final class BiliApiClient {
       '/x/web-interface/archive/like',
       '/x/web-interface/coin/add',
       '/x/v3/fav/resource/deal',
+      '/x/v3/fav/resource/batch-deal',
+      '/x/v3/fav/folder/del',
       '/x/v3/fav/folder/unfav',
       '/x/v3/fav/season/unfav',
       '/x/v3/fav/season/fav',

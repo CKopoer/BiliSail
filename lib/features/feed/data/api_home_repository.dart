@@ -19,6 +19,7 @@ final class ApiHomeRepository
         HomeRepository,
         HomeDynamicRepository,
         HomeSubscriptionRepository,
+        HomeFavoriteRepository,
         HomeWatchLaterRepository {
   ApiHomeRepository(
     this.client,
@@ -34,7 +35,15 @@ final class ApiHomeRepository
   static const _snapshotPageSize = 99;
   static const _maximumSnapshotItems = 5000;
   final _snapshotNonce = Random.secure().nextInt(1 << 32).toRadixString(16);
-  final Map<String, ({HomeQuery query, int epoch, List<HomeEntry> items})>
+  final Map<
+    String,
+    ({
+      HomeQuery query,
+      int epoch,
+      List<HomeEntry> items,
+      String? favoriteFolderId,
+    })
+  >
   _snapshots = {};
   RequestCancellation? _snapshotLifetime;
   int _nextSnapshot = 0;
@@ -53,10 +62,16 @@ final class ApiHomeRepository
       List.unmodifiable(snapshot.items.skip(start).take(_snapshotPageSize)),
       hasMore: start + _snapshotPageSize < snapshot.items.length,
       nextCursor: key,
+      favoriteFolderId: snapshot.favoriteFolderId,
     );
   }
 
-  HomePage _publishSnapshot(HomeQuery query, List<HomeEntry> items, int page) {
+  HomePage _publishSnapshot(
+    HomeQuery query,
+    List<HomeEntry> items,
+    int page,
+    String? favoriteFolderId,
+  ) {
     if (_snapshotLifetime == null || _snapshotLifetime!.isCancelled) {
       final lifetime = _snapshotLifetime = RequestCancellation();
       lifetime.onCancel(_snapshots.clear);
@@ -67,6 +82,7 @@ final class ApiHomeRepository
       query: query,
       epoch: requests.sessionEpoch,
       items: List.unmodifiable(items.take(_maximumSnapshotItems)),
+      favoriteFolderId: favoriteFolderId,
     );
     while (_snapshots.length > 16) {
       _snapshots.remove(_snapshots.keys.first);
@@ -131,6 +147,86 @@ final class ApiHomeRepository
       cursor: cursor,
       authorId: authorId,
       cancellation: cancellation,
+    );
+  }
+
+  Future<void> _writeFavorite(
+    String folderId,
+    String scope,
+    RequestCancellation cancellation,
+    Future<void> Function(ApiRequestContext) write,
+  ) => requests.run((context) async {
+    void checkScope() {
+      if (scope != accountScope) {
+        throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
+      }
+      if (!scope.startsWith('user:')) {
+        throw const AppFailure(AppFailureKind.authentication, '请先登录');
+      }
+    }
+
+    checkScope();
+    final info = await FavoriteFolderClient(client.api)
+        .load(folderId, context: context);
+    checkScope();
+    if (scope != 'user:${info.ownerMid}') {
+      throw const AppFailure(AppFailureKind.permission, '只能操作自己创建的收藏夹');
+    }
+    try {
+      await write(context);
+    } on ApiFailure catch (failure) {
+      if (context.cancellation?.isCancelled != true &&
+          {
+            ApiFailureCategory.network,
+            ApiFailureCategory.timeout,
+            ApiFailureCategory.http,
+            ApiFailureCategory.protocol,
+          }.contains(failure.category)) {
+        throw const UnknownWriteOutcome();
+      }
+      rethrow;
+    }
+    checkScope();
+    _snapshots.removeWhere(
+      (_, snapshot) =>
+          snapshot.query.scope == scope &&
+          snapshot.favoriteFolderId == folderId,
+    );
+  }, cancellation: cancellation);
+
+  @override
+  Future<void> removeFavorite(
+    HomeEntry entry, {
+    required String folderId,
+    required String scope,
+    required RequestCancellation cancellation,
+  }) {
+    final aid = entry.aid;
+    if (entry.kind != HomeEntryKind.video || aid == null) {
+      throw const AppFailure(AppFailureKind.protocol, '收藏内容缺少视频标识，请刷新');
+    }
+    return _writeFavorite(
+      folderId,
+      scope,
+      cancellation,
+      (context) => client.removeFavorite(folderId, aid, context: context),
+    );
+  }
+
+  @override
+  Future<void> deleteFavoriteFolder(
+    HomeEntry entry, {
+    required String scope,
+    required RequestCancellation cancellation,
+  }) {
+    if (entry.kind != HomeEntryKind.folder) {
+      throw const AppFailure(AppFailureKind.permission, '只能删除自己创建的收藏夹');
+    }
+    return _writeFavorite(
+      entry.id,
+      scope,
+      cancellation,
+      (context) => client.deleteFavoriteFolder(entry.id, context: context),
     );
   }
 
@@ -236,18 +332,25 @@ final class ApiHomeRepository
       throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
     }
     final items = List<HomeEntry>.unmodifiable(result.items.map(_entry));
+    final favoriteFolderId =
+        query.channel == HomeChannel.favorites &&
+            query.folderId?.startsWith('ugc:') != true
+        ? query.folderId ??
+              (query.section == '默认收藏夹' ? result.nextCursor : null)
+        : null;
     // Some collected UGC endpoints ignore ps and return the complete collection.
     // Expose bounded local pages without changing watch-later's full-list flow.
     if (query.channel == HomeChannel.favorites &&
         (query.folderId != null || query.section == '默认收藏夹') &&
         !result.hasMore &&
         items.length > _snapshotPageSize) {
-      return _publishSnapshot(query, items, page);
+      return _publishSnapshot(query, items, page, favoriteFolderId);
     }
     return HomePage(
       items,
       hasMore: result.hasMore,
       nextCursor: result.nextCursor,
+      favoriteFolderId: favoriteFolderId,
     );
   }, cancellation: cancellation);
   static HomeEntry _entry(ApiHomeEntry item) => HomeEntry(

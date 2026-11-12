@@ -43,6 +43,21 @@ void main() {
         cancellation: RequestCancellation(),
       );
 
+  test('default folder identity survives local snapshot pagination', () async {
+    const query = (
+      channel: HomeChannel.favorites,
+      section: '默认收藏夹',
+      scope: 'user:7',
+      folderId: null,
+    );
+    final first = await load(1, query: query);
+    expect(first.nextCursor, startsWith('local-favorite-'));
+    expect(first.favoriteFolderId, '42');
+    final next = await load(2, query: query, cursor: first.nextCursor);
+    expect(next.favoriteFolderId, '42');
+    expect(transport.uris, hasLength(2));
+  });
+
   test('an endpoint returning the whole collection exposes stable local pages of 99', () async {
     final first = await load(1);
     expect(first.items, hasLength(99));
@@ -171,6 +186,24 @@ final class _Transport implements ApiTransport {
     ApiCancellation? cancellation,
   }) async {
     uris.add(uri);
+    if (uri.path.endsWith('/space/v2')) {
+      return ApiHttpResponse(
+        200,
+        Uint8List.fromList(
+          utf8.encode(
+            jsonEncode({
+              'code': 0,
+              'data': {
+                'default_folder': {
+                  'folder_detail': {'id': '42'},
+                },
+              },
+            }),
+          ),
+        ),
+        const {},
+      );
+    }
     final items = [
       for (var n = offset; n < offset + count; n++)
         {

@@ -106,6 +106,7 @@ void main() {
     expect(first.nextCursor, _defaultId);
     expect(first.totalCount, 21);
     final video = first.items.single;
+    expect(video.aid, '124');
     expect(video.authorName, '作者');
     expect(video.authorMid, '9007199254740993124');
     expect(video.duration, const Duration(seconds: 123));
@@ -305,6 +306,7 @@ void main() {
       ).load(channel: 'favorites', section: '我的收藏与订阅', page: 1, folderId: '42');
       expect(result.items.every((e) => e.bvid == null), isTrue);
       expect(result.items.first.coverUrl?.scheme, 'https');
+      expect(result.items.map((e) => e.aid), ['124', '124', null, '125']);
     },
   );
 
