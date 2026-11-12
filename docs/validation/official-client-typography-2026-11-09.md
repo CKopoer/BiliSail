@@ -164,3 +164,15 @@
 新增 8 项布局回归，覆盖完整／精简正文、单图／三图换行以及普通／双倍字号，检查两个标记都在最后一行图片下方。修复前 8 项均失败，修复后通过；连同无图标记、头像与作者对齐、评论正文、装扮解码、操作栏和图片预览的 60 项相关回归通过。日志位于本机 `build/validation/comment-picture-markers-2026-11-12/`；本轮不构建、不安装，未执行实机视觉验收。
 
 `tool/check.ps1 -SkipPub` 的 Lint、RootTests、PackageTests 三阶段全部通过：根应用 5,176、`bili_api` 886、`bili_player` 398、`bili_danmaku` 161、`bili_mux` 5，共 6,626 项通过。根应用 13 项按环境条件跳过，mux 的 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。格式、静态分析、打包边界及本次文件的 `git diff --check` 通过；保留同期播放器修改。
+
+## 2026-11-12 评论头像、作者信息与装扮整体对齐
+
+按用户反馈重新对照 PiliPlus `cab0114a21ce7fad5b90b9a4d788d35d313d25f9` 的 `lib/pages/video/reply/widgets/reply_item_grpc.dart`（`_replyHeaderLayout`）及 `lib/common/widgets/translucent_row.dart`。PiliPlus 将头像和昵称／时间视为同一组，头像在该组内垂直居中，右侧装扮单独定位；其装扮高度 38 像素。本项目此前将头像放在整条评论左侧、作者文字与 52 像素装扮顶部对齐，三者高度不同，视觉重心不一致。
+
+共享 `CommentAuthorHeader` 现同时负责头像与作者信息，并使整组与右侧装扮垂直居中。正文、操作栏及楼中楼预览继续按头像 30 像素加间距 12 像素缩进，与昵称左边缘对齐。作者信息使用内容高度；没有日期／属地时也不拉高头部。作者信息在窄屏或大字号下换行后，头像与装扮继续共享该组的垂直中心，正文始终位于完整头部下方，保留 8 像素间距。
+
+保留装扮 52 像素高度上限、112 像素占位宽度上限、可用内容宽度的 40% 上限、12 像素号码、原图透明画布与等比例缩放。头像挂件、昵称颜色、徽章换行、头像／昵称跳转沿用现有能力。视频、PGC、动态主评论与完整回复共用此布局。仅借鉴布局职责，独立实现，没有复制 PiliPlus GPLv3 源码或资源，没有修改相邻仓库、依赖或锁文件。
+
+组件回归覆盖视频／动态在 320／390／640 像素、普通／双倍字号下的整组中心、正文缩进和头部间距，并检查长昵称、会员标记、单行无元信息作者、挂件尺寸及头像／昵称跳转。离线截图位于本机 `build/validation/comment-decoration-alignment-2026-11-12/screenshots/`；装扮图案尺寸与透明画布另由离线图片回归验证。未重新构建、安装或执行实机视觉验收；未发现 Flutter／DTD 调试进程，已尝试热重载但无法连接。
+
+`tool/check.ps1 -SkipPub` 的 Lint、RootTests、PackageTests 三阶段通过，覆盖格式、静态分析、打包边界及离线测试。最终根应用 5,266、`bili_api` 917、`bili_player` 212、`bili_danmaku` 161、`bili_mux` 5，共 6,561 项通过；根应用 13 项、`bili_player` 1 项按环境条件跳过，mux 的 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。首轮全量中的 3 项旧顶部对齐断言、1 项因头像首字加入头部而产生的昵称查找歧义，以及 1 项短回复列表视口预期已更新；保留中心对齐、回调更新和无滚动自动分页断言，最终全量重跑通过。208 个文档本地链接及 `git diff --check` 通过。日志为本机 `build/comment-decoration-Lint.log`、`build/comment-decoration-RootTests-final.log`、`build/comment-decoration-PackageTests.log` 和 `build/comment-decoration-analyze-final.log`。

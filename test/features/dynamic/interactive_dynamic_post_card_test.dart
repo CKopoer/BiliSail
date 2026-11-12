@@ -113,11 +113,14 @@ void main() {
         find.descendant(of: panel, matching: find.byType(NetworkAvatar)),
       );
       final decoration = tester.getRect(find.byType(CommentAuthorDecoration));
+      final header = tester.getRect(find.byType(CommentAuthorHeader));
       final author = tester.getRect(find.text('十六點半到家'));
       final body = tester.getRect(find.text('负担走了，真是一身轻松啊'));
-      expect(decoration.top, avatar.top);
-      expect(decoration.top, author.top);
+      expect(decoration.center.dy, closeTo(avatar.center.dy, .01));
+      expect(avatar.center.dy, closeTo(header.center.dy, .01));
+      expect(author.top, greaterThanOrEqualTo(header.top));
       expect(decoration.left, greaterThan(author.right));
+      expect(body.left, closeTo(author.left, .01));
       expect(body.top, greaterThanOrEqualTo(decoration.bottom));
       expect(body.top, greaterThan(avatar.bottom));
       expect(tester.takeException(), isNull);

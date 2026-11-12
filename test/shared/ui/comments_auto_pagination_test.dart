@@ -76,7 +76,7 @@ void main() {
         } else {
           repo.onLoad = shortPage;
         }
-        final container = await _mount(tester, repo);
+        final container = await _mount(tester, repo, height: 900);
         if (replies) {
           await container
               .read(commentsProviderFor(_video).notifier)
@@ -87,6 +87,14 @@ void main() {
         }
         expect(replies ? repo.replyPages : repo.pages, [1, 2, 3]);
         expect(find.text('没有更多了'), findsOneWidget);
+        expect(
+          tester
+              .widget<ListView>(find.byType(ListView))
+              .controller!
+              .position
+              .maxScrollExtent,
+          0,
+        );
         expect(tester.takeException(), isNull);
       },
     );
@@ -219,9 +227,10 @@ Future<ProviderContainer> _mount(
   _Comments repo, {
   CommentTarget target = _video,
   ValueNotifier<bool>? active,
+  double height = 700,
 }) async {
   tester.view.devicePixelRatio = 1;
-  tester.view.physicalSize = const Size(390, 700);
+  tester.view.physicalSize = Size(390, height);
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(tester.view.resetPhysicalSize);
   final panel = CommentsPanel(target: target);

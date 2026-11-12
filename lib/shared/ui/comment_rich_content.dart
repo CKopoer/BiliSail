@@ -12,6 +12,7 @@ import '../../features/comments/domain/comments_repository.dart';
 import 'comment_text_styles.dart';
 import 'user_decoration_image.dart';
 import 'comment_badge.dart';
+import 'network_avatar.dart';
 
 TextEditingValue insertCommentEmote(TextEditingValue value, String token) {
   final selection = value.selection;
@@ -267,6 +268,9 @@ class CommentAuthorHeader extends StatelessWidget {
   final CommentEntry comment;
   final ValueChanged<UserId>? onOpenUser;
 
+  // Body starts after the 30px avatar and 12px gap.
+  static const contentIndent = 42.0;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context), c = comment;
@@ -275,6 +279,7 @@ class CommentAuthorHeader extends StatelessWidget {
     final location = c.ipLocation?.trim();
     final hasLocation = location != null && location.isNotEmpty;
     final identity = Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
@@ -338,19 +343,40 @@ class CommentAuthorHeader extends StatelessWidget {
           ),
       ],
     );
-    if (c.decorationImageUrl == null) return identity;
+    final author = Row(
+      children: [
+        InkWell(
+          onTap: c.authorId?.isValid == true && onOpenUser != null
+              ? () => onOpenUser!(c.authorId!)
+              : null,
+          child: NetworkAvatar(
+            url: c.avatarUrl,
+            pendantUrl: c.pendantUrl,
+            name: c.author,
+            radius: 15,
+          ),
+        ),
+        const SizedBox(width: contentIndent - 30),
+        Expanded(child: identity),
+      ],
+    );
+    if (c.decorationImageUrl == null) return author;
     final decoration = CommentAuthorDecoration(comment: c);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final spacing = constraints.maxWidth.clamp(0.0, 8.0);
-        final decorationWidth = ((constraints.maxWidth - spacing) * .4).clamp(
+        final contentWidth = (constraints.maxWidth - contentIndent).clamp(
+          0.0,
+          double.infinity,
+        );
+        final spacing = contentWidth.clamp(0.0, 8.0);
+        final decorationWidth = ((contentWidth - spacing) * .4).clamp(
           0.0,
           112.0,
         );
         return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: identity),
+            // Keep the avatar, name and metadata on one center with the card.
+            Expanded(child: author),
             SizedBox(width: spacing),
             // Keep the art beside the avatar and leave most of the row for
             // readable author metadata, scaling the art and serial together.
@@ -358,7 +384,7 @@ class CommentAuthorHeader extends StatelessWidget {
               constraints: BoxConstraints(maxWidth: decorationWidth),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
-                alignment: Alignment.topRight,
+                alignment: Alignment.centerRight,
                 child: decoration,
               ),
             ),

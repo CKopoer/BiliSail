@@ -64,8 +64,13 @@ void main() {
           );
           final tile = find.byKey(const ValueKey(('comment', '10')));
           expect(
-            tester.getTopLeft(find.text(_root.author)).dy,
-            closeTo(tester.getTopLeft(find.byType(NetworkAvatar)).dy, .01),
+            tester.getCenter(find.byType(NetworkAvatar)).dy,
+            closeTo(
+              (tester.getTopLeft(find.text(_root.author)).dy +
+                      tester.getBottomLeft(find.text('IP属地：广东')).dy) /
+                  2,
+              .01,
+            ),
           );
           await _snapshot(tester, tile, '${type.name}-${width.toInt()}-$scale');
           final actions = find.descendant(
@@ -136,7 +141,9 @@ void main() {
       (320.0, 1.0),
       (390.0, 1.0),
       (640.0, 1.0),
+      (320.0, 2.0),
       (390.0, 2.0),
+      (640.0, 2.0),
     ]) {
       testWidgets(
         '${type.name} decorated author aligns with avatar at $width / $scale',
@@ -174,14 +181,20 @@ void main() {
             find.byType(CommentAuthorDecoration),
           );
           final body = tester.getRect(find.byType(CommentRichContent));
-          expect(header.top, closeTo(avatar.top, .01));
-          expect(author.top, closeTo(avatar.top, .01));
+          expect(
+            avatar.center.dy,
+            closeTo((author.top + metadata.bottom) / 2, 1),
+          );
           expect(metadata.top, greaterThanOrEqualTo(author.bottom));
           expect(body.top, greaterThanOrEqualTo(header.bottom + 8));
+          expect(author.left, closeTo(body.left, .01));
+          expect(avatar.left, closeTo(header.left, .01));
           expect(decoration.height, lessThanOrEqualTo(52));
           expect(decoration.width, lessThanOrEqualTo(header.width * .4));
           expect(decoration.height / decoration.width, closeTo(52 / 112, .01));
-          expect(decoration.top, closeTo(avatar.top, .01));
+          expect(decoration.center.dy, closeTo(avatar.center.dy, .01));
+          expect(decoration.right, closeTo(header.right, .01));
+          expect(body.top, greaterThanOrEqualTo(decoration.bottom + 8));
           expect(decoration.left, greaterThan(author.right));
           expect(tester.takeException(), isNull);
         },

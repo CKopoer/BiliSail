@@ -362,7 +362,9 @@ void main() {
         tester.getRect(find.text('NO.\n0014931')).right,
         decorationRect.right,
       );
-      expect(decorationRect.top, tester.getRect(find.text(comment.author)).top);
+      final headerRect = tester.getRect(find.byType(CommentAuthorHeader));
+      expect(decorationRect.top, greaterThanOrEqualTo(headerRect.top));
+      expect(decorationRect.bottom, lessThanOrEqualTo(headerRect.bottom));
       expect(
         decorationRect.left,
         greaterThan(tester.getRect(find.byType(BiliLevelBadge)).right),
@@ -453,7 +455,13 @@ void main() {
       );
       expect(find.text('刚刚'), findsOneWidget);
       expect(find.textContaining('IP属地'), findsNothing);
-      expect(find.byType(Text), findsNWidgets(2));
+      expect(
+        find.descendant(
+          of: find.byType(CommentAuthorHeader),
+          matching: find.text('reader'),
+        ),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     }
   });
