@@ -15,11 +15,13 @@ final class DynamicContentState {
     this.hiddenAuthors = const {},
     this.posts = const {},
     this.locked = const {},
+    this.reservations = const {},
   });
   final Set<String> removed;
   final Map<String, String> hiddenAuthors;
   final Map<String, DynamicPost> posts;
   final Map<String, Set<String>> locked;
+  final Map<String, DynamicReservation> reservations;
   bool hidden(DynamicPost post) =>
       removed.contains(post.id) ||
       hiddenAuthors.containsKey(post.authorId?.value);
@@ -44,11 +46,13 @@ class DynamicContentController extends Notifier<DynamicContentState> {
     Map<String, String>? authors,
     Map<String, DynamicPost>? posts,
     Map<String, Set<String>>? locked,
+    Map<String, DynamicReservation>? reservations,
   }) => state = DynamicContentState(
     removed: Set.unmodifiable(removed ?? state.removed),
     hiddenAuthors: Map.unmodifiable(authors ?? state.hiddenAuthors),
     posts: Map.unmodifiable(posts ?? state.posts),
     locked: Map.unmodifiable(locked ?? state.locked),
+    reservations: Map.unmodifiable(reservations ?? state.reservations),
   );
   void remove(String id) {
     final values = {...state.removed, id};
@@ -76,6 +80,13 @@ class DynamicContentController extends Notifier<DynamicContentState> {
     values[id] = Set.unmodifiable({...?values[id], action});
     if (values.length > 512) values.remove(values.keys.first);
     _set(locked: values);
+  }
+
+  void updateReservation(DynamicReservation reservation) {
+    final values = {...state.reservations}..remove(reservation.id);
+    values[reservation.id] = reservation;
+    if (values.length > 512) values.remove(values.keys.first);
+    _set(reservations: values);
   }
 
   void unlock(String id, Set<String> actions) {

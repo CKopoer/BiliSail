@@ -312,6 +312,41 @@ final class DynamicClient {
     }, context: context);
   }
 
+  Future<ApiDynamicReservationUpdate> reserve(
+    String dynamicId,
+    String reserveId,
+    int status,
+    int total, {
+    ApiRequestContext? context,
+  }) async {
+    _id(dynamicId);
+    _id(reserveId);
+    if (status < 0 || total < 0) {
+      throw ArgumentError('Invalid reservation state');
+    }
+    const endpoint = 'dynamic_reserve';
+    final data = await api
+        .submitDynamicJson('/x/dynamic/feed/reserve/click', endpoint, {
+          'reserve_id': reserveId,
+          'cur_btn_status': status,
+          'dynamic_id_str': dynamicId,
+          'reserve_total': total,
+        }, context: context);
+    if (data is! Map<String, Object?> ||
+        data['final_btn_status'] is! int ||
+        (data['final_btn_status'] as int) < 0 ||
+        data['reserve_update'] is! int ||
+        (data['reserve_update'] as int) < 0 ||
+        data['desc_update'] is! String) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    return ApiDynamicReservationUpdate(
+      data['final_btn_status'] as int,
+      data['reserve_update'] as int,
+      data['desc_update'] as String,
+    );
+  }
+
   Future<String> repost(
     String id,
     String text, {

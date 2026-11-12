@@ -5,6 +5,7 @@ import '../../../domain/dynamic_post.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../shared/data/dynamic_post_mapper.dart';
 import '../domain/dynamic_repository.dart';
+import '../domain/dynamic_reservation_repository.dart';
 import '../domain/dynamic_poll.dart';
 import '../domain/dynamic_poll_repository.dart';
 import '../domain/dynamic_management_repository.dart';
@@ -17,6 +18,7 @@ import '../../../domain/app_failure.dart';
 final class ApiDynamicRepository
     implements
         DynamicRepository,
+        DynamicReservationRepository,
         DynamicManagementRepository,
         DynamicPollRepository,
         DynamicPollSocialRepository {
@@ -261,6 +263,21 @@ final class ApiDynamicRepository
         (context) => client.like(id, liked, context: context),
         cancellation,
       );
+  @override
+  Future<DynamicReservation> reserve(
+    String dynamicId,
+    DynamicReservation reservation,
+    RequestCancellation cancellation,
+  ) => _write((context) async {
+    final result = await client.reserve(
+      dynamicId,
+      reservation.id,
+      reservation.status,
+      reservation.total,
+      context: context,
+    );
+    return reservation.updated(result.status, result.total, result.description);
+  }, cancellation);
   @override
   Future<String> repost(
     String id,

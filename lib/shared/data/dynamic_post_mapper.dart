@@ -43,6 +43,21 @@ DynamicPost mapDynamicPost(ApiDynamicPost p) {
             url: card.url,
             actionLabel: card.actionLabel,
             actionUrl: card.actionUrl,
+            reservation: switch (card.reservation) {
+              final r? => DynamicReservation(
+                id: r.id,
+                status: r.status,
+                type: r.type,
+                total: r.total,
+                description: r.description,
+                checkedText: r.checkedText,
+                uncheckedText: r.uncheckedText,
+                disabled: r.disabled,
+                ended: r.ended,
+                hasJump: r.hasJump,
+              ),
+              _ => null,
+            },
           ),
         )
         .toList(),

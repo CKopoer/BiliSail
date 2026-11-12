@@ -27,7 +27,31 @@ final class ApiDynamicTopic {
   final Uri? url;
 }
 
-/// A displayable major or additional module, without account write semantics.
+final class ApiDynamicReservation {
+  const ApiDynamicReservation({
+    required this.id,
+    required this.status,
+    required this.type,
+    required this.total,
+    this.description = '',
+    this.checkedText = '已预约',
+    this.uncheckedText = '预约',
+    this.disabled = false,
+    this.ended = false,
+    this.hasJump = false,
+  });
+  final String id, description, checkedText, uncheckedText;
+  final int status, type, total;
+  final bool disabled, ended, hasJump;
+}
+
+final class ApiDynamicReservationUpdate {
+  const ApiDynamicReservationUpdate(this.status, this.total, this.description);
+  final int status, total;
+  final String description;
+}
+
+/// A displayable major or additional module with optional typed action data.
 final class ApiDynamicContentCard {
   const ApiDynamicContentCard({
     required this.kind,
@@ -39,10 +63,12 @@ final class ApiDynamicContentCard {
     this.url,
     this.actionLabel = '',
     this.actionUrl,
+    this.reservation,
   });
   final ApiDynamicCardKind kind;
   final String title, description, detail, badge, actionLabel;
   final Uri? coverUrl, url, actionUrl;
+  final ApiDynamicReservation? reservation;
 }
 
 final class ApiDynamicTextSpan {

@@ -263,8 +263,29 @@ List<ApiDynamicContentCard> _contentCards(
       _map(button['jump_style'])['text'],
       fallback: stateLabel,
     );
+    final reserveId = _id(value['rid']);
+    final total = _buttonNumber(value['reserve_total']);
+    final reserve =
+        reservation && knownReservation && reserveId != null && total != null
+        ? ApiDynamicReservation(
+            id: reserveId,
+            status: status,
+            type: buttonType,
+            total: total,
+            description: _text(_map(value['desc2'])['text']),
+            checkedText: _text(_map(button['check'])['text'], fallback: '已预约'),
+            uncheckedText: _text(
+              _map(button['uncheck'])['text'],
+              fallback: '预约',
+            ),
+            disabled: _buttonNumber(_map(button['uncheck'])['disable']) == 1,
+            ended: ended,
+            hasJump: _text(button['jump_url']).isNotEmpty,
+          )
+        : null;
     result.add(
       ApiDynamicContentCard(
+        reservation: reserve,
         kind: kind,
         title: _text(
           value['title'],
@@ -278,7 +299,7 @@ List<ApiDynamicContentCard> _contentCards(
                 value['desc_first'],
                 value['desc_second'],
                 value['desc1'],
-                value['desc2'],
+                if (reserve == null) value['desc2'],
                 value['hint'],
                 match['sub_title'],
               ]),
@@ -292,8 +313,9 @@ List<ApiDynamicContentCard> _contentCards(
             : _join([
                 value['desc3'],
                 value['desc'],
-                if (_number(value['reserve_total']) case final total?)
-                  '$total人预约',
+                if (reserve == null)
+                  if (_number(value['reserve_total']) case final total?)
+                    '$total人预约',
               ]),
         badge: ended ? '已结束' : label,
         coverUrl: _uri(value['cover']),

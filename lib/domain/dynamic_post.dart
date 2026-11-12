@@ -40,10 +40,53 @@ final class DynamicContentCard {
     this.url,
     this.actionLabel = '',
     this.actionUrl,
+    this.reservation,
   });
   final DynamicCardKind kind;
   final String title, description, detail, badge, actionLabel;
   final Uri? coverUrl, url, actionUrl;
+  final DynamicReservation? reservation;
+}
+
+final class DynamicReservation {
+  const DynamicReservation({
+    required this.id,
+    required this.status,
+    required this.type,
+    required this.total,
+    this.description = '',
+    this.checkedText = '已预约',
+    this.uncheckedText = '预约',
+    this.disabled = false,
+    this.ended = false,
+    this.hasJump = false,
+  });
+  final String id, description, checkedText, uncheckedText;
+  final int status, type, total;
+  final bool disabled, ended, hasJump;
+  bool get checked => status == type;
+  bool get canToggle => !disabled && !ended && !hasJump;
+  String get label => checked ? checkedText : uncheckedText;
+
+  // Fresh card capabilities take precedence over a cached account action.
+  DynamicReservation withCachedState(DynamicReservation? cached) =>
+      cached == null || cached.id != id || cached.type != type
+      ? this
+      : updated(cached.status, cached.total, cached.description);
+
+  DynamicReservation updated(int status, int total, String description) =>
+      DynamicReservation(
+        id: id,
+        status: status,
+        type: type,
+        total: total,
+        description: description,
+        checkedText: checkedText,
+        uncheckedText: uncheckedText,
+        disabled: disabled,
+        ended: ended,
+        hasJump: hasJump,
+      );
 }
 
 final class DynamicTextSpan {

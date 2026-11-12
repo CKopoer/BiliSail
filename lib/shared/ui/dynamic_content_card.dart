@@ -11,15 +11,32 @@ class DynamicContentCardView extends StatelessWidget {
     required this.card,
     this.onOpenLink,
     this.layoutOnly = false,
+    this.reservation,
+    this.handleAction = false,
+    this.onAction,
+    this.actionLabel,
   });
   final DynamicContentCard card;
   final ValueChanged<Uri>? onOpenLink;
   final bool layoutOnly;
+  final DynamicReservation? reservation;
+  final bool handleAction;
+  final VoidCallback? onAction;
+  final String? actionLabel;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final reserve = reservation ?? card.reservation;
+    final description = [
+      card.description,
+      if (reserve != null) reserve.description,
+    ].where((s) => s.isNotEmpty).join(' · ');
+    final detail = [
+      card.detail,
+      if (reserve != null) '${reserve.total}人预约',
+    ].where((s) => s.isNotEmpty).join(' · ');
     final (icon, label) = switch (card.kind) {
       DynamicCardKind.article => (Icons.article_outlined, '专栏'),
       DynamicCardKind.pgc => (Icons.movie_outlined, '影视'),
@@ -104,10 +121,10 @@ class DynamicContentCardView extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleSmall,
                       ),
-                      if (card.description.isNotEmpty) ...[
+                      if (description.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
-                          card.description,
+                          description,
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                           style: card.kind == DynamicCardKind.goods
@@ -117,10 +134,10 @@ class DynamicContentCardView extends StatelessWidget {
                               : theme.textTheme.bodySmall,
                         ),
                       ],
-                      if (card.detail.isNotEmpty) ...[
+                      if (detail.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
-                          card.detail,
+                          detail,
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall,
@@ -141,15 +158,17 @@ class DynamicContentCardView extends StatelessWidget {
                       Expanded(child: text),
                     ],
                   );
-                  final action = card.actionLabel.isEmpty
+                  final buttonLabel = actionLabel ?? card.actionLabel;
+                  final action = buttonLabel.isEmpty
                       ? null
                       : OutlinedButton(
-                          onPressed:
-                              card.actionUrl == null || onOpenLink == null
+                          onPressed: handleAction
+                              ? onAction
+                              : card.actionUrl == null || onOpenLink == null
                               ? null
                               : () => onOpenLink!(card.actionUrl!),
                           child: Text(
-                            card.actionLabel,
+                            buttonLabel,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),

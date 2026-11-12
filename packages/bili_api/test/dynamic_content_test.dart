@@ -39,6 +39,72 @@ Future<ApiDynamicPost> load(
 void main() {
   for (final home in [true, false]) {
     test(
+      'typed reservation retains exact identity and action state in ${home ? "feed" : "space"}',
+      () async {
+        final card = (await load(
+          richPost(
+            additional: {
+              'type': 'ADDITIONAL_TYPE_RESERVE',
+              'reserve': {
+                'rid': '9007199254740993123',
+                'title': '直播预约',
+                'reserve_total': '42',
+                'desc1': {'text': '明天20点'},
+                'desc2': {'text': '42人预约'},
+                'button': {
+                  'type': 2,
+                  'status': 1,
+                  'check': {'text': '取消预约'},
+                  'uncheck': {'text': '立即预约', 'disable': '1'},
+                },
+              },
+            },
+          ),
+          home: home,
+        )).contentCards.single;
+        final r = card.reservation!;
+        expect(
+          (r.id, r.status, r.type, r.total),
+          ('9007199254740993123', 1, 2, 42),
+        );
+        expect(
+          (r.description, r.checkedText, r.uncheckedText),
+          ('42人预约', '取消预约', '立即预约'),
+        );
+        expect((r.disabled, r.ended, r.hasJump), (true, false, false));
+        expect(card.description, '明天20点');
+      },
+    );
+  }
+  test(
+    'malformed reservation identity and counts never become writable',
+    () async {
+      for (final (rid, total) in <(Object?, Object?)>[
+        (null, 1),
+        (1.0, 1),
+        ('0', 1),
+        ('12', -1),
+        ('12', 1.0),
+        ('12', null),
+      ]) {
+        final card = (await load(
+          richPost(
+            additional: {
+              'type': 'ADDITIONAL_TYPE_RESERVE',
+              'reserve': {
+                'rid': rid,
+                'reserve_total': total,
+                'button': {'type': 2, 'status': 1},
+              },
+            },
+          ),
+        )).contentCards.single;
+        expect(card.reservation, isNull);
+      }
+    },
+  );
+  for (final home in [true, false]) {
+    test(
       'poll identities override unrelated links in ${home ? "home" : "space"}',
       () async {
         final value = await load(

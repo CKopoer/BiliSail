@@ -18,6 +18,8 @@ import '../../features/dynamic/application/dynamic_management_controller.dart';
 import '../../features/dynamic/domain/dynamic_link.dart';
 import 'dynamic_post_menu.dart';
 import 'dynamic_poll_dialog.dart';
+import 'dynamic_content_card.dart';
+import 'dynamic_reservation_card.dart';
 
 class InteractiveDynamicPostCard extends ConsumerWidget {
   const InteractiveDynamicPostCard({
@@ -128,6 +130,14 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
       children: [
         DynamicPostCard(
           post: current,
+          contentCardBuilder: (owner, card) => card.reservation == null
+              ? DynamicContentCardView(card: card, onOpenLink: link)
+              : DynamicReservationCard(
+                  post: owner,
+                  card: card,
+                  onOpenLink: link,
+                  onLogin: login,
+                ),
           inDetail: inDetail,
           expansionState: expansionState,
           onOpenUser: onOpenUser,
