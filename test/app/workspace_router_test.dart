@@ -1404,6 +1404,8 @@ void main() {
           listen: false,
         );
         final catScope = tabScope();
+        final searchInput = find.byKey(const ValueKey('workspace-search'));
+        expect(tester.widget<TextField>(searchInput).controller!.text, 'cat');
         expect(root.read(searchControllerProvider).query, isEmpty);
         expect(find.byKey(const ValueKey('home-channel-strip')), findsNothing);
         expect(find.byType(SearchCategoryBar), findsOneWidget);
@@ -1445,8 +1447,12 @@ void main() {
           'cat',
         );
         expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsNothing);
+        await tester.enterText(searchInput, 'cat 教程');
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
         router.go('/search?q=dog');
         await tester.pumpAndSettle();
+        expect(tester.widget<TextField>(searchInput).controller!.text, 'dog');
         expect(identical(catScope, tabScope()), isFalse);
         expect(
           tabScope().read(searchControllerProvider).category,
@@ -1463,6 +1469,10 @@ void main() {
         }
         await tester.pumpAndSettle();
         expect(identical(catScope, tabScope()), isTrue);
+        expect(
+          tester.widget<TextField>(searchInput).controller!.text,
+          'cat 教程',
+        );
         expect(catScope.read(searchControllerProvider).query, 'cat');
         expect(
           catScope.read(searchControllerProvider).category,

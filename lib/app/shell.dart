@@ -412,7 +412,13 @@ final class _BiliAppShellState extends State<BiliAppShell>
         return controller;
       });
   void _restoreSearch() {
-    _searchFor(_displayTab).text = _searchDrafts[_displayTab.id] ?? '';
+    final tab = _displayTab;
+    final query =
+        _searchDrafts[tab.id] ??
+        (tab.location.path == '/search'
+            ? tab.location.queryParameters['q'] ?? ''
+            : '');
+    _searchFor(tab).text = query;
   }
 
   @override

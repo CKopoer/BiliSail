@@ -209,8 +209,9 @@ void main() {
       await tester.tap(find.text('展示热搜'));
       await tester.pumpAndSettle();
       expect(calls, ['查询热搜']);
+      expect(tester.widget<TextField>(field).controller!.text, '查询热搜');
       expect(find.text('搜索历史'), findsNothing);
-      await tester.tap(field);
+      await tester.enterText(field, '');
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey(('search-history', '查询热搜'))),
@@ -223,7 +224,7 @@ void main() {
   );
 
   testWidgets(
-    'mobile opens independent search page; keyboard insets scroll; submit saves and returns',
+    'mobile retains the submitted query for editing and searching again',
     (tester) async {
       final calls = <String>[];
       await _mount(tester, width: 390, inline: false, calls: calls);
@@ -242,15 +243,35 @@ void main() {
       await tester.pumpAndSettle();
       expect(calls, ['手机搜索']);
       expect(find.byKey(const ValueKey('search-discovery-page')), findsNothing);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('workspace-search')))
+            .controller!
+            .text,
+        '手机搜索',
+      );
       await tester.tap(find.byKey(const ValueKey('workspace-search')));
       await tester.pumpAndSettle();
+      final input = find.byKey(const ValueKey('search-page-input'));
+      expect(tester.widget<TextField>(input).controller!.text, '手机搜索');
       expect(
-        find.byKey(const ValueKey(('search-history', '手机搜索'))),
-        findsOneWidget,
+        ProviderScope.containerOf(tester.element(input))
+            .read(searchDiscoveryControllerProvider)
+            .history,
+        contains('手机搜索'),
       );
-      await tester.pageBack();
+      await tester.enterText(input, '手机搜索 教程');
+      await tester.tap(find.widgetWithText(TextButton, '搜索'));
       await tester.pumpAndSettle();
-      expect(calls, ['手机搜索']);
+      expect(calls, ['手机搜索', '手机搜索 教程']);
+      expect(find.byKey(const ValueKey('search-discovery-page')), findsNothing);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('workspace-search')))
+            .controller!
+            .text,
+        '手机搜索 教程',
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -343,7 +364,7 @@ void main() {
   );
 
   testWidgets(
-    'privacy toggle skips new history; candidate and history clicks submit and clear',
+    'privacy toggle skips new history; candidate and history clicks retain the query',
     (tester) async {
       final calls = <String>[];
       await _mount(tester, width: 1200, inline: true, calls: calls);
@@ -362,8 +383,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(calls, ['新搜索建议']);
-      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
-      await tester.tap(field);
+      expect(tester.widget<TextField>(field).controller!.text, '新搜索建议');
+      await tester.enterText(field, '');
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey(('search-history', '新搜索建议'))),
@@ -374,8 +395,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey(('search-history', '历史2'))));
       await tester.pumpAndSettle();
       expect(calls, ['新搜索建议', '历史2']);
-      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
-      await tester.tap(field);
+      expect(tester.widget<TextField>(field).controller!.text, '历史2');
+      await tester.enterText(field, '');
       await tester.pumpAndSettle();
       expect(
         tester
@@ -388,7 +409,7 @@ void main() {
   );
 
   testWidgets(
-    'keyboard submit clears field; blank submit retains open search',
+    'keyboard submit retains an editable query; blank submit retains open search',
     (tester) async {
       final calls = <String>[];
       await _mount(tester, width: 1200, inline: true, calls: calls);
@@ -397,12 +418,21 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
       expect(calls, ['键盘搜索']);
-      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
-      await tester.tap(field);
+      expect(tester.widget<TextField>(field).controller!.text, '键盘搜索');
+      expect(
+        tester.widget<TextField>(field).controller!.selection,
+        TextSelection.collapsed(offset: '键盘搜索'.length),
+      );
+      await tester.enterText(field, '键盘搜索 教程');
+      await tester.tap(find.byTooltip('搜索'));
+      await tester.pumpAndSettle();
+      expect(calls, ['键盘搜索', '键盘搜索 教程']);
+      expect(tester.widget<TextField>(field).controller!.text, '键盘搜索 教程');
+      await tester.enterText(field, '   ');
       await tester.pumpAndSettle();
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
-      expect(calls, ['键盘搜索']);
+      expect(calls, ['键盘搜索', '键盘搜索 教程']);
       expect(find.text('搜索历史'), findsOneWidget);
     },
   );

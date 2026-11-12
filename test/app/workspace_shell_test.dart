@@ -121,7 +121,7 @@ void main() {
   }
   for (final mode in WorkspaceNavigationMode.values) {
     _workspaceTestWidgets(
-      'submitted search clears across navigation in $mode',
+      'search query remains editable across navigation in $mode',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = const Size(1200, 800);
@@ -137,7 +137,7 @@ void main() {
         router.go('/search?q=existing');
         await tester.pumpAndSettle();
         final search = find.byKey(const ValueKey('workspace-search'));
-        expect(tester.widget<TextField>(search).controller!.text, isEmpty);
+        expect(tester.widget<TextField>(search).controller!.text, 'existing');
         await tester.enterText(search, ' 新关键词 ');
         await tester.testTextInput.receiveAction(TextInputAction.search);
         await tester.pumpAndSettle();
@@ -145,8 +145,25 @@ void main() {
           router.routeInformationProvider.value.uri.queryParameters['q'],
           '新关键词',
         );
-        expect(tester.widget<TextField>(search).controller!.text, isEmpty);
-        router.go('/dynamic');
+        expect(tester.widget<TextField>(search).controller!.text, '新关键词');
+        router.go('/?channel=dynamic');
+        await tester.pumpAndSettle();
+        router.go('/search?q=新关键词');
+        await tester.pumpAndSettle();
+        expect(tester.widget<TextField>(search).controller!.text, '新关键词');
+        await tester.enterText(search, '新关键词 教程');
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters['q'],
+          '新关键词 教程',
+        );
+        expect(tester.widget<TextField>(search).controller!.text, '新关键词 教程');
+        router.go('/search?q=新关键词');
+        await tester.pumpAndSettle();
+        // An explicitly cleared draft must not be filled from the route again.
+        await tester.enterText(search, '');
+        router.go('/?channel=dynamic');
         await tester.pumpAndSettle();
         router.go('/search?q=新关键词');
         await tester.pumpAndSettle();
