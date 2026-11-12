@@ -64,6 +64,7 @@ void main() {
           danmakuEnabled: false,
           danmakuArea: .25,
           danmakuFontScale: 1.5,
+          danmakuFont: DanmakuFontPreference.system,
           highEnergyProgressEnabled: !defaults.highEnergyProgressEnabled,
           playerControlsMode:
               defaults.playerControlsMode == PlayerControlsMode.click
@@ -113,6 +114,8 @@ void main() {
         expect(settings.navigationMode, defaults.navigationMode);
         expect(settings.danmakuArea, defaults.danmakuArea);
         expect(settings.danmakuFontScale, defaults.danmakuFontScale);
+        expect(settings.danmakuFont, DanmakuFontPreference.harmonyOsSans);
+        expect(settings.danmakuFontFamily, 'HarmonyOS Sans');
         expect(settings.playerControlsMode, defaults.playerControlsMode);
         expect(
           settings.videoCardHoverPlayback,

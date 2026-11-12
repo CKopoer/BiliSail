@@ -970,6 +970,8 @@ void main() {
       expect(settings.danmakuEnabled, isFalse);
       expect(settings.danmakuOpacity, .7);
       expect(settings.danmakuFontScale, 1.2);
+      expect(settings.danmakuFont, DanmakuFontPreference.harmonyOsSans);
+      expect(settings.danmakuFontFamily, 'HarmonyOS Sans');
       expect(settings.danmakuTopMargin, 0);
       expect(settings.danmakuLineSpacing, 5);
       expect(settings.autoPlay, isTrue);
@@ -1073,6 +1075,12 @@ void main() {
           loaded.copyWith(font: AppFontPreference.system).fontFamily,
           isNull,
         );
+        await repository.save(
+          loaded.copyWith(danmakuFont: DanmakuFontPreference.system),
+        );
+        final systemFont = await repository.load();
+        expect(systemFont.danmakuFont, DanmakuFontPreference.system);
+        expect(systemFont.danmakuFontFamily, isNull);
       }
     },
   );
@@ -1095,8 +1103,8 @@ void main() {
       final loaded = await repository.load();
       expect(loaded.font, AppFontPreference.harmonyOsSans);
       expect(loaded.fontFamily, 'HarmonyOS Sans');
-      expect(loaded.danmakuFont, DanmakuFontPreference.system);
-      expect(loaded.danmakuFontFamily, isNull);
+      expect(loaded.danmakuFont, DanmakuFontPreference.harmonyOsSans);
+      expect(loaded.danmakuFontFamily, 'HarmonyOS Sans');
       expect(loaded.systemFontFamily, 'Microsoft YaHei');
       expect(loaded.danmakuSystemFontFamily, 'Segoe UI');
       expect(loaded.theme, AppThemePreference.dark);
@@ -1107,7 +1115,7 @@ void main() {
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
       expect(snapshot['font'], 'harmonyOsSans');
-      expect(snapshot['danmakuFont'], 'system');
+      expect(snapshot['danmakuFont'], 'harmonyOsSans');
       final reloaded = await repository.load();
       expect(reloaded.font, loaded.font);
       expect(reloaded.danmakuFont, loaded.danmakuFont);
@@ -1258,7 +1266,7 @@ void main() {
     expect(s.danmakuTopMargin, 0);
     expect(s.danmakuLineSpacing, 5);
     expect(s.danmakuMaxPerSecond, 0);
-    expect(s.danmakuFont, DanmakuFontPreference.system);
+    expect(s.danmakuFont, DanmakuFontPreference.harmonyOsSans);
     expect(s.danmakuBold, isFalse);
     expect(s.danmakuStyle, DanmakuStylePreference.shadow);
     expect(s.danmakuMinimumWeight, 10);

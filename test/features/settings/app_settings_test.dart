@@ -221,7 +221,9 @@ void main() {
     'danmaku style defaults preserve existing behavior and clamp limits',
     () {
       final defaults = const AppSettings.defaults();
-      expect(defaults.danmakuFont, DanmakuFontPreference.system);
+      expect(defaults.danmakuFont, DanmakuFontPreference.harmonyOsSans);
+      expect(defaults.danmakuFontFamily, 'HarmonyOS Sans');
+      expect(AppSettings().danmakuFont, defaults.danmakuFont);
       expect(defaults.danmakuStyle, DanmakuStylePreference.shadow);
       expect(defaults.danmakuBold, isFalse);
       expect(defaults.danmakuMergeDuplicates, isFalse);
@@ -230,7 +232,7 @@ void main() {
       expect(defaults.danmakuOffset, Duration.zero);
       final copy = defaults
           .copyWith(
-            danmakuFont: DanmakuFontPreference.harmonyOsSans,
+            danmakuFont: DanmakuFontPreference.system,
             danmakuStyle: DanmakuStylePreference.plain,
             danmakuBold: true,
             danmakuMergeDuplicates: true,
@@ -240,7 +242,8 @@ void main() {
             danmakuOffset: const Duration(seconds: -90),
           )
           .normalized();
-      expect(copy.danmakuFont, DanmakuFontPreference.harmonyOsSans);
+      expect(copy.danmakuFont, DanmakuFontPreference.system);
+      expect(copy.danmakuFontFamily, isNull);
       expect(copy.danmakuStyle, DanmakuStylePreference.plain);
       expect(copy.danmakuBold, isTrue);
       expect(copy.danmakuMergeDuplicates, isTrue);

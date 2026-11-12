@@ -240,7 +240,7 @@ class SqliteSettingsRepository implements SettingsRepository {
           DanmakuFontPreference.values
               .where((v) => v.name == decoded['danmakuFont'])
               .firstOrNull ??
-          DanmakuFontPreference.system,
+          defaults.danmakuFont,
       danmakuBold: boolean('danmakuBold', false),
       danmakuStyle:
           DanmakuStylePreference.values
