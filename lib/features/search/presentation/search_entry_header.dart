@@ -64,7 +64,10 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
     final query = value.trim();
     if (query.isEmpty) return;
     _close();
-    widget.controller.clear();
+    widget.controller.value = TextEditingValue(
+      text: query,
+      selection: TextSelection.collapsed(offset: query.length),
+    );
     unawaited(
       ProviderScope.containerOf(
         context,
