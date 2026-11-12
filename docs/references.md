@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-12 追番只读参考 PiliPlus `cab0114a21ce7fad5b90b9a4d788d35d313d25f9` 的 `lib/http/api.dart`、`lib/http/video.dart` 和 `lib/http/pgc.dart`，核对状态读取及追番／取消端点、季编号与 CSRF。仅采用协议事实，独立实现本项目仓储、控制器和主题按钮，未复制 GPLv3 应用源码／资源或修改依赖，见[PGC 追番](validation/pgc-follow.md)。
+
 2026-11-12 视频合集工具栏只读参考 PiliPlus `cab0114a21ce7fad5b90b9a4d788d35d313d25f9` 的 `lib/pages/episode_panel/view.dart` 和 `lib/pages/video/view.dart`，核对实际 overrides／锁文件。仅借鉴定位、显示排序与倒序播放职责，独立实现合集卡片与领域播放顺序，未复制 GPLv3 应用源码／资源、修改相邻仓库或依赖，见[来源与验证](validation/video-collection-controls-2026-11-12.md)。
 
 2026-11-11 风控处理只读参考 PiliPlus `cab0114a21ce7fad5b90b9a4d788d35d313d25f9` 的热门精选、设备 SPI／激活及 Gaia 验证职责。独立实现共享请求策略、设备上下文和测试，未复制 GPLv3 应用代码、随机指纹或资源，未修改相邻仓库或依赖；精确路径、采用边界与未线上验收项见[请求风控](validation/api-risk-control-2026-11-11.md)。

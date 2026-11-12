@@ -3,10 +3,42 @@ import '../models.dart';
 import '../models/pgc_models.dart';
 import '../mappers/dash_audio_parser.dart';
 
-/// Web Cookie PGC reads. Entitlement decisions remain with the playurl API.
+/// Web Cookie PGC metadata and follows. Playurl decides viewing entitlement.
 final class PgcClient {
   const PgcClient(this.api);
   final BiliApiClient api;
+
+  Future<bool> isFollowed(String seasonId, {ApiRequestContext? context}) async {
+    _validateId(seasonId);
+    const endpoint = 'pgc_follow_state';
+    final data = await api.requestJson(
+      Uri.https('api.bilibili.com', '/pgc/view/web/season/user/status', {
+        'season_id': seasonId,
+      }),
+      endpoint,
+      context: context,
+    );
+    return switch (data['follow']) {
+      true || 1 || '1' => true,
+      false || 0 || '0' => false,
+      _ => throw const ApiFailure(ApiFailureCategory.protocol, endpoint),
+    };
+  }
+
+  /// One explicit click sends one CSRF form; unknown results need a state read.
+  Future<void> setFollowed(
+    String seasonId,
+    bool followed, {
+    ApiRequestContext? context,
+  }) async {
+    _validateId(seasonId);
+    await api.submitForm(
+      followed ? '/pgc/web/follow/add' : '/pgc/web/follow/del',
+      'pgc_follow_write',
+      {'season_id': seasonId},
+      context: context,
+    );
+  }
 
   Future<ApiPgcSeason> getSeason({
     String? seasonId,

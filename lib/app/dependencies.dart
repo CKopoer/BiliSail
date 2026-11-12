@@ -105,6 +105,8 @@ import '../features/playback/data/api_video_preview_repository.dart';
 import '../features/playback/data/api_playback_history_repository.dart';
 import '../features/playback/data/api_content_playback_repository.dart';
 import '../features/pgc/application/pgc_controller.dart';
+import '../features/pgc/application/pgc_follow_controller.dart';
+import '../features/pgc/data/api_pgc_follow_repository.dart';
 import '../features/pgc/data/api_pgc_repository.dart';
 import '../features/pgc/data/local_pgc_resume_repository.dart';
 import '../features/pgc/application/pgc_danmaku_controller.dart';
@@ -552,6 +554,13 @@ class AppDependencies {
         }),
         pgcRepositoryProvider.overrideWithValue(
           ApiPgcRepository(
+            PgcClient(api),
+            requests,
+            accountScope: () => session.accountScope,
+          ),
+        ),
+        pgcFollowRepositoryProvider.overrideWithValue(
+          ApiPgcFollowRepository(
             PgcClient(api),
             requests,
             accountScope: () => session.accountScope,

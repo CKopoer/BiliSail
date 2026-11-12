@@ -13,6 +13,7 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/comments/application/comments_controller.dart';
 import 'package:bilisail/features/comments/domain/comments_repository.dart';
 import 'package:bilisail/features/pgc/application/pgc_controller.dart';
+import 'package:bilisail/features/pgc/application/pgc_follow_controller.dart';
 import 'package:bilisail/features/pgc/domain/pgc_repository.dart';
 import 'package:bilisail/features/pgc/presentation/pgc_screen.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
@@ -31,6 +32,7 @@ import 'package:go_router/go_router.dart';
 
 import '../support/detached_window_fake.dart';
 import '../support/input_test_app.dart';
+import '../support/pgc_follow_fake.dart';
 
 const _id = VideoId('BV1ab411c7mD');
 const _target = CommentTarget('42', CommentTargetType.video);
@@ -427,6 +429,7 @@ _mount(
         relatedVideosProvider(_id).overrideWith((_) async => []),
         videoTagsProvider(_id).overrideWith((_) async => []),
         pgcRepositoryProvider.overrideWithValue(_Pgc()),
+        pgcFollowRepositoryProvider.overrideWithValue(PgcFollowFake()),
       ],
       child: InputTestApp.router(routerConfig: router),
     ),

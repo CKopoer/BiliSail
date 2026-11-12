@@ -1,5 +1,7 @@
 # API、鉴权与数据边界
 
+2026-11-12 番剧、国创与放映厅接入 Web Cookie GET `/pgc/view/web/season/user/status` 及 CSRF 单次 POST `/pgc/web/follow/add`、`/del`。状态按季编号共享，账号／epoch／取消隔离，写入结果不明须读取核对，来源与验证见[PGC 追番](validation/pgc-follow.md)。
+
 2026-11-11 共享请求管线补齐 Web 设备上下文、安全持久化、风控／验证码识别与端点冷却；热门精选增加 WBI 和页面上下文。业务拒绝不自动重试，账户写入继续单次提交；协议、PiliPlus 来源、离线回归与线上未验收边界见[请求风控](validation/api-risk-control-2026-11-11.md)。
 
 2026-11-11 动态增加管理和应用内投票：Web Cookie／CSRF 单次删除、置顶、可见性、互动和举报，WBI 单次编辑，Web IM 卡片分享与投票参与；游客可见性检查使用独立空 CookieJar。端点、容量、账号隔离与验证见[动态操作菜单与投票](validation/dynamic-operations-and-voting-2026-11-11.md)。
