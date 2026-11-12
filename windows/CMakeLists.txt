@@ -55,7 +55,6 @@ add_subdirectory("runner")
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
-include(../native/fvp/configure.cmake)
 include(flutter/generated_plugins.cmake)
 # The pinned WebView plugin's C++17 WinRT headers use the coroutine TS ABI.
 # VS 2026 rejects that deprecated header unless explicitly acknowledged. Keep
@@ -95,9 +94,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND CMAKE_GENERATOR MATCHES "^Visual St
   endforeach()
 endif()
 
-include(patches/fvp/apply.cmake)
-bilisail_patch_fvp_target()
-list(FILTER PLUGIN_BUNDLED_LIBRARIES EXCLUDE REGEX "[/\\\\]mdk-(braw|r3d|nvjp2k)\\.dll$")
 include(native/media-assets.cmake)
 bilisail_verify_media_assets()
 

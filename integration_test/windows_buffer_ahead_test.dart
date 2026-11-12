@@ -9,15 +9,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  for (final useFvp in [false, true]) {
-    _testBackend(useFvp);
-  }
-}
-
-void _testBackend(bool useFvp) {
-  testWidgets('${useFvp ? 'fvp' : 'media_kit'} rolling two-minute forward buffer', (
-    tester,
-  ) async {
+  testWidgets('media_kit rolling two-minute forward buffer', (tester) async {
     initializePlayerBackend();
     final fixturePath = Platform.environment['BILI_TEST_BUFFER_DIR'];
     expect(fixturePath, isNotNull, reason: 'Use tool/test-windows-buffer.ps1');
@@ -73,7 +65,7 @@ void _testBackend(bool useFvp) {
         // Native buffering can stop reading before the response completes.
       }
     });
-    final PlayerEngine engine = useFvp ? FvpEngine() : MediaKitEngine();
+    final PlayerEngine engine = MediaKitEngine();
     addTearDown(() async {
       await engine.dispose();
       await server.close(force: true);
@@ -123,7 +115,7 @@ void _testBackend(bool useFvp) {
         microseconds: (nativeSeconds * 1000000).round(),
       );
       // The timeline follows native demuxer time, without a byte-cache proxy
-      // or MP4 index. mpv reports its main demuxer; MDK reports the paired min.
+      // or MP4 index. mpv reports its main demuxer.
       expect(nativeAhead, greaterThanOrEqualTo(const Duration(seconds: 119)));
       expect(
         nativeAhead,
@@ -137,7 +129,7 @@ void _testBackend(bool useFvp) {
       );
       expect(snapshot.buffered, lessThan(snapshot.duration));
       debugPrint(
-        'PLAYER_BUFFER backend=${useFvp ? 'fvp' : 'media_kit'} $stage positionMs=${snapshot.position.inMilliseconds} '
+        'PLAYER_BUFFER backend=media_kit $stage positionMs=${snapshot.position.inMilliseconds} '
         'bufferedMs=${snapshot.buffered.inMilliseconds} aheadMs=${ahead.inMilliseconds} nativeAheadMs=${nativeAhead.inMilliseconds}',
       );
       return snapshot.position + nativeAhead;

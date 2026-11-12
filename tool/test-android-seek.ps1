@@ -1,7 +1,6 @@
 param(
   [Parameter(Mandatory)][string]$DeviceId,
   [switch]$SkipReleaseBuild,
-  [ValidateSet('all', 'media_kit', 'fvp')][string]$Backend = 'all',
   [ValidateSet('all', 'renderedTexture', 'directTexture')][string]$Output = 'all',
   [ValidateSet('synchronization', 'cache')][string]$Suite = 'synchronization'
 )
@@ -54,10 +53,9 @@ try {
     '--target', $entrypoint, $AndroidDevelopmentBuildArgument,
     "--build-number=$fixtureBuild", "--dart-define=BILISAIL_RELEASE_VERSION=$fixtureVersion",
     "--dart-define=BILI_TEST_MEDIA_DIR=$fixtureDirectory",
-    "--dart-define=BILI_TEST_BACKEND=$Backend", "--dart-define=BILI_TEST_OUTPUT=$Output")
+    "--dart-define=BILI_TEST_OUTPUT=$Output")
   $fixtureApk = Join-Path $repoRoot 'build/validation/seek-profile.apk'
   Copy-Item -LiteralPath 'build/app/outputs/flutter-apk/app-arm64-v8a-profile.apk' -Destination $fixtureApk
-  Invoke-SeekCheck python @((Join-Path $PSScriptRoot 'verify_android_fvp_sdk.py'), $fixtureApk)
   $fixtureIdentity = Confirm-AndroidDevelopmentApk $fixtureApk 'Profile'
   $fixtureCertificate = Confirm-AndroidApkSigning $fixtureApk ([pscustomobject]@{ Signing = 'temporary-debug-key' })
   if ($fixtureIdentity.VersionCode -ne $restoreIdentity.VersionCode -or $fixtureCertificate -cne $restoreCertificate) {

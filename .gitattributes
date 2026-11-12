@@ -2,5 +2,3 @@ packages/bili_mux/tool/*.sh text eol=lf
 tool/*.sh text eol=lf
 linux/packaging/AppRun text eol=lf
 linux/packaging/flatpak-launcher text eol=lf
-# Preserve the exact upstream SDK header bytes and their recorded SHA-256.
-packages/bili_player/third_party/mdk/*.h -text whitespace=cr-at-eol

@@ -18,76 +18,74 @@ void main() {
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
   for (final online in [false, true]) {
-    for (final fvp in [false, true]) {
-      testWidgets(
-        '${fvp ? 'fvp' : 'media_kit'} silent video opens, advances and seeks online=$online',
-        (tester) async {
-          initializePlayerBackend();
-          final PlayerEngine engine = fvp ? FvpEngine() : MediaKitEngine();
-          final requests = ApiRequests();
-          final api = BiliApiClient(sessionProvider: requests);
-          final session = PlaybackSession(
-            engine: engine,
-            repository: online
-                ? ApiPlaybackRepository(api, requests)
-                : _Repository(
-                    File(
-                      '${Platform.environment['BILI_TEST_MEDIA_DIR']}/video.mp4',
-                    ).uri,
-                  ),
-            progress: _Progress(),
-            accountScope: () => 'guest',
+    testWidgets(
+      'media_kit silent video opens, advances and seeks online=$online',
+      (tester) async {
+        initializePlayerBackend();
+        final PlayerEngine engine = MediaKitEngine();
+        final requests = ApiRequests();
+        final api = BiliApiClient(sessionProvider: requests);
+        final session = PlaybackSession(
+          engine: engine,
+          repository: online
+              ? ApiPlaybackRepository(api, requests)
+              : _Repository(
+                  File(
+                    '${Platform.environment['BILI_TEST_MEDIA_DIR']}/video.mp4',
+                  ).uri,
+                ),
+          progress: _Progress(),
+          accountScope: () => 'guest',
+        );
+        session.configureSettings(
+          AppSettings(
+            autoPlay: true,
+            resumePlayback: false,
+            danmakuEnabled: false,
+            subtitlesEnabled: false,
+          ),
+        );
+        try {
+          await tester.pumpWidget(
+            MaterialApp(home: VideoSurface(engine: engine)),
           );
-          session.configureSettings(
-            AppSettings(
-              autoPlay: true,
-              resumePlayback: false,
-              danmakuEnabled: false,
-              subtitlesEnabled: false,
-            ),
+          await _withFrames(tester, session.open(_detail, _part, volume: 3));
+          expect(session.error, isNull);
+          expect(session.media?.isIntentionallySilent, isTrue);
+          expect(session.media?.audio, isNull);
+          expect(session.canListen, isFalse);
+          final initial = engine.currentSnapshot.position;
+          await tester.pump(const Duration(milliseconds: 750));
+          expect(engine.currentSnapshot.position, greaterThan(initial));
+          final information = await (engine as PlayerInformationSource)
+              .inspectPlaybackInformation();
+          expect(information?.diagnostics?.hasDecodedVideo, isTrue);
+          expect(information?.diagnostics?.hasDecodedAudio, isFalse);
+          expect(information?.diagnostics?.hasVideoOutput, isTrue);
+          await _withFrames(tester, session.pause());
+          await _withFrames(tester, session.seek(const Duration(seconds: 2)));
+          expect(session.error, isNull);
+          expect(engine.currentSnapshot.desiredPlaying, isFalse);
+          expect(
+            (engine.currentSnapshot.position - const Duration(seconds: 2))
+                .abs(),
+            lessThan(const Duration(milliseconds: 400)),
           );
-          try {
-            await tester.pumpWidget(
-              MaterialApp(home: VideoSurface(engine: engine)),
-            );
-            await _withFrames(tester, session.open(_detail, _part, volume: 3));
-            expect(session.error, isNull);
-            expect(session.media?.isIntentionallySilent, isTrue);
-            expect(session.media?.audio, isNull);
-            expect(session.canListen, isFalse);
-            final initial = engine.currentSnapshot.position;
-            await tester.pump(const Duration(milliseconds: 750));
-            expect(engine.currentSnapshot.position, greaterThan(initial));
-            final information = await (engine as PlayerInformationSource)
-                .inspectPlaybackInformation();
-            expect(information?.diagnostics?.hasDecodedVideo, isTrue);
-            expect(information?.diagnostics?.hasDecodedAudio, isFalse);
-            expect(information?.diagnostics?.hasVideoOutput, isTrue);
-            await _withFrames(tester, session.pause());
-            await _withFrames(tester, session.seek(const Duration(seconds: 2)));
-            expect(session.error, isNull);
-            expect(engine.currentSnapshot.desiredPlaying, isFalse);
-            expect(
-              (engine.currentSnapshot.position - const Duration(seconds: 2))
-                  .abs(),
-              lessThan(const Duration(milliseconds: 400)),
-            );
-            await _withFrames(tester, session.play());
-            await tester.pump(const Duration(milliseconds: 500));
-            expect(
-              engine.currentSnapshot.position,
-              greaterThan(const Duration(seconds: 2)),
-            );
-            expect(tester.takeException(), isNull);
-          } finally {
-            await tester.pumpWidget(const SizedBox.shrink());
-            await _withFrames(tester, session.close());
-            api.close();
-          }
-        },
-        skip: online && !const bool.fromEnvironment('BILI_ONLINE_SMOKE'),
-      );
-    }
+          await _withFrames(tester, session.play());
+          await tester.pump(const Duration(milliseconds: 500));
+          expect(
+            engine.currentSnapshot.position,
+            greaterThan(const Duration(seconds: 2)),
+          );
+          expect(tester.takeException(), isNull);
+        } finally {
+          await tester.pumpWidget(const SizedBox.shrink());
+          await _withFrames(tester, session.close());
+          api.close();
+        }
+      },
+      skip: online && !const bool.fromEnvironment('BILI_ONLINE_SMOKE'),
+    );
   }
 }
 

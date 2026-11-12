@@ -15,95 +15,70 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  for (final backend in ['media_kit', 'fvp']) {
-    for (final resume in ['none', 'local', 'cloud']) {
-      testWidgets('$backend EOF replays DASH from zero after $resume resume', (
-        tester,
-      ) async {
-        initializePlayerBackend();
-        final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
-        expect(fixtures, isNotNull, reason: 'Use tool/test-windows-media.ps1');
-        final PlayerEngine engine = backend == 'fvp'
-            ? FvpEngine()
-            : MediaKitEngine();
-        final history = _History();
-        final session = PlaybackSession(
-          engine: engine,
-          repository: _Repository(fixtures!),
-          progress: _Progress(
-            resume == 'local' ? const Duration(seconds: 6) : null,
+  for (final resume in ['none', 'local', 'cloud']) {
+    testWidgets('media_kit EOF replays DASH from zero after $resume resume', (
+      tester,
+    ) async {
+      initializePlayerBackend();
+      final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
+      expect(fixtures, isNotNull, reason: 'Use tool/test-windows-media.ps1');
+      final PlayerEngine engine = MediaKitEngine();
+      final history = _History();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _Repository(fixtures!),
+        progress: _Progress(
+          resume == 'local' ? const Duration(seconds: 6) : null,
+        ),
+        historyRepository: resume == 'cloud' ? history : null,
+        accountScope: () => resume == 'cloud' ? 'user:1' : 'guest',
+      );
+      session.configureSettings(AppSettings(resumePlayback: resume != 'none'));
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(body: VideoSurface(engine: engine)),
           ),
-          historyRepository: resume == 'cloud' ? history : null,
-          accountScope: () => resume == 'cloud' ? 'user:1' : 'guest',
         );
-        session.configureSettings(
-          AppSettings(resumePlayback: resume != 'none'),
-        );
-        try {
-          await tester.pumpWidget(
-            MaterialApp(
-              home: Scaffold(body: VideoSurface(engine: engine)),
-            ),
-          );
-          await session.open(_detail, _part, volume: 0);
-          if (resume != 'none') {
-            await _until(
-              tester,
-              () =>
-                  engine.currentSnapshot.position >= const Duration(seconds: 6),
-            );
-          }
+        await session.open(_detail, _part, volume: 0);
+        if (resume != 'none') {
           await _until(
             tester,
-            () => engine.currentSnapshot.phase == PlaybackPhase.ended,
+            () => engine.currentSnapshot.position >= const Duration(seconds: 6),
           );
-          final generation = engine.currentSnapshot.generation;
-          await session.togglePlaying();
-          expect(session.error, isNull);
-          if (resume == 'cloud') expect(history.reads, 1);
-          await _until(
-            tester,
-            () =>
-                engine.currentSnapshot.phase == PlaybackPhase.playing &&
-                engine.currentSnapshot.position >
-                    const Duration(milliseconds: 250) &&
-                engine.currentSnapshot.position < const Duration(seconds: 3),
-          );
-          expect(engine.currentSnapshot.generation, generation);
-          if (engine is MediaKitEngine) {
-            expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
-            expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
-          }
-          await session.pause();
-          final paused = engine.currentSnapshot.position;
-          await session.togglePlaying();
-          await _until(tester, () => engine.currentSnapshot.position > paused);
-          expect(engine.currentSnapshot.generation, generation);
-          expect(session.error, isNull);
-          if (backend == 'fvp') {
-            await _until(
-              tester,
-              () => engine.currentSnapshot.phase == PlaybackPhase.ended,
-            );
-            await session.play();
-            await _until(
-              tester,
-              () =>
-                  engine.currentSnapshot.phase == PlaybackPhase.playing &&
-                  engine.currentSnapshot.position >
-                      const Duration(milliseconds: 250) &&
-                  engine.currentSnapshot.position < const Duration(seconds: 3),
-            );
-            expect(engine.currentSnapshot.generation, generation);
-            expect(session.error, isNull);
-            if (resume == 'cloud') expect(history.reads, 1);
-          }
-        } finally {
-          await tester.pumpWidget(const SizedBox.shrink());
-          await session.close();
         }
-      });
-    }
+        await _until(
+          tester,
+          () => engine.currentSnapshot.phase == PlaybackPhase.ended,
+        );
+        final generation = engine.currentSnapshot.generation;
+        await session.togglePlaying();
+        expect(session.error, isNull);
+        if (resume == 'cloud') expect(history.reads, 1);
+        await _until(
+          tester,
+          () =>
+              engine.currentSnapshot.phase == PlaybackPhase.playing &&
+              engine.currentSnapshot.position >
+                  const Duration(milliseconds: 250) &&
+              engine.currentSnapshot.position < const Duration(seconds: 3),
+        );
+        expect(engine.currentSnapshot.generation, generation);
+        if (engine is MediaKitEngine) {
+          expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
+          expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
+        }
+        await session.pause();
+        final paused = engine.currentSnapshot.position;
+        await session.togglePlaying();
+        await _until(tester, () => engine.currentSnapshot.position > paused);
+        expect(engine.currentSnapshot.generation, generation);
+        expect(session.error, isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await session.close();
+      }
+    });
   }
 }
 

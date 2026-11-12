@@ -9,14 +9,8 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  for (final useFvp in [false, true]) {
-    _testBackend(useFvp);
-  }
-}
-
-void _testBackend(bool useFvp) {
   testWidgets(
-    '${useFvp ? 'fvp' : 'media_kit'} Windows preview keeps a rolling 5-second buffer and regular opens allow longer buffering',
+    'media_kit Windows preview keeps a rolling 5-second buffer and regular opens allow longer buffering',
     (tester) async {
       initializePlayerBackend();
       final fixturePath = Platform.environment['BILI_TEST_MEDIA_DIR'];
@@ -60,7 +54,7 @@ void _testBackend(bool useFvp) {
           // A stopped native reader can close the response before completion.
         }
       });
-      final PlayerEngine engine = useFvp ? FvpEngine() : MediaKitEngine();
+      final PlayerEngine engine = MediaKitEngine();
       addTearDown(() async {
         await engine.dispose();
         await server.close(force: true);
@@ -113,7 +107,7 @@ void _testBackend(bool useFvp) {
         expect(ahead, lessThanOrEqualTo(const Duration(milliseconds: 5500)));
         expect(snapshot.buffered, lessThan(snapshot.duration));
         debugPrint(
-          'PREVIEW_BUFFER backend=${useFvp ? 'fvp' : 'media_kit'} $stage positionMs=${snapshot.position.inMilliseconds} '
+          'PREVIEW_BUFFER backend=media_kit $stage positionMs=${snapshot.position.inMilliseconds} '
           'bufferedMs=${snapshot.buffered.inMilliseconds} aheadMs=${ahead.inMilliseconds}',
         );
         return snapshot.buffered;
@@ -157,7 +151,7 @@ void _testBackend(bool useFvp) {
         () => engine.currentSnapshot.buffered >= const Duration(seconds: 58),
       );
       debugPrint(
-        'PREVIEW_BUFFER backend=${useFvp ? 'fvp' : 'media_kit'} regular bufferedMs=${engine.currentSnapshot.buffered.inMilliseconds}',
+        'PREVIEW_BUFFER backend=media_kit regular bufferedMs=${engine.currentSnapshot.buffered.inMilliseconds}',
       );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());

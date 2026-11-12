@@ -70,8 +70,6 @@ try {
     & (Join-Path $PSScriptRoot 'test-ios-package-validation.ps1')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_ios_*.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_sqlite_assets.py')
-    Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_android_fvp_sdk.py')
-    Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_windows_fvp_sdk.py')
   }
   # A cold Windows SDK can emit pub bootstrap output before the machine JSON.
   Invoke-Check flutter @('--version')
@@ -93,7 +91,6 @@ try {
   }
   if ($runLint) {
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_windows_media_assets.py')
-    Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_texture_handoff.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_texture_handoff.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_media_libs.py')
     Invoke-Check dart @('format', '--output=none', '--set-exit-if-changed', 'lib', 'test', 'integration_test')

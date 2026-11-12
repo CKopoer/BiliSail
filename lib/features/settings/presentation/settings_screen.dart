@@ -664,13 +664,9 @@ final class _SettingsCategoryPageState
                           Text(
                             s.videoDecoding == VideoDecodingPreference.automatic
                                 ? '优先使用硬件解码，不支持当前编码时回退软件解码。'
-                                : '使用所选后端进行软件解码，可能增加 CPU 占用和耗电。',
+                                : '使用 media_kit 进行软件解码，可能增加 CPU 占用和耗电。',
                             style: const TextStyle(fontSize: 12),
                           ),
-                          _choices('播放后端', s.playbackBackend, const {
-                            PlaybackBackendPreference.mediaKit: 'media_kit（默认）',
-                            PlaybackBackendPreference.fvp: 'fvp（实验性）',
-                          }, controller.setPlaybackBackend),
                           if (defaultTargetPlatform ==
                               TargetPlatform.android) ...[
                             _choices(
@@ -691,7 +687,7 @@ final class _SettingsCategoryPageState
                               s.videoDecoding ==
                                       VideoDecodingPreference.software
                                   ? '软件解码使用兼容渲染；切回硬件解码后恢复已保存的输出偏好。'
-                                  : 'media_kit 和 fvp 均保留弹幕、字幕和控件。解码直出需要设备硬解支持；画面异常时切回兼容渲染。',
+                                  : 'media_kit 保留弹幕、字幕和控件。解码直出需要设备硬解支持；画面异常时切回兼容渲染。',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ],

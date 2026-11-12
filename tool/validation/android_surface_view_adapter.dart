@@ -10,9 +10,8 @@ import 'package:flutter/widgets.dart';
 /// A measurement prototype: open and seek on the validated texture path first,
 /// then pause and transfer only the decoder output to an HC platform view.
 final class AndroidSurfaceViewBenchmark implements VideoCompositionAdapter {
-  AndroidSurfaceViewBenchmark({required this.engine, required this.fvp});
+  AndroidSurfaceViewBenchmark({required this.engine});
   final PlayerEngine engine;
-  final bool fvp;
   final enabled = ValueNotifier(false);
   final ready = Completer<void>();
   static const channel = MethodChannel('dev.bilisail/surface_benchmark');
@@ -49,7 +48,6 @@ final class AndroidSurfaceViewBenchmark implements VideoCompositionAdapter {
                             id: params.id,
                             viewType: 'dev.bilisail/surface_benchmark',
                             layoutDirection: TextDirection.ltr,
-                            creationParams: {'backend': fvp ? 'fvp' : 'mpv'},
                             creationParamsCodec: const StandardMessageCodec(),
                           );
                       controller.addOnPlatformViewCreatedListener(
@@ -61,13 +59,11 @@ final class AndroidSurfaceViewBenchmark implements VideoCompositionAdapter {
                             'surface',
                             {'id': id},
                           );
-                          if (!fvp) {
-                            if (surface == null || surface <= 0) {
-                              throw StateError('Native Surface unavailable');
-                            }
-                            await (engine as MediaKitEngine)
-                                .replaceAndroidSurfaceForBenchmark(surface);
+                          if (surface == null || surface <= 0) {
+                            throw StateError('Native Surface unavailable');
                           }
+                          await (engine as MediaKitEngine)
+                              .replaceAndroidSurfaceForBenchmark(surface);
                           if (!ready.isCompleted) ready.complete();
                         } catch (error, stack) {
                           if (!ready.isCompleted) {

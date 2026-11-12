@@ -102,7 +102,7 @@ void main() {
       expect(first.disposed, false);
       expect(engine.currentSnapshot.position, const Duration(seconds: 4));
       expect(engine.currentSnapshot.generation, 2);
-      key = 'fvp';
+      key = 'replacement';
       first.release = Completer<void>();
       final switching = engine.open(source, const OpenOptions(play: false));
       await Future<void>.delayed(Duration.zero);

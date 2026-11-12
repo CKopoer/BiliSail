@@ -13,7 +13,7 @@ import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
 
 /** Registered only in the independent .test application; never a product mode. */
-class SurfaceBenchmarkViews(private val engine: FlutterEngine, private val fvp: () -> FvpProcessHandler?) : AutoCloseable {
+class SurfaceBenchmarkViews(private val engine: FlutterEngine) : AutoCloseable {
     private val views = mutableMapOf<Int, Output>()
     private val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "dev.bilisail/surface_benchmark")
     private val handler = Handler(Looper.getMainLooper())
@@ -27,8 +27,7 @@ class SurfaceBenchmarkViews(private val engine: FlutterEngine, private val fvp: 
     init {
         engine.platformViewsController.registry.registerViewFactory("dev.bilisail/surface_benchmark", object : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
             override fun create(context: Context, id: Int, args: Any?): PlatformView {
-                val parameters = args as Map<*, *>
-                val output = Output(context, id, parameters["backend"] == "fvp")
+                val output = Output(context, id)
                 views[id] = output
                 return output
             }
@@ -43,7 +42,7 @@ class SurfaceBenchmarkViews(private val engine: FlutterEngine, private val fvp: 
             else output.waitForSurface(result)
         }
     }
-    private inner class Output(context: Context, val id: Int, val isFvp: Boolean) : PlatformView, SurfaceHolder.Callback {
+    private inner class Output(context: Context, val id: Int) : PlatformView, SurfaceHolder.Callback {
         val view = SurfaceView(context)
         var reference = 0L
         var ready = false
@@ -68,15 +67,7 @@ class SurfaceBenchmarkViews(private val engine: FlutterEngine, private val fvp: 
             handler.removeCallbacks(timeout); pending?.success(value); pending = null
         }
         override fun surfaceCreated(holder: SurfaceHolder) {
-            if (isFvp) {
-                val bridge = fvp()
-                if (bridge == null) { pending?.error("unavailable", "播放器不可用", null); return }
-                bridge.bindBenchmarkSurface(holder.surface, object : MethodChannel.Result {
-                    override fun success(value: Any?) = complete(0)
-                    override fun error(code: String, message: String?, details: Any?) { pending?.error(code, message, null); pending = null }
-                    override fun notImplemented() = error("unavailable", "播放器不可用", null)
-                })
-            } else complete(retain(holder.surface))
+            complete(retain(holder.surface))
         }
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
         override fun surfaceDestroyed(holder: SurfaceHolder) { ready = false }

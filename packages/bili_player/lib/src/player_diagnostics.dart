@@ -51,7 +51,6 @@ enum PlayerDiagnosticKind {
   openStarted,
   openReady,
   openStageChanged,
-  nativeProcessExited,
   openTerminated,
   videoInterrupted,
   playbackStalled,
@@ -77,13 +76,7 @@ enum NativeErrorCause {
 
 enum NativeLogSeverity { warning, error, fatal }
 
-enum PlaybackStallReason {
-  playbackClock,
-  audioClock,
-  videoBuffer,
-  audioFrames,
-  videoClock,
-}
+enum PlaybackStallReason { playbackClock, audioClock, videoBuffer, videoClock }
 
 /// The bounded source-open step, without media URLs or native log text.
 enum NativeReadinessStage { tracks, externalAudio, videoDecode, videoOutput }
@@ -161,34 +154,6 @@ final class NativeErrorSummary {
   final String component;
 }
 
-/// Scalar native evidence retained at a terminal read/track event. Packet
-/// queues and decoded endpoints differ from the presentation clock; record all
-/// three so an EOF is distinguishable from a clock watchdog without raw logs.
-final class NativeReadEvidence {
-  const NativeReadEvidence({
-    required this.videoBufferedMs,
-    required this.videoStatus,
-    this.audioPositionMs,
-    this.audioBufferedMs,
-    this.audioDecodedEndMs,
-    this.audioDurationMs,
-    this.audioStatus,
-  });
-  final int videoBufferedMs, videoStatus;
-  final int? audioPositionMs, audioBufferedMs, audioDecodedEndMs;
-  final int? audioDurationMs, audioStatus;
-
-  Map<String, Object?> toJson() => {
-    'videoBufferedMs': videoBufferedMs,
-    'videoStatus': videoStatus,
-    'audioPositionMs': ?audioPositionMs,
-    'audioBufferedMs': ?audioBufferedMs,
-    'audioDecodedEndMs': ?audioDecodedEndMs,
-    'audioDurationMs': ?audioDurationMs,
-    'audioStatus': ?audioStatus,
-  };
-}
-
 final class PlayerDiagnosticEvent {
   PlayerDiagnosticEvent({
     required this.kind,
@@ -202,7 +167,6 @@ final class PlayerDiagnosticEvent {
     this.stallReason,
     this.stalledFor,
     this.audioPosition,
-    this.nativeRead,
   }) : timestamp = DateTime.now().toUtc();
 
   final DateTime timestamp;
@@ -217,7 +181,6 @@ final class PlayerDiagnosticEvent {
   final PlaybackStallReason? stallReason;
   final Duration? stalledFor;
   final Duration? audioPosition;
-  final NativeReadEvidence? nativeRead;
 
   Map<String, Object?> toJson() => {
     'time': timestamp.toIso8601String(),
@@ -234,7 +197,6 @@ final class PlayerDiagnosticEvent {
     'stallReason': ?stallReason?.name,
     'stalledForMs': ?stalledFor?.inMilliseconds,
     'audioPositionMs': ?audioPosition?.inMilliseconds,
-    'nativeRead': ?nativeRead?.toJson(),
     'severity': ?severity?.name,
     'nativeErrorCode': ?nativeErrorCode,
     'readinessStage': ?readinessStage?.name,

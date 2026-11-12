@@ -11,76 +11,72 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  for (final backend in ['media_kit', 'fvp']) {
-    for (final delayed in ['video', 'audio']) {
-      testWidgets('$backend waits for delayed $delayed before autoplay', (
-        tester,
-      ) async {
-        initializePlayerBackend();
-        final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR']!;
-        final video = await File('$fixtures/video.mp4').readAsBytes();
-        final audio = await File('$fixtures/audio.m4a').readAsBytes();
-        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-        final requested = Completer<void>(), release = Completer<void>();
-        server.listen((request) async {
-          try {
-            if (request.uri.path == '/$delayed') {
-              if (!requested.isCompleted) requested.complete();
-              await release.future;
-            }
-            _serveRange(request, request.uri.path == '/video' ? video : audio);
-            await request.response.close();
-          } on SocketException {
-            // Native cancellation may retire an in-flight Range request.
-          } on HttpException {
-            // A retired request may already have sent its headers.
-          }
-        });
-        final PlayerEngine engine = backend == 'fvp'
-            ? FvpEngine()
-            : MediaKitEngine();
-        final output =
-            (engine as VideoOutputSource).videoOutput as VideoFrameReadiness;
-        MediaTrack track(String name) => MediaTrack(
-          uri: Uri.parse('http://127.0.0.1:${server.port}/$name'),
-          requestPolicy: MediaRequestPolicy(),
-        );
+  for (final delayed in ['video', 'audio']) {
+    testWidgets('media_kit waits for delayed $delayed before autoplay', (
+      tester,
+    ) async {
+      initializePlayerBackend();
+      final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR']!;
+      final video = await File('$fixtures/video.mp4').readAsBytes();
+      final audio = await File('$fixtures/audio.m4a').readAsBytes();
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final requested = Completer<void>(), release = Completer<void>();
+      server.listen((request) async {
         try {
-          await tester.pumpWidget(
-            MaterialApp(home: VideoSurface(engine: engine)),
-          );
-          var done = false;
-          final opening = engine
-              .open(
-                DashPairSource(video: track('video'), audio: track('audio')),
-                const OpenOptions(play: true, volume: 0),
-              )
-              .whenComplete(() => done = true);
-          await _until(tester, () => requested.isCompleted);
-          await tester.pump(const Duration(milliseconds: 400));
-          expect(done, false);
-          expect(engine.currentSnapshot.phase, isNot(PlaybackPhase.playing));
-          release.complete();
-          await _withFrames(tester, opening);
-          await _until(tester, () => output.frameReady.value);
-          expect(engine.currentSnapshot.desiredPlaying, true);
-          await _until(
-            tester,
-            () => engine.currentSnapshot.position > Duration.zero,
-          );
-          final information = await (engine as PlayerInformationSource)
-              .inspectPlaybackInformation();
-          expect(information?.diagnostics?.hasDecodedAudio, true);
-          expect(information?.diagnostics?.hasDecodedVideo, true);
-          expect(tester.takeException(), isNull);
-        } finally {
-          if (!release.isCompleted) release.complete();
-          await _withFrames(tester, engine.dispose());
-          await tester.pumpWidget(const SizedBox.shrink());
-          await server.close(force: true);
+          if (request.uri.path == '/$delayed') {
+            if (!requested.isCompleted) requested.complete();
+            await release.future;
+          }
+          _serveRange(request, request.uri.path == '/video' ? video : audio);
+          await request.response.close();
+        } on SocketException {
+          // Native cancellation may retire an in-flight Range request.
+        } on HttpException {
+          // A retired request may already have sent its headers.
         }
       });
-    }
+      final PlayerEngine engine = MediaKitEngine();
+      final output =
+          (engine as VideoOutputSource).videoOutput as VideoFrameReadiness;
+      MediaTrack track(String name) => MediaTrack(
+        uri: Uri.parse('http://127.0.0.1:${server.port}/$name'),
+        requestPolicy: MediaRequestPolicy(),
+      );
+      try {
+        await tester.pumpWidget(
+          MaterialApp(home: VideoSurface(engine: engine)),
+        );
+        var done = false;
+        final opening = engine
+            .open(
+              DashPairSource(video: track('video'), audio: track('audio')),
+              const OpenOptions(play: true, volume: 0),
+            )
+            .whenComplete(() => done = true);
+        await _until(tester, () => requested.isCompleted);
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(done, false);
+        expect(engine.currentSnapshot.phase, isNot(PlaybackPhase.playing));
+        release.complete();
+        await _withFrames(tester, opening);
+        await _until(tester, () => output.frameReady.value);
+        expect(engine.currentSnapshot.desiredPlaying, true);
+        await _until(
+          tester,
+          () => engine.currentSnapshot.position > Duration.zero,
+        );
+        final information = await (engine as PlayerInformationSource)
+            .inspectPlaybackInformation();
+        expect(information?.diagnostics?.hasDecodedAudio, true);
+        expect(information?.diagnostics?.hasDecodedVideo, true);
+        expect(tester.takeException(), isNull);
+      } finally {
+        if (!release.isCompleted) release.complete();
+        await _withFrames(tester, engine.dispose());
+        await tester.pumpWidget(const SizedBox.shrink());
+        await server.close(force: true);
+      }
+    });
   }
 
   testWidgets('Windows terminal load failure immediately permits a backup', (

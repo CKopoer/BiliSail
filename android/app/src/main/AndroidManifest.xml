@@ -66,11 +66,6 @@
             android:exported="false"
             android:grantUriPermissions="true" />
         <service
-            android:name=".FvpPlaybackService"
-            android:process=":fvp_player"
-            android:exported="false"
-            android:stopWithTask="true" />
-        <service
             android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true">

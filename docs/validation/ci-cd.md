@@ -1,5 +1,7 @@
 # GitHub Actions CI/CD 与安装包
 
+2026-11-12：已移除 fvp／MDK，当前仅使用 media_kit。历史文档中的双后端实现、SDK、命令及测试记录保留当时事实，不再作为现行入口；清理与设置兼容见[移除记录](fvp-removal-2026-11-12.md)。
+
 更新日期：2026-11-09。配置覆盖 Android arm64、Windows x64／ARM64、macOS arm64／Intel x64、iOS arm64、Linux x64；iOS／Linux 的远端构建进展与设备未验项详见[接入记录](ios-linux.md)，Intel macOS 的新增配置与验证边界见下文。本地验证结果与远端、设备未测项分别记录。此流程交付预览构建，不表示各平台验收或 M5 正式发行完成。
 
 ## 入口与分工

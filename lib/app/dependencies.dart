@@ -316,21 +316,10 @@ class AppDependencies {
       ),
     );
     PlayerEngine createPlayerEngine() => ConfigurablePlayerEngine.select(
-      selectEngine: () async {
-        final saved = await settings.load();
-        return PlayerEngineSelection(
-          saved.playbackBackend,
-          () async => switch (saved.playbackBackend) {
-            PlaybackBackendPreference.mediaKit => MediaKitEngine(
-              onDiagnostic: playbackLog?.record,
-            ),
-            PlaybackBackendPreference.fvp => FvpEngine(
-              onDiagnostic: (event) =>
-                  playbackLog?.record(event, backend: 'fvp'),
-            ),
-          },
-        );
-      },
+      selectEngine: () async => PlayerEngineSelection(
+        PlaybackBackendPreference.mediaKit,
+        () async => MediaKitEngine(onDiagnostic: playbackLog?.record),
+      ),
     );
     final cardPreviews = VideoCardPreviewPlayback(
       createEngine: createPlayerEngine,

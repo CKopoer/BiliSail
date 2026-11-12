@@ -69,8 +69,7 @@ Future<void> main() async {
     for (final row in rows) {
       final config = Map<String, Object?>.from(row as Map);
       final name = config['name'] as String;
-      final fvp = config['backend'] == 'fvp';
-      if (!{'mpv', 'media_kit', 'fvp'}.contains(config['backend'])) {
+      if (!{'mpv', 'media_kit'}.contains(config['backend'])) {
         throw StateError('Unsupported benchmark backend or output');
       }
       final direct = config['direct'] == true;
@@ -90,7 +89,7 @@ Future<void> main() async {
         DeviceOrientation.landscapeLeft,
       ]);
       await Future<void>.delayed(const Duration(seconds: 1));
-      final PlayerEngine engine = fvp ? FvpEngine() : MediaKitEngine();
+      final PlayerEngine engine = MediaKitEngine();
       final infoSource = engine as PlayerInformationSource;
       final failures = engine.failures.listen((failure) {
         unawaited(
@@ -102,7 +101,7 @@ Future<void> main() async {
           }).catchError((Object _) {}),
         );
       });
-      final composition = AndroidSurfaceViewBenchmark(engine: engine, fvp: fvp);
+      final composition = AndroidSurfaceViewBenchmark(engine: engine);
       final session = PlaybackSession(
         engine: engine,
         repository: Android4kRepository(
