@@ -296,7 +296,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  for (final width in [180.0, 260.0, 320.0]) {
+  for (final width in [180.0, 220.0, 260.0, 299.0, 320.0]) {
     testWidgets('decoration image and fan serial fit $width pixel header', (
       tester,
     ) async {
@@ -355,24 +355,22 @@ void main() {
       final decorationRect = tester.getRect(
         find.byType(CommentAuthorDecoration),
       );
-      expect(decorationRect.height, 52);
-      expect(decorationRect.width, inInclusiveRange(112, 152));
+      expect(decorationRect.height, lessThanOrEqualTo(52));
+      expect(decorationRect.width, lessThanOrEqualTo(width * .4));
       expect(decorationRect.right, width);
       expect(
         tester.getRect(find.text('NO.\n0014931')).right,
         decorationRect.right,
       );
-      if (width >= 300) {
-        expect(
-          decorationRect.left,
-          greaterThan(tester.getRect(find.byType(BiliLevelBadge)).right),
-        );
-      } else {
-        expect(
-          decorationRect.top,
-          greaterThan(tester.getRect(find.text('IP属地：内蒙古')).bottom),
-        );
-      }
+      expect(decorationRect.top, tester.getRect(find.text(comment.author)).top);
+      expect(
+        decorationRect.left,
+        greaterThan(tester.getRect(find.byType(BiliLevelBadge)).right),
+      );
+      expect(
+        decorationRect.left,
+        greaterThan(tester.getRect(find.text(comment.author)).right),
+      );
       expect(tester.takeException(), isNull);
     });
   }
