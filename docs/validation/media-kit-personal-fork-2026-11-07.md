@@ -1,5 +1,7 @@
 # 官方基线与个人媒体 fork 统一维护
 
+2026-11-13 iOS 后续：媒体包统一固定到 `ba953612ebfa83a4590f374c78a1ba479e1ea1df`，修复每帧输出分配/纹理导入失败的强制解包、无效 FBO 后退出进程、CoreVideo 纹理释放和 mpv 参数指针作用域。原 SDK 资产不变；受控 Swift 回归通过，iOS SDK 编译与真机闪退接受度未验证，见[iOS 专项](ios-video-playback-crash-2026-11-13.md)。下文固定引用按各次验证的历史状态保留。
+
 2026-11-09 后续：现行媒体依赖统一固定到 `9858a8db83faf8bcfa39a8bfbc02dde9a2e92572`，替换 Windows ARM64 中禁用 OpenGL 的 SDK，修复渲染降级与初始化错误传播；其他平台资产保持原内容。来源、自动检查和未构建／实机边界见 [ARM64 闪退修复](windows-arm64-preview-crash-2026-11-09.md)。
 
 2026-11-08 Apple／Linux 后续：当时源码统一固定到 `b1c7e4336140d8c4550c1e963365da8edfe56d0a`，修复 Apple 完成帧发布与旧缓冲重用、Linux GPU 跨 context 同步和软件帧交付；Windows 修复及全部 SDK 资产继续沿用。实现与未测项见[跨平台纹理交接](apple-linux-texture-handoff-2026-11-08.md)。以下各条保留对应专项当时的固定引用。

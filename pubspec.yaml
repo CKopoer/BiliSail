@@ -52,42 +52,42 @@ dependency_overrides:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit
-      ref: eaae0273a93fbd23b24e3c951b99efd9b73e702b
+      ref: ba953612ebfa83a4590f374c78a1ba479e1ea1df
   media_kit_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit_video
-      ref: eaae0273a93fbd23b24e3c951b99efd9b73e702b
+      ref: ba953612ebfa83a4590f374c78a1ba479e1ea1df
   media_kit_libs_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/universal/media_kit_libs_video
-      ref: eaae0273a93fbd23b24e3c951b99efd9b73e702b
+      ref: ba953612ebfa83a4590f374c78a1ba479e1ea1df
   media_kit_libs_android_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/android/media_kit_libs_android_video
-      ref: eaae0273a93fbd23b24e3c951b99efd9b73e702b
+      ref: ba953612ebfa83a4590f374c78a1ba479e1ea1df
   media_kit_libs_windows_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/windows/media_kit_libs_windows_video
-      ref: eaae0273a93fbd23b24e3c951b99efd9b73e702b
+      ref: ba953612ebfa83a4590f374c78a1ba479e1ea1df
   media_kit_libs_macos_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/macos/media_kit_libs_macos_video
-      ref: eaae0273a93fbd23b24e3c951b99efd9b73e702b
+      ref: ba953612ebfa83a4590f374c78a1ba479e1ea1df
   media_kit_libs_ios_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/ios/media_kit_libs_ios_video
-      ref: eaae0273a93fbd23b24e3c951b99efd9b73e702b
+      ref: ba953612ebfa83a4590f374c78a1ba479e1ea1df
   media_kit_libs_linux:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: libs/linux/media_kit_libs_linux
-      ref: eaae0273a93fbd23b24e3c951b99efd9b73e702b
+      ref: ba953612ebfa83a4590f374c78a1ba479e1ea1df
 
 dev_dependencies:
   flutter_driver:

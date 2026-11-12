@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [iOS 播放期间闪退](validation/ios-video-playback-crash-2026-11-13.md) | 输出帧分配与失败退出、CoreVideo 生命周期、PiliPlus 精确依赖对照、受控 Swift 回归与实机边界 |
 | [移除 fvp 播放后端](validation/fvp-removal-2026-11-12.md) | 统一 media_kit、旧设置回退、原生／依赖／脚本清理及验证边界 |
 | [番剧、国创与放映厅追番](validation/pgc-follow.md) | 追番／追剧与取消、登录和状态核对、账号隔离及离线验证 |
 | [视频合集定位与播放顺序](validation/video-collection-controls-2026-11-12.md) | 顶部／底部／当前分 P 定位、显示排序与倒序播放、队列边界及回归验证 |
