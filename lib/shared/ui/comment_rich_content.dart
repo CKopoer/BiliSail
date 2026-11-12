@@ -341,35 +341,30 @@ class CommentAuthorHeader extends StatelessWidget {
     if (c.decorationImageUrl == null) return identity;
     final decoration = CommentAuthorDecoration(comment: c);
     return LayoutBuilder(
-      builder: (context, constraints) => constraints.maxWidth >= 300
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Let author badges use the decoration's spare transparent
-                // padding, while keeping at least 112px for its art and serial.
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: constraints.maxWidth - 112 - 8,
-                  ),
-                  child: identity,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: decoration,
-                  ),
-                ),
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                identity,
-                const SizedBox(height: 2),
-                Align(alignment: Alignment.centerRight, child: decoration),
-              ],
+      builder: (context, constraints) {
+        final spacing = constraints.maxWidth.clamp(0.0, 8.0);
+        final decorationWidth = ((constraints.maxWidth - spacing) * .4).clamp(
+          0.0,
+          112.0,
+        );
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: identity),
+            SizedBox(width: spacing),
+            // Keep the art beside the avatar and leave most of the row for
+            // readable author metadata, scaling the art and serial together.
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: decorationWidth),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.topRight,
+                child: decoration,
+              ),
             ),
+          ],
+        );
+      },
     );
   }
 }
@@ -393,7 +388,7 @@ class CommentAuthorDecoration extends StatelessWidget {
       image: true,
       excludeSemantics: true,
       child: SizedBox(
-        width: 152,
+        width: 112,
         height: 52,
         child: Stack(
           // Wide canvases include transparent left margins. Keep their natural

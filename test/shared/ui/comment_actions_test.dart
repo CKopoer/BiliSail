@@ -178,12 +178,11 @@ void main() {
           expect(author.top, closeTo(avatar.top, .01));
           expect(metadata.top, greaterThanOrEqualTo(author.bottom));
           expect(body.top, greaterThanOrEqualTo(header.bottom + 8));
-          expect(decoration.height, 52);
-          if (width >= 390) {
-            expect(decoration.top, closeTo(avatar.top, .01));
-          } else {
-            expect(decoration.top, greaterThan(metadata.bottom));
-          }
+          expect(decoration.height, lessThanOrEqualTo(52));
+          expect(decoration.width, lessThanOrEqualTo(header.width * .4));
+          expect(decoration.height / decoration.width, closeTo(52 / 112, .01));
+          expect(decoration.top, closeTo(avatar.top, .01));
+          expect(decoration.left, greaterThan(author.right));
           expect(tester.takeException(), isNull);
         },
       );
