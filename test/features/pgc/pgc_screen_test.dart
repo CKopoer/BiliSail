@@ -16,6 +16,7 @@ import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/pgc/application/pgc_controller.dart';
+import 'package:bilisail/features/pgc/application/pgc_follow_controller.dart';
 import 'package:bilisail/features/pgc/domain/pgc_repository.dart';
 import 'package:bilisail/features/pgc/presentation/pgc_episode_panel.dart';
 import 'package:bilisail/features/pgc/presentation/pgc_screen.dart';
@@ -28,6 +29,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../support/pgc_follow_fake.dart';
 
 final _season = PgcSeason(
   id: const PgcSeasonId('s1'),
@@ -62,6 +65,64 @@ final _season = PgcSeason(
 );
 
 void main() {
+  testWidgets(
+    'episode entry follows its resolved season without recreating playback',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1280, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final auth = _Auth()
+        ..emit(const AuthState(status: AuthStatus.signedIn, mid: '7'));
+      addTearDown(auth.dispose);
+      final follows = PgcFollowFake();
+      var builds = 0;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(auth),
+            pgcRepositoryProvider.overrideWithValue(_Repo()),
+            pgcFollowRepositoryProvider.overrideWithValue(follows),
+          ],
+          child: InputTestApp(
+            home: Scaffold(
+              body: PgcScreen(
+                episodeId: 'e2',
+                playerBuilder: (_, _, episode) {
+                  builds++;
+                  return Text('播放 ${episode.episodeId}');
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('播放 e2'), findsOneWidget);
+      expect(follows.reads, [const PgcSeasonId('s1')]);
+      final button = find.byKey(const ValueKey('pgc-follow-button'));
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(find.text('已追番'), findsOneWidget);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(follows.writes, [
+        (const PgcSeasonId('s1'), true),
+        (const PgcSeasonId('s1'), false),
+      ]);
+      expect(builds, 1);
+      expect(find.text('播放 e2'), findsOneWidget);
+      follows.followed = true;
+      await tester.sendKeyEvent(LogicalKeyboardKey.f5);
+      await tester.pumpAndSettle();
+      expect(find.text('已追番'), findsOneWidget);
+      expect(follows.reads, hasLength(2));
+      expect(follows.writes, hasLength(2));
+      expect(builds, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('portrait PGC shares expansion and scroll collapse with video', (
     tester,
   ) async {

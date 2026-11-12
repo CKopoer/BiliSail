@@ -441,6 +441,8 @@ final class BiliApiClient {
       '/x/v3/fav/folder/unfav',
       '/x/v3/fav/season/unfav',
       '/x/v3/fav/season/fav',
+      '/pgc/web/follow/add',
+      '/pgc/web/follow/del',
       '/x/v3/fav/folder/edit',
       '/x/v2/history/toview/add',
       '/x/v2/history/toview/del',

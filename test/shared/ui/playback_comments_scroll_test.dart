@@ -7,6 +7,7 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/comments/application/comments_controller.dart';
 import 'package:bilisail/features/comments/domain/comments_repository.dart';
 import 'package:bilisail/features/pgc/application/pgc_controller.dart';
+import 'package:bilisail/features/pgc/application/pgc_follow_controller.dart';
 import 'package:bilisail/features/pgc/domain/pgc_repository.dart';
 import 'package:bilisail/features/pgc/presentation/pgc_screen.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
@@ -21,6 +22,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/input_test_app.dart';
+import '../../support/pgc_follow_fake.dart';
 import '../../support/playback_layout_session_fake.dart';
 
 const _target = CommentTarget('42', CommentTargetType.video);
@@ -286,6 +288,7 @@ Future<ProviderContainer> _mount(
       overrides: [
         playbackSessionProvider.overrideWithValue(session),
         authControllerProvider.overrideWith(() => _Guest(signedIn)),
+        pgcFollowRepositoryProvider.overrideWithValue(PgcFollowFake()),
         videoCommentsRepositoryProvider.overrideWithValue(
           comments ?? _Comments(),
         ),
