@@ -436,14 +436,13 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                         video.collection?.id
                                     ? null
                                     : video.collection?.id;
+                                if (_canReverseCollection(video)) {
+                                  _reversedCollectionId =
+                                      _reversedDisplayCollectionId;
+                                }
                               }),
                               onTogglePlaybackOrder:
-                                  widget.queue == null &&
-                                      video.collection?.entries.any(
-                                            (entry) =>
-                                                entry.id == video.summary.id,
-                                          ) ==
-                                          true
+                                  _canReverseCollection(video)
                                   ? () => setState(() {
                                       _reversedCollectionId =
                                           _collectionReversed(video)
@@ -688,6 +687,11 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     );
     widget.onAdvanceVideo?.call(next.id, null);
   }
+
+  bool _canReverseCollection(VideoDetail video) =>
+      widget.queue == null &&
+      (video.collection?.entries.any((entry) => entry.id == video.summary.id) ??
+          false);
 
   bool _collectionReversed(VideoDetail video) =>
       _reversedCollectionId != null &&

@@ -138,9 +138,12 @@ void main() {
     },
   );
 
-  for (final mode in [PlaybackMode.continuous, PlaybackMode.listLoop]) {
+  for (final (mode, control) in [
+    for (final mode in [PlaybackMode.continuous, PlaybackMode.listLoop])
+      for (final control in ['倒序播放', '倒序']) (mode, control),
+  ]) {
     testWidgets(
-      'reverse collection uses $mode without reopening the current source',
+      'reverse collection uses $mode via $control without reopening the current source',
       (tester) async {
         final engine = _Engine();
         final session = _session(engine);
@@ -194,16 +197,37 @@ void main() {
           find.byType(PlaybackPageCommands),
         );
         final opens = engine.opens;
-        await tester.ensureVisible(find.byTooltip('倒序播放'));
-        await tester.tap(find.byTooltip('倒序播放'));
+        await tester.ensureVisible(find.byTooltip(control));
+        await tester.tap(find.byTooltip(control));
         await _frames(tester);
         expect(engine.opens, opens);
         expect(session.detail?.summary.id, _b);
         commands.previousPart();
         await _frames(tester);
         expect(engine.opens, opens);
-        await tester.tap(find.byTooltip('倒序'));
-        await _frames(tester);
+        if (control == '倒序播放') {
+          await tester.tap(find.byTooltip('倒序'));
+          await _frames(tester);
+        } else {
+          expect(
+            tester
+                .widget<PlaybackPageCommands>(find.byType(PlaybackPageCommands))
+                .hasNext,
+            isTrue,
+          );
+          await tester.tap(find.byTooltip('顺序'));
+          await _frames(tester);
+          expect(
+            tester
+                .widget<PlaybackPageCommands>(find.byType(PlaybackPageCommands))
+                .hasNext,
+            isFalse,
+          );
+          expect(find.byTooltip('倒序播放'), findsOneWidget);
+          await tester.tap(find.byTooltip('倒序'));
+          await _frames(tester);
+          expect(engine.opens, opens);
+        }
         engine.end();
         await _frames(tester);
         expect(session.detail?.summary.id, _a);
