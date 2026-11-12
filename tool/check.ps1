@@ -31,9 +31,26 @@ function Invoke-Check([string]$Executable, [string[]]$Parameters) {
   }
 }
 
+function Invoke-PubCheck([string]$Executable, [string[]]$Parameters) {
+  $checkCanonical = $runLint -and $EnforceLockfile
+  if ($checkCanonical) {
+    $lockHash = (Get-FileHash -LiteralPath 'pubspec.lock' -Algorithm SHA256).Hash
+  }
+  Invoke-Check $Executable $Parameters
+  if ($checkCanonical) {
+    # Flutter builds rerun ordinary Pub to regenerate plugin registrants.
+    # Strict resolution alone accepts noncanonical YAML without rewriting it.
+    Invoke-Check $Executable @('pub', 'get')
+    if ((Get-FileHash -LiteralPath 'pubspec.lock' -Algorithm SHA256).Hash -ne $lockHash) {
+      throw 'pub get changed pubspec.lock. Regenerate it with Flutter 3.47.6 / Dart 3.13.5 and commit the generated lockfile.'
+    }
+  }
+}
+
 Push-Location $repoRoot
 try {
   if ($runLint) {
+    & (Join-Path $PSScriptRoot 'test-pub-lockfile.ps1')
     & (Join-Path $PSScriptRoot 'test-ci-build-plan.ps1')
     & (Join-Path $PSScriptRoot 'test-build-dependency-command.ps1')
     & (Join-Path $PSScriptRoot 'test-build-optimization.ps1')
@@ -63,14 +80,14 @@ try {
   $pubArgs = @('pub', 'get')
   if ($EnforceLockfile) { $pubArgs += '--enforce-lockfile' }
   if (!$SkipPub) {
-    if ($runLint -or $runRootTests) { Invoke-Check flutter $pubArgs }
+    if ($runLint -or $runRootTests) { Invoke-PubCheck flutter $pubArgs }
     # Root analysis scans every package, including its tests and dev dependencies.
     $pubPackages = if ($runLint) { $packages } elseif ($runPackageTests) { $testPackages } else { @() }
     foreach ($package in $pubPackages) {
       Push-Location (Join-Path $repoRoot "packages/$package")
       try {
         $runner = if ($package -eq 'bili_api') { 'dart' } else { 'flutter' }
-        Invoke-Check $runner $pubArgs
+        Invoke-PubCheck $runner $pubArgs
       } finally { Pop-Location }
     }
   }
