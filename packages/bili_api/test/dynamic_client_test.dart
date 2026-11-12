@@ -57,6 +57,101 @@ void main() {
   );
 
   test(
+    'reservation and cancellation preserve IDs, query CSRF and server updates',
+    () async {
+      final transport = _Transport()
+        ..result = _response({
+          'final_btn_status': 2,
+          'reserve_update': 123,
+          'desc_update': '123人预约',
+        });
+      final client = DynamicClient(api(transport));
+      final result = await client.reserve(id, '9007199254740993125', 1, 100);
+      expect(transport.uri?.path, '/x/dynamic/feed/reserve/click');
+      expect(transport.uri?.queryParameters, {'csrf': 'fixture-csrf'});
+      expect(transport.jsonBody, {
+        'reserve_id': '9007199254740993125',
+        'cur_btn_status': 1,
+        'dynamic_id_str': id,
+        'reserve_total': 100,
+      });
+      expect(
+        (result.status, result.total, result.description),
+        (2, 123, '123人预约'),
+      );
+      transport.result = _response({
+        'final_btn_status': 1,
+        'reserve_update': 122,
+        'desc_update': '122人预约',
+      });
+      final cancelled = await client.reserve(
+        id,
+        '9007199254740993125',
+        result.status,
+        result.total,
+      );
+      expect(transport.jsonBody['cur_btn_status'], 2);
+      expect(transport.jsonBody['reserve_total'], 123);
+      expect(cancelled.status, 1);
+      expect(transport.posts, 2);
+    },
+  );
+
+  test(
+    'reservation rejects guests and invalid parameters before sending',
+    () async {
+      final transport = _Transport();
+      await expectLater(
+        DynamicClient(
+          BiliApiClient(transport: transport),
+        ).reserve(id, '12', 1, 0),
+        throwsA(isA<ApiFailure>()),
+      );
+      final client = DynamicClient(api(transport));
+      for (final args in [
+        ('1.2', '12', 1, 0),
+        (id, '0', 1, 0),
+        (id, '12', -1, 0),
+        (id, '12', 1, -1),
+      ]) {
+        await expectLater(
+          client.reserve(args.$1, args.$2, args.$3, args.$4),
+          throwsArgumentError,
+        );
+      }
+      expect(transport.posts, 0);
+    },
+  );
+
+  test(
+    'unknown and malformed reservation responses are never replayed',
+    () async {
+      final transport = _Transport();
+      final client = DynamicClient(api(transport));
+      for (final data in [
+        null,
+        {},
+        {'final_btn_status': 2, 'reserve_update': 1},
+        {'final_btn_status': 2.0, 'reserve_update': 1, 'desc_update': ''},
+        {'final_btn_status': 2, 'reserve_update': -1, 'desc_update': ''},
+      ]) {
+        transport.result = _response(data);
+        await expectLater(
+          client.reserve(id, '12', 1, 0),
+          throwsA(isA<ApiFailure>()),
+        );
+      }
+      expect(transport.posts, 5);
+      transport.result = _response(null, status: 503);
+      await expectLater(
+        client.reserve(id, '12', 1, 0),
+        throwsA(isA<ApiFailure>()),
+      );
+      expect(transport.posts, 6);
+    },
+  );
+
+  test(
     'missing credentials, invalid IDs/types and unsupported paths send nothing',
     () async {
       final transport = _Transport();

@@ -603,6 +603,7 @@ final class BiliApiClient {
   }) {
     if (!const {
       '/x/dynamic/feed/dyn/thumb',
+      '/x/dynamic/feed/reserve/click',
       '/x/dynamic/feed/create/dyn',
       '/x/vote/create',
       '/x/vote/do_vote',

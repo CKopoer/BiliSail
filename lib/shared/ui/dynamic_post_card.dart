@@ -33,6 +33,7 @@ class DynamicPostCard extends StatelessWidget {
     this.busy = false,
     this.expansionState,
     this.inDetail = false,
+    this.contentCardBuilder,
   }) : _layoutOnly = false;
 
   /// Uses the same layout without image requests or account state subscriptions.
@@ -54,7 +55,8 @@ class DynamicPostCard extends StatelessWidget {
        liked = null,
        likeCount = null,
        repostCount = null,
-       busy = false;
+       busy = false,
+       contentCardBuilder = null;
 
   final bool _layoutOnly;
   final bool inDetail;
@@ -69,6 +71,7 @@ class DynamicPostCard extends StatelessWidget {
   final bool? liked;
   final int? likeCount, repostCount;
   final bool busy;
+  final Widget Function(DynamicPost, DynamicContentCard)? contentCardBuilder;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -83,6 +86,7 @@ class DynamicPostCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: _PostBody(
           post: post,
+          contentCardBuilder: contentCardBuilder,
           inDetail: inDetail,
           onOpenDetail: onOpenDetail,
           layoutOnly: _layoutOnly,
@@ -120,6 +124,7 @@ class _PostBody extends StatelessWidget {
     this.layoutOnly = false,
     this.inDetail = false,
     this.expansionState,
+    this.contentCardBuilder,
   });
   final DynamicPost post;
   final ValueChanged<UserId>? onOpenUser;
@@ -131,6 +136,7 @@ class _PostBody extends StatelessWidget {
   final Widget? actions;
   final bool layoutOnly, inDetail;
   final DynamicPostExpansionState? expansionState;
+  final Widget Function(DynamicPost, DynamicContentCard)? contentCardBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -434,11 +440,12 @@ class _PostBody extends StatelessWidget {
         ],
         for (final card in post.contentCards) ...[
           const SizedBox(height: 10),
-          DynamicContentCardView(
-            card: card,
-            onOpenLink: onOpenLink,
-            layoutOnly: layoutOnly,
-          ),
+          contentCardBuilder?.call(post, card) ??
+              DynamicContentCardView(
+                card: card,
+                onOpenLink: onOpenLink,
+                layoutOnly: layoutOnly,
+              ),
         ],
         if (post.notice.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -516,6 +523,7 @@ class _PostBody extends StatelessWidget {
             ),
             child: _PostBody(
               post: original,
+              contentCardBuilder: contentCardBuilder,
               inDetail: inDetail,
               layoutOnly: layoutOnly,
               expansionState: expansionState,

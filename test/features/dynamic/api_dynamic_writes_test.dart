@@ -8,10 +8,13 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/local_image.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/dynamic/data/api_dynamic_composer_repository.dart';
+import 'package:bilisail/features/dynamic/data/api_dynamic_repository.dart';
 import 'package:bilisail/features/dynamic/data/api_dynamic_topic_repository.dart';
 import 'package:bilisail/features/dynamic/domain/dynamic_repository.dart';
 import 'package:bilisail/features/dynamic/domain/dynamic_draft.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../support/dynamic_reservation_fakes.dart';
 
 class _Transport
     implements
@@ -22,18 +25,14 @@ class _Transport
   int status = 503, code = 0, posts = 0;
   Completer<ApiHttpResponse>? pending;
   Map<String, Object?>? json;
+  Object? data = const {'dyn_id_str': '123'};
   Future<ApiHttpResponse> result() async {
     posts++;
     return pending?.future ??
         ApiHttpResponse(
           status,
           Uint8List.fromList(
-            utf8.encode(
-              jsonEncode({
-                'code': code,
-                'data': {'dyn_id_str': '123'},
-              }),
-            ),
+            utf8.encode(jsonEncode({'code': code, 'data': data})),
           ),
           {},
         );
@@ -122,6 +121,40 @@ void main() {
     );
     await expectLater(
       topic.report('12', '广告', RequestCancellation()),
+      throwsA(isA<DynamicWriteUncertain>()),
+    );
+    expect(transport.posts, 3);
+  });
+
+  test('reservation repository maps server updates and exposes unknown results without replay', () async {
+    final repository = ApiDynamicRepository(
+      DynamicClient(composer.client.api),
+      requests,
+      accountScope: () => 'user:7',
+    );
+    await expectLater(
+      repository.reserve('100', reservation, RequestCancellation()),
+      throwsA(isA<DynamicWriteUncertain>()),
+    );
+    expect(transport.posts, 1);
+    transport.status = 200;
+    transport.data = {
+      'final_btn_status': 2,
+      'reserve_update': 99,
+      'desc_update': '99人预约',
+    };
+    final result = await repository.reserve(
+      '100',
+      reservation,
+      RequestCancellation(),
+    );
+    expect(
+      (result.id, result.checked, result.total, result.description),
+      (reservation.id, true, 99, '99人预约'),
+    );
+    transport.data = {'final_btn_status': 1};
+    await expectLater(
+      repository.reserve('100', result, RequestCancellation()),
       throwsA(isA<DynamicWriteUncertain>()),
     );
     expect(transport.posts, 3);
