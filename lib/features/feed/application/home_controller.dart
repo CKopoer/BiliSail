@@ -5,6 +5,8 @@ import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/user.dart';
 import '../domain/dynamic_author.dart';
+import '../../../core/network/api_requests.dart';
+import '../../video/domain/video_actions_repository.dart';
 import '../domain/home_channel.dart';
 import '../domain/home_repository.dart';
 import 'watch_later_removal_controller.dart';
@@ -40,6 +42,7 @@ final class HomeState {
   final bool loadingMore;
   final bool limitReached;
   final Object? pageError;
+  // Pending subscription, video and folder removals share the same card state.
   final Set<(HomeEntryKind, String)> unsubscribing;
 
   HomeState withUnsubscribing(Set<(HomeEntryKind, String)> pending) =>
@@ -120,13 +123,14 @@ final class HomeController extends Notifier<HomeState> {
   int _generation = 0;
   int _page = 0;
   String? _cursor;
+  String? _defaultFolderId;
   final Set<String> _seenCursors = {};
   int _pagesWithoutNewItems = 0;
   int _reconcileUntilPage = 0;
-  final Map<(HomeEntryKind, String), RequestCancellation> _unsubscriptions = {};
-  final Set<(HomeEntryKind, String)> _removedSubscriptions = {};
-  Set<(HomeEntryKind, String)> get _pending =>
-      Set.unmodifiable(_unsubscriptions.keys);
+  final Map<(HomeEntryKind, String), RequestCancellation> _removals = {};
+  final Set<(HomeEntryKind, String)> _removedEntries = {};
+  final Set<(HomeEntryKind, String)> _uncertainRemovals = {};
+  Set<(HomeEntryKind, String)> get _pending => Set.unmodifiable(_removals.keys);
   @override
   HomeState build() {
     if (query.channel == HomeChannel.watchLater) {
@@ -151,7 +155,7 @@ final class HomeController extends Notifier<HomeState> {
     ref.onDispose(() {
       _generation++;
       _cancellation?.cancel();
-      for (final cancellation in _unsubscriptions.values) {
+      for (final cancellation in _removals.values) {
         cancellation.cancel();
       }
     });
@@ -168,10 +172,12 @@ final class HomeController extends Notifier<HomeState> {
     _page = 0;
     _queuePages.clear();
     _cursor = null;
+    _defaultFolderId = null;
     _seenCursors.clear();
     _pagesWithoutNewItems = 0;
     _reconcileUntilPage = 0;
-    _removedSubscriptions.clear();
+    _removedEntries.clear();
+    _uncertainRemovals.clear();
     state = HomeState(unsubscribing: _pending);
     final repository = ref.read(homeRepositoryProvider);
     try {
@@ -193,6 +199,9 @@ final class HomeController extends Notifier<HomeState> {
       }
       _page = 1;
       _cursor = result.nextCursor;
+      if (query.section == '默认收藏夹') {
+        _defaultFolderId = result.favoriteFolderId ?? result.nextCursor;
+      }
       if (_cursor case final cursor?) _seenCursors.add(cursor);
       _pagesWithoutNewItems = items.isEmpty ? 1 : 0;
       state = HomeState(
@@ -295,35 +304,93 @@ final class HomeController extends Notifier<HomeState> {
             entry.kind != HomeEntryKind.collection)) {
       return false;
     }
-    final key = (entry.kind, entry.id);
-    final items = state.items.asData?.value;
-    if (items == null ||
-        !items.any((item) => (item.kind, item.id) == key) ||
-        _unsubscriptions.containsKey(key)) {
-      return false;
-    }
-    final repository = ref.read(homeRepositoryProvider);
-    if (repository is! HomeSubscriptionRepository) {
-      throw const AppFailure(AppFailureKind.protocol, '当前无法取消订阅');
-    }
-    final cancellation = RequestCancellation();
-    _unsubscriptions[key] = cancellation;
-    state = state.withUnsubscribing(_pending);
-    bool current() =>
-        ref.mounted &&
-        !cancellation.isCancelled &&
-        repository.accountScope == query.scope;
-    try {
-      if (!current()) return false;
-      await (repository as HomeSubscriptionRepository).unsubscribeFavorite(
+    return _removeEntry(entry, (repository, cancellation) {
+      if (repository is! HomeSubscriptionRepository) {
+        throw const AppFailure(AppFailureKind.protocol, '当前无法取消订阅');
+      }
+      return (repository as HomeSubscriptionRepository).unsubscribeFavorite(
         entry,
         scope: query.scope,
         cancellation: cancellation,
       );
+    });
+  }
+
+  bool canRemoveFavorite(HomeEntry entry) =>
+      query.channel == HomeChannel.favorites &&
+      (query.section == '默认收藏夹' || query.section == '我创建的收藏夹') &&
+      (query.folderId != null || query.section == '默认收藏夹') &&
+      query.folderId?.startsWith('ugc:') != true &&
+      entry.kind == HomeEntryKind.video &&
+      entry.aid != null;
+
+  Future<bool> removeFavorite(HomeEntry entry) async {
+    if (!canRemoveFavorite(entry)) return false;
+    final folderId = query.folderId ?? _defaultFolderId;
+    if (folderId == null) return false;
+    return _removeEntry(entry, (repository, cancellation) {
+      if (repository is! HomeFavoriteRepository) {
+        throw const AppFailure(AppFailureKind.protocol, '当前无法取消收藏');
+      }
+      return (repository as HomeFavoriteRepository).removeFavorite(
+        entry,
+        folderId: folderId,
+        scope: query.scope,
+        cancellation: cancellation,
+      );
+    });
+  }
+
+  Future<bool> deleteFavoriteFolder(HomeEntry entry) async {
+    if (query.channel != HomeChannel.favorites ||
+        query.section != '我创建的收藏夹' ||
+        query.folderId != null ||
+        entry.kind != HomeEntryKind.folder ||
+        entry.id == _cursor) {
+      return false;
+    }
+    return _removeEntry(entry, (repository, cancellation) {
+      if (repository is! HomeFavoriteRepository) {
+        throw const AppFailure(AppFailureKind.protocol, '当前无法删除收藏夹');
+      }
+      return (repository as HomeFavoriteRepository).deleteFavoriteFolder(
+        entry,
+        scope: query.scope,
+        cancellation: cancellation,
+      );
+    });
+  }
+
+  Future<bool> _removeEntry(
+    HomeEntry entry,
+    Future<void> Function(HomeRepository, RequestCancellation) write,
+  ) async {
+    if (!ref.mounted) return false;
+    final key = (entry.kind, entry.id);
+    final items = state.items.asData?.value;
+    if (items == null ||
+        !items.any((item) => (item.kind, item.id) == key) ||
+        _removals.containsKey(key)) {
+      return false;
+    }
+    if (_uncertainRemovals.contains(key)) throw const UnknownWriteOutcome();
+    final repository = ref.read(homeRepositoryProvider);
+    final epoch = ref.read(sessionEpochProvider)();
+    final cancellation = RequestCancellation();
+    _removals[key] = cancellation;
+    state = state.withUnsubscribing(_pending);
+    bool current() =>
+        ref.mounted &&
+        !cancellation.isCancelled &&
+        repository.accountScope == query.scope &&
+        ref.read(sessionEpochProvider)() == epoch;
+    try {
       if (!current()) return false;
-      _removedSubscriptions.add(key);
-      if (_removedSubscriptions.length > maxFavoriteEntries) {
-        _removedSubscriptions.remove(_removedSubscriptions.first);
+      await write(repository, cancellation);
+      if (!current()) return false;
+      _removedEntries.add(key);
+      if (_removedEntries.length > maxFavoriteEntries) {
+        _removedEntries.remove(_removedEntries.first);
       }
       // A removal shifts server page offsets. Discard any outstanding read and
       // resume paging from page 1, deduplicating against the retained cards.
@@ -338,6 +405,7 @@ final class HomeController extends Notifier<HomeState> {
       _cancellation = RequestCancellation();
       if (_page > _reconcileUntilPage) _reconcileUntilPage = _page;
       _page = 0;
+      _queuePages.clear();
       _cursor = null;
       _seenCursors.clear();
       _pagesWithoutNewItems = 0;
@@ -354,9 +422,10 @@ final class HomeController extends Notifier<HomeState> {
           error is AppFailure && error.kind == AppFailureKind.cancelled) {
         return false;
       }
+      if (error is UnknownWriteOutcome) _uncertainRemovals.add(key);
       rethrow;
     } finally {
-      _unsubscriptions.remove(key);
+      _removals.remove(key);
       if (ref.mounted) state = state.withUnsubscribing(_pending);
     }
   }
@@ -407,7 +476,7 @@ final class HomeController extends Notifier<HomeState> {
         if (!removedWatchLater.contains(entry.id)) _mergeKey(entry): entry,
     };
     for (final entry in incoming) {
-      if (_removedSubscriptions.contains((entry.kind, entry.id))) continue;
+      if (_removedEntries.contains((entry.kind, entry.id))) continue;
       if (removedWatchLater.contains(entry.id)) continue;
       final key = _mergeKey(entry);
       final previous = unique[key];

@@ -63,7 +63,7 @@ final class HomeVideoCard extends StatelessWidget {
   );
 }
 
-final class FavoriteFolderCard extends StatelessWidget {
+final class FavoriteFolderCard extends StatefulWidget {
   const FavoriteFolderCard({
     super.key,
     required this.entry,
@@ -72,6 +72,7 @@ final class FavoriteFolderCard extends StatelessWidget {
     this.unsubscribing = false,
     this.showCreatedMetadata = false,
     this.onEdit,
+    this.onDelete,
   });
   final HomeEntry entry;
   final VoidCallback onTap;
@@ -79,6 +80,14 @@ final class FavoriteFolderCard extends StatelessWidget {
   final bool unsubscribing;
   final bool showCreatedMetadata;
   final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  @override
+  State<FavoriteFolderCard> createState() => _FavoriteFolderCardState();
+}
+
+final class _FavoriteFolderCardState extends State<FavoriteFolderCard> {
+  final _menuKey = GlobalKey<PopupMenuButtonState<String>>();
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +96,14 @@ final class FavoriteFolderCard extends StatelessWidget {
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(6),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
+        onLongPress:
+            !widget.unsubscribing &&
+                (widget.onUnsubscribe != null ||
+                    widget.onEdit != null ||
+                    widget.onDelete != null)
+            ? () => _menuKey.currentState?.showButtonMenu()
+            : null,
         borderRadius: BorderRadius.circular(6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,19 +141,19 @@ final class FavoriteFolderCard extends StatelessWidget {
                     child: AspectRatio(
                       aspectRatio: 16 / 9,
                       child: _Cover(
-                        url: entry.coverUrl,
+                        url: widget.entry.coverUrl,
                         left: [
-                          if (entry.contentCount != null)
-                            '${entry.contentCount}个内容',
-                          if (showCreatedMetadata)
-                            if (entry.isPrivate == true)
+                          if (widget.entry.contentCount != null)
+                            '${widget.entry.contentCount}个内容',
+                          if (widget.showCreatedMetadata)
+                            if (widget.entry.isPrivate == true)
                               '私密'
-                            else if (entry.isPrivate == false)
+                            else if (widget.entry.isPrivate == false)
                               '公开',
                         ].join(' '),
-                        right: showCreatedMetadata
+                        right: widget.showCreatedMetadata
                             ? ''
-                            : entry.kind == HomeEntryKind.collection
+                            : widget.entry.kind == HomeEntryKind.collection
                             ? '合集'
                             : '收藏夹',
                       ),
@@ -150,7 +166,8 @@ final class FavoriteFolderCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (showCreatedMetadata && entry.isPrivate == true) ...[
+                if (widget.showCreatedMetadata &&
+                    widget.entry.isPrivate == true) ...[
                   const Padding(
                     padding: EdgeInsets.only(top: 2),
                     child: Tooltip(
@@ -162,16 +179,23 @@ final class FavoriteFolderCard extends StatelessWidget {
                 ],
                 Expanded(
                   child: Text(
-                    entry.title,
+                    widget.entry.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ),
-                if (onUnsubscribe != null || onEdit != null)
+                if (widget.onUnsubscribe != null ||
+                    widget.onEdit != null ||
+                    widget.onDelete != null)
                   PopupMenuButton<String>(
-                    tooltip: unsubscribing ? '取消订阅中' : '更多操作',
-                    enabled: !unsubscribing,
+                    key: _menuKey,
+                    tooltip: widget.unsubscribing
+                        ? widget.onDelete != null
+                              ? '删除中'
+                              : '取消订阅中'
+                        : '更多操作',
+                    enabled: !widget.unsubscribing,
                     padding: EdgeInsets.zero,
                     iconSize: 20,
                     iconColor: scheme.onSurfaceVariant,
@@ -194,18 +218,25 @@ final class FavoriteFolderCard extends StatelessWidget {
                         color: scheme.outlineVariant.withValues(alpha: .6),
                       ),
                     ),
-                    icon: unsubscribing
+                    icon: widget.unsubscribing
                         ? const SizedBox.square(
                             dimension: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.more_vert),
                     onSelected: (action) {
-                      if (action == 'edit') onEdit?.call();
-                      if (action == 'unsubscribe') onUnsubscribe?.call();
+                      if (action == 'edit') widget.onEdit?.call();
+                      if (action == 'unsubscribe') widget.onUnsubscribe?.call();
+                      if (action == 'delete') widget.onDelete?.call();
                     },
                     itemBuilder: (_) => [
-                      if (onEdit != null)
+                      if (widget.onDelete != null)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          padding: EdgeInsets.symmetric(horizontal: 24),
+                          child: Text('删除收藏夹'),
+                        ),
+                      if (widget.onEdit != null)
                         PopupMenuItem(
                           value: 'edit',
                           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -214,7 +245,7 @@ final class FavoriteFolderCard extends StatelessWidget {
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ),
-                      if (onUnsubscribe != null)
+                      if (widget.onUnsubscribe != null)
                         PopupMenuItem(
                           value: 'unsubscribe',
                           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -227,20 +258,20 @@ final class FavoriteFolderCard extends StatelessWidget {
                   ),
               ],
             ),
-            if (showCreatedMetadata) ...[
+            if (widget.showCreatedMetadata) ...[
               const SizedBox(height: 12),
               Text(
-                switch (entry.createdAt) {
+                switch (widget.entry.createdAt) {
                   final date? => '创建于${_date(date.toLocal())}',
                   null => '创建时间未知',
                 },
                 style: Theme.of(context).textTheme.bodySmall
                     ?.copyWith(color: scheme.onSurfaceVariant),
               ),
-            ] else if (entry.viewCount != null) ...[
+            ] else if (widget.entry.viewCount != null) ...[
               const SizedBox(height: 12),
               Text(
-                '${compactCount(entry.viewCount)}播放',
+                '${compactCount(widget.entry.viewCount)}播放',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],

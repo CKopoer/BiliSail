@@ -8,6 +8,97 @@ import 'package:test/test.dart';
 const _id = '9007199254740993123';
 
 void main() {
+  for (final deleteFolder in [false, true]) {
+    Future<void> write(
+      _Transport transport, {
+      ApiRequestContext? context,
+      ApiCookieJar? cookies,
+      String id = _id,
+    }) {
+      final client = HomeClient(
+        BiliApiClient(transport: transport, cookieJar: cookies ?? _cookies()),
+      );
+      return deleteFolder
+          ? client.deleteFavoriteFolder(id, context: context)
+          : client.removeFavorite(id, _id, context: context);
+    }
+
+    test('favorite deleteFolder=$deleteFolder sends one scoped form', () async {
+      final transport = _Transport();
+      await write(transport);
+      expect(transport.posts, 1);
+      expect(
+        transport.uri?.path,
+        deleteFolder ? '/x/v3/fav/folder/del' : '/x/v3/fav/resource/batch-deal',
+      );
+      expect(transport.fields, {
+        if (deleteFolder) ...{
+          'media_ids': _id,
+          'platform': 'web',
+        } else ...{
+          'resources': '$_id:2',
+          'add_media_ids': '',
+          'del_media_ids': _id,
+        },
+        'csrf': 'fixture-csrf',
+      });
+      expect(transport.headers['Cookie'], contains('SESSDATA=fixture-session'));
+    });
+
+    test(
+      'favorite deleteFolder=$deleteFolder guards credentials and context',
+      () async {
+        final transport = _Transport();
+        for (final id in ['0', '-1', '1.0', 'ugc:42', '42&media_ids=7']) {
+          await expectLater(write(transport, id: id), throwsArgumentError);
+        }
+        await expectLater(
+          write(transport, cookies: ApiCookieJar()),
+          throwsA(isA<ApiFailure>()),
+        );
+        await expectLater(
+          write(
+            transport,
+            context: ApiRequestContext(
+              cancellation: ApiCancellation()..cancel(),
+            ),
+          ),
+          throwsA(
+            isA<ApiFailure>().having(
+              (e) => e.category,
+              'category',
+              ApiFailureCategory.cancelled,
+            ),
+          ),
+        );
+        await expectLater(
+          write(
+            transport,
+            context: ApiRequestContext(deadline: DateTime.utc(2000)),
+          ),
+          throwsA(isA<ApiFailure>()),
+        );
+        expect(transport.posts, 0);
+      },
+    );
+
+    test(
+      'favorite deleteFolder=$deleteFolder never replays failures',
+      () async {
+        for (final response in [
+          _response(status: 503),
+          _response(code: -403),
+        ]) {
+          final transport = _Transport()..response = response;
+          await expectLater(write(transport), throwsA(isA<ApiFailure>()));
+          expect(transport.posts, 1);
+        }
+        final transport = _Transport()..error = TimeoutException('fixture');
+        await expectLater(write(transport), throwsA(isA<ApiFailure>()));
+        expect(transport.posts, 1);
+      },
+    );
+  }
   for (final collection in [false, true]) {
     test(
       'unsubscribe collection=$collection sends one scoped CSRF form',

@@ -51,6 +51,7 @@ enum VideoCardMenuAction {
   cancelWatchLater,
   removeWatchLater,
   removeHistory,
+  removeFavorite,
 }
 
 final class VideoCardMenu {
@@ -649,6 +650,7 @@ final class _VideoCardState extends State<VideoCard> {
     VideoCardMenuAction.watchLater => Icons.watch_later_outlined,
     VideoCardMenuAction.cancelWatchLater => Icons.watch_later_outlined,
     VideoCardMenuAction.removeWatchLater ||
+    VideoCardMenuAction.removeFavorite ||
     VideoCardMenuAction.removeHistory => Icons.delete_outline,
   };
 
@@ -658,6 +660,7 @@ final class _VideoCardState extends State<VideoCard> {
     VideoCardMenuAction.cancelWatchLater => '取消稍后再看',
     VideoCardMenuAction.removeWatchLater => '取消稍后再看',
     VideoCardMenuAction.removeHistory => '删除记录',
+    VideoCardMenuAction.removeFavorite => '取消收藏',
   };
 
   Future<void> _addWatchLater({bool remove = false}) async {

@@ -59,6 +59,31 @@ final class HomeClient {
     );
   }
 
+  Future<void> removeFavorite(
+    String folderId,
+    String aid, {
+    ApiRequestContext? context,
+  }) async {
+    _validateId(folderId);
+    _validateId(aid);
+    await api.submitForm('/x/v3/fav/resource/batch-deal', 'favorite_remove', {
+      'resources': '$aid:2',
+      'add_media_ids': '',
+      'del_media_ids': folderId,
+    }, context: context);
+  }
+
+  Future<void> deleteFavoriteFolder(
+    String id, {
+    ApiRequestContext? context,
+  }) async {
+    _validateId(id);
+    await api.submitForm('/x/v3/fav/folder/del', 'favorite_folder_delete', {
+      'media_ids': id,
+      'platform': 'web',
+    }, context: context);
+  }
+
   /// Explicit user action; the shared CSRF form pipeline sends only one attempt.
   Future<void> unsubscribeFavorite(
     String id, {
@@ -539,9 +564,13 @@ final class HomeClient {
         kind: ApiHomeEntryKind.video,
         coverUrl: _uri(m['cover']),
         subtitle: '内容已失效或不支持在此播放',
+        aid: m['type'] == null || _number(m['type']) == 2
+            ? _positiveId(m['id'])
+            : null,
       );
     }
-    return _video(item);
+    // Favorite resources identify the archive with `id`, unlike feed `aid`.
+    return _video({...m, 'aid': m['aid'] ?? m['id']});
   }
 
   static ApiHomeEntry _video(Object? item, {bool allowUnavailable = false}) {
