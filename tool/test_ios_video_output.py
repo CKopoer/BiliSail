@@ -41,6 +41,8 @@ class IOSVideoOutputExecutionTest(unittest.TestCase):
             plugin / "gles/OpenGLESHelpers.swift",
             plugin / "gles/TextureGLESContext.swift",
             plugin / "TextureHW.swift",
+            common / "TextureSWContext.swift",
+            common / "TextureSW.swift",
         ]
         cls.directory = tempfile.TemporaryDirectory()
         cls.addClassCleanup(cls.directory.cleanup)
@@ -88,6 +90,21 @@ class IOSVideoOutputExecutionTest(unittest.TestCase):
 
     def test_mpv_render_failure_does_not_publish_an_incomplete_frame(self):
         self.run_case("render")
+
+    def test_explicit_dispose_frees_the_context_while_a_frame_is_retained(self):
+        self.run_case("dispose")
+
+    def test_native_callbacks_do_not_accumulate_on_the_platform_queue(self):
+        self.run_case("callbacks")
+
+    def test_software_context_has_the_same_explicit_disposal_contract(self):
+        self.run_case("software")
+
+    def test_software_allocation_failure_keeps_a_complete_frame(self):
+        self.run_case("software-pixel")
+
+    def test_software_render_failure_keeps_a_complete_frame(self):
+        self.run_case("software-render")
 
     def test_mpv_parameters_typecheck_with_real_c_headers(self):
         headers = os.environ.get("BILISAIL_MPV_HEADERS")
