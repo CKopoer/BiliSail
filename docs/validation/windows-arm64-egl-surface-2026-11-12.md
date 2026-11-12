@@ -34,3 +34,15 @@ Flutter 3.47.6／Dart 3.13.5 下的结果：
 - `tool/check.ps1 -EnforceLockfile` 在未修改的 `tool/test-macos-release-validation.ps1:320` 中断，报告 `The independent parent failed to terminate a stalled worker and its child`，与此前 Linux 验证记录一致。随后完成上述独立检查和全部应用／包测试；不宣称完整检查脚本通过。
 
 日志保存在忽略目录 `build/issue-100-egl/`。当前执行主机为 Linux；Windows ARM64 应用构建、真实 ANGLE／D3D11 像素回归及 Surface Pro X 的悬停、点播、软件／硬件解码、seek、暂停缩放、全屏／小窗仍需在相应平台验收。x64 共用表面实现，也需确认原生播放；不能把受控 EGL 测试解释成实机黑屏已消失。
+
+## CI 锁文件序列化修复
+
+[CI 43071478079](https://github.com/CKopoer/BiliSail/actions/runs/43071478079) 对应应用提交 `410b700f`。静态检查、根测试四个分片、包测试及 mux 原生回归均成功。七个平台完成编译和打包，其中 Windows x64／ARM64 安装包验证也成功；所有构建任务最后都在 `tool/build-release.ps1:404` 报告 `Build changed pubspec.lock; do not publish this package.`。
+
+原因是此前替换 Git ref 时保留了旧锁文件的引号。新提交号以 `e` 开头，固定 Pub 的标准序列化会将其写成无引号字符串。`pub get --enforce-lockfile` 接受带引号的等价 YAML，且不改写文件；Flutter 构建为更新插件注册再次运行普通 Pub 时，会移除引号，触发发布脚本的文件 SHA-256 校验。这是锁文件表示形式的变化，依赖版本、Git 提交和校验摘要没有变化。
+
+本次使用 Flutter 3.47.6／Dart 3.13.5 的普通 `pub get` 重新生成根应用与播放器包的锁文件，未手动移除引号。`tool/check.ps1 -Stage Lint -EnforceLockfile` 增加严格解析后再执行普通解析的检查，并要求锁文件字节不变，覆盖根应用和四个包，提前发现构建会引发的序列化漂移。严格解析失败仍立即失败；发布前哈希校验及构建时插件注册重生成均保留。
+
+新增六项受控回归，覆盖两种 Pub runner、序列化改写拒绝、严格解析失败传播及非 lint／非严格模式。另用真实 SDK 对原带引号锁文件复现拒绝，再检查五份锁文件的严格／普通解析往返保持原字节。验证日志保存在 `build/issue-100-ci/`。
+
+前述 Windows ARM64 构建未测边界是本地执行时的快照；此次 CI 日志已补充编译和打包成功的证据，仍不能替代 Surface Pro X 的实际音画验收。
