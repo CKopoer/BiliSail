@@ -223,7 +223,10 @@ class SharedPlayerEngine
     }
   }
 
-  void _invalidate({bool retainPresentation = false}) {
+  void _invalidate({
+    bool retainPresentation = false,
+    bool keepBackend = false,
+  }) {
     ++_generation;
     ++_intentRevision;
     ++_seekRevision;
@@ -240,7 +243,7 @@ class SharedPlayerEngine
     _health.reset();
     if (!retainPresentation) {
       _output.clearRetainedFrame();
-      _interrupt(_backend);
+      if (!keepBackend) _interrupt(_backend);
       _output.bind(null);
     }
   }
@@ -293,7 +296,23 @@ class SharedPlayerEngine
       );
     }
     final previous = _snapshot;
-    _invalidate(retainPresentation: options.retainPresentation);
+    final reuseCandidate =
+        !_opening &&
+        !_seeking &&
+        _failing == null &&
+        _releaseBarrier == null &&
+        _backend is ReusablePlaybackBackend &&
+        const {
+          PlaybackPhase.ready,
+          PlaybackPhase.playing,
+          PlaybackPhase.paused,
+          PlaybackPhase.buffering,
+          PlaybackPhase.ended,
+        }.contains(previous.phase);
+    _invalidate(
+      retainPresentation: options.retainPresentation,
+      keepBackend: reuseCandidate,
+    );
     final generation = _generation;
     final operation = _openOperation = PlaybackOperation(
       generation,
@@ -337,10 +356,8 @@ class SharedPlayerEngine
         // arrives. Capture before interrupting that still-visible output too.
         await _output.retainFrame();
         if (!_current(generation)) return;
-        _interrupt(_backend);
+        if (!reuseCandidate) _interrupt(_backend);
       }
-      await _release();
-      if (!_current(generation)) return;
       _diagnose(PlayerDiagnosticKind.openStarted);
       try {
         final plan = ValidatedSource.validate(
@@ -353,13 +370,27 @@ class SharedPlayerEngine
         _live = plan.live;
         _preview = source is DashVideoSource;
         _audioConfirmed = false;
-        final creating = _allocation =
-            Future<PlaybackBackend>.sync(createBackend).then((value) {
-              _backend = value;
-              return value;
-            });
-        final backend = await operation.wait(creating);
-        _allocation = null;
+        await _subscription?.cancel();
+        _subscription = null;
+        final existing = _backend;
+        final reusable = existing is ReusablePlaybackBackend
+            ? existing as ReusablePlaybackBackend
+            : null;
+        if (reuseCandidate && reusable != null && reusable.canReuse(plan)) {
+          await operation.wait(_controls);
+          await operation.wait(reusable.resetForNextSource(operation));
+        } else {
+          await _release();
+          operation.check();
+          final creating = _allocation =
+              Future<PlaybackBackend>.sync(createBackend).then((value) {
+                _backend = value;
+                return value;
+              });
+          await operation.wait(creating);
+          _allocation = null;
+        }
+        final backend = _backend!;
         _output.bind(backend.videoOutput);
         _subscription = backend.events.listen(
           (event) => _event(event, generation, backend),
@@ -633,7 +664,12 @@ class SharedPlayerEngine
   }
 
   void _startSampling(int generation) {
-    if (!_current(generation) || _terminal || _timer != null) return;
+    if (!_current(generation) ||
+        _terminal ||
+        _timer != null ||
+        _backend is EventDrivenPlaybackBackend) {
+      return;
+    }
     _timer = Timer.periodic(NativePlaybackHealth.sampleInterval, (_) {
       final backend = _backend;
       if (!_current(generation) ||

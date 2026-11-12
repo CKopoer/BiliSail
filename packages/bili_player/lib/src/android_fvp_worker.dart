@@ -30,21 +30,23 @@ void runFvpWorker(
       final owned = _WorkerPlayer(port);
       players[id] = owned;
       owned.subscription = port.statuses.listen((status) {
-        if (owned.seeking) return;
+        if (owned.seeking || owned.reloading) return;
         unawaited(
           event(id, {
             'kind': 'status',
             'seekRevision': owned.seekRevision,
+            'sourceRevision': owned.sourceRevision,
             'status': status.name,
           }),
         );
       });
       owned.timer = Timer.periodic(const Duration(milliseconds: 250), (_) {
-        if (owned.seeking) return;
+        if (owned.seeking || owned.reloading) return;
         unawaited(
           event(id, {
             'kind': 'sample',
             'seekRevision': owned.seekRevision,
+            'sourceRevision': owned.sourceRevision,
             'position': port.positionMilliseconds,
             'buffered': port.bufferedMilliseconds,
             if (port is FvpAudioClockPort)
@@ -62,8 +64,21 @@ void runFvpWorker(
     if (owned == null) throw StateError('Player unavailable');
     final port = owned.port;
     switch (call.method) {
+      case 'resetSource':
+        owned.reloading = true;
+        owned.sourceRevision = args['sourceRevision'] as int;
+        owned.directSurface = false;
+        await channel.invokeMethod<void>('unbindSurface', {'player': id});
+        await (port as FvpReusablePlayerPort).resetForNextSource();
+        await owned.leases.close();
+        owned.leases = AndroidMediaLeases();
+        owned.reloading = false;
+        return null;
       case 'frameConsumed':
-        if (owned.directSurface) frameConsumed(port);
+        if (owned.directSurface &&
+            (args['sourceRevision'] ?? 0) == owned.sourceRevision) {
+          frameConsumed(port);
+        }
         return null;
       case 'information':
         if (port is! FvpInformationPort) return null;
@@ -189,11 +204,12 @@ void runFvpWorker(
 final class _WorkerPlayer {
   _WorkerPlayer(this.port);
   final FvpPlayerPort port;
-  final leases = AndroidMediaLeases();
+  var leases = AndroidMediaLeases();
   StreamSubscription<FvpNativeStatus>? subscription;
   Timer? timer;
   bool closing = false;
   bool directSurface = false;
-  int seekRevision = 0;
+  int seekRevision = 0, sourceRevision = 0;
+  bool reloading = false;
   bool seeking = false;
 }

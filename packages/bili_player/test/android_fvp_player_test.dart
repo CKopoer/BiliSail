@@ -64,6 +64,60 @@ void main() {
       messenger.setMockMethodCallHandler(AndroidFvpPlayer.channel, null);
     },
   );
+  test('source reset rejects old IPC samples and EOF while retaining process failures', () async {
+    final messenger = binding.defaultBinaryMessenger;
+    final reset = Completer<void>();
+    messenger.setMockMethodCallHandler(AndroidFvpPlayer.channel, (call) async {
+      if (call.method == 'create') return 103;
+      if (call.method == 'resetSource') {
+        expect((call.arguments as Map)['sourceRevision'], 1);
+        await reset.future;
+      }
+      return null;
+    });
+    final port = await AndroidFvpPlayer.create();
+    final statuses = <FvpNativeStatus>[];
+    final subscription = port.statuses.listen(statuses.add);
+    Future<void> event(Map<String, Object?> data) async {
+      final done = Completer<void>();
+      messenger.handlePlatformMessage(
+        'dev.bilisail/fvp_process/events',
+        const StandardMethodCodec().encodeSuccessEnvelope({
+          'player': 103,
+          ...data,
+        }),
+        (_) => done.complete(),
+      );
+      await done.future;
+    }
+
+    await event({'kind': 'sample', 'position': 5000, 'buffered': 6000});
+    var finished = false;
+    final resetting = (port as FvpReusablePlayerPort).resetForNextSource().then(
+      (_) => finished = true,
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(finished, false);
+    reset.complete();
+    await resetting;
+    expect(port.positionMilliseconds, 0);
+    await event({'kind': 'sample', 'position': 8000, 'buffered': 9000});
+    await event({'kind': 'status', 'status': 'ended'});
+    expect(port.positionMilliseconds, 0);
+    expect(statuses, isEmpty);
+    await event({
+      'kind': 'sample',
+      'sourceRevision': 1,
+      'position': 2000,
+      'buffered': 3000,
+    });
+    expect(port.positionMilliseconds, 2000);
+    await event({'kind': 'processExited'});
+    expect(statuses, [FvpNativeStatus.processExited]);
+    await subscription.cancel();
+    await port.dispose();
+    messenger.setMockMethodCallHandler(AndroidFvpPlayer.channel, null);
+  });
   test('startup pause waits for the worker acknowledgement', () async {
     final messenger = binding.defaultBinaryMessenger;
     final paused = Completer<void>();

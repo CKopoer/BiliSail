@@ -14,7 +14,10 @@ import 'video_output.dart';
 
 /// MDK commands and observations, shared by the local and Android IPC ports.
 final class FvpBackend
-    implements PlaybackBackend, PlaybackResumeSynchronization {
+    implements
+        PlaybackBackend,
+        PlaybackResumeSynchronization,
+        ReusablePlaybackBackend {
   FvpBackend({
     required this.createPlayer,
     required this.isolated,
@@ -24,7 +27,7 @@ final class FvpBackend
   final bool isolated;
   final void Function(NativeReadinessStage)? onStage;
   final _output = FvpVideoOutput();
-  final _leases = AndroidMediaLeases();
+  var _leases = AndroidMediaLeases();
   final _bufferDisplay = FvpBufferDisplay();
   final _events = StreamController<BackendEvent>.broadcast(sync: true);
   Future<FvpPlayerPort>? _creating;
@@ -32,6 +35,8 @@ final class FvpBackend
   StreamSubscription<FvpNativeStatus>? _subscription;
   Future<void>? _disposal;
   PlaybackOperation? _preparation;
+  ValidatedSource? _lastPlan;
+  int _sourceRevision = 0;
   bool _disposed = false;
   bool _nativeEnded = false;
   bool _buffering = false, _live = false;
@@ -57,6 +62,8 @@ final class FvpBackend
     ValidatedSource plan,
     PlaybackOperation operation,
   ) async {
+    final revision = ++_sourceRevision;
+    _lastPlan = plan;
     _bufferDisplay.reset();
     _live = plan.live;
     _preparation = operation;
@@ -76,14 +83,17 @@ final class FvpBackend
           ? null
           : await operation.wait(lease(plan.audio!));
       _paired = sound != null;
-      final creating = _creating = createPlayer().then((player) {
-        _player = player;
-        return player;
-      });
-      final player = await operation.wait(creating);
-      _creating = null;
+      if (_player == null) {
+        final creating = _creating = createPlayer().then((player) {
+          _player = player;
+          return player;
+        });
+        await operation.wait(creating);
+        _creating = null;
+      }
+      final player = _player!;
       _subscription = player.statuses.listen((status) {
-        if (_disposed) return;
+        if (_disposed || revision != _sourceRevision) return;
         if (status == FvpNativeStatus.buffering) _buffering = true;
         if (status == FvpNativeStatus.buffered) _buffering = false;
         if (status == FvpNativeStatus.ended) _nativeEnded = true;
@@ -265,6 +275,7 @@ final class FvpBackend
   Future<void> cancelSeek() async => await _player?.cancelSeek();
   @override
   void interrupt() {
+    ++_sourceRevision;
     _bufferDisplay.reset();
     _preparation?.cancel();
     _player?.interrupt();
@@ -322,6 +333,33 @@ final class FvpBackend
       backend: 'fvp / MDK',
       audioGainDb: _gain,
     );
+  }
+
+  @override
+  bool canReuse(ValidatedSource plan) =>
+      !_disposed &&
+      _player is FvpReusablePlayerPort &&
+      _lastPlan?.audioOnly == plan.audioOnly &&
+      _lastPlan?.silent == plan.silent &&
+      (_lastPlan?.audio != null) == (plan.audio != null) &&
+      _lastPlan?.options.videoDecoding == plan.options.videoDecoding &&
+      _lastPlan?.options.androidVideoOutput == plan.options.androidVideoOutput;
+
+  @override
+  Future<void> resetForNextSource(PlaybackOperation operation) async {
+    ++_sourceRevision;
+    await _subscription?.cancel();
+    _subscription = null;
+    _output.clear();
+    await operation.wait(
+      (_player as FvpReusablePlayerPort).resetForNextSource(),
+    );
+    await _leases.close();
+    _leases = AndroidMediaLeases();
+    _bufferDisplay.reset();
+    _nativeEnded = _buffering = _hasPlayed = _resumeNeedsSync = false;
+    _dimensions = null;
+    ++_pauseRevision;
   }
 
   @override

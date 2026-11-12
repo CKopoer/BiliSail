@@ -34,6 +34,7 @@ final class MediaKitVideoOutput
   final List<VoidCallback> _readinessCleanup = [];
   int _readinessRevision = 0;
   Future<void>? _presentation;
+  Completer<void>? _sourceFrame;
 
   Future<void> get videoFramePresented =>
       _presentation ?? Future.error(StateError('No video output is bound.'));
@@ -107,9 +108,11 @@ final class MediaKitVideoOutput
             {'handle': controller.player.nativeHandle.toString()},
           )
         : controller.waitUntilFirstFrameRendered;
-    _presentation = presentation;
+    final sourceFrame = _sourceFrame;
+    final currentPresentation = presentation.then((_) => sourceFrame?.future);
+    _presentation = currentPresentation;
     unawaited(
-      presentation.then(
+      currentPresentation.then(
         (_) {
           rendered = true;
           update();
@@ -216,7 +219,8 @@ final class MediaKitVideoOutput
     if (viewport && !viewportCurrent()) return;
     // Android attaches the Surface before MediaCodec is created. Its default
     // 1x1 buffer would turn the paused first frame into a stretched solid color.
-    // on_preloaded keeps decoding blocked until both sizes have been applied.
+    // Initial binding sizes the surface before loading; track discovery refines
+    // it while presentation is still gated by the current source's readiness.
     await _viewportChannel
         .invokeMethod<void>('VideoOutputManager.SetSurfaceTextureSize', {
           'handle': player.nativeHandle.toString(),
@@ -302,15 +306,17 @@ final class MediaKitVideoOutput
                 _sizeAndroidSurface(player, size, revision, viewport: true),
           )
         : null;
-    final controller = mkv.VideoController(
-      player,
-      configuration: videoDecoderConfiguration(
-        isAndroid: Platform.isAndroid,
-        decoding: decoding,
-        androidOutput: androidOutput,
-        usesDolbyVisionRenderer: () => _androidDolbyVision,
-      ),
-    );
+    final controller =
+        _controller.value ??
+        mkv.VideoController(
+          player,
+          configuration: videoDecoderConfiguration(
+            isAndroid: Platform.isAndroid,
+            decoding: decoding,
+            androidOutput: androidOutput,
+            usesDolbyVisionRenderer: () => _androidDolbyVision,
+          ),
+        );
     WidgetsBinding.instance.ensureVisualUpdate();
     await controller.platform.future;
     if (_disposed ||
@@ -319,9 +325,8 @@ final class MediaKitVideoOutput
       return;
     }
     if (Platform.isAndroid) {
-      // Size SurfaceTexture before on_load creates android.view.Surface and
-      // attaches it to the decoder. Resizing only in on_preloaded is too late
-      // for the GPU's initial buffer, especially during paused startup.
+      // Size SurfaceTexture before the SDK attaches it to the decoder. Track
+      // discovery is too late for the GPU's initial buffer while paused.
       final layout = _viewportLayout;
       final viewSize =
           WidgetsBinding.instance.platformDispatcher.implicitView?.physicalSize;
@@ -348,7 +353,9 @@ final class MediaKitVideoOutput
         return;
       }
     }
+    final reused = identical(_controller.value, controller);
     _controller.value = controller;
+    if (reused) _observeFrameReadiness();
     _updateDecodedSize();
     final cap = _requestedViewport;
     if (Platform.isWindows && cap != null) _commitViewport(cap);
@@ -421,6 +428,21 @@ final class MediaKitVideoOutput
     _viewportRevision++;
   }
 
+  void confirmSourceFrame() {
+    final frame = _sourceFrame;
+    if (frame != null && !frame.isCompleted) frame.complete();
+  }
+
+  void resetSource() {
+    _sourceFrame = Completer<void>();
+    _videoDimensions = null;
+    _frameReady.value = false;
+    _presentation = null;
+    _viewportRevision++;
+    cancelPendingViewport();
+    _observeFrameReadiness();
+  }
+
   void clearPlayer() {
     _androidViewportSizer?.invalidate();
     _androidViewportSizer = null;
@@ -428,6 +450,7 @@ final class MediaKitVideoOutput
     _sourceGeneration++;
     _viewportRevision++;
     _controller.value = null;
+    _sourceFrame = null;
     _player = null;
     _videoDimensions = null;
     _androidDolbyVision = false;

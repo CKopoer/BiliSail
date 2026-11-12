@@ -94,6 +94,35 @@ final class _Harness {
 }
 
 void main() {
+  testWidgets(
+    'a reused texture stays masked until the new source confirms its frame',
+    (tester) async {
+      final player = _Player()..publishDimensions(1920, 1080);
+      final controller = _Controller(player, 44);
+      final harness = _Harness();
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        harness.output.dispose();
+        controller.dispose();
+        await player.dispose();
+      });
+      harness.controllers.value = controller;
+      await tester.pumpWidget(harness.build());
+      await tester.pump();
+      expect(harness.output.frameReady.value, true);
+      harness.output.resetSource();
+      player.publishDimensions(1280, 720);
+      await tester.pump();
+      await tester.pump();
+      expect(harness.output.frameReady.value, false);
+      harness.output.confirmSourceFrame();
+      await tester.pump();
+      await tester.pump();
+      expect(harness.output.frameReady.value, true);
+      expect(harness.controllers.value, same(controller));
+    },
+  );
+
   testWidgets('surface masks the texture until the current first frame', (
     tester,
   ) async {

@@ -41,7 +41,7 @@ class FvpPlaybackService : Service() {
         } else if (message.what == 2) {
             if (ready) execute(message) else if (queued.size < 64) queued.add(Message.obtain(message))
         } else if (message.what == 5 && ready) {
-            channel.invokeMethod("frameConsumed", mapOf("player" to message.arg1))
+            channel.invokeMethod("frameConsumed", mapOf("player" to message.arg1, "sourceRevision" to message.arg2))
         }
         true
     })

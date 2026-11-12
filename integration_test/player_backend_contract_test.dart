@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
+import 'package:bili_player/src/shared_player_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -23,9 +24,13 @@ void main() {
         ) async {
           if (directory == null) fail('BILI_TEST_MEDIA_DIR is required');
           initializePlayerBackend();
-          final engine = ConfigurablePlayerEngine(
-            createEngine: () async =>
-                backend == 'fvp' ? FvpEngine() : MediaKitEngine(),
+          final children = <SharedPlayerEngine>[];
+          final engine = ConfigurablePlayerEngine.select(
+            selectEngine: () async => PlayerEngineSelection(backend, () async {
+              final child = backend == 'fvp' ? FvpEngine() : MediaKitEngine();
+              children.add(child);
+              return child;
+            }),
           );
           final failures = <PlayerFailure>[];
           final subscription = engine.failures.listen(failures.add);
@@ -53,7 +58,7 @@ void main() {
             );
             expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
             expect(engine.currentSnapshot.videoDimensions, isNotNull);
-            final generation = engine.currentSnapshot.generation;
+            var generation = engine.currentSnapshot.generation;
             await withFrames(tester, engine.play());
             await until(
               tester,
@@ -63,6 +68,33 @@ void main() {
             );
             await withFrames(tester, engine.pause());
             final before = engine.currentSnapshot.position;
+            final nativeBackend = children.single.activeBackend;
+            await withFrames(
+              tester,
+              engine.open(
+                DashPairSource(
+                  video: track('video.mp4'),
+                  audio: track('audio.m4a'),
+                ),
+                OpenOptions(
+                  startPosition: const Duration(seconds: 1),
+                  volume: 0,
+                  rate: 1.5,
+                  videoDecoding: decoding,
+                  androidVideoOutput: output,
+                ),
+              ),
+            );
+            expect(children, hasLength(1));
+            expect(children.single.activeBackend, same(nativeBackend));
+            expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+            expect(engine.currentSnapshot.generation, generation + 1);
+            expect(
+              (engine.currentSnapshot.position - const Duration(seconds: 1))
+                  .abs(),
+              lessThan(const Duration(milliseconds: 300)),
+            );
+            generation = engine.currentSnapshot.generation;
             final end = engine.currentSnapshot.duration;
             final pending = engine.seek(end - const Duration(milliseconds: 34));
             await tester.pump(const Duration(milliseconds: 5));

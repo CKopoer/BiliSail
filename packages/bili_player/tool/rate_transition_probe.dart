@@ -9,7 +9,6 @@ import 'package:bili_player/bili_player.dart';
 import 'package:bili_player/src/media_kit_video_output.dart';
 import 'package:bili_player/src/native_media_options.dart';
 import 'package:bili_player/src/native_player_properties.dart';
-import 'package:bili_player/src/native_rate_audio.dart';
 import 'package:bili_player/src/video_dimensions.dart';
 
 // Run from the app root with flutter run --profile -d windows -t this file.
@@ -79,23 +78,19 @@ Future<void> main() async {
         generation: 1,
         decoding: VideoDecodingMode.automatic,
       );
-      await configureNativeRateAudio(
-        write: player.setPropertyAsync,
-        read: player.getPropertyAsync,
-        isCurrent: () => true,
-        timeout: const Duration(seconds: 5),
-      );
       await player.setPropertyAsync(
         'af',
         'scaletempo2=search-interval=${config.search}',
       );
       await player.setPropertyAsync('audio-buffer', '$bufferSeconds');
       await player.setPropertyAsync('autosync', '${config.autosync}');
-      player.setProperty(
-        'audio-files',
-        mpvPathListEntry(audio.uri, windows: Platform.isWindows),
+      await player.open(
+        mk.Media(
+          nativeMediaUri(video.uri, audio.uri),
+          nativeOptions: const {'force-media-title': 'BiliSail probe'},
+        ),
+        play: false,
       );
-      await player.open(mk.Media(video.uri.toString()), play: false);
       await player.setVolume(0);
       await player.play();
       await output.firstFrameRendered.timeout(const Duration(seconds: 10));

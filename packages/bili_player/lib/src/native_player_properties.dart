@@ -3,8 +3,8 @@ import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 
-/// Source hooks require synchronous calls so they never await a reply on the
-/// event loop they are holding. Native access stays within this adapter.
+/// SDK commands and bounded metadata/configuration access for this adapter.
+/// Regular playback progress uses SDK events rather than polling this adapter.
 extension NativePlayerProperties on mk.Player {
   mk.NativePlayer get native => platform as mk.NativePlayer;
   int get nativeHandle => native.ctx.address;
