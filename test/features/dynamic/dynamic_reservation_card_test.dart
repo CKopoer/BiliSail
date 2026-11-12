@@ -6,6 +6,7 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/dynamic/application/dynamic_actions_controller.dart';
 import 'package:bilisail/features/dynamic/domain/dynamic_repository.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bilisail/shared/ui/dynamic_content_card.dart';
 import 'package:bilisail/shared/ui/dynamic_post_interactions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +33,7 @@ void main() {
     DynamicReservation value = reservation,
     bool forwarded = false,
     bool inDetail = false,
+    DynamicContentCard? contentCard,
   }) => tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -48,12 +50,16 @@ void main() {
                       id: '200',
                       original: DynamicPost(
                         id: '100',
-                        contentCards: [reservationCard(value: value)],
+                        contentCards: [
+                          contentCard ?? reservationCard(value: value),
+                        ],
                       ),
                     )
                   : DynamicPost(
                       id: '100',
-                      contentCards: [reservationCard(value: value)],
+                      contentCards: [
+                        contentCard ?? reservationCard(value: value),
+                      ],
                     ),
               inDetail: inDetail,
               onOpenLink: links.add,
@@ -65,6 +71,48 @@ void main() {
     ),
   );
   Finder button(String label) => find.widgetWithText(OutlinedButton, label);
+
+  for (final forwarded in [false, true]) {
+    for (final hasMetadata in [false, true]) {
+      testWidgets(
+        'reservation body stays on the current page forwarded=$forwarded metadata=$hasMetadata',
+        (tester) async {
+          await show(
+            tester,
+            forwarded: forwarded,
+            contentCard: hasMetadata
+                ? null
+                : DynamicContentCard(
+                    kind: DynamicCardKind.reservation,
+                    title: '明晚直播',
+                    description: '明天20点',
+                    url: Uri.https('t.bilibili.com', '/100'),
+                    actionLabel: '查看详情',
+                  ),
+          );
+          final bounds = tester.getRect(find.byType(DynamicContentCardView));
+          for (final position in [
+            tester.getCenter(find.text('明晚直播')),
+            tester.getCenter(find.textContaining('明天20点')),
+            bounds.topRight + const Offset(-12, 12),
+          ]) {
+            await tester.tapAt(position);
+            await tester.pumpAndSettle();
+            expect(links, isEmpty);
+            expect(repository.reservations, isEmpty);
+            expect(logins, 0);
+            expect(find.byType(InteractiveDynamicPostCard), findsOneWidget);
+            expect(
+              Navigator.of(
+                tester.element(find.byType(InteractiveDynamicPostCard)),
+              ).canPop(),
+              false,
+            );
+          }
+        },
+      );
+    }
+  }
 
   for (final forwarded in [false, true]) {
     testWidgets(
