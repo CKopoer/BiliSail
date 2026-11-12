@@ -82,7 +82,10 @@ class DynamicContentCardView extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: card.url == null || onOpenLink == null
+        // Consume reservation body taps so the parent dynamic stays closed too.
+        onTap: card.kind == DynamicCardKind.reservation
+            ? () {}
+            : card.url == null || onOpenLink == null
             ? null
             : () => onOpenLink!(card.url!),
         child: Column(
