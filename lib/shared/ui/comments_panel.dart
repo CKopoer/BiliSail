@@ -16,7 +16,6 @@ import '../../domain/comment_target.dart';
 import 'app_network_image.dart';
 import 'app_notice.dart';
 import 'emoticon_picker_dialog.dart';
-import 'network_avatar.dart';
 import 'scroll_collapsing_header.dart';
 import 'bili_icons.dart';
 import 'comment_rich_content.dart';
@@ -1252,26 +1251,17 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
     final styles = CommentTextStyles(theme);
     return Padding(
       padding: const EdgeInsets.only(top: 12),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
-            onTap: c.authorId?.isValid == true && onOpenUser != null
-                ? () => onOpenUser(c.authorId!)
-                : null,
-            child: NetworkAvatar(
-              url: c.avatarUrl,
-              pendantUrl: c.pendantUrl,
-              name: c.author,
-              radius: 15,
+          CommentAuthorHeader(comment: c, onOpenUser: onOpenUser),
+          Padding(
+            padding: const EdgeInsets.only(
+              left: CommentAuthorHeader.contentIndent,
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CommentAuthorHeader(comment: c, onOpenUser: onOpenUser),
                 const SizedBox(height: 8),
                 CommentRichContent(
                   comment: c,

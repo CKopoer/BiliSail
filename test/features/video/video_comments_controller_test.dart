@@ -1342,10 +1342,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final author = find.descendant(
-        of: find.byType(CommentAuthorHeader),
-        matching: find.text('甲'),
-      );
+      final author = find
+          .descendant(
+            of: find.byType(CommentAuthorHeader),
+            matching: find.text('甲'),
+          )
+          .last;
       await tester.tap(author);
       update(() {
         onOpen = second.add;

@@ -3,6 +3,7 @@ import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/comments/domain/comments_repository.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
 import 'package:bilisail/shared/ui/comment_rich_content.dart';
+import 'package:bilisail/shared/ui/network_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,7 +40,7 @@ void main() {
           theme: BiliTheme.light(),
           home: Scaffold(
             body: SizedBox(
-              width: width,
+              width: width + CommentAuthorHeader.contentIndent,
               child: CommentAuthorHeader(
                 comment: comment,
                 onOpenUser: users.add,
@@ -57,11 +58,58 @@ void main() {
       expect(vip.center.dy, closeTo(author.center.dy, .01));
       expect(vip.left, greaterThan(level.right));
       expect(vip.right, lessThanOrEqualTo(decoration.left - 8));
-      expect(decoration.right, width);
+      expect(decoration.right, width + CommentAuthorHeader.contentIndent);
       expect(decoration.height, 52);
       expect(tester.widget<Text>(find.text('NO.\n012515')).style?.fontSize, 12);
       await tester.tap(find.text(comment.author));
-      expect(users, [const UserId('7')]);
+      await tester.tap(find.byType(NetworkAvatar));
+      expect(users, [const UserId('7'), const UserId('7')]);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final decorated in [false, true]) {
+    testWidgets('single-line author stays centered, decorated: $decorated', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: BiliTheme.light(),
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              child: CommentAuthorHeader(
+                comment: CommentEntry(
+                  id: '1',
+                  author: '单行作者',
+                  message: '',
+                  pendantUrl: Uri.https('i0.hdslb.com', '/pendant.png'),
+                  decorationImageUrl: decorated
+                      ? Uri.https('i0.hdslb.com', '/card.png')
+                      : null,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final avatar = tester.getRect(find.byType(NetworkAvatar));
+      final author = tester.getRect(find.text('单行作者'));
+      final header = tester.getRect(find.byType(CommentAuthorHeader));
+      expect(author.center.dy, closeTo(avatar.center.dy, .01));
+      expect(avatar.center.dy, closeTo(header.center.dy, .01));
+      expect(avatar.width, closeTo(30, .01));
+      expect(avatar.height, closeTo(30, .01));
+      expect(author.left, CommentAuthorHeader.contentIndent);
+      if (decorated) {
+        final decoration = tester.getRect(find.byType(CommentAuthorDecoration));
+        expect(decoration.center.dy, closeTo(avatar.center.dy, .01));
+        expect(decoration.width, closeTo(108, .01));
+        expect(decoration.height, closeTo(108 * 52 / 112, .01));
+      } else {
+        expect(header.height, 30);
+      }
       expect(tester.takeException(), isNull);
     });
   }
