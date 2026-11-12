@@ -502,13 +502,31 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SelectionArea(
-          child: Text(
-            season.title,
-            style: text.titleMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-              height: 32 / 16,
-            ),
+        LayoutBuilder(
+          builder: (context, constraints) => Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SelectionArea(
+                  child: Text(
+                    season.title,
+                    style: text.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      height: 32 / 16,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: constraints.maxWidth / 2),
+                child: PgcFollowButton(
+                  seasonId: season.id,
+                  seasonType: season.type,
+                  onLogin: widget.onLogin,
+                ),
+              ),
+            ],
           ),
         ),
         if (season.publishText?.isNotEmpty == true) ...[
@@ -549,12 +567,6 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
           ],
         ),
         _PgcDescription(key: ValueKey(season.id), text: season.description),
-        const SizedBox(height: 8),
-        PgcFollowButton(
-          seasonId: season.id,
-          seasonType: season.type,
-          onLogin: widget.onLogin,
-        ),
         if (selected != null && !selected.playable) ...[
           const SizedBox(height: 4),
           Text(
