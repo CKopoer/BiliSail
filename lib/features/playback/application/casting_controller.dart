@@ -92,6 +92,24 @@ class CastingController extends ChangeNotifier {
   List<CastDevice> get devices => List.unmodifiable(_devices.values);
   CastDevice? selected;
   CastingTransport? transport;
+  bool _televisionDanmaku = false, _selectedReceiverResolves = false;
+  bool get televisionDanmaku => _televisionDanmaku;
+  bool get needsReconnect {
+    final device = selected;
+    return device != null &&
+        _selectedReceiverResolves != _receiverResolvesFor(device);
+  }
+
+  bool _receiverResolvesFor(CastDevice device) =>
+      _televisionDanmaku && device.bilibiliService != null;
+
+  void setTelevisionDanmaku(bool enabled) {
+    if (!_current || busy || enabled == _televisionDanmaku) return;
+    _televisionDanmaku = enabled;
+    message = null;
+    _notify();
+  }
+
   bool searching = false, busy = false, invalidated = false, _disposed = false;
   String? message;
 
@@ -150,11 +168,15 @@ class CastingController extends ChangeNotifier {
   }
 
   Future<void> connect(CastDevice device) => _run((token) async {
-    if (selected?.id == device.id) return;
+    final receiverResolves = _receiverResolvesFor(device);
+    if (selected?.id == device.id &&
+        _selectedReceiverResolves == receiverResolves) {
+      return;
+    }
     // Resolve again on each selection so an expired signed URL is not reused.
     final media = await mediaRepository.resolve(
       request,
-      receiverResolves: device.bilibiliService != null,
+      receiverResolves: receiverResolves,
       cancellation: token,
     );
     if (!_current || token.isCancelled) return;
@@ -177,9 +199,10 @@ class CastingController extends ChangeNotifier {
     );
     if (!_current || token.isCancelled) return;
     selected = device;
+    _selectedReceiverResolves = receiverResolves;
     transport = CastingTransport.playing;
     await pauseLocal();
-    if (device.bilibiliService != null && _current && !token.isCancelled) {
+    if (receiverResolves && _current && !token.isCancelled) {
       // Apply the actual switch as well as the saved preference in metadata.
       // A settings failure must not erase an already-confirmed media handoff.
       try {

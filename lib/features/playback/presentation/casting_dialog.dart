@@ -127,6 +127,29 @@ class CastingDialog extends StatelessWidget {
                         style: TextStyle(color: colors.onSurfaceVariant),
                       ),
                       const SizedBox(height: 16),
+                      if (devices.any(
+                            (device) => device.bilibiliService != null,
+                          ) ||
+                          selected?.bilibiliService != null) ...[
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('电视弹幕（实验）'),
+                          subtitle: const Text('由 B站接收端获取视频和弹幕，切换后需重新投屏。'),
+                          value: controller.televisionDanmaku,
+                          onChanged: controller.busy || controller.invalidated
+                              ? null
+                              : controller.setTelevisionDanmaku,
+                        ),
+                        if (controller.needsReconnect && selected != null)
+                          OutlinedButton.icon(
+                            onPressed: controller.busy || controller.invalidated
+                                ? null
+                                : () => unawaited(controller.connect(selected)),
+                            icon: const Icon(Icons.cast_rounded),
+                            label: const Text('按当前设置重新投屏'),
+                          ),
+                        const SizedBox(height: 8),
+                      ],
                       if (selected != null) ...[
                         Card(
                           margin: EdgeInsets.zero,
@@ -246,7 +269,7 @@ class CastingDialog extends StatelessWidget {
                         ),
                       const SizedBox(height: 8),
                       Text(
-                        '电视从头播放；连接成功后本机暂停。关闭面板后电视继续播放，可使用电视遥控器控制。',
+                        '默认使用兼容播放。连接成功后本机暂停；关闭面板后电视继续播放，可使用电视遥控器控制。',
                         style: Theme.of(context).textTheme.bodySmall
                             ?.copyWith(color: colors.onSurfaceVariant),
                       ),

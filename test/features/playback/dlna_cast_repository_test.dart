@@ -135,7 +135,7 @@ void main() {
         });
         await repository.setMedia(
           device,
-          CastMedia(request: request),
+          CastMedia(request: request, receiverResolves: true),
           '测试 <电视> & 弹幕',
           cancellation: RequestCancellation(),
         );

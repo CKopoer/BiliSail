@@ -73,6 +73,8 @@ lib/src/
 
 2026-11-13 直播投屏复用现有 `LiveClient.getPlayInfo` 和 WBI 请求上下文，按规范房间 ID／开播状态交接，普通设备选择 AVC HLS／FLV 签名地址。声明 B站服务的接收端只接收内容身份与播放／弹幕偏好，自行使用电视账号取流；点播不再要求先取得 TV `durl`。局域网 SOAP 元数据不携带 Cookie、App access／refresh token，不新增账号转换、远端授权或自动写请求重试。
 
+2026-11-14 纠正上述自动取流分流：默认对包括云视听在内的所有设备保留 TV `durl`／直播媒体地址解析。仅用户主动开启“电视弹幕（实验）”且设备声明 B站服务时才跳过直链，不能因发现服务就假定接收端版本／专有取流会话兼容；不新增接口、鉴权转换或自动写请求回退。见[回归修复](validation/casting-compatibility-regression-2026-11-14.md)。
+
 MVP 优先 **Web REST + Web Cookie + 按端点配置 WBI/CSRF**，视频弹幕使用 HTTP 返回的 Protobuf，直播消息使用 WebSocket。收到 Protobuf 字节并不意味着必须使用 gRPC。
 
 App/TV token 按功能独立接入，gRPC 仍延后。App 推荐可使用游客身份；个性化推荐和反馈只使用正常登录取得的 App token。参考项目的 App/TV 参数不能直接与 Web Cookie 登录拼接，缺少 token 不允许提交 App 反馈。
