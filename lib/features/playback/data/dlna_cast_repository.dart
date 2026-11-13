@@ -7,6 +7,7 @@ import 'package:xml/xml.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../domain/casting.dart';
+import 'bilibili_cast_projection.dart';
 
 /// SSDP discovery and AVTransport control use no account headers or cookies.
 final class DlnaCastRepository implements CastDeviceRepository {
@@ -42,6 +43,7 @@ final class DlnaCastRepository implements CastDeviceRepository {
       for (final target in const [
         'urn:schemas-upnp-org:device:MediaRenderer:1',
         'urn:schemas-upnp-org:service:AVTransport:1',
+        'urn:app-bilibili-com:service:NirvanaControl:3',
       ]) {
         socket.send(
           ascii.encode(
@@ -125,7 +127,24 @@ final class DlnaCastRepository implements CastDeviceRepository {
         }
         final services = device.childElements
             .where((node) => node.name.local == 'serviceList')
-            .expand((node) => node.childElements);
+            .expand((node) => node.childElements)
+            .toList();
+        CastService? bilibili;
+        for (final service in services) {
+          final type = _child(service, 'serviceType');
+          final path = _child(service, 'controlURL');
+          if (!RegExp(
+                r'^urn:(app-bilibili-com|schemas-upnp-org):service:NirvanaControl:[1-9][0-9]*$',
+              ).hasMatch(type) ||
+              path.isEmpty) {
+            continue;
+          }
+          final control = base.resolve(path);
+          if (_httpUri(control) && control.host == location.host) {
+            bilibili = CastService(controlUri: control, type: type);
+            break;
+          }
+        }
         for (final service in services) {
           final type = _child(service, 'serviceType');
           final path = _child(service, 'controlURL');
@@ -146,6 +165,7 @@ final class DlnaCastRepository implements CastDeviceRepository {
                   : name.substring(0, name.length.clamp(0, 128)),
               controlUri: control,
               serviceType: type,
+              bilibiliService: bilibili,
             ),
           );
           break;
@@ -162,10 +182,18 @@ final class DlnaCastRepository implements CastDeviceRepository {
   @override
   Future<void> setMedia(
     CastDevice device,
-    Uri uri,
+    CastMedia media,
     String title, {
     required RequestCancellation cancellation,
   }) {
+    final enhanced = device.bilibiliService != null;
+    final uri = enhanced
+        ? Uri.parse('bilibili://projection?proj_source=bilibili&_nva_ext_=')
+        : media.uri;
+    if (uri == null || (!enhanced && !_httpUri(uri))) {
+      throw const AppFailure(AppFailureKind.protocol, '未取得可投屏的媒体地址');
+    }
+    final projection = enhanced ? encodeBilibiliCastProjection(media) : null;
     final metadata = XmlBuilder()
       ..element(
         'DIDL-Lite',
@@ -186,6 +214,10 @@ final class DlnaCastRepository implements CastDeviceRepository {
       ],
       [
         XmlElement(XmlName('title', 'dc'), [], [XmlText(title)]),
+        if (projection != null)
+          XmlElement(XmlName('longDescription', 'upnp'), [], [
+            XmlText(projection),
+          ]),
         XmlElement(XmlName('class', 'upnp'), [], [
           XmlText('object.item.videoItem'),
         ]),
@@ -228,14 +260,39 @@ final class DlnaCastRepository implements CastDeviceRepository {
     cancellation,
   );
 
+  @override
+  Future<void> setDanmaku(
+    CastDevice device,
+    bool enabled, {
+    required RequestCancellation cancellation,
+  }) {
+    final service = device.bilibiliService;
+    if (service == null || service.controlUri.host != device.controlUri.host) {
+      throw const AppFailure(AppFailureKind.protocol, '投屏设备不支持弹幕控制');
+    }
+    return _action(
+      device,
+      'SetDanmakuSwitch',
+      {'DesiredSwitch': enabled ? '1' : '0'},
+      cancellation,
+      service: service,
+    );
+  }
+
   Future<void> _action(
     CastDevice device,
     String action,
     Map<String, String> arguments,
-    RequestCancellation cancellation,
-  ) async {
+    RequestCancellation cancellation, {
+    CastService? service,
+  }) async {
+    final type = service?.type ?? device.serviceType;
     if (!RegExp(r'^urn:schemas-upnp-org:service:AVTransport:[1-9][0-9]*$')
-        .hasMatch(device.serviceType)) {
+            .hasMatch(type) &&
+        !(service != null &&
+            RegExp(
+              r'^urn:(app-bilibili-com|schemas-upnp-org):service:NirvanaControl:[1-9][0-9]*$',
+            ).hasMatch(type))) {
       throw const AppFailure(AppFailureKind.protocol, '投屏设备协议不受支持');
     }
     final builder = XmlBuilder();
@@ -249,9 +306,12 @@ final class DlnaCastRepository implements CastDeviceRepository {
         's:Body',
         nest: () => builder.element(
           'u:$action',
-          attributes: {'xmlns:u': device.serviceType},
+          attributes: {'xmlns:u': type},
           nest: () {
-            for (final entry in {'InstanceID': '0', ...arguments}.entries) {
+            for (final entry in {
+              if (service == null) 'InstanceID': '0',
+              ...arguments,
+            }.entries) {
               builder.element(entry.key, nest: entry.value);
             }
           },
@@ -259,9 +319,9 @@ final class DlnaCastRepository implements CastDeviceRepository {
       ),
     );
     final xml = await _request(
-      device.controlUri,
+      service?.controlUri ?? device.controlUri,
       cancellation,
-      action: '${device.serviceType}#$action',
+      action: '$type#$action',
       body: builder.buildDocument().toXmlString(),
     );
     try {
