@@ -46,6 +46,9 @@ void main() {
           theme: AppThemePreference.dark,
           defaultDynamicTab: DynamicPageTab.videoDynamic,
           navigationMode: WorkspaceNavigationMode.multipleTabs,
+          closeTabOnMiddleClick: true,
+          closeTabOnRightClick: true,
+          closeTabOnDoubleClick: true,
           allowConcurrentPlayback: true,
           font: AppFontPreference.installed,
           systemFontFamily: 'Custom font',
@@ -112,6 +115,9 @@ void main() {
         expect(settings.defaultDynamicTab, DynamicPageTab.dynamic);
         expect(settings.checkPrereleaseUpdates, isFalse);
         expect(settings.navigationMode, defaults.navigationMode);
+        expect(settings.closeTabOnMiddleClick, isFalse);
+        expect(settings.closeTabOnRightClick, isFalse);
+        expect(settings.closeTabOnDoubleClick, isFalse);
         expect(settings.danmakuArea, defaults.danmakuArea);
         expect(settings.danmakuFontScale, defaults.danmakuFontScale);
         expect(settings.danmakuFont, DanmakuFontPreference.harmonyOsSans);
