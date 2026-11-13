@@ -9,7 +9,8 @@ import '../domain/casting.dart';
 
 /// Bilibili's UPnP extension identifies the content so the receiver can fetch
 /// its own streams and danmaku. This fixed protocol key is not account security.
-/// Wire format reviewed against NeoBV's MIT NvaExtDecoder; see dlna-casting.md.
+/// Wire format reviewed against NeoBV's MIT NvaExtDecoder; routing and initial
+/// state checked against the 1.8.9 receiver. See dlna-casting.md.
 String encodeBilibiliCastProjection(CastMedia media) {
   final request = media.request;
   int? id(String? value) => value == null ? null : int.tryParse(value);
@@ -39,6 +40,13 @@ String encodeBilibiliCastProjection(CastMedia media) {
     'epId': episodeId ?? 0,
     'seasonId': seasonId ?? 0,
     if (request.isLive) 'roomId': roomId!,
+    // The TV's autoNext flag also selects content resolution. Without it an
+    // identity-only projection is downgraded to an empty direct media URL.
+    'an': true,
+    'io': request.danmakuEnabled,
+    // Protocol discriminator: receivers before mobile version 6.24.0 used ms.
+    // This identifies the seconds-based wire format, not this app's version.
+    'mv': 6240000,
     'sk': '$position',
     'seekTs': position,
     'qn': request.quality,

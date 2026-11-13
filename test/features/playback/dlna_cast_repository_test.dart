@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/playback/data/dlna_cast_repository.dart';
 import 'package:bilisail/features/playback/domain/casting.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pointycastle/export.dart';
 import 'package:xml/xml.dart';
+
+import '../../support/bilibili_cast_projection.dart';
 
 String _description({
   String base = '',
@@ -150,7 +150,9 @@ void main() {
         );
         final metadata = XmlDocument.parse(value(body, 'CurrentURIMetaData'));
         expect(value(metadata, 'title'), '测试 <电视> & 弹幕');
-        final payload = _decodeProjection(value(metadata, 'longDescription'));
+        final payload = decodeCastProjection(
+          value(metadata, 'longDescription'),
+        );
         expect(
           payload['cid'],
           request.cid == null ? 0 : int.parse(request.cid!),
@@ -360,21 +362,4 @@ void main() {
       await check;
     },
   );
-}
-
-// Decode as an independent receiver: AES-CBC/PKCS7, then raw DEFLATE JSON.
-Map<String, Object?> _decodeProjection(String value) {
-  final key = Uint8List.fromList(utf8.encode('1pzhA828t4i.6Oq@'));
-  final cipher = PaddedBlockCipher('AES/CBC/PKCS7')
-    ..init(
-      false,
-      PaddedBlockCipherParameters(
-        ParametersWithIV(KeyParameter(key), key),
-        null,
-      ),
-    );
-  final decoded = cipher.process(base64Url.decode(base64Url.normalize(value)));
-  return (jsonDecode(
-    utf8.decode(ZLibDecoder(raw: true).convert(decoded)),
-  ) as Map).cast<String, Object?>();
 }
