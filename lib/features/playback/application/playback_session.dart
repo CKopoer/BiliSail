@@ -601,6 +601,8 @@ class PlaybackSession extends ChangeNotifier {
 
   void discardNextVideo() => _nextSourceIntent = null;
 
+  bool get danmakuEnabled => _settings.danmakuEnabled;
+
   String? get danmakuCid => switch (contentTarget) {
     LivePlaybackTarget() => null,
     PgcPlaybackTarget(:final cid) => cid ?? part?.cid,

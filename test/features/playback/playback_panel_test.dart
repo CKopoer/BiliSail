@@ -909,7 +909,7 @@ void main() {
             '置顶',
             '返回',
             '回到主页',
-            if (content == 'video' || content == 'pgc') '投屏',
+            if (content != 'offline') '投屏',
             if (session.canListen) '听视频',
             '播放配置',
             '更多播放选项',
@@ -1706,7 +1706,7 @@ void main() {
               const ValueKey('player-control-title-layer'),
             );
             for (final tooltip in [
-              if (content == 'video' || content == 'pgc') '投屏',
+              if (content != 'offline') '投屏',
               if (session.canListen) '听视频',
               '播放配置',
               '更多播放选项',
@@ -6893,26 +6893,17 @@ void main() {
         expect(find.byIcon(Icons.airplanemode_active), findsNothing);
         expect(
           find.byTooltip('投屏'),
-          content == 'video' || content == 'pgc'
-              ? findsOneWidget
-              : findsNothing,
+          content != 'offline' ? findsOneWidget : findsNothing,
         );
         void expectCastingInTopBar() {
           final casting = find.byTooltip('投屏').hitTestable();
-          expect(
-            casting,
-            content == 'video' || content == 'pgc'
-                ? findsOneWidget
-                : findsNothing,
-          );
+          expect(casting, content != 'offline' ? findsOneWidget : findsNothing);
           expect(
             find.descendant(
               of: find.byKey(const ValueKey('player-control-title-layer')),
               matching: casting,
             ),
-            content == 'video' || content == 'pgc'
-                ? findsOneWidget
-                : findsNothing,
+            content != 'offline' ? findsOneWidget : findsNothing,
           );
           expect(
             find.descendant(

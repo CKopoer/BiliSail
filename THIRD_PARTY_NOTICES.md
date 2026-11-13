@@ -1,5 +1,11 @@
 # 第三方来源与分发检查
 
+## 2026-11-13 B站扩展投屏与直播
+
+新增精确依赖 [pointycastle 4.0.0](https://pub.dev/packages/pointycastle/versions/4.0.0)（MIT，纯 Dart），用于标准 AES-CBC／PKCS7 编码；包内原始 LICENSE 由 Flutter notices 收集。B站投屏固定协议 key／IV 和报文格式只作为互通协议事实，不用于账号凭据传送或安全存储。
+
+只读核对 MIT 的 [NeoBV `6c8ce4bbf82f43681cc6c5e46cd4f8c9b9b71bf6`](https://github.com/b1ackmarket/NeoBV/tree/6c8ce4bbf82f43681cc6c5e46cd4f8c9b9b71bf6) 接收协议；GPLv3 的 Danmu TV 与 Pure Live 仅参考协议事实、内容身份／弹幕职责和直播地址交接，没有复制其应用源码、资源、抓包样本或账号数据。独立实现、精确路径、固定提交和设备验收边界见 [DLNA 投屏](docs/validation/dlna-casting.md)。
+
 ## 2026-11-07 Windows x64 硬解边缘修复
 
 Windows x64 改用个人 mpv `afd6da8843a07f463ba4c736a2ea636b1a92e23e` 重建的 SDK；固定 [原生资产](https://github.com/CKopoer/media-kit/releases/tag/native-windows-hwdec-edges-2026-11-07)、源码、构建容器和完整摘要见 [Windows 来源](windows/native/mpv/SOURCE.md)。mpv 为 LGPL-2.1-or-later，本次 FFmpeg 为 LGPL-3.0-or-later；LuaJIT／libsixel 的 MIT 和 subrandr 的 MPL-2.0 原始文本、容器附带的子依赖通知随 SDK 的 `provenance/` 分发。补充许可的打包脚本逐项验证原生 DLL、import library、头文件和 JAR 与 CI 产物内容不变。应用动态加载 DLL，保留替换和对应源码／构建材料；MIT 包装许可不覆盖静态子依赖许可。ARM64 和其他平台保留既有原生资产。

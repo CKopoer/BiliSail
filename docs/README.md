@@ -105,7 +105,7 @@
 | [1080P60 播放请求对照](validation/playurl-quality-2026-11-01.md) | PiliPlus 请求上下文、最高档发现／缺档补取、普通账号在线证据与大会员验收边界 |
 | [播放地址内容不可用重试](validation/playurl-unavailable-retry-2026-11-05.md) | DASH 缺失／未分类业务错误恢复、网络与 WBI 共享次数预算、取消／账号／超时边界 |
 | [无音轨视频播放](validation/silent-video-playback-2026-11-08.md) | BV1fTnZ6LEvr 的明确无音轨响应、完整播放契约和 Windows 两后端在线验证 |
-| [DLNA 投屏](validation/dlna-casting.md) | 视频／影视 TV 地址、设备发现与控制、生命周期及平台验收边界 |
+| [DLNA 投屏](validation/dlna-casting.md) | 视频／影视／直播、B站接收端内容身份与弹幕开关、普通 DLNA、生命周期及设备验收边界 |
 | [系统媒体通知与控制](validation/system-media-controls.md) | Android 通知、Apple 正在播放、Windows SMTC、Linux MPRIS、会话目标与验证边界 |
 | [PiliPlus 播放器与弹幕依赖切换](validation/piliplus-dependencies-2026-11-01.md) | 精确提交、库插件打包、异步 API、headers、首帧与原生回归 |
 | [Predidit 弹幕与播放器切换](predidit-media-migration.md) | 固定源码、Canvas 绘制适配、D3D11／Native Assets、打包及逐平台验证 |

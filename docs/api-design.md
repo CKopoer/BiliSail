@@ -71,6 +71,8 @@ lib/src/
 
 2026-10-31 新增 TV 投屏只读端点：`GET https://api.bilibili.com/x/tv/playurl`，App profile MD5 签名，游客可请求，已有且未过期的 App token 同时用于 `access_key`／`mobile_access_key`，不携带 Web Cookie。`object_id` 为 UGC aid 或 PGC episode ID，`cid` 保留真实内容身份，`playurl_type` 分别为 1／2；`is_proj=1`、`protocol=0`、`fourk=1`，清晰度沿用本地已选值。无分页；单次总预算 25 秒内最多两次只读尝试，取消／账号 epoch 隔离沿用 `ApiRequests`。JSON 仅接受一个完整 `durl` 段，不将 DASH 单轨或试看作为完整投屏成功。设备发现和 SOAP 操作独立于账号 HTTP 通道，写命令不自动重放；详情见 [DLNA 投屏](validation/dlna-casting.md)。
 
+2026-11-13 直播投屏复用现有 `LiveClient.getPlayInfo` 和 WBI 请求上下文，按规范房间 ID／开播状态交接，普通设备选择 AVC HLS／FLV 签名地址。声明 B站服务的接收端只接收内容身份与播放／弹幕偏好，自行使用电视账号取流；点播不再要求先取得 TV `durl`。局域网 SOAP 元数据不携带 Cookie、App access／refresh token，不新增账号转换、远端授权或自动写请求重试。
+
 MVP 优先 **Web REST + Web Cookie + 按端点配置 WBI/CSRF**，视频弹幕使用 HTTP 返回的 Protobuf，直播消息使用 WebSocket。收到 Protobuf 字节并不意味着必须使用 gRPC。
 
 App/TV token 按功能独立接入，gRPC 仍延后。App 推荐可使用游客身份；个性化推荐和反馈只使用正常登录取得的 App token。参考项目的 App/TV 参数不能直接与 Web Cookie 登录拼接，缺少 token 不允许提交 App 反馈。

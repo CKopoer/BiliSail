@@ -29,19 +29,33 @@ CastMediaRequest? castRequestFor(PlaybackSession session) {
   if (!supportsDlnaCasting || media == null || session.isResolving) {
     return null;
   }
+  if (session.contentTarget case LivePlaybackTarget(:final roomId)) {
+    return CastMediaRequest.live(
+      roomId: roomId,
+      quality: media.quality,
+      danmakuEnabled: session.danmakuEnabled,
+    );
+  }
   final cid = session.danmakuCid;
   if (cid == null) return null;
   return switch (session.contentTarget) {
-    PgcPlaybackTarget(:final episodeId) => CastMediaRequest(
+    PgcPlaybackTarget(:final episodeId, :final seasonId) => CastMediaRequest(
       episodeId: episodeId,
+      seasonId: seasonId,
       cid: cid,
       quality: media.quality,
+      position: session.snapshots.value.position,
+      speed: session.commandRate,
+      danmakuEnabled: session.danmakuEnabled,
     ),
     null when detail != null => CastMediaRequest(
       aid: detail.aid,
       bvid: detail.summary.id.value,
       cid: cid,
       quality: media.quality,
+      position: session.snapshots.value.position,
+      speed: session.commandRate,
+      danmakuEnabled: session.danmakuEnabled,
     ),
     _ => null,
   };
@@ -138,7 +152,11 @@ class CastingController extends ChangeNotifier {
   Future<void> connect(CastDevice device) => _run((token) async {
     if (selected?.id == device.id) return;
     // Resolve again on each selection so an expired signed URL is not reused.
-    final uri = await mediaRepository.resolve(request, cancellation: token);
+    final media = await mediaRepository.resolve(
+      request,
+      receiverResolves: device.bilibiliService != null,
+      cancellation: token,
+    );
     if (!_current || token.isCancelled) return;
     if (selected case final previous?) {
       await deviceRepository.command(
@@ -150,7 +168,7 @@ class CastingController extends ChangeNotifier {
       selected = null;
       transport = null;
     }
-    await deviceRepository.setMedia(device, uri, title, cancellation: token);
+    await deviceRepository.setMedia(device, media, title, cancellation: token);
     if (!_current || token.isCancelled) return;
     await deviceRepository.command(
       device,
@@ -161,6 +179,21 @@ class CastingController extends ChangeNotifier {
     selected = device;
     transport = CastingTransport.playing;
     await pauseLocal();
+    if (device.bilibiliService != null && _current && !token.isCancelled) {
+      // Apply the actual switch as well as the saved preference in metadata.
+      // A settings failure must not erase an already-confirmed media handoff.
+      try {
+        await deviceRepository.setDanmaku(
+          device,
+          request.danmakuEnabled,
+          cancellation: token,
+        );
+      } catch (_) {
+        if (_current && !token.isCancelled) {
+          message = '投屏已开始，电视弹幕设置未确认，请使用电视遥控器调整';
+        }
+      }
+    }
   });
 
   Future<void> control(CastCommand command) => _run((token) async {
