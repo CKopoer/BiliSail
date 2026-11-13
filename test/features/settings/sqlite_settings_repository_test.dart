@@ -12,6 +12,55 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late AppDatabase database;
   late SqliteSettingsRepository repository;
+  test('tab close mouse options migrate with safe defaults', () async {
+    for (final legacy in [
+      <String, Object?>{},
+      {
+        'closeTabOnMiddleClick': 'true',
+        'closeTabOnRightClick': 1,
+        'closeTabOnDoubleClick': null,
+      },
+    ]) {
+      await database.writeSetting(
+        'preferences.v1',
+        jsonEncode({'schemaVersion': 46, 'theme': 'dark', ...legacy}),
+      );
+      final loaded = await repository.load();
+      expect(loaded.closeTabOnMiddleClick, isFalse);
+      expect(loaded.closeTabOnRightClick, isFalse);
+      expect(loaded.closeTabOnDoubleClick, isFalse);
+      expect(loaded.theme, AppThemePreference.dark);
+    }
+    expect(database.schemaVersion, 3);
+  });
+
+  test(
+    'tab close mouse options persist every independent combination',
+    () async {
+      for (var mask = 0; mask < 8; mask++) {
+        await repository.save(
+          AppSettings(
+            closeTabOnMiddleClick: (mask & 1) != 0,
+            closeTabOnRightClick: (mask & 2) != 0,
+            closeTabOnDoubleClick: (mask & 4) != 0,
+          ).copyWith(cacheImages: false).normalized(),
+        );
+        for (final mode in WorkspaceNavigationMode.values) {
+          final settings = (await repository.load()).copyWith(
+            navigationMode: mode,
+          );
+          await repository.save(settings);
+          final restored = await repository.load();
+          expect(restored.closeTabOnMiddleClick, (mask & 1) != 0);
+          expect(restored.closeTabOnRightClick, (mask & 2) != 0);
+          expect(restored.closeTabOnDoubleClick, (mask & 4) != 0);
+          expect(restored.cacheImages, isFalse);
+          expect(restored.navigationMode, mode);
+        }
+      }
+    },
+  );
+
   test(
     'picture gesture preferences migrate, validate, persist and reset',
     () async {

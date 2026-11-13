@@ -14,6 +14,80 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   for (final failSave in [false, true]) {
+    testWidgets(
+      'tab close options allow multiple selections and rollback: $failSave',
+      (tester) async {
+        final repository = _SettingsRepository()
+          ..settings = AppSettings.defaults(
+            navigationMode: WorkspaceNavigationMode.multipleTabs,
+          )
+          ..failSave = failSave;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: MaterialApp(
+              builder: AppNoticeHost.builder,
+              home: const Scaffold(
+                body: SettingsScreen(category: SettingsCategory.appearance),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        for (final label in ['鼠标中键', '鼠标右键', '鼠标双击']) {
+          final chip = find.widgetWithText(FilterChip, label);
+          expect(tester.widget<FilterChip>(chip).selected, isFalse);
+          await tester.ensureVisible(chip);
+          await tester.pumpAndSettle();
+          await tester.tap(chip);
+          await tester.pumpAndSettle();
+          expect(tester.widget<FilterChip>(chip).selected, !failSave);
+        }
+        final container = ProviderScope.containerOf(
+          tester.element(find.text('关闭标签页（可多选）')),
+        );
+        container.invalidate(settingsControllerProvider);
+        await tester.pumpAndSettle();
+        for (final label in ['鼠标中键', '鼠标右键', '鼠标双击']) {
+          expect(
+            tester
+                .widget<FilterChip>(find.widgetWithText(FilterChip, label))
+                .selected,
+            !failSave,
+          );
+        }
+        expect(repository.settings.closeTabOnMiddleClick, !failSave);
+        expect(repository.settings.closeTabOnRightClick, !failSave);
+        expect(repository.settings.closeTabOnDoubleClick, !failSave);
+        if (!failSave) {
+          await tester.tap(find.widgetWithText(FilterChip, '鼠标右键'));
+          await tester.pumpAndSettle();
+          expect(repository.settings.closeTabOnMiddleClick, isTrue);
+          expect(repository.settings.closeTabOnRightClick, isFalse);
+          expect(repository.settings.closeTabOnDoubleClick, isTrue);
+          for (final mode in ['双标签页', '单标签页', '多标签页']) {
+            final chip = find.widgetWithText(ChoiceChip, mode);
+            await tester.ensureVisible(chip);
+            await tester.pumpAndSettle();
+            await tester.tap(chip);
+            await tester.pumpAndSettle();
+            expect(
+              find.text('关闭标签页（可多选）'),
+              mode == '多标签页' ? findsOneWidget : findsNothing,
+            );
+          }
+          expect(repository.settings.closeTabOnMiddleClick, isTrue);
+          expect(repository.settings.closeTabOnRightClick, isFalse);
+          expect(repository.settings.closeTabOnDoubleClick, isTrue);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  for (final failSave in [false, true]) {
     testWidgets('background playback saves, reloads or rolls back: $failSave', (
       tester,
     ) async {

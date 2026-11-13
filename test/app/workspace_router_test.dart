@@ -77,6 +77,56 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final (label, buttons) in [
+    ('鼠标中键', kMiddleMouseButton),
+    ('鼠标右键', kSecondaryMouseButton),
+    ('鼠标双击', kPrimaryMouseButton),
+  ]) {
+    _workspaceTestWidgets('tab close setting applies immediately: $label', (
+      tester,
+    ) async {
+      final settings = _SettingsRepository(
+        navigationMode: WorkspaceNavigationMode.multipleTabs,
+      );
+      final search = _SearchRepository();
+      final router = createBiliRouter(
+        initialLocation: '/search?q=cat',
+        playerBuilder: (_, _, _) => const SizedBox(),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsRepositoryProvider.overrideWithValue(settings),
+            searchRepositoryProvider.overrideWithValue(search),
+            feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+            homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+          ],
+          child: InputTestApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      router.go('/settings');
+      await tester.pumpAndSettle();
+      final option = find.widgetWithText(FilterChip, label);
+      await tester.ensureVisible(option);
+      await tester.pumpAndSettle();
+      await tester.tap(option);
+      await tester.pumpAndSettle();
+      final tab = find.byKey(const ValueKey('workspace-tab-tab-1'));
+      await tester.tap(tab, kind: PointerDeviceKind.mouse, buttons: buttons);
+      if (buttons == kPrimaryMouseButton) {
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.tap(tab, kind: PointerDeviceKind.mouse, buttons: buttons);
+      }
+      await tester.pumpAndSettle();
+      expect(tab, findsNothing);
+      expect(router.routeInformationProvider.value.uri.path, '/settings');
+      expect(find.byType(SearchScreen, skipOffstage: false), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final width in [390.0, 1280.0]) {
     for (final textScale in [1.0, 2.0]) {
       _workspaceTestWidgets(

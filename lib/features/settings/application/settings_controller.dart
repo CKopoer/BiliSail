@@ -87,6 +87,12 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(recommendations: value));
   Future<void> setNavigationMode(WorkspaceNavigationMode value) =>
       update((current) => current.copyWith(navigationMode: value));
+  Future<void> setCloseTabOnMiddleClick(bool value) =>
+      update((current) => current.copyWith(closeTabOnMiddleClick: value));
+  Future<void> setCloseTabOnRightClick(bool value) =>
+      update((current) => current.copyWith(closeTabOnRightClick: value));
+  Future<void> setCloseTabOnDoubleClick(bool value) =>
+      update((current) => current.copyWith(closeTabOnDoubleClick: value));
   Future<void> setNavigationBarMode(NavigationBarMode value) =>
       update((current) => current.copyWith(navigationBarMode: value));
   Future<void> setSidebarStyle(SidebarStyle value) =>

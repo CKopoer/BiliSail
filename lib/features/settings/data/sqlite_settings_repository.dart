@@ -96,6 +96,9 @@ class SqliteSettingsRepository implements SettingsRepository {
               .firstOrNull ??
           DynamicPageTab.dynamic,
       allowConcurrentPlayback: boolean('allowConcurrentPlayback', false),
+      closeTabOnMiddleClick: boolean('closeTabOnMiddleClick', false),
+      closeTabOnRightClick: boolean('closeTabOnRightClick', false),
+      closeTabOnDoubleClick: boolean('closeTabOnDoubleClick', false),
       cacheImages: boolean('cacheImages', true),
       recordSearchHistory: boolean('recordSearchHistory', true),
       checkPrereleaseUpdates: boolean('checkPrereleaseUpdates', false),
@@ -284,7 +287,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 46,
+        'schemaVersion': 47,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -296,6 +299,9 @@ class SqliteSettingsRepository implements SettingsRepository {
         'playerFullscreenGesture': value.playerFullscreenGesture,
         'playerShrinkVideo': value.playerShrinkVideo,
         'navigationMode': value.navigationMode.name,
+        'closeTabOnMiddleClick': value.closeTabOnMiddleClick,
+        'closeTabOnRightClick': value.closeTabOnRightClick,
+        'closeTabOnDoubleClick': value.closeTabOnDoubleClick,
         'allowConcurrentPlayback': value.allowConcurrentPlayback,
         'cacheImages': value.cacheImages,
         'recordSearchHistory': value.recordSearchHistory,
