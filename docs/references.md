@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-13 B站扩展投屏只读核对 MIT 的 NeoBV `6c8ce4bbf82f43681cc6c5e46cd4f8c9b9b71bf6`、GPLv3 的 Danmu TV `d28b8aed03e6da6df47469ac22771dc40ae228f4`；直播地址投屏只读参考 GPLv3 的 Pure Live `1a60607cdd308132afcd85cd562f404109499633`。仅采用内容身份、压缩／编码格式、服务发现与控制的协议事实，独立实现领域模型、能力分流和仓储，无参考应用源码／资源／抓包凭据复制。精确源码路径、依赖许可和验证边界见 [DLNA 投屏](validation/dlna-casting.md)。
+
 2026-11-12：已移除 fvp／MDK，当前仅使用 media_kit。历史文档中的双后端实现、SDK、命令及测试记录保留当时事实，不再作为现行入口；清理与设置兼容见[移除记录](validation/fvp-removal-2026-11-12.md)。
 
 2026-11-12 评论装扮对齐只读参考 PiliPlus `cab0114a21ce7fad5b90b9a4d788d35d313d25f9` 的 `lib/pages/video/reply/widgets/reply_item_grpc.dart` 和 `lib/common/widgets/translucent_row.dart`，核对实际 overrides／锁文件。借鉴头像与作者信息共同排版、装扮靠右的职责，结合本项目 52 像素装扮实现整组垂直居中；未复制 GPLv3 源码／资源、修改相邻仓库或依赖，见[评论样式与验证](validation/official-client-typography-2026-11-09.md)。

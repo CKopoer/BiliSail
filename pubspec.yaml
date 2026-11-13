@@ -20,6 +20,7 @@ dependencies:
   archive: 4.5.2
   crypto: 3.0.7
   xml: 6.6.1
+  pointycastle: 4.0.0
   path_provider: 2.1.6
   file_selector: 1.1.0
   flutter_secure_storage: 11.2.0

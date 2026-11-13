@@ -8,6 +8,56 @@ import '../../support/casting_fakes.dart';
 
 void main() {
   test(
+    'unconfirmed TV danmaku switch preserves a successful handoff',
+    () async {
+      final h = CastingHarness(
+        request: const CastMediaRequest(
+          aid: '1',
+          cid: '2',
+          quality: 80,
+          danmakuEnabled: false,
+        ),
+      );
+      addTearDown(h.dispose);
+      h.devices.failDanmaku = true;
+      await h.controller.connect(castDevice('tv', bilibili: true));
+      expect(h.devices.calls, ['set:tv', 'play:tv', 'danmaku:tv:false']);
+      expect(h.localPauses, 1);
+      expect(h.controller.selected?.id, 'tv');
+      expect(h.controller.transport, CastingTransport.playing);
+      expect(h.controller.message, contains('投屏已开始'));
+      await h.controller.connect(castDevice('tv', bilibili: true));
+      expect(h.devices.calls, hasLength(3));
+    },
+  );
+
+  test(
+    'Bilibili receivers resolve content while ordinary devices receive URLs',
+    () async {
+      final h = CastingHarness(
+        request: const CastMediaRequest.live(roomId: '42', quality: 400),
+      );
+      addTearDown(h.dispose);
+      await h.controller.connect(castDevice('tv', bilibili: true));
+      await h.controller.connect(castDevice('dlna'));
+      expect(h.media.receiversResolve, [true, false]);
+      expect(h.devices.media.map((media) => media.request.roomId), [
+        '42',
+        '42',
+      ]);
+      expect(h.devices.calls, [
+        'set:tv',
+        'play:tv',
+        'danmaku:tv:true',
+        'stop:tv',
+        'set:dlna',
+        'play:dlna',
+      ]);
+      expect(h.localPauses, 2);
+    },
+  );
+
+  test(
     'successful handoff pauses local once and commands stay serialized',
     () async {
       final h = CastingHarness();
