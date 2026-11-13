@@ -186,7 +186,12 @@ final class DlnaCastRepository implements CastDeviceRepository {
     String title, {
     required RequestCancellation cancellation,
   }) {
-    final enhanced = device.bilibiliService != null;
+    // NirvanaControl discovery does not prove that a TV can load an
+    // identity-only projection using this sender's metadata and session.
+    final enhanced = media.receiverResolves;
+    if (enhanced && device.bilibiliService == null) {
+      throw const AppFailure(AppFailureKind.protocol, '投屏设备不支持电视弹幕模式');
+    }
     final uri = enhanced
         ? Uri.parse('bilibili://projection?proj_source=bilibili&_nva_ext_=')
         : media.uri;

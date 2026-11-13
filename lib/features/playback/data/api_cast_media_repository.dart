@@ -29,7 +29,11 @@ final class ApiCastMediaRepository implements CastMediaRepository {
         throw const AppFailure(AppFailureKind.playback, '主播当前未开播');
       }
       if (receiverResolves) {
-        return CastMedia(request: request, roomId: info.roomId);
+        return CastMedia(
+          request: request,
+          roomId: info.roomId,
+          receiverResolves: true,
+        );
       }
       // A renderer cannot inherit the native player's HTTP headers or decode
       // preferences. Prefer an AVC MPEG-TS HLS stream for ordinary televisions.
@@ -61,7 +65,9 @@ final class ApiCastMediaRepository implements CastMediaRepository {
       throw const AppFailure(AppFailureKind.playback, '当前内容暂不支持投屏');
     }
     final aid = request.episodeId == null ? objectId : request.aid;
-    if (receiverResolves) return CastMedia(request: request, aid: aid);
+    if (receiverResolves) {
+      return CastMedia(request: request, aid: aid, receiverResolves: true);
+    }
     final cid = request.cid;
     if (cid == null) {
       throw const AppFailure(AppFailureKind.playback, '当前内容缺少投屏所需的视频标识');
