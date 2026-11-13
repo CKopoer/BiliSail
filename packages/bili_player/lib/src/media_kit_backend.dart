@@ -16,6 +16,7 @@ import 'native_player_properties.dart';
 import 'native_error_monitor.dart';
 import 'native_load_observer.dart';
 import 'native_audio_gain.dart';
+import 'native_rate_audio.dart';
 import 'native_video_frame_queue.dart';
 import 'native_video_color.dart';
 import 'video_dimensions.dart';
@@ -31,7 +32,9 @@ final class MediaKitBackend
     bool? experimentalVideoFrameQueue,
     bool? experimentalAndroidViewport,
     this.experimentalAudioAutosync,
-  }) : _videoOutput = MediaKitVideoOutput(
+    Future<mk.Player> Function()? createPlayer,
+  }) : _createPlayer = createPlayer ?? createNativePlayer,
+       _videoOutput = MediaKitVideoOutput(
          limitAndroidOutputToViewport: experimentalAndroidViewport,
        ),
        experimentalVideoFrameQueue = resolveVideoFrameQueueEnabled(
@@ -39,6 +42,7 @@ final class MediaKitBackend
          enabledOverride: experimentalVideoFrameQueue,
        );
   final PlaybackSnapshot Function() snapshot;
+  final Future<mk.Player> Function() _createPlayer;
   PlaybackSnapshot get _snapshot => snapshot();
   final void Function(PlayerDiagnosticEvent)? onDiagnostic;
   final bool experimentalVideoFrameQueue;
@@ -57,6 +61,7 @@ final class MediaKitBackend
   NativeLoadObserver? _nativeLoad;
   Future<NativeLoadObserver>? _attachingLoad;
   NativeAudioGain? _audioGain;
+  NativeRateAudio? _rateAudio;
   Future<mk.Player>? _creating;
   Future<void>? _disposal;
   PlaybackOperation? _preparation;
@@ -501,7 +506,7 @@ final class MediaKitBackend
     }
     mk.MediaKit.ensureInitialized();
     if (_player == null) {
-      final creating = _creating = createNativePlayer().then((player) {
+      final creating = _creating = _createPlayer().then((player) {
         _player = player;
         return player;
       });
@@ -525,7 +530,6 @@ final class MediaKitBackend
       _attachingLoad = null;
     }
     await operation.wait(player.setVolume(options.volume));
-    final platform = player;
 
     _audioGain = NativeAudioGain(
       write: player.setPropertyAsync,
@@ -558,11 +562,22 @@ final class MediaKitBackend
       watch,
       openBudget,
     );
-    // Use the backend's default audio buffer, pitch correction and sync policy.
-    // A validation-only override remains explicit and never changes user opens.
-    if (experimentalAudioAutosync case final autosync?) {
-      await operation.wait(platform.setPropertyAsync('autosync', '$autosync'));
-    }
+    // Configure before decoding starts, never during a hold/release. This
+    // controller follows the native player's lifetime across source reuse.
+    final rateAudio = _rateAudio ??= NativeRateAudio(
+      write: player.setPropertyAsync,
+      read: player.getPropertyAsync,
+    );
+    await rateAudio.configure(
+      enabled: !plan.live && !plan.silent,
+      isCurrent: () =>
+          generation == _generation &&
+          !_disposed &&
+          !operation.isCancelled &&
+          identical(_player, player),
+      timeout: _remaining(watch, openBudget),
+      experimentalAutosync: experimentalAudioAutosync,
+    );
     if (experimentalVideoFrameQueue && source is DashPairSource) {
       await configureNativeVideoFrameQueue(
         write: player.setPropertyAsync,
