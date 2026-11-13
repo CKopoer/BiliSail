@@ -342,9 +342,12 @@ final class ImageByteCache {
   static bool isPublicImageUri(Uri uri) =>
       uri.scheme == 'https' &&
       uri.userInfo.isEmpty &&
+      // Comments and dynamics also return the public album CDN. Keep biliimg
+      // hosts explicit rather than accepting every subdomain.
       // Private message originals use a separate, credential-free image CDN.
       // The private viewer loads them in memory, bypassing the disk cache.
-      (uri.host == 'message.biliimg.com' ||
+      (uri.host == 'album.biliimg.com' ||
+          uri.host == 'message.biliimg.com' ||
           uri.host == 'hdslb.com' ||
           uri.host.endsWith('.hdslb.com') ||
           uri.host == 'bilibili.com' ||

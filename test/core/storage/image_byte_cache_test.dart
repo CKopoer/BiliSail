@@ -22,6 +22,39 @@ void main() {
       .cast<File>()
       .toList();
 
+  test(
+    'album comment thumbnails load and reuse the public image cache',
+    () async {
+      final source = Uri.parse(
+        'https://album.biliimg.com/bfs/new_dyn/fixture.jpg@264w_1280h_0e.webp',
+      );
+      final loaded = <Uri>[];
+      final cache = ImageByteCache(
+        directory: () async => directory,
+        loader: (uri, _) async {
+          loaded.add(uri);
+          return bytes;
+        },
+      );
+      addTearDown(cache.close);
+      expect((await cache.load(source)).bytes, bytes);
+      expect((await cache.load(source)).bytes, bytes);
+      expect(loaded, [source]);
+      for (final host in [
+        'album.biliimg.com.example.com',
+        'other.album.biliimg.com',
+        'other.biliimg.com',
+        'biliimg.com',
+      ]) {
+        await expectLater(
+          cache.load(source.replace(host: host)),
+          throwsA(isA<ImageLoadCancelled>()),
+        );
+      }
+      expect(loaded, [source]);
+    },
+  );
+
   test('same URL is single-flight and reused after cache restart without leaking URLs', () async {
     var calls = 0;
     final response = Completer<Uint8List>();
