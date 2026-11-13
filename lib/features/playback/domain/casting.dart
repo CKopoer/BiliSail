@@ -36,10 +36,19 @@ final class CastMediaRequest {
 
 /// Short-lived handoff data. Media URLs and identities remain in memory.
 final class CastMedia {
-  const CastMedia({required this.request, this.uri, this.aid, this.roomId});
+  const CastMedia({
+    required this.request,
+    this.uri,
+    this.aid,
+    this.roomId,
+    this.receiverResolves = false,
+  });
   final CastMediaRequest request;
   final Uri? uri;
   final String? aid, roomId;
+
+  /// Identity-only handoff requires an explicit choice, not just discovery.
+  final bool receiverResolves;
 }
 
 abstract interface class CastMediaRepository {

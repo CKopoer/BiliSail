@@ -8,6 +8,55 @@ import '../../support/casting_fakes.dart';
 
 void main() {
   test(
+    'an explicit mode change waits for re-selection and stops the old handoff',
+    () async {
+      final h = CastingHarness();
+      addTearDown(h.dispose);
+      final tv = castDevice('tv', bilibili: true);
+      expect(h.controller.televisionDanmaku, isFalse);
+      await h.controller.connect(tv);
+      expect(h.media.receiversResolve, [false]);
+      expect(h.devices.calls, ['set:tv', 'play:tv']);
+
+      h.controller.setTelevisionDanmaku(true);
+      expect(h.controller.needsReconnect, isTrue);
+      expect(h.devices.calls, hasLength(2));
+      await h.controller.connect(tv);
+      expect(h.media.receiversResolve, [false, true]);
+      expect(h.devices.calls, [
+        'set:tv',
+        'play:tv',
+        'stop:tv',
+        'set:tv',
+        'play:tv',
+        'danmaku:tv:true',
+      ]);
+      expect(h.controller.needsReconnect, isFalse);
+
+      h.controller.setTelevisionDanmaku(false);
+      expect(h.controller.needsReconnect, isTrue);
+      expect(h.devices.calls, hasLength(6));
+      await h.controller.connect(tv);
+      expect(h.media.receiversResolve, [false, true, false]);
+      expect(h.devices.calls.skip(6), ['stop:tv', 'set:tv', 'play:tv']);
+      expect(h.controller.needsReconnect, isFalse);
+    },
+  );
+
+  test('mode cannot change while the current handoff is pending', () async {
+    final h = CastingHarness();
+    addTearDown(h.dispose);
+    h.media.pending = Completer<Uri>();
+    final connecting = h.controller.connect(castDevice('tv', bilibili: true));
+    h.controller.setTelevisionDanmaku(true);
+    expect(h.controller.televisionDanmaku, isFalse);
+    h.media.pending!.complete(Uri.parse('https://cdn.example/video.mp4'));
+    await connecting;
+    expect(h.devices.media.single.receiverResolves, isFalse);
+    expect(h.devices.calls, ['set:tv', 'play:tv']);
+  });
+
+  test(
     'unconfirmed TV danmaku switch preserves a successful handoff',
     () async {
       final h = CastingHarness(
@@ -20,6 +69,7 @@ void main() {
       );
       addTearDown(h.dispose);
       h.devices.failDanmaku = true;
+      h.controller.setTelevisionDanmaku(true);
       await h.controller.connect(castDevice('tv', bilibili: true));
       expect(h.devices.calls, ['set:tv', 'play:tv', 'danmaku:tv:false']);
       expect(h.localPauses, 1);
@@ -38,6 +88,7 @@ void main() {
         request: const CastMediaRequest.live(roomId: '42', quality: 400),
       );
       addTearDown(h.dispose);
+      h.controller.setTelevisionDanmaku(true);
       await h.controller.connect(castDevice('tv', bilibili: true));
       await h.controller.connect(castDevice('dlna'));
       expect(h.media.receiversResolve, [true, false]);

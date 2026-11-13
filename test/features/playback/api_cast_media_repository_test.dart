@@ -33,6 +33,7 @@ void main() {
           'https://cdn.example/video.mp4?sign=a%2Bb',
         );
         expect(media.request, same(request));
+        expect(media.receiverResolves, isFalse);
         final query = h.transport.calls.single.queryParameters;
         expect(query['object_id'], episode ? '123' : '170001');
         expect(query['playurl_type'], episode ? '2' : '1');
@@ -56,6 +57,7 @@ void main() {
           cancellation: RequestCancellation(),
         );
         expect(media.uri, isNull);
+        expect(media.receiverResolves, isTrue);
         expect(media.aid, episode ? null : '170001');
         expect(h.transport.calls, isEmpty);
         expect(h.credentialReads, 0);
@@ -103,6 +105,7 @@ void main() {
         cancellation: RequestCancellation(),
       );
       expect(media.uri, isNull);
+      expect(media.receiverResolves, isTrue);
       expect(media.roomId, '888');
       expect(h.transport.calls.last.queryParameters['qn'], '0');
       await expectLater(

@@ -40,7 +40,12 @@ class FakeCastMedia implements CastMediaRepository {
             Future.value(
               Uri.parse('https://cdn.example/video.mp4?sign=fixture'),
             ));
-    return CastMedia(request: request, uri: uri, aid: request.aid);
+    return CastMedia(
+      request: request,
+      uri: uri,
+      aid: request.aid,
+      receiverResolves: receiverResolves,
+    );
   }
 }
 
