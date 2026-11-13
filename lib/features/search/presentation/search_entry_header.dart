@@ -145,29 +145,49 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
                       const SingleActivator(LogicalKeyboardKey.escape): _close,
                     },
                     child: _SearchFieldScrollBoundary(
-                      child: TextField(
-                        key: const ValueKey('workspace-search'),
-                        controller: widget.controller,
-                        focusNode: _focus,
-                        readOnly: mobile,
-                        onTap: mobile ? _openMobile : _show,
-                        textInputAction: TextInputAction.search,
-                        style: const TextStyle(fontSize: 13),
-                        onSubmitted: _submit,
-                        decoration: InputDecoration(
-                          hintText: '搜索视频、UP 主、番剧',
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                          ),
-                          suffixIcon: IconButton(
-                            tooltip: '搜索',
-                            onPressed: mobile
-                                ? _openMobile
-                                : () => widget.controller.text.trim().isEmpty
-                                      ? _show()
-                                      : _submit(widget.controller.text),
-                            icon: const Icon(BiliIcons.search, size: 18),
+                      child: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: widget.controller,
+                        builder: (context, value, child) => TextField(
+                          key: const ValueKey('workspace-search'),
+                          controller: widget.controller,
+                          focusNode: _focus,
+                          readOnly: mobile,
+                          onTap: mobile ? _openMobile : _show,
+                          textInputAction: TextInputAction.search,
+                          style: const TextStyle(fontSize: 13),
+                          onSubmitted: _submit,
+                          decoration: InputDecoration(
+                            hintText: '搜索视频、UP 主、番剧',
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                            ),
+                            suffixIcon: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (value.text.isNotEmpty)
+                                  IconButton(
+                                    tooltip: '清空输入',
+                                    onPressed: () {
+                                      widget.controller.clear();
+                                      if (!mobile) _focus.requestFocus();
+                                    },
+                                    icon: const Icon(Icons.close, size: 18),
+                                  ),
+                                IconButton(
+                                  tooltip: '搜索',
+                                  onPressed: mobile
+                                      ? _openMobile
+                                      : () =>
+                                            widget.controller.text
+                                                .trim()
+                                                .isEmpty
+                                            ? _show()
+                                            : _submit(widget.controller.text),
+                                  icon: const Icon(BiliIcons.search, size: 18),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -386,18 +406,23 @@ final class _SearchPageState extends State<_SearchPage> {
     appBar: AppBar(
       leading: BackButton(onPressed: () => Navigator.of(context).pop()),
       titleSpacing: 0,
-      title: TextField(
-        key: const ValueKey('search-page-input'),
-        controller: _text,
-        autofocus: true,
-        textInputAction: TextInputAction.search,
-        onSubmitted: _submit,
-        decoration: InputDecoration(
-          hintText: '搜索视频、UP 主、番剧',
-          suffixIcon: IconButton(
-            tooltip: '清空输入',
-            onPressed: _text.clear,
-            icon: const Icon(Icons.close, size: 18),
+      title: ValueListenableBuilder<TextEditingValue>(
+        valueListenable: _text,
+        builder: (context, value, child) => TextField(
+          key: const ValueKey('search-page-input'),
+          controller: _text,
+          autofocus: true,
+          textInputAction: TextInputAction.search,
+          onSubmitted: _submit,
+          decoration: InputDecoration(
+            hintText: '搜索视频、UP 主、番剧',
+            suffixIcon: value.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: '清空输入',
+                    onPressed: _text.clear,
+                    icon: const Icon(Icons.close, size: 18),
+                  ),
           ),
         ),
       ),
