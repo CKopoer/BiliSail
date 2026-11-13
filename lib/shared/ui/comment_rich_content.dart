@@ -80,14 +80,16 @@ class _CommentRichContentState extends State<CommentRichContent> {
       emoteTokens: widget.comment.emotes.keys,
       mentionedUsers: widget.comment.mentionedUsers,
     );
-    for (var i = 0; i < _parts.length; i++) {
-      final part = _parts[i];
-      if (part.kind == CommentTextKind.link ||
-          part.kind == CommentTextKind.timestamp ||
-          part.kind == CommentTextKind.mention) {
-        _recognizers[i] = TapGestureRecognizer();
-      }
+  }
+
+  TapGestureRecognizer? _recognizer(int index, VoidCallback? onTap) {
+    // Dynamic comments have timecodes without a playback target. Allocate
+    // gesture state only for available actions, and release removed actions.
+    if (onTap == null) {
+      _recognizers.remove(index)?.dispose();
+      return null;
     }
+    return (_recognizers[index] ??= TapGestureRecognizer())..onTap = onTap;
   }
 
   void _disposeRecognizers() {
@@ -111,7 +113,6 @@ class _CommentRichContentState extends State<CommentRichContent> {
     for (var i = 0; i < _parts.length; i++) {
       final part = _parts[i];
       if (part.kind != CommentTextKind.emote) {
-        final recognizer = _recognizers[i];
         final url = part.url, position = part.position;
         final open = widget.onOpenLink, seek = widget.onSeek;
         final userId = part.userId, openUser = widget.onOpenUser;
@@ -122,16 +123,17 @@ class _CommentRichContentState extends State<CommentRichContent> {
             : userId != null && openUser != null
             ? () => openUser(userId)
             : null;
-        recognizer?.onTap = onTap;
+        final recognizer = _recognizer(i, onTap);
         spans.add(
           TextSpan(
             text: part.text,
             style:
-                recognizer == null ||
-                    (part.kind == CommentTextKind.mention && onTap == null)
-                ? null
-                : TextStyle(color: styles.linkColor),
-            recognizer: onTap == null ? null : recognizer,
+                part.kind == CommentTextKind.link ||
+                    part.kind == CommentTextKind.timestamp ||
+                    (part.kind == CommentTextKind.mention && onTap != null)
+                ? TextStyle(color: styles.linkColor)
+                : null,
+            recognizer: recognizer,
             mouseCursor: onTap == null ? null : SystemMouseCursors.click,
           ),
         );
@@ -143,8 +145,8 @@ class _CommentRichContentState extends State<CommentRichContent> {
           alignment: PlaceholderAlignment.middle,
           child: Semantics(
             label: selected,
-            child: Image.network(
-              comment.emotes[selected].toString(),
+            child: AppNetworkImage(
+              url: comment.emotes[selected].toString(),
               cacheWidth: 84,
               cacheHeight: 84,
               width: 28,
