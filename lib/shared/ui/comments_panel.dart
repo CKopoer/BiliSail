@@ -900,8 +900,25 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     onReplyFocus: _focus.requestFocus,
   );
 
-  void _scheduleLoadMore(BuildContext context) {
-    if (_loadMoreScheduled) return;
+  static const _loadMoreExtent = 240.0;
+
+  void _scheduleLoadMore(BuildContext context, {ScrollMetrics? metrics}) {
+    if (_loadMoreScheduled ||
+        (metrics != null && metrics.extentAfter > _loadMoreExtent) ||
+        widget.composerOnly ||
+        widget.target.oid.isEmpty ||
+        !WorkspaceActivity.isActive(context)) {
+      return;
+    }
+    final current = ref.read(_provider);
+    final inReplies = current.openRoot != null;
+    if (current.busy ||
+        (inReplies ? current.replyLoading : current.loading) ||
+        (inReplies ? current.replyLoadFailed : current.loadFailed) ||
+        !(inReplies ? current.replyHasMore : current.hasMore) ||
+        (inReplies ? current.replyPage : current.page) == 0) {
+      return;
+    }
     _loadMoreScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadMoreScheduled = false;
@@ -926,12 +943,12 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       final scroll = replies ? _replyScroll : _topScroll;
       if (!scroll.hasClients ||
           !scroll.position.hasContentDimensions ||
-          scroll.position.extentAfter > 240) {
+          scroll.position.extentAfter > _loadMoreExtent) {
         return;
       }
       final controller = ref.read(_provider.notifier);
       unawaited(replies ? controller.loadReplies() : controller.load());
-    });
+    }, debugLabel: 'CommentsPanel.loadMore');
     // Metrics can arrive after layout. Request one check, without polling.
     WidgetsBinding.instance.ensureVisualUpdate();
   }
@@ -1051,7 +1068,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
         onNotification: (notification) {
           if (notification.depth == 0 &&
               notification.metrics.axis == Axis.vertical) {
-            _scheduleLoadMore(context);
+            _scheduleLoadMore(context, metrics: notification.metrics);
           }
           return false;
         },
@@ -1065,7 +1082,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
                   OverscrollNotification(:final overscroll) => overscroll > 0,
                   _ => false,
                 }) {
-              _scheduleLoadMore(context);
+              _scheduleLoadMore(context, metrics: notification.metrics);
             }
             return false;
           },

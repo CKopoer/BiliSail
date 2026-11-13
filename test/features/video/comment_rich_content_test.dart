@@ -1,10 +1,12 @@
 import '../../support/input_test_app.dart';
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:bilisail/core/presentation/app_image_provider.dart';
+import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/core/storage/image_byte_cache.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
@@ -22,6 +24,229 @@ import 'package:bilisail/features/video/presentation/comment_rich_content.dart';
 import 'package:bilisail/features/video/domain/video_comments_repository.dart';
 
 void main() {
+  testWidgets('inline emotes share transport and cancel outside the viewport '
+      'and on hidden pages', (tester) async {
+    final requests = <ImageLoadRequest>[];
+    final cache = AppImageCache(
+      ImageByteCache(
+        directory: () async => throw const FileSystemException('optional'),
+        loader: (_, request) {
+          requests.add(request);
+          return Completer<Uint8List>().future;
+        },
+      ),
+    );
+    final scroll = ScrollController();
+    var active = true;
+    late StateSetter update;
+    final content = SingleChildScrollView(
+      controller: scroll,
+      child: Column(
+        children: [
+          CommentRichContent(
+            comment: CommentEntry(
+              id: 'emotes',
+              author: 'reader',
+              message: '[笑][笑]',
+              emotes: {'[笑]': Uri.https('i0.hdslb.com', '/emote.png')},
+            ),
+          ),
+          const SizedBox(height: 2000),
+          CommentRichContent(
+            comment: CommentEntry(
+              id: 'offscreen',
+              author: 'reader',
+              message: '[远]',
+              emotes: {'[远]': Uri.https('i0.hdslb.com', '/offscreen.png')},
+            ),
+          ),
+        ],
+      ),
+    );
+    Future<void> settle() async {
+      for (var frame = 0; frame < 5; frame++) {
+        await tester.pump();
+      }
+    }
+
+    try {
+      await tester.pumpWidget(
+        AppImageCacheScope(
+          cache: cache,
+          child: MaterialApp(
+            home: Scaffold(
+              body: StatefulBuilder(
+                builder: (_, setState) {
+                  update = setState;
+                  return WorkspaceActivity(active: active, child: content);
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await settle();
+      expect(
+        requests,
+        hasLength(1),
+        reason: 'visible duplicates share one load',
+      );
+      expect(requests.single.cancelled, isFalse);
+      final rich = tester.element(find.byType(CommentRichContent).first);
+      scroll.jumpTo(800);
+      await settle();
+      expect(rich.mounted, isTrue, reason: 'test a retained offscreen subtree');
+      expect(requests.single.cancelled, isTrue);
+      scroll.jumpTo(0);
+      await settle();
+      expect(requests, hasLength(2));
+      update(() => active = false);
+      await settle();
+      expect(requests.last.cancelled, isTrue);
+      update(() => active = true);
+      await settle();
+      expect(requests, hasLength(3));
+      await tester.pumpWidget(const SizedBox());
+      expect(requests.every((request) => request.cancelled), isTrue);
+      expect(tester.takeException(), isNull);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      scroll.dispose();
+      await cache.close();
+    }
+  });
+
+  testWidgets(
+    'disabled timecodes release recognizers before being re-enabled',
+    (tester) async {
+      final sought = <Duration>[];
+      final comment = const CommentEntry(
+        id: 'timecode',
+        author: 'reader',
+        message: '00:09',
+      );
+      Future<void> show(ValueChanged<Duration>? onSeek) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CommentRichContent(comment: comment, onSeek: onSeek),
+          ),
+        ),
+      );
+      TextSpan timecode() {
+        final text = tester.widget<Text>(
+          find
+              .descendant(
+                of: find.byType(CommentRichContent),
+                matching: find.byType(Text),
+              )
+              .first,
+        );
+        return (text.textSpan! as TextSpan).children!.single as TextSpan;
+      }
+
+      await show(sought.add);
+      final first = timecode().recognizer;
+      expect(first, isNotNull);
+      await show(null);
+      expect(timecode().recognizer, isNull);
+      expect(timecode().style?.color, const Color(0xFF008AC5));
+      await show(sought.add);
+      expect(timecode().recognizer, isNot(same(first)));
+      await tester.tapOnText(find.textRange.ofSubstring('00:09'));
+      expect(sought, [const Duration(seconds: 9)]);
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('decoded inline emotes release offscreen streams and reuse '
+      'cached frames on return', (tester) async {
+    final bytes = await tester.runAsync(() async {
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawColor(Colors.blue, BlendMode.src);
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(2, 2);
+      try {
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (data == null) throw StateError('PNG missing');
+        return data.buffer.asUint8List();
+      } finally {
+        image.dispose();
+        picture.dispose();
+      }
+    });
+    if (bytes == null) throw StateError('PNG missing');
+    var loads = 0;
+    final cache = AppImageCache(
+      ImageByteCache(
+        directory: () async => throw const FileSystemException('optional'),
+        loader: (_, _) async {
+          loads++;
+          return bytes;
+        },
+      ),
+    );
+    final scroll = ScrollController();
+    try {
+      await tester.pumpWidget(
+        AppImageCacheScope(
+          cache: cache,
+          child: MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                controller: scroll,
+                child: Column(
+                  children: [
+                    CommentRichContent(
+                      comment: CommentEntry(
+                        id: 'decoded-emote',
+                        author: 'reader',
+                        message: '[笑]',
+                        emotes: {
+                          '[笑]': Uri.https('i0.hdslb.com', '/cached.png'),
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 2000),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      for (var attempt = 0; attempt < 40; attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+        if (tester
+            .widgetList<RawImage>(find.byType(RawImage))
+            .any((image) => image.image != null)) {
+          break;
+        }
+      }
+      expect(cache.decoded.liveImageCount, 1);
+      expect(tester.widget<RawImage>(find.byType(RawImage)).image, isNotNull);
+      scroll.jumpTo(800);
+      await tester.pumpAndSettle();
+      expect(find.byType(CommentRichContent), findsOneWidget);
+      expect(find.byType(RawImage), findsNothing);
+      expect(cache.decoded.liveImageCount, 0);
+      scroll.jumpTo(0);
+      await tester.pumpAndSettle();
+      expect(tester.widget<RawImage>(find.byType(RawImage)).image, isNotNull);
+      expect(loads, 1);
+      await tester.pumpWidget(const SizedBox());
+      expect(cache.decoded.liveImageCount, 0);
+      expect(tester.takeException(), isNull);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      scroll.dispose();
+      await cache.close();
+    }
+  });
+
   for (final host in ['i0.hdslb.com', 'album.biliimg.com']) {
     testWidgets(
       '$host comment GIF animates and opens a preview before its original',
