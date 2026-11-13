@@ -134,7 +134,7 @@ class CastingDialog extends StatelessWidget {
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('电视弹幕（实验）'),
-                          subtitle: const Text('由 B站接收端获取视频和弹幕，切换后需重新投屏。'),
+                          subtitle: const Text('由电视获取视频、弹幕并接管连播，切换后需重新投屏。'),
                           value: controller.televisionDanmaku,
                           onChanged: controller.busy || controller.invalidated
                               ? null
