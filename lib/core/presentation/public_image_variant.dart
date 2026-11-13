@@ -14,7 +14,9 @@ Uri publicImageThumbnail(
       source.hasPort ||
       source.hasQuery ||
       source.hasFragment ||
-      !(host == 'hdslb.com' || host.endsWith('.hdslb.com')) ||
+      !(host == 'album.biliimg.com' ||
+          host == 'hdslb.com' ||
+          host.endsWith('.hdslb.com')) ||
       source.path.contains('@') ||
       !RegExp(
         resizeAnimated

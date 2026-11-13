@@ -2,6 +2,25 @@
 
 2026-10-25 新增共用查看器保存／复制与长图支持，目录、限额、平台实现和验证边界见[图片查看器保存、复制与长图](image-viewer-export-long-images.md)。
 
+## 2026-11-14：评论相册 CDN 图片无法加载
+
+用户提供的[第 6 话](https://www.bilibili.com/bangumi/play/ep323090)经公开剧集接口核对为 `aid=721834250`。只读采样该视频的热门评论，取得 6 张图片，其中 3 张使用 `album.biliimg.com`，其余使用 `i0.hdslb.com`。6 张原图及其 `@1280w_1280h_0e.webp` 预览均返回 HTTP 200；相册 CDN 三张原图分别为 900×716／263,712 字节、2388×1080／234,476 字节、720×576／250,574 字节，没有触及原图加载上限。
+
+根因是[公开图片白名单](../../lib/core/storage/image_byte_cache.dart)仅接受 `hdslb.com`、`bilibili.com` 及原有私信图片主机 `message.biliimg.com`，漏掉评论接口实际返回的 `album.biliimg.com`。[原图仓储](../../lib/features/image_viewer/data/network_original_image_repository.dart)因此在发起请求前抛出 `FormatException('Unsupported original image')`，共享查看器提示无法读取；列表图片也会被同一缓存入口拒绝。这不是该样本的 CDN 下载失败或图片损坏。
+
+现补充确切的 `album.biliimg.com` 主机，同时让[共享缩略图规则](../../lib/core/presentation/public_image_variant.dart)支持它。评论列表和共享查看器继续先加载有界预览，用户明确点击后再获取原图。签名 query、fragment、已有变换与原图字节保持原样；不通配放行 `biliimg.com` 子域，私信主机仍不生成缩略图。无凭据传输、系统 TLS、账号缓存隔离、取消和原有容量限制保持。
+
+回归证据：
+
+- 修改前新增／扩展的缩略图、GIF、缓存与原图仓储用例共 4 项失败，原图用例复现上述异常。修复后的 89 项定向回归通过，包含两种 CDN 的评论 GIF 动画、点击预览／查看原图、缓存复用、伪造主机拒绝、长图、取消与迟到响应、私信图片和双窗口查看器。
+- 临时在线烟测通过生产原图仓储及 Windows Flutter 引擎读取、解码全部 6 张图片的预览和原图，共 12 次成功；未使用账号凭据或执行账号写操作。在线请求仅作显式诊断，不加入常规离线测试。
+- `tool/check.ps1 -SkipPub` 完整通过：根应用 5,308、`bili_api` 917、`bili_player` 238、`bili_danmaku` 161、`bili_mux` 5 项，共 6,629 项通过；根应用 13 项、播放器包 3 项按环境跳过，mux 10 项原生测试因未配置 `BILI_MUX_LIBRARY` 跳过。格式、静态分析及打包边界检查通过。首次检查发现本地依赖解析未包含锁文件已有的 `pointycastle`，执行 `flutter pub get --enforce-lockfile` 补齐后重跑通过，根锁文件哈希保持不变。
+- 日志位于忽略目录 `build/validation/comment-album-before.log`、`comment-album-focused.log`、`comment-album-online.log` 和 `comment-album-check.log`。
+
+本机没有运行中的 DTD／调试应用，热重载调用未能执行。本轮未构建安装包或进行 Windows／Android／macOS 客户端手动验收，生产仓储与引擎解码烟测不等于完整页面实机验收。
+
+## 2026-10-06：图片预览与作者装扮
+
 日期：2026-10-06。本轮按用户提供的 UWP 评论截图调整；装扮指用户名右侧的图片与 `NO.` 粉丝编号，编号不作为账号等级或粉丝勋章等级处理。
 
 ## 展示与协议

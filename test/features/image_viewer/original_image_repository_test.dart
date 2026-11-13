@@ -11,7 +11,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final source = Uri.parse('https://i0.hdslb.com/long.png');
   test(
-    'private message CDN originals load without rewriting their URL',
+    'album and private message CDN originals keep their URL and bytes',
     () async {
       final bytes = _png(4, 6);
       final sources = <Uri>[];
@@ -21,19 +21,21 @@ void main() {
           return bytes;
         },
       );
-      for (final scheme in ['https', 'http']) {
-        final source = Uri.parse(
-          '$scheme://message.biliimg.com/bfs/im/fixture.jpg?fixture=original',
-        );
-        final image = await repository.load(source, RequestCancellation());
-        expect(sources.last, source.replace(scheme: 'https'));
-        expect(image.bytes, bytes);
-        expect((image.width, image.height), (4, 6));
+      for (final host in ['album.biliimg.com', 'message.biliimg.com']) {
+        for (final scheme in ['https', 'http']) {
+          final source = Uri.parse(
+            '$scheme://$host/bfs/fixture.jpg?fixture=original',
+          );
+          final image = await repository.load(source, RequestCancellation());
+          expect(sources.last, source.replace(scheme: 'https'));
+          expect(image.bytes, bytes);
+          expect((image.width, image.height), (4, 6));
+        }
       }
     },
   );
 
-  test('message CDN support still rejects untrusted original URLs', () async {
+  test('biliimg CDN support still rejects untrusted original URLs', () async {
     var loads = 0;
     final repository = NetworkOriginalImageRepository(
       loader: (_, _) async {
@@ -43,9 +45,12 @@ void main() {
     );
     for (final url in [
       'https://message.biliimg.com.example.com/image.jpg',
+      'https://album.biliimg.com.example.com/image.jpg',
+      'https://other.album.biliimg.com/image.jpg',
       'https://other.biliimg.com/image.jpg',
       'https://biliimg.com/image.jpg',
       'https://user:password@message.biliimg.com/image.jpg',
+      'https://user:password@album.biliimg.com/image.jpg',
       'file:///message.biliimg.com/image.jpg',
     ]) {
       await expectLater(
