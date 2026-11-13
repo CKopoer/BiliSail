@@ -128,6 +128,7 @@
 | [真实首页视频 GPU 复测](validation/windows-real-video-gpu-2026-10-13.md) | 正式播放页面、真实弹幕、持久偏好与完整采样 |
 | [弹幕高刷合成实验（已撤回）](validation/danmaku-frame-cadence-2026-10-13.md) | 历史候选测量、撤回记录与随屏幕刷新率运行的 Ticker |
 | [倍速 seek 供帧缓冲实验](validation/video-frame-queue-experiment-2026-10-13.md) | 构建开关、小容量解码帧队列、Windows 原生兼容性及手动对照方法 |
+| [长按与松开倍速回归修复](validation/hold-rate-regression-2026-11-13.md) | 对比 1.2.9+0、音频输出与时钟配置、最新后端跨源复用及验证边界 |
 | [性能热点第一批优化结果](validation/performance-hotspots-results-2026-10-11.md) | 九项 P1 的图片任务、局部订阅、弹幕窗口、影视懒创建修复与验证边界 |
 | [性能热点 P2 优化结果](validation/performance-p2-results-2026-10-11.md) | 图片连接复用、分页索引、启动并发、字幕与评论、影视缓存／解码、直播对账及待实机测量项 |
 | [连续播放与下一集](validation/continuous-playback.md) | 分 P／合集／影视顺序、完播推进、设置持久化与全屏控件 |
