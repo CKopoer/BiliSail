@@ -146,6 +146,28 @@ final class BiliApiClient {
     );
   }
 
+  /// Web IM reads use the same WBI key flight as other signed Web requests.
+  Future<Map<String, Object?>> requestMessageWbiJson(
+    String path,
+    Map<String, String> parameters,
+    String endpoint, {
+    ApiRequestContext? context,
+  }) {
+    if (!const {
+      '/session_svr/v1/session_svr/get_sessions',
+      '/svr_sync/v1/svr_sync/fetch_session_msgs',
+    }.contains(path)) {
+      throw ArgumentError('Unsupported message WBI endpoint');
+    }
+    return _wbiJson(
+      path,
+      parameters,
+      endpoint,
+      context,
+      origin: Uri.https('api.vc.bilibili.com', '/'),
+    );
+  }
+
   void close() {
     if (prepareWebRequests) _webDevice.close();
     _wbiInFlight?.cancellation.cancel();
@@ -2614,6 +2636,7 @@ final class BiliApiClient {
       await _webDevice.ensure(context);
     }
     final spaceDetails = endpoint == 'profile_details';
+    final message = endpoint.startsWith('message_');
     final popularReferer = switch (endpoint) {
       'popular_weeks' => 'https://www.bilibili.com/v/popular/weekly',
       'popular_week' =>
@@ -2628,9 +2651,13 @@ final class BiliApiClient {
       'User-Agent': webUserAgent,
       'Referer': spaceDetails
           ? 'https://space.bilibili.com/${uri.queryParameters['mid']}/dynamic'
+          : message
+          ? 'https://message.bilibili.com/'
           : popularReferer ?? referer,
       'Origin': spaceDetails
           ? 'https://space.bilibili.com'
+          : message
+          ? 'https://message.bilibili.com'
           : 'https://www.bilibili.com',
     };
     final cookie = cookieJar.headerFor(uri, now: _clock());

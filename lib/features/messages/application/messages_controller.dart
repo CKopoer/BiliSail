@@ -258,9 +258,21 @@ class MessagesController extends Notifier<MessagesState> {
   }
 
   Future<void> refresh() async {
+    if (state.inbox.loading || state.thread.loading) return;
     final generation = _generation;
-    await loadInbox(refresh: true);
-    if (!ref.mounted || generation != _generation) return;
+    final section = state.section;
+    final repository = ref.read(messageRepositoryProvider);
+    final scope = repository.accountScope, epoch = repository.sessionEpoch;
+    final loading = loadInbox(refresh: true);
+    final version = _inboxVersion;
+    await loading;
+    if (!_current(generation, scope, epoch) ||
+        version != _inboxVersion ||
+        section != state.section ||
+        state.inbox.loading ||
+        state.inbox.error != null) {
+      return;
+    }
     ref.invalidate(unreadMessagesProvider);
     if (state.selected != null) {
       await loadThread(refresh: true);
@@ -268,6 +280,11 @@ class MessagesController extends Notifier<MessagesState> {
   }
 
   Future<void> loadInbox({bool refresh = false}) async {
+    if (state.inbox.loading) return;
+    await _loadInbox(refresh: refresh);
+  }
+
+  Future<void> _loadInbox({bool refresh = false}) async {
     final old = refresh ? const MessageListState<InboxEntry>() : state.inbox;
     if (!refresh && (old.loading || !old.hasMore)) return;
     final repository = ref.read(messageRepositoryProvider);
@@ -425,6 +442,11 @@ class MessagesController extends Notifier<MessagesState> {
   }
 
   Future<void> loadThread({bool refresh = false}) async {
+    if (state.thread.loading) return;
+    await _loadThread(refresh: refresh);
+  }
+
+  Future<void> _loadThread({bool refresh = false}) async {
     final entry = state.selected;
     if (entry == null) return;
     final old = refresh
@@ -967,10 +989,11 @@ class MessagesController extends Notifier<MessagesState> {
         ref.invalidate(unreadMessagesProvider);
       }
       if (state.selected?.id == entry.id && send) {
-        unawaited(loadThread(refresh: true));
+        // A confirmed send must supersede a read started before the write.
+        unawaited(_loadThread(refresh: true));
       }
       if (state.section == InboxSection.private) {
-        unawaited(loadInbox(refresh: true));
+        unawaited(_loadInbox(refresh: true));
       }
       return true;
     } catch (error) {

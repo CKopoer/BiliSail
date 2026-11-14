@@ -193,17 +193,21 @@ final class MessageCenterClient {
     if (cursor != null && !RegExp(r'^[0-9]+$').hasMatch(cursor)) {
       throw ArgumentError('Invalid session cursor');
     }
-    final data =
-        await _get(_vc, '/session_svr/v1/session_svr/get_sessions', endpoint, {
-          'session_type': fanGroups ? '2' : '1',
-          'group_fold': '0',
-          'unfollow_fold': '0',
-          'sort_rule': '2',
-          'size': '20',
-          'build': '0',
-          'mobi_app': 'web',
-          'end_ts': ?cursor,
-        }, context);
+    final data = await api.requestMessageWbiJson(
+      '/session_svr/v1/session_svr/get_sessions',
+      {
+        'session_type': fanGroups ? '2' : '1',
+        'group_fold': '0',
+        'unfollow_fold': '0',
+        'sort_rule': '2',
+        'size': '20',
+        'build': '0',
+        'mobi_app': 'web',
+        'end_ts': ?cursor,
+      },
+      endpoint,
+      context: context,
+    );
     final rows = _list(
       data['session_list'],
       endpoint,
