@@ -1880,15 +1880,13 @@ final class BiliApiClient {
     final season = _map(value, endpoint);
     final entries = <ApiVideoCollectionEntry>[];
     final seen = <String>{};
-    for (final section in _list(
-      season['sections'] ?? const [],
-      endpoint,
-    ).take(50)) {
+    // View returns the complete collection, including videos beyond the 500th.
+    // Keep its order and identities; the HTTP response has a byte limit.
+    for (final section in _list(season['sections'] ?? const [], endpoint)) {
       for (final value in _list(
         _map(section, endpoint)['episodes'] ?? const [],
         endpoint,
-      ).take(500)) {
-        if (entries.length >= 500) break;
+      )) {
         final episode = _map(value, endpoint);
         final arc = _optionalMap(episode['arc']);
         final bvid = _requiredString(episode['bvid'] ?? arc?['bvid'], endpoint);

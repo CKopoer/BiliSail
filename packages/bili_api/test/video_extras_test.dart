@@ -448,6 +448,68 @@ void main() {
     expect(detail.collection?.entries.last.pages, isEmpty);
   });
 
+  for (final sectionSize in [978, 300, 10]) {
+    test(
+      'collection keeps all 978 videos in sections of $sectionSize',
+      () async {
+        const current = 'BV1Sc411U7m6';
+        final episodes = List.generate(
+          978,
+          (index) => {
+            'bvid': index == 605
+                ? current
+                : 'BV${index.toString().padLeft(10, '0')}',
+            'title': 'Episode $index',
+            'pages': [
+              {'cid': '${index + 1}', 'page': 1, 'part': 'P1', 'duration': 225},
+            ],
+          },
+        );
+        final sections = [
+          for (var start = 0; start < episodes.length; start += sectionSize)
+            {
+              'episodes': [
+                // Repeated entries must not displace later unique videos.
+                if (start > 0) episodes.first,
+                ...episodes.skip(start).take(sectionSize),
+              ],
+            },
+        ];
+        final transport = _Transport(
+          (_) => {
+            'code': 0,
+            'data': {
+              'aid': '279607392',
+              'bvid': current,
+              'title': 'Current video',
+              'pages': episodes[605]['pages'],
+              'ugc_season': {
+                'id': '8762233',
+                'title': 'Collection',
+                'ep_count': 978,
+                'sections': sections,
+              },
+            },
+          },
+        );
+        final api = BiliApiClient(transport: transport);
+        addTearDown(api.close);
+        final detail = await api.getVideoDetail(current);
+        final entries = detail.collection!.entries;
+        expect(entries, hasLength(978));
+        expect(entries.map((entry) => entry.bvid), [
+          for (final episode in episodes) episode['bvid'],
+        ]);
+        expect(entries[605].bvid, detail.bvid);
+        expect(entries[605].pages.single.cid, detail.pages.single.cid);
+        expect(entries.last.title, 'Episode 977');
+        expect(() => entries.clear(), throwsUnsupportedError);
+        expect(transport.requests, hasLength(1));
+        expect(transport.requests.single.path, '/x/web-interface/view');
+      },
+    );
+  }
+
   test('related endpoint parses list payload and immutable results', () async {
     final transport = _Transport(
       (uri) => {
