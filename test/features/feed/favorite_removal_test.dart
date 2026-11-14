@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/feed/application/home_controller.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
@@ -37,6 +38,72 @@ HomeQuery _query({bool folders = false, bool defaultFolder = false}) => (
 );
 
 void main() {
+  for (final defaultFolder in [false, true]) {
+    test(
+      'removal preserves playable page hints in default folder=$defaultFolder',
+      () async {
+        final repo = _Repository()..snapshotDefault = true;
+        final query = _query(defaultFolder: defaultFolder);
+        final provider = homeControllerProvider(query);
+        final container = ProviderContainer(
+          overrides: [homeRepositoryProvider.overrideWithValue(repo)],
+        );
+        addTearDown(container.dispose);
+        container.listen(provider, (_, _) {});
+        await Future<void>.delayed(Duration.zero);
+        final controller = container.read(provider.notifier);
+        const third = HomeEntry(
+          id: 'BV1234567892',
+          bvid: 'BV1234567892',
+          aid: '126',
+          title: '第三条视频',
+          kind: HomeEntryKind.video,
+        );
+        final more = controller.loadMore();
+        repo.pendingRead!.complete(HomePage([third], hasMore: false));
+        await more;
+        final removal = controller.removeFavorite(_video);
+        repo.pendingWrite.complete();
+        expect(await removal, true);
+        expect(controller.queuePageFor(VideoId(_video.bvid!)), isNull);
+        expect(controller.queuePageFor(VideoId(_other.bvid!)), (
+          page: 1,
+          cursor: null,
+          reconcile: true,
+        ));
+        expect(controller.queuePageFor(VideoId(third.bvid!)), (
+          page: 2,
+          cursor: null,
+          reconcile: true,
+        ));
+        expect(container.read(provider).items.requireValue, [_other, third]);
+        // No eager reread; ordinary pagination can refresh an old page hint.
+        expect(repo.reads, 2);
+        final reconcile = controller.loadMore();
+        repo.pendingRead!.complete(
+          const HomePage([_other, third], hasMore: false, nextCursor: 'new'),
+        );
+        await reconcile;
+        expect(controller.queuePageFor(VideoId(third.bvid!)), (
+          page: 1,
+          cursor: 'new',
+          reconcile: false,
+        ));
+
+        repo.pendingWrite = Completer<void>();
+        final secondRemoval = controller.removeFavorite(_other);
+        repo.pendingWrite.complete();
+        expect(await secondRemoval, true);
+        expect(controller.queuePageFor(VideoId(_other.bvid!)), isNull);
+        expect(controller.queuePageFor(VideoId(third.bvid!)), (
+          page: 1,
+          cursor: null,
+          reconcile: true,
+        ));
+      },
+    );
+  }
+
   test('subscribed folders cannot remove videos or delete folders', () async {
     final repo = _Repository();
     final query = (

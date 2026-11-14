@@ -930,8 +930,8 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   }) async {
     final provider = favoritePlaybackQueueProvider(request);
     if (ref.read(provider).isLoading) return;
-    final ({int page, String? cursor})? origin = initial == null
-        ? (page: 1, cursor: null)
+    final origin = initial == null
+        ? (page: 1, cursor: null, reconcile: false)
         : ref
               .read(homeControllerProvider(request.query).notifier)
               .queuePageFor(initial);
@@ -941,7 +941,12 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
     }
     final queue = await ref
         .read(provider.notifier)
-        .capture(page: origin.page, cursor: origin.cursor, initial: initial);
+        .capture(
+          page: origin.page,
+          cursor: origin.cursor,
+          initial: initial,
+          reconcile: origin.reconcile,
+        );
     if (!mounted ||
         !widget.active ||
         !WorkspaceActivity.isActive(context) ||

@@ -39,6 +39,7 @@ final class FavoritePlaybackQueueController
     int page = 1,
     String? cursor,
     VideoId? initial,
+    bool reconcile = false,
   }) async {
     if (state.isLoading) return null;
     final query = request.query;
@@ -66,13 +67,34 @@ final class FavoritePlaybackQueueController
       read.cancel();
     });
     try {
-      final result = await Future.any([
-        repository.load(query, page: page, cursor: cursor, cancellation: read),
+      var sourcePage = reconcile && initial != null ? 1 : page;
+      var sourceCursor = reconcile ? null : cursor;
+      Future<HomePage> loadPage() => Future.any([
+        repository.load(
+          query,
+          page: sourcePage,
+          cursor: sourceCursor,
+          cancellation: read,
+        ),
         cancelled.future.then<HomePage>((_) {
           throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
         }),
       ]);
+      var result = await loadPage();
       if (!current()) return null;
+      // Local removals can move a retained video to an earlier page and revoke
+      // snapshot cursors. Search only through its former page, sharing the same
+      // cancellation/deadline; publish only the page that contains the video.
+      while (reconcile &&
+          initial != null &&
+          sourcePage < page &&
+          result.hasMore &&
+          !result.items.any((entry) => entry.bvid == initial.value)) {
+        sourcePage++;
+        sourceCursor = result.nextCursor;
+        result = await loadPage();
+        if (!current()) return null;
+      }
       final items = homeQueueItems(result.items);
       if (items.isEmpty) {
         throw const AppFailure(AppFailureKind.notFound, '当前收藏页暂无可播放的视频');
@@ -101,12 +123,12 @@ final class FavoritePlaybackQueueController
             homeSource: HomeQueueSource(
               query: query,
               title: request.title,
-              cursor: result.nextCursor ?? cursor,
+              cursor: result.nextCursor ?? sourceCursor,
             ),
             favoriteTitle: request.title,
             current: initial ?? items.first.video.id,
             hasMore: result.hasMore,
-            nextPage: page + 1,
+            nextPage: sourcePage + 1,
             truncated: items.length > WatchLaterQueue.maximumInitialItems,
           );
       state = AsyncData(queue);
