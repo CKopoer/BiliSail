@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [直播解码错误恢复](validation/live-decoder-recovery-2026-11-14.md) | 视频错误接入有界重开、反复短停顿、缓冲提示归因、脱敏原生状态和真实坏流自动恢复回归 |
 | [直播卡悬停预览](validation/live-card-hover-preview-2026-11-14.md) | 官网首页预览接口、视频／直播共享预览生命周期、静音与首帧淡入、自动回归及未构建／实机边界 |
 | [历史续播与默认 CDN](validation/resume-startup-cdn-2026-11-14.md) | Windows 历史续播等待、PiliPlus 默认选线对照、自动模式常规 CDN 优先及验证 |
 | [点播预读断流恢复](validation/prefetch-network-recovery-2026-11-14.md) | 缓存仍可播放时的网络恢复探测、提前重开、PiliPlus 对比与受控断流回归 |

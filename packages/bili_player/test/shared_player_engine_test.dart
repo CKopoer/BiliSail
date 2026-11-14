@@ -191,8 +191,89 @@ MediaTrack track(String name) => MediaTrack(
 );
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
   final pair = DashPairSource(video: track('v'), audio: track('a'));
+  test('video decode errors use the existing bounded stall recovery', () async {
+    final backend = _Backend();
+    final diagnostics = <PlayerDiagnosticEvent>[];
+    final engine = SharedPlayerEngine(
+      createBackend: () => backend,
+      onDiagnostic: diagnostics.add,
+    );
+    addTearDown(engine.dispose);
+    await engine.open(pair, const OpenOptions(play: true));
+    backend.signals.add(
+      const BackendEvent(BackendEventKind.warning, videoDecodeError: true),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 2100));
+    expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+    expect(
+      diagnostics.any((e) => e.kind == PlayerDiagnosticKind.playbackStalled),
+      true,
+    );
+  });
+  test(
+    'video errors with confirmed progress do not retire a healthy source',
+    () async {
+      final backend = _Backend();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions(play: true));
+      backend.signals.add(
+        const BackendEvent(BackendEventKind.warning, videoDecodeError: true),
+      );
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: 1),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 2100));
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      expect(backend.released, false);
+    },
+  );
+  test('repeated frozen decoder buffering emits one bounded failure', () async {
+    final backend = _Backend();
+    final diagnostics = <PlayerDiagnosticEvent>[];
+    var now = Duration.zero;
+    final engine = SharedPlayerEngine(
+      createBackend: () => backend,
+      monotonicNow: () => now,
+      onDiagnostic: diagnostics.add,
+    );
+    addTearDown(engine.dispose);
+    final failures = <PlayerFailure>[];
+    engine.failures.listen(failures.add);
+    await engine.open(pair, const OpenOptions(play: true));
+    for (var i = 0; i < 3; i++) {
+      backend.signals.add(
+        const BackendEvent(BackendEventKind.buffering, value: true),
+      );
+      backend.signals.add(
+        const BackendEvent(BackendEventKind.warning, videoDecodeError: true),
+      );
+      now += const Duration(seconds: 2);
+      backend.signals.add(
+        const BackendEvent(BackendEventKind.buffering, value: false),
+      );
+      backend.signals.add(
+        BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(milliseconds: 100 * (i + 1)),
+        ),
+      );
+      await tick();
+    }
+    expect(failures, hasLength(1));
+    expect(
+      diagnostics.where(
+        (e) => e.stallReason == PlaybackStallReason.repeatedDecoderBuffering,
+      ),
+      hasLength(1),
+    );
+    expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+  });
+  TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'audio failure pauses the pair before video can mask the error',
     () async {

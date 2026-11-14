@@ -210,7 +210,7 @@ Future<void> _withFrames(
     await tester.pump(const Duration(milliseconds: 16));
     if (checkHints) {
       expect(find.text('正在准备音视频…'), findsNothing);
-      expect(find.text('网络缓冲中…'), findsNothing);
+      expect(find.text('播放缓冲中…'), findsNothing);
     }
   }
   await observed;

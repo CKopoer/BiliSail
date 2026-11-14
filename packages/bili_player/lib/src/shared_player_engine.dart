@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'native_error_monitor.dart';
+import 'native_video_buffer_monitor.dart';
 import 'native_readiness.dart';
 import 'playback_backend.dart';
 import 'playback_startup.dart';
@@ -25,11 +26,32 @@ class SharedPlayerEngine
     this.onDiagnostic,
     this.seekCoalescingDelay = Duration.zero,
     VideoOutput? initialVideoOutput,
+    Duration Function()? monotonicNow,
   }) {
     _output.bind(initialVideoOutput);
     _errors = NativeErrorMonitor(
-      onStalled: (_) => unawaited(_fail(PlayerFailureKind.nativePlayback)),
+      onStalled: (_) {
+        _diagnose(
+          PlayerDiagnosticKind.playbackStalled,
+          stallReason: PlaybackStallReason.playbackClock,
+          stalledFor: _snapshot.isBuffering
+              ? NativeErrorMonitor.bufferingTimeout
+              : NativeErrorMonitor.stallTimeout,
+        );
+        unawaited(_fail(PlayerFailureKind.nativePlayback));
+      },
       onRecovered: (_) => _diagnose(PlayerDiagnosticKind.recovered),
+    );
+    _videoBuffers = NativeVideoBufferMonitor(
+      now: monotonicNow,
+      onStalled: (blockedFor) {
+        _diagnose(
+          PlayerDiagnosticKind.playbackStalled,
+          stallReason: PlaybackStallReason.repeatedDecoderBuffering,
+          stalledFor: blockedFor,
+        );
+        unawaited(_fail(PlayerFailureKind.nativePlayback));
+      },
     );
   }
 
@@ -41,6 +63,7 @@ class SharedPlayerEngine
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   final _failures = StreamController<PlayerFailure>.broadcast(sync: true);
   late final NativeErrorMonitor _errors;
+  late final NativeVideoBufferMonitor _videoBuffers;
   PlaybackBackend? _backend;
   PlaybackBackend? get activeBackend => _backend;
   Future<PlaybackBackend>? _allocation;
@@ -131,6 +154,7 @@ class SharedPlayerEngine
     }
     _snapshot = value;
     _errors.update(value);
+    _videoBuffers.update(value);
     _pendingSnapshots.add(value);
     if (_publishing) return;
     _publishing = true;
@@ -149,6 +173,7 @@ class SharedPlayerEngine
     NativeErrorSummary? nativeError,
     PlayerFailureKind? failureKind,
     PlaybackStallReason? stallReason,
+    Duration? stalledFor,
     int? nativeErrorCode,
   }) => onDiagnostic?.call(
     PlayerDiagnosticEvent(
@@ -158,6 +183,7 @@ class SharedPlayerEngine
       nativeErrorCode: nativeErrorCode,
       failureKind: failureKind,
       stallReason: stallReason,
+      stalledFor: stalledFor,
     ),
   );
 
@@ -228,6 +254,7 @@ class SharedPlayerEngine
     _pendingSeek?.complete();
     _pendingSeek = null;
     _errors.reset();
+    _videoBuffers.reset();
     if (!retainPresentation) {
       _output.clearRetainedFrame();
       if (!keepBackend) _interrupt(_backend);
@@ -612,6 +639,7 @@ class SharedPlayerEngine
         );
       case BackendEventKind.warning:
         _errors.report(_snapshot);
+        if (event.videoDecodeError) _videoBuffers.report(_snapshot);
       case BackendEventKind.failure:
         if (event.stallReason case final reason?) {
           _diagnose(

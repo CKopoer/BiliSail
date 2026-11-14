@@ -47,7 +47,8 @@ void main() {
       }
     });
     final failures = <PlayerFailure>[];
-    final engine = MediaKitEngine();
+    final diagnostics = <PlayerDiagnosticEvent>[];
+    final engine = MediaKitEngine(onDiagnostic: diagnostics.add);
     final subscription = engine.failures.listen(failures.add);
     try {
       await tester.pumpWidget(MaterialApp(home: VideoSurface(engine: engine)));
@@ -78,6 +79,18 @@ void main() {
       debugPrint('LIVE_BUFFER frozenAtMs=${waitingAt.inMilliseconds}');
       await tester.pump(const Duration(seconds: 9));
       expect(failures, isEmpty);
+      final cacheSamples = diagnostics.where(
+        (event) =>
+            event.kind == PlayerDiagnosticKind.nativeState &&
+            event.nativeState?.pausedForCache == true,
+      );
+      expect(cacheSamples, isNotEmpty);
+      expect(
+        diagnostics.any(
+          (event) => event.kind == PlayerDiagnosticKind.bufferingStarted,
+        ),
+        isTrue,
+      );
       debugPrint(
         'LIVE_BUFFER afterGapMs=${engine.inspectDiagnostics().position.inMilliseconds}',
       );
@@ -112,6 +125,14 @@ void main() {
       expect(engine.currentSnapshot.generation, generation);
       expect(requests, 1);
       expect(failures, isEmpty);
+      expect(
+        diagnostics.any(
+          (event) => event.kind == PlayerDiagnosticKind.bufferingEnded,
+        ),
+        isTrue,
+      );
+      expect(diagnostics.map((event) => event.playerId).toSet(), hasLength(1));
+      expect(diagnostics.every((event) => event.playerId != null), isTrue);
       debugPrint(
         'LIVE_BUFFER waitedAtMs=${waitingAt.inMilliseconds} '
         'resumedAtMs=${engine.currentSnapshot.position.inMilliseconds} '
