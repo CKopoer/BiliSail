@@ -301,7 +301,7 @@ final class DlnaCastRepository implements CastDeviceRepository {
               path.isEmpty) {
             continue;
           }
-          final control = resolveDlnaUri(base, path);
+          final control = _resolveControlUri(base, path);
           if (control != null) {
             bilibili = CastService(controlUri: control, type: type);
             break;
@@ -315,7 +315,7 @@ final class DlnaCastRepository implements CastDeviceRepository {
               path.isEmpty) {
             continue;
           }
-          final control = resolveDlnaUri(base, path);
+          final control = _resolveControlUri(base, path);
           if (control == null) continue;
           final name = _child(device, 'friendlyName');
           final udn = _child(device, 'UDN');
@@ -717,6 +717,15 @@ final class _DlnaEndpoint {
 final class _DlnaConnectionFailure implements Exception {
   const _DlnaConnectionFailure(this.failure);
   final AppFailure failure;
+}
+
+Uri? _resolveControlUri(Uri base, String path) {
+  // Legacy Lebo paths contain a colon in their first segment. Mark them as
+  // relative so Uri does not parse the invalid "_urn" prefix as a scheme.
+  final relative = path.startsWith('_urn:schemas-upnp-org:service:')
+      ? './$path'
+      : path;
+  return resolveDlnaUri(base, relative);
 }
 
 String _child(XmlElement element, String name) =>
