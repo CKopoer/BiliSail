@@ -856,28 +856,13 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
                 ),
               ),
             ),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final stacked =
-                  constraints.maxWidth < 380 ||
-                  MediaQuery.textScalerOf(context).scale(1) > 1.3;
-              return stacked
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        tools,
-                        const SizedBox(height: 4),
-                        Align(alignment: Alignment.centerRight, child: submit),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        Expanded(child: tools),
-                        const SizedBox(width: 8),
-                        submit,
-                      ],
-                    );
-            },
+          // Measure the current tools and scaled text before deciding to wrap.
+          OverflowBar(
+            alignment: MainAxisAlignment.spaceBetween,
+            spacing: 8,
+            overflowAlignment: OverflowBarAlignment.end,
+            overflowSpacing: 4,
+            children: [tools, submit],
           ),
         ],
       ),

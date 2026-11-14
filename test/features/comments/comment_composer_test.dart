@@ -14,6 +14,7 @@ import 'package:bilisail/features/comments/domain/comments_repository.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,6 +34,15 @@ void main() {
   late ProviderContainer container;
   late CommentsController controller;
   Completer<List<CommentLocalImage>>? pendingPick;
+
+  setUpAll(() async {
+    await (FontLoader('HarmonyOS Sans')..addFont(
+          rootBundle.load(
+            'assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf',
+          ),
+        ))
+        .load();
+  });
 
   setUp(() async {
     pendingPick = null;
@@ -93,6 +103,75 @@ void main() {
     await tester.tap(find.byType(TextField));
     await tester.pumpAndSettle();
   }
+
+  for (final (width, scale, target, replying) in [
+    (376.0, 1.0, _target, false),
+    (340.0, 1.0, _target, true),
+    (340.0, 1.0, const CommentTarget('42', CommentTargetType.album), false),
+    (800.0, 2.0, _target, false),
+  ]) {
+    testWidgets('composer keeps fitting tools and Publish on one row at '
+        '$width pixels, $scale scale, ${target.type}, replying=$replying', (
+      tester,
+    ) async {
+      if (replying) {
+        controller.target(
+          const CommentEntry(id: '10', author: '甲', message: '原文'),
+        );
+      }
+      await show(tester, width: width, scale: scale, target: target);
+      for (final length in [0, 1000]) {
+        if (length > 0) {
+          await tester.enterText(find.byType(TextField), '文' * length);
+          await tester.pumpAndSettle();
+        }
+        final firstTool = tester.getRect(find.byTooltip('选择表情'));
+        final lastTool = tester.getRect(find.byTooltip('同步到动态'));
+        final submit = tester.getRect(find.widgetWithText(FilledButton, '发布'));
+        final counter = tester.getRect(find.text('$length/1000'));
+        expect(submit.center.dy, closeTo(firstTool.center.dy, 1));
+        expect(lastTool.center.dy, closeTo(firstTool.center.dy, 1));
+        expect(lastTool.right, lessThan(counter.left));
+        expect(submit.right, closeTo(width - 12, 1));
+        expect(find.text('发布').hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+      expect(repo.posts, 0);
+    });
+  }
+
+  testWidgets('composer stacks actions when their actual widths do not fit', (
+    tester,
+  ) async {
+    await show(tester, width: 320, scale: 2, keyboard: 300);
+    final lastTool = tester.getRect(find.byTooltip('同步到动态'));
+    final submit = tester.getRect(find.widgetWithText(FilledButton, '发布'));
+    expect(submit.top, greaterThan(lastTool.bottom));
+    expect(submit.right, closeTo(308, 1));
+    expect(find.text('发布').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('composer reflows when the growing counter needs more space', (
+    tester,
+  ) async {
+    await show(
+      tester,
+      width: 320,
+      target: const CommentTarget('42', CommentTargetType.album),
+    );
+    final tools = find.byTooltip('同步到动态');
+    final submit = find.widgetWithText(FilledButton, '发布');
+    expect(tester.getCenter(submit).dy, closeTo(tester.getCenter(tools).dy, 1));
+    await tester.enterText(find.byType(TextField), '文' * 1000);
+    await tester.pumpAndSettle();
+    expect(
+      tester.getTopLeft(submit).dy,
+      greaterThan(tester.getBottomLeft(tools).dy),
+    );
+    expect(find.text('发布').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   test(
     'upload failure sends no comment; explicit retry uploads and submits once',
