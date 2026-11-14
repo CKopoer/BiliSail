@@ -131,9 +131,11 @@ final class _RecommendationSettingsSectionState
           children: [
             for (final source in RecommendationSource.values)
               ChoiceChip(
-                label: Text(
-                  source == RecommendationSource.web ? 'Web 推荐' : 'App 推荐',
-                ),
+                label: Text(switch (source) {
+                  RecommendationSource.web => 'Web 推荐',
+                  RecommendationSource.app => 'App 推荐',
+                  RecommendationSource.desktop => '桌面端 / PC',
+                }),
                 selected: s.source == source,
                 onSelected: (_) =>
                     _save((current) => current.copyWith(source: source)),
@@ -141,7 +143,8 @@ final class _RecommendationSettingsSectionState
           ],
         ),
         const Text(
-          'Web 推荐使用当前网页登录；App 推荐可游客浏览，正常登录后自动使用账号推荐。',
+          'Web 和桌面端推荐使用当前网页登录；桌面端采用官方 Windows 客户端的推荐参数。'
+          'App 推荐可游客浏览，正常登录后自动使用账号推荐。',
           style: TextStyle(fontSize: 12),
         ),
         const AppRecommendationIdentitySettings(),

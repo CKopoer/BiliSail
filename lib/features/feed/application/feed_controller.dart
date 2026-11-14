@@ -689,6 +689,15 @@ final class FeedController extends Notifier<FeedState> {
     final repository = ref.read(feedRepositoryProvider);
     if (state.channel == HomeChannel.recommended &&
         ref.read(recommendationQueryKeyProvider).source ==
+            RecommendationSource.desktop) {
+      if (repository is! DesktopRecommendationFeedRepository) {
+        throw const AppFailure(AppFailureKind.protocol, '当前推荐服务暂不支持桌面端来源');
+      }
+      return (repository as DesktopRecommendationFeedRepository)
+          .loadDesktopRecommendations(page: page, cancellation: cancellation);
+    }
+    if (state.channel == HomeChannel.recommended &&
+        ref.read(recommendationQueryKeyProvider).source ==
             RecommendationSource.app) {
       if (repository is! AppRecommendationFeedRepository) {
         throw const AppFailure(AppFailureKind.protocol, '当前推荐服务暂不支持 App 来源');

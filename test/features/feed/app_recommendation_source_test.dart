@@ -69,49 +69,62 @@ void main() {
       .map((item) => item.id.value)
       .toList();
 
-  test('default Web has no App calls; switching source cancels late data and never merges old entries', () async {
-    final old = controller.refresh();
-    final stale = feed.calls.last;
-    expect(stale.source, 'web');
-    await source(RecommendationSource.app);
-    expect(stale.cancellation.isCancelled, isTrue);
-    expect(feed.calls.last.source, 'app');
-    expect(feed.calls.last.page, 1);
-    complete('app');
-    await container.pump();
-    stale.result.complete(const PageResult(items: [], hasMore: false));
-    await old;
-    expect(ids(), ['app']);
-    await source(RecommendationSource.web);
-    expect(ids(), isNull);
-    complete('new-web');
-    await container.pump();
-    expect(ids(), ['new-web']);
-  });
-  test('hidden recommendation invalidation preserves popular content and starts no hidden request', () async {
-    final first = controller.refresh();
-    complete('old-web');
-    await first;
-    final popular = controller.selectPopular();
-    complete('popular');
-    await popular;
-    final count = feed.calls.length;
-    await source(RecommendationSource.app);
-    expect(feed.calls.length, count);
-    expect(ids(), ['popular']);
-    expect(
-      controller.stateForChannel(HomeChannel.recommended).items.isLoading,
-      isTrue,
+  for (final target in [
+    RecommendationSource.app,
+    RecommendationSource.desktop,
+  ]) {
+    test(
+      'switching to $target cancels late data and never merges old entries',
+      () async {
+        final old = controller.refresh();
+        final stale = feed.calls.last;
+        expect(stale.source, 'web');
+        await source(target);
+        expect(stale.cancellation.isCancelled, isTrue);
+        expect(feed.calls.last.source, target.name);
+        expect(feed.calls.last.page, 1);
+        complete('app');
+        await container.pump();
+        stale.result.complete(const PageResult(items: [], hasMore: false));
+        await old;
+        expect(ids(), ['app']);
+        await source(RecommendationSource.web);
+        expect(ids(), isNull);
+        complete('new-web');
+        await container.pump();
+        expect(ids(), ['new-web']);
+      },
     );
-    final back = controller.selectRecommended();
-    expect(feed.calls.last.source, 'app');
-    complete('app');
-    await back;
-    expect(ids(), ['app']);
-    await controller.selectPopular();
-    expect(ids(), ['popular']);
-    expect(feed.calls.length, count + 1);
-  });
+  }
+  for (final target in [
+    RecommendationSource.app,
+    RecommendationSource.desktop,
+  ]) {
+    test('hidden recommendation invalidation preserves popular content and starts no hidden request', () async {
+      final first = controller.refresh();
+      complete('old-web');
+      await first;
+      final popular = controller.selectPopular();
+      complete('popular');
+      await popular;
+      final count = feed.calls.length;
+      await source(target);
+      expect(feed.calls.length, count);
+      expect(ids(), ['popular']);
+      expect(
+        controller.stateForChannel(HomeChannel.recommended).items.isLoading,
+        isTrue,
+      );
+      final back = controller.selectRecommended();
+      expect(feed.calls.last.source, target.name);
+      complete('app');
+      await back;
+      expect(ids(), ['app']);
+      await controller.selectPopular();
+      expect(ids(), ['popular']);
+      expect(feed.calls.length, count + 1);
+    });
+  }
   test(
     'device revisions refresh only App recommendations and reset pagination',
     () async {
@@ -148,7 +161,11 @@ final class _Settings implements SettingsRepository {
   }
 }
 
-final class _Feed implements FeedRepository, AppRecommendationFeedRepository {
+final class _Feed
+    implements
+        FeedRepository,
+        AppRecommendationFeedRepository,
+        DesktopRecommendationFeedRepository {
   final calls =
       <
         ({
@@ -193,6 +210,11 @@ final class _Feed implements FeedRepository, AppRecommendationFeedRepository {
     required int page,
     required RequestCancellation cancellation,
   }) => read('app', page, cancellation);
+  @override
+  Future<PageResult<VideoSummary>> loadDesktopRecommendations({
+    required int page,
+    required RequestCancellation cancellation,
+  }) => read('desktop', page, cancellation);
 }
 
 final class _Identity implements AppRecommendationIdentityRepository {

@@ -57,6 +57,18 @@ void main() {
     expect(find.textContaining('设备标识'), findsNothing);
     expect(find.text(identity.device), findsNothing);
     expect(find.text('当前使用游客推荐。'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ChoiceChip, '桌面端 / PC'));
+    await tester.pumpAndSettle();
+    expect(settings.value.recommendations.source, RecommendationSource.desktop);
+    expect(
+      tester
+          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '桌面端 / PC'))
+          .selected,
+      isTrue,
+    );
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Web 推荐'));
+    await tester.pumpAndSettle();
+    expect(settings.value.recommendations.source, RecommendationSource.web);
     expect(tester.takeException(), isNull);
   });
   for (final expired in [false, true]) {

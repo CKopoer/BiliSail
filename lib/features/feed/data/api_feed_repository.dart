@@ -22,6 +22,7 @@ class ApiFeedRepository
         RankingFeedRepository,
         RecommendationPublicationTimeRepository,
         AppRecommendationFeedRepository,
+        DesktopRecommendationFeedRepository,
         RecommendationFeedbackRepository {
   ApiFeedRepository(this.api, this.requests, {this.appIdentity});
   final AppRecommendationIdentityStore? appIdentity;
@@ -32,6 +33,9 @@ class ApiFeedRepository
   // A refresh owns a new cancellation scope. Weak keys retain failed-page
   // indices for explicit retries without retaining closed query lifetimes.
   final _recommendationPulls = Expando<_RecommendationPull>();
+  final _desktopRecommendationPulls = Expando<_RecommendationPull>();
+  int _desktopRecommendationIndex = 0;
+  int? _desktopRecommendationEpoch;
 
   @override
   String get feedbackScope => 'session:${requests.sessionEpoch}';
@@ -344,26 +348,68 @@ class ApiFeedRepository
         ),
       );
     }
+    return _loadRecommendations(
+      page: page,
+      cancellation: cancellation,
+      context: context,
+    );
+  }, cancellation: cancellation);
+
+  @override
+  Future<PageResult<VideoSummary>> loadDesktopRecommendations({
+    required int page,
+    required RequestCancellation cancellation,
+  }) => requests.run(
+    (context) => _loadRecommendations(
+      page: page,
+      cancellation: cancellation,
+      desktop: true,
+      context: context,
+    ),
+    cancellation: cancellation,
+  );
+
+  Future<PageResult<VideoSummary>> _loadRecommendations({
+    required int page,
+    required RequestCancellation cancellation,
+    bool desktop = false,
+    required ApiRequestContext context,
+  }) async {
     if (page < 1) throw ArgumentError.value(page, 'page');
     final epoch = requests.sessionEpoch;
-    final pending = _recommendationPulls[cancellation];
+    if (desktop && _desktopRecommendationEpoch != epoch) {
+      _desktopRecommendationEpoch = epoch;
+      _desktopRecommendationIndex = 0;
+    }
+    final pulls = desktop ? _desktopRecommendationPulls : _recommendationPulls;
+    final pending = pulls[cancellation];
     final pull =
         pending != null && pending.page == page && pending.epoch == epoch
         ? pending
-        : _RecommendationPull(page, ++_recommendationIndex, epoch);
-    _recommendationPulls[cancellation] = pull;
+        : _RecommendationPull(
+            page,
+            desktop ? _desktopRecommendationIndex++ : ++_recommendationIndex,
+            epoch,
+          );
+    pulls[cancellation] = pull;
     final result = _mapPage(
-      await api.getRecommended(page: pull.index, context: context),
+      desktop
+          ? await api.getDesktopRecommended(
+              freshIndex: pull.index,
+              loadMore: page > 1,
+              context: context,
+            )
+          : await api.getRecommended(page: pull.index, context: context),
     );
     // An empty success also consumes its sample. A late old response must not
     // clear the retry index of a newer page or account session.
     if (!cancellation.isCancelled &&
         epoch == requests.sessionEpoch &&
-        identical(_recommendationPulls[cancellation], pull)) {
-      _recommendationPulls[cancellation] = null;
+        identical(pulls[cancellation], pull)) {
+      pulls[cancellation] = null;
     }
     return result;
-  }, cancellation: cancellation);
+  }
 
   @override
   Future<PageResult<VideoSummary>> loadRanking({

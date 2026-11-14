@@ -1,1 +1,1 @@
-enum RecommendationSource { web, app }
+enum RecommendationSource { web, app, desktop }
