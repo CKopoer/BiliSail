@@ -30,6 +30,8 @@ import 'package:bilisail/features/video/presentation/video_author_header.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/features/video/presentation/video_collection_panel.dart';
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:bilisail/features/video/presentation/watch_later_queue_panel.dart';
@@ -57,6 +59,65 @@ import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 
 void main() {
+  testWidgets(
+    'custom layout threshold updates in place and retains the player',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(900, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final layout = ValueNotifier(const ResponsiveLayoutSettings.defaults());
+      addTearDown(layout.dispose);
+      var created = 0, disposed = 0;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authControllerProvider.overrideWith(_GuestAuthController.new),
+            videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+            videoExtrasRepositoryProvider.overrideWithValue(
+              _ExtrasRepository(),
+            ),
+          ],
+          child: InputTestApp(
+            home: ValueListenableBuilder(
+              valueListenable: layout,
+              builder: (context, value, child) =>
+                  ResponsiveLayoutScope(settings: value, child: child!),
+              child: Scaffold(
+                body: VideoScreen(
+                  id: const VideoId('BV1abc123456'),
+                  playerBuilder: (_, _, _) => _TrackedPlayer(
+                    onCreate: () => created++,
+                    onDispose: () => disposed++,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final state = tester.state(find.byType(_TrackedPlayer));
+      expect(tester.getSize(find.byType(_TrackedPlayer)).width, 900);
+      layout.value = ResponsiveLayoutSettings(playbackSideBySideWidth: 900);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(_TrackedPlayer)).width, 520);
+      tester.view.physicalSize = const Size(899, 800);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(_TrackedPlayer)).width, 899);
+      tester.view.physicalSize = const Size(900, 800);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(_TrackedPlayer)).width, 520);
+      layout.value = const ResponsiveLayoutSettings.defaults();
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(_TrackedPlayer)).width, 900);
+      expect(tester.state(find.byType(_TrackedPlayer)), same(state));
+      expect(created, 1);
+      expect(disposed, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('sidebar toggles reuse player and information builders', (
     tester,
   ) async {

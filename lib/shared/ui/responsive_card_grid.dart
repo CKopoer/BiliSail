@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import 'text_measurement_cache.dart';
+import 'responsive_layout_scope.dart';
 
 const _desktopSpacing = 20.0;
 
@@ -25,9 +26,19 @@ const _desktopSpacing = 20.0;
       : extent >= compactMinimum * 2 + _desktopSpacing
       ? 2
       : 1;
-  final columns = ((extent + _desktopSpacing) / (minimum + _desktopSpacing))
+  var columns = ((extent + _desktopSpacing) / (minimum + _desktopSpacing))
       .floor()
       .clamp(minimumColumns, 12);
+  if (ResponsiveLayoutScope.of(context).videoGridMinWidths case final widths?) {
+    // Custom thresholds refer to default title size; enlarged text still
+    // receives more horizontal space. Smaller text never adds extra columns.
+    final scale = titleScale < 1 ? 1.0 : titleScale;
+    columns = 1;
+    for (final threshold in widths) {
+      if (extent < threshold * scale) break;
+      columns++;
+    }
+  }
   return (
     columns: columns,
     width: (extent - (columns - 1) * spacing) / columns,

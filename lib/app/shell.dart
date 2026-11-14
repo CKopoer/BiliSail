@@ -141,6 +141,7 @@ final class BiliAppShell extends StatefulWidget {
     this.closeTabOnRightClick = false,
     this.closeTabOnDoubleClick = false,
     this.sidebarStyle = SidebarStyle.automatic,
+    this.sidebarExpandedWidth = 1600,
     this.navigationBarMode = NavigationBarMode.automatic,
     this.sidebarCollapsed,
     this.defaultDynamicTab = DynamicPageTab.dynamic,
@@ -157,6 +158,7 @@ final class BiliAppShell extends StatefulWidget {
   final bool closeTabOnRightClick;
   final bool closeTabOnDoubleClick;
   final SidebarStyle sidebarStyle;
+  final int sidebarExpandedWidth;
   final NavigationBarMode navigationBarMode;
   final bool? sidebarCollapsed;
   final DynamicPageTab defaultDynamicTab;
@@ -812,7 +814,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
             builder: (context, constraints) {
               final compact = _usesBottomNavigation(constraints.maxWidth);
               final extended = switch (widget.sidebarStyle) {
-                SidebarStyle.automatic => constraints.maxWidth >= 1600,
+                SidebarStyle.automatic =>
+                  constraints.maxWidth >= widget.sidebarExpandedWidth,
                 SidebarStyle.expanded => true,
                 SidebarStyle.compact => false,
               };

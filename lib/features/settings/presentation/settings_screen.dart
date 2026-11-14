@@ -23,6 +23,7 @@ import '../domain/settings_category.dart';
 import 'shortcut_settings_section.dart';
 import 'app_icon_settings.dart';
 import 'recommendation_settings_section.dart';
+import 'responsive_layout_settings_controls.dart';
 import 'cdn_settings_tile.dart';
 import 'log_export_button.dart';
 
@@ -407,8 +408,17 @@ final class _SettingsCategoryPageState
                             SidebarStyle.compact: '图标文字上下',
                           }, controller.setSidebarStyle),
                           const Text(
-                            '使用侧边栏时生效；随窗口宽度模式在 1600 起展开。可用左上角按钮完全收起或展开，保留当前页面和侧栏样式。',
+                            '使用侧边栏时生效；随窗口宽度模式按下方展开阈值调整。可用左上角按钮完全收起或展开，保留当前页面和侧栏样式。',
                             style: TextStyle(fontSize: 12),
+                          ),
+                          ResponsiveLayoutSettingsControls(
+                            settings: s.responsiveLayout,
+                            onVideoGridChanged:
+                                controller.setVideoGridMinWidths,
+                            onSidebarChanged:
+                                controller.setSidebarExpandedWidth,
+                            onPlaybackChanged:
+                                controller.setPlaybackSideBySideWidth,
                           ),
                           _choices('动态页默认标签', s.defaultDynamicTab, const {
                             DynamicPageTab.dynamic: '动态',

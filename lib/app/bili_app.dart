@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as path;
 
 import '../shared/ui/app_dialog.dart';
+import '../shared/ui/responsive_layout_scope.dart';
 import '../core/platform/desktop_window_chrome.dart';
 import '../core/platform/detached_playback_window.dart';
 import '../core/platform/window_service.dart';
@@ -119,6 +120,12 @@ class _BiliAppState extends ConsumerState<BiliApp> {
                   ? null
                   : WorkspacePlaybackWindow(
                       theme: Theme.of(context),
+                      responsiveLayout:
+                          (ref.read(settingsControllerProvider).value ??
+                                  ref.read<AppSettings>(
+                                    settingsDefaultsProvider,
+                                  ))
+                              .responsiveLayout,
                       shortcuts:
                           (ref.read(settingsControllerProvider).value ??
                                   ref.read<AppSettings>(
@@ -453,8 +460,11 @@ class _BiliAppState extends ConsumerState<BiliApp> {
                       interactions: cardInteractions,
                       onNotice: showAppNotice,
                       hoverPlaybackEnabled: settings.videoCardHoverPlayback,
-                      child: AndroidSystemUi(
-                        child: child ?? const SizedBox.shrink(),
+                      child: ResponsiveLayoutScope(
+                        settings: settings.responsiveLayout,
+                        child: AndroidSystemUi(
+                          child: child ?? const SizedBox.shrink(),
+                        ),
                       ),
                     ),
                   ),

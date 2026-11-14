@@ -11,6 +11,8 @@ import '../core/presentation/app_input_host.dart';
 import '../core/presentation/input_scope.dart';
 import '../features/settings/domain/shortcut_settings.dart';
 import '../shared/ui/app_notice.dart';
+import '../shared/ui/responsive_layout_scope.dart';
+import '../domain/responsive_layout_settings.dart';
 import '../shared/ui/smooth_scroll_behavior.dart';
 import 'shortcut_coordinator.dart';
 
@@ -26,6 +28,7 @@ class WorkspacePlaybackWindow extends StatefulWidget {
     required this.onActivateBrowser,
     this.onHome,
     required this.theme,
+    this.responsiveLayout = const ResponsiveLayoutSettings.defaults(),
   });
 
   final Widget child;
@@ -35,6 +38,7 @@ class WorkspacePlaybackWindow extends StatefulWidget {
   final VoidCallback onActivateBrowser;
   final VoidCallback? onHome;
   final ThemeData theme;
+  final ResponsiveLayoutSettings responsiveLayout;
 
   @override
   State<WorkspacePlaybackWindow> createState() =>
@@ -217,7 +221,10 @@ class _WorkspacePlaybackWindowState extends State<WorkspacePlaybackWindow> {
               ])
                 command: (stroke) => _command(command, stroke),
             },
-            child: child ?? const SizedBox.shrink(),
+            child: ResponsiveLayoutScope(
+              settings: widget.responsiveLayout,
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
         ),
       ),

@@ -13,6 +13,7 @@ import '../../../core/network/api_requests.dart';
 
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_layout_builder.dart';
+import '../../../shared/ui/responsive_layout_scope.dart';
 import '../../../shared/ui/width_layout_builder.dart';
 import '../../../domain/video.dart';
 import '../../../domain/playback_mode.dart';
@@ -269,7 +270,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       children: [
         WidthLayoutBuilder(
           builder: (context, width) {
-            final wide = width >= 1000;
+            final wide =
+                width >=
+                ResponsiveLayoutScope.of(context).playbackSideBySideWidth;
             void toggleInfo() => _infoVisible.value = !_infoVisible.value;
             return PlaybackPageCommands(
               previousPart: () => _changePart(video, selected, -1),
