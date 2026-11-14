@@ -72,18 +72,57 @@ void main() {
   );
 
   test(
-    'automatic retains API order, removes duplicates and never rewrites URLs',
+    'automatic prefers returned regular CDNs without rewriting signed URLs',
     () {
       final ordered = orderMediaCdnUrls([
         ...urls,
         tencent,
       ], MediaCdnPreference.automatic);
-      expect(ordered, urls);
-      expect(identical(ordered[1], tencent), true);
-      expect(ordered[1].toString(), tencent.toString());
+      expect(ordered, [tencent, huawei, alibaba, baidu, pcdn]);
+      expect(identical(ordered.first, tencent), true);
+      expect(ordered.first.toString(), tencent.toString());
+      expect(orderMediaCdnUrls(ordered, MediaCdnPreference.automatic), ordered);
       expect(() => ordered.clear(), throwsUnsupportedError);
     },
   );
+
+  test('automatic keeps provided fallbacks when no regular CDN exists', () {
+    final edge = Uri.parse('https://node.edge.mountaintoys.cn/v.m4s?k=test');
+    final lookalike = Uri.parse(
+      'https://upos-sz-mirrorcos.bilivideo.com.example.org/v.m4s',
+    );
+    expect(
+      orderMediaCdnUrls([pcdn, edge, lookalike], MediaCdnPreference.automatic),
+      [pcdn, edge, lookalike],
+    );
+    expect(orderMediaCdnUrls([], MediaCdnPreference.automatic), isEmpty);
+  });
+
+  test('automatic distinguishes UPOS PCDN from provided regular mirrors', () {
+    final disguisedPcdn = Uri.parse(
+      'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/v.m4s?os=mcdn&k=a%2Bb',
+    );
+    final redirectedPcdn = Uri.parse(
+      'https://upos-sz-302.test.bilivideo.com/upgcxcode/v.m4s?k=302',
+    );
+    final overseas = Uri.parse(
+      'https://upos-hz-mirrorakam.akamaized.net/upgcxcode/v.m4s?hdnts=fixture%2Bsignature',
+    );
+    final proxy = Uri.parse(
+      'https://proxy-tf-all-ws.bilivideo.com/upgcxcode/v.m4s?k=fixture',
+    );
+    final ordered = orderMediaCdnUrls([
+      disguisedPcdn,
+      redirectedPcdn,
+      overseas,
+      tencent,
+      proxy,
+    ], MediaCdnPreference.automatic);
+    expect(ordered, [overseas, tencent, proxy, disguisedPcdn, redirectedPcdn]);
+    expect(ordered.first, same(overseas));
+    expect(ordered.first.query, overseas.query);
+    expect(backupMediaCdnUrl(ordered, MediaCdnPreference.automatic), tencent);
+  });
 
   test('regular CDN preference moves PCDN behind unchanged server backups', () {
     expect(orderMediaCdnUrls(urls, MediaCdnPreference.regular), [

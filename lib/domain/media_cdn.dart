@@ -77,16 +77,27 @@ List<Uri> _orderProvidedUrls(
   MediaCdnPreference preference,
 ) {
   final unique = urls.toSet().toList();
-  if (preference == MediaCdnPreference.automatic) {
-    return List.unmodifiable(unique);
-  }
   bool preferred(Uri uri) {
     final host = uri.host.toLowerCase();
     if (preference.host case final target?) return host == target;
+    // The API's first URL can be a PCDN that serves the header promptly but
+    // stalls on the Range needed for resume. Use returned regular CDNs from
+    // the first open, keeping provider order and every original fallback.
+    if (preference == MediaCdnPreference.automatic ||
+        preference == MediaCdnPreference.regular) {
+      final regularHost =
+          (host.startsWith('upos-') || host.startsWith('proxy-tf-')) &&
+          (host.endsWith('.bilivideo.com') || host.endsWith('.akamaized.net'));
+      final node = host.split('-').elementAtOrNull(2);
+      // Some PCDN addresses also use an UPOS hostname. Their query/node marks
+      // must not rank them ahead of an ordinary returned mirror.
+      return regularHost &&
+          node?.startsWith('302') != true &&
+          uri.queryParameters['os'] != 'mcdn';
+    }
     if (!host.endsWith('.bilivideo.com')) return false;
     return switch (preference) {
-      MediaCdnPreference.automatic => true,
-      MediaCdnPreference.regular => host.startsWith('upos-'),
+      MediaCdnPreference.automatic || MediaCdnPreference.regular => false,
       MediaCdnPreference.tencent =>
         host.startsWith('upos-') &&
             RegExp(r'(?:mirror|estg)cos').hasMatch(host),

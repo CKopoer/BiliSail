@@ -1,5 +1,7 @@
 # 视频 CDN 设置、测速与悬停故障恢复
 
+2026-11-14：按用户要求，自动模式改为与 PiliPlus 默认选线方向一致的常规镜像优先；历史续播的现场原因、签名／回退边界及本轮验证见[历史续播与默认 CDN](resume-startup-cdn-2026-11-14.md)。以下保留各次实施时的历史记录。
+
 ## 具体节点与展开测速（2026-10-28）
 
 按用户要求，只读参考 PiliPlus 提交 `936072449e82e3d90c28c728c0087bf5136fa441` 的 `lib/models/common/video/cdn_type.dart`、`lib/pages/setting/widgets/select_dialog.dart`、`lib/utils/video_utils.dart` 和 `lib/pages/setting/models/video_settings.dart`。参考节点目录、选择弹窗与读取视频片段测速的行为，独立实现本项目的领域模型、仓储、控制器和 Material 弹窗，没有复制 GPLv3 应用源码或增加依赖。

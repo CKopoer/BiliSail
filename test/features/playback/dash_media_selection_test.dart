@@ -7,6 +7,40 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('automatic DASH selection prefers returned regular video and audio', () {
+    ApiMediaTrack track(int id, String codec, String name) => ApiMediaTrack(
+      id: id,
+      url: Uri.parse('https://node.edge.mountaintoys.cn/$name.m4s?k=pcdn'),
+      backupUrls: [
+        Uri.parse(
+          'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/$name%2F1.m4s?k=a%2Bb&x=1&x=2',
+        ),
+      ],
+      bandwidth: 100000,
+      mimeType: 'video/mp4',
+      codecs: codec,
+    );
+    final video = track(80, 'avc1', 'video');
+    final audio = track(30280, 'mp4a.40.2', 'audio');
+    final media = selectDashMedia(
+      ApiPlayInfo(
+        duration: const Duration(minutes: 3),
+        dashVideo: [video],
+        dashAudio: [audio],
+        acceptQuality: const [80],
+      ),
+      quality: 80,
+      preferredCodec: VideoCodecPreference.h264,
+      headers: const {'Referer': 'https://www.bilibili.com/'},
+    );
+    expect(media.video.urls, [video.backupUrls.single, video.url]);
+    expect(media.audio?.urls, [audio.backupUrls.single, audio.url]);
+    expect(identical(media.video.urls.first, video.backupUrls.single), isTrue);
+    expect(identical(media.audio?.urls.first, audio.backupUrls.single), isTrue);
+    expect(media.video.urls.first.query, video.backupUrls.single.query);
+    expect(media.audio?.urls.first.query, audio.backupUrls.single.query);
+  });
+
   for (final silent in [true, false]) {
     test('video without audio requires confirmed silence=$silent', () {
       PlaybackMedia select() => selectDashMedia(
