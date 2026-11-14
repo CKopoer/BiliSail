@@ -1079,6 +1079,26 @@ void main() {
     expect(backend.playing, false);
   });
 
+  test(
+    'premature playback completion still reports a recoverable interruption',
+    () async {
+      final backend = _Backend();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions(play: true));
+      final failure = engine.failures.first;
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.ended,
+          position: Duration(seconds: 10),
+        ),
+      );
+      expect((await failure).kind, PlayerFailureKind.videoInterrupted);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+      expect(backend.playing, false);
+    },
+  );
+
   test('natural EOF emits once, ignores trailing events, and replay resumes native events', () async {
     final backend = _Backend();
     final engine = SharedPlayerEngine(createBackend: () => backend);

@@ -27,27 +27,14 @@ final class NativeBufferRecovery {
   bool _exhausted = false, _disposed = false, _reading = false;
   bool _recoveryRequested = false;
 
-  void readingChanged(
-    bool reading, {
-    bool endOfInput = false,
-    double? cacheEndSeconds,
-  }) {
-    _reading = reading;
+  void readingChanged(bool reading, {bool endOfInput = false}) {
+    _reading = reading && !endOfInput;
+    // Input EOF also means normal prefetch completion. DASH tracks can end at
+    // different timestamps; the estimated cache endpoint cannot prove a read
+    // failure. Let native playback consume the cache and report real errors or
+    // premature playback completion through the existing engine event route.
+    if (endOfInput) cancel();
     update();
-    // EOF in the input reader is not playback completion: cached packets may
-    // still play for minutes. The duration guard excludes a fully cached file.
-    if (endOfInput) {
-      final duration = snapshot().duration;
-      if (duration > Duration.zero && cacheEndSeconds != null) {
-        // Read the endpoint from the same native event as EOF. The SDK's
-        // separate buffer notification can still be behind a fully read file.
-        if (duration.inMicroseconds / 1000000 - cacheEndSeconds > .5) {
-          reportNetworkError(immediate: true);
-        }
-      } else {
-        reportNetworkError();
-      }
-    }
   }
 
   bool get _active {

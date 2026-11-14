@@ -10,12 +10,11 @@ void main() {
     () {
       expect(
         nativeCacheReadState('{"idle":false,"eof":false,"cache-end":120.2}'),
-        (reading: true, endOfInput: false, cacheEndSeconds: 120.2),
+        (reading: true, endOfInput: false),
       );
       expect(nativeCacheReadState('{"idle":true,"eof":true}'), (
         reading: false,
         endOfInput: true,
-        cacheEndSeconds: null,
       ));
       for (final value in [
         '',
@@ -28,11 +27,11 @@ void main() {
       }
     },
   );
-  test('invalid native cache endpoints remain unavailable', () {
+  test('read state does not depend on estimated cache endpoints', () {
     for (final end in ['null', '-1', '"NaN"', '1e400']) {
       expect(
         nativeCacheReadState('{"idle":true,"eof":true,"cache-end":$end}'),
-        (reading: false, endOfInput: true, cacheEndSeconds: null),
+        (reading: false, endOfInput: true),
       );
     }
   });

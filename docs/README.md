@@ -11,6 +11,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [全平台 WebView 与 Linux 登录](validation/webview-all-linux-2026-11-14.md) | webview_all 迁移、私有 Cookie、Linux 原生与 helper 打包验证 |
+| [Windows Release 正常预读 EOF](validation/windows-release-dash-eof-2026-11-14.md) | 分轨尾部差异导致误中断、PiliPlus 职责对照、删除 EOF 差值判错及原生复现／修复验证 |
 | [消息内容与评论定位](validation/message-content-navigation-2026-11-14.md) | 回复／点赞／@ 通知定位、视频时间／分 P、共享评论详情及验证边界 |
 | [桌面端推荐](validation/desktop-recommendation-2026-11-14.md) | Web／App／桌面端来源、PiliPlus PR #3463 参数对照、切换隔离、持久化与验证边界 |
 | [点播反复缓存暂停恢复](validation/repeated-rebuffer-recovery-2026-11-14.md) | 系统安装版现场、无错误少量补数循环、原生缓存暂停判断及有界备用线路恢复 |

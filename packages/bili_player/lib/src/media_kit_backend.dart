@@ -594,12 +594,8 @@ final class MediaKitBackend
             player.native,
             onCachePauseChanged: (paused) =>
                 _rebuffers?.cachePauseChanged(paused),
-            onCacheStateChanged: (reading, endOfInput, cacheEndSeconds) =>
-                _bufferRecovery?.readingChanged(
-                  reading,
-                  endOfInput: endOfInput,
-                  cacheEndSeconds: cacheEndSeconds,
-                ),
+            onCacheStateChanged: (reading, endOfInput) => _bufferRecovery
+                ?.readingChanged(reading, endOfInput: endOfInput),
             onFailure: (code) => _diagnose(
               PlayerDiagnosticKind.openTerminated,
               nativeErrorCode: code,
