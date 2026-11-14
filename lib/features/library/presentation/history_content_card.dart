@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/app_cover_image.dart';
+import '../../../shared/ui/card_menu.dart';
+import '../../../shared/ui/highlighted_text.dart';
 import '../../../shared/ui/live_card_cover.dart';
 import '../../../shared/ui/scroll_aware_hover_region.dart';
 import '../../live/domain/live_room.dart';
@@ -16,128 +19,238 @@ final class HistoryContentCard extends StatefulWidget {
     required this.onOpen,
     required this.onDelete,
     this.onOpenAuthor,
+    this.busy = false,
   });
 
   final WatchHistoryEntry entry;
   final String date, dateTooltip;
   final VoidCallback onOpen;
   final VoidCallback? onDelete, onOpenAuthor;
+  final bool busy;
 
   @override
   State<HistoryContentCard> createState() => _HistoryContentCardState();
 }
 
 class _HistoryContentCardState extends State<HistoryContentCard> {
-  bool _hovered = false;
+  bool _hovered = false, _focused = false, _authorHovered = false;
+  bool _menuFocused = false, _menuOpen = false;
+  final _menuAnchor = GlobalKey();
+
+  Future<void> _showMenu() async {
+    if (_menuOpen ||
+        widget.busy ||
+        widget.onDelete == null ||
+        !WorkspaceActivity.isActive(context)) {
+      return;
+    }
+    final entry = widget.entry;
+    setState(() => _menuOpen = true);
+    bool? selected;
+    try {
+      selected = await showCardMenu<bool>(
+        context,
+        anchorKey: _menuAnchor,
+        actions: const [
+          (value: true, icon: Icons.delete_outline, label: '删除记录'),
+        ],
+      );
+    } finally {
+      if (mounted) setState(() => _menuOpen = false);
+    }
+    if (mounted &&
+        selected == true &&
+        identical(widget.entry, entry) &&
+        !widget.busy &&
+        WorkspaceActivity.isActive(context)) {
+      widget.onDelete?.call();
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final entry = widget.entry;
-    final date = widget.date, dateTooltip = widget.dateTooltip;
-    final onDelete = widget.onDelete, onOpenAuthor = widget.onOpenAuthor;
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final label = entry.type == HistoryContentType.live
-        ? (entry.isLive ? '直播中' : '未开播')
-        : entry.type.label;
-    final card = Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: () {
-          setState(() => _hovered = false);
-          widget.onOpen();
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: entry.type == HistoryContentType.live
-                  ? LiveCardCover(
-                      roomId: RoomId(entry.contentId ?? ''),
-                      hovered: _hovered,
-                      previewEnabled: entry.isLive,
-                      borderRadius: 12,
-                      child: _cover(context, label),
-                    )
-                  : _cover(context, label),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final entry = widget.entry;
+      final theme = Theme.of(context);
+      final scheme = theme.colorScheme;
+      final textScaler = MediaQuery.textScalerOf(context);
+      final label = entry.type == HistoryContentType.live
+          ? (entry.isLive ? '直播中' : '未开播')
+          : entry.type.label;
+      final metadataStyle = theme.textTheme.bodySmall?.copyWith(
+        fontSize: 13,
+        height: 16 / 13,
+      );
+      final touchPlatform = switch (theme.platform) {
+        TargetPlatform.android || TargetPlatform.iOS => true,
+        _ => false,
+      };
+      return ScrollAwareHoverRegion(
+        onHover: (hovered) => setState(() => _hovered = hovered),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _focused ? scheme.primary : Colors.transparent,
             ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      entry.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(fontSize: 15),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(7),
+            clipBehavior: Clip.none,
+            child: InkWell(
+              onTap: () {
+                setState(() => _hovered = false);
+                widget.onOpen();
+              },
+              onLongPress: _showMenu,
+              onFocusChange: (focused) => setState(() => _focused = focused),
+              hoverColor: Colors.transparent,
+              hoverDuration: Duration.zero,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: entry.type == HistoryContentType.live
+                        ? LiveCardCover(
+                            roomId: RoomId(entry.contentId ?? ''),
+                            hovered: _hovered,
+                            previewEnabled: entry.isLive,
+                            child: _cover(context, label),
+                          )
+                        : _cover(context, label),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 9, bottom: 1),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          // Match video cards' two scaled 22px title lines.
+                          height: textScaler.scale(15) * (22 / 15) * 2 + 2,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: HighlightedText(
+                                  entry.title,
+                                  query: '',
+                                  maxLines: 2,
+                                  showOverflowTooltip: true,
+                                  tooltipTriggerMode: TooltipTriggerMode.manual,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    height: 22 / 15,
+                                    color:
+                                        (_hovered || _focused) &&
+                                            !_authorHovered
+                                        ? scheme.primary
+                                        : scheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                              CardMenuButton(
+                                anchorKey: _menuAnchor,
+                                buttonKey: const ValueKey(
+                                  'history-content-title-menu',
+                                ),
+                                cardWidth: constraints.maxWidth,
+                                visible:
+                                    _hovered ||
+                                    _focused ||
+                                    _menuFocused ||
+                                    _menuOpen ||
+                                    touchPlatform,
+                                busy: widget.busy,
+                                onFocusChange: (focused) =>
+                                    setState(() => _menuFocused = focused),
+                                onPressed:
+                                    widget.busy || widget.onDelete == null
+                                    ? null
+                                    : _showMenu,
+                                tooltip: '历史记录操作',
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        LayoutBuilder(
+                          builder: (context, constraints) => Row(
+                            children: [
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: ScrollAwareHoverRegion(
+                                    onHover: (hovered) => setState(
+                                      () => _authorHovered = hovered,
+                                    ),
+                                    child: InkWell(
+                                      onTap: widget.onOpenAuthor,
+                                      hoverColor: Colors.transparent,
+                                      hoverDuration: Duration.zero,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              entry.author,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: metadataStyle?.copyWith(
+                                                color: _authorHovered
+                                                    ? scheme.primary
+                                                    : null,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (widget.date.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: constraints.maxWidth * .4,
+                                  ),
+                                  child: Tooltip(
+                                    message: widget.dateTooltip,
+                                    child: Text(
+                                      widget.date,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: metadataStyle,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                PopupMenuButton<String>(
-                  tooltip: '历史记录操作',
-                  iconSize: 20,
-                  onSelected: (_) => onDelete?.call(),
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'delete',
-                      enabled: onDelete != null,
-                      child: const Text('删除记录'),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: onOpenAuthor,
-                    child: Text(
-                      entry.author,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Tooltip(
-                  message: dateTooltip,
-                  child: Text(
-                    date,
-                    maxLines: 1,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-    return entry.type == HistoryContentType.live
-        ? ScrollAwareHoverRegion(
-            onHover: (hovered) => setState(() => _hovered = hovered),
-            child: card,
-          )
-        : card;
-  }
+      );
+    },
+  );
 
   Widget _cover(BuildContext context, String label) {
     final entry = widget.entry;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(6),
       child: Stack(
         fit: StackFit.expand,
         children: [
