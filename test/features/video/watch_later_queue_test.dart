@@ -3,9 +3,12 @@ import 'dart:ui' as ui;
 
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:bilisail/features/video/presentation/watch_later_queue_panel.dart';
+import 'package:bilisail/shared/ui/horizontal_video_card.dart';
+import 'package:bilisail/shared/ui/video_card_cover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -26,6 +29,7 @@ WatchLaterQueueItem _item(int number) => WatchLaterQueueItem(
     title: '第 ${number + 1} 条稍后再看视频，标题用于验证两行省略',
     coverUrl: '',
     author: '测试 UP 主',
+    authorId: const UserId('7'),
     duration: const Duration(minutes: 4, seconds: 33),
   ),
   playCountText: '64.5万',
@@ -328,6 +332,79 @@ void main() {
       }
     },
   );
+
+  for (final watchLater in [true, false]) {
+    testWidgets(
+      'queue shares related card interactions and isolates removal, watchLater=$watchLater',
+      (tester) async {
+        final queue = WatchLaterQueue(
+          id: 'shared-cards',
+          scope: 'user:7',
+          sessionEpoch: 0,
+          favoriteTitle: watchLater ? null : '测试收藏夹',
+          items: List.generate(3, _item),
+        );
+        final selected = <VideoId>[];
+        final openedUsers = <UserId>[];
+        final removed = <WatchLaterQueueItem>[];
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: BiliTheme.light(),
+            home: Scaffold(
+              body: SizedBox(
+                width: 380,
+                height: 600,
+                child: WatchLaterQueuePanel(
+                  queue: queue,
+                  current: _firstId,
+                  expanded: true,
+                  onToggle: () {},
+                  onSelect: selected.add,
+                  onOpenUser: openedUsers.add,
+                  onRemove: watchLater ? removed.add : null,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(HorizontalVideoCard), findsNWidgets(3));
+        for (final cover in find.byType(VideoCardCover).evaluate()) {
+          expect(
+            tester.getSize(find.byWidget(cover.widget)),
+            const Size(140, 79),
+          );
+        }
+        await tester.tap(find.text('测试 UP 主').at(1));
+        expect(openedUsers, [const UserId('7')]);
+        expect(selected, isEmpty);
+        await tester.tap(find.text(queue.items[1].video.title));
+        expect(selected, [_secondId]);
+        if (watchLater) {
+          final remove = find.byKey(
+            const ValueKey('watch-later-queue-remove-BV2abc123456'),
+          );
+          final target = find.byKey(
+            const ValueKey('watch-later-queue-BV2abc123456'),
+          );
+          expect(
+            tester.getRect(remove).right,
+            closeTo(tester.getRect(target).right, .1),
+          );
+          await tester.tap(remove);
+          expect(removed, [queue.items[1]]);
+          expect(selected, [_secondId]);
+          expect(
+            find.byKey(const ValueKey('watch-later-queue-remove-BV1abc123456')),
+            findsNothing,
+          );
+        } else {
+          expect(find.text('删除'), findsNothing);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   for (final reducedMotion in [false, true]) {
     testWidgets(

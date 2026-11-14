@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../domain/video.dart';
-import '../../../shared/ui/app_cover_image.dart';
-import '../../../shared/ui/bili_icons.dart';
+import '../../../domain/user.dart';
+import '../../../shared/ui/horizontal_video_card.dart';
 import '../../../shared/ui/video_card.dart';
 import '../domain/watch_later_queue.dart';
 
@@ -15,6 +15,7 @@ final class WatchLaterQueuePanel extends StatefulWidget {
     required this.expanded,
     required this.onToggle,
     required this.onSelect,
+    this.onOpenUser,
     this.onRemove,
     this.pendingRemovals = const {},
     this.collapsedChild,
@@ -31,6 +32,7 @@ final class WatchLaterQueuePanel extends StatefulWidget {
   final bool expanded;
   final VoidCallback onToggle;
   final ValueChanged<VideoId> onSelect;
+  final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<WatchLaterQueueItem>? onRemove;
   final Set<String> pendingRemovals;
   final VoidCallback? onLoadMore;
@@ -110,7 +112,7 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
     super.dispose();
   }
 
-  double _measureLines(
+  Size _measureText(
     BuildContext context,
     TextStyle style,
     String text,
@@ -122,9 +124,9 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
       textScaler: MediaQuery.textScalerOf(context),
       maxLines: lines,
     )..layout();
-    final height = painter.height;
+    final size = painter.size;
     painter.dispose();
-    return height;
+    return size;
   }
 
   @override
@@ -183,55 +185,79 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
           Expanded(
             child: _QueueBodyTransition(
               expanded: widget.expanded,
-              queue: _buildList(context, index, textScale),
+              queue: _buildList(context, index),
               details: details,
             ),
           )
         else if (widget.expanded)
-          Expanded(child: _buildList(context, index, textScale)),
+          Expanded(child: _buildList(context, index)),
       ],
     );
   }
 
-  Widget _buildList(
-    BuildContext context,
-    int index,
-    double textScale,
-  ) => LayoutBuilder(
+  Widget _buildList(BuildContext context, int index) => LayoutBuilder(
     builder: (context, constraints) {
-      final coverWidth =
-          (constraints.maxWidth - 50 - 160 * textScale.clamp(1, 1.5)).clamp(
-            96.0,
-            141.0,
-          );
       final typography = Theme.of(context).textTheme;
-      final titleHeight = _measureLines(
+      final titleHeight = _measureText(
         context,
-        (typography.bodyMedium ?? const TextStyle()).copyWith(
-          fontSize: 14,
-          height: 1.3,
-        ),
+        HorizontalVideoCard.titleStyleOf(context) ?? const TextStyle(),
         '汉字Ag\n汉字Ag',
         2,
-      );
-      final authorHeight = _measureLines(
+      ).height;
+      final authorHeight = _measureText(
         context,
         typography.bodySmall ?? const TextStyle(),
         '汉字Ag',
         1,
-      );
-      final countHeight = _measureLines(
+      ).height;
+      final countStyle = typography.bodySmall ?? const TextStyle();
+      final countHeight = _measureText(
         context,
-        (typography.bodySmall ?? const TextStyle()).copyWith(fontSize: 12),
+        countStyle,
         '9999.9万',
         1,
+      ).height.clamp(16.0, double.infinity);
+      final hasRemoval = widget.queue.isWatchLater && widget.onRemove != null;
+      final removeLabel = _measureText(
+        context,
+        countStyle.copyWith(fontSize: 12),
+        '删除',
+        1,
       );
+      final statsWidth =
+          constraints.maxWidth -
+          40 -
+          HorizontalVideoCard.coverSize.width -
+          HorizontalVideoCard.coverSpacing -
+          (hasRemoval ? removeLabel.width + 34 : 0);
+      final countWidths = <String, double>{};
+      double countWidth(int? value, String text) {
+        final label = compactCountLabel(value, text);
+        return countWidths.putIfAbsent(
+          label,
+          () => _measureText(context, countStyle, label, 1).width + 21,
+        );
+      }
+
+      // Keep one fixed extent for paging anchors, including rows whose counts
+      // wrap beside the removal action. Reuse measurements for repeated labels.
+      final wraps = widget.queue.items.any(
+        (item) =>
+            countWidth(item.video.playCount, item.playCountText) +
+                countWidth(item.video.danmakuCount, item.danmakuCountText) +
+                8 >
+            statsWidth,
+      );
+      final statsHeight = wraps ? countHeight * 2 + 3 : countHeight;
+      final footerHeight = hasRemoval
+          ? statsHeight.clamp(
+              removeLabel.height.clamp(28.0, double.infinity),
+              double.infinity,
+            )
+          : statsHeight;
       final rowHeight =
-          (coverWidth * 9 / 16).clamp(
-            titleHeight +
-                authorHeight +
-                countHeight.clamp(28.0, double.infinity) +
-                4 * textScale,
+          HorizontalVideoCard.coverSize.height.clamp(
+            titleHeight + 6 + authorHeight + footerHeight,
             double.infinity,
           ) +
           20;
@@ -297,7 +323,8 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
               key: ValueKey(widget.queue.items[contentIndex].removalId),
               item: widget.queue.items[contentIndex],
               selected: contentIndex == index,
-              coverWidth: coverWidth,
+              onOpenUser: widget.onOpenUser,
+              showWatchLaterActions: !widget.queue.isWatchLater,
               onTap: () =>
                   widget.onSelect(widget.queue.items[contentIndex].video.id),
               onRemove: contentIndex == index || widget.onRemove == null
@@ -471,208 +498,61 @@ final class _QueueRow extends StatelessWidget {
     super.key,
     required this.item,
     required this.selected,
-    required this.coverWidth,
     required this.onTap,
     required this.onRemove,
     required this.removing,
+    required this.showWatchLaterActions,
+    this.onOpenUser,
   });
 
   final WatchLaterQueueItem item;
   final bool selected;
-  final double coverWidth;
   final VoidCallback onTap;
   final VoidCallback? onRemove;
-  final bool removing;
+  final bool removing, showWatchLaterActions;
+  final ValueChanged<UserId>? onOpenUser;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
-    final viewText = compactCountLabel(
-      item.video.playCount,
-      item.playCountText,
-    );
-    final danmakuText = compactCountLabel(
-      item.video.danmakuCount,
-      item.danmakuCountText,
-    );
     return Material(
       color: selected
           ? scheme.primary.withValues(alpha: .10)
           : Colors.transparent,
-      child: InkWell(
-        key: ValueKey('watch-later-queue-${item.video.id.value}'),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: coverWidth,
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (item.video.coverUrl.isEmpty)
-                          _coverFallback(context)
-                        else
-                          AppCoverImage(
-                            url: item.video.coverUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => _coverFallback(context),
-                          ),
-                        Positioned(
-                          right: 3,
-                          bottom: 3,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: const Color(0xB9000000),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 3,
-                                vertical: 1,
-                              ),
-                              child: Text(
-                                durationLabel(item.video.duration),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: HorizontalVideoCard(
+          key: ValueKey('watch-later-queue-${item.video.id.value}'),
+          video: item.video,
+          selected: selected,
+          onTap: onTap,
+          onOpenUser: onOpenUser,
+          showWatchLaterActions: showWatchLaterActions,
+          playCountText: item.playCountText,
+          danmakuCountText: item.danmakuCountText,
+          trailing: onRemove == null
+              ? null
+              : TextButton.icon(
+                  key: ValueKey(
+                    'watch-later-queue-remove-${item.video.id.value}',
                   ),
+                  onPressed: removing ? null : onRemove,
+                  style: TextButton.styleFrom(
+                    foregroundColor: scheme.onSurfaceVariant,
+                    minimumSize: const Size(0, 28),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(fontSize: 12),
+                  ),
+                  icon: removing
+                      ? const SizedBox.square(
+                          dimension: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.delete_outline, size: 14),
+                  label: const Text('删除'),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.video.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: selected ? scheme.primary : scheme.onSurface,
-                        fontSize: 14,
-                        height: 1.3,
-                      ),
-                    ),
-                    SizedBox(height: 2 * textScale),
-                    Text(
-                      item.video.author,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                    SizedBox(height: 2 * textScale),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Icon(
-                                BiliIcons.playCount,
-                                size: 12,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 3),
-                              Flexible(
-                                child: Text(
-                                  viewText,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                        fontSize: 12,
-                                      ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(
-                                BiliIcons.comment,
-                                size: 12,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 3),
-                              Flexible(
-                                child: Text(
-                                  danmakuText,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                        fontSize: 12,
-                                      ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (onRemove != null)
-                          TextButton.icon(
-                            key: ValueKey(
-                              'watch-later-queue-remove-${item.video.id.value}',
-                            ),
-                            onPressed: removing ? null : onRemove,
-                            style: TextButton.styleFrom(
-                              foregroundColor: scheme.onSurfaceVariant,
-                              minimumSize: const Size(0, 28),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                              ),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              textStyle: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(fontSize: 12),
-                            ),
-                            icon: removing
-                                ? const SizedBox.square(
-                                    dimension: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.delete_outline, size: 14),
-                            label: const Text('删除'),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _coverFallback(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [scheme.surfaceContainerHighest, scheme.surfaceContainerHigh],
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.play_circle_outline,
-          size: 30,
-          color: scheme.onSurfaceVariant.withValues(alpha: .55),
         ),
       ),
     );
