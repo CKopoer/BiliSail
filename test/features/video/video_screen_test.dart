@@ -41,6 +41,7 @@ import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:bilisail/features/video/application/video_card_preview_playback.dart';
 import 'package:bilisail/features/video/domain/video_card_interactions.dart';
 import 'package:bilisail/shared/ui/video_card_cover.dart';
+import 'package:bilisail/shared/ui/horizontal_video_card.dart';
 import 'package:bilisail/shared/ui/video_card_interaction_scope.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
@@ -2021,6 +2022,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(VideoCardCover).evaluate().length, lessThan(20));
+      expect(find.byType(HorizontalVideoCard), findsWidgets);
       expect(find.text('推荐视频 39'), findsNothing);
       await tester.scrollUntilVisible(
         find.text('推荐视频 39'),

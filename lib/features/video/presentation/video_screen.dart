@@ -18,8 +18,6 @@ import '../../../shared/ui/width_layout_builder.dart';
 import '../../../domain/video.dart';
 import '../../../domain/playback_mode.dart';
 import '../../../shared/ui/state_view.dart';
-import '../../../shared/ui/app_cover_image.dart';
-import '../../../shared/ui/highlighted_text.dart';
 import '../../../shared/ui/playback_page_layout.dart';
 import '../../../shared/ui/scroll_collapsing_header.dart';
 import '../../../shared/ui/playback_info_tabs.dart';
@@ -27,9 +25,7 @@ import '../../../shared/ui/comment_detail_builder.dart';
 import '../../../domain/comment_target.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/video_card.dart';
-import '../../../shared/ui/video_card_cover.dart';
-import '../../../shared/ui/video_card_menu_sheet.dart';
-import '../../../shared/ui/scroll_aware_hover_region.dart';
+import '../../../shared/ui/horizontal_video_card.dart';
 import '../../../shared/ui/video_card_interaction_scope.dart';
 import '../../feed/application/home_repository_provider.dart';
 import '../../feed/application/watch_later_removal_controller.dart';
@@ -570,6 +566,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                 () => _queueExpanded = !_queueExpanded,
                               ),
                               onSelect: _openQueueVideo,
+                              onOpenUser: widget.onOpenUser,
                               onRemove: queue.isWatchLater
                                   ? _removeQueueItem
                                   : null,
@@ -1197,7 +1194,7 @@ final class _RelatedVideosSliverState
               return Padding(
                 key: ValueKey(video.id),
                 padding: const EdgeInsets.only(bottom: 10),
-                child: _RelatedVideoCard(
+                child: HorizontalVideoCard(
                   video: video,
                   onTap: onOpen == null ? null : () => onOpen(video),
                   onOpenUser: onOpenUser,
@@ -1216,189 +1213,6 @@ final class _RelatedVideosSliverState
           return sliver;
         },
       );
-}
-
-final class _RelatedVideoCard extends StatefulWidget {
-  const _RelatedVideoCard({required this.video, this.onTap, this.onOpenUser});
-
-  final VideoSummary video;
-  final VoidCallback? onTap;
-  final ValueChanged<UserId>? onOpenUser;
-
-  @override
-  State<_RelatedVideoCard> createState() => _RelatedVideoCardState();
-}
-
-final class _RelatedVideoCardState extends State<_RelatedVideoCard> {
-  bool _hovered = false;
-  bool _focused = false;
-  bool _authorHovered = false;
-  bool _authorFocused = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final video = widget.video;
-    final theme = Theme.of(context);
-    final authorId = video.authorId;
-    final onOpenUser = widget.onOpenUser;
-    final canOpenAuthor =
-        authorId != null && authorId.isValid && onOpenUser != null;
-    return ScrollAwareHoverRegion(
-      onHover: (hovered) => setState(() => _hovered = hovered),
-      child: InkWell(
-        onTap: widget.onTap,
-        onLongPress: () => showVideoCardWatchLaterMenu(
-          context,
-          video.id,
-          isCurrent: () => widget.video.id == video.id,
-        ),
-        onFocusChange: (focused) => setState(() => _focused = focused),
-        hoverColor: Colors.transparent,
-        hoverDuration: Duration.zero,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 140,
-              height: 79,
-              child: VideoCardCover(
-                video: video,
-                hovered: _hovered,
-                focused: _focused,
-                borderRadius: 5,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (video.coverUrl.isEmpty)
-                      const ColoredBox(
-                        color: Colors.black12,
-                        child: Icon(Icons.video_library_outlined),
-                      )
-                    else
-                      AppCoverImage(
-                        url: video.coverUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            const Icon(Icons.video_library_outlined),
-                      ),
-                    Positioned(
-                      right: 4,
-                      bottom: 3,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3),
-                          child: Text(
-                            durationLabel(video.duration),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 79),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    HighlightedText(
-                      video.title,
-                      query: '',
-                      maxLines: 2,
-                      showOverflowTooltip: true,
-                      tooltipTriggerMode: MediaQuery.sizeOf(context).width < 600
-                          ? TooltipTriggerMode.manual
-                          : TooltipTriggerMode.longPress,
-                      style: Theme.of(context).textTheme.titleSmall
-                          ?.copyWith(height: 19 / 14),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                BiliIcons.up,
-                                size: 13,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 3),
-                              Flexible(
-                                child: ScrollAwareHoverRegion(
-                                  onHover: (hovered) =>
-                                      setState(() => _authorHovered = hovered),
-                                  child: InkWell(
-                                    onTap: canOpenAuthor
-                                        ? () => onOpenUser(authorId)
-                                        : null,
-                                    onFocusChange: (focused) => setState(
-                                      () => _authorFocused = focused,
-                                    ),
-                                    hoverColor: Colors.transparent,
-                                    hoverDuration: Duration.zero,
-                                    child: Text(
-                                      video.author,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color:
-                                                canOpenAuthor &&
-                                                    (_authorHovered ||
-                                                        _authorFocused)
-                                                ? theme.colorScheme.primary
-                                                : null,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 3,
-                            children: [
-                              _Meta(
-                                icon: BiliIcons.playCount,
-                                label: compactCount(video.playCount),
-                              ),
-                              _Meta(
-                                icon: BiliIcons.danmaku,
-                                label: compactCount(video.danmakuCount),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 final class _Meta extends StatelessWidget {
