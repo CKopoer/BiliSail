@@ -56,6 +56,14 @@ add_subdirectory("runner")
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+
+# The pinned WebView plugin's C++17 WinRT headers use the coroutine TS ABI.
+# Acknowledge their deprecation on VS 2026 without changing the coroutine ABI.
+if(MSVC AND TARGET webview_all_windows_plugin)
+  target_compile_definitions(webview_all_windows_plugin PRIVATE
+    _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+endif()
+
 # MSBuild project parallelism still compiles each project's sources serially.
 # Public Windows CI runners have four cores/16 GB. Keep local builds at two
 # processes, and cap CI at the available processor count and four. Restrict /MP
