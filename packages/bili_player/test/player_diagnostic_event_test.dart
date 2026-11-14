@@ -93,4 +93,15 @@ void main() {
       NativeErrorCause.hardwareDecoder,
     );
   });
+
+  test('premature HTTP reads and TLS pull failures retain no source text', () {
+    for (final message in [
+      'Stream ends prematurely at 100, should be 200',
+      'Error in the pull function. https://private.test/?token=SECRET',
+    ]) {
+      final summary = NativeErrorSummary.classify(message, prefix: 'ffmpeg');
+      expect(summary.cause, NativeErrorCause.inputOutput);
+      expect(summary.httpStatus, isNull);
+    }
+  });
 }

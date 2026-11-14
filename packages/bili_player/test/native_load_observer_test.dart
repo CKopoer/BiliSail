@@ -5,6 +5,28 @@ import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'structured native cache state distinguishes read stalls from idle EOF',
+    () {
+      expect(
+        nativeCacheReadState('{"idle":false,"eof":false,"cache-end":120.2}'),
+        (reading: true, endOfInput: false),
+      );
+      expect(nativeCacheReadState('{"idle":true,"eof":true}'), (
+        reading: false,
+        endOfInput: true,
+      ));
+      for (final value in [
+        '',
+        'null',
+        '{}',
+        '{"idle":"yes","eof":false}',
+        '{',
+      ]) {
+        expect(nativeCacheReadState(value), isNull);
+      }
+    },
+  );
   test('paused track readiness belongs to the current load and seek', () async {
     final state = NativeLoadState();
     addTearDown(state.dispose);
