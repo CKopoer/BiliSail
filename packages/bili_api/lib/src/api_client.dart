@@ -1735,6 +1735,40 @@ final class BiliApiClient {
       'recommended',
       context,
     );
+    return _recommendedPage(data, page + 1);
+  }
+
+  /// Uses the desktop client's Web profile; [freshIndex] starts at zero.
+  /// Later first-page requests refresh, while [loadMore] selects pagination.
+  Future<ApiPage<ApiVideoSummary>> getDesktopRecommended({
+    required int freshIndex,
+    bool loadMore = false,
+    ApiRequestContext? context,
+  }) async {
+    if (freshIndex < 0) throw ArgumentError.value(freshIndex, 'freshIndex');
+    final data = await _wbiJson(
+      '/x/web-interface/wbi/index/top/feed/rcmd',
+      {
+        'plat': '1',
+        'feed_version': 'V1',
+        'ps': '30',
+        'fresh_idx': '$freshIndex',
+        'fresh_type': freshIndex == 0 ? '0' : (loadMore ? '4' : '3'),
+        'x_num': '3',
+        'y_num': '4',
+        'pc_wx_install': '0',
+        'pc_wx_gm_install': '0',
+      },
+      'recommended',
+      context,
+    );
+    return _recommendedPage(data, freshIndex + 1);
+  }
+
+  ApiPage<ApiVideoSummary> _recommendedPage(
+    Map<String, Object?> data,
+    int nextIndex,
+  ) {
     // Feed cards can also advertise non-video destinations.
     final items = _list(data['item'], 'recommended')
         .map((entry) => _map(entry, 'recommended'))
@@ -1744,7 +1778,7 @@ final class BiliApiClient {
     return ApiPage(
       items,
       hasMore: items.isNotEmpty,
-      nextCursor: items.isEmpty ? null : '${page + 1}',
+      nextCursor: items.isEmpty ? null : '$nextIndex',
     );
   }
 

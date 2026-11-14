@@ -75,6 +75,13 @@ abstract interface class AppRecommendationFeedRepository {
   });
 }
 
+abstract interface class DesktopRecommendationFeedRepository {
+  Future<PageResult<VideoSummary>> loadDesktopRecommendations({
+    required int page,
+    required RequestCancellation cancellation,
+  });
+}
+
 /// Optional metadata for recommendation sources that omit publication times.
 abstract interface class RecommendationPublicationTimeRepository {
   Future<DateTime?> loadPublicationTime(

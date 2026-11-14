@@ -15,6 +15,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'all recommendation sources persist and unknown values use Web',
+    () async {
+      final database = AppDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = SqliteSettingsRepository(database);
+      for (final source in RecommendationSource.values) {
+        await repository.save(
+          AppSettings(recommendations: RecommendationSettings(source: source)),
+        );
+        expect((await repository.load()).recommendations.source, source);
+      }
+      for (final source in <Object?>[null, 'unknown', 2]) {
+        expect(
+          RecommendationSettings.fromJson({'source': source}).source,
+          RecommendationSource.web,
+        );
+      }
+      expect(
+        const RecommendationSettings.defaults().source,
+        RecommendationSource.web,
+      );
+    },
+  );
+
   testWidgets('custom threshold validates, saves and remains selectable', (
     tester,
   ) async {
@@ -126,6 +151,14 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('推荐流设置'), findsOneWidget);
+        final desktop = find.widgetWithText(ChoiceChip, '桌面端 / PC');
+        await tester.tap(desktop);
+        await tester.pumpAndSettle();
+        expect(tester.widget<ChoiceChip>(desktop).selected, !failSave);
+        expect(
+          repository.value.recommendations.source,
+          failSave ? RecommendationSource.web : RecommendationSource.desktop,
+        );
         final toggle = find.widgetWithText(SwitchListTile, '保留首页推荐刷新');
         expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
         final marker = find.widgetWithText(SwitchListTile, '显示上次看到位置提示');

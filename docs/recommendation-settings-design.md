@@ -2,6 +2,8 @@
 
 日期：2026-10-27。只读参考本机 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 的 `lib/pages/setting/models/recommend_settings.dart`、`lib/utils/recommend_filter.dart`、`lib/pages/rcmd/controller.dart`、`lib/http/video.dart`。仅参考选项职责、协议字段与交互，独立实现，不复制 GPLv3 应用源码或资源，不修改相邻仓库或依赖。
 
+2026-11-14：新增“桌面端 / PC”推荐来源，设置支持 Web／App／桌面端三选一；原有默认与有效选择保留。参数依据 PiliPlus [PR #3463](https://github.com/bggRGjQaUbCoE/PiliPlus/pull/3463) 的最终提交 `a0a6c5adcab5400a94e67e07b3fb3474a2510915`，仅参考公开协议与交互，独立实现。采用边界、请求流程与本轮验证见[桌面端推荐](validation/desktop-recommendation-2026-11-14.md)。
+
 ## 选项对应
 
 | PiliPlus 选项 | BiliSail 实施 |
