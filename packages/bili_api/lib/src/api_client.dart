@@ -1019,6 +1019,45 @@ final class BiliApiClient {
     );
   }
 
+  /// Reads a root even when it is absent from the main comment pages.
+  Future<ApiVideoComment> getVideoCommentRoot(
+    String aid,
+    String rootId, {
+    int commentType = 1,
+    ApiRequestContext? context,
+  }) async {
+    _validateCommentId(aid);
+    _validateCommentId(rootId);
+    _validateCommentType(commentType);
+    const endpoint = 'video_replies';
+    final data = await _json(
+      _api.replace(
+        path: '/x/v2/reply/reply',
+        queryParameters: {
+          'oid': aid,
+          'type': '$commentType',
+          'root': rootId,
+          'pn': '1',
+          'ps': '20',
+        },
+      ),
+      endpoint,
+      context,
+    );
+    if (data['root'] == null) {
+      throw const ApiFailure(ApiFailureCategory.notFound, endpoint);
+    }
+    final root = _comment(
+      _map(data['root'], endpoint),
+      endpoint,
+      upperMid: _userMid(_commentMap(data['upper'])['mid']),
+    );
+    if (root.id != rootId || root.rootId != null && root.rootId != rootId) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    return root;
+  }
+
   Future<ApiPage<ApiVideoComment>> getVideoReplies(
     String aid,
     String rootId, {

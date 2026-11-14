@@ -672,6 +672,7 @@ class PlaybackSession extends ChangeNotifier {
     ContentPlaybackTarget? target,
     String? title,
     bool visible = true,
+    Duration? position,
   }) async {
     if (_disposed || !_owners.contains(owner)) return;
     if (identical(_activeOwner, owner) &&
@@ -680,13 +681,15 @@ class PlaybackSession extends ChangeNotifier {
         contentTarget == target &&
         _scope == accountScope() &&
         _epoch == sessionEpoch() &&
-        (media != null || _resolving)) {
+        (media != null || _resolving) &&
+        (position == null || media != null)) {
       final wasVisible = _ownerVisible;
       _ownerVisible = visible;
       if (!wasVisible && visible) _resumeCommentPresentation();
       if (wasVisible && !visible) _suspendCommentPresentation();
       if (!visible) _cancelHighEnergy();
       if (visible) unawaited(ensureHighEnergy());
+      if (position != null) await seek(position);
       return;
     }
     final sameOwner = identical(_activeOwner, owner);
@@ -744,7 +747,9 @@ class PlaybackSession extends ChangeNotifier {
               : _settings.preferredQuality),
       liveLine: restored?.liveLine,
       liveStream: restored?.liveStream,
-      position: nextPlaying != null ? nextIntent?.position : restored?.position,
+      position:
+          position ??
+          (nextPlaying != null ? nextIntent?.position : restored?.position),
       desiredPlaying:
           nextPlaying ??
           restored?.desiredPlaying ??

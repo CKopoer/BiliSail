@@ -1,6 +1,7 @@
 import '../../../domain/user.dart';
 import '../../../domain/request_cancellation.dart';
 import 'comment_composer.dart';
+import '../../../domain/content_link.dart';
 
 enum CommentSort { hot, latest }
 
@@ -188,6 +189,25 @@ abstract interface class CommentsRepository {
     bool syncToDynamic = false,
     required RequestCancellation cancellation,
   });
+}
+
+final class LocatedCommentThread {
+  const LocatedCommentThread({
+    required this.root,
+    required this.page,
+    required this.pageNumber,
+  });
+  final CommentEntry root;
+  final CommentPage page;
+  final int pageNumber;
+}
+
+abstract interface class CommentLocationRepository {
+  Future<LocatedCommentThread> locate(
+    String oid,
+    CommentLocation location,
+    RequestCancellation cancellation,
+  );
 }
 
 final class CommentEmotePackage {

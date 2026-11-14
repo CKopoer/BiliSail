@@ -11,6 +11,10 @@ import 'package:bilisail/core/input/input_stroke.dart';
 import 'package:bilisail/core/input/shortcut_dispatcher.dart';
 
 import 'dart:async';
+
+import 'package:bilisail/domain/content_link.dart';
+import 'package:bilisail/shared/ui/content_link_scope.dart';
+
 import 'dart:io';
 
 import 'package:bilisail/features/playback/presentation/live_stream_picker.dart';
@@ -65,6 +69,45 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  testWidgets(
+    'content link seeks once without replacing the retained surface',
+    (tester) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _MiniWindowService(desktop: true);
+      addTearDown(session.close);
+      final settings = AppSettings();
+      Future<void> show(ContentLink link) async {
+        await tester.pumpWidget(_app(session, window, settings, link: link));
+        await _pumpFrames(tester);
+      }
+
+      await show(
+        const ContentLink(position: Duration(seconds: 12), requestId: '1'),
+      );
+      expect(engine.currentSnapshot.position, const Duration(seconds: 12));
+      final surface = tester.element(
+        find.byKey(const ValueKey('player-surface-tap-target')),
+      );
+      await session.pause();
+      await show(
+        const ContentLink(position: Duration(seconds: 24), requestId: '2'),
+      );
+      expect(engine.currentSnapshot.position, const Duration(seconds: 24));
+      expect(engine.opens, 1);
+      expect(engine.seeks, 1);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(
+        tester.element(find.byKey(const ValueKey('player-surface-tap-target'))),
+        same(surface),
+      );
+      await show(
+        const ContentLink(position: Duration(seconds: 24), requestId: '2'),
+      );
+      expect(engine.seeks, 1);
+      expect(engine.maxSurfaces, 1);
+    },
+  );
   testWidgets(
     'hiding a page while native mini enter is pending restores its window',
     (tester) async {
@@ -10798,6 +10841,7 @@ Widget _app(
   bool showNavigationInPlayer = false,
   SettingsRepository? settingsRepository,
   VoidCallback? onToggleComments,
+  ContentLink link = const ContentLink(),
 }) => ProviderScope(
   overrides: [
     playbackSessionProvider.overrideWithValue(session),
@@ -10814,9 +10858,12 @@ Widget _app(
       child: MediaQuery(
         data: MediaQuery.of(context)
             .copyWith(textScaler: TextScaler.linear(textScale)),
-        child: WorkspaceActivity(
-          active: active,
-          child: child ?? const SizedBox(),
+        child: ContentLinkScope(
+          link: link,
+          child: WorkspaceActivity(
+            active: active,
+            child: child ?? const SizedBox(),
+          ),
         ),
       ),
     ),

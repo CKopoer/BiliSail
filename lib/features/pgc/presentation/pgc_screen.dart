@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../domain/content_link.dart';
+import '../../../shared/ui/content_link_scope.dart';
+
 import '../../../core/input/input_stroke.dart';
 import '../../../domain/video.dart';
 import '../../../domain/playback_mode.dart';
@@ -76,6 +79,21 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
   late PgcLocator _locator;
   int? _tab;
   bool _infoVisible = true;
+  ContentLink? _contentLink;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final link = ContentLinkScope.of(context);
+    if (link != _contentLink) {
+      _contentLink = link;
+      if (link.comment != null) {
+        _tab = 1;
+        _infoVisible = true;
+      }
+    }
+  }
+
   final _introScroll = HeaderScrollController();
   PgcSeason? _playerSeason;
   PgcEpisode? _playerEpisode;

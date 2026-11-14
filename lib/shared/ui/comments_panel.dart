@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_dialog.dart';
+import 'content_link_scope.dart';
+import '../../domain/content_link.dart';
 import '../../core/platform/external_links.dart';
 import '../../core/presentation/workspace_activity.dart';
 import '../../core/presentation/page_back_scope.dart';
@@ -73,8 +75,10 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   var _replyStorage = PageStorageBucket();
   double _topOffset = 0;
   String? _shownRoot;
+  String? _shownFocus;
   bool _loadMoreScheduled = false;
   RequestCancellation? _linkCancellation;
+  ContentLink? _consumedLink;
   @override
   void initState() {
     super.initState();
@@ -102,6 +106,17 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!WorkspaceActivity.isActive(context)) _linkCancellation?.cancel();
+    final link = ContentLinkScope.of(context);
+    final location = link.comment;
+    if (!widget.composerOnly && location != null && link != _consumedLink) {
+      _consumedLink = link;
+      final target = widget.target;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.target == target && _consumedLink == link) {
+          unawaited(ref.read(_provider.notifier).locate(location));
+        }
+      });
+    }
   }
 
   @override
@@ -381,8 +396,12 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
         ],
       );
     }
-    if (_shownRoot != rootId) {
+    final focusId = ref.watch(
+      _provider.select((state) => state.focusedCommentId),
+    );
+    if (_shownRoot != rootId || _shownFocus != focusId) {
       _shownRoot = rootId;
+      _shownFocus = focusId;
       _replyStorage = PageStorageBucket();
       final offset = rootId == null ? _topOffset : 0.0;
       final scroll = rootId == null ? _topScroll : _replyScroll;
@@ -873,16 +892,27 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     CommentEntry comment, {
     required bool preview,
     bool root = false,
-  }) => _CommentTile(
+  }) => DecoratedBox(
     key: ValueKey((root ? 'comment-root' : 'comment', comment.id)),
-    provider: _provider,
-    comment: comment,
-    preview: preview,
-    onOpenUser: widget.onOpenUser,
-    onOpenLink: _handleOpenLink,
-    onSeek: widget.onSeek,
-    onLogin: _login,
-    onReplyFocus: _focus.requestFocus,
+    decoration: BoxDecoration(
+      color:
+          ref.watch(_provider.select((state) => state.focusedCommentId)) ==
+              comment.id
+          ? Theme.of(context).colorScheme.primaryContainer
+                .withValues(alpha: 0.4)
+          : null,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: _CommentTile(
+      provider: _provider,
+      comment: comment,
+      preview: preview,
+      onOpenUser: widget.onOpenUser,
+      onOpenLink: _handleOpenLink,
+      onSeek: widget.onSeek,
+      onLogin: _login,
+      onReplyFocus: _focus.requestFocus,
+    ),
   );
 
   static const _loadMoreExtent = 240.0;
@@ -951,6 +981,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
             state.openRoot == null ? state.loadFailed : state.replyLoadFailed,
             state.message,
             state.openRoot == null ? state.totalCount : null,
+            state.focusedCommentId,
           ),
         ),
       );
@@ -963,10 +994,24 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       _topScroll.configure(context, active: active && root == null);
       _replyScroll.configure(context, active: active && root != null);
       _scheduleLoadMore(context);
-      final comments = root == null ? state.items : state.replyItems;
+      final focused = root == null || root.id == state.focusedCommentId
+          ? null
+          : state.replyItems
+                .where((entry) => entry.id == state.focusedCommentId)
+                .firstOrNull;
+      final comments = root == null
+          ? state.items
+          : focused == null
+          ? state.replyItems
+          : state.replyItems.where((entry) => entry.id != focused.id).toList();
       final loading = root == null ? state.loading : state.replyLoading;
       final more = root == null ? state.hasMore : state.replyHasMore;
-      final prefix = root == null ? 0 : 2;
+      // Put the addressed reply first, so even a long root cannot hide it.
+      final prefix = root == null
+          ? 0
+          : focused == null
+          ? 2
+          : 4;
       if (!identical(_indexedComments, comments)) {
         _indexedComments = comments;
         _commentIndices = {
@@ -984,14 +1029,27 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
         findChildIndexCallback: (key) {
           if (key is! ValueKey<(String, String)>) return null;
           if (key.value.$1 == 'comment-root') {
-            return root?.id == key.value.$2 ? 0 : null;
+            return root?.id == key.value.$2 ? (focused == null ? 0 : 2) : null;
           }
+          if (focused?.id == key.value.$2) return 0;
           final index = _commentIndices[key.value.$2];
           return index == null ? null : prefix + index;
         },
         itemBuilder: (context, index) {
           if (root != null && index < prefix) {
-            return index == 0
+            if (focused != null && index < 2) {
+              return index == 0
+                  ? _entry(focused, preview: false)
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        '原评论',
+                        style: CommentTextStyles(Theme.of(context))
+                            .sectionTitle,
+                      ),
+                    );
+            }
+            return index == (focused == null ? 0 : 2)
                 ? _entry(root, preview: false, root: true)
                 : Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1166,7 +1224,6 @@ final class _CommentEmoteDialog extends ConsumerWidget {
 
 class _CommentTile extends ConsumerStatefulWidget {
   const _CommentTile({
-    super.key,
     required this.provider,
     required this.comment,
     required this.onLogin,

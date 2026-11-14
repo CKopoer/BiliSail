@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
 import '../../../domain/comment_target.dart';
+import '../../../domain/content_link.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../../auth/application/auth_controller.dart';
@@ -61,6 +64,7 @@ final class CommentsState {
     this.replyLoadFailed = false,
     this.replyTarget,
     this.uncertain = const {},
+    this.focusedCommentId,
   });
   final String accountScope;
   final int sessionEpoch;
@@ -77,6 +81,7 @@ final class CommentsState {
   final String? message;
   final CommentEntry? openRoot, replyTarget;
   final Set<String> uncertain;
+  final String? focusedCommentId;
   CommentsState copy({
     List<CommentEmotePackage>? emotePackages,
     bool? emotesLoading,
@@ -102,6 +107,8 @@ final class CommentsState {
     CommentEntry? replyTarget,
     bool clearTarget = false,
     Set<String>? uncertain,
+    String? focusedCommentId,
+    bool clearFocus = false,
   }) => CommentsState(
     emotePackages: emotePackages ?? this.emotePackages,
     emotesLoading: emotesLoading ?? this.emotesLoading,
@@ -127,6 +134,9 @@ final class CommentsState {
     replyLoadFailed: replyLoadFailed ?? this.replyLoadFailed,
     replyTarget: clearTarget ? null : replyTarget ?? this.replyTarget,
     uncertain: uncertain ?? this.uncertain,
+    focusedCommentId: clearFocus
+        ? null
+        : focusedCommentId ?? this.focusedCommentId,
   );
 }
 
@@ -265,6 +275,7 @@ class CommentsController extends Notifier<CommentsState> {
       clearCursor: reset,
       closeRoot: reset,
       clearTarget: reset,
+      clearFocus: reset,
       replyItems: reset ? const [] : null,
       replyPage: reset ? 0 : null,
       replyHasMore: reset ? false : null,
@@ -308,6 +319,64 @@ class CommentsController extends Notifier<CommentsState> {
     }
   }
 
+  Future<void> locate(CommentLocation location) async {
+    if (state.busy) return;
+    final repository = _repository;
+    if (repository is! CommentLocationRepository) {
+      state = state.copy(message: '当前评论区不支持定位');
+      return;
+    }
+    _read.cancel();
+    _replies.cancel();
+    _replies = RequestCancellation();
+    final generation = ++_generation, replyGeneration = ++_replyGeneration;
+    final scope = repository.accountScope, epoch = repository.sessionEpoch;
+    state = state.copy(
+      loading: true,
+      replyLoading: false,
+      closeRoot: true,
+      clearTarget: true,
+      clearFocus: true,
+      replyItems: const [],
+    );
+    try {
+      final result = await (repository as CommentLocationRepository).locate(
+        oid,
+        location,
+        _replies,
+      );
+      if (!_current(generation, scope, epoch) ||
+          replyGeneration != _replyGeneration) {
+        return;
+      }
+      final selected = result.page.items.where(
+        (entry) => entry.id == location.focusId,
+      );
+      state = state.copy(
+        openRoot: result.root,
+        loading: false,
+        focusedCommentId: location.focusId,
+        replyItems: List.unmodifiable([
+          ...selected,
+          ...result.page.items.where((entry) => entry.id != location.focusId),
+        ]),
+        replyPage: result.pageNumber,
+        replyHasMore: result.page.hasMore,
+        replyLoadFailed: false,
+      );
+      if (result.pageNumber == 0) await loadReplies();
+    } catch (error) {
+      if (_current(generation, scope, epoch) &&
+          replyGeneration == _replyGeneration) {
+        state = state.copy(
+          loading: false,
+          replyLoading: false,
+          message: _error(error),
+        );
+      }
+    }
+  }
+
   Future<void> openReplies(CommentEntry root) async {
     if (state.busy) return;
     _replies.cancel();
@@ -320,6 +389,7 @@ class CommentsController extends Notifier<CommentsState> {
       replyLoading: false,
       replyLoadFailed: false,
       clearTarget: true,
+      clearFocus: true,
     );
     await loadReplies();
   }
@@ -330,12 +400,14 @@ class CommentsController extends Notifier<CommentsState> {
     state = state.copy(
       closeRoot: true,
       clearTarget: true,
+      clearFocus: true,
       replyItems: const [],
       replyPage: 0,
       replyHasMore: false,
       replyLoading: false,
       replyLoadFailed: false,
     );
+    if (state.page == 0 && !state.loading) unawaited(load());
   }
 
   Future<void> loadReplies() async {

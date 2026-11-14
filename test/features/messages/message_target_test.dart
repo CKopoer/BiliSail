@@ -2,6 +2,54 @@ import 'package:bilisail/features/messages/domain/message_target.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('message links preserve only validated content navigation parameters', () {
+    expect(
+      messageWorkspaceLocation(
+        Uri.parse(
+          'https://www.bilibili.com/video/BV17x411w7KC?cid=9007199254740993&p=2&comment_root_id=100&comment_secondary_id=101&start_progress=12500&from=message',
+        ),
+      ),
+      '/video/BV17x411w7KC?cid=9007199254740993&p=2&comment_root_id=100&comment_secondary_id=101&start_progress=12500',
+    );
+    expect(
+      messageWorkspaceLocation(
+        Uri.parse(
+          'https://www.bilibili.com/video/BV17x411w7KC?dm_progress=12000',
+        ),
+      ),
+      '/video/BV17x411w7KC?start_progress=9000',
+    );
+    expect(
+      messageWorkspaceLocation(
+        Uri.parse(
+          'https://www.bilibili.com/video/BV17x411w7KC?t=12.5#reply9007199254740993',
+        ),
+      ),
+      '/video/BV17x411w7KC?comment_root_id=9007199254740993&start_progress=12500',
+    );
+    expect(
+      messageWorkspaceLocation(
+        Uri.parse(
+          'https://www.bilibili.com/bangumi/play/ep123?comment_root_id=100&t=9',
+        ),
+      ),
+      '/pgc/episode/123?comment_root_id=100&start_progress=9000',
+    );
+    for (final query in [
+      'cid=-1&p=0&comment_root_id=1e9&comment_secondary_id=2&t=NaN',
+      'start_progress=-1',
+      'start_progress=9999999999999999999',
+      'p=10001&comment_root_id=0&t=Infinity',
+    ]) {
+      expect(
+        messageWorkspaceLocation(
+          Uri.parse('https://www.bilibili.com/video/BV17x411w7KC?$query'),
+        ),
+        '/video/BV17x411w7KC',
+        reason: query,
+      );
+    }
+  });
   test('supported message cards use existing workspace destinations', () {
     const cases = {
       'https://www.bilibili.com/video/BV17x411w7KC/?from=message':
