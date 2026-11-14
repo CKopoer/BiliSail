@@ -85,6 +85,7 @@ enum PlaybackStallReason {
   videoBuffer,
   videoClock,
   repeatedDecoderBuffering,
+  repeatedCacheUnderrun,
 }
 
 enum NativeErrorDetail {
