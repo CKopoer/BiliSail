@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [全平台 WebView 与 Linux 登录](validation/webview-all-linux-2026-11-14.md) | webview_all 迁移、私有 Cookie、Linux 原生与 helper 打包验证 |
 | [消息内容与评论定位](validation/message-content-navigation-2026-11-14.md) | 回复／点赞／@ 通知定位、视频时间／分 P、共享评论详情及验证边界 |
 | [点播反复缓存暂停恢复](validation/repeated-rebuffer-recovery-2026-11-14.md) | 系统安装版现场、无错误少量补数循环、原生缓存暂停判断及有界备用线路恢复 |
 | [直播解码错误恢复](validation/live-decoder-recovery-2026-11-14.md) | 视频错误接入有界重开、反复短停顿、缓冲提示归因、脱敏原生状态和真实坏流自动恢复回归 |

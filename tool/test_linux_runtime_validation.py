@@ -21,6 +21,12 @@ class RuntimeValidationTests(unittest.TestCase):
         self.library = self.root / "usr/bin/lib/libexample.so"
         self.library.parent.mkdir()
         self.library.write_bytes(b"\x7fELFfixture")
+        webkit = self.root / "usr/lib/x86_64-linux-gnu/webkit2gtk-4.1"
+        self.helpers = [webkit / "WebKitWebProcess", webkit / "WebKitNetworkProcess",
+                        webkit / "injected-bundle/libwebkit2gtkinjectedbundle.so"]
+        for helper in self.helpers:
+            helper.parent.mkdir(parents=True, exist_ok=True)
+            helper.write_bytes(b"\x7fELFfixture")
         commands = self.root / "commands"
         commands.mkdir()
         ldd = commands / "ldd"
@@ -52,7 +58,7 @@ printf 'libc.so.6 => /usr/lib/libc.so.6\\n'
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(set(self.checked.read_text().splitlines()),
-                         {str(self.binary), str(self.library)})
+                         {str(self.binary), str(self.library), *map(str, self.helpers)})
         self.assertIn("checks passed", result.stdout)
 
     def test_nonzero_ldd_prints_captured_error_and_fails(self):
@@ -62,6 +68,23 @@ printf 'libc.so.6 => /usr/lib/libc.so.6\\n'
         self.assertIn("ldd exit 1", result.stderr)
         self.assertIn("loader diagnostic", result.stderr)
         self.assertNotIn("checks passed", result.stdout)
+
+    def test_missing_webkit_helper_fails(self):
+        self.helpers[0].unlink()
+        result = self.check()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Missing WebKitGTK component", result.stderr)
+
+    def test_webkit_helper_dependencies_are_checked(self):
+        result = self.check(self.helpers[1], 0, "libmissing.so => not found")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(str(self.helpers[1]), result.stderr)
+
+    def test_non_elf_webkit_helper_is_rejected(self):
+        self.helpers[0].write_text("corrupt helper")
+        result = self.check()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Executable is not ELF", result.stderr)
 
     def test_missing_dependency_with_zero_ldd_status_still_fails(self):
         result = self.check(self.library, 0, "libmissing.so => not found")

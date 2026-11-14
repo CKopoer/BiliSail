@@ -7,6 +7,13 @@ from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 import sys
+import importlib.util
+
+_webkit_spec = importlib.util.spec_from_file_location(
+    "linux_webview", Path(__file__).with_name("linux-webview.py")
+)
+_webkit = importlib.util.module_from_spec(_webkit_spec)
+_webkit_spec.loader.exec_module(_webkit)
 
 
 def run(*arguments: str, env: dict[str, str] | None = None) -> str:
@@ -79,7 +86,8 @@ def main() -> None:
         raise RuntimeError("The package must include dlopen'ed libmpv.so.2")
     env = dict(os.environ, LC_ALL="C")
     env["LD_LIBRARY_PATH"] = f"{appdir}/usr/bin/lib:{appdir}/usr/lib"
-    for binary in [appdir / "usr/bin/bilisail", *libraries]:
+    processes = _webkit.validate_webkit(appdir)
+    for binary in [appdir / "usr/bin/bilisail", *libraries, *processes]:
         with binary.open("rb") as stream:
             magic = stream.read(4)
         if magic != b"\x7fELF":

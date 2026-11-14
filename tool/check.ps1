@@ -69,6 +69,7 @@ try {
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_macos_*.py')
     & (Join-Path $PSScriptRoot 'test-ios-package-validation.ps1')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_sqlite_assets.py')
+    Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_linux_webview.py')
   }
   # A cold Windows SDK can emit pub bootstrap output before the machine JSON.
   Invoke-Check flutter @('--version')
@@ -96,7 +97,6 @@ try {
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_texture_handoff.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_media_libs.py')
     Invoke-Check dart @('format', '--output=none', '--set-exit-if-changed', 'lib', 'test', 'integration_test')
-    Invoke-Check dart @('format', '--output=none', '--set-exit-if-changed', 'linux/plugins/flutter_inappwebview_linux/lib')
     foreach ($package in $packages) {
       Push-Location (Join-Path $repoRoot "packages/$package")
       try {
@@ -104,9 +104,6 @@ try {
       } finally { Pop-Location }
     }
     Invoke-Check flutter @('analyze', '--no-pub')
-    # Flutter excludes generated platform trees from root analysis; this local
-    # Dart-only platform adapter is maintained source rather than a generated file.
-    Invoke-Check dart @('analyze', 'linux/plugins/flutter_inappwebview_linux/lib')
   }
   if ($runRootTests) {
     Invoke-Check python @((Join-Path $PSScriptRoot 'prepare-sqlite-assets.py'))

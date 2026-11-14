@@ -10,7 +10,6 @@ final class MacOSApplication {
   private var systemFontsChannel: FlutterMethodChannel?
   private var imageExportChannel: FlutterMethodChannel?
   private var appIconChannel: FlutterMethodChannel?
-  private var passportCookies: PassportWebCookies?
   private var desktopWindows: DesktopWindowController?
   private var mainGeometry: PersistentWindowGeometry?
   private var focusObservers: [NSObjectProtocol] = []
@@ -150,9 +149,6 @@ final class MacOSApplication {
     ReleaseSmokeNativeStage.pluginsRegister.emit()
     RegisterGeneratedPlugins(registry: engine)
     ReleaseSmokeNativeStage.pluginsReady.emit()
-    passportCookies = PassportWebCookies(messenger: engine.binaryMessenger) {
-      NSApp.windows.compactMap { $0.contentView }
-    }
 
     let channel = FlutterMethodChannel(
       name: "bilisail/system_fonts",

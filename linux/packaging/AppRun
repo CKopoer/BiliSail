@@ -3,7 +3,9 @@
 set -e
 export APPDIR="$(cd -- "$(dirname -- "$(readlink -f -- "$0")")" && pwd)"
 export LD_LIBRARY_PATH="$APPDIR/usr/bin/lib:$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export WEBKIT_INJECTED_BUNDLE_PATH="$APPDIR/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/injected-bundle"
 for hook in "$APPDIR"/apprun-hooks/*.sh; do
   [[ -f "$hook" ]] && source "$hook"
 done
+cd "$APPDIR"
 exec "$APPDIR/usr/bin/bilisail" "$@"

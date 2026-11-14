@@ -1,52 +1,45 @@
 import 'package:bilisail/core/platform/passport_web_login.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:webview_all/webview_all.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  for (final windows in [false, true]) {
-    test('native expiry retains units for Windows: $windows', () {
-      final expiry = DateTime.utc(2027, 1, 1);
-      final cookie = BrowserLoginCookie.fromNative(
-        Cookie(
-          name: 'SESSDATA',
-          value: 'fixture',
-          domain: '.BILIBILI.COM',
-          path: '/',
-          isSecure: true,
-          isSessionOnly: false,
-          expiresDate: windows
-              ? expiry.millisecondsSinceEpoch ~/ 1000
-              : expiry.millisecondsSinceEpoch,
-        ),
-        windowsExpiryInSeconds: windows,
-      );
-      expect(cookie.expires, expiry);
-      expect(cookie.domain, 'bilibili.com');
-      expect(cookie.hostOnly, isFalse);
-    });
-  }
-
-  test('native session cookies do not acquire an expiry', () {
+  test('native UTC expiry and domain scope are retained', () {
+    final expiry = DateTime.utc(2027);
     final cookie = BrowserLoginCookie.fromNative(
-      Cookie(
+      WebViewCookie(
         name: 'SESSDATA',
         value: 'fixture',
+        domain: '.BILIBILI.COM',
         isSecure: true,
-        isSessionOnly: true,
-        expiresDate: -1,
+        isSession: false,
+        expires: expiry,
       ),
-      windowsExpiryInSeconds: true,
+    );
+    expect(cookie.expires, expiry);
+    expect(cookie.domain, 'bilibili.com');
+    expect(cookie.hostOnly, isFalse);
+  });
+  test('native host-only and session cookies keep their identity', () {
+    final cookie = BrowserLoginCookie.fromNative(
+      const WebViewCookie(
+        name: 'SESSDATA',
+        value: 'fixture',
+        domain: 'api.bilibili.com',
+        isSecure: true,
+        isSession: true,
+      ),
     );
     expect(cookie.expires, isNull);
-    expect(cookie.domain, 'api.bilibili.com');
     expect(cookie.hostOnly, isTrue);
   });
-
-  test('incomplete native scope metadata is rejected', () {
+  test('missing metadata is rejected', () {
     expect(
       () => BrowserLoginCookie.fromNative(
-        Cookie(name: 'SESSDATA', value: 'fixture'),
-        windowsExpiryInSeconds: false,
+        const WebViewCookie(
+          name: 'SESSDATA',
+          value: 'fixture',
+          domain: '.bilibili.com',
+        ),
       ),
       throwsFormatException,
     );

@@ -1,133 +1,88 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:bilisail/core/platform/passport_web_login.dart';
 import 'package:bilisail/core/presentation/app_input_host.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:webview_all/webview_all.dart';
+
+import 'fake_passport_webview.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 
 const _pageError = '登录页面加载失败，请检查网络后重试';
-final _loginUrl = WebUri('https://passport.bilibili.com/login');
+final _loginUrl = Uri.parse('https://passport.bilibili.com/login');
 
 void main() {
-  final binding = TestWidgetsFlutterBinding.ensureInitialized();
-  final platform = _FakePlatform();
-  final original = InAppWebViewPlatform.instance;
-  late Directory support;
-  const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
-  setUpAll(() async {
-    InAppWebViewPlatform.instance = platform;
-    support = await Directory.systemTemp.createTemp(
-      'passport-navigation-test-',
-    );
-    binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      pathChannel,
-      (_) async => support.path,
-    );
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late FakePassportPlatform platform;
+  final original = WebViewPlatform.instance;
+  setUp(() {
+    platform = FakePassportPlatform();
+    WebViewPlatform.instance = platform;
   });
-  tearDownAll(() async {
-    if (original != null) InAppWebViewPlatform.instance = original;
-    binding.defaultBinaryMessenger.setMockMethodCallHandler(pathChannel, null);
-    await support.delete(recursive: true);
-  });
-  setUp(() => platform.cookies.reset());
+  tearDown(() => WebViewPlatform.instance = original ?? FakePassportPlatform());
 
-  testWidgets('Windows native focus handoff keeps polling login cookies', (
-    tester,
-  ) async {
-    final result = await _open(tester);
-    expect(
-      find.ancestor(
-        of: find.byType(InAppWebView),
-        matching: find.byType(NativeInputRegion),
-      ),
-      findsOneWidget,
-    );
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    await tester.pump();
-    platform.cookies.value = [_sessionCookie()];
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
-    expect((await result.value)?.single.name, 'SESSDATA');
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-  }, skip: !Platform.isWindows);
+  testWidgets(
+    'native desktop focus handoff keeps polling login cookies',
+    (tester) async {
+      final result = await _open(tester);
+      expect(
+        find.ancestor(
+          of: find.byType(WebViewWidget, skipOffstage: false),
+          matching: find.byType(NativeInputRegion),
+        ),
+        findsOneWidget,
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      platform.cookies.value = [_sessionCookie()];
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect((await result.value)?.single.name, 'SESSDATA');
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    },
+    variant: TargetPlatformVariant({
+      TargetPlatform.windows,
+      TargetPlatform.linux,
+    }),
+  );
 
-  for (final target in [TargetPlatform.iOS, TargetPlatform.macOS]) {
-    testWidgets('Apple login captures private cookies and closes after login', (
+  for (final target in [
+    TargetPlatform.iOS,
+    TargetPlatform.macOS,
+    TargetPlatform.linux,
+  ]) {
+    testWidgets('private session cookies complete login on $target', (
       tester,
     ) async {
-      const channel = MethodChannel('bilisail/passport_web_cookies');
-      var signedIn = false;
-      String? attempt;
-      binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
-        call,
-      ) async {
-        expect(call.method, 'getCookies');
-        expect(call.arguments, {'marker': attempt});
-        return signedIn ? [_nativeSessionCookie()] : [];
-      });
-      addTearDown(
-        () => binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          channel,
-          null,
-        ),
-      );
       final result = await _open(tester);
-      final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
-      final userAgent = view.platform.params.initialSettings?.userAgent;
-      expect(userAgent, startsWith('FixtureAgent '));
-      attempt = userAgent?.split(' ').last;
-      expect(attempt, startsWith('BiliSailPassport/'));
-      expect(view.platform.params.initialSettings?.incognito, isTrue);
-      signedIn = true;
+      expect(
+        platform.controller.params.sessionMode,
+        WebViewSessionMode.isolatedIncognito,
+      );
+      platform.cookies.value = [_sessionCookie()];
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
       expect((await result.value)?.single.value, 'fixture');
-      expect((await result.value)?.single.expires, DateTime.utc(2027));
-      expect(platform.cookies.reads, 0);
-      expect(find.byType(InAppWebView), findsNothing);
+      expect(platform.controller.closes, 1);
+      expect(find.byType(WebViewWidget, skipOffstage: false), findsNothing);
     }, variant: TargetPlatformVariant({target}));
   }
-
-  testWidgets('closing an Apple login rejects a late private-store result', (
-    tester,
-  ) async {
-    const channel = MethodChannel('bilisail/passport_web_cookies');
-    final pending = Completer<List<Object?>>();
-    binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      channel,
-      (_) => pending.future,
-    );
-    addTearDown(
-      () => binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        channel,
-        null,
-      ),
-    );
-    final result = await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
-    view.platform.params.onLoadStop?.call(_controller(view), _loginUrl);
-    await tester.tap(find.byTooltip('关闭网页登录'));
-    pending.complete([_nativeSessionCookie()]);
-    await tester.pumpAndSettle();
-    expect(await result.value, isNull);
-    expect(platform.cookies.reads, 0);
-  }, variant: TargetPlatformVariant({TargetPlatform.iOS}));
 
   testWidgets('cancelled navigation keeps waiting for the login session', (
     tester,
   ) async {
     final result = await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
+    );
     final controller = _controller(view);
-    _error(view, controller, WebResourceErrorType.CANCELLED);
+    _error(view, controller, WebResourceErrorType.unknown, code: 14);
     await tester.pump();
     expect(find.text(_pageError), findsNothing);
-    expect(find.byType(InAppWebView), findsOneWidget);
+    expect(find.byType(WebViewWidget, skipOffstage: false), findsOneWidget);
     platform.cookies.value = [_sessionCookie()];
-    view.platform.params.onLoadStart?.call(controller, _loginUrl);
+    controller.navigation.started?.call(_loginUrl.toString());
     await tester.pumpAndSettle();
     expect((await result.value)?.single.name, 'SESSDATA');
   });
@@ -136,32 +91,62 @@ void main() {
     tester,
   ) async {
     final result = await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
-    platform.cookies.value = [_sessionCookie()];
-    _error(
-      view,
-      _controller(view),
-      WebResourceErrorType.CANNOT_CONNECT_TO_HOST,
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
     );
+    platform.cookies.value = [_sessionCookie()];
+    _error(view, _controller(view), WebResourceErrorType.connect);
     await tester.pumpAndSettle();
     expect(find.text(_pageError), findsNothing);
     expect((await result.value)?.single.value, 'fixture');
   });
 
+  testWidgets('Windows certificate error is not a cancelled navigation', (
+    tester,
+  ) async {
+    await _open(tester);
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
+    );
+    _error(
+      view,
+      _controller(view),
+      WebResourceErrorType.failedSslHandshake,
+      code: 5,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(_pageError), findsOneWidget);
+    expect(
+      tester
+          .widget<Offstage>(
+            find
+                .ancestor(
+                  of: find.byType(WebViewWidget, skipOffstage: false),
+                  matching: find.byType(Offstage, skipOffstage: false),
+                )
+                .first,
+          )
+          .offstage,
+      isTrue,
+    );
+    await _close(tester);
+  }, variant: TargetPlatformVariant({TargetPlatform.windows}));
+
   testWidgets('success redirect captures cookies before its document loads', (
     tester,
   ) async {
     final result = await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
+    );
     platform.cookies.value = [_sessionCookie()];
-    final policy = await view.platform.params.shouldOverrideUrlLoading?.call(
-      _controller(view),
-      NavigationAction(
-        request: URLRequest(url: WebUri('https://www.bilibili.com/')),
-        isForMainFrame: true,
+    final policy = await _controller(view).navigation.request?.call(
+      const NavigationRequest(
+        url: 'https://www.bilibili.com/',
+        isMainFrame: true,
       ),
     );
-    expect(policy, NavigationActionPolicy.ALLOW);
+    expect(policy, NavigationDecision.navigate);
     await tester.pumpAndSettle();
     expect((await result.value)?.single.name, 'SESSDATA');
   });
@@ -170,12 +155,14 @@ void main() {
     tester,
   ) async {
     final result = await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
+    );
     final controller = _controller(view);
-    final pending = Completer<List<Cookie>>();
+    final pending = Completer<List<WebViewCookie>>();
     platform.cookies.pending = pending;
-    view.platform.params.onLoadStop?.call(controller, _loginUrl);
-    _error(view, controller, WebResourceErrorType.CANNOT_CONNECT_TO_HOST);
+    controller.navigation.finished?.call(_loginUrl.toString());
+    _error(view, controller, WebResourceErrorType.connect);
     await tester.pump();
     expect(platform.cookies.reads, 1);
     expect(find.text(_pageError), findsNothing);
@@ -188,17 +175,25 @@ void main() {
     tester,
   ) async {
     final result = await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
-    final native = tester.element(find.byType(_FakeNativeView));
-    _error(
-      view,
-      _controller(view),
-      WebResourceErrorType.CANNOT_CONNECT_TO_HOST,
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
     );
+    final native = tester.element(
+      find.byType(WebViewWidget, skipOffstage: false),
+    );
+    _error(view, _controller(view), WebResourceErrorType.connect);
     await tester.pumpAndSettle();
     expect(find.text(_pageError), findsOneWidget);
-    expect(tester.element(find.byType(_FakeNativeView)), same(native));
-    expect(tester.widget<InAppWebView>(find.byType(InAppWebView)), same(view));
+    expect(
+      tester.element(find.byType(WebViewWidget, skipOffstage: false)),
+      same(native),
+    );
+    expect(
+      tester.widget<WebViewWidget>(
+        find.byType(WebViewWidget, skipOffstage: false),
+      ),
+      same(view),
+    );
     platform.cookies.value = [_sessionCookie()];
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
@@ -209,13 +204,15 @@ void main() {
     tester,
   ) async {
     await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
+    );
     final controller = _controller(view);
-    final pending = Completer<List<Cookie>>();
+    final pending = Completer<List<WebViewCookie>>();
     platform.cookies.pending = pending;
-    _error(view, controller, WebResourceErrorType.CANNOT_CONNECT_TO_HOST);
-    view.platform.params.onLoadStart?.call(controller, _loginUrl);
-    view.platform.params.onLoadStop?.call(controller, _loginUrl);
+    _error(view, controller, WebResourceErrorType.connect);
+    controller.navigation.started?.call(_loginUrl.toString());
+    controller.navigation.finished?.call(_loginUrl.toString());
     pending.complete([]);
     await tester.pump();
     expect(find.text(_pageError), findsNothing);
@@ -224,11 +221,13 @@ void main() {
 
   testWidgets('subframe errors do not terminate login', (tester) async {
     await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
+    );
     _error(
       view,
       _controller(view),
-      WebResourceErrorType.CANNOT_CONNECT_TO_HOST,
+      WebResourceErrorType.connect,
       mainFrame: false,
     );
     await tester.pump();
@@ -241,18 +240,30 @@ void main() {
     tester,
   ) async {
     await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
-    final native = tester.element(find.byType(_FakeNativeView));
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
+    );
+    final native = tester.element(
+      find.byType(WebViewWidget, skipOffstage: false),
+    );
     final controller = _controller(view);
-    _error(view, controller, WebResourceErrorType.CANNOT_CONNECT_TO_HOST);
+    _error(view, controller, WebResourceErrorType.connect);
     await tester.pumpAndSettle();
     await tester.tap(find.text('重新打开登录页'));
     await tester.pump();
     expect(find.text(_pageError), findsNothing);
-    expect(platform.controller.requests.single.url, _loginUrl);
-    expect(platform.controller.requests.single.method, 'GET');
-    expect(tester.element(find.byType(_FakeNativeView)), same(native));
-    expect(tester.widget<InAppWebView>(find.byType(InAppWebView)), same(view));
+    expect(platform.controller.requests.last.uri, _loginUrl);
+    expect(platform.controller.requests.last.method, LoadRequestMethod.get);
+    expect(
+      tester.element(find.byType(WebViewWidget, skipOffstage: false)),
+      same(native),
+    );
+    expect(
+      tester.widget<WebViewWidget>(
+        find.byType(WebViewWidget, skipOffstage: false),
+      ),
+      same(view),
+    );
     await _close(tester);
   });
 
@@ -260,14 +271,12 @@ void main() {
     tester,
   ) async {
     final result = await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
-    final pending = Completer<List<Cookie>>();
-    platform.cookies.pending = pending;
-    _error(
-      view,
-      _controller(view),
-      WebResourceErrorType.CANNOT_CONNECT_TO_HOST,
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
     );
+    final pending = Completer<List<WebViewCookie>>();
+    platform.cookies.pending = pending;
+    _error(view, _controller(view), WebResourceErrorType.connect);
     await tester.tap(find.byTooltip('关闭网页登录'));
     pending.complete([_sessionCookie()]);
     await tester.pumpAndSettle();
@@ -279,14 +288,16 @@ void main() {
     tester,
   ) async {
     final result = await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
+    );
     // No reads are started in the background; the overall dialog still expires.
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await tester.pump(const Duration(minutes: 10));
     await tester.pump();
     platform.cookies.value = [_sessionCookie()];
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    view.platform.params.onLoadStop?.call(_controller(view), _loginUrl);
+    _controller(view).navigation.finished?.call(_loginUrl.toString());
     await tester.pumpAndSettle();
     expect(find.text('登录页面已超时，请关闭后重试'), findsOneWidget);
     expect(platform.cookies.reads, 0);
@@ -298,10 +309,12 @@ void main() {
     tester,
   ) async {
     final result = await _open(tester);
-    final view = tester.widget<InAppWebView>(find.byType(InAppWebView));
-    final pending = Completer<List<Cookie>>();
+    final view = tester.widget<WebViewWidget>(
+      find.byType(WebViewWidget, skipOffstage: false),
+    );
+    final pending = Completer<List<WebViewCookie>>();
     platform.cookies.pending = pending;
-    view.platform.params.onLoadStop?.call(_controller(view), _loginUrl);
+    _controller(view).navigation.finished?.call(_loginUrl.toString());
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
     expect(find.text('无法读取网页登录会话，请重试或使用扫码登录'), findsOneWidget);
@@ -315,8 +328,6 @@ void main() {
 Future<({Future<List<BrowserLoginCookie>?> value})> _open(
   WidgetTester tester,
 ) async {
-  final platform = InAppWebViewPlatform.instance as _FakePlatform;
-  platform.controller = _FakeController();
   final result = Completer<List<BrowserLoginCookie>?>();
   await tester.pumpWidget(
     MaterialApp(
@@ -332,15 +343,16 @@ Future<({Future<List<BrowserLoginCookie>?> value})> _open(
   );
   await tester.tap(find.text('Open'));
   await tester.pump();
-  // Windows profile allocation uses real asynchronous filesystem operations.
   for (var attempt = 0; attempt < 50; attempt++) {
-    if (find.byType(InAppWebView).evaluate().isNotEmpty) break;
+    if (find.byType(WebViewWidget, skipOffstage: false).evaluate().isNotEmpty) {
+      break;
+    }
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
     );
     await tester.pump();
   }
-  expect(find.byType(InAppWebView), findsOneWidget);
+  expect(find.byType(WebViewWidget, skipOffstage: false), findsOneWidget);
   await tester.pumpAndSettle();
   return (value: result.future);
 }
@@ -351,162 +363,31 @@ Future<void> _close(WidgetTester tester) async {
   await tester.runAsync(() => Future<void>.delayed(Duration.zero));
 }
 
-InAppWebViewController _controller(InAppWebView view) =>
-    InAppWebViewController.fromPlatform(
-      platform: (view.platform as _FakeView).controller,
-    );
+FakePassportController _controller(WebViewWidget view) =>
+    view.platform.params.controller as FakePassportController;
 
 void _error(
-  InAppWebView view,
-  InAppWebViewController controller,
+  WebViewWidget view,
+  FakePassportController controller,
   WebResourceErrorType type, {
   bool mainFrame = true,
-}) => view.platform.params.onReceivedError?.call(
-  controller,
-  WebResourceRequest(url: _loginUrl, isForMainFrame: mainFrame),
-  WebResourceError(type: type, description: 'Fixture navigation error'),
+  int code = -1,
+}) => controller.navigation.error?.call(
+  WebResourceError(
+    errorCode: code,
+    errorType: type,
+    isForMainFrame: mainFrame,
+    url: _loginUrl.toString(),
+    description: 'Fixture navigation error',
+  ),
 );
 
-Cookie _sessionCookie() => Cookie(
+WebViewCookie _sessionCookie() => const WebViewCookie(
   name: 'SESSDATA',
   value: 'fixture',
   domain: '.bilibili.com',
   path: '/',
   isSecure: true,
-  isSessionOnly: true,
+  isHttpOnly: true,
+  isSession: true,
 );
-
-Map<String, Object?> _nativeSessionCookie() => {
-  'name': 'SESSDATA',
-  'value': 'fixture',
-  'domain': '.bilibili.com',
-  'path': '/',
-  'isSecure': true,
-  'isHttpOnly': true,
-  'isSessionOnly': false,
-  'expiresDate': DateTime.utc(2027).millisecondsSinceEpoch,
-};
-
-class _FakePlatform extends InAppWebViewPlatform {
-  final cookies = _FakeCookies();
-  late _FakeController controller;
-
-  @override
-  PlatformInAppWebViewController createPlatformInAppWebViewControllerStatic() =>
-      _FakeController();
-
-  @override
-  PlatformWebViewEnvironment createPlatformWebViewEnvironmentStatic() =>
-      _FakeEnvironment();
-
-  @override
-  PlatformCookieManager createPlatformCookieManager(
-    PlatformCookieManagerCreationParams params,
-  ) => cookies;
-
-  @override
-  PlatformInAppWebViewWidget createPlatformInAppWebViewWidget(
-    PlatformInAppWebViewWidgetCreationParams params,
-  ) => _FakeView(params, controller);
-}
-
-class _FakeEnvironment extends PlatformWebViewEnvironment {
-  _FakeEnvironment()
-    : super.implementation(const PlatformWebViewEnvironmentCreationParams());
-
-  @override
-  Future<String?> getAvailableVersion({
-    String? browserExecutableFolder,
-  }) async => 'fixture-version';
-
-  @override
-  Future<PlatformWebViewEnvironment> create({
-    WebViewEnvironmentSettings? settings,
-  }) async => this;
-
-  @override
-  Future<void> dispose() async {}
-}
-
-class _FakeCookies extends PlatformCookieManager {
-  _FakeCookies()
-    : super.implementation(const PlatformCookieManagerCreationParams());
-
-  List<Cookie> value = [];
-  Completer<List<Cookie>>? pending;
-  int reads = 0;
-
-  void reset() {
-    value = [];
-    pending = null;
-    reads = 0;
-  }
-
-  @override
-  Future<List<Cookie>> getCookies({
-    required WebUri url,
-    PlatformInAppWebViewController? iosBelow11WebViewController,
-    PlatformInAppWebViewController? webViewController,
-  }) async {
-    expect(url.toString(), 'https://api.bilibili.com/');
-    expect(webViewController, isNotNull);
-    reads++;
-    return pending?.future ?? value;
-  }
-}
-
-class _FakeController extends PlatformInAppWebViewController {
-  _FakeController()
-    : super.implementation(
-        const PlatformInAppWebViewControllerCreationParams(id: 'fixture'),
-      );
-
-  final requests = <URLRequest>[];
-
-  @override
-  Future<String> getDefaultUserAgent() async => 'FixtureAgent';
-
-  @override
-  Future<void> loadUrl({
-    required URLRequest urlRequest,
-    Uri? iosAllowingReadAccessTo,
-    WebUri? allowingReadAccessTo,
-  }) async => requests.add(urlRequest);
-}
-
-class _FakeView extends PlatformInAppWebViewWidget {
-  _FakeView(super.params, this.controller) : super.implementation();
-
-  final _FakeController controller;
-
-  @override
-  Widget build(BuildContext context) => _FakeNativeView(this);
-
-  @override
-  T controllerFromPlatform<T>(PlatformInAppWebViewController controller) =>
-      params.controllerFromPlatform!(controller) as T;
-
-  @override
-  void dispose() {}
-}
-
-class _FakeNativeView extends StatefulWidget {
-  const _FakeNativeView(this.view);
-  final _FakeView view;
-
-  @override
-  State<_FakeNativeView> createState() => _FakeNativeViewState();
-}
-
-class _FakeNativeViewState extends State<_FakeNativeView> {
-  @override
-  void initState() {
-    super.initState();
-    widget.view.params.onWebViewCreated?.call(
-      InAppWebViewController.fromPlatform(platform: widget.view.controller),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => const SizedBox.expand();
-}

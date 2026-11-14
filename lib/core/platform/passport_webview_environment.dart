@@ -1,62 +1,75 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:webview_all/webview_all.dart';
 
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:path/path.dart' as path;
-
-/// Owns one Windows login's profile, independent of other app instances.
+/// Owns the login view and its cookies until the view has been removed.
 final class PassportWebViewEnvironment {
-  PassportWebViewEnvironment._(this.environment, this.userDataDirectory);
+  PassportWebViewEnvironment._(this.session, this.platform);
 
-  final WebViewEnvironment environment;
-  final Directory userDataDirectory;
+  final WebViewSession session;
+  final TargetPlatform platform;
   Future<void>? _disposal;
+  static bool _androidInUse = false;
 
-  static Future<PassportWebViewEnvironment> create(
-    Directory applicationSupportDirectory, {
-    Future<WebViewEnvironment> Function(WebViewEnvironmentSettings)?
-    createEnvironment,
+  static Future<PassportWebViewEnvironment> create({
+    TargetPlatform? platform,
   }) async {
-    // An elevated launcher can supply a system/admin-only TEMP directory.
-    // WebView2's browser runs without elevation and needs a user-writable path.
-    final root = Directory(
-      path.join(applicationSupportDirectory.path, 'passport-webview'),
-    );
-    await root.create(recursive: true);
-    final profile = await root.createTemp('login-');
+    final target = platform ?? defaultTargetPlatform;
+    final android = target == TargetPlatform.android;
+    // Android's WebView has a shared store even in incognito mode. Reserve it
+    // through cleanup so a closing attempt cannot clear a new login's cookies.
+    if (android && _androidInUse) {
+      throw StateError('A WebView login is already closing or active');
+    }
+    if (android) _androidInUse = true;
+    WebViewSession? session;
     try {
-      final settings = WebViewEnvironmentSettings(userDataFolder: profile.path);
-      final environment = await (createEnvironment == null
-          ? WebViewEnvironment.create(settings: settings)
-          : createEnvironment(settings));
-      return PassportWebViewEnvironment._(environment, profile);
+      session = await WebViewSession.create(
+        mode: android
+            ? WebViewSessionMode.incognito
+            : WebViewSessionMode.isolatedIncognito,
+        onPermissionRequest: (request) => request.deny(),
+      );
+      if (session == null || !session.capabilities.scopedCookies) {
+        throw UnsupportedError('A private login store is unavailable');
+      }
+      final environment = PassportWebViewEnvironment._(session, target);
+      if (android) await environment._clearAndroidStore();
+      return environment;
     } catch (_) {
-      await _deleteProfile(profile);
+      try {
+        await session?.close();
+      } finally {
+        if (android) _androidInUse = false;
+      }
       rethrow;
     }
   }
 
-  /// Call after the native WebView widget has been removed.
+  Future<void> _clearAndroidStore() async {
+    final result = await session.dataManager.clearAllWebsiteData();
+    const required = {
+      WebViewDataType.cookies,
+      WebViewDataType.localStorage,
+      WebViewDataType.indexedDb,
+      WebViewDataType.cache,
+    };
+    if (!result.clearedDataTypes.containsAll(required) ||
+        result.failures.isNotEmpty) {
+      throw StateError('Unable to clear the login WebView store');
+    }
+  }
+
+  /// Remove the native widget and finish pending cookie reads before calling.
   Future<void> dispose() => _disposal ??= _dispose();
 
   Future<void> _dispose() async {
     try {
-      await environment.dispose();
+      if (platform == TargetPlatform.android) await _clearAndroidStore();
     } finally {
-      await _deleteProfile(userDataDirectory);
-    }
-  }
-
-  static Future<void> _deleteProfile(Directory profile) async {
-    // Browser shutdown can briefly retain file locks after the view closes.
-    // Delete only the directory allocated by this attempt, never shared data.
-    for (var attempt = 0; attempt < 5; attempt++) {
       try {
-        if (await profile.exists()) await profile.delete(recursive: true);
-        return;
-      } on FileSystemException {
-        if (attempt < 4) {
-          await Future<void>.delayed(const Duration(milliseconds: 300));
-        }
+        await session.close();
+      } finally {
+        if (platform == TargetPlatform.android) _androidInUse = false;
       }
     }
   }

@@ -305,7 +305,7 @@ void main() {
   }
 
   test('web login capability matches the installed native plugins', () {
-    expect(passportWebLoginSupportedForPlatform(TargetPlatform.linux), isFalse);
+    expect(passportWebLoginSupportedForPlatform(TargetPlatform.linux), isTrue);
     expect(passportWebLoginSupportedForPlatform(TargetPlatform.iOS), isTrue);
   });
 

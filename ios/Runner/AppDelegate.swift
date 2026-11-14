@@ -4,7 +4,6 @@ import UIKit
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var deviceOrientation: DeviceOrientationHandler?
-  private var passportCookies: PassportWebCookies?
   private var appIconChannel: FlutterMethodChannel?
   override func application(
     _ application: UIApplication,
@@ -44,8 +43,5 @@ import UIKit
     }
     appIconChannel = channel
     deviceOrientation = DeviceOrientationHandler(messenger: engineBridge.applicationRegistrar.messenger())
-    passportCookies = PassportWebCookies(messenger: engineBridge.applicationRegistrar.messenger()) {
-      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
-    }
   }
 }
