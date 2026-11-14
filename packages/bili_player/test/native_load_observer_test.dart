@@ -10,11 +10,12 @@ void main() {
     () {
       expect(
         nativeCacheReadState('{"idle":false,"eof":false,"cache-end":120.2}'),
-        (reading: true, endOfInput: false),
+        (reading: true, endOfInput: false, cacheEndSeconds: 120.2),
       );
       expect(nativeCacheReadState('{"idle":true,"eof":true}'), (
         reading: false,
         endOfInput: true,
+        cacheEndSeconds: null,
       ));
       for (final value in [
         '',
@@ -27,6 +28,14 @@ void main() {
       }
     },
   );
+  test('invalid native cache endpoints remain unavailable', () {
+    for (final end in ['null', '-1', '"NaN"', '1e400']) {
+      expect(
+        nativeCacheReadState('{"idle":true,"eof":true,"cache-end":$end}'),
+        (reading: false, endOfInput: true, cacheEndSeconds: null),
+      );
+    }
+  });
   test('paused track readiness belongs to the current load and seek', () async {
     final state = NativeLoadState();
     addTearDown(state.dispose);

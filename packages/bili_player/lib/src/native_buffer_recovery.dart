@@ -10,7 +10,7 @@ final class NativeBufferRecovery {
     required this.snapshot,
     required this.probe,
     required this.cancelProbe,
-    required this.onReachable,
+    required this.onRecoveryRequired,
   });
 
   static const retryInterval = Duration(seconds: 5);
@@ -19,42 +19,69 @@ final class NativeBufferRecovery {
   final PlaybackSnapshot Function() snapshot;
   final Future<bool> Function() probe;
   final void Function() cancelProbe;
-  final void Function() onReachable;
+  final void Function() onRecoveryRequired;
   Timer? _retry, _deadline, _readDeadline;
   Object? _episode;
   Duration _buffered = Duration.zero;
   int _attempts = 0;
   bool _exhausted = false, _disposed = false, _reading = false;
+  bool _recoveryRequested = false;
 
-  void readingChanged(bool reading, {bool endOfInput = false}) {
+  void readingChanged(
+    bool reading, {
+    bool endOfInput = false,
+    double? cacheEndSeconds,
+  }) {
     _reading = reading;
     update();
     // EOF in the input reader is not playback completion: cached packets may
     // still play for minutes. The duration guard excludes a fully cached file.
-    if (endOfInput) reportNetworkError();
+    if (endOfInput) {
+      final duration = snapshot().duration;
+      if (duration > Duration.zero && cacheEndSeconds != null) {
+        // Read the endpoint from the same native event as EOF. The SDK's
+        // separate buffer notification can still be behind a fully read file.
+        if (duration.inMicroseconds / 1000000 - cacheEndSeconds > .5) {
+          reportNetworkError(immediate: true);
+        }
+      } else {
+        reportNetworkError();
+      }
+    }
   }
 
-  bool get _eligible {
+  bool get _active {
     final value = snapshot();
     return !_disposed &&
+        !_recoveryRequested &&
         value.desiredPlaying &&
         !value.isSeeking &&
         const {
           PlaybackPhase.playing,
           PlaybackPhase.buffering,
         }.contains(value.phase) &&
-        // A blocked native read can delay its cache-time notification even
-        // while queued packets keep playing. Do not require that notification
-        // to detect the read stall. Empty, already-buffering playback keeps its
-        // existing normal underrun recovery path.
-        (value.phase == PlaybackPhase.playing ||
-            value.buffered - value.position > const Duration(seconds: 1)) &&
         (value.duration == Duration.zero ||
             value.duration - value.buffered >
                 const Duration(milliseconds: 500));
   }
 
-  void reportNetworkError() {
+  bool get _eligible =>
+      _active &&
+      // A blocked native read can delay its cache-time notification even
+      // while queued packets keep playing. Do not require that notification
+      // to detect the read stall. Empty, already-buffering playback keeps its
+      // existing normal underrun recovery path.
+      (snapshot().phase == PlaybackPhase.playing ||
+          snapshot().buffered - snapshot().position >
+              const Duration(seconds: 1));
+
+  void reportNetworkError({bool immediate = false}) {
+    if (immediate) {
+      // A confirmed read failure needs no reachability probe or cache drain.
+      // The session owns retry/backoff and pauses both tracks before reopening.
+      if (_active) _requestRecovery();
+      return;
+    }
     if (!_eligible || _episode != null || _exhausted) return;
     _readDeadline?.cancel();
     _readDeadline = null;
@@ -105,14 +132,19 @@ final class NativeBufferRecovery {
     update();
     if (!identical(_episode, episode)) return;
     if (reachable) {
-      cancel();
-      onReachable();
+      _requestRecovery();
     } else if (++_attempts >= maximumAttempts) {
       _exhausted = true;
       cancel();
     } else {
       _schedule(episode);
     }
+  }
+
+  void _requestRecovery() {
+    _recoveryRequested = true;
+    cancel();
+    onRecoveryRequired();
   }
 
   void cancel() {

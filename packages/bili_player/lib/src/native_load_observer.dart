@@ -10,13 +10,23 @@ import 'native_readiness.dart';
 
 enum NativeOutputProperty { colorMatrix, driver }
 
-({bool reading, bool endOfInput})? nativeCacheReadState(String value) {
+({bool reading, bool endOfInput, double? cacheEndSeconds})?
+nativeCacheReadState(String value) {
   try {
-    if (jsonDecode(value) case {
-      'idle': final bool idle,
-      'eof': final bool eof,
-    }) {
-      return (reading: !idle, endOfInput: eof);
+    final Object? decoded = jsonDecode(value);
+    if (decoded is Map<String, Object?>) {
+      final idle = decoded['idle'];
+      final eof = decoded['eof'];
+      final end = decoded['cache-end'];
+      if (idle is bool && eof is bool) {
+        return (
+          reading: !idle,
+          endOfInput: eof,
+          cacheEndSeconds: end is num && end.isFinite && end >= 0
+              ? end.toDouble()
+              : null,
+        );
+      }
     }
   } on FormatException {
     // The property may be unavailable before a source has been loaded.
@@ -128,7 +138,8 @@ final class NativeLoadObserver {
   static Future<NativeLoadObserver> attach(
     mk.NativePlayer platform, {
     required void Function(int errorCode) onFailure,
-    void Function(bool reading, bool endOfInput)? onCacheStateChanged,
+    void Function(bool reading, bool endOfInput, double? cacheEndSeconds)?
+    onCacheStateChanged,
   }) async {
     final observer = NativeLoadObserver._(platform, onFailure);
     try {
@@ -191,7 +202,11 @@ final class NativeLoadObserver {
         await platform.observeProperty(name, (value) async {
           if (observer._disposed) return;
           if (nativeCacheReadState(value) case final state?) {
-            onCacheStateChanged(state.reading, state.endOfInput);
+            onCacheStateChanged(
+              state.reading,
+              state.endOfInput,
+              state.cacheEndSeconds,
+            );
           }
         });
         observer._properties.add(name);

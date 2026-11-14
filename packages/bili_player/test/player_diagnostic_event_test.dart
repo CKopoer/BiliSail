@@ -94,6 +94,15 @@ void main() {
     );
   });
 
+  test('audio decoding errors retain the sanitized decoder category', () {
+    final summary = NativeErrorSummary.classify(
+      'Error decoding audio.',
+      prefix: 'ffmpeg/audio',
+    );
+    expect(summary.component, 'ffmpeg/audio');
+    expect(summary.cause, NativeErrorCause.decoder);
+  });
+
   test('premature HTTP reads and TLS pull failures retain no source text', () {
     for (final message in [
       'Stream ends prematurely at 100, should be 200',
