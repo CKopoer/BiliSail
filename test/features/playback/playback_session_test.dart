@@ -4523,6 +4523,94 @@ void main() {
     },
   );
 
+  for (final target in <ContentPlaybackTarget?>[
+    null,
+    const PgcPlaybackTarget('7', cid: 'one'),
+  ]) {
+    test(
+      'storyboard preloads during resolution without delaying playback; target=${target?.key}',
+      () async {
+        final metadata = _FakeMetadataRepository();
+        final repository = _FakeRepository();
+        final contentReady = Completer<PlaybackMedia>();
+        final content = _FakeContentRepository()..pending = contentReady;
+        final nativeReady = Completer<void>();
+        final engine = _FakeEngine()..nextOpen = nativeReady;
+        final session = PlaybackSession(
+          engine: engine,
+          repository: repository,
+          contentRepository: content,
+          metadataRepository: metadata,
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+        );
+        addTearDown(session.close);
+        final opening = session.open(
+          _detail('one'),
+          _part('one'),
+          target: target,
+        );
+        await _flush();
+        expect(metadata.storyboardCalls, ['one']);
+        expect(session.storyboardLoading, isTrue);
+        await session.ensureStoryboard();
+        expect(metadata.storyboardCalls, hasLength(1));
+        await _flush();
+        expect(engine.sources, isEmpty);
+        expect(session.media, isNull);
+
+        if (target == null) {
+          repository.completeResolve('one');
+        } else {
+          contentReady.complete(_media('one', 80, const Duration(minutes: 2)));
+        }
+        await _flush();
+        expect(engine.sources, hasLength(1));
+        expect(session.media, isNull);
+        expect(session.storyboardLoading, isTrue);
+
+        nativeReady.complete();
+        await opening;
+        expect(session.media, isNotNull);
+        expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+        expect(session.storyboardLoading, isTrue);
+        metadata.storyboardPending['one']?.complete(_storyboard);
+        await _flush();
+        expect(session.storyboard, same(_storyboard));
+        expect(session.storyboardLoading, isFalse);
+        await session.ensureStoryboard();
+        expect(metadata.storyboardCalls, hasLength(1));
+        expect(engine.seekTargets, isEmpty);
+      },
+    );
+  }
+
+  for (final target in const [
+    LivePlaybackTarget('8'),
+    OfflinePlaybackTarget('task'),
+  ]) {
+    test(
+      '${target.key} skips storyboard preloading and preview reads',
+      () async {
+        final metadata = _FakeMetadataRepository();
+        final session = PlaybackSession(
+          engine: _FakeEngine(),
+          repository: _FakeRepository(),
+          contentRepository: _FakeContentRepository(),
+          metadataRepository: metadata,
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+        );
+        addTearDown(session.close);
+        await session.open(_detail('one'), _part('one'), target: target);
+        await session.ensureStoryboard();
+        expect(session.media, isNotNull);
+        expect(metadata.storyboardCalls, isEmpty);
+        expect(session.storyboardLoading, isFalse);
+      },
+    );
+  }
+
   test(
     'optional timeline failures preserve media and single-flight reads',
     () async {
@@ -4540,13 +4628,12 @@ void main() {
         const AppFailure(AppFailureKind.network, 'metadata unavailable'),
       );
       await _flush();
-      final pending = session.ensureStoryboard();
       await session.ensureStoryboard();
       expect(metadata.storyboardCalls, ['one']);
       metadata.storyboardPending['one']?.completeError(
         const AppFailure(AppFailureKind.timeout, 'preview unavailable'),
       );
-      await pending;
+      await _flush();
       expect(session.storyboardLoading, isFalse);
       expect(session.storyboardMessage, '缩略图暂时不可用');
       expect(session.media, isNotNull);
@@ -4566,7 +4653,7 @@ void main() {
     AppFailureKind.protocol,
   ]) {
     test(
-      'storyboard $kind retries on the next preview entry without cooldown',
+      'storyboard preload $kind retries on the next preview entry without cooldown',
       () async {
         final engine = _FakeEngine();
         final metadata = _FakeMetadataRepository();
@@ -4579,7 +4666,7 @@ void main() {
         );
         addTearDown(session.close);
         await session.open(_detail('one'), _part('one'));
-        final first = session.ensureStoryboard();
+        expect(metadata.storyboardCalls, ['one']);
         if (kind == null) {
           metadata.storyboardPending['one']?.complete(null);
         } else {
@@ -4587,7 +4674,6 @@ void main() {
             AppFailure(kind, 'preview unavailable'),
           );
         }
-        await first;
         await _flush();
         expect(metadata.storyboardCalls, ['one']);
         expect(session.storyboardMessage, kind == null ? null : '缩略图暂时不可用');
@@ -4653,10 +4739,9 @@ void main() {
         );
         addTearDown(session.close);
         await session.open(_detail('one'), _part('one'));
-        final oldRead = session.ensureStoryboard();
         await session.open(_detail('two'), _part('two'));
         expect(metadata.storyboardTokens['one']?.isCancelled, isTrue);
-        final newRead = session.ensureStoryboard();
+        expect(metadata.storyboardCalls, ['one', 'two']);
         if (empty) {
           metadata.storyboardPending['one']?.complete(null);
         } else {
@@ -4664,11 +4749,11 @@ void main() {
             const AppFailure(AppFailureKind.timeout, 'late preview failure'),
           );
         }
-        await oldRead;
+        await _flush();
         expect(session.storyboardLoading, isTrue);
         expect(session.storyboardMessage, isNull);
         metadata.storyboardPending['two']?.complete(_storyboard);
-        await newRead;
+        await _flush();
         await session.ensureStoryboard();
         expect(metadata.storyboardCalls, ['one', 'two']);
         expect(session.storyboard, same(_storyboard));
@@ -4693,11 +4778,10 @@ void main() {
         );
         addTearDown(session.close);
         await session.open(_detail('one'), _part('one'));
-        final pending = session.ensureStoryboard();
         metadata.storyboardPending['one']?.completeError(
           const AppFailure(AppFailureKind.timeout, 'preview unavailable'),
         );
-        await pending;
+        await _flush();
         if (changeScope) {
           scope = 'replacement';
         } else {
@@ -4710,7 +4794,7 @@ void main() {
   }
 
   test(
-    'timeline loads metadata once and lazily loads storyboard without seek',
+    'timeline loads chapters and storyboard independently without seek',
     () async {
       final metadata = _FakeMetadataRepository();
       final engine = _FakeEngine();
@@ -4728,13 +4812,12 @@ void main() {
       await _flush();
       expect(repository.pendingSubtitles, isEmpty);
       expect(session.chapters.single.title, 'Chapter one');
-      expect(metadata.storyboardPending, isEmpty);
-      final pending = session.ensureStoryboard();
+      expect(metadata.storyboardCalls, ['one']);
       await session.ensureStoryboard();
       expect(metadata.storyboardPending, hasLength(1));
       expect(session.storyboardLoading, isTrue);
       metadata.storyboardPending['one']?.complete(_storyboard);
-      await pending;
+      await _flush();
       expect(session.storyboard, same(_storyboard));
       expect(session.storyboardLoading, isFalse);
       expect(engine.seekTargets, isEmpty);
@@ -4754,49 +4837,81 @@ void main() {
       );
       addTearDown(session.close);
       await session.open(_detail('one'), _part('one'));
-      final oldShot = session.ensureStoryboard();
       await session.open(_detail('two'), _part('two'));
       expect(metadata.storyboardTokens['one']?.isCancelled, isTrue);
       metadata.metadataPending['one']?.complete(_timelineMetadata);
       metadata.storyboardPending['one']?.complete(_storyboard);
-      await oldShot;
       await _flush();
       expect(session.chapters, isEmpty);
       expect(session.storyboard, isNull);
       metadata.metadataPending['two']?.complete(_timelineMetadata);
       await _flush();
       expect(session.chapters, hasLength(1));
-      final newShot = session.ensureStoryboard();
       await session.stop();
       expect(metadata.storyboardTokens['two']?.isCancelled, isTrue);
       metadata.storyboardPending['two']?.complete(_storyboard);
-      await newShot;
+      await _flush();
       expect(session.chapters, isEmpty);
       expect(session.storyboard, isNull);
+      await session.ensureStoryboard();
+      expect(metadata.storyboardCalls, ['one', 'two']);
     },
   );
 
-  test('timeline rejects responses after account scope changes', () async {
-    var scope = 'guest';
-    final metadata = _FakeMetadataRepository();
-    final session = PlaybackSession(
-      engine: _FakeEngine(),
-      repository: _FakeRepository(autoResolve: true),
-      metadataRepository: metadata,
-      progress: _FakeProgress(),
-      accountScope: () => scope,
+  test(
+    'closing cancels storyboard preloading and ignores late results',
+    () async {
+      final metadata = _FakeMetadataRepository();
+      final session = PlaybackSession(
+        engine: _FakeEngine(),
+        repository: _FakeRepository(autoResolve: true),
+        metadataRepository: metadata,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'));
+      await session.close();
+      expect(metadata.storyboardTokens['one']?.isCancelled, isTrue);
+      metadata.storyboardPending['one']?.complete(_storyboard);
+      await _flush();
+      expect(session.storyboard, isNull);
+      expect(session.storyboardLoading, isFalse);
+      await session.ensureStoryboard();
+      expect(metadata.storyboardCalls, ['one']);
+    },
+  );
+
+  for (final changeScope in [false, true]) {
+    test(
+      'timeline rejects preloaded responses after account changes; scope=$changeScope',
+      () async {
+        var scope = 'guest';
+        var epoch = 0;
+        final metadata = _FakeMetadataRepository();
+        final session = PlaybackSession(
+          engine: _FakeEngine(),
+          repository: _FakeRepository(autoResolve: true),
+          metadataRepository: metadata,
+          progress: _FakeProgress(),
+          accountScope: () => scope,
+          sessionEpoch: () => epoch,
+        );
+        addTearDown(session.close);
+        await session.open(_detail('one'), _part('one'));
+        if (changeScope) {
+          scope = 'account-two';
+        } else {
+          epoch++;
+        }
+        metadata.metadataPending['one']?.complete(_timelineMetadata);
+        metadata.storyboardPending['one']?.complete(_storyboard);
+        await _flush();
+        expect(session.chapters, isEmpty);
+        expect(session.storyboard, isNull);
+      },
     );
-    addTearDown(session.close);
-    await session.open(_detail('one'), _part('one'));
-    final pending = session.ensureStoryboard();
-    scope = 'account-two';
-    metadata.metadataPending['one']?.complete(_timelineMetadata);
-    metadata.storyboardPending['one']?.complete(_storyboard);
-    await pending;
-    await _flush();
-    expect(session.chapters, isEmpty);
-    expect(session.storyboard, isNull);
-  });
+  }
 
   for (final target in const [
     PgcPlaybackTarget('7'),
