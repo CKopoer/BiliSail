@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../shared/ui/video_card.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/app_cover_image.dart';
+import '../../../shared/ui/live_card_cover.dart';
+import '../../../shared/ui/scroll_aware_hover_region.dart';
+import '../../live/domain/live_room.dart';
 import '../domain/home_repository.dart';
 
 final class VideoDynamicCard extends StatelessWidget {
@@ -287,47 +290,63 @@ String _date(DateTime date) =>
     '${date.month.toString().padLeft(2, '0')}-'
     '${date.day.toString().padLeft(2, '0')}';
 
-final class LiveRoomCard extends StatelessWidget {
+final class LiveRoomCard extends StatefulWidget {
   const LiveRoomCard({super.key, required this.entry, required this.onTap});
   final HomeEntry entry;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: AspectRatio(
+  State<LiveRoomCard> createState() => _LiveRoomCardState();
+}
+
+final class _LiveRoomCardState extends State<LiveRoomCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) => ScrollAwareHoverRegion(
+    onHover: (hovered) => setState(() => _hovered = hovered),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          setState(() => _hovered = false);
+          widget.onTap();
+        },
+        borderRadius: BorderRadius.circular(6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
               aspectRatio: 16 / 9,
-              child: _Cover(
-                url: entry.coverUrl,
-                left: entry.popularityText.trim().isEmpty
-                    ? ''
-                    : '♨ ${compactCountLabel(null, entry.popularityText)}',
-                right: entry.areaName,
+              child: LiveCardCover(
+                roomId: RoomId(widget.entry.id),
+                hovered: _hovered,
+                child: _Cover(
+                  url: widget.entry.coverUrl,
+                  left: widget.entry.popularityText.trim().isEmpty
+                      ? ''
+                      : '♨ ${compactCountLabel(null, widget.entry.popularityText)}',
+                  right: widget.entry.areaName,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            entry.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            entry.authorName.isEmpty ? entry.subtitle : entry.authorName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              widget.entry.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              widget.entry.authorName.isEmpty
+                  ? widget.entry.subtitle
+                  : widget.entry.authorName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
       ),
     ),
   );

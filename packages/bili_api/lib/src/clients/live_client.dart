@@ -288,31 +288,68 @@ final class LiveClient {
     String roomId, {
     int qn = 10000,
     ApiRequestContext? context,
+  }) => _getPlayInfo(roomId, qn: qn, context: context);
+
+  /// Muted card playback profile used by the official live homepage.
+  Future<ApiLivePlayInfo> getPreviewInfo(
+    String roomId, {
+    ApiRequestContext? context,
+  }) => _getPlayInfo(roomId, qn: 0, preview: true, context: context);
+
+  Future<ApiLivePlayInfo> _getPlayInfo(
+    String roomId, {
+    required int qn,
+    bool preview = false,
+    ApiRequestContext? context,
   }) async {
     _validateId(roomId);
     // qn=0 asks the live service to choose a quality automatically.
     if (qn < 0 || qn > 30000) throw ArgumentError.value(qn, 'qn');
-    const endpoint = 'live_playurl';
-    final data = await api.requestLiveWbiJson(
-      '/xlive/web-room/v2/index/getRoomPlayInfo',
-      {
-        'room_id': roomId,
-        'qn': '$qn',
-        'protocol': '0,1',
-        'format': '0,1,2',
-        'codec': '0,1,2',
-        'platform': 'web',
-        'ptype': '8',
-        'dolby': '5',
-        'panorama': '1',
-        'web_location': '444.8',
-      },
-      endpoint,
-      context: context,
-    );
+    final endpoint = preview ? 'live_preview' : 'live_playurl';
+    const path = '/xlive/web-room/v2/index/getRoomPlayInfo';
+    final data = preview
+        ? await api.requestJson(
+            Uri.https('api.live.bilibili.com', path, {
+              'room_id': roomId,
+              'no_playurl': '0',
+              'mask': '1',
+              'qn': '0',
+              'platform': 'web',
+              'protocol': '0,1',
+              'format': '0,1,2',
+              'codec': '0,1',
+              'special_scenario': '2',
+            }),
+            endpoint,
+            context: context,
+          )
+        : await api.requestLiveWbiJson(
+            path,
+            {
+              'room_id': roomId,
+              'qn': '$qn',
+              'protocol': '0,1',
+              'format': '0,1,2',
+              'codec': '0,1,2',
+              'platform': 'web',
+              'ptype': '8',
+              'dolby': '5',
+              'panorama': '1',
+              'web_location': '444.8',
+            },
+            endpoint,
+            context: context,
+          );
+    if (preview &&
+        (data['is_locked'] == true ||
+            _int(data['is_locked']) == 1 ||
+            data['encrypted'] == true ||
+            _int(data['encrypted']) == 1)) {
+      throw ApiFailure(ApiFailureCategory.permission, endpoint);
+    }
     final status =
         _int(data['live_status']) ??
-        (throw const ApiFailure(ApiFailureCategory.protocol, endpoint));
+        (throw ApiFailure(ApiFailureCategory.protocol, endpoint));
     final canonicalId = _id(data['room_id'], endpoint);
     final playurl = _mapOrEmpty(_mapOrEmpty(data['playurl_info'])['playurl']);
     final labels = <int, String>{};
@@ -393,7 +430,7 @@ final class LiveClient {
       }
     }
     if (status == 1 && streams.isEmpty) {
-      throw const ApiFailure(ApiFailureCategory.unavailable, endpoint);
+      throw ApiFailure(ApiFailureCategory.unavailable, endpoint);
     }
     return ApiLivePlayInfo(
       roomId: canonicalId,

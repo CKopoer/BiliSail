@@ -1034,7 +1034,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        final toggle = find.widgetWithText(SwitchListTile, '视频卡悬停播放');
+        final toggle = find.widgetWithText(SwitchListTile, '卡片悬停播放');
         expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
         await tester.ensureVisible(toggle);
         await tester.pumpAndSettle();

@@ -5,12 +5,14 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../domain/live_repository.dart';
+import '../domain/live_preview_repository.dart';
 import '../domain/live_chat_repository.dart';
 import '../domain/live_room.dart';
 
 class ApiLiveRepository
     implements
         LiveRepository,
+        LivePreviewRepository,
         LiveChatRepository,
         LiveViewerRepository,
         LiveHistoryRepository {
@@ -235,24 +237,37 @@ class ApiLiveRepository
       qn: quality,
       context: context,
     );
-    return LivePlayInfo(
-      roomId: RoomId(info.roomId),
-      isLive: info.liveStatus == 1,
-      qualities: List.unmodifiable(info.qualities),
-      qualityLabels: Map.unmodifiable(info.qualityLabels),
-      streams: List.unmodifiable(
-        info.streams.map(
-          (stream) => LiveStream(
-            urls: List.unmodifiable(stream.urls),
-            quality: stream.quality,
-            qualityLabel: stream.qualityLabel,
-            format: stream.format,
-            codec: stream.codec,
-          ),
-        ),
-      ),
+    return _mapPlayInfo(info);
+  }, cancellation: cancellation);
+
+  @override
+  Future<LivePlayInfo> loadPreview(
+    RoomId id, {
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    _validate(id);
+    return _mapPlayInfo(
+      await client.getPreviewInfo(id.value, context: context),
     );
   }, cancellation: cancellation);
+
+  static LivePlayInfo _mapPlayInfo(ApiLivePlayInfo info) => LivePlayInfo(
+    roomId: RoomId(info.roomId),
+    isLive: info.liveStatus == 1,
+    qualities: List.unmodifiable(info.qualities),
+    qualityLabels: Map.unmodifiable(info.qualityLabels),
+    streams: List.unmodifiable(
+      info.streams.map(
+        (stream) => LiveStream(
+          urls: List.unmodifiable(stream.urls),
+          quality: stream.quality,
+          qualityLabel: stream.qualityLabel,
+          format: stream.format,
+          codec: stream.codec,
+        ),
+      ),
+    ),
+  );
 
   @override
   Future<List<LiveChatMessage>> loadChatHistory(
