@@ -5613,7 +5613,7 @@ void main() {
             tester
                 .widget<DanmakuOverlay>(find.byType(DanmakuOverlay))
                 .bottomInset,
-            visible ? 100 : 48,
+            48,
           );
           final after = session.danmaku.frame().single;
           expect(after.event.id, before.event.id);
@@ -5632,6 +5632,107 @@ void main() {
       await _pumpFrames(tester);
     },
   );
+
+  for (final (content, target) in <(String, ContentPlaybackTarget?)>[
+    ('video', null),
+    ('pgc', const PgcPlaybackTarget('12', cid: '123')),
+    ('offline', const OfflinePlaybackTarget('local-task')),
+  ]) {
+    for (final mode in PlayerControlsMode.values) {
+      for (final (width, area) in [(320.0, .75), (800.0, 1.0)]) {
+        testWidgets(
+          'control visibility preserves all danmaku lanes for $content ${mode.name} width=$width',
+          (tester) async {
+            final engine = _FakeEngine();
+            final session = _session(engine, danmakuNow: () => Duration.zero);
+            addTearDown(session.close);
+            await tester.pumpWidget(
+              _app(
+                session,
+                _FakeWindowService(),
+                AppSettings(playerControlsMode: mode, danmakuArea: area),
+                width: width,
+                target: target,
+              ),
+            );
+            await _pumpFrames(tester);
+            await session.pause();
+            final controls = find.byKey(const ValueKey('player-controls'));
+            final mouse = await tester.createGesture(
+              kind: PointerDeviceKind.mouse,
+            );
+            await mouse.addPointer(location: const Offset(-10, -10));
+
+            Future<void> setControls(bool visible) async {
+              if (mode == PlayerControlsMode.dynamic) {
+                // Enter before exiting so the initial dynamic controls also hide.
+                await mouse.moveTo(_surfacePoint(tester));
+                await tester.pump();
+                if (!visible) {
+                  await mouse.moveTo(const Offset(-10, -10));
+                }
+              } else if (controls.evaluate().isNotEmpty != visible) {
+                await tester.tapAt(_surfacePoint(tester));
+              }
+              await _pumpSurfaceTap(tester);
+              expect(controls, visible ? findsOneWidget : findsNothing);
+            }
+
+            for (final fullscreen in [false, true]) {
+              if (fullscreen) {
+                await setControls(true);
+                await tester.tap(find.byTooltip('全屏（F）'));
+                await _pumpFrames(tester);
+              }
+              await setControls(false);
+              session.danmaku.replaceEvents([
+                for (final mode in DanmakuMode.values)
+                  for (var lane = 0; lane < 20; lane++)
+                    DanmakuEvent(
+                      id: '${mode.name}-$lane',
+                      at: Duration.zero,
+                      text: '${mode.name} $lane',
+                      mode: mode,
+                    ),
+              ]);
+              session.danmaku.seekConfirmed(const Duration(seconds: 1));
+              await _pumpFrames(tester);
+              final before = [
+                for (final item in session.danmaku.frame())
+                  (item.event.id, item.x, item.y),
+              ];
+              for (final mode in DanmakuMode.values) {
+                expect(
+                  before.where((item) => item.$1.startsWith(mode.name)).length,
+                  greaterThan(1),
+                );
+              }
+              final generation = session.sourceGeneration;
+              final pending = session.danmaku.pendingCount;
+              final dropped = session.danmaku.dropped;
+              for (final visible in [true, false, true, false]) {
+                await setControls(visible);
+                expect([
+                  for (final item in session.danmaku.frame())
+                    (item.event.id, item.x, item.y),
+                ], before);
+                expect(session.danmaku.pendingCount, pending);
+                expect(session.danmaku.dropped, dropped);
+                expect(session.sourceGeneration, generation);
+                expect(session.snapshots.value.desiredPlaying, isFalse);
+                expect(engine.opens, 1);
+                expect(engine.maxSurfaces, 1);
+              }
+            }
+            await mouse.removePointer();
+            await tester.pumpWidget(const SizedBox());
+            await _pumpFrames(tester);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  }
 
   for (final controlsVisible in [true, false]) {
     testWidgets(

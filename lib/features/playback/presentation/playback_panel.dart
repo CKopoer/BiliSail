@@ -1640,7 +1640,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     return _cachedControlsLayout = _ControlsLayout(inputs);
   }
 
-  Widget _buildDanmakuOverlay(bool controls, AppSettings settings) {
+  Widget _buildDanmakuOverlay(AppSettings settings) {
     final session = widget.session;
     final overlay = Opacity(
       opacity: settings.danmakuOpacity,
@@ -1649,7 +1649,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         null when session.isLive => const SizedBox.shrink(),
         null => DanmakuOverlay(
           controller: session.danmaku,
-          bottomInset: controls ? 100 : 48,
+          // Control fades must not move bottom comments or remove active lanes.
+          bottomInset: 48,
         ),
       },
     );
@@ -1780,7 +1781,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                 snapshot.phase != PlaybackPhase.opening &&
                                 snapshot.phase != PlaybackPhase.failed &&
                                 snapshot.phase != PlaybackPhase.disposed)
-                              _buildDanmakuOverlay(controls, settings),
+                              _buildDanmakuOverlay(settings),
                             Positioned.fill(
                               child: RepaintBoundary(
                                 child: PlayerPictureControls(
