@@ -45,3 +45,14 @@
 - `tool/test-windows-content.ps1` 通过 Windows 受控 HLS／FLV 原生解码、headers 和共享会话回归，并完成 Windows Debug 构建；未启用 `-Online`，其中公网 PGC／直播分支未执行。日志 `build/live-fullscreen-windows-content.log`。
 - 随后以 `flutter run -d windows --no-pub -t lib/main.dart` 恢复普通应用入口，Debug 启动和热重载成功；连接 DTD 后未发现运行时错误，检查结束正常退出应用。这不替代真实直播全屏的手动验收。
 - 两份更新文档的 47 条本地链接及本任务差异空白检查通过。真实直播手动全屏、Android／macOS 实机和性能尚未验收。
+
+## 控件显隐保持弹幕区域高度（2026-11-14）
+
+共享 `PlaybackPanel` 原来在控件显示时将 `DanmakuOverlay.bottomInset` 设为 100，隐藏时改为 48。`DanmakuController` 会按底部留白重新计算可用高度和轨道数，因此底部固定弹幕上下移动，较低的活动轨道也可能在控件出现时被移除。原组件测试只检查第一条滚动弹幕，且明确接受了 100／48 的切换，没有覆盖区域底边和多轨道保留。
+
+播放面板现在固定使用原隐藏状态的底部 48 逻辑像素，不再将控件显隐传给弹幕构建方法。普通视频、影视和离线播放共用修复；普通／全屏继续响应真实尺寸变化，弹幕区域比例、顶部距离和行距保持已有设置语义。直播由自定义 overlay 提供，本来就没有这处显隐相关的留白变化。
+
+- 新增 12 项组件回归，覆盖三类点播内容、点击／动态模式、320／800 宽度与 75%／100% 弹幕区域。每项均在普通和全屏下填充滚动／顶部／底部多轨道，反复显隐控件，检查全部活动弹幕的身份与坐标、待处理数量、丢弃计数、暂停意图、媒体 generation 和单一 surface 保持不变。使用固定单调时钟隔离动画推进；原代码 12 项全部失败，日志 `build/danmaku-controls-before.log`。
+- 播放面板与直播弹幕定向回归共 501 项通过，日志 `build/danmaku-controls-targeted.log`。
+- `tool/check.ps1 -SkipPub` 通过格式、静态分析、脚本边界与全仓离线测试：根应用 5487、`bili_api` 935、`bili_player` 298、`bili_danmaku` 161、`bili_mux` 5，共 6886 项通过。根应用 13 项因 Windows 符号链接权限不足跳过；播放器包 3 项未配置 `BILI_TEST_NATIVE_MPV`／`BILI_TEST_MEDIA_DIR`，mux 包 10 项未配置 `BILI_MUX_LIBRARY`，均不算原生通过。日志 `build/danmaku-controls-check.log`。两份文档的 131 条本地链接与 `git diff --check` 通过。
+- 按用户要求不构建、不执行实机或性能测试，实际显示效果留待用户自行构建后确认。未找到运行中的调试应用／DTD，热重载未执行成功。
