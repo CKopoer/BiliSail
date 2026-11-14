@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
 import '../../../shared/ui/app_notice.dart';
+import '../../../shared/ui/app_dialog.dart';
 import '../../../core/network/api_requests.dart';
 
 import '../../../shared/ui/playback_page_commands.dart';
@@ -73,6 +74,7 @@ final class VideoScreen extends ConsumerStatefulWidget {
     this.onSearchTag,
     this.queue,
     this.onOpenQueueVideo,
+    this.onCloseQueue,
     this.onAdvanceVideo,
   });
   final VideoId id;
@@ -89,6 +91,7 @@ final class VideoScreen extends ConsumerStatefulWidget {
   final ValueChanged<String>? onSearchTag;
   final WatchLaterQueue? queue;
   final ValueChanged<VideoId>? onOpenQueueVideo;
+  final ValueChanged<VideoPart>? onCloseQueue;
   final void Function(VideoId, String?)? onAdvanceVideo;
   @override
   ConsumerState<VideoScreen> createState() => _VideoScreenState();
@@ -566,6 +569,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                 () => _queueExpanded = !_queueExpanded,
                               ),
                               onSelect: _openQueueVideo,
+                              onClose: widget.onCloseQueue == null
+                                  ? null
+                                  : () => _closeQueue(selected),
                               onOpenUser: widget.onOpenUser,
                               onRemove: queue.isWatchLater
                                   ? _removeQueueItem
@@ -884,6 +890,39 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     );
     setState(() => _selectedCid = part.cid);
     widget.onPartChanged?.call(part);
+  }
+
+  Future<void> _closeQueue(VideoPart selected) async {
+    final queue = _validQueue;
+    final id = widget.id;
+    if (queue == null || !WorkspaceActivity.isActive(context)) return;
+    final confirmed = await showAppDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('关闭播放列表？'),
+        content: const Text('关闭后，当前视频将按普通视频播放。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true &&
+        mounted &&
+        WorkspaceActivity.isActive(context) &&
+        widget.id == id &&
+        _validQueue?.id == queue.id) {
+      final current = _lastVideo?.parts
+          .where((part) => part.cid == _lastCid)
+          .firstOrNull;
+      widget.onCloseQueue?.call(current ?? selected);
+    }
   }
 
   void _openQueueVideo(VideoId id) {

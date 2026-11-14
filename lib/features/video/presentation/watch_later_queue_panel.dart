@@ -15,6 +15,7 @@ final class WatchLaterQueuePanel extends StatefulWidget {
     required this.expanded,
     required this.onToggle,
     required this.onSelect,
+    this.onClose,
     this.onOpenUser,
     this.onRemove,
     this.pendingRemovals = const {},
@@ -32,6 +33,7 @@ final class WatchLaterQueuePanel extends StatefulWidget {
   final bool expanded;
   final VoidCallback onToggle;
   final ValueChanged<VideoId> onSelect;
+  final VoidCallback? onClose;
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<WatchLaterQueueItem>? onRemove;
   final Set<String> pendingRemovals;
@@ -148,33 +150,54 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    AnimatedRotation(
-                      turns: widget.expanded ? .5 : 0,
-                      duration: MediaQuery.disableAnimationsOf(context)
-                          ? Duration.zero
-                          : const Duration(milliseconds: 180),
-                      curve: Curves.easeOutCubic,
-                      child: const Icon(Icons.keyboard_arrow_down, size: 20),
-                    ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        widget.queue.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          AnimatedRotation(
+                            turns: widget.expanded ? .5 : 0,
+                            duration: MediaQuery.disableAnimationsOf(context)
+                                ? Duration.zero
+                                : const Duration(milliseconds: 180),
+                            curve: Curves.easeOutCubic,
+                            child: const Icon(
+                              Icons.keyboard_arrow_down,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              widget.queue.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.equalizer,
+                            size: 15,
+                            color: scheme.primary,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            index < 0
+                                ? '${widget.queue.items.length} 项'
+                                : '${widget.queue.offset + index + 1}/${widget.queue.offset + widget.queue.items.length}${widget.queue.hasPrevious || widget.queue.hasMore || widget.queue.truncated ? '+' : ''}',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Icon(Icons.equalizer, size: 15, color: scheme.primary),
-                    const SizedBox(width: 5),
-                    Text(
-                      index < 0
-                          ? '${widget.queue.items.length} 项'
-                          : '${widget.queue.offset + index + 1}/${widget.queue.offset + widget.queue.items.length}${widget.queue.hasPrevious || widget.queue.hasMore || widget.queue.truncated ? '+' : ''}',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
+                    if (widget.onClose != null) ...[
+                      const SizedBox(width: 4),
+                      IconButton(
+                        tooltip: '关闭播放列表',
+                        onPressed: widget.onClose,
+                        icon: const Icon(Icons.close, size: 18),
+                      ),
+                    ],
                   ],
                 ),
               ),
