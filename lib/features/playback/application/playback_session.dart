@@ -1103,6 +1103,9 @@ class PlaybackSession extends ChangeNotifier {
           }
         },
       );
+      // Resolution initializes the repository's source context synchronously.
+      // Fetch the preview index alongside it, without delaying playback.
+      unawaited(ensureStoryboard());
       Duration? localResume;
       late final PlaybackMedia resolved;
       // Attach handlers to every operation immediately, and settle all of them
@@ -2308,7 +2311,8 @@ class PlaybackSession extends ChangeNotifier {
     _storyboardRequested = false;
   }
 
-  /// Hover loads only metadata/images; the active engine never seeks for preview.
+  /// Preloads the preview index; later preview interactions can retry failures.
+  /// The active engine never seeks for preview.
   Future<void> ensureStoryboard() async {
     final repository = metadataRepository;
     final video = detail?.summary.id;
@@ -2316,7 +2320,8 @@ class PlaybackSession extends ChangeNotifier {
     if (_disposed ||
         _closing ||
         isLive ||
-        media == null ||
+        contentTarget is OfflinePlaybackTarget ||
+        (media == null && !_resolving) ||
         repository == null ||
         video == null ||
         cid == null ||
