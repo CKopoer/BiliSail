@@ -12,6 +12,8 @@ import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
@@ -65,6 +67,63 @@ final _season = PgcSeason(
 );
 
 void main() {
+  testWidgets('custom PGC layout threshold switches without replacing player', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final layout = ValueNotifier(const ResponsiveLayoutSettings.defaults());
+    addTearDown(layout.dispose);
+    final auth = _Auth();
+    addTearDown(auth.dispose);
+    var created = 0, disposed = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          pgcRepositoryProvider.overrideWithValue(_Repo()),
+          authRepositoryProvider.overrideWithValue(auth),
+        ],
+        child: InputTestApp(
+          home: ValueListenableBuilder(
+            valueListenable: layout,
+            builder: (context, value, child) =>
+                ResponsiveLayoutScope(settings: value, child: child!),
+            child: Scaffold(
+              body: PgcScreen(
+                seasonId: 's1',
+                playerBuilder: (_, _, episode) => _TrackedPlayer(
+                  title: episode.displayTitle,
+                  onCreate: () => created++,
+                  onDispose: () => disposed++,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final state = tester.state(find.byType(_TrackedPlayer));
+    expect(find.byTooltip('收起影视信息'), findsNothing);
+    layout.value = ResponsiveLayoutSettings(playbackSideBySideWidth: 900);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('收起影视信息'), findsOneWidget);
+    expect(tester.getSize(find.byType(_TrackedPlayer)).width, 520);
+    tester.view.physicalSize = const Size(899, 800);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('收起影视信息'), findsNothing);
+    layout.value = const ResponsiveLayoutSettings.defaults();
+    tester.view.physicalSize = const Size(900, 800);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('收起影视信息'), findsNothing);
+    expect(tester.state(find.byType(_TrackedPlayer)), same(state));
+    expect(created, 1);
+    expect(disposed, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'episode entry follows its resolved season without recreating playback',
     (tester) async {

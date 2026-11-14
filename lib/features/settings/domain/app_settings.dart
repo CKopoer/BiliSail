@@ -12,6 +12,7 @@ import '../../../domain/media_cdn.dart';
 import '../../../domain/playback_mode.dart';
 import 'shortcut_settings.dart';
 import '../../../domain/recommendation_settings.dart';
+import '../../../domain/responsive_layout_settings.dart';
 
 export '../../../domain/video_codec.dart';
 export '../../../domain/video_quality.dart';
@@ -75,6 +76,7 @@ final class AppSettings {
     this.navigationBarMode = NavigationBarMode.automatic,
     this.sidebarStyle = SidebarStyle.automatic,
     this.sidebarCollapsed = false,
+    this.responsiveLayout = const ResponsiveLayoutSettings.defaults(),
     this.defaultDynamicTab = DynamicPageTab.dynamic,
     this.allowConcurrentPlayback = false,
     this.font = AppFontPreference.harmonyOsSans,
@@ -165,6 +167,7 @@ final class AppSettings {
     this.navigationBarMode = NavigationBarMode.automatic,
     this.sidebarStyle = SidebarStyle.automatic,
     this.sidebarCollapsed = false,
+    this.responsiveLayout = const ResponsiveLayoutSettings.defaults(),
     this.defaultDynamicTab = DynamicPageTab.dynamic,
     this.allowConcurrentPlayback = false,
     this.videoCardHoverPlayback = true,
@@ -247,6 +250,7 @@ final class AppSettings {
   final NavigationBarMode navigationBarMode;
   final SidebarStyle sidebarStyle;
   final bool sidebarCollapsed;
+  final ResponsiveLayoutSettings responsiveLayout;
   final DynamicPageTab defaultDynamicTab;
   final bool allowConcurrentPlayback;
   bool get concurrentPlaybackEnabled =>
@@ -349,6 +353,7 @@ final class AppSettings {
     NavigationBarMode? navigationBarMode,
     SidebarStyle? sidebarStyle,
     bool? sidebarCollapsed,
+    ResponsiveLayoutSettings? responsiveLayout,
     DynamicPageTab? defaultDynamicTab,
     bool? allowConcurrentPlayback,
     AppFontPreference? font,
@@ -429,6 +434,7 @@ final class AppSettings {
     navigationBarMode: navigationBarMode ?? this.navigationBarMode,
     sidebarStyle: sidebarStyle ?? this.sidebarStyle,
     sidebarCollapsed: sidebarCollapsed ?? this.sidebarCollapsed,
+    responsiveLayout: responsiveLayout ?? this.responsiveLayout,
     defaultDynamicTab: defaultDynamicTab ?? this.defaultDynamicTab,
     allowConcurrentPlayback:
         allowConcurrentPlayback ?? this.allowConcurrentPlayback,

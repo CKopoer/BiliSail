@@ -1,6 +1,8 @@
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/shared/ui/responsive_card_grid.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/video_grid.dart';
@@ -10,6 +12,90 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'custom thresholds update wrap and sliver grids at exact boundaries',
+    (tester) async {
+      _setViewport(tester, 4000);
+      final widths = [...ResponsiveLayoutSettings.defaultVideoGridMinWidths]
+        ..[0] = 320
+        ..[1] = 550
+        ..[2] = 900;
+      for (final sliver in [false, true]) {
+        for (final (width, scale, columns) in [
+          (319.0, 1.0, 1),
+          (320.0, 1.0, 2),
+          (549.0, 1.0, 2),
+          (550.0, 1.0, 3),
+          (899.0, 1.0, 3),
+          (900.0, 1.0, 4),
+          (1799.0, 2.0, 3),
+          (1800.0, 2.0, 4),
+          (4000.0, 1.0, 12),
+        ]) {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: ResponsiveLayoutScope(
+                  settings: ResponsiveLayoutSettings(
+                    videoGridMinWidths: widths,
+                  ),
+                  child: MediaQuery(
+                    data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: SizedBox(
+                        width: width,
+                        child: sliver
+                            ? CustomScrollView(
+                                slivers: [
+                                  SliverVideoGrid(
+                                    items: _videos,
+                                    onOpen: (_) {},
+                                  ),
+                                ],
+                              )
+                            : SingleChildScrollView(
+                                child: VideoGrid(
+                                  items: _videos,
+                                  onOpen: (_) {},
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final cards = find.byType(VideoCard);
+          final first = tester.getRect(cards.first);
+          final last = tester.getRect(cards.at(columns - 1));
+          expect(
+            last.top,
+            first.top,
+            reason: 'sliver=$sliver width=$width scale=$scale',
+          );
+          expect(last.right, closeTo(width, .01));
+          if (columns < 12) {
+            expect(
+              tester.getRect(cards.at(columns)).top,
+              greaterThan(first.bottom),
+            );
+          }
+          expect(tester.takeException(), isNull);
+        }
+      }
+      await tester.pumpWidget(_gridApp(width: 900));
+      await tester.pumpAndSettle();
+      final cards = find.byType(VideoCard);
+      expect(
+        tester.getRect(cards.at(3)).top,
+        greaterThan(tester.getRect(cards.first).bottom),
+      );
+    },
+  );
+
   testWidgets('desktop grid fills the width with six flexible cards', (
     tester,
   ) async {

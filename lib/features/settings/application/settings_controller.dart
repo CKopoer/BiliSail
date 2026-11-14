@@ -99,6 +99,28 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(sidebarStyle: value));
   Future<void> setSidebarCollapsed(bool value) =>
       update((current) => current.copyWith(sidebarCollapsed: value));
+  Future<void> setVideoGridMinWidths(List<int>? value) => update(
+    (current) => current.copyWith(
+      responsiveLayout: current.responsiveLayout.copyWith(
+        videoGridMinWidths: value,
+        resetVideoGrid: value == null,
+      ),
+    ),
+  );
+  Future<void> setSidebarExpandedWidth(int value) => update(
+    (current) => current.copyWith(
+      responsiveLayout: current.responsiveLayout.copyWith(
+        sidebarExpandedWidth: value,
+      ),
+    ),
+  );
+  Future<void> setPlaybackSideBySideWidth(int value) => update(
+    (current) => current.copyWith(
+      responsiveLayout: current.responsiveLayout.copyWith(
+        playbackSideBySideWidth: value,
+      ),
+    ),
+  );
   Future<void> setDefaultDynamicTab(DynamicPageTab value) =>
       update((current) => current.copyWith(defaultDynamicTab: value));
   Future<void> setAllowConcurrentPlayback(bool value) =>

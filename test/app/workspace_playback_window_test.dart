@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:bilisail/app/workspace_playback_window.dart';
 import 'package:bilisail/core/platform/window_service.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +14,33 @@ import '../support/native_window_events.dart';
 import '../support/window_service_fake.dart';
 
 void main() {
+  testWidgets('detached playback navigator receives updated layout settings', (
+    tester,
+  ) async {
+    Widget build(int threshold) => WorkspacePlaybackWindow(
+      shortcuts: const ShortcutSettings.defaults(),
+      theme: ThemeData(),
+      responsiveLayout: ResponsiveLayoutSettings(
+        playbackSideBySideWidth: threshold,
+      ),
+      onBack: () {},
+      onClose: () {},
+      onActivateBrowser: () {},
+      child: Builder(
+        builder: (context) => Text(
+          'threshold ${ResponsiveLayoutScope.of(context).playbackSideBySideWidth}',
+        ),
+      ),
+    );
+    await tester.pumpWidget(build(900));
+    await tester.pumpAndSettle();
+    expect(find.text('threshold 900'), findsOneWidget);
+    await tester.pumpWidget(build(1200));
+    await tester.pumpAndSettle();
+    expect(find.text('threshold 1200'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Apple playback window uses configured tab shortcuts', (
     tester,
   ) async {

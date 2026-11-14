@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../../../domain/playback_rates.dart';
 
 import '../../../domain/recommendation_settings.dart';
+import '../../../domain/responsive_layout_settings.dart';
 
 import '../../../core/storage/app_database.dart';
 import '../domain/app_settings.dart';
@@ -90,6 +91,7 @@ class SqliteSettingsRepository implements SettingsRepository {
               .firstOrNull ??
           NavigationBarMode.automatic,
       sidebarCollapsed: boolean('sidebarCollapsed', false),
+      responsiveLayout: _responsiveLayout(decoded['responsiveLayout']),
       defaultDynamicTab:
           DynamicPageTab.values
               .where((item) => item.name == decoded['defaultDynamicTab'])
@@ -287,12 +289,18 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 47,
+        'schemaVersion': 48,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
         'sidebarStyle': value.sidebarStyle.name,
         'sidebarCollapsed': value.sidebarCollapsed,
+        'responsiveLayout': {
+          'videoGridMinWidths': value.responsiveLayout.videoGridMinWidths,
+          'sidebarExpandedWidth': value.responsiveLayout.sidebarExpandedWidth,
+          'playbackSideBySideWidth':
+              value.responsiveLayout.playbackSideBySideWidth,
+        },
         'defaultDynamicTab': value.defaultDynamicTab.name,
         'fullscreenSwipeControls': value.fullscreenSwipeControls,
         'playerFullscreenGestureReverse': value.playerFullscreenGestureReverse,
@@ -370,6 +378,24 @@ class SqliteSettingsRepository implements SettingsRepository {
         'sponsorBlockBottomPadding': value.sponsorBlockBottomPadding,
         'sponsorBlockCategories': value.sponsorBlockCategories,
       }),
+    );
+  }
+
+  static ResponsiveLayoutSettings _responsiveLayout(Object? value) {
+    if (value is! Map<String, Object?>) {
+      return const ResponsiveLayoutSettings.defaults();
+    }
+    final widths = value['videoGridMinWidths'];
+    return ResponsiveLayoutSettings(
+      videoGridMinWidths: widths is List && widths.every((item) => item is int)
+          ? widths.cast<int>()
+          : null,
+      sidebarExpandedWidth: value['sidebarExpandedWidth'] is int
+          ? value['sidebarExpandedWidth'] as int
+          : 1600,
+      playbackSideBySideWidth: value['playbackSideBySideWidth'] is int
+          ? value['playbackSideBySideWidth'] as int
+          : 1000,
     );
   }
 

@@ -17,6 +17,46 @@ final _region = find.byKey(const ValueKey('workspace-sidebar-region'));
 final _toggle = find.byKey(const ValueKey('workspace-sidebar-toggle'));
 
 void main() {
+  testWidgets(
+    'custom sidebar breakpoint applies at the boundary and honors fixed styles',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1279, 900);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      Future<void> show(SidebarStyle style, {int threshold = 1280}) =>
+          tester.pumpWidget(
+            MaterialApp(
+              theme: BiliTheme.light().copyWith(
+                platform: TargetPlatform.windows,
+              ),
+              home: BiliAppShell(
+                location: '/',
+                sidebarStyle: style,
+                sidebarExpandedWidth: threshold,
+                child: const SizedBox(),
+              ),
+            ),
+          );
+      await show(SidebarStyle.automatic);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(_region).width, 76);
+      tester.view.physicalSize = const Size(1280, 900);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(_region).width, 164);
+      await show(SidebarStyle.automatic, threshold: 1600);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(_region).width, 76);
+      await show(SidebarStyle.expanded, threshold: 1600);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(_region).width, 164);
+      await show(SidebarStyle.compact);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(_region).width, 76);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final platform in [TargetPlatform.windows, TargetPlatform.macOS]) {
     for (final dark in [false, true]) {
       testWidgets(
