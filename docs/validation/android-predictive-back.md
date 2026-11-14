@@ -2,6 +2,16 @@
 
 日期：2026-10-25；导航栏模式启停更新于 2026-10-27。
 
+## 预测式返回动画开关（2026-11-14）
+
+- Android 的“设置 → 外观”增加“预测式返回动画”，默认开启，修改后立即保存并应用。关闭后工作区不接管预测预览，系统确认返回仍执行原有页面／媒体历史返回和退出确认；不改变手动导航、弹窗和全屏的返回优先级。
+- 开启时继续遵守底栏布局、有效返回目标、页内返回、键盘和模态等原有条件；侧边栏布局仍不启用预览。其他平台不显示此开关，独立 Material 路由继续沿用原过渡。
+- `AppSettings.predictiveBackEnabled` 沿用设置控制器的串行保存、即时应用和失败回退。`preferences.v1` 快照版本由 49 增至 50，SQLite schema 仍为 3；缺失／非法值和恢复默认均为开启，已保存的关闭值在重启及其他设置修改后保留。
+- 开关传入现有 `PredictiveBackRegion.enabled`，保持工作区、缓存页面与播放会话身份。预览中关闭会撤销当前手势，迟到确认不触发返回；重新开启后新手势恢复预览。
+- [设置回归](../../test/features/settings/predictive_back_settings_test.dart)覆盖旧快照、非法值、双向持久化、恢复默认、Android 设置入口、其他平台隐藏及保存失败回退；[手势回归](../../test/app/predictive_back_test.dart)覆盖单／双／多标签、左右边缘、关闭后取消／确认、即时重开与进行中关闭的迟到事件。
+- 设置与手势专项 120 项通过（`build/predictive-back-toggle/targeted.log`）。首轮 `tool/check.ps1 -SkipPub` 的格式、静态分析和打包边界检查通过；根测试发现[响应式布局快照测试](../../test/features/settings/responsive_layout_settings_test.dart)仍断言版本 49，已同步为 50，该文件 5 项复测通过。随后按同一检查脚本分阶段复跑：根应用 5458 项通过、13 项按既有条件跳过；bili_api 935、bili_player 280（另跳过 3）、bili_danmaku 161、bili_mux 5 项通过，共 6839 项通过。mux 另有 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计原生集成通过。完整日志为 `build/predictive-back-toggle/check.log`、`root-tests-final.log` 和 `package-tests.log`（后两者位于同一目录）；检查基于含同期其他修改的共享工作区。
+- 本轮未构建或安装平台包，未进行 Android 实机边缘手势、原生画面或性能验收；其他平台仅验证设置入口隐藏。未发现运行中的 DTD／Flutter 调试应用，热重载请求未能执行。本页本地链接及任务文件的 `git diff --check` 通过。
+
 ## 播放页侧滑返回被状态栏通知中断（2026-11-07）
 
 - 现象：播放页左上角返回及普通系统返回键可用，系统侧滑却停留在播放页。Xiaomi 13（Android 16、手势导航）开发测试包复现：预测预览切入首页时收到窗口指标通知，原实现无条件取消已接管的手势，后续确认事件因不再处于跟踪状态被忽略。

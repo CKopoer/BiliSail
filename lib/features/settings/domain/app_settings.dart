@@ -70,6 +70,7 @@ final class AppSettings {
     this.theme = AppThemePreference.system,
     this.appIcon = AppIconPreference.bilisail,
     this.navigationMode = WorkspaceNavigationMode.dualTabs,
+    this.predictiveBackEnabled = true,
     this.closeTabOnMiddleClick = false,
     this.closeTabOnRightClick = false,
     this.closeTabOnDoubleClick = false,
@@ -161,6 +162,7 @@ final class AppSettings {
     this.recommendations = const RecommendationSettings.defaults(),
     this.shortcuts = const ShortcutSettings.defaults(),
     this.navigationMode = WorkspaceNavigationMode.dualTabs,
+    this.predictiveBackEnabled = true,
     this.closeTabOnMiddleClick = false,
     this.closeTabOnRightClick = false,
     this.closeTabOnDoubleClick = false,
@@ -244,6 +246,7 @@ final class AppSettings {
   final AppThemePreference theme;
   final AppIconPreference appIcon;
   final WorkspaceNavigationMode navigationMode;
+  final bool predictiveBackEnabled;
   final bool closeTabOnMiddleClick;
   final bool closeTabOnRightClick;
   final bool closeTabOnDoubleClick;
@@ -347,6 +350,7 @@ final class AppSettings {
     AppThemePreference? theme,
     AppIconPreference? appIcon,
     WorkspaceNavigationMode? navigationMode,
+    bool? predictiveBackEnabled,
     bool? closeTabOnMiddleClick,
     bool? closeTabOnRightClick,
     bool? closeTabOnDoubleClick,
@@ -428,6 +432,7 @@ final class AppSettings {
     theme: theme ?? this.theme,
     appIcon: appIcon ?? this.appIcon,
     navigationMode: navigationMode ?? this.navigationMode,
+    predictiveBackEnabled: predictiveBackEnabled ?? this.predictiveBackEnabled,
     closeTabOnMiddleClick: closeTabOnMiddleClick ?? this.closeTabOnMiddleClick,
     closeTabOnRightClick: closeTabOnRightClick ?? this.closeTabOnRightClick,
     closeTabOnDoubleClick: closeTabOnDoubleClick ?? this.closeTabOnDoubleClick,

@@ -343,6 +343,13 @@ final class _SettingsCategoryPageState
                             WorkspaceNavigationMode.dualTabs: '双标签页',
                             WorkspaceNavigationMode.multipleTabs: '多标签页',
                           }, controller.setNavigationMode),
+                          if (defaultTargetPlatform == TargetPlatform.android)
+                            _toggle(
+                              '预测式返回动画',
+                              s.predictiveBackEnabled,
+                              controller.setPredictiveBackEnabled,
+                              '返回手势时预览上一页，仅底栏布局生效；关闭后仍可正常返回。',
+                            ),
                           if (s.navigationMode ==
                               WorkspaceNavigationMode.multipleTabs)
                             Padding(

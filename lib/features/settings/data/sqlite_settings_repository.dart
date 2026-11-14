@@ -91,6 +91,7 @@ class SqliteSettingsRepository implements SettingsRepository {
               .firstOrNull ??
           NavigationBarMode.automatic,
       sidebarCollapsed: boolean('sidebarCollapsed', false),
+      predictiveBackEnabled: boolean('predictiveBackEnabled', true),
       responsiveLayout: _responsiveLayout(decoded['responsiveLayout']),
       defaultDynamicTab:
           DynamicPageTab.values
@@ -289,7 +290,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 49,
+        'schemaVersion': 50,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -309,6 +310,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'playerFullscreenGesture': value.playerFullscreenGesture,
         'playerShrinkVideo': value.playerShrinkVideo,
         'navigationMode': value.navigationMode.name,
+        'predictiveBackEnabled': value.predictiveBackEnabled,
         'closeTabOnMiddleClick': value.closeTabOnMiddleClick,
         'closeTabOnRightClick': value.closeTabOnRightClick,
         'closeTabOnDoubleClick': value.closeTabOnDoubleClick,

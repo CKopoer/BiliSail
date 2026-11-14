@@ -26,6 +26,81 @@ void main() {
   });
 
   for (final mode in WorkspaceNavigationMode.values) {
+    for (final edge in SwipeEdge.values) {
+      testWidgets(
+        'predictive Back setting disables preview but preserves Back in $mode from $edge',
+        (tester) async {
+          final enabled = ValueNotifier(false);
+          addTearDown(enabled.dispose);
+          final router = _router(
+            mode: mode,
+            predictiveBackEnabled: enabled,
+            builder: (_, tab) => _PageProbe(tab: tab, disposed: []),
+          );
+          addTearDown(router.dispose);
+          await tester.pumpWidget(InputTestApp.router(routerConfig: router));
+          await tester.pumpAndSettle();
+          router.go('/video/A');
+          await tester.pumpAndSettle();
+          final video = find.byKey(const ValueKey('page-surface-/video/A'));
+          final element = tester.element(video);
+          final bounds = tester.getRect(video);
+          expect(
+            await systemBackGesture(tester, 'startBackGesture', edge: edge),
+            isFalse,
+          );
+          await systemBackGesture(
+            tester,
+            'updateBackGestureProgress',
+            progress: .5,
+            edge: edge,
+          );
+          await tester.pump();
+          expect(tester.getRect(video), bounds);
+          expect(find.byKey(const ValueKey('page-surface-/')), findsNothing);
+          await systemBackGesture(tester, 'cancelBackGesture');
+          await tester.pumpAndSettle();
+          expect(router.routeInformationProvider.value.uri.path, '/video/A');
+          enabled.value = true;
+          await tester.pumpAndSettle();
+          expect(tester.element(video), same(element));
+          expect(
+            await systemBackGesture(tester, 'startBackGesture', edge: edge),
+            isTrue,
+          );
+          await systemBackGesture(
+            tester,
+            'updateBackGestureProgress',
+            progress: .5,
+            edge: edge,
+          );
+          await tester.pump();
+          expect(tester.getRect(video), isNot(bounds));
+          // Disable during a preview: discard it and any late confirmation.
+          enabled.value = false;
+          await tester.pumpAndSettle();
+          expect(tester.getRect(video), bounds);
+          await systemBackGesture(tester, 'commitBackGesture');
+          await tester.pumpAndSettle();
+          expect(router.routeInformationProvider.value.uri.path, '/video/A');
+          expect(tester.element(video), same(element));
+          // A fresh system gesture still returns through the ordinary path.
+          expect(
+            await systemBackGesture(tester, 'startBackGesture', edge: edge),
+            isFalse,
+          );
+          await systemBackGesture(tester, 'commitBackGesture');
+          await tester.pumpAndSettle();
+          expect(router.routeInformationProvider.value.uri.path, '/');
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+        },
+        variant: TargetPlatformVariant.only(TargetPlatform.android),
+      );
+    }
+  }
+
+  for (final mode in WorkspaceNavigationMode.values) {
     for (final target in ['/video/A', '/user/42']) {
       testWidgets(
         'My keeps its own chrome through Back from $target in $mode',
@@ -744,6 +819,7 @@ void main() {
 
 GoRouter _router({
   WorkspaceNavigationMode mode = WorkspaceNavigationMode.dualTabs,
+  ValueNotifier<bool>? predictiveBackEnabled,
   WorkspacePageBuilder? builder,
   Future<void> Function()? onExitRequested,
   WidgetBuilder? accountBuilder,
@@ -752,13 +828,17 @@ GoRouter _router({
   routes: [
     ShellRoute(
       observers: [],
-      builder: (context, state, child) => BiliAppShell(
-        location: state.uri.toString(),
-        navigationMode: mode,
-        onExitRequested: onExitRequested,
-        accountBuilder: accountBuilder,
-        pageBuilder: builder ?? (_, tab) => Text('page ${tab.location.path}'),
-        child: child,
+      builder: (context, state, child) => AnimatedBuilder(
+        animation: predictiveBackEnabled ?? const AlwaysStoppedAnimation(true),
+        builder: (context, _) => BiliAppShell(
+          location: state.uri.toString(),
+          navigationMode: mode,
+          predictiveBackEnabled: predictiveBackEnabled?.value ?? true,
+          onExitRequested: onExitRequested,
+          accountBuilder: accountBuilder,
+          pageBuilder: builder ?? (_, tab) => Text('page ${tab.location.path}'),
+          child: child,
+        ),
       ),
       routes: [
         for (final path in [
