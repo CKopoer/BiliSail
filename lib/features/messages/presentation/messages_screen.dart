@@ -1384,7 +1384,7 @@ class _ConversationThread extends ConsumerWidget {
       return StateView.error(message: error, onAction: onRefresh);
     }
     if (items.isEmpty) return const StateView.empty(message: '暂无会话消息');
-    return ListView.builder(
+    final list = ListView.builder(
       reverse: true,
       padding: const EdgeInsets.all(16),
       itemCount: items.length + 1,
@@ -1470,6 +1470,14 @@ class _ConversationThread extends ConsumerWidget {
           ),
         );
       },
+    );
+    // A fling's stretch can keep animating after moving away from the edge.
+    return NotificationListener<OverscrollIndicatorNotification>(
+      onNotification: (notification) {
+        notification.disallowIndicator();
+        return false;
+      },
+      child: list,
     );
   }
 }
