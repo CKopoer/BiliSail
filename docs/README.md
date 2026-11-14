@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [视频侧栏重建与生命周期](validation/video-sidebar-lifecycle-2026-11-14.md) | 开关局部更新、播放器内容复用、隐藏态 Ticker／可见性边界及回归证据 |
 | [评论区滚动生命周期复查](validation/comments-scroll-lifecycle-2026-11-14.md) | 行内表情可见性与请求取消、分页无效调度、手势资源及 500 条列表释放回归 |
 | [iOS 播放期间闪退](validation/ios-video-playback-crash-2026-11-13.md) | 输出帧失败退出、Apple 渲染队列与销毁屏障、用户日志/PiliPlus 对照、受控回归及 SDK/实机边界 |
 | [移除 fvp 播放后端](validation/fvp-removal-2026-11-12.md) | 统一 media_kit、旧设置回退、原生／依赖／脚本清理及验证边界 |

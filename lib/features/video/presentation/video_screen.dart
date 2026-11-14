@@ -100,7 +100,7 @@ final class VideoScreen extends ConsumerStatefulWidget {
 final class _VideoScreenState extends ConsumerState<VideoScreen> {
   String? _selectedCid;
   int? _tab;
-  bool _infoVisible = true;
+  final _infoVisible = ValueNotifier(true);
   bool _descriptionExpanded = false;
   bool _tagsRequested = false;
   bool _queueExpanded = true;
@@ -125,6 +125,8 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
   final _introScroll = HeaderScrollController();
   final GlobalKey _infoKey = GlobalKey();
   final GlobalKey _playerKey = GlobalKey();
+  (VideoDetail, VideoPart, VideoPlayerBuilder)? _playerConfiguration;
+  Widget? _playerContent;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -160,6 +162,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       _retainedRegistry?.release(id);
     }
     _introScroll.dispose();
+    _infoVisible.dispose();
     super.dispose();
   }
 
@@ -267,8 +270,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
         WidthLayoutBuilder(
           builder: (context, width) {
             final wide = width >= 1000;
-            final showInfo = _infoVisible;
-            void toggleInfo() => setState(() => _infoVisible = !_infoVisible);
+            void toggleInfo() => _infoVisible.value = !_infoVisible.value;
             return PlaybackPageCommands(
               previousPart: () => _changePart(video, selected, -1),
               nextPart: () => _changePart(video, selected, 1),
@@ -287,10 +289,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
               child: Focus(
                 child: Builder(
                   builder: (context) {
-                    final playerContent = ColoredBox(
-                      color: Colors.black,
-                      child: widget.playerBuilder(context, video, selected),
-                    );
+                    final playerContent = _player(video, selected);
                     final content = Padding(
                       padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
                       child: Column(
@@ -462,90 +461,95 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                         ],
                       ),
                     );
-                    final detailsVisible =
-                        showInfo && (queue == null || !_queueExpanded);
-                    final infoTabs = WorkspaceActivity(
-                      active:
-                          detailsVisible && WorkspaceActivity.isActive(context),
-                      previewing:
-                          detailsVisible &&
-                          WorkspaceActivity.isVisible(context) &&
-                          !WorkspaceActivity.isActive(context),
-                      child: CommentDetailBuilder(
-                        target: switch (video.aid) {
-                          final String aid => CommentTarget(
-                            aid,
-                            CommentTargetType.video,
-                          ),
-                          null => null,
-                        },
-                        enabled: tab == 1,
-                        builder: (context, detailOpen) => PlaybackInfoTabs(
-                          key: ValueKey(video.summary.id),
-                          showNavigation: !detailOpen,
-                          value: tab,
-                          onChanged: (tab) => setState(() => _tab = tab),
-                          viewKey: const ValueKey('video-info-swipe'),
-                          labels: [
-                            const Text('简介'),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('评论'),
-                                const SizedBox(width: 4),
-                                Text(
-                                  compactCount(video.replyCount),
-                                  style: Theme.of(context).textTheme.labelSmall,
-                                ),
-                              ],
-                            ),
-                          ],
-                          trailing: widget.menuBuilder?.call(
-                            context,
-                            video,
-                            selected,
-                          ),
-                          pageBuilder: (context, tab, active) {
-                            if (tab == 0) {
-                              _introScroll.configure(
-                                context,
-                                active:
-                                    detailsVisible &&
-                                    active &&
-                                    WorkspaceActivity.isActive(context),
-                              );
-                            }
-                            return TickerMode(
-                              enabled: detailsVisible && active,
-                              child: tab == 0
-                                  ? CustomScrollView(
-                                      key: const ValueKey('video-intro-scroll'),
-                                      controller: _introScroll,
-                                      slivers: [
-                                        SliverToBoxAdapter(child: content),
-                                        SliverPadding(
-                                          padding: const EdgeInsets.fromLTRB(
-                                            12,
-                                            0,
-                                            12,
-                                            12,
-                                          ),
-                                          sliver: _RelatedVideosSliver(
-                                            id: widget.id,
-                                            onOpenVideo: widget.onOpenVideo,
-                                            onOpenUser: widget.onOpenUser,
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                                  : VideoCommentsPanel(
-                                      detail: video,
-                                      onLogin: widget.onLogin,
-                                      onOpenUser: widget.onOpenUser,
-                                    ),
-                            );
-                          },
+                    final detailsVisible = queue == null || !_queueExpanded;
+                    final tabs = CommentDetailBuilder(
+                      target: switch (video.aid) {
+                        final String aid => CommentTarget(
+                          aid,
+                          CommentTargetType.video,
                         ),
+                        null => null,
+                      },
+                      enabled: tab == 1,
+                      builder: (context, detailOpen) => PlaybackInfoTabs(
+                        key: ValueKey(video.summary.id),
+                        showNavigation: !detailOpen,
+                        value: tab,
+                        onChanged: (tab) => setState(() => _tab = tab),
+                        viewKey: const ValueKey('video-info-swipe'),
+                        labels: [
+                          const Text('简介'),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('评论'),
+                              const SizedBox(width: 4),
+                              Text(
+                                compactCount(video.replyCount),
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ],
+                          ),
+                        ],
+                        trailing: widget.menuBuilder?.call(
+                          context,
+                          video,
+                          selected,
+                        ),
+                        pageBuilder: (context, tab, active) {
+                          if (tab == 0) {
+                            _introScroll.configure(
+                              context,
+                              active:
+                                  detailsVisible &&
+                                  active &&
+                                  WorkspaceActivity.isActive(context),
+                            );
+                          }
+                          return TickerMode(
+                            enabled: detailsVisible && active,
+                            child: tab == 0
+                                ? CustomScrollView(
+                                    key: const ValueKey('video-intro-scroll'),
+                                    controller: _introScroll,
+                                    slivers: [
+                                      SliverToBoxAdapter(child: content),
+                                      SliverPadding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          12,
+                                          0,
+                                          12,
+                                          12,
+                                        ),
+                                        sliver: _RelatedVideosSliver(
+                                          id: widget.id,
+                                          onOpenVideo: widget.onOpenVideo,
+                                          onOpenUser: widget.onOpenUser,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : VideoCommentsPanel(
+                                    detail: video,
+                                    onLogin: widget.onLogin,
+                                    onOpenUser: widget.onOpenUser,
+                                  ),
+                          );
+                        },
+                      ),
+                    );
+                    // Resolve the enclosing layout's visibility here, below
+                    // PlaybackPageLayout, while reusing the tab content.
+                    final infoTabs = Builder(
+                      builder: (context) => WorkspaceActivity(
+                        active:
+                            detailsVisible &&
+                            WorkspaceActivity.isActive(context),
+                        previewing:
+                            detailsVisible &&
+                            WorkspaceActivity.isVisible(context) &&
+                            !WorkspaceActivity.isActive(context),
+                        child: tabs,
                       ),
                     );
                     final info = Material(
@@ -593,27 +597,33 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                       builder: (context, constraints, listening) =>
                           PlaybackVideoDimensions(
                             builder: (context, dimensions) =>
-                                PlaybackPageLayout(
-                                  minimumInfoHeight: 480,
-                                  wide: wide,
-                                  showInfo: showInfo,
-                                  listening: listening,
-                                  dimensions: dimensions,
-                                  collapsedHeight:
-                                      listening &&
-                                          constraints.maxHeight.isFinite
-                                      ? PlaybackLayoutBuilder.listeningHeight(
-                                          constraints.maxHeight,
-                                        )
-                                      : constraints.maxWidth * 9 / 16,
-                                  contentKey: video.summary.id,
-                                  player: KeyedSubtree(
-                                    key: _playerKey,
-                                    child: playerContent,
-                                  ),
-                                  info: info,
-                                  toggleInfo: toggleInfo,
-                                  toggleTooltip: showInfo ? '收起视频信息' : '展开视频信息',
+                                ValueListenableBuilder<bool>(
+                                  valueListenable: _infoVisible,
+                                  builder: (context, showInfo, _) =>
+                                      PlaybackPageLayout(
+                                        minimumInfoHeight: 480,
+                                        wide: wide,
+                                        showInfo: showInfo,
+                                        listening: listening,
+                                        dimensions: dimensions,
+                                        collapsedHeight:
+                                            listening &&
+                                                constraints.maxHeight.isFinite
+                                            ? PlaybackLayoutBuilder.listeningHeight(
+                                                constraints.maxHeight,
+                                              )
+                                            : constraints.maxWidth * 9 / 16,
+                                        contentKey: video.summary.id,
+                                        player: KeyedSubtree(
+                                          key: _playerKey,
+                                          child: playerContent,
+                                        ),
+                                        info: info,
+                                        toggleInfo: toggleInfo,
+                                        toggleTooltip: showInfo
+                                            ? '收起视频信息'
+                                            : '展开视频信息',
+                                      ),
                                 ),
                           ),
                     );
@@ -631,6 +641,20 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _player(VideoDetail video, VideoPart part) {
+    final builder = widget.playerBuilder;
+    final configuration = (video, part, builder);
+    final cached = _playerContent;
+    if (_playerConfiguration == configuration && cached != null) return cached;
+    _playerConfiguration = configuration;
+    // Inherited settings/theme dependencies belong to the player's own
+    // element, so cached content still receives those updates.
+    return _playerContent = ColoredBox(
+      color: Colors.black,
+      child: Builder(builder: (context) => builder(context, video, part)),
     );
   }
 
