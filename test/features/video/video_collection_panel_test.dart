@@ -16,36 +16,41 @@ VideoPart _part(int number) => VideoPart(
   duration: const Duration(minutes: 1),
 );
 
-VideoDetail _video({int current = 40, bool unknownParts = false}) =>
-    VideoDetail(
-      summary: VideoSummary(
-        id: VideoId('BV${current.toString().padLeft(10, '0')}'),
-        title: '当前视频',
-        coverUrl: '',
-        author: 'UP',
-        duration: const Duration(minutes: 10),
+VideoDetail _video({
+  int current = 40,
+  int count = 80,
+  int partCount = 12,
+  bool unknownParts = false,
+}) => VideoDetail(
+  summary: VideoSummary(
+    id: VideoId('BV${current.toString().padLeft(10, '0')}'),
+    title: '当前视频',
+    coverUrl: '',
+    author: 'UP',
+    duration: const Duration(minutes: 10),
+  ),
+  description: '',
+  parts: List.generate(partCount, (index) => _part(index + 1)),
+  collection: VideoCollection(
+    id: '1',
+    title: '测试合集',
+    entries: List.generate(
+      count,
+      (index) => VideoCollectionEntry(
+        id: VideoId('BV${index.toString().padLeft(10, '0')}'),
+        title: '合集视频 $index',
+        parts: unknownParts && index == 0 ? const [] : [_part(1), _part(2)],
       ),
-      description: '',
-      parts: List.generate(12, (index) => _part(index + 1)),
-      collection: VideoCollection(
-        id: '1',
-        title: '测试合集',
-        entries: List.generate(
-          80,
-          (index) => VideoCollectionEntry(
-            id: VideoId('BV${index.toString().padLeft(10, '0')}'),
-            title: '合集视频 $index',
-            parts: unknownParts && index == 0 ? const [] : [_part(1), _part(2)],
-          ),
-        ),
-      ),
-    );
+    ),
+  ),
+);
 
 Future<void> _pump(
   WidgetTester tester,
   VideoDetail video, {
   double width = 356,
   double textScale = 1,
+  int selectedPart = 9,
   Future<VideoDetail>? pendingDetail,
   VoidCallback? onTogglePlaybackOrder,
 }) async {
@@ -69,7 +74,7 @@ Future<void> _pump(
                 child: StatefulBuilder(
                   builder: (_, update) => VideoCollectionPanel(
                     video: video,
-                    selected: video.parts[9],
+                    selected: video.parts[selectedPart],
                     onSelectPart: (_) {},
                     onTogglePlaybackOrder: onTogglePlaybackOrder,
                     displayReversed: displayReversed,
@@ -109,6 +114,49 @@ void _expectVisible(WidgetTester tester, String title) {
 }
 
 void main() {
+  for (final reversed in [false, true]) {
+    testWidgets('978 videos remain reachable with reversed=$reversed', (
+      tester,
+    ) async {
+      final video = _video(current: 605, count: 978, partCount: 1);
+      await _pump(tester, video, selectedPart: 0);
+      expect(find.text('(606/978)'), findsOneWidget);
+      _expectVisible(tester, '合集视频 605');
+      if (reversed) await _tap(tester, '倒序');
+      _expectVisible(tester, '合集视频 605');
+
+      final controller = _controller(tester);
+      final list = tester.widget<ListView>(find.byType(ListView));
+      expect(
+        controller.position.maxScrollExtent,
+        closeTo(
+          978 * list.itemExtent! +
+              4 -
+              tester.getSize(find.byType(ListView)).height,
+          0.01,
+        ),
+      );
+      await _tap(tester, '跳至顶部');
+      _expectVisible(tester, '合集视频 ${reversed ? 977 : 0}');
+      await tester.scrollUntilVisible(
+        find.text('合集视频 605'),
+        180,
+        scrollable: find.descendant(
+          of: find.byType(VideoCollectionPanel),
+          matching: find.byType(Scrollable),
+        ),
+        maxScrolls: 160,
+      );
+      await tester.pumpAndSettle();
+      _expectVisible(tester, '合集视频 605');
+      await _tap(tester, '跳至底部');
+      _expectVisible(tester, '合集视频 ${reversed ? 0 : 977}');
+      await _tap(tester, '跳至当前');
+      _expectVisible(tester, '合集视频 605');
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final reversed in [false, true]) {
     testWidgets('collection jumps respect display reversed=$reversed', (
       tester,

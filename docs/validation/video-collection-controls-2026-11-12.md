@@ -30,3 +30,22 @@
 - 未构建安装包，未执行 Android、Windows 或 macOS 实机验收和性能测量。当前没有运行中的 Flutter 调试应用，热重载未能执行；本次未修改原生媒体实现。
 
 主要实现：[合集卡片](../../lib/features/video/presentation/video_collection_panel.dart)、[视频页面](../../lib/features/video/presentation/video_screen.dart)、[播放顺序](../../lib/features/video/domain/video_playback_sequence.dart)。测试见[合集组件](../../test/features/video/video_collection_panel_test.dart)和[连续播放](../../test/features/playback/continuous_playback_test.dart)。
+
+## 长合集截断修复（2026-11-14）
+
+问题视频：[BV1Sc411U7m6](https://www.bilibili.com/video/BV1Sc411U7m6)。当日游客只读请求 `GET https://api.bilibili.com/x/web-interface/view?bvid=BV1Sc411U7m6` 返回合集 `8762233`「私人致享」，`ep_count=978`，一个分组内直接返回全部 978 个视频，当前视频位于第 606 项。该响应已经包含完整合集，不需要另外补分页。
+
+根因在 `bili_api` 的 `_collection`：每组最多读取 500 项，合集累计也只保留前 500 个视频，因此当前视频未进入领域模型，列表总数显示成 500、手动滚动止于第 500 项，“跳至当前”和合集续播也因找不到当前身份失效。不是固定行高列表的滚动范围计算问题。
+
+修复移除这两处 500 项截断和分组的 50 项截断，按接口顺序读取全部分组／视频，继续按 BV 号去重并生成不可变 API 列表。保留现有 HTTP transport 的 4 MiB 响应上限及协议错误处理；界面仍使用固定行高懒加载和 224 逻辑像素视口，未引入额外列表请求或依赖。
+
+验证：
+
+- 新增 3 项协议回归：978 项分别放在单组、跨组和超过 50 个分组的响应内，覆盖第 606 项、完整顺序、跨组去重、分 P 身份、最后一项、不可变性和仅请求一次。修复前三项均复现只保留 500 项，修复后通过；`video_extras_test.dart` 共 21 项通过。
+- 新增 2 项组件回归：978 项、第 606 项为当前视频，覆盖初始自动定位、正确总数和完整滚动范围、手动滑动到当前项、顶部／底部／当前定位，以及正序／倒序显示。合集、视频页和连续播放三组定向测试共 131 项通过。
+- 修复后的实际 `BiliApiClient` 游客请求解析到 978 项，当前序号 606，合集内当前分 P 的 cid 与视频详情一致；首尾分别为 `BV1BFZLBDEGP`、`BV1JD4y1L7WV`。未调用账号写接口。
+- 执行 `tool/check.ps1 -SkipPub`：格式、静态分析和打包边界检查通过；根应用 5,329 项通过、13 项跳过，`video_screen_test.dart` 的侧栏重建计数和 `playback_page_layout_test.dart` 的隐藏侧栏活动状态两项失败，导致整次命令未通过。检查期间工作区出现同期播放页／侧栏及对应测试修改；随后单独复跑这两个测试文件，86 项全部通过。本次未修改或提交这组同期文件，也未将首次全量结果记为通过。
+- 另执行 `tool/check.ps1 -SkipPub -Stage PackageTests` 通过：`bili_api` 920 项、`bili_player` 238 项、`bili_danmaku` 161 项、`bili_mux` 5 项通过；`bili_player` 3 项按现有条件跳过。未设置 `BILI_MUX_LIBRARY`，`bili_mux` 10 项原生用例跳过，不算原生集成通过。文档相对路径及 `git diff --check` 通过。
+- 按用户要求不构建安装包、不执行实机或性能验收；目前无运行中的 Flutter 调试应用，未执行热重载。后续由用户自行构建及实机确认。
+
+协议回归见 [video_extras_test.dart](../../packages/bili_api/test/video_extras_test.dart)。
