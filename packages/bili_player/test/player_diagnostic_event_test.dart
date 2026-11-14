@@ -4,6 +4,99 @@ import 'package:bili_player/bili_player.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('video bitstream errors enter stall checking and keep only fixed subcategories', () {
+    for (final (message, detail) in [
+      (
+        'Invalid NAL unit size 999 https://cdn/?token=SECRET',
+        NativeErrorDetail.invalidBitstream,
+      ),
+      (
+        'Reference picture missing during reorder',
+        NativeErrorDetail.missingReference,
+      ),
+      ('Packet corrupt (stream = 0)', NativeErrorDetail.corruptPacket),
+      ('Non-monotonous DTS in output stream', NativeErrorDetail.timestamp),
+      ('Error decoding video frame', NativeErrorDetail.decoderFailure),
+      ('Unrecognized native decoder message', NativeErrorDetail.unknown),
+    ]) {
+      final summary = NativeErrorSummary.classify(
+        message,
+        prefix: 'ffmpeg/video',
+      );
+      expect(summary.isVideoDecodeError, true);
+      expect(summary.detail, detail);
+      expect(summary.cause, NativeErrorCause.decoder);
+      expect(
+        jsonEncode(
+          PlayerDiagnosticEvent(
+            kind: PlayerDiagnosticKind.nativeLog,
+            snapshot: const PlaybackSnapshot(
+              phase: PlaybackPhase.playing,
+              generation: 1,
+            ),
+            nativeError: summary,
+          ).toJson(),
+        ),
+        isNot(contains('SECRET')),
+      );
+    }
+    expect(
+      NativeErrorSummary.classify(
+        'HTTP error 403',
+        prefix: 'ffmpeg/video',
+      ).isVideoDecodeError,
+      false,
+    );
+  });
+  test(
+    'hardware advice and desync hints are not hardware decoder failures',
+    () {
+      for (final message in [
+        'Consider trying --profile=fast and/or --hwdec=auto as they may help.',
+        'Audio/Video desynchronisation detected! Possible reasons include too slow hardware.',
+        'hardware, temporary CPU spikes, broken drivers, and broken files.',
+      ]) {
+        expect(
+          NativeErrorSummary.classify(message, prefix: 'cplayer').cause,
+          isNot(NativeErrorCause.hardwareDecoder),
+        );
+      }
+      expect(
+        NativeErrorSummary.classify(
+          'Failed D3D11 hardware decoder',
+          prefix: 'vd',
+        ).isVideoDecodeError,
+        true,
+      );
+    },
+  );
+  test('enrichment preserves capture identity, timing and sanitized state', () {
+    final event = PlayerDiagnosticEvent(
+      kind: PlayerDiagnosticKind.nativeState,
+      snapshot: const PlaybackSnapshot(
+        phase: PlaybackPhase.buffering,
+        generation: 3,
+      ),
+      bufferingDuration: const Duration(seconds: 2),
+      nativeState: const NativePlaybackState(
+        coreIdle: true,
+        pausedForCache: false,
+        hardwareDecoder: 'SECRET',
+        videoCodec: 'https://private/?token=SECRET',
+      ),
+    );
+    final first = event.withContext(
+      playerId: 7,
+      sourceKind: DiagnosticSourceKind.liveManifest,
+    );
+    final second = event.withContext(playerId: 8);
+    expect(first.timestamp, event.timestamp);
+    expect(first.toJson()['playerId'], 7);
+    expect(second.toJson()['playerId'], 8);
+    expect(first.toJson()['sourceKind'], 'liveManifest');
+    expect(first.toJson()['bufferingDurationMs'], 2000);
+    expect(jsonEncode(first.toJson()), isNot(contains('SECRET')));
+  });
   test('stall diagnostics record safe clocks and the detection deadline', () {
     final json = PlayerDiagnosticEvent(
       kind: PlayerDiagnosticKind.playbackStalled,

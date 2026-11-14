@@ -10173,7 +10173,7 @@ void main() {
           expect(controls, controlsVisible ? findsOneWidget : findsNothing);
           final message = find.text('正在恢复播放…');
           void expectLoading({bool buffering = false}) {
-            final hint = buffering ? find.text('网络缓冲中…') : message;
+            final hint = buffering ? find.text('播放缓冲中…') : message;
             expect(hint, findsOneWidget);
             final centered = find
                 .ancestor(
@@ -10227,7 +10227,7 @@ void main() {
             ),
           );
           await tester.pump();
-          expect(find.text('网络缓冲中…'), findsNothing);
+          expect(find.text('播放缓冲中…'), findsNothing);
           await tester.pump(const Duration(milliseconds: 300));
           expectLoading(buffering: true);
           engine._emit(
@@ -10237,7 +10237,7 @@ void main() {
             ),
           );
           await tester.pump();
-          expect(find.text('网络缓冲中…'), findsNothing);
+          expect(find.text('播放缓冲中…'), findsNothing);
           expect(message, findsNothing);
 
           // The first automatic reload succeeds immediately. The next failure
@@ -10373,7 +10373,7 @@ void main() {
       );
       await _pumpFrames(tester);
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('网络缓冲中…'), findsOneWidget);
+      expect(find.text('播放缓冲中…'), findsOneWidget);
 
       // Completion takes precedence even if a backend retains its last flag.
       engine._emit(
@@ -10384,14 +10384,14 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
-      expect(find.text('网络缓冲中…'), findsNothing);
+      expect(find.text('播放缓冲中…'), findsNothing);
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.byTooltip('播放（空格）'), findsOneWidget);
 
       // A later position sample must not bring the completion spinner back.
       engine._emit(engine.currentSnapshot);
       await tester.pump(const Duration(seconds: 1));
-      expect(find.text('网络缓冲中…'), findsNothing);
+      expect(find.text('播放缓冲中…'), findsNothing);
 
       engine._emit(
         engine.currentSnapshot.copyWith(
@@ -10402,7 +10402,7 @@ void main() {
       );
       await _pumpFrames(tester);
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('网络缓冲中…'), findsOneWidget);
+      expect(find.text('播放缓冲中…'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

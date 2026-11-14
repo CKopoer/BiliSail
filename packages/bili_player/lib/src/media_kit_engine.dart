@@ -13,6 +13,7 @@ void initializePlayerBackend() => mk.MediaKit.ensureInitialized();
 
 /// Fixed mpv entrypoint. Playback decisions live in SharedPlayerEngine.
 final class MediaKitEngine extends SharedPlayerEngine {
+  static int _nextDiagnosticId = 0;
   factory MediaKitEngine({
     void Function(PlayerDiagnosticEvent)? onDiagnostic,
     bool? experimentalVideoFrameQueue,
@@ -32,32 +33,39 @@ final class MediaKitEngine extends SharedPlayerEngine {
       enabledOverride: experimentalVideoFrameQueue,
     );
     late final MediaKitEngine engine;
+    final diagnosticId = ++_nextDiagnosticId;
+    void report(PlayerDiagnosticEvent event) {
+      onDiagnostic?.call(
+        event.withContext(
+          playerId: diagnosticId,
+          diagnostics: event.kind == PlayerDiagnosticKind.openStarted
+              ? null
+              : engine.inspectDiagnostics(),
+          readinessStage: event.kind == PlayerDiagnosticKind.openStarted
+              ? null
+              : engine._native?.readinessStage,
+          sourceKind: event.kind == PlayerDiagnosticKind.openStarted
+              ? null
+              : engine._native?.diagnosticSourceKind,
+        ),
+      );
+      if (event.kind == PlayerDiagnosticKind.openReady) {
+        engine._native?.captureReadyDiagnostics();
+      }
+    }
+
     engine = MediaKitEngine._(
       idleVideoOutput: MediaKitVideoOutput(
         limitAndroidOutputToViewport: experimentalAndroidViewport,
       ),
       createBackend: () => MediaKitBackend(
         snapshot: () => engine.currentSnapshot,
-        onDiagnostic: onDiagnostic,
+        onDiagnostic: onDiagnostic == null ? null : report,
         experimentalVideoFrameQueue: queue,
         experimentalAndroidViewport: experimentalAndroidViewport,
         experimentalAudioAutosync: experimentalAudioAutosync,
       ),
-      onDiagnostic: (event) => onDiagnostic?.call(
-        PlayerDiagnosticEvent(
-          kind: event.kind,
-          snapshot: event.snapshot,
-          readinessStage: engine._native?.readinessStage,
-          diagnostics: engine.inspectDiagnostics(),
-          nativeError: event.nativeError,
-          failureKind: event.failureKind,
-          severity: event.severity,
-          nativeErrorCode: event.nativeErrorCode,
-          stallReason: event.stallReason,
-          stalledFor: event.stalledFor,
-          audioPosition: event.audioPosition,
-        ),
-      ),
+      onDiagnostic: onDiagnostic == null ? null : report,
       experimentalVideoFrameQueue: queue,
       experimentalAudioAutosync: experimentalAudioAutosync,
     );

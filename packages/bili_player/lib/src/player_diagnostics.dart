@@ -58,6 +58,9 @@ enum PlayerDiagnosticKind {
   nativeError,
   recovered,
   failed,
+  bufferingStarted,
+  bufferingEnded,
+  nativeState,
 }
 
 enum NativeErrorCause {
@@ -76,7 +79,34 @@ enum NativeErrorCause {
 
 enum NativeLogSeverity { warning, error, fatal }
 
-enum PlaybackStallReason { playbackClock, audioClock, videoBuffer, videoClock }
+enum PlaybackStallReason {
+  playbackClock,
+  audioClock,
+  videoBuffer,
+  videoClock,
+  repeatedDecoderBuffering,
+}
+
+enum NativeErrorDetail {
+  invalidBitstream,
+  missingReference,
+  timestamp,
+  corruptPacket,
+  prematureRead,
+  segmentRead,
+  avDesync,
+  hardwareAdvice,
+  decoderFailure,
+  unknown,
+}
+
+enum DiagnosticSourceKind {
+  dash,
+  preview,
+  liveManifest,
+  liveProgressive,
+  other,
+}
 
 /// The bounded source-open step, without media URLs or native log text.
 enum NativeReadinessStage { tracks, externalAudio, videoDecode, videoOutput }
@@ -88,6 +118,7 @@ final class NativeErrorSummary {
     this.cause, {
     this.httpStatus,
     this.component = 'other',
+    this.detail = NativeErrorDetail.unknown,
   });
 
   factory NativeErrorSummary.classify(String text, {String prefix = 'other'}) {
@@ -115,6 +146,47 @@ final class NativeErrorSummary {
       r'\b(?:http(?: error)?|server returned)\s*:?\s*([45]\d{2})\b',
     ).firstMatch(value);
     final status = match == null ? null : int.tryParse(match.group(1) ?? '');
+    final detail = switch (value) {
+      _ when value.contains('consider trying') && value.contains('hwdec') =>
+        NativeErrorDetail.hardwareAdvice,
+      _ when value.contains('audio/video desynchronisation') =>
+        NativeErrorDetail.avDesync,
+      _
+          when value.contains('reference picture') ||
+              value.contains('missing reference') ||
+              value.contains('non-existing pps') ||
+              value.contains('pps id out of range') =>
+        NativeErrorDetail.missingReference,
+      _
+          when value.contains('nal unit') ||
+              value.contains('slice_header') ||
+              value.contains('invalid bitstream') ||
+              value.contains('error splitting') =>
+        NativeErrorDetail.invalidBitstream,
+      _
+          when value.contains('packet corrupt') ||
+              value.contains('corrupt input packet') =>
+        NativeErrorDetail.corruptPacket,
+      _
+          when value.contains('timestamp') ||
+              value.contains('pts') ||
+              value.contains('non-monoton') ||
+              value.contains('dts') =>
+        NativeErrorDetail.timestamp,
+      _
+          when value.contains('stream ends prematurely') ||
+              value.contains('partial file') =>
+        NativeErrorDetail.prematureRead,
+      _
+          when value.contains('failed to open segment') ||
+              value.contains('failed to reload playlist') =>
+        NativeErrorDetail.segmentRead,
+      _
+          when value.contains('error decoding') ||
+              value.contains('failed to decode') =>
+        NativeErrorDetail.decoderFailure,
+      _ => NativeErrorDetail.unknown,
+    };
     final cause = switch (value) {
       _ when status != null => NativeErrorCause.http,
       _ when value.contains('timed out') || value.contains('timeout') =>
@@ -130,16 +202,25 @@ final class NativeErrorSummary {
               value.contains('resolve') =>
         NativeErrorCause.connection,
       _
-          when value.contains('hwdec') ||
-              value.contains('hardware') ||
-              value.contains('d3d11') ||
-              value.contains('dxva') =>
+          when detail != NativeErrorDetail.hardwareAdvice &&
+              detail != NativeErrorDetail.avDesync &&
+              (value.contains('failed') ||
+                  value.contains('error') ||
+                  value.contains('unavailable') ||
+                  value.contains('cannot') ||
+                  value.contains('could not')) &&
+              (value.contains('hwdec') ||
+                  value.contains('hardware') ||
+                  value.contains('d3d11') ||
+                  value.contains('dxva')) =>
         NativeErrorCause.hardwareDecoder,
       _
           when value.contains('decode') ||
               value.contains('decoding') ||
               prefix == 'vd' ||
-              prefix == 'ad' =>
+              prefix == 'ad' ||
+              component == 'ffmpeg/video' ||
+              component == 'ffmpeg/audio' =>
         NativeErrorCause.decoder,
       _ when value.contains('property not found') =>
         NativeErrorCause.unsupportedProperty,
@@ -154,12 +235,25 @@ final class NativeErrorSummary {
         NativeErrorCause.inputOutput,
       _ => NativeErrorCause.unknown,
     };
-    return NativeErrorSummary(cause, httpStatus: status, component: component);
+    return NativeErrorSummary(
+      cause,
+      httpStatus: status,
+      component: component,
+      detail: detail,
+    );
   }
 
   final NativeErrorCause cause;
   final int? httpStatus;
   final String component;
+  final NativeErrorDetail detail;
+
+  bool get isVideoDecodeError =>
+      const {'vd', 'ffmpeg/video'}.contains(component) &&
+      const {
+        NativeErrorCause.decoder,
+        NativeErrorCause.hardwareDecoder,
+      }.contains(cause);
 }
 
 final class PlayerDiagnosticEvent {
@@ -175,7 +269,12 @@ final class PlayerDiagnosticEvent {
     this.stallReason,
     this.stalledFor,
     this.audioPosition,
-  }) : timestamp = DateTime.now().toUtc();
+    this.playerId,
+    this.sourceKind,
+    this.bufferingDuration,
+    this.nativeState,
+    DateTime? timestamp,
+  }) : timestamp = timestamp ?? DateTime.now().toUtc();
 
   final DateTime timestamp;
   final PlayerDiagnosticKind kind;
@@ -189,11 +288,43 @@ final class PlayerDiagnosticEvent {
   final PlaybackStallReason? stallReason;
   final Duration? stalledFor;
   final Duration? audioPosition;
+  final int? playerId;
+  final DiagnosticSourceKind? sourceKind;
+  final Duration? bufferingDuration;
+  final NativePlaybackState? nativeState;
+
+  PlayerDiagnosticEvent withContext({
+    required int playerId,
+    PlayerDiagnostics? diagnostics,
+    NativeReadinessStage? readinessStage,
+    DiagnosticSourceKind? sourceKind,
+  }) => PlayerDiagnosticEvent(
+    kind: kind,
+    snapshot: snapshot,
+    nativeError: nativeError,
+    failureKind: failureKind,
+    severity: severity,
+    nativeErrorCode: nativeErrorCode,
+    readinessStage: this.readinessStage ?? readinessStage,
+    diagnostics: this.diagnostics ?? diagnostics,
+    stallReason: stallReason,
+    stalledFor: stalledFor,
+    audioPosition: audioPosition,
+    playerId: playerId,
+    sourceKind: this.sourceKind ?? sourceKind,
+    bufferingDuration: bufferingDuration,
+    nativeState: nativeState,
+    timestamp: timestamp,
+  );
 
   Map<String, Object?> toJson() => {
     'time': timestamp.toIso8601String(),
     'event': kind.name,
     'generation': snapshot.generation,
+    'playerId': ?playerId,
+    'sourceKind': ?sourceKind?.name,
+    'bufferingDurationMs': ?bufferingDuration?.inMilliseconds,
+    'bufferAheadMs': (snapshot.buffered - snapshot.position).inMilliseconds,
     'phase': snapshot.phase.name,
     'positionMs': snapshot.position.inMilliseconds,
     'durationMs': snapshot.duration.inMilliseconds,
@@ -212,12 +343,102 @@ final class PlayerDiagnosticEvent {
       'hasDecodedVideo': media.hasDecodedVideo,
       'hasDecodedAudio': media.hasDecodedAudio,
       'hasVideoOutput': media.hasVideoOutput,
+      'videoWidth': ?media.videoWidth,
+      'videoHeight': ?media.videoHeight,
     },
     if (nativeError case final error?) ...{
       'component': error.component,
       'cause': error.cause.name,
+      'detail': error.detail.name,
       'httpStatus': ?error.httpStatus,
     },
     if (failureKind case final failure?) 'failure': failure.name,
+    if (nativeState case final state?) 'nativeState': state.toJson(),
+  };
+}
+
+/// Allowlisted scalars only; raw property values and native messages are discarded.
+final class NativePlaybackState {
+  static const hardwareDecoders = {
+    'no',
+    'd3d11va',
+    'd3d11va-copy',
+    'dxva2',
+    'dxva2-copy',
+    'mediacodec',
+    'mediacodec-copy',
+    'videotoolbox',
+    'videotoolbox-copy',
+    'vaapi',
+    'vaapi-copy',
+    'nvdec',
+    'nvdec-copy',
+    'vdpau',
+    'drm',
+    'vulkan',
+  };
+  static const videoCodecs = {
+    'h264',
+    'hevc',
+    'av1',
+    'vp8',
+    'vp9',
+    'mpeg2video',
+    'mpeg4',
+  };
+  static const audioCodecs = {
+    'aac',
+    'mp3',
+    'flac',
+    'eac3',
+    'ac3',
+    'opus',
+    'vorbis',
+    'alac',
+    'pcm_s16le',
+  };
+  const NativePlaybackState({
+    this.coreIdle,
+    this.pausedForCache,
+    this.cacheReading,
+    this.cacheEof,
+    this.cacheBytes,
+    this.cacheSpeed,
+    this.cacheDurationMs,
+    this.audioPositionMs,
+    this.nativePositionMs,
+    this.avSyncMs,
+    this.frameDrops,
+    this.decoderDrops,
+    this.hardwareDecoder,
+    this.videoCodec,
+    this.audioCodec,
+  });
+  final bool? coreIdle, pausedForCache, cacheReading, cacheEof;
+  final int? cacheBytes, cacheSpeed, cacheDurationMs;
+  final int? audioPositionMs,
+      nativePositionMs,
+      avSyncMs,
+      frameDrops,
+      decoderDrops;
+  final String? hardwareDecoder, videoCodec, audioCodec;
+
+  Map<String, Object?> toJson() => {
+    'coreIdle': ?coreIdle,
+    'pausedForCache': ?pausedForCache,
+    'cacheReading': ?cacheReading,
+    'cacheEof': ?cacheEof,
+    'cacheBytes': ?cacheBytes,
+    'cacheSpeedBytesPerSecond': ?cacheSpeed,
+    'cacheDurationMs': ?cacheDurationMs,
+    'audioPositionMs': ?audioPositionMs,
+    'nativePositionMs': ?nativePositionMs,
+    'avSyncMs': ?avSyncMs,
+    'frameDrops': ?frameDrops,
+    'decoderDrops': ?decoderDrops,
+    if (hardwareDecoders.contains(hardwareDecoder))
+      'hardwareDecoder': hardwareDecoder,
+    if (videoCodecs.contains(videoCodec)) 'videoCodec': videoCodec,
+    if (audioCodecs.contains(audioCodec)) 'audioCodec': audioCodec,
   };
 }

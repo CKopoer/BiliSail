@@ -358,7 +358,7 @@ Future<void> _runBuffering(
     expect(engine.currentSnapshot.isBuffering, true);
     expect(engine.currentSnapshot.position, greaterThan(Duration.zero));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('网络缓冲中…'), findsOneWidget);
+    expect(find.text('播放缓冲中…'), findsOneWidget);
     final surfaceState = tester.state(find.byType(VideoSurface));
     final textureId = tester.widget<Texture>(find.byType(Texture)).textureId;
     final generation = engine.currentSnapshot.generation;
@@ -439,7 +439,7 @@ Future<void> _runBuffering(
     );
     expect(failures, isEmpty);
     expect(engine.currentSnapshot.generation, generation);
-    expect(find.text('网络缓冲中…'), findsNothing);
+    expect(find.text('播放缓冲中…'), findsNothing);
     expect(await readFrame(), isNot(orderedEquals(heldFrame)));
     debugPrint(
       'TEMPORARY_VIDEO_BUFFER waitedAtMs=${waitingAt.inMilliseconds} '

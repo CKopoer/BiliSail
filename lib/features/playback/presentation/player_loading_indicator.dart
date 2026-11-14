@@ -77,7 +77,7 @@ class _PlayerLoadingIndicatorState extends State<PlayerLoadingIndicator> {
                   ? '正在恢复播放…'
                   : widget.preparing
                   ? '正在准备音视频…'
-                  : '网络缓冲中…',
+                  : '播放缓冲中…',
               style: const TextStyle(color: Colors.white70, fontSize: 13),
             ),
           ],

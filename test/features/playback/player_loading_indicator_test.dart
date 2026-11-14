@@ -45,7 +45,8 @@ void main() {
   ) async {
     await tester.pumpWidget(indicator(buffering: true));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('网络缓冲中…'), findsOneWidget);
+    expect(find.text('播放缓冲中…'), findsOneWidget);
+    expect(find.text('网络缓冲中…'), findsNothing);
     expect(find.text('正在准备音视频…'), findsNothing);
     await tester.pumpWidget(indicator());
     expect(find.byType(CircularProgressIndicator), findsNothing);

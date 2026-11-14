@@ -100,6 +100,7 @@ final class BackendEvent {
     this.value,
     this.failureKind = PlayerFailureKind.nativePlayback,
     this.stallReason,
+    this.videoDecodeError = false,
   });
   final BackendEventKind kind;
   final Duration? position, duration, buffered;
@@ -107,6 +108,7 @@ final class BackendEvent {
   final bool? value;
   final PlayerFailureKind failureKind;
   final PlaybackStallReason? stallReason;
+  final bool videoDecodeError;
 }
 
 /// A backend may retain its native player after a fully settled source.

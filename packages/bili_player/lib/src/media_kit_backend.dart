@@ -15,6 +15,7 @@ import 'native_media_options.dart';
 import 'native_player_properties.dart';
 import 'native_error_monitor.dart';
 import 'native_audio_error_monitor.dart';
+import 'native_buffering_diagnostics.dart';
 import 'native_buffer_recovery.dart';
 import 'native_load_observer.dart';
 import 'native_audio_gain.dart';
@@ -77,6 +78,8 @@ final class MediaKitBackend
   Timer? _colorDeadline;
   NativeBufferRecovery? _bufferRecovery;
   NativeAudioErrorMonitor? _audioErrors;
+  NativeBufferingDiagnostics? _bufferDiagnostics;
+  DiagnosticSourceKind? diagnosticSourceKind;
   NativeReadinessStage? get readinessStage => _readinessStage;
   double get appliedAudioGainDb => _audioGain?.gainDb ?? 0;
   @override
@@ -97,6 +100,8 @@ final class MediaKitBackend
     PlayerFailureKind? failureKind,
     NativeLogSeverity? severity,
     int? nativeErrorCode,
+    PlaybackStallReason? stallReason,
+    Duration? stalledFor,
   }) => onDiagnostic?.call(
     PlayerDiagnosticEvent(
       kind: kind,
@@ -105,6 +110,8 @@ final class MediaKitBackend
       failureKind: failureKind,
       severity: severity,
       nativeErrorCode: nativeErrorCode,
+      stallReason: stallReason,
+      stalledFor: stalledFor,
       readinessStage: _readinessStage,
       // openStarted precedes releasing the previous native player.
       diagnostics: kind == PlayerDiagnosticKind.openStarted
@@ -491,6 +498,8 @@ final class MediaKitBackend
     PlaybackOperation operation,
   ) async {
     _preparation = operation;
+    _bufferDiagnostics?.dispose();
+    _bufferDiagnostics = null;
     _audioErrors?.dispose();
     _audioErrors = null;
     _bufferRecovery?.dispose();
@@ -498,6 +507,13 @@ final class MediaKitBackend
     _generation = operation.generation;
     final generation = _generation;
     final source = plan.source;
+    diagnosticSourceKind = switch (source) {
+      DashPairSource() => DiagnosticSourceKind.dash,
+      DashVideoSource() => DiagnosticSourceKind.preview,
+      ManifestSource(isLive: true) => DiagnosticSourceKind.liveManifest,
+      ProgressiveSource(isLive: true) => DiagnosticSourceKind.liveProgressive,
+      _ => DiagnosticSourceKind.other,
+    };
     final options = plan.options;
     final video = plan.media;
     final audio = plan.audio;
@@ -977,13 +993,27 @@ final class MediaKitBackend
 
   void _subscribe(mk.Player player, int generation) {
     bool active() =>
-        !_disposed && generation == _generation && identical(player, _player);
+        !_disposed &&
+        generation == _generation &&
+        snapshot().generation == generation &&
+        identical(player, _player);
     void event(BackendEvent value) {
       if (active()) {
         _emit(value);
         _bufferRecovery?.update();
         _audioErrors?.update();
       }
+    }
+
+    final sampler = NativePlaybackSampler(player.getPropertyAsync);
+    if (onDiagnostic != null) {
+      _bufferDiagnostics = NativeBufferingDiagnostics(
+        sampler: sampler,
+        read: player.getPropertyAsync,
+        snapshot: snapshot,
+        isCurrent: active,
+        emit: (event) => onDiagnostic?.call(event),
+      );
     }
 
     _subscriptions.addAll([
@@ -1005,10 +1035,11 @@ final class MediaKitBackend
         (value) =>
             event(BackendEvent(BackendEventKind.sample, buffered: value)),
       ),
-      player.stream.buffering.listen(
-        (value) =>
-            event(BackendEvent(BackendEventKind.buffering, value: value)),
-      ),
+      player.stream.buffering.listen((value) {
+        if (!active()) return;
+        event(BackendEvent(BackendEventKind.buffering, value: value));
+        _bufferDiagnostics?.bufferingChanged(value);
+      }),
       player.stream.playing.listen(
         (value) => event(BackendEvent(BackendEventKind.playing, value: value)),
       ),
@@ -1058,6 +1089,21 @@ final class MediaKitBackend
             nativeError: summary,
           );
           _audioErrors?.report(summary, severity);
+          if (summary.isVideoDecodeError &&
+              severity != NativeLogSeverity.warning) {
+            // FFmpeg video errors are absent from media_kit's error stream.
+            // Arm the existing progress/deadline checks, not an immediate reopen.
+            event(
+              const BackendEvent(
+                BackendEventKind.warning,
+                videoDecodeError: true,
+              ),
+            );
+          }
+          if (severity != NativeLogSeverity.warning ||
+              summary.detail == NativeErrorDetail.avDesync) {
+            _bufferDiagnostics?.capture();
+          }
           if (const {
             NativeErrorCause.http,
             NativeErrorCause.timeout,
@@ -1093,6 +1139,8 @@ final class MediaKitBackend
     await _player!.play();
     _audioErrors?.update();
   }
+
+  void captureReadyDiagnostics() => _bufferDiagnostics?.sourceReady();
 
   @override
   Future<bool> pauseAndWait() async {
@@ -1145,6 +1193,8 @@ final class MediaKitBackend
 
   @override
   Future<void> resetForNextSource(PlaybackOperation operation) async {
+    _bufferDiagnostics?.dispose();
+    _bufferDiagnostics = null;
     _audioErrors?.dispose();
     _audioErrors = null;
     _bufferRecovery?.dispose();
@@ -1173,6 +1223,8 @@ final class MediaKitBackend
   @override
   Future<void> dispose() => _disposal ??= _dispose();
   Future<void> _dispose() async {
+    _bufferDiagnostics?.dispose();
+    _bufferDiagnostics = null;
     interrupt();
     _disposed = true;
     _colorDeadline?.cancel();

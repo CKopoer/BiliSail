@@ -57,6 +57,8 @@ void main() {
         events.any((event) => event.kind == PlayerDiagnosticKind.failed),
         isTrue,
       );
+      expect(events.every((event) => event.playerId != null), isTrue);
+      expect(events.map((event) => event.playerId).toSet(), hasLength(1));
       await log.flush();
       final files = await directory
           .list()
