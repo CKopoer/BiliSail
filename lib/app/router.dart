@@ -39,6 +39,8 @@ import '../features/playback/application/playback_session.dart';
 import '../features/playback/application/playback_manager.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/comments/application/comment_link_resolver.dart';
+import '../domain/content_link.dart';
+import '../shared/ui/content_link_scope.dart';
 import '../features/auth/presentation/account_button.dart';
 import '../features/auth/presentation/account_screen.dart';
 import '../features/feed/application/feed_controller.dart';
@@ -456,7 +458,23 @@ final class _WorkspacePage extends ConsumerWidget {
     onOpenTarget: (target) {
       final location = messageWorkspaceLocation(target);
       if (location != null) {
-        context.go(location);
+        final uri = Uri.parse(location);
+        final hasPosition =
+            uri.queryParameters.containsKey('comment_root_id') ||
+            uri.queryParameters.containsKey('start_progress');
+        context.go(
+          hasPosition
+              ? uri
+                    .replace(
+                      queryParameters: {
+                        ...uri.queryParameters,
+                        'message_request':
+                            '${DateTime.now().microsecondsSinceEpoch}',
+                      },
+                    )
+                    .toString()
+              : location,
+        );
       } else {
         ProviderScope.containerOf(
           context,
@@ -648,6 +666,7 @@ final class _WorkspacePage extends ConsumerWidget {
         : (false, null, null, 0);
     return Builder(
       builder: (context) => _PageCommandTarget(
+        link: ContentLink.fromUri(tab.location),
         commands: {
           if (!tab.isRoot &&
               !tab.isPgc &&
@@ -1043,7 +1062,12 @@ Widget _workspacePlayer(BuildContext context, Widget Function() build) =>
 
 /// Visibility updates only the input registration, not the page factory.
 class _PageCommandTarget extends StatelessWidget {
-  const _PageCommandTarget({required this.commands, required this.child});
+  const _PageCommandTarget({
+    required this.commands,
+    required this.child,
+    this.link = const ContentLink(),
+  });
+  final ContentLink link;
   final Map<Object, InputCommand> commands;
   final Widget child;
 
@@ -1053,6 +1077,6 @@ class _PageCommandTarget extends StatelessWidget {
     active: WorkspaceActivity.isActive(context),
     merge: const {ShortcutAction.refresh},
     commands: commands,
-    child: child,
+    child: ContentLinkScope(link: link, child: child),
   );
 }

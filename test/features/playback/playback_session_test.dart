@@ -34,6 +34,45 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'content link position overrides resume and seeks a retained owner once',
+    () async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress()..readValue = const Duration(seconds: 60),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      final owner = Object();
+      session.attach(owner);
+      await session.activate(
+        owner,
+        _detail('one'),
+        _part('one'),
+        position: const Duration(seconds: 12),
+      );
+      expect(
+        engine.openOptions.last.startPosition,
+        const Duration(seconds: 12),
+      );
+      await session.pause();
+      final opens = engine.openOptions.length;
+      await session.activate(
+        owner,
+        _detail('one'),
+        _part('one'),
+        position: const Duration(seconds: 24),
+      );
+      expect(engine.openOptions, hasLength(opens));
+      expect(engine.currentSnapshot.position, const Duration(seconds: 24));
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      await session.activate(owner, _detail('one'), _part('one'));
+      expect(engine.openOptions, hasLength(opens));
+      expect(engine.currentSnapshot.position, const Duration(seconds: 24));
+    },
+  );
   for (final action in [
     ShortcutAction.seekBack,
     ShortcutAction.seekForward,

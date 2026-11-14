@@ -15,6 +15,8 @@ import '../../../core/presentation/android_system_ui.dart';
 import '../../../core/presentation/mobile_playback_status_bar.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_navigation.dart';
+import '../../../shared/ui/content_link_scope.dart';
+import '../../../domain/content_link.dart';
 import '../../../shared/ui/width_layout_builder.dart';
 import '../../../shared/ui/app_dialog.dart';
 import '../../../shared/ui/danmaku_composer_draft.dart';
@@ -101,6 +103,14 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   Timer? _pipExitTimer;
   bool _fullScreenPresented = false;
   bool _active = false;
+  ContentLink? _contentLink;
+  Duration? _linkPosition;
+  Duration? _takeLinkPosition() {
+    final position = _linkPosition;
+    _linkPosition = null;
+    return position;
+  }
+
   bool _surfaceReady = false;
   Object? _activityRequest;
   _PlayerFullScreenRoute<void>? _fullScreenRoute;
@@ -175,8 +185,32 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       }
     });
     final active = WorkspaceActivity.isActive(context);
+    final link = ContentLinkScope.of(context);
+    final linkChanged = link != _contentLink;
+    if (linkChanged) {
+      _contentLink = link;
+      _linkPosition = link.position;
+    }
     if (active) widget.window.onMiniPlayerRequested = _requestMiniPlayer;
-    if (_active == active) return;
+    if (_active == active) {
+      if (active && linkChanged && _linkPosition != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _active && _contentLink == link) {
+            unawaited(
+              _session.activate(
+                this,
+                widget.detail,
+                widget.part,
+                target: widget.target,
+                title: widget.title,
+                position: _takeLinkPosition(),
+              ),
+            );
+          }
+        });
+      }
+      return;
+    }
     _active = active;
     _surfaceReady = false;
     final activityRequest = Object();
@@ -199,6 +233,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             target: widget.target,
             title: widget.title,
             visible: _active,
+            position: _takeLinkPosition(),
           ),
         );
         _pauseInBackground(WidgetsBinding.instance.lifecycleState);
@@ -301,6 +336,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             target: widget.target,
             title: widget.title,
             visible: _active,
+            position: _takeLinkPosition(),
           ),
         );
       }

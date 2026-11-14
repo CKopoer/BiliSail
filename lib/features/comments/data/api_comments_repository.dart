@@ -1,5 +1,7 @@
 import '../../../domain/user.dart';
 import '../../../domain/comment_target.dart';
+import '../../../domain/content_link.dart';
+import '../../../domain/app_failure.dart';
 
 import 'package:bili_api/bili_api.dart';
 
@@ -11,6 +13,7 @@ import '../domain/comment_composer.dart';
 final class ApiCommentsRepository
     implements
         CommentsRepository,
+        CommentLocationRepository,
         CommentEmotesRepository,
         CommentComposerRepository {
   ApiCommentsRepository(
@@ -138,6 +141,62 @@ final class ApiCommentsRepository
     ),
     cancellation: cancellation,
   );
+
+  @override
+  Future<LocatedCommentThread> locate(
+    String oid,
+    CommentLocation location,
+    RequestCancellation cancellation,
+  ) async {
+    // One lifetime spans every page, so account changes also cancel the search.
+    final untrack = requests.trackLifetime(cancellation);
+    try {
+      return await _locate(oid, location, cancellation).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          cancellation.cancel();
+          throw const AppFailure(AppFailureKind.timeout, '评论定位超时，请稍后重试');
+        },
+      );
+    } finally {
+      untrack();
+    }
+  }
+
+  Future<LocatedCommentThread> _locate(
+    String oid,
+    CommentLocation location,
+    RequestCancellation cancellation,
+  ) async {
+    final root = await requests.run(
+      (ctx) async => _entry(
+        await api.getVideoCommentRoot(
+          oid,
+          location.rootId,
+          commentType: type.value,
+          context: ctx,
+        ),
+      ),
+      cancellation: cancellation,
+    );
+    if (location.focusId == root.id) {
+      return LocatedCommentThread(
+        root: root,
+        page: const CommentPage(items: [], hasMore: true),
+        pageNumber: 0,
+      );
+    }
+    // Match the shared list's 500-entry capacity; never scan indefinitely.
+    for (var number = 1; number <= 25; number++) {
+      final page = await replies(oid, root.id, number, cancellation);
+      if (page.items.any((entry) => entry.id == location.focusId)) {
+        return LocatedCommentThread(root: root, page: page, pageNumber: number);
+      }
+      if (!page.hasMore) break;
+    }
+    throw const AppFailure(AppFailureKind.notFound, '未找到目标评论，可能已删除或超出定位范围');
+  }
+
   Future<T> _write<T>(
     Future<T> Function(ApiRequestContext) operation,
     RequestCancellation c,

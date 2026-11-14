@@ -39,6 +39,8 @@ import 'video_collection_panel.dart';
 import '../application/video_controller.dart';
 import '../application/video_extras_controller.dart';
 import 'video_comments_panel.dart';
+import '../../../domain/content_link.dart';
+import '../../../shared/ui/content_link_scope.dart';
 import 'video_tags_panel.dart';
 import 'video_access_notice.dart';
 import 'watch_later_queue_panel.dart';
@@ -127,9 +129,22 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
   final GlobalKey _playerKey = GlobalKey();
   (VideoDetail, VideoPart, VideoPlayerBuilder)? _playerConfiguration;
   Widget? _playerContent;
+  ContentLink? _contentLink;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final link = ContentLinkScope.of(context);
+    if (link != _contentLink) {
+      if (link.page != _contentLink?.page && link.page != null) {
+        _selectedCid = null;
+      }
+      _contentLink = link;
+      if (link.comment != null) {
+        _tab = 1;
+        _queueExpanded = false;
+        _infoVisible.value = true;
+      }
+    }
     _syncQueue();
   }
 
@@ -258,6 +273,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                       ? _lastCid
                       : _selectedCid ?? widget.initialCid),
             )
+            .firstOrNull ??
+        video.parts
+            .where((part) => part.page == _contentLink?.page)
             .firstOrNull ??
         video.parts.first;
     if (!transitioning) {

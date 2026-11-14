@@ -56,6 +56,57 @@ void main() {
     expect(find.byTooltip('更多消息操作'), matcher);
   }
 
+  for (final section in [
+    InboxSection.replies,
+    InboxSection.mentions,
+    InboxSection.likes,
+  ]) {
+    testWidgets('$section notification body opens the original content', (
+      tester,
+    ) async {
+      final target = Uri.parse(
+        'https://www.bilibili.com/video/BV17x411w7KC?comment_root_id=200&comment_secondary_id=242',
+      );
+      final repo = MessageRepositoryFake()
+        ..entries = [
+          InboxEntry(
+            id: '99',
+            title: '通知',
+            text: '通知正文',
+            targetUrl: target,
+            replyContext: section == InboxSection.likes
+                ? null
+                : const MessageReplyContext(
+                    subjectId: '170001',
+                    businessId: 1,
+                    rootId: '200',
+                    parentId: '242',
+                    author: '甲',
+                  ),
+          ),
+        ];
+      final opened = <Uri>[];
+      final container = await mount(
+        tester,
+        width: 390,
+        repository: repo,
+        onOpenTarget: opened.add,
+      );
+      container
+          .read(messagesControllerProvider.notifier)
+          .selectSection(section);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('通知正文'));
+      await tester.pumpAndSettle();
+      expect(opened, [target]);
+      expect(find.byType(Dialog), findsNothing);
+      expect(
+        find.text('回复'),
+        section == InboxSection.likes ? findsNothing : findsOneWidget,
+      );
+    });
+  }
+
   for (final width in [320.0, 390.0]) {
     testWidgets(
       'narrow notification pages replace the home toolbar at $width',

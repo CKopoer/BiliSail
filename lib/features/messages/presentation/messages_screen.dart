@@ -1020,6 +1020,7 @@ class _NotificationRow extends ConsumerWidget {
     final theme = Theme.of(context);
     final user = entry.userId;
     final canReply = entry.replyContext != null;
+    final target = entry.targetUrl;
     final source = [
       entry.sourceTitle,
       entry.sourceText,
@@ -1027,7 +1028,9 @@ class _NotificationRow extends ConsumerWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: !canReply
+        onTap: target != null && onOpenTarget != null
+            ? () => onOpenTarget?.call(target)
+            : !canReply
             ? null
             : () => showMessageReply(
                 context,
