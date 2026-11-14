@@ -10,13 +10,13 @@ class ResponsiveLayoutSettingsControls extends StatelessWidget {
     super.key,
     required this.settings,
     required this.onVideoGridChanged,
-    required this.onSidebarChanged,
+    required this.onNavigationChanged,
     required this.onPlaybackChanged,
   });
 
   final ResponsiveLayoutSettings settings;
   final Future<void> Function(List<int>?) onVideoGridChanged;
-  final Future<void> Function(int) onSidebarChanged;
+  final Future<void> Function(int, int) onNavigationChanged;
   final Future<void> Function(int) onPlaybackChanged;
 
   @override
@@ -55,20 +55,25 @@ class ResponsiveLayoutSettingsControls extends StatelessWidget {
       ),
       ListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text('侧栏展开阈值'),
+        title: const Text('导航栏自动切换阈值'),
         subtitle: Text(
-          '${settings.sidebarExpandedWidth} 逻辑像素；侧栏样式选择“随窗口宽度”时生效',
+          '侧边栏 ${settings.navigationBarBreakpoint}、完整侧栏 ${settings.sidebarExpandedWidth} 逻辑像素起',
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => showAppDialog<void>(
           context: context,
           builder: (_) => _BreakpointDialog(
-            title: '侧栏展开阈值',
-            description: '安全区内窗口宽度达到此值时展开完整侧栏。底栏／侧栏的切换规则及手动侧栏样式保持原设置。',
-            labels: const ['展开宽度'],
-            initial: [settings.sidebarExpandedWidth],
-            defaults: const [1600],
-            onSave: (values) => onSidebarChanged(values?.first ?? 1600),
+            title: '导航栏自动切换阈值',
+            description: '按安全区内窗口可用宽度调整。第一个阈值在导航栏模式为“自动”时控制底栏与侧边栏切换；第二个阈值在侧栏样式为“随窗口宽度”时控制完整侧栏展开。手机的小屏底栏保护仍生效。',
+            labels: const ['底栏 → 侧边栏', '侧边栏 → 完整侧栏'],
+            initial: [
+              settings.navigationBarBreakpoint,
+              settings.sidebarExpandedWidth,
+            ],
+            defaults: const [600, 1600],
+            minimums: const [320, 600],
+            onSave: (values) =>
+                onNavigationChanged(values?[0] ?? 600, values?[1] ?? 1600),
           ),
         ),
       ),
@@ -103,12 +108,14 @@ class _BreakpointDialog extends StatefulWidget {
     required this.onSave,
     this.grid = false,
     this.useDefaultRules = false,
+    this.minimums,
   });
 
   final String title, description;
   final List<String> labels;
   final List<int> initial, defaults;
   final bool grid, useDefaultRules;
+  final List<int>? minimums;
   final Future<void> Function(List<int>?) onSave;
 
   @override
@@ -203,8 +210,7 @@ class _BreakpointDialogState extends State<_BreakpointDialog> {
                     decoration: InputDecoration(
                       labelText: widget.labels[i],
                       suffixText: '逻辑像素',
-                      helperText:
-                          '范围 ${widget.grid ? 200 : 600}–${widget.grid ? 12000 : 6000}',
+                      helperText: '范围 ${widget.minimums?[i] ?? 600}–6000',
                     ),
                     onChanged: (_) => setState(() {
                       _useDefaultRules = false;
@@ -212,8 +218,8 @@ class _BreakpointDialogState extends State<_BreakpointDialog> {
                     }),
                     validator: (text) {
                       final value = int.tryParse(text ?? '');
-                      final minimum = widget.grid ? 200 : 600;
-                      final maximum = widget.grid ? 12000 : 6000;
+                      final minimum = widget.minimums?[i] ?? 600;
+                      const maximum = 6000;
                       return value == null || value < minimum || value > maximum
                           ? '请输入 $minimum–$maximum 之间的整数'
                           : null;

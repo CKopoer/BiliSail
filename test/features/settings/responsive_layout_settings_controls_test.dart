@@ -9,7 +9,7 @@ void main() {
     ResponsiveLayoutSettings settings =
         const ResponsiveLayoutSettings.defaults(),
     Future<void> Function(List<int>?)? grid,
-    Future<void> Function(int)? sidebar,
+    Future<void> Function(int, int)? navigation,
     Future<void> Function(int)? playback,
   }) => tester.pumpWidget(
     MaterialApp(
@@ -18,7 +18,7 @@ void main() {
           child: ResponsiveLayoutSettingsControls(
             settings: settings,
             onVideoGridChanged: grid ?? (_) async {},
-            onSidebarChanged: sidebar ?? (_) async {},
+            onNavigationChanged: navigation ?? (_, _) async {},
             onPlaybackChanged: playback ?? (_) async {},
           ),
         ),
@@ -31,39 +31,58 @@ void main() {
     'numeric threshold validates, saves, cancels and restores defaults',
     (tester) async {
       var saved = 0;
-      await showControls(tester, sidebar: (value) async => saved = value);
-      await tester.tap(find.text('侧栏展开阈值'));
+      var savedExpanded = 0;
+      final second = find.byKey(const ValueKey('layout-breakpoint-1'));
+      Future<void> save(int value, int expanded) async {
+        saved = value;
+        savedExpanded = expanded;
+      }
+
+      await showControls(tester, navigation: save);
+      await tester.tap(find.text('导航栏自动切换阈值'));
       await tester.pumpAndSettle();
-      await tester.enterText(first, '599');
+      await tester.enterText(first, '319');
       await tester.tap(find.text('保存'));
       await tester.pumpAndSettle();
-      expect(find.text('请输入 600–6000 之间的整数'), findsOneWidget);
+      expect(find.text('请输入 320–6000 之间的整数'), findsOneWidget);
       expect(saved, 0);
       await tester.enterText(first, '1280');
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
       expect(saved, 0);
-      await tester.tap(find.text('侧栏展开阈值'));
+      await tester.tap(find.text('导航栏自动切换阈值'));
       await tester.pumpAndSettle();
       await tester.enterText(first, '1280');
+      await tester.enterText(second, '599');
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+      expect(find.text('请输入 600–6000 之间的整数'), findsOneWidget);
+      expect(saved, 0);
+      await tester.enterText(second, '1800');
       await tester.tap(find.text('保存'));
       await tester.pumpAndSettle();
       expect(saved, 1280);
+      expect(savedExpanded, 1800);
       expect(find.byType(AlertDialog), findsNothing);
 
       await showControls(
         tester,
-        settings: ResponsiveLayoutSettings(sidebarExpandedWidth: 1280),
-        sidebar: (value) async => saved = value,
+        settings: ResponsiveLayoutSettings(
+          navigationBarBreakpoint: 1280,
+          sidebarExpandedWidth: 1800,
+        ),
+        navigation: save,
       );
-      await tester.tap(find.text('侧栏展开阈值'));
+      await tester.tap(find.text('导航栏自动切换阈值'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('恢复默认'));
       await tester.pumpAndSettle();
-      expect(tester.widget<TextFormField>(first).controller?.text, '1600');
+      expect(tester.widget<TextFormField>(first).controller?.text, '600');
+      expect(tester.widget<TextFormField>(second).controller?.text, '1600');
       await tester.tap(find.text('保存'));
       await tester.pumpAndSettle();
-      expect(saved, 1600);
+      expect(saved, 600);
+      expect(savedExpanded, 1600);
     },
   );
 

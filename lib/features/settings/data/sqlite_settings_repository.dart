@@ -289,7 +289,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 48,
+        'schemaVersion': 49,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -297,6 +297,8 @@ class SqliteSettingsRepository implements SettingsRepository {
         'sidebarCollapsed': value.sidebarCollapsed,
         'responsiveLayout': {
           'videoGridMinWidths': value.responsiveLayout.videoGridMinWidths,
+          'navigationBarBreakpoint':
+              value.responsiveLayout.navigationBarBreakpoint,
           'sidebarExpandedWidth': value.responsiveLayout.sidebarExpandedWidth,
           'playbackSideBySideWidth':
               value.responsiveLayout.playbackSideBySideWidth,
@@ -390,6 +392,9 @@ class SqliteSettingsRepository implements SettingsRepository {
       videoGridMinWidths: widths is List && widths.every((item) => item is int)
           ? widths.cast<int>()
           : null,
+      navigationBarBreakpoint: value['navigationBarBreakpoint'] is int
+          ? value['navigationBarBreakpoint'] as int
+          : 600,
       sidebarExpandedWidth: value['sidebarExpandedWidth'] is int
           ? value['sidebarExpandedWidth'] as int
           : 1600,

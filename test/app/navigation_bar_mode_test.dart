@@ -15,6 +15,120 @@ final _sidebar = find.byKey(const ValueKey('workspace-sidebar-region'));
 final _toggle = find.byKey(const ValueKey('workspace-sidebar-toggle'));
 
 void main() {
+  for (final platform in [
+    TargetPlatform.windows,
+    TargetPlatform.android,
+    TargetPlatform.iOS,
+  ]) {
+    testWidgets(
+      'custom navigation breakpoint switches position and retains content on $platform',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(799, 900);
+        tester.view.display.size = const Size(1200, 900);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.display.resetSize);
+        Future<void> show({
+          int threshold = 800,
+          int sidebarThreshold = 1600,
+          NavigationBarMode mode = NavigationBarMode.automatic,
+          SidebarStyle style = SidebarStyle.automatic,
+        }) => tester.pumpWidget(
+          MaterialApp(
+            theme: BiliTheme.light().copyWith(platform: platform),
+            home: BiliAppShell(
+              location: '/',
+              navigationBarMode: mode,
+              navigationBarBreakpoint: threshold,
+              sidebarExpandedWidth: sidebarThreshold,
+              sidebarStyle: style,
+              child: const SizedBox.expand(
+                key: ValueKey('navigation-threshold-content'),
+              ),
+            ),
+          ),
+        );
+        await show();
+        await tester.pumpAndSettle();
+        final content = tester.element(
+          find.byKey(const ValueKey('navigation-threshold-content')),
+        );
+        final bottom = find.byKey(
+          const ValueKey('workspace-bottom-navigation'),
+        );
+        expect(bottom, findsOneWidget);
+        tester.view.physicalSize = const Size(800, 900);
+        await tester.pumpAndSettle();
+        expect(bottom, findsNothing);
+        expect(tester.getSize(_sidebar).width, 76);
+        await show(sidebarThreshold: 1200);
+        tester.view.physicalSize = const Size(1199, 900);
+        await tester.pumpAndSettle();
+        expect(tester.getSize(_sidebar).width, 76);
+        tester.view.physicalSize = const Size(1200, 900);
+        await tester.pumpAndSettle();
+        expect(tester.getSize(_sidebar).width, 164);
+        tester.view.physicalSize = const Size(800, 900);
+        await show(threshold: 1000);
+        await tester.pumpAndSettle();
+        expect(bottom, findsOneWidget);
+        await show(threshold: 1000, mode: NavigationBarMode.sidebar);
+        await tester.pumpAndSettle();
+        expect(bottom, findsNothing);
+        expect(tester.getSize(_sidebar).width, 76);
+        await show(mode: NavigationBarMode.bottom);
+        await tester.pumpAndSettle();
+        expect(bottom, findsOneWidget);
+        await show(style: SidebarStyle.expanded);
+        await tester.pumpAndSettle();
+        expect(bottom, findsNothing);
+        expect(tester.getSize(_sidebar).width, 164);
+        await show(threshold: 600);
+        await tester.pumpAndSettle();
+        expect(tester.getSize(_sidebar).width, 76);
+        expect(
+          tester.element(
+            find.byKey(const ValueKey('navigation-threshold-content')),
+          ),
+          same(content),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    testWidgets(
+      'phone protection remains active with a lower custom navigation breakpoint on $platform',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(844, 390);
+        tester.view.display.size = const Size(844, 390);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.display.resetSize);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: BiliTheme.light().copyWith(platform: platform),
+            home: const BiliAppShell(
+              location: '/',
+              navigationBarBreakpoint: 320,
+              child: SizedBox(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('workspace-bottom-navigation')),
+          findsOneWidget,
+        );
+        expect(tester.getSize(_sidebar).width, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'back animation and playback return follow navigation layout and safe area',
     (tester) async {
@@ -23,6 +137,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       final mode = ValueNotifier(NavigationBarMode.automatic);
       addTearDown(mode.dispose);
+      var navigationBreakpoint = 600;
       final router = GoRouter(
         routes: [
           ShellRoute(
@@ -32,6 +147,7 @@ void main() {
                 location: state.uri.toString(),
                 navigationMode: WorkspaceNavigationMode.dualTabs,
                 navigationBarMode: value,
+                navigationBarBreakpoint: navigationBreakpoint,
                 pageBuilder: (_, tab) => Text('page ${tab.location.path}'),
                 child: child,
               ),
@@ -61,18 +177,25 @@ void main() {
       await tester.pumpAndSettle();
       router.go('/history');
       await tester.pumpAndSettle();
-      for (final (width, inset) in [
-        (390.0, 0.0),
-        (1280.0, 0.0),
-        (620.0, 20.0),
+      for (final (width, inset, breakpoint) in [
+        (390.0, 0.0, 600),
+        (1280.0, 0.0, 600),
+        (620.0, 20.0, 600),
+        (799.0, 0.0, 800),
+        (800.0, 0.0, 800),
+        (820.0, 20.0, 800),
       ]) {
         padding = inset;
+        navigationBreakpoint = breakpoint;
         tester.view.physicalSize = Size(width, 900);
         for (final value in NavigationBarMode.values) {
           mode.value = value;
           await tester.pumpAndSettle();
           final bottom =
-              value == NavigationBarMode.bottom || width - inset * 2 < 600;
+              value == NavigationBarMode.bottom ||
+              width - inset * 2 < 600 ||
+              (value == NavigationBarMode.automatic &&
+                  width - inset * 2 < breakpoint);
           expect(
             tester
                 .widget<PredictiveBackRegion>(find.byType(PredictiveBackRegion))

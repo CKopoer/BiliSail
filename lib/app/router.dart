@@ -134,6 +134,8 @@ GoRouter createBiliRouter({
             appIcon: settings.appIcon,
             navigationBarMode: settings.navigationBarMode,
             sidebarStyle: settings.sidebarStyle,
+            navigationBarBreakpoint:
+                settings.responsiveLayout.navigationBarBreakpoint,
             sidebarExpandedWidth:
                 settings.responsiveLayout.sidebarExpandedWidth,
             sidebarCollapsed: settings.sidebarCollapsed,
