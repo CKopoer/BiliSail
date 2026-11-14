@@ -61,6 +61,102 @@ import 'package:bilisail/features/video/application/watch_later_queue_registry.d
 
 void main() {
   testWidgets(
+    'closing a queue cancels pending EOF paging and ignores its result',
+    (tester) async {
+      const id = VideoId('BV1abc123456');
+      final detail = await const _VideoRepository(includeCollection: false)
+          .loadDetail(id, cancellation: RequestCancellation());
+      final session = _ProfilePagingSession(detail);
+      addTearDown(session.snapshots.dispose);
+      final repository = _ProfilePagingRepository();
+      final registry = WatchLaterQueueRegistry();
+      WatchLaterQueue? queue = registry.capture(
+        scope: 'user:7',
+        sessionEpoch: 0,
+        items: [WatchLaterQueueItem(video: detail.summary)],
+        profileSource: const ProfileVideoQueueSource(
+          userId: UserId('7'),
+          name: '测试UP',
+          order: 'pubdate',
+        ),
+        hasMore: true,
+        nextPage: 2,
+      );
+      final opened = <VideoId>[];
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            playbackSessionProvider.overrideWithValue(session),
+            profileRepositoryProvider.overrideWithValue(repository),
+            watchLaterQueueRegistryProvider.overrideWithValue(registry),
+            authControllerProvider.overrideWith(_QueueSignedInAuth.new),
+            videoRepositoryProvider.overrideWithValue(
+              const _VideoRepository(includeCollection: false),
+            ),
+            videoExtrasRepositoryProvider.overrideWithValue(
+              _ExtrasRepository(),
+            ),
+          ],
+          child: InputTestApp(
+            home: Scaffold(
+              body: StatefulBuilder(
+                builder: (_, update) => VideoScreen(
+                  id: id,
+                  initialCid: detail.parts.last.cid,
+                  queue: queue,
+                  onCloseQueue: (_) => update(() => queue = null),
+                  onOpenQueueVideo: opened.add,
+                  playerBuilder: (_, _, _) => const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      tester
+          .widget<PlaybackPageCommands>(find.byType(PlaybackPageCommands))
+          .onCompleted
+          ?.call();
+      await tester.pump();
+      expect(repository.reads, 1);
+      expect(repository.cancellation?.isCancelled, isFalse);
+      await tester.tap(find.byTooltip('关闭播放列表'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.widgetWithText(FilledButton, '关闭'));
+      await tester.pumpAndSettle();
+      expect(find.byType(WatchLaterQueuePanel), findsNothing);
+      expect(repository.cancellation?.isCancelled, isTrue);
+      repository.pending.complete(
+        ProfilePage(
+          items: [
+            ProfileEntry(
+              id: 'BV2abc123456',
+              kind: ProfileEntryKind.video,
+              title: '迟到的下一条投稿',
+              video: const VideoSummary(
+                id: VideoId('BV2abc123456'),
+                title: '迟到的下一条投稿',
+                coverUrl: '',
+                author: 'UP',
+                duration: Duration(minutes: 1),
+              ),
+            ),
+          ],
+          hasMore: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(opened, isEmpty);
+      expect(session.advances, isEmpty);
+      expect(repository.reads, 1);
+      expect(find.byType(WatchLaterQueuePanel), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
     'custom layout threshold updates in place and retains the player',
     (tester) async {
       tester.view.devicePixelRatio = 1;
@@ -2869,6 +2965,7 @@ final class _ProfilePagingRepository extends Fake implements ProfileRepository {
   int get sessionEpoch => 0;
   final pending = Completer<ProfilePage>();
   int reads = 0;
+  RequestCancellation? cancellation;
   @override
   Future<ProfilePage> loadEntries(
     UserId id,
@@ -2888,6 +2985,7 @@ final class _ProfilePagingRepository extends Fake implements ProfileRepository {
     );
     expect(folderId, expectedFolderId);
     expect(page, 2);
+    this.cancellation = cancellation;
     reads++;
     return pending.future;
   }
@@ -2953,6 +3051,8 @@ final class _ProfilePagingSession extends Fake
     const PlaybackSnapshot(phase: PlaybackPhase.ended, generation: 1),
   );
   final advances = <({VideoId id, bool completed})>[];
+  @override
+  void discardNextVideo() {}
   @override
   bool prepareNextVideo(
     VideoId id,

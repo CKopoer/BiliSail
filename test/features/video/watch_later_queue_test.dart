@@ -532,6 +532,7 @@ void main() {
                         current: _firstId,
                         expanded: expanded,
                         onToggle: () {},
+                        onClose: () {},
                         onSelect: (_) {},
                         onRemove: (_) {},
                       ),

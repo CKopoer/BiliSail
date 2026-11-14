@@ -2,6 +2,22 @@
 
 日期：2026-10-11。
 
+## 关闭当前播放列表（2026-11-14）
+
+稍后再看、收藏和 UP 投稿等显式播放队列的标题栏右侧增加叉号，展开和折叠时均可用。点击后显示“关闭播放列表？”确认框，取消或关闭弹窗保留列表；确认后从当前播放页面地址移除 `queue`，保留当前视频和分 P，并沿用原页面与播放会话、播放位置和暂停意图。
+
+关闭后直接复用普通视频行为：上下集、连续播放和列表循环只考虑视频本身的分 P／合集，不再访问原队列；单视频的列表循环按现有规则重播自身，相关视频连续播放恢复普通视频的设置规则。释放队列保留和分页订阅，取消未完成的分页请求，迟到结果不能继续推进。此操作只解除当前播放页的队列关联，不修改收藏夹、稍后再看或其他播放页的列表，不新增设置或数据库字段。
+
+新增 12 项离线回归通过：覆盖宽窄布局、稍后再看／收藏、展开／折叠、确认／取消、单视频／多 P、连续播放／列表循环、保留暂停与进度、原页面命令回调、单／双／多标签路由清除、后续切 P 不恢复队列，以及 EOF 分页取消与旧响应隔离。测试见 [continuous_playback_test.dart](../../test/features/playback/continuous_playback_test.dart)、[video_screen_test.dart](../../test/features/video/video_screen_test.dart) 和 [workspace_router_test.dart](../../test/app/workspace_router_test.dart)。
+
+首轮主工作区检查遇到同期直播预览修改：`packages/bili_api/lib/src/clients/live_client.dart:348/429` 将非恒定的 `endpoint` 传给 `const ApiFailure`，多组测试编译失败，随后中止该轮，没有记为通过。保留同期修改，以干净提交 `6fac13dd` 创建隔离工作区 `build/validation/playlist-close/`，仅复制本任务的 8 个文件后执行 `tool/check.ps1 -EnforceLockfile`，完整通过：根应用 5,415 项、`bili_api` 920 项、`bili_player` 280 项、`bili_danmaku` 161 项、`bili_mux` 5 项，共 6,781 项。格式、静态分析、打包边界和五份锁文件复现解析通过；交付前核对本任务 7 个 Dart 文件与隔离验证内容的 SHA-256 一致。主日志为 `build/playlist-close-isolated-check.log`，定向与预览日志为 `build/playlist-close-targeted.log`、`build/playlist-close-paging.log` 和 `build/playlist-close-preview.log`。
+
+根应用 13 项及播放器 3 项按现有条件跳过；未配置 `BILI_MUX_LIBRARY`，10 项 mux 原生用例跳过，不计为原生集成通过。另复核 360 像素宽、两倍字号预览，标题完整显示“稍后再看”，叉号位于标题栏右侧，无布局溢出；本任务文档链接与 `git diff --check` 通过。
+
+提交前在已合入同期修改的主工作区复跑上述播放页、队列、连续播放和路由四组测试，247 项全部通过；7 个相关 Dart 文件定向静态分析通过。日志为 `build/playlist-close-precommit-tests.log` 和 `build/playlist-close-precommit-analysis.log`。
+
+本轮没有运行中的 Flutter 调试应用可执行热重载；未构建安装包、执行平台实机验收或性能测量。未修改原生媒体实现、依赖或锁文件。
+
 ## 四种播放模式（2026-11-06）
 
 设置“播放”与播放器“播放配置”增加统一的播放模式：播完暂停、连续播放、列表循环、单集循环，默认播完暂停。连续播放保留现有分 P、合集、稍后再看、收藏／UP 播放队列、影视与相关视频策略；“连续播放相关视频”继续作为连续模式的细分偏好保存。单集循环从当前 P／剧集零点重播，列表循环先依序播放剩余分 P，再推进外层队列／合集，末尾回到该列表首项；没有列表和单文件离线播放按单项列表重播。影视只在当前正片／SP 分组内循环，已知不可播放的相邻／回绕剧集仍是停止点。直播不适用。

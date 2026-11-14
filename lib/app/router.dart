@@ -920,6 +920,33 @@ final class _WorkspacePage extends ConsumerWidget {
                           ),
                           onOpenVideo: (video) =>
                               context.go('/video/${video.id.value}'),
+                          onCloseQueue: (part) {
+                            final target = uri.replace(
+                              queryParameters: {
+                                for (final entry in uri.queryParameters.entries)
+                                  if (entry.key != 'queue')
+                                    entry.key: entry.value,
+                                'cid': part.cid,
+                              },
+                            );
+                            final navigation = WorkspacePageNavigation.maybeOf(
+                              context,
+                            );
+                            if (navigation != null) {
+                              navigation.navigate(target);
+                            } else {
+                              context.go(
+                                target
+                                    .replace(
+                                      queryParameters: {
+                                        ...target.queryParameters,
+                                        'tab': tab.id,
+                                      },
+                                    )
+                                    .toString(),
+                              );
+                            }
+                          },
                           onAdvanceVideo: (video, cid) {
                             final target = Uri(
                               path: '/video/${video.value}',

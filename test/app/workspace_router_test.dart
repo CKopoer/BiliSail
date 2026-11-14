@@ -17,6 +17,9 @@ import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
+import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
+import 'package:bilisail/features/video/domain/watch_later_queue.dart';
+import 'package:bilisail/features/video/presentation/watch_later_queue_panel.dart';
 import 'package:bilisail/shared/ui/playback_info_tabs.dart';
 
 import 'dart:async';
@@ -77,6 +80,120 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mode in WorkspaceNavigationMode.values) {
+    _workspaceTestWidgets(
+      'closing playback queue clears its route and retains the page in $mode',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1280, 900);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        const id = VideoId('BV1234567890');
+        final registry = WatchLaterQueueRegistry();
+        final queue = registry.capture(
+          scope: 'guest',
+          sessionEpoch: 0,
+          favoriteTitle: '测试收藏夹',
+          items: [
+            WatchLaterQueueItem(video: _videoWithTitle(id, '测试视频').summary),
+          ],
+        )!;
+        final engines = <CardFakeEngine>[];
+        final sessions = <PlaybackSession>[];
+        final manager = PlaybackManager(
+          createSession: (sleepTimer) {
+            final engine = CardFakeEngine();
+            engines.add(engine);
+            final session = PlaybackSession(
+              sleepTimer: sleepTimer,
+              engine: engine,
+              repository: _UnusedPlaybackRepository(),
+              progress: _UnusedProgressRepository(),
+              accountScope: () => 'guest',
+            );
+            sessions.add(session);
+            return session;
+          },
+        );
+        addTearDown(() async {
+          await tester.pumpWidget(const SizedBox());
+          final closing = manager.close();
+          for (var frame = 0; frame < 5; frame++) {
+            await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+            await tester.pump();
+          }
+          await closing;
+        });
+        final router = createBiliRouter(
+          initialLocation: '/video/${id.value}?queue=${queue.id}&cid=2',
+          playerBuilder: (context, _, part) {
+            ProviderScope.containerOf(context).read(playbackSessionProvider);
+            return Text('保留播放 ${part.cid}');
+          },
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(
+                _SettingsRepository(navigationMode: mode),
+              ),
+              playbackManagerProvider.overrideWithValue(manager),
+              watchLaterQueueRegistryProvider.overrideWithValue(registry),
+              videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+              relatedVideosProvider.overrideWith((ref, id) => const []),
+              videoTagsProvider.overrideWith((ref, id) => const []),
+              feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+              homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            ],
+            child: InputTestApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final page = tester.state(find.byType(VideoScreen));
+        final session = sessions.single;
+        final tab =
+            router.routeInformationProvider.value.uri.queryParameters['tab'] ??
+            'tab-1';
+        await tester.tap(find.byTooltip('关闭播放列表'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('取消'));
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters['queue'],
+          queue.id,
+        );
+        await tester.tap(find.byTooltip('关闭播放列表'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, '关闭'));
+        await tester.pumpAndSettle();
+        final uri = router.routeInformationProvider.value.uri;
+        expect(uri.path, '/video/${id.value}');
+        expect(uri.queryParameters['queue'], isNull);
+        expect(uri.queryParameters['cid'], '2');
+        expect(uri.queryParameters['tab'], tab);
+        expect(tester.state(find.byType(VideoScreen)), same(page));
+        expect(sessions.single, same(session));
+        expect(engines.single.disposals, 0);
+        expect(find.text('保留播放 2'), findsOneWidget);
+        expect(find.byType(WatchLaterQueuePanel), findsNothing);
+        // Later part changes must not restore the old queue parameter.
+        final screen = tester.widget<VideoScreen>(find.byType(VideoScreen));
+        screen.onPartChanged?.call(_videoWithTitle(id, '测试视频').parts.first);
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters['queue'],
+          isNull,
+        );
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters['cid'],
+          '1',
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final (label, buttons) in [
     ('鼠标中键', kMiddleMouseButton),
     ('鼠标右键', kSecondaryMouseButton),
