@@ -185,7 +185,7 @@ void main() {
           expect(a.dy, b.dy);
           await tester.tap(find.text('游戏'));
           await tester.pumpAndSettle();
-          await tester.tap(find.widgetWithText(ChoiceChip, '单机'));
+          await tester.tap(find.widgetWithText(TextButton, '单机'));
           await tester.pumpAndSettle();
           expect(repository.calls.last.folderId, '2:21');
           expect(tester.takeException(), isNull);
