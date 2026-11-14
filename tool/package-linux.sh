@@ -25,10 +25,11 @@ work="$(dirname "$output")/linux-package-work"
 [[ ! -e "$work" ]] || { echo "Staging already exists: $work" >&2; exit 1; }
 mkdir -p "$work/tools" "$work/AppDir/usr/bin" "$work/AppDir/usr/share/doc/bilisail"
 bundle="$repo/build/linux/x64/release/bundle"
-for required in bilisail lib/libflutter_linux_gtk.so lib/libapp.so lib/libbili_mux.so data/icudtl.dat; do
+for required in bilisail lib/libflutter_linux_gtk.so lib/libapp.so lib/libbili_mux.so lib/libwebview_all_linux_plugin.so data/icudtl.dat; do
   [[ -s "$bundle/$required" ]] || { echo "Missing bundle file: $required" >&2; exit 1; }
 done
 cp -a "$bundle/." "$work/AppDir/usr/bin/"
+python3 "$repo/tool/linux-webview.py" "$work/AppDir"
 cp "$repo/THIRD_PARTY_NOTICES.md" "$work/AppDir/usr/share/doc/bilisail/"
 cp "$repo/linux/packaging/AppRun" "$work/AppDir/AppRun"
 cp "$repo/linux/packaging/flatpak-launcher" "$work/AppDir/"
@@ -55,10 +56,30 @@ if grep -q 'not found' <<< "$mpv_dependencies"; then
   echo 'Pinned libmpv has unresolved runtime dependencies' >&2
   exit 1
 fi
+webkit_arguments=()
+for process in "$work/AppDir/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1"/WebKit*Process; do
+  webkit_arguments+=(--executable "$process")
+done
 run_stage 'Populate AppDir and GTK dependencies' "$work/tools/linuxdeploy-x86_64.AppImage" --appdir "$work/AppDir" \
+  "${webkit_arguments[@]}" \
   --executable "$work/AppDir/usr/bin/bilisail" --library "$mpv" \
   --desktop-file "$repo/linux/packaging/dev.bilisail.bilisail.desktop" \
   --icon-file "$repo/linux/packaging/dev.bilisail.bilisail.png" --plugin gtk
+
+# WebKitGTK release builds use a compiled absolute helper prefix. A build-time
+# replacement preserves ELF offsets; AppRun supplies the stable working folder.
+python3 - "$repo/tool/linux-webview.py" "$work/AppDir" <<'PY'
+import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("linux_webview", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+libraries = list((Path(sys.argv[2]) / "usr/lib").glob("libwebkit2gtk-4.1.so*"))
+resolved = {path.resolve() for path in libraries}
+if len(resolved) != 1:
+    raise RuntimeError("Expected one bundled WebKitGTK shared library")
+module.relocate_webkit_library(resolved.pop(), Path(sys.argv[2]) / "usr/share/doc/bilisail")
+PY
 
 # Retain distro license texts and exact source/binary versions for every bundled
 # distro library (the Flutter/mux licenses are supplied separately).

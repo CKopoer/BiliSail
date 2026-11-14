@@ -2,6 +2,8 @@
 
 日期：2026-10-06。Flutter 3.47.6 / Dart 3.13.5，Windows x64 开发主机。真实账号与设备运行需要独立验收。
 
+2026-11-14：现已统一迁移到 `webview_all 1.5.0`，补齐 Linux 官网登录，Apple Cookie 原生适配和旧 Windows profile 管理已移除。当前实现与验证见[全平台 WebView 迁移](webview-all-linux-2026-11-14.md)，下文保留各日期的历史实现与验收记录。
+
 ## 2026-10-28 统一凭据调整
 
 密码/短信继续使用内嵌官网，读取隔离 Cookie 并经 nav 校验后直接安全保存 Web 会话；按用户要求删除实测失败的 Cookie 换取 App token 流程，不再让兑换失败阻止网页登录。正常扫码使用一次返回 Cookie/token 的 HD 路径。两种方式都可切换 App 推荐；没有 App 凭据时为游客推荐，有效同账号凭据才用于账号推荐。旧 Web 会话保留，没有“更新登录”入口。以下为原实现历史，当前设计与验证以[统一登录](../unified-login-design.md)为准。
@@ -80,12 +82,12 @@
 
 当前锁定的 Apple 平台插件 `1.2.0-beta.3` 存在明确的存储错配：iOS／macOS 的 `InAppWebView.swift` 在 `incognito=true` 时为视图创建 `WKWebsiteDataStore.nonPersistent()`；`MyCookieManager.swift` 却固定读取 `WKWebsiteDataStore.default().httpCookieStore`。Dart 的 `getCookies(webViewController: ...)` 在这两个平台没有把 controller 传给原生 Cookie 接口。因此原有两秒轮询即使传入当前 controller，也读不到临时视图中的 SESSDATA，无法返回网页登录结果。网页显示已登录只说明网页自己的存储有效，手动关闭仍按取消处理。Apple 对 [websiteDataStore](https://developer.apple.com/documentation/webkit/wkwebviewconfiguration/websitedatastore) 的说明也将 Cookie 所属绑定到视图配置的存储。
 
-- 新增共享 [Apple 原生适配](../../apple/PassportWebCookies.swift)和 [Dart Cookie 读取器](../../lib/core/platform/passport_web_cookies.dart)，iOS／macOS 都从当前登录 WKWebView 的 `configuration.websiteDataStore.httpCookieStore` 读取，包括 HttpOnly Cookie。继续使用临时存储，未启用默认存储、Cookie 同步或 JavaScript `document.cookie` 回退，也不修改 Pub 缓存或升级依赖。
+- 新增共享 [Apple 原生适配](https://github.com/CKopoer/BiliSail/blob/71ec0b6d8e3e1841000b673f9842556492514c89/apple/PassportWebCookies.swift)和 [Dart Cookie 读取器](../../lib/core/platform/passport_web_cookies.dart)，iOS／macOS 都从当前登录 WKWebView 的 `configuration.websiteDataStore.httpCookieStore` 读取，包括 HttpOnly Cookie。继续使用临时存储，未启用默认存储、Cookie 同步或 JavaScript `document.cookie` 回退，也不修改 Pub 缓存或升级依赖。
 - 插件未公开按 ID 获取 WKWebView 的接口，适配器在系统默认 UA 后追加每次登录独立的随机标记，通过 `customUserAgent` 只匹配当前已挂载的原生视图；该标记不是凭据，会出现在 UA。未使用插件的 `applicationNameForUserAgent`：它只在系统默认应用名非空时追加，而 [WebKit 的 macOS 默认值为空](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewConfiguration.mm)，会导致 macOS 标记丢失。系统 UA 获取期限为 10 秒，失败时关闭本次初始化；找不到视图时等待下一轮，重名或持久化视图直接拒绝，不读取其他窗口或默认存储。iOS 在隐式 engine 注册回调绑定 channel，macOS 绑定现有 engine，两个 Xcode 工程引用同一份 Swift 源码。
 - 原生只回传适用于 API 根地址的有效 Cookie，保留 domain/path/secure/HttpOnly/session/毫秒有效期，最多 128 项。Dart 严格检查元数据；原有 10 秒读取期限、10 分钟总期限、后台暂停／返回继续、关闭取消和迟到结果隔离继续适用。取得 Cookie 后自动关闭网页，再沿用 SessionRepository 的 nav 验证和系统安全保存，不要求 App token。
 - 复查锁定插件的其他平台：Windows 原生按传入的 `webViewId` 调用当前 WebView2 的 `Network.getCookies`，且应用已传入同一 environment；Android WebView 和 `CookieManagerCompat.getCookieInfo` 使用同一系统 CookieManager，继续要求 `GET_COOKIE_INFO`。未发现这两者有 Apple 式的默认／临时存储错配。Linux 仍隐藏网页登录入口，仅提供扫码；本次没有扩展其 WebView 能力。这些为源码结论，不替代各端真实官网提交验收。
 
-[读取器测试](../../test/core/platform/passport_web_cookies_test.dart)覆盖 Apple channel、独立标记、元数据、空视图、原生错误和超量拒绝；[窗口回归](../../test/core/platform/passport_web_login_navigation_test.dart)增加 iOS／macOS 临时存储成功后自动关闭、毫秒时间戳及关闭后的迟到结果。[共享原生 XCTest](../../apple/PassportWebCookiesTests.swift)接入两个 RunnerTests target，使用假会话在非持久化 WKWebView 中验证 HttpOnly、视图隔离、作用域和拒绝持久化存储。
+[读取器测试](../../test/core/platform/passport_web_cookies_test.dart)覆盖 Apple channel、独立标记、元数据、空视图、原生错误和超量拒绝；[窗口回归](../../test/core/platform/passport_web_login_navigation_test.dart)增加 iOS／macOS 临时存储成功后自动关闭、毫秒时间戳及关闭后的迟到结果。[共享原生 XCTest](https://github.com/CKopoer/BiliSail/blob/71ec0b6d8e3e1841000b673f9842556492514c89/apple/PassportWebCookiesTests.swift)接入两个 RunnerTests target，使用假会话在非持久化 WKWebView 中验证 HttpOnly、视图隔离、作用域和拒绝持久化存储。
 
 最终登录相关 62 项定向测试及四个相关 Dart 文件的静态分析通过。根检查按 `-Stage Lint -SkipPub` 和 `-Stage RootTests -SkipPub` 收尾：全仓格式、静态分析、打包边界检查通过，根应用 3266 项离线测试通过，13 项 Windows 符号链接用例按环境条件跳过；日志分别为 `build/passport-web-login-lint.log` 与 `build/passport-web-login-root-tests.log`。四个包在本轮完整 `tool/check.ps1 -SkipPub` 中通过 bili_api 492、bili_player 83、bili_danmaku 116、bili_mux 5 项测试；未配置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生用例跳过，不计为原生通过。测试总数包含同期其他任务的改动，不代表本次新增数量。文档相对链接、共享 Swift 源码引用、Xcode 对象标识唯一性和 `git diff --check` 通过；五份锁文件未修改。
 

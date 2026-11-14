@@ -97,6 +97,11 @@ class PackageValidationTests(unittest.TestCase):
         library = root / "usr/lib/libmpv.so.2"
         library.parent.mkdir(parents=True)
         library.write_bytes(b"\x7fELFtest")
+        webkit = root / validation._webkit.WEBKIT_DIRECTORY
+        for name in validation._webkit.REQUIRED_FILES:
+            helper = webkit / name
+            helper.parent.mkdir(parents=True, exist_ok=True)
+            helper.write_bytes(b"\x7fELFtest")
         metadata = root / "usr/bin/data/flutter_assets/version.json"
         metadata.parent.mkdir(parents=True)
         metadata.write_text(

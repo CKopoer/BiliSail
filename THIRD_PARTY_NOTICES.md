@@ -76,7 +76,7 @@ Windows MSI/EXE 打包使用固定 [WiX Toolset 6.0.2](https://github.com/wixtoo
 
 Windows 安装器的现代文件夹选择器另使用同版本的 `WixToolset.BootstrapperApplicationApi` 与 `WixToolset.WixStandardBootstrapperApplicationFunctionApi` 接口头文件；不链接新增 WiX 库。NuGet 归档 SHA-256 固定于[构建脚本](tool/windows-installer-native.ps1)，头文件保留 MS-RL 通知并连同辅助源码随 `data/licenses/wix/installer-ui` 分发；静态 CRT 的原生辅助 DLL 仅用于安装 UI。
 
-内嵌官网登录使用 [flutter_inappwebview 6.2.0-beta.3](https://pub.dev/packages/flutter_inappwebview/versions/6.2.0-beta.3)，Apache-2.0；选此固定预览版是因为工程 AGP 9 与其稳定版不兼容。官网页面与验证码按需通过 HTTPS 加载，未复制到应用资产。Windows 的 WebView2 SDK／Loader 使用 NuGet 包内 Microsoft BSD 类许可，WIL、CppWinRT 与 nlohmann.json 使用 MIT；这些原生许可另随 Windows 产物置于 `data/licenses/webview`。nlohmann.json 3.12.0 的 [原始许可](https://github.com/nlohmann/json/blob/v3.12.0/LICENSE.MIT)保留于 [本地许可](windows/licenses/nlohmann-json-LICENSE.txt)。平台 SDK 来源、锁定版本和实测边界见 [登录验证](docs/validation/password-sms-login.md)。
+内嵌官网登录统一使用 [webview_all 1.5.0](https://pub.dev/packages/webview_all/versions/1.5.0)（MIT），平台包另保留 Flutter 上游 BSD 通知。参考 [PiliPlus PR #3423](https://github.com/bggRGjQaUbCoE/PiliPlus/pull/3423) 的依赖选择，未复制其 GPLv3 应用源码。官网与验证码按需经 HTTPS 加载，不作为应用资产。Windows 使用包内固定 WebView2 SDK 1.0.3650.58／Loader 和 WIL 1.0.220914.1，其许可随产物放在 `data/licenses/webview`。Linux 使用发行版 WebKitGTK 4.1 及其辅助进程，版权和精确 binary/source 版本保留于包内 distro notices；辅助进程路径变换脚本及库修改前后 SHA-256 同包保留。迁移、来源与验证边界见[全平台 WebView 记录](docs/validation/webview-all-linux-2026-11-14.md)。
 
 应用默认内置 HarmonyOS Sans（简体中文 Regular/Medium/Bold），来源为用户提供的本机字体目录，文件未修改。随字体提供的 HarmonyOS Sans Fonts License Agreement、版权通知与 SHA-256 见 [资源来源](assets/README.md#harmonyos-sans)。完整许可证打包到应用，并通过“关于”中的许可证页展示；设置中可切换为系统默认字体。
 

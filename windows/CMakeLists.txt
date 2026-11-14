@@ -56,20 +56,6 @@ add_subdirectory("runner")
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
-# The pinned WebView plugin's C++17 WinRT headers use the coroutine TS ABI.
-# VS 2026 rejects that deprecated header unless explicitly acknowledged. Keep
-# this temporary compatibility definition private to the third-party target.
-if(MSVC AND TARGET flutter_inappwebview_windows_plugin)
-  target_compile_definitions(flutter_inappwebview_windows_plugin PRIVATE
-    _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
-  # Reuse the expensive SDK/codec headers within this plugin only. CMake 3.14
-  # remains supported; older generators simply retain the normal build path.
-  if(COMMAND target_precompile_headers AND CMAKE_GENERATOR MATCHES "^Visual Studio")
-    target_precompile_headers(flutter_inappwebview_windows_plugin PRIVATE
-      "${CMAKE_CURRENT_SOURCE_DIR}/patches/inappwebview/precompiled.h")
-  endif()
-endif()
-
 # MSBuild project parallelism still compiles each project's sources serially.
 # Public Windows CI runners have four cores/16 GB. Keep local builds at two
 # processes, and cap CI at the available processor count and four. Restrict /MP
@@ -87,7 +73,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND CMAKE_GENERATOR MATCHES "^Visual St
     endif()
   endif()
   message(STATUS "BiliSail MSVC compiler processes per target: ${BILISAIL_MSVC_COMPILE_JOBS}")
-  foreach(COMPILE_TARGET IN ITEMS ${BINARY_NAME} flutter_inappwebview_windows_plugin)
+  foreach(COMPILE_TARGET IN ITEMS ${BINARY_NAME} webview_all_windows_plugin)
     if(TARGET ${COMPILE_TARGET})
       target_compile_options(${COMPILE_TARGET} PRIVATE /MP${BILISAIL_MSVC_COMPILE_JOBS})
     endif()
@@ -163,9 +149,9 @@ endif()
 
 # The pinned WebView plugin imports this loader, but its bundled-libraries list
 # omits it. NuGet copies it beside the plugin DLL before the install step.
-if(TARGET flutter_inappwebview_windows_plugin)
+if(TARGET webview_all_windows_plugin)
   install(FILES
-    "$<TARGET_FILE_DIR:flutter_inappwebview_windows_plugin>/WebView2Loader.dll"
+    "$<TARGET_FILE_DIR:webview_all_windows_plugin>/WebView2Loader.dll"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
   set(WEBVIEW_LICENSE_DIR "${INSTALL_BUNDLE_DATA_DIR}/licenses/webview")
@@ -175,10 +161,6 @@ if(TARGET flutter_inappwebview_windows_plugin)
     DESTINATION "${WEBVIEW_LICENSE_DIR}" RENAME WIL-LICENSE.txt COMPONENT Runtime)
   install(FILES "${CMAKE_BINARY_DIR}/packages/Microsoft.Windows.ImplementationLibrary/ThirdPartyNotices.txt"
     DESTINATION "${WEBVIEW_LICENSE_DIR}" RENAME WIL-ThirdPartyNotices.txt COMPONENT Runtime)
-  install(FILES "${CMAKE_BINARY_DIR}/packages/Microsoft.Windows.CppWinRT/LICENSE"
-    DESTINATION "${WEBVIEW_LICENSE_DIR}" RENAME CppWinRT-LICENSE.txt COMPONENT Runtime)
-  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/licenses/nlohmann-json-LICENSE.txt"
-    DESTINATION "${WEBVIEW_LICENSE_DIR}" COMPONENT Runtime)
 endif()
 
 # Copy the native assets provided by the build.dart from all packages.

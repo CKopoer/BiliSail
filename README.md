@@ -114,7 +114,7 @@ CI 和 Release 构建的 Windows 产物同时包含 `.msix`、`.msi` 和 `.exe` 
 
 项目固定使用 **Flutter 3.47.6 stable / Dart 3.13.5**。直接依赖采用精确版本，根应用和各包均保留锁文件。
 
-Windows 开发还需安装 **Visual Studio 2022** 的“使用 C++ 的桌面开发”工作负载及 Windows SDK，并将 NuGet CLI 加入 `PATH`（内嵌网页插件构建使用）。Windows 密码／短信登录需要 WebView2 Runtime；来源与平台边界见[登录验证](docs/validation/password-sms-login.md)。Android 和 macOS 的构建需各自的工具链，macOS 构建需在 macOS 主机上执行。
+Windows 开发还需安装 **Visual Studio 2022** 的“使用 C++ 的桌面开发”工作负载及 Windows SDK，并将 NuGet CLI 加入 `PATH`（内嵌网页插件构建使用）。Windows 密码／短信登录需要 WebView2 Runtime；来源与平台边界见[登录验证](docs/validation/password-sms-login.md)。Android 和 macOS 的构建需各自的工具链，macOS 构建需在 macOS 主机上执行。Linux 构建需 WebKitGTK 4.1 开发包；网页登录与安装包运行依赖见[WebView 平台记录](docs/validation/webview-all-linux-2026-11-14.md)。
 
 ### Windows 调试
 

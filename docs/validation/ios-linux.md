@@ -64,11 +64,13 @@ chmod +x ./BiliSail-<version>-linux-x64.AppImage
 
 登录持久化要求桌面具有已解锁的 `org.freedesktop.secrets` 服务，例如 GNOME Keyring 或兼容的 KWallet。服务不可用或保存失败不能退回明文。Flatpak 与 AppImage 的数据目录可能不同，不自动迁移账号或下载文件。
 
-## Linux 网页登录的明确降级
+## Linux 网页登录
+
+2026-11-14：已迁移到 `webview_all 1.5.0`／WebKitGTK 4.1，移除占位插件并开放官网密码／短信入口，补充辅助进程、注入库与依赖打包校验。现行方案和验收边界见[全平台 WebView 迁移](webview-all-linux-2026-11-14.md)。以下为首次接入时的降级记录。
 
 当前锁定 `flutter_inappwebview_linux 0.1.0-beta.1` 的上游实验实现依赖 WPE WebKit 和相应 backend，不是只安装 GTK 即可分发。本轮不引入该浏览器引擎及独立的 helper 进程打包链。
 
-根应用使用显式的 [Dart 平台适配](../../linux/plugins/flutter_inappwebview_linux/lib/flutter_inappwebview_linux.dart) 覆盖该实现，没有复制上游代码或修改 Pub 缓存；Flutter 的生成器因此不注册其原生 CMake 插件。登录页面通过平台能力隐藏密码／短信入口，保留扫码和既有会话验证。其他平台继续使用上游 WebView；恢复 Linux 网页登录前须一起验证引擎、TLS、Cookie 元数据、账号隔离、helper 路径与沙盒权限。
+根应用使用显式的 Dart 平台占位适配 覆盖该实现，没有复制上游代码或修改 Pub 缓存；Flutter 的生成器因此不注册其原生 CMake 插件。登录页面通过平台能力隐藏密码／短信入口，保留扫码和既有会话验证。其他平台继续使用上游 WebView；恢复 Linux 网页登录前须一起验证引擎、TLS、Cookie 元数据、账号隔离、helper 路径与沙盒权限。
 
 ## 验证边界
 

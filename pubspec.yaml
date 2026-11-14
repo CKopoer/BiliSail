@@ -38,17 +38,13 @@ dependencies:
     path: packages/bili_danmaku
   bili_mux:
     path: packages/bili_mux
-  flutter_inappwebview: 6.2.0-beta.3
+  webview_all: 1.5.0
   image_picker: 1.2.4
 
 # Keep core, video output and native library manifests on one reviewed fork commit.
 dependency_overrides:
   # Retain the existing wakelock API and package_info_plus compatibility.
   wakelock_plus: 1.8.1
-  # Linux uses QR login until the experimental WPE WebKit implementation has
-  # a separately validated portable packaging path. No native WebView is linked.
-  flutter_inappwebview_linux:
-    path: linux/plugins/flutter_inappwebview_linux
   media_kit:
     git:
       url: https://github.com/CKopoer/media-kit.git
@@ -98,6 +94,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: 6.0.0
+  webview_platform_interface: 1.5.0
 
 flutter:
   # The pinned video and native-library plugins share CocoaPods integration.

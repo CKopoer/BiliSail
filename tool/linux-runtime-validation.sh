@@ -8,7 +8,11 @@ export LD_LIBRARY_PATH="$root/usr/bin/lib:$root/usr/lib"
   echo "Missing executable: $root/usr/bin/bilisail" >&2
   exit 1
 }
-find "$root/usr" -type f \( -name '*.so*' -o -path "$root/usr/bin/bilisail" \) \
+webkit="$root/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1"
+for component in WebKitWebProcess WebKitNetworkProcess injected-bundle/libwebkit2gtkinjectedbundle.so; do
+  [ -s "$webkit/$component" ] || { echo "Missing WebKitGTK component: $component" >&2; exit 1; }
+done
+find "$root/usr" -type f \( -name '*.so*' -o -name 'WebKit*Process' -o -path "$root/usr/bin/bilisail" \) \
   -exec sh -c '
     failed=0
     for binary do
@@ -21,7 +25,7 @@ find "$root/usr" -type f \( -name '*.so*' -o -path "$root/usr/bin/bilisail" \) \
       }
       if [ "$magic" != "$(printf "\177ELF")" ]; then
         case "$binary" in
-          */usr/bin/bilisail)
+          */usr/bin/bilisail|*/WebKit*Process)
             printf "Executable is not ELF: %s\n" "$binary" >&2
             failed=1 ;;
         esac
