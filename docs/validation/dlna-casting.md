@@ -31,7 +31,7 @@
 - [CastClient](../../packages/bili_api/lib/src/clients/cast_client.dart) 使用固定 `api.bilibili.com/x/tv/playurl` 端点及已有 App profile 签名。服务端权益仍生效，Web Cookie 不转换成 App token；没有有效 App token 时按游客请求。只接受单段 `durl`，拒绝 DASH 单轨、多段及显式试看；HTTP／业务错误沿用统一分类。
 - [ApiCastMediaRepository](../../lib/features/playback/data/api_cast_media_repository.dart) 在应用 data 层映射身份和安全存储中的现有 App 凭据，视频缺少 aid 时通过原有详情读取补齐；地址只保存在本次操作内存，不写数据库、设置或日志。
 - [CastingController](../../lib/features/playback/application/casting_controller.dart) 管理搜索、设备选择和命令串行化。源 generation 或账号变化使面板失效；账号 lifetime 与 HTTP 取消同步。晚到的 URL／Play 回复不能触发后续设备命令或暂停新源。关闭面板移除监听并释放网络资源。
-- [DlnaCastRepository](../../lib/features/playback/data/dlna_cast_repository.dart) 自行实现最小 SSDP／SOAP 适配：12 秒搜索窗口、最多 64 个描述地址及设备；HTTP 每次 5 秒、连接 3 秒、响应 256 KiB；设备描述错误不会阻止其他设备。按 UDN 去重，支持嵌套设备、相对 controlURL、URLBase 和带命名空间 XML。
+- [DlnaCastRepository](../../lib/features/playback/data/dlna_cast_repository.dart) 与 [dlna_network.dart](../../lib/features/playback/data/dlna_network.dart) 实现 SSDP／SOAP 适配：每次枚举所有候选接口的 IPv4／IPv6 地址，各自绑定并显式选择组播出口；共用 12 秒搜索窗口，最多 64 个描述任务及设备，同时最多 4 个描述请求。按 UDN 合并并保留多个可用端点，IPv6 链路本地 scope 贯穿描述和控制连接。HTTP 响应 256 KiB，连接最多 3 秒、单次控制总预算 5 秒；仅 TCP 尚未连接时允许切换端点，结果不明的 SOAP 不重放。详见[多网卡与双栈验证](dlna-multicast-dual-stack-2026-11-14.md)。
 - SSDP 描述地址必须与回复源 IP 一致，controlURL／URLBase 必须留在该主机；禁止跳转转发。设备 HTTP 通道不携带账号 header、Cookie、App token，不改变系统 TLS 校验。DIDL-Lite 和 SOAP 分层转义，保留带签名媒体地址与中文标题。
 - 初版增加直接依赖 `xml: 6.6.1`（MIT，原已作为传递依赖锁定），无新增原生播放器或 DLNA 插件。macOS Release 增加 UDP 应答所需的 network.server 沙盒权限和局域网用途说明，发布签名校验同步检查；Debug/Profile 原已有 server 权限。
 - 平台能力集中在 [casting_support.dart](../../lib/core/platform/casting_support.dart)。Android 使用既有 INTERNET 权限，SSDP 接收单播回复，不加入多播组；实际网络策略、Windows 防火墙、macOS 局域网权限和设备兼容性须实测。

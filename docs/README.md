@@ -111,6 +111,7 @@
 | [播放地址内容不可用重试](validation/playurl-unavailable-retry-2026-11-05.md) | DASH 缺失／未分类业务错误恢复、网络与 WBI 共享次数预算、取消／账号／超时边界 |
 | [无音轨视频播放](validation/silent-video-playback-2026-11-08.md) | BV1fTnZ6LEvr 的明确无音轨响应、完整播放契约和 Windows 两后端在线验证 |
 | [DLNA 投屏](validation/dlna-casting.md) | 视频／影视／直播、默认兼容播放、可选电视弹幕、生命周期及设备验收边界 |
+| [DLNA 多网卡与 IPv4／IPv6](validation/dlna-multicast-dual-stack-2026-11-14.md) | 每接口组播出口、链路本地 scope、多端点回退、搜索资源与自动测试边界 |
 | [云视听投屏加载失败修复](validation/casting-compatibility-regression-2026-11-14.md) | 自动身份投屏导致的回归、恢复直链默认路径、显式实验模式与回归验证 |
 | [云视听 1.8.9 弹幕模式修复](validation/casting-danmaku-receiver-1.8.9-2026-11-14.md) | 官方接收逻辑核对、身份取流开关缺失、初始弹幕与进度单位修复及实机边界 |
 | [系统媒体通知与控制](validation/system-media-controls.md) | Android 通知、Apple 正在播放、Windows SMTC、Linux MPRIS、会话目标与验证边界 |
