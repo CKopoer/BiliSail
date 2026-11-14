@@ -9,12 +9,13 @@
 | 设置 | 默认规则 | 自定义范围 |
 | --- | --- | --- |
 | 视频卡片列数阈值 | 原有卡宽与字号算法；默认字号下 2–12 列分别从 300、492、1100、1380、1660、1940、2220、2500、2780、3060、3340 起 | 每项 200–12000，严格递增 |
-| 侧栏展开阈值 | 安全区内窗口可用宽度 1600 起展开 | 600–6000 |
+| 导航栏自动切换阈值 | 自动模式下，安全区内窗口可用宽度小于 600 为底栏，达到 600 为侧边栏 | 320–6000 |
+| 同一导航设置中的完整侧栏阈值 | 侧栏样式为“随窗口宽度”时，1600 起展开为完整侧栏 | 600–6000 |
 | 播放页左右布局阈值 | 播放页自身可用宽度 1000 起左右排列 | 600–6000 |
 
 卡片阈值以扣除侧栏、内容区留白与网格内边距后的宽度为准，首页推荐、其他首页频道、搜索、历史等共享 `ResponsiveCardGrid` / `SliverResponsiveCardGrid` 的区域同步生效。自定义阈值以默认标题字号为基准，放大字号时按实际 15px 标题缩放比例同比提高，缩小字号不额外增加列数。间距、边距、自然卡片高度、懒加载与最多 12 列保持原实现。默认配置用空值表达，继续执行原来的双列／三列最小卡宽、常规 260 卡宽及各字号上限算法；不是把默认字号的 11 个边界直接用于所有字号。恢复默认返回同一路径。
 
-侧栏展开阈值只在侧栏样式为“随窗口宽度”时生效，完整侧栏与图标文字上下排列的手动选择继续优先。底栏／侧栏位置规则、手机短边保护、完全收起侧栏及收起动画保持原行为。
+导航栏自动切换设置在同一个弹窗内分别编辑“底栏 → 侧边栏”和“侧边栏 → 完整侧栏”，一次保存或恢复默认同时处理两项。第一个阈值只在导航栏模式为“自动”时控制位置；第二个阈值只在侧栏可见且样式为“随窗口宽度”时控制 76 宽导航轨／164 宽完整侧栏。两项独立：若完整侧栏阈值低于位置切换阈值，侧栏出现时就直接展开。手动导航模式与侧栏样式、完全收起及收起动画保持。Android／iOS 的屏幕逻辑短边小于 600，或窗口可用宽度小于 600 时，继续优先使用底栏。直播频道归组仍按原有页面宽度规则判断。Android 预测式返回与“返回播放”入口继续使用同一个导航位置判断，跟随自定义阈值更新。
 
 播放阈值由视频和影视页共用，主窗口与独立播放窗口均接收设置。小于阈值为上下布局，达到阈值为左右布局，右侧信息区仍为 380 宽。布局切换保留页面、播放器和播放会话；不修改竖版画面收缩、键盘避让、听视频或全屏策略。直播的独立 900 宽布局规则保持原实现。
 
@@ -28,15 +29,23 @@
 ## 存储与实现
 
 - [领域配置](../../lib/domain/responsive_layout_settings.dart) 是纯 Dart 不可变对象，归入 `AppSettings.responsiveLayout`；共享 UI 通过 [ResponsiveLayoutScope](../../lib/shared/ui/responsive_layout_scope.dart) 接收组合根注入。
-- `preferences.v1` 快照从版本 47 升为 48，增加 `responsiveLayout` 对象；数据库表与数据库版本 3 不变。缺失或非法对象回退默认，每个独立标量字段分别校验，视频卡片阈值列表按长度、整数、范围及严格递增整体校验。有效旧设置保留。
+- `preferences.v1` 快照版本为 49，新增 `responsiveLayout.navigationBarBreakpoint`，默认 600；数据库表与数据库版本 3 不变。此前版本 48 中的 `sidebarExpandedWidth` 保留原有完整侧栏含义，缺失／非法时回退 1600，不把它转换为位置切换阈值；已有卡片阈值、播放页阈值及其他合法设置继续保留。缺失或非法对象回退默认，每个独立标量字段分别校验，视频卡片阈值列表按长度、整数、范围及严格递增整体校验。
 - [编辑控件](../../lib/features/settings/presentation/responsive_layout_settings_controls.dart)、[多滑块编辑器](../../lib/features/settings/presentation/video_grid_breakpoint_editor.dart) 仅调用应用控制器，不直接操作数据库。
 
 ## 验证
 
 定向测试覆盖默认算法、Wrap／Sliver 网格边界与大字号、自定义阈值及恢复默认、侧栏边界与手动样式优先、视频／影视布局切换且播放器实例保持、独立播放窗口设置注入、SQLite 旧／非法／部分配置兼容、连续设置写入、失败回退、弹窗取消和重试，以及滑块拖动、不交叉、键盘操作、窄屏与两倍字号的深浅主题。
 
-`tool/check.ps1 -SkipPub` 通过格式、根应用／四包静态分析、打包边界脚本及 6672 项测试：根应用 5348、API 920、播放器 238、弹幕 161、封装 5。另有 13 项根应用 Windows 符号链接用例因权限跳过，播放器 3 项原生用例因未配置 `BILI_TEST_NATIVE_MPV` / `BILI_TEST_MEDIA_DIR` 跳过，封装 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生通过。完整日志：`build/responsive-layout-check.log`。
+初次实现（提交 `b4d56600`）的 `tool/check.ps1 -SkipPub` 通过格式、根应用／四包静态分析、打包边界脚本及 6672 项测试：根应用 5348、API 920、播放器 238、弹幕 161、封装 5。另有 13 项根应用 Windows 符号链接用例因权限跳过，播放器 3 项原生用例因未配置 `BILI_TEST_NATIVE_MPV` / `BILI_TEST_MEDIA_DIR` 跳过，封装 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生通过。完整日志：`build/responsive-layout-check.log`。这组历史结果不代表导航切换阈值纠正后的检查结果。
 
 最终交互与文案调整后，设置模型／持久化／编辑器、共享网格及独立播放窗口 23 项定向测试再次通过，设置 presentation 静态分析通过；日志为 `build/responsive-layout-final-targeted.log`、`build/responsive-layout-final-analysis.log`。视频／影视及侧栏自定义边界另有 3 项定向验证，见 `build/responsive-layout-page-tests.log`。三份文档共 329 个相对链接及 `git diff --check` 通过。
 
 使用项目 HarmonyOS Sans 与主题渲染桌面 960×800、手机 390×844 和桌面深色弹窗，目视核对配色、滑块、选中态、换行及操作区；预览位于 `build/responsive-layout-desktop.png`、`build/responsive-layout-phone.png` 和 `build/responsive-layout-dark.png`。窄屏两倍字号由组件测试覆盖。当前未发现运行中的 DTD／Flutter 调试实例，热重载无法执行；本轮未构建安装包、进行原生窗口或 Android／macOS 实机验收，也未测量性能。
+
+## 导航栏两级自动切换
+
+按用户纠正和后续补充，将单独的“侧栏展开阈值”入口替换为“导航栏自动切换阈值”，在同一个弹窗内同时设置底栏／侧边栏切换与完整侧栏展开，默认分别为 600、1600。覆盖设置入口、默认／恢复默认、控制器、保存／读取和自动导航判断，设置不改变页面身份或播放会话。测试覆盖 Windows／Android／iOS 的两级自定义边界、保存失败整组回退、旧快照兼容、手动导航优先、移动小屏保护，以及 Android 安全区下的预测式返回和返回播放入口。
+
+定向的配置／SQLite／控制器、双阈值弹窗、导航模式与侧栏测试共 38 项通过，日志为 `build/navigation-breakpoint-targeted.log`。使用项目字体和主题重新渲染并目视核对同一弹窗的两项输入，桌面／手机／深色预览分别为 `build/navigation-breakpoints-desktop.png`、`build/navigation-breakpoints-phone.png`、`build/navigation-breakpoints-dark.png`。三份文档的 329 个相对链接和 `git diff --check` 通过。
+
+两级阈值版本的 `tool/check.ps1 -SkipPub` 通过格式、根应用／四包静态分析、打包边界脚本及 6678 项测试：根应用 5354、API 920、播放器 238、弹幕 161、封装 5。另有 13 项符号链接用例因 Windows 权限跳过，播放器 3 项原生用例因未配置 `BILI_TEST_NATIVE_MPV` / `BILI_TEST_MEDIA_DIR` 跳过，封装 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过；不计为原生验证通过。日志为 `build/navigation-breakpoints-check.log`。本轮同样未发现 DTD／Flutter 调试实例，无法热重载。按用户要求不构建，后续由用户自行构建和实机确认。

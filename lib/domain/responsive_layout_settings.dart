@@ -2,6 +2,7 @@
 final class ResponsiveLayoutSettings {
   ResponsiveLayoutSettings({
     List<int>? videoGridMinWidths,
+    int navigationBarBreakpoint = 600,
     int sidebarExpandedWidth = 1600,
     int playbackSideBySideWidth = 1000,
   }) : videoGridMinWidths =
@@ -9,6 +10,10 @@ final class ResponsiveLayoutSettings {
                validVideoGridWidths(videoGridMinWidths)
            ? List.unmodifiable(videoGridMinWidths)
            : null,
+       navigationBarBreakpoint =
+           navigationBarBreakpoint >= 320 && navigationBarBreakpoint <= 6000
+           ? navigationBarBreakpoint
+           : 600,
        sidebarExpandedWidth =
            sidebarExpandedWidth >= 600 && sidebarExpandedWidth <= 6000
            ? sidebarExpandedWidth
@@ -20,6 +25,7 @@ final class ResponsiveLayoutSettings {
 
   const ResponsiveLayoutSettings.defaults()
     : videoGridMinWidths = null,
+      navigationBarBreakpoint = 600,
       sidebarExpandedWidth = 1600,
       playbackSideBySideWidth = 1000;
 
@@ -40,6 +46,7 @@ final class ResponsiveLayoutSettings {
   /// Null retains the original card-width and nonlinear font-scaling rules.
   /// Custom entries are the minimum grid widths for 2 through 12 columns.
   final List<int>? videoGridMinWidths;
+  final int navigationBarBreakpoint;
   final int sidebarExpandedWidth;
   final int playbackSideBySideWidth;
 
@@ -56,12 +63,15 @@ final class ResponsiveLayoutSettings {
   ResponsiveLayoutSettings copyWith({
     List<int>? videoGridMinWidths,
     bool resetVideoGrid = false,
+    int? navigationBarBreakpoint,
     int? sidebarExpandedWidth,
     int? playbackSideBySideWidth,
   }) => ResponsiveLayoutSettings(
     videoGridMinWidths: resetVideoGrid
         ? null
         : videoGridMinWidths ?? this.videoGridMinWidths,
+    navigationBarBreakpoint:
+        navigationBarBreakpoint ?? this.navigationBarBreakpoint,
     sidebarExpandedWidth: sidebarExpandedWidth ?? this.sidebarExpandedWidth,
     playbackSideBySideWidth:
         playbackSideBySideWidth ?? this.playbackSideBySideWidth,

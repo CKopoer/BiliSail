@@ -107,10 +107,14 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       ),
     ),
   );
-  Future<void> setSidebarExpandedWidth(int value) => update(
+  Future<void> setNavigationBreakpoints(
+    int navigationBarBreakpoint,
+    int sidebarExpandedWidth,
+  ) => update(
     (current) => current.copyWith(
       responsiveLayout: current.responsiveLayout.copyWith(
-        sidebarExpandedWidth: value,
+        navigationBarBreakpoint: navigationBarBreakpoint,
+        sidebarExpandedWidth: sidebarExpandedWidth,
       ),
     ),
   );

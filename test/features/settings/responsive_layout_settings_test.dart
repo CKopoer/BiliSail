@@ -16,6 +16,7 @@ void main() {
     () {
       for (final settings in [AppSettings(), const AppSettings.defaults()]) {
         expect(settings.responsiveLayout.videoGridMinWidths, isNull);
+        expect(settings.responsiveLayout.navigationBarBreakpoint, 600);
         expect(settings.responsiveLayout.sidebarExpandedWidth, 1600);
         expect(settings.responsiveLayout.playbackSideBySideWidth, 1000);
       }
@@ -41,9 +42,11 @@ void main() {
         );
       }
       final invalid = ResponsiveLayoutSettings(
+        navigationBarBreakpoint: 319,
         sidebarExpandedWidth: 599,
         playbackSideBySideWidth: 6001,
       );
+      expect(invalid.navigationBarBreakpoint, 600);
       expect(invalid.sidebarExpandedWidth, 1600);
       expect(invalid.playbackSideBySideWidth, 1000);
       expect(custom.copyWith(resetVideoGrid: true).videoGridMinWidths, isNull);
@@ -59,6 +62,45 @@ void main() {
     });
     tearDown(() => database.close());
 
+    test('old sidebar thresholds are retained separately from the new navigation threshold', () async {
+      final widths = [...ResponsiveLayoutSettings.defaultVideoGridMinWidths]
+        ..[2] = 1000;
+      await database.writeSetting(
+        'preferences.v1',
+        jsonEncode({
+          'schemaVersion': 48,
+          'theme': 'dark',
+          'responsiveLayout': {
+            'sidebarExpandedWidth': 1280,
+            'videoGridMinWidths': widths,
+            'playbackSideBySideWidth': 900,
+          },
+        }),
+      );
+      final loaded = await repository.load();
+      expect(loaded.responsiveLayout.navigationBarBreakpoint, 600);
+      expect(loaded.responsiveLayout.sidebarExpandedWidth, 1280);
+      expect(loaded.responsiveLayout.videoGridMinWidths, widths);
+      expect(loaded.responsiveLayout.playbackSideBySideWidth, 900);
+      expect(loaded.theme, AppThemePreference.dark);
+      await repository.save(loaded);
+      final Object? raw = jsonDecode(
+        (await database.readSetting('preferences.v1')) ?? '{}',
+      );
+      expect(
+        raw,
+        isA<Map<String, Object?>>().having(
+          (map) => map['responsiveLayout'],
+          'layout',
+          isA<Map<String, Object?>>().having(
+            (layout) => layout['sidebarExpandedWidth'],
+            'sidebar threshold',
+            1280,
+          ),
+        ),
+      );
+    });
+
     test(
       'old, malformed and partial snapshots preserve unrelated settings',
       () async {
@@ -68,7 +110,7 @@ void main() {
           <String, Object?>{},
           {
             'videoGridMinWidths': [300, 300],
-            'sidebarExpandedWidth': 599,
+            'navigationBarBreakpoint': 319,
             'playbackSideBySideWidth': '900',
           },
           {
@@ -77,7 +119,7 @@ void main() {
               492.5,
               ...ResponsiveLayoutSettings.defaultVideoGridMinWidths.skip(2),
             ],
-            'sidebarExpandedWidth': 7000,
+            'navigationBarBreakpoint': 7000,
             'playbackSideBySideWidth': -1,
           },
         ]) {
@@ -92,17 +134,17 @@ void main() {
           final loaded = await repository.load();
           expect(loaded.theme, AppThemePreference.dark);
           expect(loaded.responsiveLayout.videoGridMinWidths, isNull);
-          expect(loaded.responsiveLayout.sidebarExpandedWidth, 1600);
+          expect(loaded.responsiveLayout.navigationBarBreakpoint, 600);
           expect(loaded.responsiveLayout.playbackSideBySideWidth, 1000);
         }
         await database.writeSetting(
           'preferences.v1',
           jsonEncode({
-            'responsiveLayout': {'sidebarExpandedWidth': 1280},
+            'responsiveLayout': {'navigationBarBreakpoint': 1280},
           }),
         );
         final partial = (await repository.load()).responsiveLayout;
-        expect(partial.sidebarExpandedWidth, 1280);
+        expect(partial.navigationBarBreakpoint, 1280);
         expect(partial.playbackSideBySideWidth, 1000);
         expect(partial.videoGridMinWidths, isNull);
       },
@@ -117,14 +159,16 @@ void main() {
           AppSettings(
             responsiveLayout: ResponsiveLayoutSettings(
               videoGridMinWidths: widths,
-              sidebarExpandedWidth: 1280,
+              navigationBarBreakpoint: 1280,
+              sidebarExpandedWidth: 1800,
               playbackSideBySideWidth: 900,
             ),
           ),
         );
         final loaded = (await repository.load()).responsiveLayout;
         expect(loaded.videoGridMinWidths, widths);
-        expect(loaded.sidebarExpandedWidth, 1280);
+        expect(loaded.navigationBarBreakpoint, 1280);
+        expect(loaded.sidebarExpandedWidth, 1800);
         expect(loaded.playbackSideBySideWidth, 900);
         final Object? raw = jsonDecode(
           (await database.readSetting('preferences.v1')) ?? '{}',
@@ -134,7 +178,7 @@ void main() {
           isA<Map<String, Object?>>().having(
             (map) => map['schemaVersion'],
             'schema version',
-            48,
+            49,
           ),
         );
         expect(database.schemaVersion, 3);
@@ -158,20 +202,30 @@ void main() {
       await container.read(settingsControllerProvider.future);
       final controller = container.read(settingsControllerProvider.notifier);
       await Future.wait([
-        controller.setSidebarExpandedWidth(1280),
+        controller.setNavigationBreakpoints(800, 1280),
         controller.setPlaybackSideBySideWidth(900),
         controller.setVideoGridMinWidths(
           [...ResponsiveLayoutSettings.defaultVideoGridMinWidths]..[2] = 1000,
         ),
       ]);
+      expect(repository.value.responsiveLayout.navigationBarBreakpoint, 800);
       expect(repository.value.responsiveLayout.sidebarExpandedWidth, 1280);
       expect(repository.value.responsiveLayout.playbackSideBySideWidth, 900);
       expect(repository.value.responsiveLayout.videoGridMinWidths?[2], 1000);
       repository.fail = true;
       await expectLater(
-        controller.setSidebarExpandedWidth(1500),
+        controller.setNavigationBreakpoints(1500, 1800),
         throwsStateError,
       );
+      expect(
+        container
+            .read(settingsControllerProvider)
+            .requireValue
+            .responsiveLayout
+            .navigationBarBreakpoint,
+        800,
+      );
+      repository.fail = false;
       expect(
         container
             .read(settingsControllerProvider)
@@ -180,11 +234,11 @@ void main() {
             .sidebarExpandedWidth,
         1280,
       );
-      repository.fail = false;
       await controller.setVideoGridMinWidths(null);
       expect(repository.value.responsiveLayout.videoGridMinWidths, isNull);
       expect(repository.value.responsiveLayout.playbackSideBySideWidth, 900);
       await controller.resetToDefaults();
+      expect(repository.value.responsiveLayout.navigationBarBreakpoint, 600);
       expect(repository.value.responsiveLayout.sidebarExpandedWidth, 1600);
       expect(repository.value.responsiveLayout.playbackSideBySideWidth, 1000);
     },
