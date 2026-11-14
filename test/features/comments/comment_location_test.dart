@@ -186,88 +186,97 @@ void main() {
     },
   );
 
-  for (final maxPage in [3, 25]) {
-    test('repository searches bounded reply pages max=$maxPage', () async {
-      final transport = _Transport((uri) {
-        final number = int.parse(uri.queryParameters['pn'] ?? '1');
-        final id = maxPage == 3 && number == 3 ? '242' : '${300 + number}';
-        return {
-          'root': _comment('200'),
-          'replies': [_comment(id)],
-          'page': {'count': 10000, 'size': 20},
-        };
-      });
-      final requests = ApiRequests();
-      final api = BiliApiClient(
-        transport: transport,
-        sessionProvider: requests,
-      );
-      addTearDown(api.close);
-      final data = ApiCommentsRepository(
-        api,
-        requests,
-        accountScope: () => 'guest',
-      );
-      final result = data.locate('170001', _location, RequestCancellation());
-      if (maxPage == 3) {
-        expect((await result).pageNumber, 3);
-      } else {
-        await expectLater(
-          result,
-          throwsA(
-            isA<AppFailure>().having(
-              (e) => e.kind,
-              'kind',
-              AppFailureKind.notFound,
-            ),
-          ),
+  for (final found in [true, false]) {
+    test(
+      'repository directly locates beyond 500 replies found=$found',
+      () async {
+        final transport = _Transport((uri) {
+          if (uri.path.endsWith('/jump')) {
+            expect(uri.queryParameters, {
+              'oid': '170001',
+              'type': '1',
+              'rpid': '242',
+            });
+            return {
+              'replies': [_comment('200')],
+              'page': {'rt_num': 60},
+            };
+          }
+          expect(uri.queryParameters['pn'], '30');
+          return {
+            'root': _comment('200'),
+            'replies': [_comment(found ? '242' : '300')],
+            'page': {'count': 10000, 'size': 20},
+          };
+        });
+        final requests = ApiRequests();
+        final api = BiliApiClient(
+          transport: transport,
+          sessionProvider: requests,
         );
-      }
-      expect(transport.uris.length, maxPage + 1);
-      expect(
-        transport.uris.every((uri) => uri.queryParameters['root'] == '200'),
-        isTrue,
-      );
-    });
+        addTearDown(api.close);
+        final data = ApiCommentsRepository(
+          api,
+          requests,
+          accountScope: () => 'guest',
+        );
+        final result = data.locate('170001', _location, RequestCancellation());
+        if (found) {
+          final thread = await result;
+          expect(thread.pageNumber, 30);
+          expect(thread.root.id, '200');
+          expect(thread.page.items.single.id, '242');
+        } else {
+          await expectLater(
+            result,
+            throwsA(
+              isA<AppFailure>().having(
+                (e) => e.kind,
+                'kind',
+                AppFailureKind.notFound,
+              ),
+            ),
+          );
+        }
+        expect(transport.uris.map((uri) => uri.path), [
+          '/x/v2/reply/jump',
+          '/x/v2/reply/reply',
+        ]);
+        expect(transport.uris.last.queryParameters['root'], '200');
+      },
+    );
   }
 
-  test(
-    'repository search cancels across account epochs before another page',
-    () async {
-      final requests = ApiRequests();
-      final transport = _Transport((uri) {
-        requests.advanceSession();
-        return {
-          'root': _comment('200'),
-          'replies': [],
-          'page': {'count': 0, 'size': 20},
-        };
-      });
-      final api = BiliApiClient(
-        transport: transport,
-        sessionProvider: requests,
-      );
-      addTearDown(api.close);
-      final data = ApiCommentsRepository(
-        api,
-        requests,
-        accountScope: () => 'guest',
-      );
-      final cancellation = RequestCancellation();
-      await expectLater(
-        data.locate('170001', _location, cancellation),
-        throwsA(
-          isA<AppFailure>().having(
-            (e) => e.kind,
-            'kind',
-            AppFailureKind.cancelled,
-          ),
+  test('repository direct location cancels across account epochs before the target page', () async {
+    final requests = ApiRequests();
+    final transport = _Transport((uri) {
+      requests.advanceSession();
+      return {
+        'replies': [_comment('200')],
+        'page': {'rt_num': 60},
+      };
+    });
+    final api = BiliApiClient(transport: transport, sessionProvider: requests);
+    addTearDown(api.close);
+    final data = ApiCommentsRepository(
+      api,
+      requests,
+      accountScope: () => 'guest',
+    );
+    final cancellation = RequestCancellation();
+    await expectLater(
+      data.locate('170001', _location, cancellation),
+      throwsA(
+        isA<AppFailure>().having(
+          (e) => e.kind,
+          'kind',
+          AppFailureKind.cancelled,
         ),
-      );
-      expect(cancellation.isCancelled, isTrue);
-      expect(transport.uris, hasLength(1));
-    },
-  );
+      ),
+    );
+    expect(cancellation.isCancelled, isTrue);
+    expect(transport.uris, hasLength(1));
+  });
 }
 
 class _Repository extends Fake
@@ -316,6 +325,8 @@ class _Repository extends Fake
 }
 
 Map<String, Object?> _comment(String id) => {
+  'oid_str': '170001',
+  'type': 1,
   'rpid_str': id,
   'member': {'mid': '7', 'uname': '作者'},
   'content': {'message': '回复'},

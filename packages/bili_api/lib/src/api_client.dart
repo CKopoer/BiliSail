@@ -1019,6 +1019,102 @@ final class BiliApiClient {
     );
   }
 
+  /// Resolves a comment ID to its exact reply page without scanning siblings.
+  Future<
+    ({ApiVideoComment root, ApiPage<ApiVideoComment> page, int pageNumber})
+  >
+  getVideoCommentLocation(
+    String aid,
+    String rootId, {
+    String? replyId,
+    int commentType = 1,
+    ApiRequestContext? context,
+  }) async {
+    _validateCommentId(aid);
+    _validateCommentId(rootId);
+    if (replyId != null) _validateCommentId(replyId);
+    _validateCommentType(commentType);
+    const endpoint = 'comment_location';
+    final focusId = replyId ?? rootId;
+    late final Map<String, Object?> data;
+    try {
+      data = await _json(
+        _api.replace(
+          path: '/x/v2/reply/jump',
+          queryParameters: {
+            'oid': aid,
+            'type': '$commentType',
+            'rpid': focusId,
+          },
+        ),
+        endpoint,
+        context,
+      );
+    } on ApiFailure catch (failure) {
+      if (const {12006, 12022}.contains(failure.businessCode)) {
+        throw ApiFailure(
+          ApiFailureCategory.notFound,
+          endpoint,
+          businessCode: failure.businessCode,
+        );
+      }
+      rethrow;
+    }
+    Map<String, Object?>? rawRoot;
+    for (final value in _list(
+      data['replies'] ?? const [],
+      endpoint,
+    ).take(100)) {
+      final entry = _map(value, endpoint);
+      if (_id(entry['rpid_str'] ?? entry['rpid'], endpoint) == rootId) {
+        rawRoot = entry;
+        break;
+      }
+    }
+    if (rawRoot == null) {
+      throw const ApiFailure(ApiFailureCategory.notFound, endpoint);
+    }
+    if (_id(rawRoot['oid_str'] ?? rawRoot['oid'], endpoint) != aid ||
+        _requiredInt(rawRoot['type'], endpoint) != commentType) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    final root = _comment(
+      rawRoot,
+      endpoint,
+      upperMid: _userMid(_commentMap(data['upper'])['mid']),
+    );
+    if (root.rootId != null && root.rootId != rootId) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    var pageNumber = 1;
+    if (focusId != rootId) {
+      final jumpPage = _requiredInt(
+        _map(data['page'], endpoint)['rt_num'],
+        endpoint,
+      );
+      if (jumpPage < 1 || jumpPage > 0x7fffffff) {
+        throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+      }
+      // Web jump's rt_num uses 10 replies per page, independently of the
+      // main list's page.size. Shared reply pagination uses 20 per page.
+      pageNumber = (jumpPage - 1) ~/ 2 + 1;
+    }
+    final page = await getVideoReplies(
+      aid,
+      rootId,
+      page: pageNumber,
+      commentType: commentType,
+      context: context,
+    );
+    if (focusId != rootId &&
+        !page.items.any(
+          (entry) => entry.id == focusId && entry.rootId == rootId,
+        )) {
+      throw const ApiFailure(ApiFailureCategory.notFound, endpoint);
+    }
+    return (root: root, page: page, pageNumber: pageNumber);
+  }
+
   /// Reads a root even when it is absent from the main comment pages.
   Future<ApiVideoComment> getVideoCommentRoot(
     String aid,
