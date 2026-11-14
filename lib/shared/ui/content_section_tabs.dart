@@ -13,6 +13,7 @@ class ContentSectionTabs<T extends Object> extends StatefulWidget {
     required this.onSelected,
     this.itemKey,
     this.scrollKey,
+    this.wrap = false,
   });
 
   final List<(T, String)> entries;
@@ -20,6 +21,7 @@ class ContentSectionTabs<T extends Object> extends StatefulWidget {
   final ValueChanged<T> onSelected;
   final Key Function(T)? itemKey;
   final Key? scrollKey;
+  final bool wrap;
 
   @override
   State<ContentSectionTabs<T>> createState() => _ContentSectionTabsState<T>();
@@ -73,6 +75,7 @@ class _ContentSectionTabsState<T extends Object>
   void didUpdateWidget(ContentSectionTabs<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value ||
+        oldWidget.wrap != widget.wrap ||
         !listEquals(oldWidget.entries, widget.entries)) {
       _revealSelection();
     }
@@ -84,9 +87,52 @@ class _ContentSectionTabsState<T extends Object>
     final colors = theme.colorScheme;
     final ids = widget.entries.map((entry) => entry.$1).toSet();
     _itemKeys.removeWhere((id, _) => !ids.contains(id));
+    final tabs = [
+      for (final (id, label) in widget.entries)
+        Padding(
+          key: _itemKeys.putIfAbsent(id, GlobalKey.new),
+          padding: const EdgeInsets.only(right: 4),
+          child: Semantics(
+            selected: widget.value == id,
+            child: TextButton(
+              key: widget.itemKey?.call(id),
+              style:
+                  TextButton.styleFrom(
+                    foregroundColor: widget.value == id
+                        ? colors.primary
+                        : colors.onSurfaceVariant,
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    textStyle: theme.textTheme.labelLarge?.copyWith(
+                      fontSize: 13,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ).copyWith(
+                    backgroundColor: WidgetStateProperty.resolveWith(
+                      (states) =>
+                          states.contains(WidgetState.hovered) ||
+                              states.contains(WidgetState.focused)
+                          ? colors.surfaceContainerLow
+                          : Colors.transparent,
+                    ),
+                    overlayColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.pressed)
+                          ? colors.onSurface.withValues(alpha: .06)
+                          : Colors.transparent,
+                    ),
+                  ),
+              onPressed: () => widget.onSelected(id),
+              child: Text(label, maxLines: 1),
+            ),
+          ),
+        ),
+    ];
     return SizedBox(
       width: double.infinity,
-      height: 44,
+      height: widget.wrap ? null : 44,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: LayoutBuilder(
@@ -95,68 +141,19 @@ class _ContentSectionTabsState<T extends Object>
               _viewportWidth = constraints.maxWidth;
               _revealSelection();
             }
+            if (widget.wrap) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Wrap(runSpacing: 4, children: tabs),
+              );
+            }
             return ScrollConfiguration(
               behavior: const SmoothScrollBehavior(horizontalMouseWheel: true),
               child: SingleChildScrollView(
                 key: widget.scrollKey,
                 controller: _scrollController,
                 scrollDirection: Axis.horizontal,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final (id, label) in widget.entries)
-                      Padding(
-                        key: _itemKeys.putIfAbsent(id, GlobalKey.new),
-                        padding: const EdgeInsets.only(right: 4),
-                        child: Semantics(
-                          selected: widget.value == id,
-                          child: TextButton(
-                            key: widget.itemKey?.call(id),
-                            style:
-                                TextButton.styleFrom(
-                                  foregroundColor: widget.value == id
-                                      ? colors.primary
-                                      : colors.onSurfaceVariant,
-                                  minimumSize: const Size(0, 36),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  textStyle: theme.textTheme.labelLarge
-                                      ?.copyWith(fontSize: 13),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ).copyWith(
-                                  backgroundColor:
-                                      WidgetStateProperty.resolveWith(
-                                        (states) =>
-                                            states.contains(
-                                                  WidgetState.hovered,
-                                                ) ||
-                                                states.contains(
-                                                  WidgetState.focused,
-                                                )
-                                            ? colors.surfaceContainerLow
-                                            : Colors.transparent,
-                                      ),
-                                  overlayColor: WidgetStateProperty.resolveWith(
-                                    (states) =>
-                                        states.contains(WidgetState.pressed)
-                                        ? colors.onSurface.withValues(
-                                            alpha: .06,
-                                          )
-                                        : Colors.transparent,
-                                  ),
-                                ),
-                            onPressed: () => widget.onSelected(id),
-                            child: Text(label, maxLines: 1),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: tabs),
               ),
             );
           },

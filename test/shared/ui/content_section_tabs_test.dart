@@ -6,6 +6,58 @@ import 'package:flutter_test/flutter_test.dart';
 const _entries = [(0, '综合热门'), (1, '每周必看'), (2, '入站必刷'), (3, '排行榜')];
 
 void main() {
+  testWidgets('wrapped choices remain selectable and visible after collapse', (
+    tester,
+  ) async {
+    late StateSetter rebuild;
+    var wrap = false;
+    var selected = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              rebuild = setState;
+              return Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: 220,
+                  child: ContentSectionTabs<int>(
+                    entries: _entries,
+                    value: selected,
+                    wrap: wrap,
+                    onSelected: (value) => setState(() => selected = value),
+                    itemKey: (id) => ValueKey('section-$id'),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final first = find.byKey(const ValueKey('section-0'));
+    final last = find.byKey(const ValueKey('section-3'));
+    expect(last.hitTestable(), findsNothing);
+
+    rebuild(() => wrap = true);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(last).top, greaterThan(tester.getRect(first).top));
+    for (final (id, _) in _entries) {
+      expect(find.byKey(ValueKey('section-$id')).hitTestable(), findsOneWidget);
+    }
+    await tester.tap(last);
+    await tester.pumpAndSettle();
+    expect(selected, 3);
+
+    rebuild(() => wrap = false);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(ContentSectionTabs<int>)).height, 44);
+    expect(last.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('wheel position survives ordinary rebuilds with equal entries', (
     tester,
   ) async {
