@@ -6,7 +6,9 @@ import 'package:bilisail/features/feed/application/home_controller.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/feed/presentation/home_content.dart';
+import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
+import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -57,15 +59,60 @@ void main() {
         container: container,
         child: MaterialApp.router(
           routerConfig: router,
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: TextScaler.linear(scale)),
-            child: child!,
+          builder: (context, child) => AppNoticeHost(
+            child: MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
+  }
+
+  for (final section in ['默认收藏夹', '我创建的收藏夹']) {
+    testWidgets('$section remaining video opens immediately after removal', (
+      tester,
+    ) async {
+      repository.totalVideos = 3;
+      await mount(tester, section);
+      if (section != '默认收藏夹') {
+        await tester.tap(find.text('测试收藏夹'));
+        await tester.pumpAndSettle();
+      }
+      await tester.longPress(
+        find.ancestor(
+          of: find.text('视频 1'),
+          matching: find.byType(HomeVideoCard),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('取消收藏'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('确认取消'));
+      await tester.pumpAndSettle();
+      expect(find.text('视频 1'), findsNothing);
+      final before = repository.pages.length;
+      await tester.tap(find.text('视频 2'));
+      await tester.pumpAndSettle();
+      final uri = router.routeInformationProvider.value.uri;
+      expect(uri.path, '/video/BV0000000002');
+      final queue = container
+          .read(watchLaterQueueRegistryProvider)
+          .resolve(
+            uri.queryParameters['queue'],
+            scope: 'user:7',
+            sessionEpoch: 4,
+          )!;
+      expect(queue.items.map((item) => item.video.id.value), [
+        'BV0000000002',
+        'BV0000000003',
+      ]);
+      expect(repository.pages.skip(before), [1]);
+      expect(tester.takeException(), isNull);
+    });
   }
 
   for (final section in ['默认收藏夹', '我创建的收藏夹', '我的收藏与订阅']) {
@@ -138,6 +185,42 @@ void main() {
     },
   );
 
+  testWidgets('leaving a folder cancels reconciliation and late navigation', (
+    tester,
+  ) async {
+    repository.totalVideos = 3;
+    await mount(tester, '我创建的收藏夹');
+    await tester.tap(find.text('测试收藏夹'));
+    await tester.pumpAndSettle();
+    const query = (
+      channel: HomeChannel.favorites,
+      section: '我创建的收藏夹',
+      scope: 'user:7',
+      folderId: '42',
+    );
+    final provider = homeControllerProvider(query);
+    final first = container
+        .read(provider)
+        .items
+        .requireValue
+        .firstWhere((entry) => entry.id == '1');
+    expect(await container.read(provider.notifier).removeFavorite(first), true);
+    await tester.pumpAndSettle();
+    repository.pending = Completer<HomePage>();
+    final before = repository.pages.length;
+    await tester.tap(find.text('视频 2'));
+    await tester.pump();
+    final cancellation = repository.lastCancellation!;
+    await tester.tap(find.byTooltip('返回列表'));
+    await tester.pumpAndSettle();
+    expect(cancellation.isCancelled, true);
+    repository.pending!.complete(const HomePage([], hasMore: true));
+    await tester.pumpAndSettle();
+    expect(repository.pages.skip(before), [1]);
+    expect(router.routeInformationProvider.value.uri.path, '/');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'clicking a video on a later browser page does not add the earlier page',
     (tester) async {
@@ -195,6 +278,54 @@ void main() {
     },
   );
 
+  testWidgets(
+    'a retained later-page card opens after moving to the first page',
+    (tester) async {
+      await mount(tester, '默认收藏夹');
+      const query = (
+        channel: HomeChannel.favorites,
+        section: '默认收藏夹',
+        scope: 'user:7',
+        folderId: null,
+      );
+      final provider = homeControllerProvider(query);
+      final controller = container.read(provider.notifier);
+      await controller.loadMore();
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('视频 25'),
+        400,
+        scrollable: find.descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      final first = container
+          .read(provider)
+          .items
+          .requireValue
+          .firstWhere((entry) => entry.id == '1');
+      expect(await controller.removeFavorite(first), true);
+      // Tap the retained card before a browser frame can reconcile its page.
+      await tester.tap(find.text('视频 25'));
+      await tester.pumpAndSettle();
+      final uri = router.routeInformationProvider.value.uri;
+      expect(uri.path, '/video/BV0000000025');
+      final queue = container
+          .read(watchLaterQueueRegistryProvider)
+          .resolve(
+            uri.queryParameters['queue'],
+            scope: 'user:7',
+            sessionEpoch: 4,
+          )!;
+      expect(queue.pages.single.page, 1);
+      expect(queue.items, hasLength(24));
+      expect(queue.items.last.video.id.value, 'BV0000000025');
+      expect(queue.hasPrevious, false);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('folder header fits narrow screens with large text', (
     tester,
   ) async {
@@ -210,12 +341,14 @@ void main() {
   });
 }
 
-final class _Repository implements HomeRepository {
+final class _Repository implements HomeRepository, HomeFavoriteRepository {
   @override
   String get accountScope => 'user:7';
   final pages = <int>[];
   final folderIds = <String?>[];
   bool collection = false;
+  int totalVideos = 25;
+  final removed = <String>{};
   Completer<HomePage>? pending;
   RequestCancellation? lastCancellation;
   @override
@@ -238,20 +371,46 @@ final class _Repository implements HomeRepository {
     if (query.folderId != null) folderIds.add(query.folderId);
     lastCancellation = cancellation;
     if (pending != null) return pending!.future;
-    return HomePage([
-      if (page == 1)
-        const HomeEntry(
-          id: 'invalid',
-          title: '失效视频',
-          kind: HomeEntryKind.video,
-        ),
-      for (var n = page == 1 ? 1 : 25; n <= (page == 1 ? 24 : 25); n++)
-        HomeEntry(
-          id: '$n',
-          kind: HomeEntryKind.video,
-          title: '视频 $n',
-          bvid: 'BV${n.toString().padLeft(10, '0')}',
-        ),
-    ], hasMore: page == 1);
+    final videos = [
+      for (var n = 1; n <= totalVideos; n++)
+        if (!removed.contains('$n'))
+          HomeEntry(
+            id: '$n',
+            aid: '$n',
+            kind: HomeEntryKind.video,
+            title: '视频 $n',
+            bvid: 'BV${n.toString().padLeft(10, '0')}',
+          ),
+    ];
+    return HomePage(
+      [
+        if (page == 1)
+          const HomeEntry(
+            id: 'invalid',
+            title: '失效视频',
+            kind: HomeEntryKind.video,
+          ),
+        ...videos.skip((page - 1) * 24).take(24),
+      ],
+      hasMore: page * 24 < videos.length,
+      favoriteFolderId: '42',
+    );
   }
+
+  @override
+  Future<void> removeFavorite(
+    HomeEntry entry, {
+    required String folderId,
+    required String scope,
+    required RequestCancellation cancellation,
+  }) async {
+    removed.add(entry.id);
+  }
+
+  @override
+  Future<void> deleteFavoriteFolder(
+    HomeEntry entry, {
+    required String scope,
+    required RequestCancellation cancellation,
+  }) async => throw UnimplementedError();
 }

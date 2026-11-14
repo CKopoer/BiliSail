@@ -94,14 +94,21 @@ final class HomeController extends Notifier<HomeState> {
     );
   }
 
-  final Map<VideoId, ({int page, String? cursor})> _queuePages = {};
-  ({int page, String? cursor})? queuePageFor(VideoId id) => _queuePages[id];
+  final Map<VideoId, ({int page, String? cursor, bool reconcile})> _queuePages =
+      {};
+  ({int page, String? cursor, bool reconcile})? queuePageFor(VideoId id) =>
+      _queuePages[id];
   void _trackQueuePage(List<HomeEntry> items, int page, String? cursor) {
     if (query.channel != HomeChannel.favorites) return;
     for (final item in items) {
       final id = VideoId(item.bvid ?? '');
-      if (id.isValid && _queuePages.length < maxFavoriteEntries) {
-        _queuePages.putIfAbsent(id, () => (page: page, cursor: cursor));
+      if (!id.isValid || _removedEntries.contains((item.kind, item.id))) {
+        continue;
+      }
+      final previous = _queuePages[id];
+      if (previous?.reconcile == true ||
+          previous == null && _queuePages.length < maxFavoriteEntries) {
+        _queuePages[id] = (page: page, cursor: cursor, reconcile: false);
       }
     }
   }
@@ -405,7 +412,13 @@ final class HomeController extends Notifier<HomeState> {
       _cancellation = RequestCancellation();
       if (_page > _reconcileUntilPage) _reconcileUntilPage = _page;
       _page = 0;
-      _queuePages.clear();
+      // Retained cards still need a playback origin. Their previous page is an
+      // upper bound after a removal, but its cursor/snapshot may be invalid.
+      // Keep the browser list intact and resolve the current page when clicked.
+      if (entry.bvid case final bvid?) _queuePages.remove(VideoId(bvid));
+      _queuePages.updateAll(
+        (_, origin) => (page: origin.page, cursor: null, reconcile: true),
+      );
       _cursor = null;
       _seenCursors.clear();
       _pagesWithoutNewItems = 0;

@@ -245,6 +245,146 @@ void main() {
     );
   });
 
+  for (final targetPage in [1, 2]) {
+    test(
+      'removal resolves the selected video on its current page $targetPage',
+      () async {
+        repository.pages = {
+          1: HomePage(
+            [_entry(2), _entry(3)],
+            hasMore: true,
+            nextCursor: 'fresh',
+          ),
+          2: HomePage(
+            [_entry(4), _entry(5)],
+            hasMore: true,
+            nextCursor: 'fresh',
+          ),
+        };
+        final selected = VideoId(_entry(targetPage == 1 ? 3 : 4).bvid!);
+        final queue = (await container
+            .read(provider.notifier)
+            .capture(
+              page: 2,
+              cursor: 'revoked-snapshot',
+              initial: selected,
+              reconcile: true,
+            ))!;
+        expect(repository.calls, targetPage == 1 ? [1] : [1, 2]);
+        expect(repository.cursors, targetPage == 1 ? [null] : [null, 'fresh']);
+        expect(queue.pages.single.page, targetPage);
+        expect(queue.homeSource?.cursor, 'fresh');
+        expect(queue.indexOf(selected), greaterThanOrEqualTo(0));
+        expect(queue.items, hasLength(2));
+        expect(queue.nextPage, targetPage + 1);
+        expect(queue.hasPrevious, targetPage > 1);
+        expect(queue.hasMore, true);
+        expect(repository.cancellation!.isCancelled, true);
+      },
+    );
+  }
+
+  test(
+    'reconciliation stops at the old page or the current last page',
+    () async {
+      for (final lastPage in [1, 2]) {
+        repository.calls.clear();
+        repository.pages = {
+          1: HomePage([_entry(1)], hasMore: lastPage > 1),
+          2: HomePage([_entry(2)], hasMore: true),
+          3: HomePage([_entry(3)], hasMore: false),
+        };
+        expect(
+          await container
+              .read(provider.notifier)
+              .capture(
+                page: 2,
+                initial: VideoId(_entry(3).bvid!),
+                reconcile: true,
+              ),
+          isNull,
+        );
+        expect(repository.calls, lastPage == 1 ? [1] : [1, 2]);
+        expect(
+          (container.read(provider).error as AppFailure).kind,
+          AppFailureKind.notFound,
+        );
+      }
+    },
+  );
+
+  test('a failed reconciliation retries from a fresh first page', () async {
+    repository.pages = {
+      1: HomePage([_entry(1)], hasMore: true, nextCursor: 'fresh'),
+      2: HomePage([_entry(2)], hasMore: false),
+    };
+    final selected = VideoId(_entry(2).bvid!);
+    repository.failPage = 2;
+    final controller = container.read(provider.notifier);
+    expect(
+      await controller.capture(page: 2, initial: selected, reconcile: true),
+      isNull,
+    );
+    expect(
+      (container.read(provider).error as AppFailure).kind,
+      AppFailureKind.network,
+    );
+    repository.failPage = null;
+    final queue = (await controller.capture(
+      page: 2,
+      initial: selected,
+      reconcile: true,
+    ))!;
+    expect(queue.pages.single.page, 2);
+    expect(queue.items.single.video.id, selected);
+    expect(repository.calls, [1, 2, 1, 2]);
+    expect(repository.cursors, [null, 'fresh', null, 'fresh']);
+  });
+
+  for (final change in ['account', 'epoch', 'dispose']) {
+    test('$change stops reconciliation before reading another page', () async {
+      repository.pending = Completer<HomePage>();
+      final result = container
+          .read(provider.notifier)
+          .capture(page: 3, initial: VideoId(_entry(3).bvid!), reconcile: true);
+      if (change == 'account') repository.accountScope = 'user:8';
+      if (change == 'epoch') epoch++;
+      if (change == 'dispose') {
+        container.invalidate(provider);
+        await container.pump();
+      }
+      repository.pending!.complete(HomePage([_entry(1)], hasMore: true));
+      expect(await result, isNull);
+      expect(repository.calls, [1]);
+      expect(repository.cancellation!.isCancelled, true);
+    });
+  }
+
+  testWidgets('reconciliation shares one total deadline across pages', (
+    tester,
+  ) async {
+    repository.pending = Completer<HomePage>();
+    final result = container
+        .read(provider.notifier)
+        .capture(page: 3, initial: VideoId(_entry(3).bvid!), reconcile: true);
+    await tester.pump(const Duration(seconds: 20));
+    final first = repository.pending!;
+    repository.pending = Completer<HomePage>();
+    first.complete(HomePage([_entry(1)], hasMore: true, nextCursor: 'fresh'));
+    await tester.pump();
+    expect(repository.calls, [1, 2]);
+    await tester.pump(const Duration(seconds: 11));
+    expect(await result, isNull);
+    expect(repository.calls, [1, 2]);
+    expect(repository.cancellation!.isCancelled, true);
+    expect(
+      (container.read(provider).error as AppFailure).kind,
+      AppFailureKind.timeout,
+    );
+    repository.pending!.complete(HomePage([_entry(3)], hasMore: false));
+    await tester.pump();
+  });
+
   for (final change in ['account', 'epoch', 'dispose']) {
     test('$change cancels or isolates an in-flight queue', () async {
       repository.pending = Completer<HomePage>();
