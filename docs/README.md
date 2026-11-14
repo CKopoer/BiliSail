@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [点播预读断流恢复](validation/prefetch-network-recovery-2026-11-14.md) | 缓存仍可播放时的网络恢复探测、提前重开、PiliPlus 对比与受控断流回归 |
 | [响应式布局阈值设置](validation/responsive-layout-settings-2026-11-14.md) | 卡片多滑块阈值、导航栏自动切换和视频／影视分栏宽度，默认兼容、持久化与布局状态验证 |
 | [视频侧栏重建与生命周期](validation/video-sidebar-lifecycle-2026-11-14.md) | 开关局部更新、播放器内容复用、隐藏态 Ticker／可见性边界及回归证据 |
 | [评论区滚动生命周期复查](validation/comments-scroll-lifecycle-2026-11-14.md) | 行内表情可见性与请求取消、分页无效调度、手势资源及 500 条列表释放回归 |

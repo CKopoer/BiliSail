@@ -142,7 +142,11 @@ final class NativeErrorSummary {
       _ when value.contains('failed to open') => NativeErrorCause.openFailed,
       _ when value.contains('not found') || value.contains('no such file') =>
         NativeErrorCause.missingFile,
-      _ when value.contains('input/output') || value.contains('i/o error') =>
+      _
+          when value.contains('input/output') ||
+              value.contains('i/o error') ||
+              value.contains('stream ends prematurely') ||
+              value.contains('error in the pull function') =>
         NativeErrorCause.inputOutput,
       _ => NativeErrorCause.unknown,
     };

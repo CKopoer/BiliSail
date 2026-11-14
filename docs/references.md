@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-14 点播预读断流恢复只读核对 PiliPlus `cab0114a21ce7fad5b90b9a4d788d35d313d25f9` 的 `lib/plugin/pl_player/controller.dart` 中缓存订阅、错误处理与 `refreshPlayer`，以及 `lib/utils/storage_pref.dart` 的 `initBuffer`／`initLiveBuffer`。实际核心和库插件固定 `My-Responsitories/media-kit` 的 `73771ec38176be2d984a3049c28177bce23b54a0`，视频包固定 `bggRGjQaUbCoE/media-kit` 的 `85f0a69ea66b100882b27a3375c72e5155375343`。PiliPlus 的点播错误重试还要求 buffering 且缓冲值为零，没有覆盖缓存仍能播放的提前恢复；本项目独立实现错误触发的媒体线路探测和有限会话恢复，没有复制 GPLv3 应用源码／资源、修改相邻仓库或 Pub 缓存。见[专项记录](validation/prefetch-network-recovery-2026-11-14.md)。
+
 2026-11-13 B站扩展投屏只读核对 MIT 的 NeoBV `6c8ce4bbf82f43681cc6c5e46cd4f8c9b9b71bf6`、GPLv3 的 Danmu TV `d28b8aed03e6da6df47469ac22771dc40ae228f4`；直播地址投屏只读参考 GPLv3 的 Pure Live `1a60607cdd308132afcd85cd562f404109499633`。仅采用内容身份、压缩／编码格式、服务发现与控制的协议事实，独立实现领域模型、能力分流和仓储，无参考应用源码／资源／抓包凭据复制。精确源码路径、依赖许可和验证边界见 [DLNA 投屏](validation/dlna-casting.md)。
 
 2026-11-12：已移除 fvp／MDK，当前仅使用 media_kit。历史文档中的双后端实现、SDK、命令及测试记录保留当时事实，不再作为现行入口；清理与设置兼容见[移除记录](validation/fvp-removal-2026-11-12.md)。
