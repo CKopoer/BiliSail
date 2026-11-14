@@ -115,6 +115,7 @@ import '../features/live/application/live_danmaku_controller.dart';
 import '../features/live/data/api_live_danmaku_repository.dart';
 import '../features/live/application/live_controller.dart';
 import '../features/live/data/api_live_repository.dart';
+import '../features/live/application/live_card_preview_controller.dart';
 import '../features/playback/data/local_progress_store.dart';
 import '../features/settings/application/settings_controller.dart';
 import '../features/settings/application/cdn_speed_test_controller.dart';
@@ -573,6 +574,7 @@ class AppDependencies {
           ),
         ),
         liveRepositoryProvider.overrideWithValue(live),
+        livePreviewRepositoryProvider.overrideWithValue(live),
         liveViewerRepositoryProvider.overrideWithValue(live),
         liveChatRepositoryProvider.overrideWithValue(live),
         liveDanmakuRepositoryProvider.overrideWithValue(

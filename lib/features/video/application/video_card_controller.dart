@@ -7,6 +7,7 @@ import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../playback/domain/video_preview_repository.dart';
+import '../../playback/application/card_preview_playback.dart';
 import '../domain/video_card_interactions.dart';
 import '../domain/video_repository.dart';
 import '../domain/video_actions_repository.dart';
@@ -17,9 +18,7 @@ import 'video_card_preview_playback.dart';
 final videoCardPlaybackRepositoryProvider = Provider<VideoPreviewRepository>(
   (ref) => throw UnimplementedError('Video card playback repository'),
 );
-final videoCardPreviewPlaybackProvider = Provider<VideoCardPreviewPlayback>(
-  (ref) => throw UnimplementedError('Video card preview playback'),
-);
+final videoCardPreviewPlaybackProvider = cardPreviewPlaybackProvider;
 final videoCardWatchLaterAddedProvider = Provider<void Function(VideoId)?>(
   (ref) => null,
 );

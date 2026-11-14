@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/platform/external_links.dart';
 import '../../../domain/user.dart';
 import '../../../shared/ui/app_cover_image.dart';
+import '../../../shared/ui/live_card_cover.dart';
+import '../../../shared/ui/scroll_aware_hover_region.dart';
 import '../../../shared/ui/bili_badges.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/video_card.dart';
@@ -403,42 +405,63 @@ final class _MediaCard extends StatelessWidget {
   }
 }
 
-final class _LiveCard extends StatelessWidget {
+final class _LiveCard extends StatefulWidget {
   const _LiveCard({required this.item, required this.query});
   final SearchLiveEntry item;
   final String query;
   @override
-  Widget build(BuildContext context) => _TapCard(
-    onTap: () => context.go('/live/${item.id.value}'),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _Cover(
-          url: item.coverUrl,
-          left: '${compactCount(item.online)} 人气',
-          right: item.area,
-          badge: item.isLive == false
-              ? '未开播'
-              : item.isLive == true
-              ? '直播中'
-              : '直播',
-        ),
-        const SizedBox(height: 9),
-        HighlightedText(item.title, query: query, maxLines: 2),
-        const SizedBox(height: 6),
-        InkWell(
-          onTap: switch (item.authorId) {
-            final UserId id => () => context.go('/user/${id.value}'),
-            _ => null,
-          },
-          child: Text(
-            item.author,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall,
+  State<_LiveCard> createState() => _LiveCardState();
+}
+
+final class _LiveCardState extends State<_LiveCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) => ScrollAwareHoverRegion(
+    onHover: (hovered) => setState(() => _hovered = hovered),
+    child: _TapCard(
+      onTap: () {
+        setState(() => _hovered = false);
+        context.go('/live/${widget.item.id.value}');
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: LiveCardCover(
+              roomId: widget.item.id,
+              hovered: _hovered,
+              previewEnabled: widget.item.isLive != false,
+              child: _Cover(
+                url: widget.item.coverUrl,
+                left: '${compactCount(widget.item.online)} 人气',
+                right: widget.item.area,
+                badge: widget.item.isLive == false
+                    ? '未开播'
+                    : widget.item.isLive == true
+                    ? '直播中'
+                    : '直播',
+              ),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 9),
+          HighlightedText(widget.item.title, query: widget.query, maxLines: 2),
+          const SizedBox(height: 6),
+          InkWell(
+            onTap: switch (widget.item.authorId) {
+              final UserId id => () => context.go('/user/${id.value}'),
+              _ => null,
+            },
+            child: Text(
+              widget.item.author,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }

@@ -143,6 +143,7 @@ ApiPage<T> { items, nextCursor, hasMore }
 | 视频悬停缩略图 M2 | `/x/player/videoshot` → `pvdata` CDN 二进制 | 官网大端 uint16 时间索引；来源/采用范围见 [实现验证](validation/playback-timeline.md) | PlaybackMetadataRepository；移入／拖动懒加载，失败在新交互补试、每步单次请求，共用 deadline／epoch；索引上限 40002 字节、公开 CDN 无凭据 |
 | 视频弹幕 M0/M2 | `/x/v2/dm/web/view`、`/x/v2/dm/web/seg.so` | K `Services/Services.Media/Core/DanmakuClient.cs` | DanmakuRepository；Protobuf、分段数、毫秒进度、空分段 |
 | 直播播放 M0/M3 | `/xlive/web-room/v2/index/getRoomPlayInfo` | K PlayerClient；PiliPlus LiveHttp | Web GET、Cookie 可选、WBI 签名；protocol=0,1、format=0,1,2、codec=0,1,2、ptype=8、dolby=5、panorama=1、web_location=444.8；真实 roomId、组合／线路与 current_qn，见[直播流偏好](validation/live-stream-audio-preferences-2026-10-30.md) |
+| 直播卡悬停预览 | `api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo` | 官方直播首页当前脚本，独立读取配置 | Web GET、Cookie 可选、不加 WBI／CSRF；room_id、no_playurl=0、mask=1、qn=0、platform=web、protocol=0,1、format=0,1,2、codec=0,1、special_scenario=2；JSON，无分页，沿用 API 总次数／deadline；只在有效悬停时请求，移开或账号 epoch 改变取消，最多打开三个服务端媒体地址；见[实现与验证](validation/live-card-hover-preview-2026-11-14.md) |
 | 直播消息 M0/M3 | `/xlive/web-room/v1/index/getDanmuInfo`、EnterLiveRoomAsync | K PlayerClient | LiveChatSession；token/host、鉴权、分包/合包、心跳 |
 | 直播 SC M3 | `/av/v1/SuperChat/getMessageList` | U `LiveRoomAPI.RoomSuperChat` | Web GET、Cookie 可选、无签名；LiveRepository 读取快照，20 秒有界刷新与本地过期清理 |
 | 直播在看人数 M3 | `/xlive/general-interface/v1/rank/getOnlineGoldRank` | GitHub qydysky/biliApi + 本机游客响应 | Web GET、Cookie 可选、无签名；独立精确 `onlineNum` 快照、20 秒可见页面刷新；不从人气或累计看过补值，见 [人数精度](validation/live-viewer-precision.md) |
