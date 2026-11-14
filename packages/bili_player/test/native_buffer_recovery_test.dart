@@ -124,29 +124,92 @@ void main() {
     },
   );
 
-  testWidgets('premature native input EOF retries immediately and only once', (
+  testWidgets('input EOF alone leaves cached playback to the native player', (
     tester,
   ) async {
-    recovery.readingChanged(false, endOfInput: true, cacheEndSeconds: 90);
-    expect(recoveries, 1);
+    recovery.readingChanged(false, endOfInput: true);
+    expect(recoveries, 0);
     expect(probes, 0);
     await tester.pump(const Duration(seconds: 5));
     snapshot = snapshot.copyWith(position: const Duration(seconds: 15));
     recovery.readingChanged(false, endOfInput: true);
     online = true;
     await tester.pump(const Duration(seconds: 5));
-    expect(recoveries, 1);
+    expect(recoveries, 0);
+  });
+
+  for (final reading in [false, true]) {
+    testWidgets('unequal DASH tails do not request recovery: $reading', (
+      tester,
+    ) async {
+      snapshot = playing.copyWith(
+        position: const Duration(milliseconds: 19633),
+        duration: const Duration(milliseconds: 140500),
+        buffered: const Duration(milliseconds: 139853),
+        rate: 2,
+      );
+      recovery.readingChanged(reading, endOfInput: true);
+      online = true;
+      await tester.pump(const Duration(minutes: 1));
+      expect(recoveries, 0);
+      expect(probes, 0);
+    });
+  }
+
+  testWidgets(
+    'input EOF with unknown duration does not probe a healthy origin',
+    (tester) async {
+      snapshot = playing.copyWith(duration: Duration.zero);
+      recovery.readingChanged(false, endOfInput: true);
+      online = true;
+      await tester.pump(const Duration(minutes: 1));
+      expect(recoveries, 0);
+      expect(probes, 0);
+    },
+  );
+
+  testWidgets('input EOF cancels an unresolved silent-read probe', (
+    tester,
+  ) async {
+    recovery.dispose();
+    final result = Completer<bool>();
+    recovery = NativeBufferRecovery(
+      snapshot: () => snapshot,
+      probe: () {
+        probes++;
+        return result.future;
+      },
+      cancelProbe: () => cancellations++,
+      onRecoveryRequired: () => recoveries++,
+    );
+    recovery.readingChanged(true);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(seconds: 5));
+    expect(probes, 1);
+    recovery.readingChanged(false, endOfInput: true);
+    result.complete(true);
+    await tester.pump(const Duration(minutes: 1));
+    expect(recoveries, 0);
+    expect(cancellations, greaterThan(0));
   });
 
   testWidgets('normal EOF cannot use a stale SDK buffer to request recovery', (
     tester,
   ) async {
-    recovery.readingChanged(false, endOfInput: true, cacheEndSeconds: 599.9);
+    recovery.readingChanged(false, endOfInput: true);
     online = true;
     await tester.pump(const Duration(seconds: 10));
     expect(recoveries, 0);
     expect(probes, 0);
     expect(snapshot.buffered, const Duration(seconds: 90));
+  });
+
+  test('a real network error after input EOF still requests recovery once', () {
+    recovery.readingChanged(false, endOfInput: true);
+    recovery.reportNetworkError(immediate: true);
+    recovery.reportNetworkError(immediate: true);
+    expect(recoveries, 1);
+    expect(probes, 0);
   });
 
   testWidgets('blocked native prefetch is detected without an error log', (

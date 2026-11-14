@@ -140,6 +140,31 @@ void main() {
               socket.destroy();
             }
             sockets.clear();
+            // Confirmed HTTP errors use the existing immediate, bounded retry
+            // policy. Only a silent read hang waits for origin probes.
+            await _until(tester, () => session.error != null);
+            expect(failures, hasLength(3));
+            expect(failures.every((ahead) => ahead > Duration.zero), true);
+            await tester.pump(const Duration(seconds: 2));
+            expect(
+              failures,
+              hasLength(3),
+              reason: 'No unbounded offline retries',
+            );
+            offline = false;
+            await _frames(tester, session.retry());
+            await _until(
+              tester,
+              () =>
+                  engine.currentSnapshot.position >
+                  before + const Duration(seconds: 2),
+            );
+            expect(session.error, isNull);
+            expect(engine.currentSnapshot.desiredPlaying, true);
+            expect(engine.inspectDiagnostics().hasDecodedAudio, true);
+            expect(engine.inspectDiagnostics().hasDecodedVideo, true);
+            expect(tester.takeException(), isNull);
+            return;
           }
           // mpv's default HTTP retry waits are 0, 1, 3 and 7 seconds. The gap
           // must remain recoverable after that native read has already given up.
