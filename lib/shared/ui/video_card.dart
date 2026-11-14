@@ -9,6 +9,7 @@ import 'highlighted_text.dart';
 import 'video_card_cover.dart';
 import 'video_card_interaction_scope.dart';
 import 'video_card_menu_sheet.dart';
+import 'card_menu.dart';
 import 'scroll_aware_hover_region.dart';
 import 'video_card_feedback.dart';
 import 'text_measurement_cache.dart';
@@ -66,19 +67,13 @@ final class VideoCardMenu {
 }
 
 enum _VideoCardWidthTier {
-  compact(10, 20, 14),
-  medium(11, 24, 17),
-  regular(13, 28, 20);
+  compact(10),
+  medium(11),
+  regular(13);
 
-  const _VideoCardWidthTier(
-    this.coverFontSize,
-    this.menuButtonSize,
-    this.menuIconSize,
-  );
+  const _VideoCardWidthTier(this.coverFontSize);
 
   final double coverFontSize;
-  final double menuButtonSize;
-  final double menuIconSize;
 
   // Preserve the existing icon and gap sizes when increasing regular text.
   double get coverScale => switch (this) {
@@ -484,57 +479,19 @@ final class _VideoCardState extends State<VideoCard> {
   }
 
   Widget _menuButton(VideoCardMenu menu, double cardWidth) {
-    final tier = _VideoCardWidthTier.fromWidth(cardWidth);
-    final buttonSize = Size.square(tier.menuButtonSize);
-    final progressSize = tier.menuIconSize * .8;
     final touchPlatform = switch (Theme.of(context).platform) {
       TargetPlatform.android || TargetPlatform.iOS => true,
       _ => false,
     };
-    final visible =
-        _hovered || _focused || _menuFocused || _menuOpen || touchPlatform;
-    final busy = menu.busy || _addingWatchLater;
-    return Focus(
-      skipTraversal: true,
+    return CardMenuButton(
+      anchorKey: _menuAnchor,
+      buttonKey: const ValueKey('video-card-title-menu'),
+      cardWidth: cardWidth,
+      visible:
+          _hovered || _focused || _menuFocused || _menuOpen || touchPlatform,
+      busy: menu.busy || _addingWatchLater,
       onFocusChange: (focused) => _update(() => _menuFocused = focused),
-      child: Opacity(
-        opacity: visible ? 1 : 0,
-        child: IgnorePointer(
-          ignoring: !visible,
-          // A disabled nested button must consume taps rather than open video.
-          child: GestureDetector(
-            key: _menuAnchor,
-            onTap: () {},
-            excludeFromSemantics: true,
-            child: IconButton(
-              key: const ValueKey('video-card-title-menu'),
-              onPressed: _canShowMenu ? _showMenu : null,
-              icon: busy
-                  ? SizedBox.square(
-                      dimension: progressSize,
-                      child: const CircularProgressIndicator(
-                        strokeWidth: 2,
-                        semanticsLabel: '操作中',
-                      ),
-                    )
-                  : Icon(
-                      Icons.more_vert,
-                      size: tier.menuIconSize,
-                      semanticLabel: '更多操作',
-                    ),
-              iconSize: tier.menuIconSize,
-              style: IconButton.styleFrom(
-                minimumSize: buttonSize,
-                maximumSize: buttonSize,
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.standard,
-                // Padded tap targets would still reserve 48px beside the title.
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ),
-        ),
-      ),
+      onPressed: _canShowMenu ? _showMenu : null,
     );
   }
 
@@ -568,60 +525,14 @@ final class _VideoCardState extends State<VideoCard> {
       }
       final menu = _menu;
       if (menu == null || !_canShowMenu) return;
-      if (MediaQuery.sizeOf(context).width < 600) {
-        selected = await showVideoCardMenuSheet(context, [
+      selected = await showCardMenu<VideoCardMenuAction>(
+        context,
+        anchorKey: _menuAnchor,
+        actions: [
           for (final action in menu.actions)
             (value: action, icon: _menuIcon(action), label: _menuLabel(action)),
-        ]);
-      } else {
-        final overlay = Navigator.of(context).overlay;
-        final anchor = _menuAnchor.currentContext?.findRenderObject();
-        if (overlay == null || anchor is! RenderBox) return;
-        final overlayBox = overlay.context.findRenderObject() as RenderBox;
-        RelativeRect position() => RelativeRect.fromRect(
-          Rect.fromPoints(
-            anchor.localToGlobal(
-              Offset(0, anchor.size.height),
-              ancestor: overlayBox,
-            ),
-            anchor.localToGlobal(
-              anchor.size.bottomRight(Offset.zero),
-              ancestor: overlayBox,
-            ),
-          ),
-          Offset.zero & overlayBox.size,
-        );
-        final initialPosition = position();
-        selected = await showMenu<VideoCardMenuAction>(
-          context: context,
-          positionBuilder: (_, _) =>
-              anchor.attached ? position() : initialPosition,
-          constraints: const BoxConstraints(minWidth: 156, maxWidth: 240),
-          color: Theme.of(context).colorScheme.surface,
-          surfaceTintColor: Colors.transparent,
-          elevation: 3,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(
-              color: Theme.of(context).colorScheme.outlineVariant
-                  .withValues(alpha: .6),
-            ),
-          ),
-          items: [
-            for (final action in menu.actions)
-              PopupMenuItem(
-                value: action,
-                child: Row(
-                  children: [
-                    Icon(_menuIcon(action), size: 19),
-                    const SizedBox(width: 10),
-                    Flexible(child: Text(_menuLabel(action))),
-                  ],
-                ),
-              ),
-          ],
-        );
-      }
+        ],
+      );
     } finally {
       if (mounted) _update(() => _menuOpen = false);
     }

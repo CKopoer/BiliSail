@@ -524,6 +524,7 @@ final class _HistoryEntriesSliver extends ConsumerWidget {
                     dateTooltip: HistoryScreen._watchedAt(entry.watchedAt),
                     onOpen: open,
                     onDelete: writeBlocked ? null : remove,
+                    busy: writeBlocked,
                     onOpenAuthor: entry.authorId == null
                         ? null
                         : () => context.go('/user/${entry.authorId?.value}'),
