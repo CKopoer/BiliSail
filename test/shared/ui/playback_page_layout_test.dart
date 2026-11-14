@@ -1,4 +1,5 @@
 import 'package:bilisail/shared/ui/playback_page_layout.dart';
+import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/shared/ui/scroll_collapsing_header.dart';
 import 'package:bilisail/shared/ui/scroll_boundary_handoff.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
@@ -8,6 +9,83 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'hidden sidebar stops activity and tickers while retaining state',
+    (tester) async {
+      var showInfo = true, active = true, previewing = false;
+      late StateSetter update;
+      var ticks = 0, disposals = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return WorkspaceActivity(
+                active: active,
+                previewing: previewing,
+                child: Scaffold(
+                  body: PlaybackPageLayout(
+                    wide: true,
+                    showInfo: showInfo,
+                    listening: false,
+                    dimensions: null,
+                    collapsedHeight: 200,
+                    contentKey: 'one',
+                    player: const SizedBox(),
+                    toggleInfo: () {},
+                    toggleTooltip: '信息',
+                    info: _SidebarProbe(
+                      onTick: () => ticks++,
+                      onDispose: () => disposals++,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      final probe = tester.state<_SidebarProbeState>(
+        find.byType(_SidebarProbe),
+      );
+      expect(probe.active, isTrue);
+      final initialTicks = ticks;
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(ticks, greaterThan(initialTicks));
+
+      update(() => showInfo = false);
+      await tester.pump();
+      expect(probe.active, isFalse);
+      expect(probe.visible, isFalse);
+      final hiddenTicks = ticks;
+      await tester.pump(const Duration(seconds: 1));
+      expect(ticks, hiddenTicks);
+      expect(disposals, 0);
+
+      update(() => showInfo = true);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(ticks, greaterThan(hiddenTicks));
+      expect(tester.state(find.byType(_SidebarProbe)), same(probe));
+      update(() {
+        active = false;
+        previewing = true;
+      });
+      await tester.pump();
+      expect(probe.active, isFalse);
+      expect(probe.visible, isTrue);
+      update(() => previewing = false);
+      await tester.pump();
+      final inactiveTicks = ticks;
+      await tester.pump(const Duration(seconds: 1));
+      expect(probe.visible, isFalse);
+      expect(ticks, inactiveTicks);
+      await tester.pumpWidget(const SizedBox());
+      expect(disposals, 1);
+    },
+  );
+
   late HeaderScrollController scroll;
   var taps = 0;
 
@@ -262,4 +340,42 @@ void main() {
     expect(height(tester), 520);
     expect(tester.element(find.byKey(const ValueKey('player'))), same(player));
   });
+}
+
+class _SidebarProbe extends StatefulWidget {
+  const _SidebarProbe({required this.onTick, required this.onDispose});
+  final VoidCallback onTick;
+  final VoidCallback onDispose;
+
+  @override
+  State<_SidebarProbe> createState() => _SidebarProbeState();
+}
+
+class _SidebarProbeState extends State<_SidebarProbe>
+    with SingleTickerProviderStateMixin {
+  late final _animation = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 1),
+  )..addListener(() => widget.onTick());
+  bool active = true, visible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _animation.repeat();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    active = WorkspaceActivity.isActive(context);
+    visible = WorkspaceActivity.isVisible(context);
+    return const SizedBox();
+  }
+
+  @override
+  void dispose() {
+    _animation.dispose();
+    widget.onDispose();
+    super.dispose();
+  }
 }

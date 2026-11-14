@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/presentation/workspace_activity.dart';
 import 'playback_sidebar_toggle.dart';
 import 'scroll_collapsing_header.dart';
 
@@ -127,17 +128,33 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
                       excluding: !widget.showInfo,
                       child: Offstage(
                         offstage: !widget.showInfo,
-                        child: NestedScrollView(
-                          controller: _scroll,
-                          physics: const ClampingScrollPhysics(),
-                          headerSliverBuilder: (context, _) => [
-                            SliverToBoxAdapter(
-                              child: SizedBox(
-                                height: widget.wide ? 0 : scrollRange,
-                              ),
+                        // Offstage retains layout and State, but does not
+                        // stop tickers or visibility-driven image/preview work.
+                        child: WorkspaceActivity(
+                          active:
+                              widget.showInfo &&
+                              WorkspaceActivity.isActive(context),
+                          previewing:
+                              widget.showInfo &&
+                              WorkspaceActivity.isVisible(context) &&
+                              !WorkspaceActivity.isActive(context),
+                          child: TickerMode(
+                            enabled:
+                                widget.showInfo &&
+                                WorkspaceActivity.isVisible(context),
+                            child: NestedScrollView(
+                              controller: _scroll,
+                              physics: const ClampingScrollPhysics(),
+                              headerSliverBuilder: (context, _) => [
+                                SliverToBoxAdapter(
+                                  child: SizedBox(
+                                    height: widget.wide ? 0 : scrollRange,
+                                  ),
+                                ),
+                              ],
+                              body: HeaderScrollBody(child: widget.info),
                             ),
-                          ],
-                          body: HeaderScrollBody(child: widget.info),
+                          ),
                         ),
                       ),
                     ),

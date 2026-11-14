@@ -57,6 +57,143 @@ import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 
 void main() {
+  testWidgets('sidebar toggles reuse player and information builders', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1100, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var playerBuilds = 0, actionBuilds = 0, menuBuilds = 0;
+    var created = 0, disposed = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(_GuestAuthController.new),
+          videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+          videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
+        ],
+        child: InputTestApp(
+          home: Scaffold(
+            body: VideoScreen(
+              id: const VideoId('BV1abc123456'),
+              playerBuilder: (_, _, _) {
+                playerBuilds++;
+                return _TrackedPlayer(
+                  onCreate: () => created++,
+                  onDispose: () => disposed++,
+                );
+              },
+              actionsBuilder: (_, _, _) {
+                actionBuilds++;
+                return const SizedBox();
+              },
+              menuBuilder: (_, _, _) {
+                menuBuilds++;
+                return const SizedBox();
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final player = tester.state(find.byType(_TrackedPlayer));
+    final builds = (playerBuilds, actionBuilds, menuBuilds);
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(find.byTooltip('收起视频信息'));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(_TrackedPlayer)).width, 1100);
+      await tester.tap(find.byTooltip('展开视频信息'));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(_TrackedPlayer)).width, 720);
+    }
+    expect((playerBuilds, actionBuilds, menuBuilds), builds);
+    await tester.tap(find.text('展开'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('收起'));
+    await tester.pumpAndSettle();
+    expect(playerBuilds, builds.$1);
+    expect(tester.state(find.byType(_TrackedPlayer)), same(player));
+    expect(created, 1);
+    expect(disposed, 0);
+    await tester.pumpWidget(const SizedBox());
+    expect(disposed, 1);
+  });
+
+  testWidgets('cached player receives inherited, part and builder updates', (
+    tester,
+  ) async {
+    late StateSetter update;
+    var dark = false, replacement = false;
+    var created = 0, disposed = 0, replacementBuilds = 0;
+    Widget player(BuildContext context, VideoDetail video, VideoPart part) =>
+        Column(
+          children: [
+            Text('${part.cid}:${Theme.of(context).brightness.name}'),
+            Expanded(
+              child: _TrackedPlayer(
+                onCreate: () => created++,
+                onDispose: () => disposed++,
+              ),
+            ),
+          ],
+        );
+    Widget otherPlayer(
+      BuildContext context,
+      VideoDetail video,
+      VideoPart part,
+    ) {
+      replacementBuilds++;
+      return player(context, video, part);
+    }
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(_GuestAuthController.new),
+          videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+          videoExtrasRepositoryProvider.overrideWithValue(_ExtrasRepository()),
+        ],
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            update = setState;
+            return InputTestApp(
+              theme: dark ? BiliTheme.dark() : BiliTheme.light(),
+              home: Scaffold(
+                body: VideoScreen(
+                  id: const VideoId('BV1abc123456'),
+                  playerBuilder: replacement ? otherPlayer : player,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final state = tester.state(find.byType(_TrackedPlayer));
+    expect(find.text('1:light'), findsOneWidget);
+    update(() => dark = true);
+    await tester.pumpAndSettle();
+    expect(find.text('1:dark'), findsOneWidget);
+    final commands = tester.widget<PlaybackPageCommands>(
+      find.byType(PlaybackPageCommands),
+    );
+    commands.nextPart();
+    await tester.pumpAndSettle();
+    expect(find.text('2:dark'), findsOneWidget);
+    update(() => replacement = true);
+    await tester.pumpAndSettle();
+    expect(replacementBuilds, greaterThan(0));
+    expect(find.text('2:dark'), findsOneWidget);
+    expect(tester.state(find.byType(_TrackedPlayer)), same(state));
+    expect(created, 1);
+    expect(disposed, 0);
+    await tester.pumpWidget(const SizedBox());
+    expect(disposed, 1);
+  });
+
   for (final (dimensions, expandedHeight) in [
     (const VideoDimensions(1080, 1920), 520.0),
     (const VideoDimensions(1080, 1080), 390.0),
