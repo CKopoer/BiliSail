@@ -17,6 +17,7 @@ import 'native_error_monitor.dart';
 import 'native_audio_error_monitor.dart';
 import 'native_buffering_diagnostics.dart';
 import 'native_buffer_recovery.dart';
+import 'native_rebuffer_monitor.dart';
 import 'native_load_observer.dart';
 import 'native_audio_gain.dart';
 import 'native_rate_audio.dart';
@@ -77,6 +78,7 @@ final class MediaKitBackend
   NativeReadinessStage? _readinessStage;
   Timer? _colorDeadline;
   NativeBufferRecovery? _bufferRecovery;
+  NativeRebufferMonitor? _rebuffers;
   NativeAudioErrorMonitor? _audioErrors;
   NativeBufferingDiagnostics? _bufferDiagnostics;
   DiagnosticSourceKind? diagnosticSourceKind;
@@ -504,6 +506,8 @@ final class MediaKitBackend
     _audioErrors = null;
     _bufferRecovery?.dispose();
     _bufferRecovery = null;
+    _rebuffers?.dispose();
+    _rebuffers = null;
     _generation = operation.generation;
     final generation = _generation;
     final source = plan.source;
@@ -556,6 +560,21 @@ final class MediaKitBackend
           (track) => const {'http', 'https'}.contains(track.uri.scheme),
         )) {
       final probe = NativeMediaProbe([video, ?audio]);
+      _rebuffers = NativeRebufferMonitor(
+        snapshot: snapshot,
+        onStalled: (blockedFor) {
+          if (!_disposed &&
+              generation == _generation &&
+              identical(_player, player)) {
+            _diagnose(
+              PlayerDiagnosticKind.playbackStalled,
+              stallReason: PlaybackStallReason.repeatedCacheUnderrun,
+              stalledFor: blockedFor,
+            );
+            _emit(const BackendEvent(BackendEventKind.failure));
+          }
+        },
+      );
       _bufferRecovery = NativeBufferRecovery(
         snapshot: () => _snapshot,
         probe: probe.check,
@@ -573,6 +592,8 @@ final class MediaKitBackend
       final attaching = _attachingLoad =
           NativeLoadObserver.attach(
             player.native,
+            onCachePauseChanged: (paused) =>
+                _rebuffers?.cachePauseChanged(paused),
             onCacheStateChanged: (reading, endOfInput, cacheEndSeconds) =>
                 _bufferRecovery?.readingChanged(
                   reading,
@@ -909,6 +930,7 @@ final class MediaKitBackend
   @override
   Future<Duration> seekTo(Duration target, PlaybackOperation operation) async {
     _bufferRecovery?.cancel();
+    _rebuffers?.reset();
     operation.check();
     _seek = operation;
     _audioErrors?.reset();
@@ -1001,6 +1023,7 @@ final class MediaKitBackend
       if (active()) {
         _emit(value);
         _bufferRecovery?.update();
+        _rebuffers?.update();
         _audioErrors?.update();
       }
     }
@@ -1138,6 +1161,7 @@ final class MediaKitBackend
   Future<void> play() async {
     await _player!.play();
     _audioErrors?.update();
+    _rebuffers?.update();
   }
 
   void captureReadyDiagnostics() => _bufferDiagnostics?.sourceReady();
@@ -1146,6 +1170,7 @@ final class MediaKitBackend
   Future<bool> pauseAndWait() async {
     _audioErrors?.update();
     _bufferRecovery?.cancel();
+    _rebuffers?.reset();
     await _player?.pause();
     return true;
   }
@@ -1165,6 +1190,8 @@ final class MediaKitBackend
     _audioErrors = null;
     _bufferRecovery?.dispose();
     _bufferRecovery = null;
+    _rebuffers?.dispose();
+    _rebuffers = null;
     ++_generation;
     _preparation?.cancel();
     unawaited(cancelSeek().catchError((Object _) {}));
@@ -1199,6 +1226,8 @@ final class MediaKitBackend
     _audioErrors = null;
     _bufferRecovery?.dispose();
     _bufferRecovery = null;
+    _rebuffers?.dispose();
+    _rebuffers = null;
     ++_generation;
     _preparation?.cancel();
     _generationChanges.add(_generation);

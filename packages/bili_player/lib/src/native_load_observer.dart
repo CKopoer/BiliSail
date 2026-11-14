@@ -140,6 +140,7 @@ final class NativeLoadObserver {
     required void Function(int errorCode) onFailure,
     void Function(bool reading, bool endOfInput, double? cacheEndSeconds)?
     onCacheStateChanged,
+    void Function(bool paused)? onCachePauseChanged,
   }) async {
     final observer = NativeLoadObserver._(platform, onFailure);
     try {
@@ -195,6 +196,15 @@ final class NativeLoadObserver {
         observer._idleChanges.add(null);
       });
       observer._properties.add('idle-active');
+      if (onCachePauseChanged != null) {
+        const name = 'paused-for-cache';
+        await platform.observeProperty(name, (value) async {
+          if (!observer._disposed && (value == 'yes' || value == 'no')) {
+            onCachePauseChanged(value == 'yes');
+          }
+        });
+        observer._properties.add(name);
+      }
       if (onCacheStateChanged != null) {
         // mpv exposes this structured property as a whole; /idle is not a
         // supported sub-property in the locked Windows SDK.
