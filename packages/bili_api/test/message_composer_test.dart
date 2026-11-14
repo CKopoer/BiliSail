@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:bili_api/bili_api.dart';
 import 'package:test/test.dart';
 
-import 'message_client_test.dart' show cookies, message, response;
+import 'message_client_test.dart' show cookies, message, response, wbiKeyData;
 
 void main() {
   late _Transport transport;
@@ -258,6 +258,7 @@ final class _Transport
   }) async {
     this.uri = uri;
     this.headers = headers;
+    if (uri.path == '/x/web-interface/nav') return response(wbiKeyData());
     return response(data);
   }
 

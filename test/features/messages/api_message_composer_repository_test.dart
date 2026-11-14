@@ -193,7 +193,16 @@ final class _Transport
     required Map<String, String> headers,
     required Duration timeout,
     ApiCancellation? cancellation,
-  }) async => _response(data);
+  }) async => _response(
+    uri.path == '/x/web-interface/nav'
+        ? {
+            'wbi_img': {
+              'img_url': 'https://i0.hdslb.com/bfs/wbi/${'a' * 32}.png',
+              'sub_url': 'https://i0.hdslb.com/bfs/wbi/${'b' * 32}.png',
+            },
+          }
+        : data,
+  );
   @override
   Future<ApiHttpResponse> postForm(
     Uri uri, {

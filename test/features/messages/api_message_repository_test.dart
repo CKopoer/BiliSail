@@ -95,7 +95,21 @@ final class _Transport implements ApiTransport {
     ApiCancellation? cancellation,
   }) async => ApiHttpResponse(
     200,
-    Uint8List.fromList(utf8.encode(jsonEncode({'code': 0, 'data': data}))),
+    Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'code': 0,
+          'data': uri.path == '/x/web-interface/nav'
+              ? {
+                  'wbi_img': {
+                    'img_url': 'https://i0.hdslb.com/bfs/wbi/${'a' * 32}.png',
+                    'sub_url': 'https://i0.hdslb.com/bfs/wbi/${'b' * 32}.png',
+                  },
+                }
+              : data,
+        }),
+      ),
+    ),
     const {},
   );
 }

@@ -18,7 +18,17 @@ final class MessageClient {
     Map<String, String> query,
     ApiRequestContext? context,
   ) =>
-      api.requestJson(Uri.https(host, path, query), endpoint, context: context);
+      host == _vc &&
+          const {
+            '/session_svr/v1/session_svr/get_sessions',
+            '/svr_sync/v1/svr_sync/fetch_session_msgs',
+          }.contains(path)
+      ? api.requestMessageWbiJson(path, query, endpoint, context: context)
+      : api.requestJson(
+          Uri.https(host, path, query),
+          endpoint,
+          context: context,
+        );
 
   Future<Map<ApiInboxSection, int>> unread({ApiRequestContext? context}) async {
     const e = 'message_unread';
@@ -65,19 +75,31 @@ final class MessageClient {
         .toSet();
     final users = <String, Map<String, Object?>>{};
     if (mids.isNotEmpty) {
-      final cards = await _get(
-        'api.bilibili.com',
-        '/x/polymer/pc-electron/v1/user/cards',
-        'message_users',
-        {'uids': mids.join(',')},
-        context,
-      );
-      final values = cards['list'] is List<Object?>
-          ? _list(cards['list'], 'message_users')
-          : cards.values.toList();
-      for (final value in values) {
-        final user = _map(value, 'message_users');
-        users[_decimal(user['mid'], 'message_users')] = user;
+      try {
+        final cards = await _get(
+          'api.bilibili.com',
+          '/x/polymer/pc-electron/v1/user/cards',
+          'message_users',
+          {'uids': mids.join(','), 'build': '0', 'mobi_app': 'web'},
+          context,
+        );
+        final values = cards['list'] is List<Object?>
+            ? _list(cards['list'], 'message_users')
+            : cards.values.toList();
+        for (final value in values) {
+          final user = _map(value, 'message_users');
+          users[_decimal(user['mid'], 'message_users')] = user;
+        }
+      } on ApiFailure catch (failure) {
+        // Names and avatars are auxiliary. Keep the verified session page when
+        // this separate read is transiently unavailable; its cooldown remains.
+        if (!const {
+          ApiFailureCategory.rateLimited,
+          ApiFailureCategory.network,
+          ApiFailureCategory.timeout,
+        }.contains(failure.category)) {
+          rethrow;
+        }
       }
     }
     final entries = rows
@@ -139,7 +161,7 @@ final class MessageClient {
         await _get(_vc, '/svr_sync/v1/svr_sync/fetch_session_msgs', e, {
           'talker_id': mid,
           'session_type': '$type',
-          'size': '30',
+          'size': '20',
           'sender_device_id': '1',
           'build': '0',
           'mobi_app': 'web',

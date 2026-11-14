@@ -10,6 +10,12 @@ ApiHttpResponse response(Object? data, {int code = 0, int status = 200}) =>
       Uint8List.fromList(utf8.encode(jsonEncode({'code': code, 'data': data}))),
       const {},
     );
+Map<String, Object?> wbiKeyData() => {
+  'wbi_img': {
+    'img_url': 'https://i0.hdslb.com/bfs/wbi/${'a' * 32}.png',
+    'sub_url': 'https://i0.hdslb.com/bfs/wbi/${'b' * 32}.png',
+  },
+};
 Map<String, Object?> message({
   String sequence = '9007199254740993123',
   int type = 1,
@@ -34,6 +40,7 @@ final class Transport implements ApiTransport, ApiFormTransport {
   Object? Function(Uri) handler = (_) => {};
   ApiHttpResponse postResult = response({});
   ApiHttpResponse? getResult;
+  bool provideWbiKeys = true;
   int posts = 0, gets = 0;
   Map<String, String> fields = {}, headers = {};
   Uri? uri;
@@ -47,6 +54,9 @@ final class Transport implements ApiTransport, ApiFormTransport {
     gets++;
     this.uri = uri;
     this.headers = headers;
+    if (provideWbiKeys && uri.path == '/x/web-interface/nav') {
+      return response(wbiKeyData());
+    }
     return getResult ?? response(handler(uri));
   }
 
@@ -80,6 +90,8 @@ void main() {
     () async {
       transport.handler = (uri) {
         if (uri.path.endsWith('/cards')) {
+          expect(uri.queryParameters['build'], '0');
+          expect(uri.queryParameters['mobi_app'], 'web');
           return {
             '9007199254740993123': {'mid': '9007199254740993123', 'name': '甲'},
           };
@@ -113,7 +125,7 @@ void main() {
     () async {
       transport.handler = (_) => {'session_list': null, 'has_more': 1};
       expect((await client.sessions()).hasMore, isFalse);
-      expect(transport.gets, 1);
+      expect(transport.gets, 2); // Shared WBI keys and the session page.
       transport.handler = (_) => {};
       await expectLater(client.sessions(), throwsA(isA<ApiFailure>()));
     },
@@ -361,6 +373,7 @@ void main() {
     expect(transport.posts, 1);
   });
   test('overview handles full level and unavailable next experience', () async {
+    transport.provideWbiKeys = false;
     transport.handler = (uri) => uri.path.endsWith('/stat')
         ? {'following': 80, 'follower': 10, 'dynamic_count': 29}
         : {

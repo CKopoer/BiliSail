@@ -110,17 +110,86 @@ void main() {
       expect(repo.sends + repo.marks, 0);
     },
   );
-  test('refresh cancels pagination and rejects its late completion', () async {
+  test('repeated refreshes keep one pending inbox read', () async {
     final pending = repo.inboxPending = Completer<MessagePage<InboxEntry>>();
     final old = controller.loadInbox();
     final read = repo.inboxRead;
-    repo.inboxPending = null;
-    repo.entries = [];
+    final reads = repo.reads;
     await controller.loadInbox(refresh: true);
-    expect(read?.isCancelled, isTrue);
+    await controller.refresh();
+    expect(read?.isCancelled, isFalse);
+    expect(repo.reads, reads);
     pending.complete(const MessagePage([conversation], hasMore: false));
     await old;
-    expect(state().inbox.items, isEmpty);
+    expect(state().inbox.items, contains(conversation));
+  });
+  test('repeated thread refreshes keep the active conversation read', () async {
+    final pending = repo.threadPending =
+        Completer<MessagePage<PrivateMessage>>();
+    controller.selectConversation(conversation);
+    final read = repo.threadRead;
+    await controller.loadThread(refresh: true);
+    await controller.refresh();
+    expect(repo.threadRead, same(read));
+    expect(read?.isCancelled, isFalse);
+    pending.complete(const MessagePage([privateMessage], hasMore: false));
+    await flush();
+    expect(state().thread.items, [privateMessage]);
+  });
+  test('a confirmed send replaces reads started before the write', () async {
+    final pending = repo.threadPending =
+        Completer<MessagePage<PrivateMessage>>();
+    controller.selectConversation(conversation);
+    final read = repo.threadRead;
+    repo.threadPending = null;
+    final sent = PrivateMessage(
+      id: '2',
+      sequence: '2',
+      senderId: const UserId('1'),
+      text: '新消息',
+      type: 1,
+    );
+    repo.messages = [privateMessage, sent];
+    expect(await controller.send('新消息'), isTrue);
+    await flush();
+    expect(read?.isCancelled, isTrue);
+    expect(state().thread.items, [privateMessage, sent]);
+    pending.complete(const MessagePage([privateMessage], hasMore: false));
+    await flush();
+    expect(state().thread.items, [privateMessage, sent]);
+  });
+  test(
+    'failed inbox refresh does not fan out to unread and thread reads',
+    () async {
+      container.listen(unreadMessagesProvider, (_, _) {});
+      await container.read(unreadMessagesProvider.future);
+      controller.selectConversation(conversation);
+      await flush();
+      final threadRead = repo.threadRead;
+      final unreadReads = repo.unreadReads;
+      repo.inboxFailure = const AppFailure(AppFailureKind.rateLimited, '限流');
+      await controller.refresh();
+      await flush();
+      expect(state().inbox.error, '限流');
+      expect(repo.unreadReads, unreadReads);
+      expect(repo.threadRead, same(threadRead));
+    },
+  );
+  test('a superseded refresh cannot refresh badges after returning to the same category', () async {
+    container.listen(unreadMessagesProvider, (_, _) {});
+    await container.read(unreadMessagesProvider.future);
+    final pending = repo.inboxPending = Completer<MessagePage<InboxEntry>>();
+    final refresh = controller.refresh();
+    repo.inboxPending = null;
+    controller.selectSection(InboxSection.replies);
+    await flush();
+    controller.selectSection(InboxSection.private);
+    await flush();
+    final unreadReads = repo.unreadReads;
+    pending.complete(const MessagePage([conversation], hasMore: false));
+    await refresh;
+    await flush();
+    expect(repo.unreadReads, unreadReads);
   });
   test('category selection isolates old inbox responses', () async {
     final pending = repo.inboxPending = Completer<MessagePage<InboxEntry>>();
