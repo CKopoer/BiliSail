@@ -135,7 +135,11 @@ final class NativeErrorSummary {
               value.contains('d3d11') ||
               value.contains('dxva') =>
         NativeErrorCause.hardwareDecoder,
-      _ when value.contains('decode') || prefix == 'vd' || prefix == 'ad' =>
+      _
+          when value.contains('decode') ||
+              value.contains('decoding') ||
+              prefix == 'vd' ||
+              prefix == 'ad' =>
         NativeErrorCause.decoder,
       _ when value.contains('property not found') =>
         NativeErrorCause.unsupportedProperty,

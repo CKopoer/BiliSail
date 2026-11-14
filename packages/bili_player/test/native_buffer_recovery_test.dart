@@ -29,10 +29,88 @@ void main() {
         return online;
       },
       cancelProbe: () => cancellations++,
-      onReachable: () => recoveries++,
+      onRecoveryRequired: () => recoveries++,
     );
   });
   tearDown(() => recovery.dispose());
+
+  for (final buffering in [false, true]) {
+    test('confirmed prefetch error retries before cache drain: $buffering', () {
+      snapshot = snapshot.copyWith(
+        phase: buffering ? PlaybackPhase.buffering : PlaybackPhase.playing,
+        isBuffering: buffering,
+      );
+      // No reachability probe is needed, even when the old origin is offline.
+      recovery.reportNetworkError(immediate: true);
+      expect(recoveries, 1);
+      expect(probes, 0);
+      expect(snapshot.position, lessThan(snapshot.buffered));
+      recovery.reportNetworkError(immediate: true);
+      recovery.readingChanged(false, endOfInput: true);
+      expect(recoveries, 1);
+    });
+  }
+
+  test(
+    'a confirmed error during an empty buffering state retries immediately',
+    () {
+      snapshot = snapshot.copyWith(
+        phase: PlaybackPhase.buffering,
+        isBuffering: true,
+        buffered: snapshot.position,
+      );
+      recovery.reportNetworkError(immediate: true);
+      expect(recoveries, 1);
+      expect(probes, 0);
+    },
+  );
+
+  testWidgets('an immediate retry cancels an in-flight silent-stall probe', (
+    tester,
+  ) async {
+    recovery.dispose();
+    final result = Completer<bool>();
+    recovery = NativeBufferRecovery(
+      snapshot: () => snapshot,
+      probe: () {
+        probes++;
+        return result.future;
+      },
+      cancelProbe: () => cancellations++,
+      onRecoveryRequired: () => recoveries++,
+    );
+    recovery.reportNetworkError();
+    await tester.pump(const Duration(seconds: 5));
+    expect(probes, 1);
+    recovery.reportNetworkError(immediate: true);
+    expect(recoveries, 1);
+    result.complete(true);
+    await tester.pump();
+    expect(recoveries, 1);
+  });
+
+  for (final action in ['pause', 'seek', 'ended', 'full', 'dispose']) {
+    test(
+      'confirmed error does not restart an inactive/full source: $action',
+      () {
+        switch (action) {
+          case 'pause':
+            snapshot = snapshot.copyWith(desiredPlaying: false);
+          case 'seek':
+            snapshot = snapshot.copyWith(isSeeking: true);
+          case 'ended':
+            snapshot = snapshot.copyWith(phase: PlaybackPhase.ended);
+          case 'full':
+            snapshot = snapshot.copyWith(buffered: snapshot.duration);
+          case 'dispose':
+            recovery.dispose();
+        }
+        recovery.reportNetworkError(immediate: true);
+        expect(recoveries, 0);
+        expect(probes, 0);
+      },
+    );
+  }
 
   testWidgets(
     'playing packets remain eligible before native cache time arrives',
@@ -46,18 +124,30 @@ void main() {
     },
   );
 
-  testWidgets(
-    'premature native input EOF remains armed while cache is consumed',
-    (tester) async {
-      recovery.readingChanged(false, endOfInput: true);
-      await tester.pump(const Duration(seconds: 5));
-      snapshot = snapshot.copyWith(position: const Duration(seconds: 15));
-      recovery.readingChanged(false, endOfInput: true);
-      online = true;
-      await tester.pump(const Duration(seconds: 5));
-      expect(recoveries, 1);
-    },
-  );
+  testWidgets('premature native input EOF retries immediately and only once', (
+    tester,
+  ) async {
+    recovery.readingChanged(false, endOfInput: true, cacheEndSeconds: 90);
+    expect(recoveries, 1);
+    expect(probes, 0);
+    await tester.pump(const Duration(seconds: 5));
+    snapshot = snapshot.copyWith(position: const Duration(seconds: 15));
+    recovery.readingChanged(false, endOfInput: true);
+    online = true;
+    await tester.pump(const Duration(seconds: 5));
+    expect(recoveries, 1);
+  });
+
+  testWidgets('normal EOF cannot use a stale SDK buffer to request recovery', (
+    tester,
+  ) async {
+    recovery.readingChanged(false, endOfInput: true, cacheEndSeconds: 599.9);
+    online = true;
+    await tester.pump(const Duration(seconds: 10));
+    expect(recoveries, 0);
+    expect(probes, 0);
+    expect(snapshot.buffered, const Duration(seconds: 90));
+  });
 
   testWidgets('blocked native prefetch is detected without an error log', (
     tester,
@@ -157,7 +247,7 @@ void main() {
         return result.future;
       },
       cancelProbe: () => cancellations++,
-      onReachable: () => recoveries++,
+      onRecoveryRequired: () => recoveries++,
     );
     recovery.reportNetworkError();
     await tester.pump(const Duration(seconds: 5));

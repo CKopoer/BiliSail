@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
+import 'package:bili_player/src/native_audio_error_monitor.dart';
 import 'package:bili_player/src/playback_backend.dart';
 import 'package:bili_player/src/shared_player_engine.dart';
 import 'package:bili_player/src/validated_source.dart';
@@ -192,6 +193,60 @@ MediaTrack track(String name) => MediaTrack(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final pair = DashPairSource(video: track('v'), audio: track('a'));
+  test(
+    'audio failure pauses the pair before video can mask the error',
+    () async {
+      final backend = _Backend();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      final failures = <PlayerFailure>[];
+      engine.failures.listen(failures.add);
+      await engine.open(
+        pair,
+        const OpenOptions(play: true, rate: 2, volume: 37),
+      );
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: 10),
+        ),
+      );
+      final monitor = NativeAudioErrorMonitor(
+        snapshot: () => engine.currentSnapshot,
+        onFailure: () =>
+            backend.signals.add(const BackendEvent(BackendEventKind.failure)),
+      );
+      addTearDown(monitor.dispose);
+      monitor.report(
+        NativeErrorSummary.classify('Error decoding audio.', prefix: 'ad'),
+        NativeLogSeverity.error,
+      );
+      backend.signals.add(const BackendEvent(BackendEventKind.warning));
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: 14),
+        ),
+      );
+      await tick();
+      expect(failures.single.kind, PlayerFailureKind.nativePlayback);
+      expect(backend.playing, false);
+      expect(backend.writes.last, 'pause');
+      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+      expect(engine.currentSnapshot.position, const Duration(seconds: 10));
+      expect(engine.currentSnapshot.rate, 2);
+      expect(engine.currentSnapshot.volume, 37);
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: Duration(seconds: 15),
+        ),
+      );
+      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+      expect(failures, hasLength(1));
+    },
+  );
+
   test(
     'event backend reuses a stopped source and never polls native health',
     () async {
