@@ -148,7 +148,7 @@ final class ApiCommentsRepository
     CommentLocation location,
     RequestCancellation cancellation,
   ) async {
-    // One lifetime spans every page, so account changes also cancel the search.
+    // Both direct reads share cancellation, account identity and one deadline.
     final untrack = requests.trackLifetime(cancellation);
     try {
       return await _locate(oid, location, cancellation).timeout(
@@ -168,33 +168,20 @@ final class ApiCommentsRepository
     CommentLocation location,
     RequestCancellation cancellation,
   ) async {
-    final root = await requests.run(
-      (ctx) async => _entry(
-        await api.getVideoCommentRoot(
-          oid,
-          location.rootId,
-          commentType: type.value,
-          context: ctx,
-        ),
-      ),
-      cancellation: cancellation,
-    );
-    if (location.focusId == root.id) {
-      return LocatedCommentThread(
-        root: root,
-        page: const CommentPage(items: [], hasMore: true),
-        pageNumber: 0,
+    return requests.run((ctx) async {
+      final result = await api.getVideoCommentLocation(
+        oid,
+        location.rootId,
+        replyId: location.replyId,
+        commentType: type.value,
+        context: ctx,
       );
-    }
-    // Match the shared list's 500-entry capacity; never scan indefinitely.
-    for (var number = 1; number <= 25; number++) {
-      final page = await replies(oid, root.id, number, cancellation);
-      if (page.items.any((entry) => entry.id == location.focusId)) {
-        return LocatedCommentThread(root: root, page: page, pageNumber: number);
-      }
-      if (!page.hasMore) break;
-    }
-    throw const AppFailure(AppFailureKind.notFound, '未找到目标评论，可能已删除或超出定位范围');
+      return LocatedCommentThread(
+        root: _entry(result.root),
+        page: _page(result.page),
+        pageNumber: result.pageNumber,
+      );
+    }, cancellation: cancellation);
   }
 
   Future<T> _write<T>(
