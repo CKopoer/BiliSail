@@ -1246,12 +1246,13 @@ void main() {
     );
     await tester.pumpAndSettle();
     final builds = <String, int>{};
+    final measurements = <String, int>{};
     final previous = debugOnRebuildDirtyWidget;
     debugOnRebuildDirtyWidget = (element, builtOnce) {
       previous?.call(element, builtOnce);
       final widget = element.widget;
       if (widget is CommentRichContent) {
-        builds.update(
+        (widget.layoutOnly ? measurements : builds).update(
           widget.comment.id,
           (value) => value + 1,
           ifAbsent: () => 1,
@@ -1264,6 +1265,7 @@ void main() {
     final loading = controller.load();
     await tester.pump();
     expect(builds, isEmpty, reason: 'loading should rebuild controls only');
+    expect(measurements, isEmpty);
     repo.pending!.complete(
       CommentPage(
         items: List.generate(
@@ -1285,11 +1287,18 @@ void main() {
       isEmpty,
       reason: 'appending offscreen data should reuse visible content',
     );
+    expect(
+      measurements.keys,
+      unorderedEquals(List.generate(20, (index) => '${480 + index}')),
+      reason: 'only appended comments need an inert height measurement',
+    );
+    measurements.clear();
 
     repo.writePending = Completer<void>();
     final liking = controller.toggleLike(state().items.first);
     await tester.pump();
     expect(builds, isEmpty, reason: 'busy should rebuild controls only');
+    expect(measurements, isEmpty);
     expect(
       tester
           .widget<TextButton>(
