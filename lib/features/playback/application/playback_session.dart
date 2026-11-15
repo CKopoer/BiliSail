@@ -124,17 +124,14 @@ class PlaybackSession extends ChangeNotifier {
   bool sponsorLoading = false;
   String? sponsorMessage;
   bool _sponsorSeeking = false;
-  SponsorSegment? get currentSponsor =>
-      _settings.sponsorBlockMode == SponsorBlockMode.disabled
-      ? null
-      : sponsorSegments
-            .where(
-              (segment) =>
-                  segment.matches(snapshots.value.duration) &&
-                  snapshots.value.position >= segment.start &&
-                  snapshots.value.position < segment.end,
-            )
-            .firstOrNull;
+  SponsorSegment? get currentSponsor => sponsorSegments
+      .where(
+        (segment) =>
+            segment.matches(snapshots.value.duration) &&
+            snapshots.value.position >= segment.start &&
+            snapshots.value.position < segment.end,
+      )
+      .firstOrNull;
   final PlayerEngine engine;
   Timer? _recoveryTimer;
   bool _recoveryScheduled = false;
@@ -1401,7 +1398,7 @@ class PlaybackSession extends ChangeNotifier {
           _loadSubtitleTracks(generation, video, selected, cancellation),
         );
       }
-      if (target == null) unawaited(_loadSponsorSegments());
+      unawaited(_loadSponsorSegments());
     } on AppFailure catch (failure) {
       if (isCurrent() && failure.kind != AppFailureKind.cancelled) {
         error = failure.message;
@@ -1549,31 +1546,7 @@ class PlaybackSession extends ChangeNotifier {
         );
       }
       _ensureComments(value.position);
-      final sponsor = currentSponsor;
-      if (_settings.sponsorBlockMode == SponsorBlockMode.automatic &&
-          value.phase == PlaybackPhase.playing &&
-          !value.isSeeking &&
-          !value.isBuffering &&
-          sponsor != null &&
-          !_skippedSponsors.contains(sponsor.id) &&
-          !_sponsorSeeking) {
-        final sourceGeneration = _generation;
-        // Native adapters may emit synchronously inside seek. Defer commands
-        // until the current position event finishes, then recheck the source.
-        scheduleMicrotask(() {
-          if (!_disposed &&
-              _playbackAllowed &&
-              _desiredPlaying &&
-              sourceGeneration == _generation &&
-              identical(currentSponsor, sponsor) &&
-              _settings.sponsorBlockMode == SponsorBlockMode.automatic &&
-              snapshots.value.phase == PlaybackPhase.playing &&
-              !snapshots.value.isSeeking &&
-              !snapshots.value.isBuffering) {
-            unawaited(skipSponsor(sponsor));
-          }
-        });
-      }
+      _maybeSkipSponsor();
       if (_clock.elapsed - _lastSaved >= const Duration(seconds: 5)) {
         _lastSaved = _clock.elapsed;
         unawaited(_saveProgress(report: false));
@@ -1902,7 +1875,8 @@ class PlaybackSession extends ChangeNotifier {
           ),
         );
       }
-      if (previous.sponsorBlockMode != _settings.sponsorBlockMode ||
+      if (previous.autoSkipPgcIntroOutro != _settings.autoSkipPgcIntroOutro ||
+          previous.sponsorBlockMode != _settings.sponsorBlockMode ||
           previous.sponsorBlockCategories.join(',') !=
               _settings.sponsorBlockCategories.join(',')) {
         unawaited(_loadSponsorSegments());
@@ -1928,13 +1902,14 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> _loadSponsorSegments() async {
     _sponsorCancellation?.cancel();
-    sponsorSegments = const [];
+    _setSponsorSegments(const []);
     sponsorMessage = null;
     sponsorLoading = false;
+    _maybeSkipSponsor();
     final repository = sponsorRepository;
     final video = detail;
     final selected = part;
-    if (contentTarget is OfflinePlaybackTarget ||
+    if ((contentTarget != null && contentTarget is! PgcPlaybackTarget) ||
         _settings.sponsorBlockMode == SponsorBlockMode.disabled ||
         repository == null ||
         video == null ||
@@ -1956,11 +1931,8 @@ class PlaybackSession extends ChangeNotifier {
         cancellation: token,
       );
       if (_disposed || token.isCancelled || generation != _generation) return;
-      sponsorSegments = List.unmodifiable(
-        result
-            .where((item) => item.matches(media?.duration ?? Duration.zero))
-            .take(512),
-      );
+      _setSponsorSegments(result);
+      _maybeSkipSponsor();
       sponsorMessage = sponsorSegments.isEmpty ? '当前视频没有可跳过片段' : null;
     } catch (_) {
       if (_disposed || token.isCancelled || generation != _generation) return;
@@ -1975,14 +1947,90 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
+  void _setSponsorSegments(List<SponsorSegment> community) {
+    final duration = media?.duration ?? Duration.zero;
+    final official = contentTarget is PgcPlaybackTarget
+        ? (media?.pgcSkipSegments ?? const <SponsorSegment>[])
+              .where(
+                (segment) =>
+                    segment.isOfficial &&
+                    segment.matches(duration) &&
+                    (_settings.autoSkipPgcIntroOutro ||
+                        _settings.sponsorBlockMode !=
+                                SponsorBlockMode.disabled &&
+                            _settings.sponsorBlockCategories.contains(
+                              segment.category,
+                            )),
+              )
+              .take(64)
+              .toList()
+        : const <SponsorSegment>[];
+    final officialCategories = official
+        .map((segment) => segment.category)
+        .toSet();
+    sponsorSegments = List.unmodifiable([
+      ...official,
+      if (_settings.sponsorBlockMode != SponsorBlockMode.disabled)
+        ...community
+            .where(
+              (segment) =>
+                  !segment.isOfficial &&
+                  segment.matches(duration) &&
+                  _settings.sponsorBlockCategories.contains(segment.category) &&
+                  !officialCategories.contains(segment.category),
+            )
+            .take(512),
+    ]);
+  }
+
+  bool _isAutomaticSponsor(SponsorSegment segment) =>
+      segment.isOfficial && _settings.autoSkipPgcIntroOutro ||
+      _settings.sponsorBlockMode == SponsorBlockMode.automatic &&
+          _settings.sponsorBlockCategories.contains(segment.category);
+
+  void _maybeSkipSponsor() {
+    final sponsor = currentSponsor;
+    if (sponsor == null ||
+        !_isAutomaticSponsor(sponsor) ||
+        _resolving ||
+        media == null ||
+        _skippedSponsors.contains(sponsor.id) ||
+        _sponsorSeeking) {
+      return;
+    }
+    final sourceGeneration = _generation;
+    // Native adapters may emit synchronously inside seek. Recheck the source,
+    // account and user intent after the current position event finishes.
+    scheduleMicrotask(() {
+      final snapshot = snapshots.value;
+      if (!_disposed &&
+          !_closing &&
+          !_resolving &&
+          _playbackAllowed &&
+          _desiredPlaying &&
+          _scope == accountScope() &&
+          _epoch == sessionEpoch() &&
+          sourceGeneration == _generation &&
+          identical(currentSponsor, sponsor) &&
+          _isAutomaticSponsor(sponsor) &&
+          !_skippedSponsors.contains(sponsor.id) &&
+          !_sponsorSeeking &&
+          snapshot.phase == PlaybackPhase.playing &&
+          !snapshot.isSeeking &&
+          !snapshot.isBuffering) {
+        unawaited(skipSponsor(sponsor));
+      }
+    });
+  }
+
   Future<void> skipSponsor(SponsorSegment segment) async {
     final generation = _generation;
     if (_disposed ||
         _resolving ||
-        (!_ownerVisible &&
-            _settings.sponsorBlockMode != SponsorBlockMode.automatic) ||
+        (!_ownerVisible && !_isAutomaticSponsor(segment)) ||
+        _scope != accountScope() ||
+        _epoch != sessionEpoch() ||
         _sponsorSeeking ||
-        _settings.sponsorBlockMode == SponsorBlockMode.disabled ||
         !sponsorSegments.contains(segment) ||
         !segment.matches(snapshots.value.duration)) {
       return;

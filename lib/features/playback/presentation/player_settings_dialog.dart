@@ -157,6 +157,18 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                           s.autoPlay,
                           (c, v) => c.copyWith(autoPlay: v),
                         ),
+                        SwitchListTile(
+                          title: const Text('自动跳过官方片头／片尾'),
+                          subtitle: const Text(
+                            '适用于番剧、国创和剧集。空降助手自动跳过片头／片尾时优先采用官方区间，缺失时使用空降数据。',
+                          ),
+                          value: s.autoSkipPgcIntroOutro,
+                          onChanged: (v) => unawaited(
+                            _update(
+                              (c) => c.copyWith(autoSkipPgcIntroOutro: v),
+                            ),
+                          ),
+                        ),
                         ListTile(
                           title: const Text('播放模式'),
                           subtitle: DropdownButton<PlaybackMode>(

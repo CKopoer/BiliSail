@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../application/playback_session.dart';
 import '../domain/playback_repository.dart';
+import '../domain/content_playback.dart';
 import 'live_stream_picker.dart';
 import 'playback_snapshot_builder.dart';
 import 'player_control_labels.dart';
@@ -264,7 +265,8 @@ class PlayerMoreDialog extends StatelessWidget {
       action('弹幕配置', Icons.tune, () => unawaited(onSettings(1))),
       if (!session.isLive)
         action('字幕样式', Icons.text_fields, () => unawaited(onSettings(2))),
-      if (session.contentTarget == null)
+      if (session.contentTarget == null ||
+          session.contentTarget is PgcPlaybackTarget)
         action('空降助手', Icons.fast_forward, () => unawaited(onSettings(3))),
     ];
   }

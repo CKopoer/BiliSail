@@ -13,6 +13,61 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final inPlayer in [false, true]) {
+    testWidgets(
+      'official PGC auto skip persists from settings entry: $inPlayer',
+      (tester) async {
+        final repository = _SettingsRepository();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: inPlayer
+                    ? Builder(
+                        builder: (context) => TextButton(
+                          onPressed: () => showPlayerSettings(context),
+                          child: const Text('配置'),
+                        ),
+                      )
+                    : const SettingsScreen(category: SettingsCategory.playback),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (inPlayer) {
+          await tester.tap(find.text('配置'));
+          await tester.pumpAndSettle();
+        }
+        final toggle = find.widgetWithText(SwitchListTile, '自动跳过官方片头／片尾');
+        await tester.scrollUntilVisible(
+          toggle,
+          100,
+          scrollable: find
+              .descendant(
+                of: find.byType(ListView).first,
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await tester.ensureVisible(toggle);
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(repository.settings.autoSkipPgcIntroOutro, isTrue);
+        final container = ProviderScope.containerOf(tester.element(toggle));
+        container.invalidate(settingsControllerProvider);
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final failSave in [false, true]) {
     testWidgets(
       'tab close options allow multiple selections and rollback: $failSave',
@@ -462,7 +517,8 @@ void main() {
                 )
                 .first,
           );
-          await tester.ensureVisible(toggle);
+          await Scrollable.ensureVisible(tester.element(toggle), alignment: .5);
+          await tester.pumpAndSettle();
           await tester.tap(toggle);
           await tester.pumpAndSettle();
           expect(repository.settings.fullscreenSwipeControls, failSave);

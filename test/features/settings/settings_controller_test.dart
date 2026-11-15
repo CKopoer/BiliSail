@@ -10,6 +10,41 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'official PGC auto skip saves, rolls back failed changes and resets',
+    () async {
+      final repository = _DeferredSettingsRepository();
+      final container = ProviderContainer(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+      await container.read(settingsControllerProvider.future);
+      final controller = container.read(settingsControllerProvider.notifier);
+      final save = controller.setAutoSkipPgcIntroOutro(true);
+      await Future<void>.delayed(Duration.zero);
+      repository.completeNext();
+      await save;
+      expect(repository.stored.autoSkipPgcIntroOutro, isTrue);
+      final failed = controller.setAutoSkipPgcIntroOutro(false);
+      final assertion = expectLater(failed, throwsStateError);
+      await Future<void>.delayed(Duration.zero);
+      repository.failNext();
+      await assertion;
+      expect(
+        container
+            .read(settingsControllerProvider)
+            .requireValue
+            .autoSkipPgcIntroOutro,
+        isTrue,
+      );
+      final reset = controller.resetToDefaults();
+      await Future<void>.delayed(Duration.zero);
+      repository.completeNext();
+      await reset;
+      expect(repository.stored.autoSkipPgcIntroOutro, isFalse);
+    },
+  );
+
+  test(
     'sponsor button distance saves, reloads and rolls back a failed save',
     () async {
       final repository = _DeferredSettingsRepository();

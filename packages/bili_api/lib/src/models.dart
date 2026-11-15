@@ -348,6 +348,7 @@ final class ApiPlayInfo {
     this.currentLanguage = '',
     this.productionType = 0,
     this.loudness,
+    this.pgcSkipSegments = const [],
   });
   final Duration duration;
   final List<ApiMediaTrack> dashVideo;
@@ -363,6 +364,15 @@ final class ApiPlayInfo {
   final List<ApiPlaybackVoice> voices;
   final String currentLanguage;
   final int productionType;
+  final List<ApiPgcSkipSegment> pgcSkipSegments;
+}
+
+enum ApiPgcSkipType { intro, outro }
+
+final class ApiPgcSkipSegment {
+  const ApiPgcSkipSegment(this.type, this.start, this.end);
+  final ApiPgcSkipType type;
+  final Duration start, end;
 }
 
 final class ApiPlaybackVoice {

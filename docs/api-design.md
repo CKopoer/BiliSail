@@ -1,5 +1,7 @@
 # API、鉴权与数据边界
 
+2026-11-15 PGC 沿用 `GET https://api.bilibili.com/pgc/player/web/playurl` 的 Web Cookie profile、`ep_id/qn/fnver/fnval/fourk/module/voice_balance` 参数、JSON `result`、有界只读重试、总 deadline 和取消／epoch；无新增签名、CSRF 或分页。增加可选 `clip_info_list` 元数据解析：`CLIP_TYPE_OP/ED`、以秒计的 `start/end`，转换为毫秒后检查源时长与正向区间，最多 64 项。未知／非法项和缺失列表不阻塞播放，试看不启用整集跳过数据。官方与空降优先级、精确参考提交及在线样本见[PGC 跳过记录](validation/pgc-skip-segments-2026-11-15.md)。
+
 2026-11-15 密码／短信登录接入 App Passport：RSA 密码、App 短信、极验与安全中心手机号验证，成功后由 SessionRepository 校验并原子保存 Cookie／App token。具体 method、签名、端点和重试边界见[密码／短信 App 登录](validation/password-sms-app-login-2026-11-15.md)。明确的官网登录仍可保存 Web-only 会话，已有会话不自动转换。
 
 同日安全中心 captcha/pre 单独使用无 Cookie／签名及 App buvid 的 Web 注册上下文，并校验 recaptcha_type；实测携带 App buvid 返回第四代注册，不能交给第三代 fullpage。安全中心短信及授权码交换仍使用 App 签名；来源、在线对照及验证见上述记录。

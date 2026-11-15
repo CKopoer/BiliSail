@@ -69,6 +69,45 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final desktop in [false, true]) {
+    testWidgets(
+      'PGC exposes sponsor configuration in more menu: desktop=$desktop',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1200, 900);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(
+            session,
+            _FakeWindowService(desktop: desktop),
+            const AppSettings.defaults(),
+            width: 480,
+            target: const PgcPlaybackTarget('12', cid: '123'),
+          ),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        await tester.tap(find.byTooltip('更多播放选项'));
+        await tester.pumpAndSettle();
+        final entry = find.text('空降助手');
+        await tester.ensureVisible(entry);
+        await tester.tap(entry);
+        await tester.pumpAndSettle();
+        expect(
+          DefaultTabController.of(tester.element(find.byType(TabBar))).index,
+          3,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
+  }
+
   testWidgets(
     'content link seeks once without replacing the retained surface',
     (tester) async {

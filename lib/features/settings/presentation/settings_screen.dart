@@ -640,6 +640,12 @@ final class _SettingsCategoryPageState
                             '打开视频后开始播放',
                           ),
                           _toggle(
+                            '自动跳过官方片头／片尾',
+                            s.autoSkipPgcIntroOutro,
+                            controller.setAutoSkipPgcIntroOutro,
+                            '适用于番剧、国创和剧集，使用 B站提供的区间。空降助手自动跳过片头／片尾时也优先使用官方区间，缺失时使用空降数据。',
+                          ),
+                          _toggle(
                             '后台播放',
                             s.backgroundPlayback,
                             controller.setBackgroundPlayback,

@@ -61,37 +61,47 @@ void main() {
     },
   );
 
+  test('warnings, fallback and advice do not request recovery', () {
+    for (final (text, prefix, severity) in [
+      ('Error while decoding frame!', 'vd', NativeLogSeverity.warning),
+      (
+        'Attempting next decoding method after failure of h264-d3d11va.',
+        'vd',
+        NativeLogSeverity.warning,
+      ),
+      (
+        'Consider trying --hwdec=auto as they may help.',
+        'cplayer',
+        NativeLogSeverity.warning,
+      ),
+      (
+        'Audio/Video desynchronisation detected! Possible reasons include too slow hardware.',
+        'cplayer',
+        NativeLogSeverity.warning,
+      ),
+      ('Unsupported texture', 'vo/libmpv', NativeLogSeverity.warning),
+      ('HTTP error 403', 'ffmpeg', NativeLogSeverity.error),
+    ]) {
+      monitor.report(
+        NativeErrorSummary.classify(text, prefix: prefix),
+        severity,
+      );
+    }
+    monitor.update();
+    expect(failures, 0);
+  });
+
   test(
-    'bad frames, fallback, output warnings and advice retain native recovery',
+    'software frame errors also enter the shared native recovery window',
     () {
-      for (final (text, prefix, severity) in [
-        ('Invalid NAL unit size', 'ffmpeg/video', NativeLogSeverity.error),
-        ('Error while decoding frame!', 'vd', NativeLogSeverity.warning),
-        (
-          'Attempting next decoding method after failure of h264-d3d11va.',
-          'vd',
-          NativeLogSeverity.warning,
+      monitor.report(
+        NativeErrorSummary.classify(
+          'Invalid NAL unit size',
+          prefix: 'ffmpeg/video',
         ),
-        (
-          'Consider trying --hwdec=auto as they may help.',
-          'cplayer',
-          NativeLogSeverity.warning,
-        ),
-        (
-          'Audio/Video desynchronisation detected! Possible reasons include too slow hardware.',
-          'cplayer',
-          NativeLogSeverity.warning,
-        ),
-        ('Unsupported texture', 'vo/libmpv', NativeLogSeverity.warning),
-        ('HTTP error 403', 'ffmpeg', NativeLogSeverity.error),
-      ]) {
-        monitor.report(
-          NativeErrorSummary.classify(text, prefix: prefix),
-          severity,
-        );
-      }
-      monitor.update();
-      expect(failures, 0);
+        NativeLogSeverity.error,
+      );
+      expect(failures, 1);
     },
   );
 

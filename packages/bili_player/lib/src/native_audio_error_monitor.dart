@@ -1,8 +1,8 @@
 import 'player_contract.dart';
 import 'player_diagnostics.dart';
 
-/// A decoder error retires the whole pair, even while video/cache can advance.
-/// Recovery is owned by the session's existing bounded retry policy.
+/// Classifies audio decoder faults independently of the shared media clock.
+/// The backend grants native recovery time before retiring the pair.
 final class NativeAudioErrorMonitor {
   NativeAudioErrorMonitor({required this.snapshot, required this.onFailure});
 

@@ -256,11 +256,14 @@ Future<void> _runVideoFailure(
       expect(engine.inspectDiagnostics().hasDecodedAudio, true);
     } else {
       expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
-      final stopped = engine.inspectDiagnostics().position;
+      // SDK position notifications can arrive after pause acknowledgment.
+      // Compare the actual native clock to prove the remaining track stopped.
+      final stopped = double.parse(await player.getPropertyAsync('time-pos'));
       await tester.pump(const Duration(milliseconds: 400));
       expect(
-        (engine.inspectDiagnostics().position - stopped).abs(),
-        lessThan(const Duration(milliseconds: 100)),
+        (double.parse(await player.getPropertyAsync('time-pos')) - stopped)
+            .abs(),
+        lessThan(0.1),
       );
     }
     debugPrint(

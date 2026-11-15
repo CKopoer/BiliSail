@@ -5,6 +5,7 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/audio_normalization.dart';
 import '../../../domain/audio_quality.dart';
 import 'playback_timeline.dart';
+import 'sponsor_repository.dart';
 import '../../../domain/live_stream_preference.dart';
 
 export '../../../domain/video_codec.dart';
@@ -50,6 +51,7 @@ final class PlaybackMedia {
     this.liveStream,
     this.audioTracks = const [],
     this.isIntentionallySilent = false,
+    this.pgcSkipSegments = const [],
   });
   final PlaybackTrack video;
   final PlaybackTrack? audio;
@@ -95,6 +97,7 @@ final class PlaybackMedia {
       loudness: loudness,
       liveStreams: liveStreams,
       liveStream: liveStream,
+      pgcSkipSegments: pgcSkipSegments,
     );
   }
 
@@ -109,6 +112,7 @@ final class PlaybackMedia {
   final AudioLoudness? loudness;
   final List<LivePlaybackStream> liveStreams;
   final LiveStreamPreference? liveStream;
+  final List<SponsorSegment> pgcSkipSegments;
 }
 
 final class LivePlaybackStream {

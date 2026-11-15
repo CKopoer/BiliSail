@@ -105,6 +105,7 @@ final class AppSettings {
     this.continuousRelatedPlayback = false,
     PlaybackMode? playbackMode,
     this.resumePlayback = true,
+    this.autoSkipPgcIntroOutro = false,
     this.showCollapsedProgress = true,
     this.highEnergyProgressEnabled = false,
     this.playerControlsMode = PlayerControlsMode.click,
@@ -247,6 +248,7 @@ final class AppSettings {
        subtitleBackgroundOpacity = 0.45,
        subtitleBottomPadding = 24.0,
        sponsorBlockMode = SponsorBlockMode.manual,
+       autoSkipPgcIntroOutro = false,
        sponsorBlockBottomPadding = 120.0,
        _danmakuBlockedWords = const [],
        _sponsorBlockCategories = supportedSponsorCategories;
@@ -354,6 +356,7 @@ final class AppSettings {
   final double subtitleBackgroundOpacity;
   final double subtitleBottomPadding;
   final SponsorBlockMode sponsorBlockMode;
+  final bool autoSkipPgcIntroOutro;
   final double sponsorBlockBottomPadding;
   final List<String> _sponsorBlockCategories;
   List<String> get sponsorBlockCategories => _sponsorBlockCategories;
@@ -442,6 +445,7 @@ final class AppSettings {
     double? subtitleBackgroundOpacity,
     double? subtitleBottomPadding,
     SponsorBlockMode? sponsorBlockMode,
+    bool? autoSkipPgcIntroOutro,
     double? sponsorBlockBottomPadding,
     List<String>? sponsorBlockCategories,
   }) => AppSettings(
@@ -557,6 +561,7 @@ final class AppSettings {
         subtitleBackgroundOpacity ?? this.subtitleBackgroundOpacity,
     subtitleBottomPadding: subtitleBottomPadding ?? this.subtitleBottomPadding,
     sponsorBlockMode: sponsorBlockMode ?? this.sponsorBlockMode,
+    autoSkipPgcIntroOutro: autoSkipPgcIntroOutro ?? this.autoSkipPgcIntroOutro,
     sponsorBlockBottomPadding:
         sponsorBlockBottomPadding ?? this.sponsorBlockBottomPadding,
     sponsorBlockCategories: List.unmodifiable(

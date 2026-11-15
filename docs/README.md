@@ -10,6 +10,8 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [PGC 空降与官方片头片尾](validation/pgc-skip-segments-2026-11-15.md) | 修复番剧／国创／剧集的空降加载和入口，官方区间独立自动跳过、按类别优先与回退 |
+| [有缓存时静默恢复](validation/silent-prefetch-retry-2026-11-15.md) | 读错／静默读停滞／解码共用半窗口、独立轨道健康检查、无中断／提示回归及缓存复用边界 |
 | [Android 直出 HDR 色彩](validation/hdr-direct-output-2026-11-15.md) | HDR 源使用 GPU 色调映射并保留硬解、直出偏好恢复、PiliPlus 对照与未构建／实机边界 |
 | [点播提前截断错误恢复](validation/prefetch-read-error-coverage-2026-11-15.md) | 提前读断分类遗漏、TLS／分片错误审查、统一恢复入口及缓存耗尽前回归 |
 | [桌面滚轮动画与参数](validation/scroll-animation-switch-2026-11-15.md) | 弹簧／Chromium／多平台平滑、曲线与倍率、设置持久化、嵌套与标签状态及未构建边界 |

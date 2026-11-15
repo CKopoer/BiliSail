@@ -5,6 +5,7 @@ import '../../../domain/audio_normalization.dart';
 import '../../../domain/media_cdn.dart';
 import '../../../domain/audio_quality.dart';
 import '../domain/playback_repository.dart';
+import '../domain/sponsor_repository.dart';
 
 /// Quality takes priority; a missing preferred codec does not downgrade it.
 PlaybackMedia selectDashMedia(
@@ -101,6 +102,22 @@ PlaybackMedia selectDashMedia(
   }
   final loudness = videoOnly ? null : info.loudness;
   return PlaybackMedia(
+    pgcSkipSegments: List.unmodifiable(
+      info.pgcSkipSegments.map((clip) {
+        final category = switch (clip.type) {
+          ApiPgcSkipType.intro => 'intro',
+          ApiPgcSkipType.outro => 'outro',
+        };
+        return SponsorSegment(
+          id: 'official:$category:${clip.start.inMilliseconds}:${clip.end.inMilliseconds}',
+          category: category,
+          start: clip.start,
+          end: clip.end,
+          videoDuration: info.duration,
+          isOfficial: true,
+        );
+      }),
+    ),
     loudness: loudness == null
         ? null
         : AudioLoudness(

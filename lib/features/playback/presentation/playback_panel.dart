@@ -3220,7 +3220,7 @@ class _ControlBar extends StatelessWidget {
         (3, '空降助手'),
       ])
         if (!(session.isLive && (tab == 1 || tab == 2 || tab == 3)) &&
-            !(session.contentTarget != null && tab == 3))
+            !(session.contentTarget is OfflinePlaybackTarget && tab == 3))
           PopupMenuItem(
             value: () => unawaited(onSettings(tab)),
             child: Text(title),

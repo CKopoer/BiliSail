@@ -7,6 +7,44 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('official PGC segments survive mapping and audio quality selection', () {
+    final media = selectDashMedia(
+      ApiPlayInfo(
+        duration: const Duration(minutes: 2),
+        dashVideo: [_track(80, 'avc1')],
+        dashAudio: [_track(30280, 'mp4a.40.2'), _track(30251, 'fLaC')],
+        acceptQuality: const [80],
+        pgcSkipSegments: const [
+          ApiPgcSkipSegment(
+            ApiPgcSkipType.intro,
+            Duration.zero,
+            Duration(seconds: 20),
+          ),
+          ApiPgcSkipSegment(
+            ApiPgcSkipType.outro,
+            Duration(seconds: 100),
+            Duration(seconds: 120),
+          ),
+        ],
+      ),
+      quality: 80,
+      preferredCodec: VideoCodecPreference.h264,
+      headers: const {},
+    );
+    expect(media.pgcSkipSegments.map((s) => s.category), ['intro', 'outro']);
+    expect(
+      media.pgcSkipSegments.every(
+        (s) => s.isOfficial && s.matches(media.duration),
+      ),
+      isTrue,
+    );
+    expect(media.pgcSkipSegments.map((s) => s.id).toSet(), hasLength(2));
+    expect(() => media.pgcSkipSegments.clear(), throwsUnsupportedError);
+    final changed = media.selectAudioQuality(AudioQualityPreference.lossless);
+    expect(changed.audioQuality, AudioQualityPreference.lossless);
+    expect(changed.pgcSkipSegments, same(media.pgcSkipSegments));
+  });
+
   test('automatic DASH selection prefers returned regular video and audio', () {
     ApiMediaTrack track(int id, String codec, String name) => ApiMediaTrack(
       id: id,
