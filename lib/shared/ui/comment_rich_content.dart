@@ -172,8 +172,6 @@ class _CommentRichContentState extends State<CommentRichContent> {
                 BiliLevelBadge(level: comment.level!),
               if (comment.verifyType == 0 || comment.verifyType == 1)
                 BiliVerifyBadge(type: comment.verifyType!),
-              if (comment.vipLabel != null)
-                Text(comment.vipLabel!, style: styles.badge),
               if (comment.medalName != null)
                 Text(
                   '${comment.medalName} ${comment.medalLevel ?? ''}',
@@ -308,15 +306,6 @@ class CommentAuthorHeader extends StatelessWidget {
               BiliLevelBadge(level: c.level!),
             if (c.verifyType == 0 || c.verifyType == 1)
               BiliVerifyBadge(type: c.verifyType!),
-            if (c.vipLabel != null)
-              Text(
-                c.vipLabel!,
-                style: styles.badge.copyWith(
-                  color: c.nicknameColor != null
-                      ? Color(0xFF000000 | c.nicknameColor!)
-                      : theme.colorScheme.primary,
-                ),
-              ),
             if (c.medalName != null)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),

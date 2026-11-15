@@ -19,7 +19,7 @@ void main() {
   });
 
   for (final width in [300.0, 306.0, 360.0, 640.0]) {
-    testWidgets('VIP badge uses available author space at $width pixels', (
+    testWidgets('author header hides VIP label at $width pixels', (
       tester,
     ) async {
       final users = <UserId>[];
@@ -52,18 +52,52 @@ void main() {
       await tester.pumpAndSettle();
       final author = tester.getRect(find.text(comment.author));
       final level = tester.getRect(find.byType(BiliLevelBadge));
-      final vip = tester.getRect(find.text('年度大会员'));
+      expect(find.text(comment.vipLabel!), findsNothing);
+      expect(
+        tester.widget<Text>(find.text(comment.author)).style?.color,
+        const Color(0xfffb7299),
+      );
       final decoration = tester.getRect(find.byType(CommentAuthorDecoration));
       expect(level.center.dy, closeTo(author.center.dy, .01));
-      expect(vip.center.dy, closeTo(author.center.dy, .01));
-      expect(vip.left, greaterThan(level.right));
-      expect(vip.right, lessThanOrEqualTo(decoration.left - 8));
+      expect(level.left, greaterThan(author.right));
+      expect(level.right, lessThanOrEqualTo(decoration.left - 8));
       expect(decoration.right, width + CommentAuthorHeader.contentIndent);
       expect(decoration.height, 52);
       expect(tester.widget<Text>(find.text('NO.\n012515')).style?.fontSize, 12);
       await tester.tap(find.text(comment.author));
       await tester.tap(find.byType(NetworkAvatar));
       expect(users, [const UserId('7'), const UserId('7')]);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final label in ['大会员', '年度大会员']) {
+    testWidgets('reply preview hides VIP label $label', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CommentRichContent(
+              prefix: '作者：',
+              compact: true,
+              comment: CommentEntry(
+                id: '1',
+                author: '作者',
+                message: '回复正文',
+                vipLabel: label,
+                level: 6,
+                verifyType: 1,
+                medalName: '粉丝牌',
+                medalLevel: 10,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text(label), findsNothing);
+      expect(find.byType(BiliLevelBadge), findsOneWidget);
+      expect(find.byType(BiliVerifyBadge), findsOneWidget);
+      expect(find.text('粉丝牌 10'), findsOneWidget);
+      expect(find.text('作者：回复正文'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
