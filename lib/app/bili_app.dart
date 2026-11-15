@@ -122,6 +122,23 @@ class _BiliAppState extends ConsumerState<BiliApp> {
                   ? null
                   : WorkspacePlaybackWindow(
                       theme: Theme.of(context),
+                      wheelScrollAnimation: SmoothScrollScope.animationOf(
+                        context,
+                      ),
+                      wheelDampingRatio: SmoothScrollScope.dampingRatioOf(
+                        context,
+                      ),
+                      chromiumScrollCurve:
+                          SmoothScrollScope.maybeOf(context)?.chromiumCurve ??
+                          ChromiumScrollCurve.easeInOut,
+                      wheelScrollDistanceMultiplier:
+                          SmoothScrollScope.maybeOf(context)
+                              ?.distanceMultiplier ??
+                          1,
+                      wheelScrollDurationMultiplier:
+                          SmoothScrollScope.maybeOf(context)
+                              ?.durationMultiplier ??
+                          1,
                       responsiveLayout:
                           (ref.read(settingsControllerProvider).value ??
                                   ref.read<AppSettings>(
@@ -451,7 +468,11 @@ class _BiliAppState extends ConsumerState<BiliApp> {
           child: VideoCompositionScope(
             adapter: widget.videoComposition,
             child: SmoothScrollScope(
+              animation: settings.wheelScrollAnimation,
               dampingRatio: settings.wheelDampingRatio,
+              chromiumCurve: settings.chromiumScrollCurve,
+              distanceMultiplier: settings.wheelScrollDistanceMultiplier,
+              durationMultiplier: settings.wheelScrollDurationMultiplier,
               child: AppInputHost<Object>(
                 dispatcher: _input,
                 routes: _input.routes,

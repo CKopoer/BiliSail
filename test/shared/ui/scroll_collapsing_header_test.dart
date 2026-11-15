@@ -393,7 +393,7 @@ void main() {
     expect(
       tester.getTopLeft(find.byKey(_tabs)).dy,
       inExclusiveRange(40, 80),
-      reason: 'Wheel input over the header follows the shared spring',
+      reason: 'Wheel input over the header follows the shared animation',
     );
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(find.byKey(_tabs)).dy, closeTo(40, 1));

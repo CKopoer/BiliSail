@@ -14,6 +14,10 @@ dependencies:
     sdk: flutter
   flutter_riverpod: 3.4.3
   flutter_markdown_plus: 1.0.12
+  scroll_animator: 0.3.0
+  smooth_scroll_multiplatform:
+    path: third_party/smooth_scroll_multiplatform
+    version: 1.0.8+bilisail.1
   go_router: 18.0.2
   drift: 2.35.2
   path: 1.9.1
@@ -108,6 +112,7 @@ flutter:
     - assets/branding/bilibili_pink.png
     - assets/branding/bilibili_pink_macos.icns
     - assets/branding/bilibili_LICENSE.md
+    - assets/licenses/scroll_animator_chromium.txt
     - assets/fonts/harmonyos_sans/LICENSE.txt
   fonts:
     - family: HarmonyOS Sans

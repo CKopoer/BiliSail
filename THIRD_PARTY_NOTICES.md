@@ -1,5 +1,11 @@
 # 第三方来源与分发检查
 
+## 2026-11-15 桌面滚轮平滑动画
+
+新增精确依赖 [scroll_animator 0.3.0](https://pub.dev/packages/scroll_animator/versions/0.3.0)（BSD-3-Clause，Copyright 2024 Kamil Szczęk），仅依赖 Flutter，无新增原生二进制。采用公共 `ChromiumEaseInOut`／`ScrollAnimation` 接口，包内原始 LICENSE 由 Flutter notices 收集；两个 Chromium 移植文件相同的原始 BSD-3-Clause 头部（Copyright 2015 The Chromium Authors）另存于 [Chromium 许可](assets/licenses/scroll_animator_chromium.txt)，随资产打包并登记到应用许可证页。归档 SHA-256、嵌套滚动适配与验证边界见[滚轮动画切换](docs/validation/scroll-animation-switch-2026-11-15.md)。没有复制 PureLive 应用源码或资源。
+
+多平台选项基于 [smooth_scroll_multiplatform 1.0.8](https://pub.dev/packages/smooth_scroll_multiplatform/versions/1.0.8) 的 MIT 源码，在仓库内维护固定 `1.0.8+bilisail.1` [兼容副本](third_party/smooth_scroll_multiplatform/UPSTREAM.md)。保留原始 [LICENSE](third_party/smooth_scroll_multiplatform/LICENSE)、来源摘要和包装实现，新增公共插值入口用于嵌套／保留列表；不修改 Pub 缓存。传递依赖 `provider 6.1.5+1`、`nested 1.0.0` 同为 MIT，包内原始许可证随 Flutter notices 收集；无新增原生二进制。
+
 ## 2026-11-13 B站扩展投屏与直播
 
 新增精确依赖 [pointycastle 4.0.0](https://pub.dev/packages/pointycastle/versions/4.0.0)（MIT，纯 Dart），用于标准 AES-CBC／PKCS7 编码；包内原始 LICENSE 由 Flutter notices 收集。B站投屏固定协议 key／IV 和报文格式只作为互通协议事实，不用于账号凭据传送或安全存储。

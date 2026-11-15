@@ -262,6 +262,118 @@ void main() {
     },
   );
 
+  test(
+    'wheel animation updates immediately, reloads and rolls back a failed save',
+    () async {
+      final repository = _DeferredSettingsRepository();
+      final container = ProviderContainer(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+      await container.read(settingsControllerProvider.future);
+      final controller = container.read(settingsControllerProvider.notifier);
+      final save = controller.setWheelScrollAnimation(
+        WheelScrollAnimation.spring,
+      );
+      expect(
+        container
+            .read(settingsControllerProvider)
+            .requireValue
+            .wheelScrollAnimation,
+        WheelScrollAnimation.spring,
+      );
+      await Future<void>.delayed(Duration.zero);
+      repository.completeNext();
+      await save;
+      container.invalidate(settingsControllerProvider);
+      expect(
+        (await container.read(settingsControllerProvider.future))
+            .wheelScrollAnimation,
+        WheelScrollAnimation.spring,
+      );
+      final failure = container
+          .read(settingsControllerProvider.notifier)
+          .setWheelScrollAnimation(WheelScrollAnimation.chromium);
+      final assertion = expectLater(failure, throwsStateError);
+      await Future<void>.delayed(Duration.zero);
+      repository.failNext();
+      await assertion;
+      expect(
+        container
+            .read(settingsControllerProvider)
+            .requireValue
+            .wheelScrollAnimation,
+        WheelScrollAnimation.spring,
+      );
+      expect(
+        repository.stored.wheelScrollAnimation,
+        WheelScrollAnimation.spring,
+      );
+    },
+  );
+
+  test(
+    'wheel parameter saves queue, reload, roll back and reset independently',
+    () async {
+      final repository = _DeferredSettingsRepository()
+        ..stored = AppSettings(
+          wheelScrollAnimation: WheelScrollAnimation.multiplatform,
+          wheelDampingRatio: .75,
+        );
+      final container = ProviderContainer(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+      await container.read(settingsControllerProvider.future);
+      var controller = container.read(settingsControllerProvider.notifier);
+      final writes = [
+        controller.setChromiumScrollCurve(ChromiumScrollCurve.impulse),
+        controller.setWheelScrollDistanceMultiplier(1.75),
+        controller.setWheelScrollDurationMultiplier(2.5),
+      ];
+      expect(
+        container
+            .read(settingsControllerProvider)
+            .requireValue
+            .wheelScrollDistanceMultiplier,
+        1.75,
+      );
+      for (final write in writes) {
+        await Future<void>.delayed(Duration.zero);
+        repository.completeNext();
+        await write;
+      }
+      container.invalidate(settingsControllerProvider);
+      var settings = await container.read(settingsControllerProvider.future);
+      expect(settings.chromiumScrollCurve, ChromiumScrollCurve.impulse);
+      expect(settings.wheelScrollDistanceMultiplier, 1.75);
+      expect(settings.wheelScrollDurationMultiplier, 2.5);
+      controller = container.read(settingsControllerProvider.notifier);
+      final failure = controller.setWheelScrollDurationMultiplier(.5);
+      final assertion = expectLater(failure, throwsStateError);
+      await Future<void>.delayed(Duration.zero);
+      repository.failNext();
+      await assertion;
+      expect(
+        container
+            .read(settingsControllerProvider)
+            .requireValue
+            .wheelScrollDurationMultiplier,
+        2.5,
+      );
+      final reset = controller.resetWheelScrollParameters();
+      await Future<void>.delayed(Duration.zero);
+      repository.completeNext();
+      await reset;
+      settings = repository.stored;
+      expect(settings.chromiumScrollCurve, ChromiumScrollCurve.easeInOut);
+      expect(settings.wheelScrollDistanceMultiplier, 1);
+      expect(settings.wheelScrollDurationMultiplier, 1);
+      expect(settings.wheelScrollAnimation, WheelScrollAnimation.multiplatform);
+      expect(settings.wheelDampingRatio, .75);
+    },
+  );
+
   test('queued live and video quality changes persist independently', () async {
     final repository = _DeferredSettingsRepository();
     final container = ProviderContainer(

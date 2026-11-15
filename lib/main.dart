@@ -78,6 +78,12 @@ Future<void> main(List<String> arguments) async {
     yield LicenseEntryWithLineBreaks([
       'Simple Icons (Bilibili)',
     ], await rootBundle.loadString('assets/branding/bilibili_LICENSE.md'));
+    yield LicenseEntryWithLineBreaks(
+      ['scroll_animator (Chromium)'],
+      await rootBundle.loadString(
+        'assets/licenses/scroll_animator_chromium.txt',
+      ),
+    );
   });
   MacOSApplicationWindow? applicationWindow;
   void smokeStage(String stage) {

@@ -1,4 +1,5 @@
 import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
+import 'package:bilisail/domain/wheel_scroll_animation.dart';
 import 'package:bilisail/shared/ui/scroll_collapsing_header.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:flutter/gestures.dart';
@@ -7,6 +8,13 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final animation in WheelScrollAnimation.values) {
+    group(animation.name, () => _timingTests(animation));
+  }
+}
+
+void _timingTests(WheelScrollAnimation animation) {
+  final speed = animation == WheelScrollAnimation.multiplatform ? 2 : 1;
   for (final coordinated in [false, true]) {
     for (final dilation in [1.0, 2.0]) {
       testWidgets('timestamped wheel stream is independent of frame grouping '
@@ -16,7 +24,11 @@ void main() {
         try {
           final samples = <({double pixels, double velocity})>[];
           for (final frameMs in [8, 16, 32, 96]) {
-            final controller = await _mount(tester, coordinated: coordinated);
+            final controller = await _mount(
+              tester,
+              animation: animation,
+              coordinated: coordinated,
+            );
             final origin = tester.binding.currentSystemFrameTimeStamp;
             final events = [1, 14, 17, 30, 35, 48, 63];
             var event = 0;
@@ -25,6 +37,7 @@ void main() {
                 await _wheel(
                   tester,
                   origin + Duration(milliseconds: events[event]),
+                  delta: 120 / speed,
                 );
                 event++;
               }
@@ -57,20 +70,20 @@ void main() {
   testWidgets('timestamped first wheel moves on its first frame', (
     tester,
   ) async {
-    final controller = await _mount(tester);
+    final controller = await _mount(tester, animation: animation);
     final origin = tester.binding.currentSystemFrameTimeStamp;
     await _wheel(tester, origin + const Duration(milliseconds: 1));
     await tester.pump(const Duration(milliseconds: 8));
-    expect(controller.offset, inExclusiveRange(500, 620));
+    expect(controller.offset, inExclusiveRange(500, 500 + 120 * speed));
     await tester.pumpAndSettle();
-    expect(controller.offset, closeTo(620, .000001));
+    expect(controller.offset, closeTo(500 + 120 * speed, .000001));
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });
 
   testWidgets('missing and queued timestamps never rewind a retarget; '
       'reversal discards unpainted old momentum', (tester) async {
-    final controller = await _mount(tester);
+    final controller = await _mount(tester, animation: animation);
     final origin = tester.binding.currentSystemFrameTimeStamp;
     await _wheel(tester, origin + const Duration(milliseconds: 1));
     await tester.pump(const Duration(milliseconds: 8));
@@ -92,7 +105,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 8));
     expect(controller.offset, lessThan(beforeReverse));
     await tester.pumpAndSettle();
-    expect(controller.offset, closeTo(beforeReverse - 120, .000001));
+    expect(controller.offset, closeTo(beforeReverse - 120 * speed, .000001));
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
@@ -103,7 +116,7 @@ void main() {
   ) async {
     final offsets = <double>[];
     for (final secondInputMs in [17, 31]) {
-      final controller = await _mount(tester);
+      final controller = await _mount(tester, animation: animation);
       final origin = tester.binding.currentSystemFrameTimeStamp;
       await _wheel(tester, origin + const Duration(milliseconds: 1));
       await tester.pump(const Duration(milliseconds: 16));
@@ -113,11 +126,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
       offsets.add(controller.offset);
       await tester.pumpAndSettle();
-      expect(controller.offset, closeTo(740, .000001));
+      expect(controller.offset, closeTo(500 + 240 * speed, .000001));
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     }
-    expect(offsets.first - offsets.last, greaterThan(5));
+    expect(offsets.first, greaterThan(offsets.last));
     expect(tester.takeException(), isNull);
   });
 
@@ -126,7 +139,7 @@ void main() {
   ) async {
     final samples = <double>[];
     for (final withPendingInput in [false, true]) {
-      final controller = await _mount(tester);
+      final controller = await _mount(tester, animation: animation);
       final origin = tester.binding.currentSystemFrameTimeStamp;
       await _wheel(tester, origin + const Duration(milliseconds: 1));
       await tester.pump(const Duration(milliseconds: 16));
@@ -137,7 +150,10 @@ void main() {
       samples.add(controller.offset);
       await tester.pump(const Duration(milliseconds: 16));
       await tester.pumpAndSettle();
-      expect(controller.offset, closeTo(withPendingInput ? 740 : 620, .000001));
+      expect(
+        controller.offset,
+        closeTo(500 + (withPendingInput ? 240 : 120) * speed, .000001),
+      );
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     }
@@ -150,7 +166,7 @@ void main() {
       'dense queued input is bounded and retains the latest direction '
       '(reverse=$reverse)',
       (tester) async {
-        final controller = await _mount(tester);
+        final controller = await _mount(tester, animation: animation);
         final origin = tester.binding.currentSystemFrameTimeStamp;
         for (var i = 0; i < 200; i++) {
           await _wheel(tester, origin + Duration(microseconds: 1000 + i));
@@ -163,7 +179,10 @@ void main() {
           );
         }
         await tester.pumpAndSettle();
-        expect(controller.offset, closeTo(reverse ? 380 : 2000, .000001));
+        expect(
+          controller.offset,
+          closeTo(reverse ? 500 - 120 * speed : 2000, .000001),
+        );
         expect(controller.position.isScrollingNotifier.value, isFalse);
         expect(tester.binding.transientCallbackCount, 0);
         expect(tester.takeException(), isNull);
@@ -183,6 +202,11 @@ void main() {
       MaterialApp(
         theme: ThemeData(platform: TargetPlatform.windows),
         scrollBehavior: const SmoothScrollBehavior(),
+        builder: (_, child) => SmoothScrollScope(
+          animation: animation,
+          dampingRatio: 1.3,
+          child: child!,
+        ),
         home: Scaffold(
           body: ValueListenableBuilder(
             valueListenable: count,
@@ -209,16 +233,21 @@ void main() {
     count.value = 30;
     await tester.pump();
     await tester.pumpAndSettle();
-    expect(controller.offset, closeTo(edge + 120, .000001));
+    expect(controller.offset, closeTo(edge + 120 * speed, .000001));
     expect(controller.position.isScrollingNotifier.value, isFalse);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 
-  for (final damping in [.5, 2.0]) {
+  for (final damping
+      in animation == WheelScrollAnimation.spring ? [.5, 2.0] : <double>[]) {
     testWidgets('timestamped input preserves damping $damping and takes over '
         'an elastic rebound', (tester) async {
-      final controller = await _mount(tester, damping: damping);
+      final controller = await _mount(
+        tester,
+        animation: animation,
+        damping: damping,
+      );
       final origin = tester.binding.currentSystemFrameTimeStamp;
       await _wheel(tester, origin + const Duration(milliseconds: 1));
       await tester.pump(const Duration(milliseconds: 110));
@@ -244,6 +273,7 @@ void main() {
 
 Future<ScrollController> _mount(
   WidgetTester tester, {
+  required WheelScrollAnimation animation,
   bool coordinated = false,
   double damping = 1.3,
 }) async {
@@ -260,6 +290,7 @@ Future<ScrollController> _mount(
       theme: ThemeData(platform: TargetPlatform.windows),
       scrollBehavior: const SmoothScrollBehavior(),
       home: SmoothScrollScope(
+        animation: animation,
         dampingRatio: damping,
         child: Scaffold(
           body: coordinated

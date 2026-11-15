@@ -262,7 +262,7 @@ class HeaderScrollController extends ScrollController {
   }
 }
 
-/// Combined distance and activities for the existing desktop wheel spring.
+/// Combined distance and activities for the desktop wheel animation.
 class HeaderScrollOffset {
   HeaderScrollOffset(this._nested, this.inner);
   final NestedScrollViewState _nested;

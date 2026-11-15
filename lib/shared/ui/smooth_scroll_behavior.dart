@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:scroll_animator/scroll_animator.dart';
+import 'package:smooth_scroll_multiplatform/smooth_scroll_multiplatform.dart';
 
 import '../../core/presentation/input_scope.dart';
 import '../../core/presentation/workspace_activity.dart';
+import '../../domain/wheel_scroll_animation.dart';
 import 'scroll_collapsing_header.dart';
 
 /// Keeps local ScrollConfiguration overrides on the same wheel preference.
@@ -15,10 +18,29 @@ final class SmoothScrollScope extends InheritedWidget {
   const SmoothScrollScope({
     super.key,
     required this.dampingRatio,
+    this.animation = WheelScrollAnimation.chromium,
+    this.chromiumCurve = ChromiumScrollCurve.easeInOut,
+    this.distanceMultiplier = 1,
+    this.durationMultiplier = 1,
     required super.child,
-  }) : assert(dampingRatio > 0 && dampingRatio < double.infinity);
+  }) : assert(dampingRatio > 0 && dampingRatio < double.infinity),
+       assert(distanceMultiplier > 0 && distanceMultiplier < double.infinity),
+       assert(durationMultiplier > 0 && durationMultiplier < double.infinity);
 
   final double dampingRatio;
+  final WheelScrollAnimation animation;
+  final ChromiumScrollCurve chromiumCurve;
+  final double distanceMultiplier;
+  final double durationMultiplier;
+
+  static SmoothScrollScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<SmoothScrollScope>();
+
+  static WheelScrollAnimation animationOf(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<SmoothScrollScope>()
+          ?.animation ??
+      WheelScrollAnimation.chromium;
 
   static double dampingRatioOf(BuildContext context) =>
       context
@@ -28,7 +50,11 @@ final class SmoothScrollScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(SmoothScrollScope oldWidget) =>
-      dampingRatio != oldWidget.dampingRatio;
+      dampingRatio != oldWidget.dampingRatio ||
+      animation != oldWidget.animation ||
+      chromiumCurve != oldWidget.chromiumCurve ||
+      distanceMultiplier != oldWidget.distanceMultiplier ||
+      durationMultiplier != oldWidget.durationMultiplier;
 }
 
 /// Adds short wheel transitions without replacing a list's controller/physics.
@@ -150,12 +176,34 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
   bool _enabled = true;
   bool _active = true;
   double _dampingRatio = 1.3;
+  WheelScrollAnimation _animation = WheelScrollAnimation.chromium;
+  ChromiumScrollCurve _chromiumCurve = ChromiumScrollCurve.easeInOut;
+  double _distanceMultiplier = 1;
+  double _durationMultiplier = 1;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final dampingRatio = SmoothScrollScope.dampingRatioOf(context);
-    if (dampingRatio != _dampingRatio) _stopMotion();
+    final animation = SmoothScrollScope.animationOf(context);
+    final scope = SmoothScrollScope.maybeOf(context);
+    final chromiumCurve = scope?.chromiumCurve ?? ChromiumScrollCurve.easeInOut;
+    final distanceMultiplier = scope?.distanceMultiplier ?? 1;
+    final durationMultiplier = scope?.durationMultiplier ?? 1;
+    if (animation != _animation ||
+        distanceMultiplier != _distanceMultiplier ||
+        (animation != WheelScrollAnimation.spring &&
+            durationMultiplier != _durationMultiplier) ||
+        (animation == WheelScrollAnimation.chromium &&
+            chromiumCurve != _chromiumCurve) ||
+        (animation == WheelScrollAnimation.spring &&
+            dampingRatio != _dampingRatio)) {
+      _stopMotion();
+    }
+    _animation = animation;
+    _chromiumCurve = chromiumCurve;
+    _distanceMultiplier = distanceMultiplier;
+    _durationMultiplier = durationMultiplier;
     _dampingRatio = dampingRatio;
     _active =
         WorkspaceActivity.isActive(context) &&
@@ -179,7 +227,6 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
       return;
     }
     if (!_active ||
-        (!_enabled && !widget.horizontalMouseWheel) ||
         event is! PointerScrollEvent ||
         event.kind != PointerDeviceKind.mouse ||
         !widget.scrollable.mounted) {
@@ -215,6 +262,15 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
     }
     if (axisDirectionIsReversed(position.axisDirection)) delta = -delta;
     if (!delta.isFinite || delta == 0) return;
+    final baseSpeed = _animation == WheelScrollAnimation.multiplatform
+        ? SmoothScrollDefaults.scrollSpeed
+        : 1.0;
+    delta = (delta * _distanceMultiplier * baseSpeed)
+        .clamp(
+          -_WheelScrollActivity._maxPendingDistance,
+          _WheelScrollActivity._maxPendingDistance,
+        )
+        .toDouble();
     final header = HeaderScrollController.offsetFor(position);
     final pixels = header?.pixels ?? position.pixels;
     final next = (pixels + delta).clamp(
@@ -255,6 +311,9 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
         delta,
         timeStamp: timeStamp,
         dampingRatio: _dampingRatio,
+        animation: _animation,
+        chromiumCurve: _chromiumCurve,
+        durationMultiplier: _durationMultiplier,
       );
       _motion = activity;
       activity.begin();
@@ -282,7 +341,9 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
   }
 }
 
-/// Retargets Flutter's scroll spring on one continuous frame clock.
+/// Coordinates the selected wheel animation with retained/nested positions.
+/// Its controller cannot own NestedScrollView's coordinator-created positions.
+/// Keep event/frame timing here: AnimatedScrollActivity retargets by wall clock.
 final class _WheelScrollActivity extends ScrollActivity {
   _WheelScrollActivity(
     ScrollPosition position,
@@ -290,22 +351,36 @@ final class _WheelScrollActivity extends ScrollActivity {
     TickerProvider vsync,
     double delta, {
     required double dampingRatio,
+    required WheelScrollAnimation animation,
+    required this.chromiumCurve,
+    required double durationMultiplier,
     required Duration timeStamp,
   }) : _position = position,
        _firstInputTimeStamp = timeStamp,
        _header = HeaderScrollController.offsetFor(position),
-       _spring = SpringDescription.withDampingRatio(
-         mass: 1,
-         stiffness: 1600,
-         ratio: dampingRatio,
-       ) {
-    _simulation = _newSimulation(0, 0);
+       _mode = animation,
+       _durationMultiplier = animation == WheelScrollAnimation.spring
+           ? 1
+           : durationMultiplier,
+       _spring = animation == WheelScrollAnimation.spring
+           ? SpringDescription.withDampingRatio(
+               mass: 1,
+               stiffness: 1600,
+               ratio: dampingRatio,
+             )
+           : null {
+    _newMotion(0, 0);
     addDelta(delta, timeStamp);
     _ticker = vsync.createTicker(_tick)..start();
   }
 
-  // The default ratio of 1.3 is overdamped for a softer stop without a rebound.
-  final SpringDescription _spring;
+  final SpringDescription? _spring;
+  final WheelScrollAnimation _mode;
+  final ChromiumScrollCurve chromiumCurve;
+  final double _durationMultiplier;
+  Simulation? _simulation;
+  double _simulationTarget = 0;
+  int _revision = 0;
   final Duration _firstInputTimeStamp;
   static const _maxPendingDistance = 1500.0; // Logical pixels.
   static const _maxQueuedInputs = 64;
@@ -318,14 +393,13 @@ final class _WheelScrollActivity extends ScrollActivity {
   double get _min => _header?.minScrollExtent ?? position.minScrollExtent;
   double get _max => _header?.maxScrollExtent ?? position.maxScrollExtent;
   late final Ticker _ticker;
-  late ScrollSpringSimulation _simulation;
+  late ScrollAnimation _animation;
   Duration _lastElapsed = Duration.zero;
   Duration? _frameTimeOffset;
   Duration? _lastSystemFrameTimeStamp;
   bool _hasFrame = false;
-  Duration _simulationStartedAt = Duration.zero;
-  double _targetDistance = 0;
-  double _lastSimulationPosition = 0;
+  Duration _animationStartedAt = Duration.zero;
+  double _lastAnimationPosition = 0;
   double _unappliedDistance = 0;
   double _lastDelta = 0;
   double _velocity = 0;
@@ -352,9 +426,9 @@ final class _WheelScrollActivity extends ScrollActivity {
           : _lastElapsed + _scaledTime(timeStamp - frame);
     }
     // Queued input may predate the last painted frame. Never rewind that frame
-    // or another input already incorporated into the spring.
+    // or another input already incorporated into the animation.
     if (elapsed < _lastElapsed) elapsed = _lastElapsed;
-    if (elapsed < _simulationStartedAt) elapsed = _simulationStartedAt;
+    if (elapsed < _animationStartedAt) elapsed = _animationStartedAt;
     if (_pendingInputs.isNotEmpty && elapsed < _pendingInputs.last.elapsed) {
       elapsed = _pendingInputs.last.elapsed;
     }
@@ -368,7 +442,7 @@ final class _WheelScrollActivity extends ScrollActivity {
       return;
     }
     // An event can arrive after vsync but before that frame's ticker callback.
-    // Keep it for its own frame, rather than evaluating a spring at negative
+    // Keep it for its own frame, rather than evaluating an animation at negative
     // time or applying its unpainted movement ahead of the frame timestamp.
     if (_pendingInputs.length == _maxQueuedInputs) {
       final last = _pendingInputs.removeLast();
@@ -383,12 +457,10 @@ final class _WheelScrollActivity extends ScrollActivity {
   }
 
   void _retarget(double delta, Duration elapsed) {
-    final seconds = (elapsed - _simulationStartedAt).inMicroseconds / 1000000;
-    final value = _simulation.x(seconds);
-    final remaining = _targetDistance - value;
-    final velocity = _simulation.dx(seconds);
-    // Elastic ratios can already be rebounding when a new notch arrives.
-    // Fresh input takes priority over motion or an endpoint behind that input.
+    final time = _animationTime(elapsed);
+    final value = _valueAt(time);
+    final remaining = _targetValue - value;
+    final velocity = _velocityAt(time);
     final reversing =
         (_lastDelta != 0 && delta.sign != _lastDelta.sign) ||
         (velocity != 0 && delta.sign != velocity.sign) ||
@@ -398,35 +470,82 @@ final class _WheelScrollActivity extends ScrollActivity {
     // update, including multiple wheel events delivered between two frames.
     _unappliedDistance = reversing
         ? 0
-        : _unappliedDistance + value - _lastSimulationPosition;
+        : _unappliedDistance + value - _lastAnimationPosition;
     final pendingDistance =
         ((reversing ? 0 : remaining) +
                 _unappliedDistance +
                 delta.clamp(-_maxPendingDistance, _maxPendingDistance))
             .clamp(-_maxPendingDistance, _maxPendingDistance)
             .toDouble();
-    _targetDistance = pendingDistance - _unappliedDistance;
-    _simulation = _newSimulation(_targetDistance, _velocity);
-    _lastSimulationPosition = 0;
-    _simulationStartedAt = elapsed;
+    final target = pendingDistance - _unappliedDistance;
+    if (_mode != WheelScrollAnimation.chromium ||
+        reversing ||
+        _lastDelta == 0) {
+      _newMotion(target, _velocity);
+      _lastAnimationPosition = 0;
+      _animationStartedAt = elapsed;
+    } else {
+      // The package owns the continuous curve and velocity at the new target.
+      _animation.updateTargetValue(time, Offset(0, value + target));
+      _revision++;
+      _lastAnimationPosition = value;
+    }
     _lastDelta = delta;
   }
 
-  ScrollSpringSimulation _newSimulation(
-    double distance,
-    double velocity,
-  ) => ScrollSpringSimulation(
-    _spring,
-    0,
-    distance,
-    velocity,
-    // Match the display scale, ending within half a physical pixel instead
-    // of chasing hundredths of a logical pixel. The simulator owns settling.
-    tolerance: Tolerance(
-      distance: .5 / position.devicePixelRatio,
-      velocity: position.physics.toleranceFor(position).velocity,
-    ),
+  void _newMotion(double distance, double velocity) {
+    _revision++;
+    if (_spring case final spring?) {
+      _simulationTarget = distance;
+      _simulation = ScrollSpringSimulation(
+        spring,
+        0,
+        distance,
+        velocity,
+        tolerance: Tolerance(
+          distance: .5 / position.devicePixelRatio,
+          velocity: position.physics.toleranceFor(position).velocity,
+        ),
+      );
+    } else if (_mode == WheelScrollAnimation.multiplatform) {
+      _simulationTarget = distance;
+      _simulation = SmoothScrollSimulation(start: 0, end: distance);
+    } else {
+      final ScrollAnimationFactory factory = switch (chromiumCurve) {
+        ChromiumScrollCurve.easeInOut => const ChromiumEaseInOut(),
+        ChromiumScrollCurve.impulse => const ChromiumImpulse(),
+      };
+      _animation = factory.createScrollAnimation(
+        Offset.zero,
+        Offset(0, distance),
+        .pointer,
+      );
+    }
+  }
+
+  double get _targetValue =>
+      _simulation == null ? _animation.targetValue.dy : _simulationTarget;
+
+  Duration _animationTime(Duration elapsed) => Duration(
+    microseconds:
+        ((elapsed - _animationStartedAt).inMicroseconds / _durationMultiplier)
+            .round(),
   );
+
+  bool _isDone(Duration time) =>
+      _simulation?.isDone(time.inMicroseconds / 1000000) ??
+      (time >= _animation.duration);
+
+  double _valueAt(Duration time) =>
+      _simulation?.x(time.inMicroseconds / 1000000) ??
+      (_isDone(time)
+          ? _animation.targetValue.dy
+          : _animation.getValue(time).dy);
+
+  double _velocityAt(Duration time) =>
+      (_simulation?.dx(time.inMicroseconds / 1000000) ??
+          (_isDone(time) ? 0 : _animation.getVelocity(time).dy)) /
+      _durationMultiplier;
 
   void _tick(Duration elapsed) {
     if (disposed) return;
@@ -466,14 +585,14 @@ final class _WheelScrollActivity extends ScrollActivity {
       final input = _pendingInputs.removeFirst();
       _retarget(input.delta, input.elapsed);
     }
-    if (elapsed < _simulationStartedAt) return;
-    final simulation = _simulation;
-    final seconds = (elapsed - _simulationStartedAt).inMicroseconds / 1000000;
-    final value = simulation.x(seconds);
-    final distance = _unappliedDistance + value - _lastSimulationPosition;
+    if (elapsed < _animationStartedAt) return;
+    final revision = _revision;
+    final time = _animationTime(elapsed);
+    final value = _valueAt(time);
+    final distance = _unappliedDistance + value - _lastAnimationPosition;
     _unappliedDistance = 0;
-    _lastSimulationPosition = value;
-    _velocity = simulation.dx(seconds);
+    _lastAnimationPosition = value;
+    _velocity = _velocityAt(time);
     // Apply only the frame's displacement so layout can still correct pixels.
     final next = (_pixels + distance).clamp(_min, _max);
     final double overscroll;
@@ -491,8 +610,7 @@ final class _WheelScrollActivity extends ScrollActivity {
       _discardMomentum(elapsed);
       return;
     }
-    final settled =
-        identical(simulation, _simulation) && simulation.isDone(seconds);
+    final settled = revision == _revision && _isDone(time);
     if (overscroll != 0 ||
         (_pendingInputs.isEmpty && (settled || _atBoundary))) {
       stop();
@@ -502,12 +620,11 @@ final class _WheelScrollActivity extends ScrollActivity {
   bool get _atBoundary => _lastDelta > 0 ? _pixels >= _max : _pixels <= _min;
 
   void _discardMomentum(Duration elapsed) {
-    _targetDistance = 0;
-    _lastSimulationPosition = 0;
+    _lastAnimationPosition = 0;
     _unappliedDistance = 0;
     _velocity = 0;
-    _simulationStartedAt = elapsed;
-    _simulation = _newSimulation(0, 0);
+    _animationStartedAt = elapsed;
+    _newMotion(0, 0);
   }
 
   void stop() {

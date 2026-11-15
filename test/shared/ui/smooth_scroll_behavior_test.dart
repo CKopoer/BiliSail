@@ -1,6 +1,7 @@
 import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 
 import 'package:bilisail/core/presentation/workspace_activity.dart';
+import 'package:bilisail/domain/wheel_scroll_animation.dart';
 import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:flutter/gestures.dart';
@@ -1018,9 +1019,14 @@ void main() {
 Widget _app(Widget child, {bool disableAnimations = false}) => MaterialApp(
   theme: ThemeData(platform: TargetPlatform.windows),
   scrollBehavior: const SmoothScrollBehavior(),
-  builder: (context, child) => MediaQuery(
-    data: MediaQuery.of(context).copyWith(disableAnimations: disableAnimations),
-    child: child ?? const SizedBox(),
+  builder: (context, child) => SmoothScrollScope(
+    animation: WheelScrollAnimation.spring,
+    dampingRatio: SmoothScrollScope.dampingRatioOf(context),
+    child: MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(disableAnimations: disableAnimations),
+      child: child ?? const SizedBox(),
+    ),
   ),
   home: Scaffold(body: child),
 );
