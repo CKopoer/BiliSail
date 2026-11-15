@@ -122,6 +122,7 @@ final class PgcClient {
         ? _int(data['timelength']) ?? 0
         : (seconds * 1000).round();
     return ApiPlayInfo(
+      pgcSkipSegments: _skipSegments(data, durationMs),
       duration: Duration(milliseconds: durationMs.clamp(0, 86400000)),
       dashVideo: List.unmodifiable(videos),
       loudness: ApiAudioLoudness.parse(data['volume']),
@@ -134,6 +135,44 @@ final class PgcClient {
         ).map(_int).whereType<int>(),
       ),
     );
+  }
+
+  static List<ApiPgcSkipSegment> _skipSegments(
+    Map<String, Object?> data,
+    int durationMs,
+  ) {
+    // Optional metadata must never prevent an otherwise playable DASH source.
+    final raw = data['clip_info_list'];
+    if (raw is! List ||
+        data['is_preview'] == true ||
+        _int(data['is_preview']) == 1) {
+      return const [];
+    }
+    final result = <ApiPgcSkipSegment>[];
+    for (final entry in raw.take(64)) {
+      final clip = _mapOrEmpty(entry);
+      final type = switch (clip['clipType']) {
+        'CLIP_TYPE_OP' => ApiPgcSkipType.intro,
+        'CLIP_TYPE_ED' => ApiPgcSkipType.outro,
+        _ => null,
+      };
+      final start = _double(clip['start']);
+      final end = _double(clip['end']);
+      if (type == null ||
+          start == null ||
+          end == null ||
+          !start.isFinite ||
+          !end.isFinite ||
+          start < 0 ||
+          end <= start ||
+          end * 1000 > durationMs) {
+        continue;
+      }
+      final from = Duration(milliseconds: (start * 1000).round());
+      final to = Duration(milliseconds: (end * 1000).round());
+      if (to > from) result.add(ApiPgcSkipSegment(type, from, to));
+    }
+    return List.unmodifiable(result);
   }
 
   static ApiMediaTrack _track(Map<String, Object?> data) {

@@ -640,6 +640,30 @@ void main() {
   }
 
   test(
+    'official PGC auto skip defaults, reload and malformed snapshot fallback',
+    () async {
+      expect((await repository.load()).autoSkipPgcIntroOutro, isFalse);
+      for (final enabled in [true, false]) {
+        await repository.save(AppSettings(autoSkipPgcIntroOutro: enabled));
+        expect((await repository.load()).autoSkipPgcIntroOutro, enabled);
+      }
+      for (final value in [null, 'true', 1]) {
+        await database.writeSetting(
+          'preferences.v1',
+          jsonEncode({'autoSkipPgcIntroOutro': value}),
+        );
+        expect((await repository.load()).autoSkipPgcIntroOutro, isFalse);
+      }
+      expect(
+        AppSettings(autoSkipPgcIntroOutro: true)
+            .normalized()
+            .autoSkipPgcIntroOutro,
+        isTrue,
+      );
+    },
+  );
+
+  test(
     'sponsor defaults preserve saved modes and category selections',
     () async {
       final defaults = await repository.load();

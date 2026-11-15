@@ -8,12 +8,14 @@ final class SponsorSegment {
     required this.start,
     required this.end,
     required this.videoDuration,
+    this.isOfficial = false,
   });
   final String id;
   final String category;
   final Duration start;
   final Duration end;
   final Duration videoDuration;
+  final bool isOfficial;
 
   bool matches(Duration duration) =>
       duration > Duration.zero &&

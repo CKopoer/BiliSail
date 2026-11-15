@@ -288,6 +288,10 @@ class SqliteSettingsRepository implements SettingsRepository {
               .where((item) => item.name == decoded['sponsorBlockMode'])
               .firstOrNull ??
           const AppSettings.defaults().sponsorBlockMode,
+      autoSkipPgcIntroOutro: boolean(
+        'autoSkipPgcIntroOutro',
+        defaults.autoSkipPgcIntroOutro,
+      ),
       sponsorBlockCategories: strings(
         'sponsorBlockCategories',
         AppSettings.supportedSponsorCategories,
@@ -398,6 +402,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'subtitleBackgroundOpacity': value.subtitleBackgroundOpacity,
         'subtitleBottomPadding': value.subtitleBottomPadding,
         'sponsorBlockMode': value.sponsorBlockMode.name,
+        'autoSkipPgcIntroOutro': value.autoSkipPgcIntroOutro,
         'sponsorBlockBottomPadding': value.sponsorBlockBottomPadding,
         'sponsorBlockCategories': value.sponsorBlockCategories,
       }),

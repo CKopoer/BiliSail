@@ -546,17 +546,58 @@ final class MediaKitBackend
       _creating = null;
     }
     final player = _player!;
+    final watchReadStalls =
+        !plan.live &&
+        source is! DashVideoSource &&
+        [
+          video,
+          ?audio,
+        ].every((track) => const {'http', 'https'}.contains(track.uri.scheme));
+    _bufferRecovery = NativeBufferRecovery(
+      snapshot: snapshot,
+      hasAudio: !plan.silent,
+      hasVideo: !plan.audioOnly,
+      watchReadStalls: watchReadStalls,
+      playbackProgress: () => nativeRecoveryProgress(
+        player.getPropertyAsync,
+        audio: !plan.silent,
+        video: !plan.audioOnly,
+      ),
+      onNativeRecovered: () {
+        _audioErrors?.reset();
+        _videoErrors?.reset();
+      },
+      onRecoveryRequired: (reason) {
+        if (!_disposed &&
+            generation == _generation &&
+            identical(_player, player)) {
+          _emit(
+            BackendEvent(
+              BackendEventKind.failure,
+              stallReason: switch (reason) {
+                NativeBufferRecoveryReason.readError =>
+                  PlaybackStallReason.prefetchReadError,
+                NativeBufferRecoveryReason.stalledRead =>
+                  PlaybackStallReason.prefetchReadStall,
+                NativeBufferRecoveryReason.audioError =>
+                  PlaybackStallReason.audioDecodeError,
+                NativeBufferRecoveryReason.videoError =>
+                  PlaybackStallReason.videoDecodeError,
+                NativeBufferRecoveryReason.decoderError => null,
+              },
+            ),
+          );
+        }
+      },
+    );
     _videoErrors = NativeVideoErrorMonitor(
       snapshot: snapshot,
       onFailure: () {
         if (!_disposed &&
             generation == _generation &&
             identical(_player, player)) {
-          _emit(
-            const BackendEvent(
-              BackendEventKind.failure,
-              stallReason: PlaybackStallReason.videoDecodeError,
-            ),
+          _bufferRecovery?.reportDecoderError(
+            NativeBufferRecoveryReason.videoError,
           );
         }
       },
@@ -568,22 +609,14 @@ final class MediaKitBackend
           if (!_disposed &&
               generation == _generation &&
               identical(_player, player)) {
-            _emit(
-              const BackendEvent(
-                BackendEventKind.failure,
-                stallReason: PlaybackStallReason.audioDecodeError,
-              ),
+            _bufferRecovery?.reportDecoderError(
+              NativeBufferRecoveryReason.audioError,
             );
           }
         },
       );
     }
-    if (!plan.live &&
-        source is! DashVideoSource &&
-        [video, ?audio].every(
-          (track) => const {'http', 'https'}.contains(track.uri.scheme),
-        )) {
-      final probe = NativeMediaProbe([video, ?audio]);
+    if (watchReadStalls) {
       _rebuffers = NativeRebufferMonitor(
         snapshot: snapshot,
         onStalled: (blockedFor) {
@@ -596,28 +629,6 @@ final class MediaKitBackend
               stalledFor: blockedFor,
             );
             _emit(const BackendEvent(BackendEventKind.failure));
-          }
-        },
-      );
-      _bufferRecovery = NativeBufferRecovery(
-        snapshot: () => _snapshot,
-        probe: probe.check,
-        cancelProbe: probe.cancel,
-        onRecoveryRequired: (reason) {
-          if (!_disposed &&
-              generation == _generation &&
-              identical(_player, player)) {
-            _emit(
-              BackendEvent(
-                BackendEventKind.failure,
-                stallReason: switch (reason) {
-                  NativeBufferRecoveryReason.readError =>
-                    PlaybackStallReason.prefetchReadError,
-                  NativeBufferRecoveryReason.stalledRead =>
-                    PlaybackStallReason.prefetchReadStall,
-                },
-              ),
-            );
           }
         },
       );
@@ -1161,7 +1172,10 @@ final class MediaKitBackend
               summary.detail == NativeErrorDetail.avDesync) {
             _bufferDiagnostics?.capture();
           }
-          _bufferRecovery?.reportError(summary);
+          _bufferRecovery?.reportError(
+            summary,
+            decoderErrors: severity != NativeLogSeverity.warning,
+          );
         }
       }),
       player.stream.error.listen((message) {
@@ -1169,7 +1183,7 @@ final class MediaKitBackend
         final summary = NativeErrorSummary.classify(message);
         _diagnose(PlayerDiagnosticKind.nativeError, nativeError: summary);
         event(const BackendEvent(BackendEventKind.warning));
-        _bufferRecovery?.reportError(summary);
+        _bufferRecovery?.reportError(summary, decoderErrors: true);
       }),
     ]);
   }

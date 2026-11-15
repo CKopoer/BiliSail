@@ -1,8 +1,8 @@
 import 'player_contract.dart';
 import 'player_diagnostics.dart';
 
-/// A failed hardware decoder/output cannot be cleared by the audio clock.
-/// Recoverable bitstream errors retain the existing progress/deadline policy.
+/// A failed decoder/output cannot be cleared by the audio clock alone.
+/// The backend grants native recovery time while both tracks remain healthy.
 final class NativeVideoErrorMonitor {
   NativeVideoErrorMonitor({required this.snapshot, required this.onFailure});
 
@@ -19,9 +19,13 @@ final class NativeVideoErrorMonitor {
     final outputFailure =
         error.cause == NativeErrorCause.videoOutput &&
         severity != NativeLogSeverity.warning;
+    final decoderFailure =
+        error.isVideoDecodeError &&
+        error.cause == NativeErrorCause.decoder &&
+        severity != NativeLogSeverity.warning;
     // mpv's vd_lavc.handle_err reports actual hardware frame failures as WARN.
     // Advice, corrupt packets and a decoder's normal fallback are not failures.
-    if (!hardwareFailure && !outputFailure) return;
+    if (!hardwareFailure && !outputFailure && !decoderFailure) return;
     _generation ??= snapshot().generation;
     update();
   }

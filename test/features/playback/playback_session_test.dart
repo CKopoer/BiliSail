@@ -5613,6 +5613,458 @@ void main() {
     },
   );
 
+  test(
+    'PGC loads community segments using the selected real bvid and cid',
+    () async {
+      final engine = _FakeEngine();
+      final sponsor = _FakeSponsor();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        contentRepository: _FakeContentRepository(),
+        sponsorRepository: sponsor,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      session.configureSettings(AppSettings());
+      await session.open(
+        _detail('one'),
+        _part('one'),
+        target: const PgcPlaybackTarget('7', cid: 'one'),
+      );
+      expect(sponsor.requestedVideos['one'], _detail('one').summary.id);
+      sponsor.pending['one']!.complete([_sponsorSegment]);
+      await _flush();
+      engine.emit(
+        engine.currentSnapshot.copyWith(position: const Duration(seconds: 11)),
+      );
+      await _flush();
+      expect(session.currentSponsor, _sponsorSegment);
+      expect(engine.seekTargets, isEmpty);
+      await session.skipSponsor(_sponsorSegment);
+      expect(engine.seekTargets, [const Duration(seconds: 20)]);
+    },
+  );
+
+  for (final officialAuto in [false, true]) {
+    test(
+      'PGC automatic mode prefers official OP and ED ($officialAuto)',
+      () async {
+        final engine = _FakeEngine();
+        final sponsor = _FakeSponsor();
+        final content = _FakeContentRepository()
+          ..resolvedMedia = _media(
+            'pgc',
+            80,
+            const Duration(minutes: 2),
+            pgcSkipSegments: const [_officialIntro, _officialOutro],
+          );
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _FakeRepository(autoResolve: true),
+          contentRepository: content,
+          sponsorRepository: sponsor,
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+        );
+        addTearDown(session.close);
+        session.configureSettings(
+          AppSettings(
+            autoSkipPgcIntroOutro: officialAuto,
+            sponsorBlockMode: SponsorBlockMode.automatic,
+          ),
+        );
+        await session.open(
+          _detail('one'),
+          _part('one'),
+          target: const PgcPlaybackTarget('7', cid: 'one'),
+        );
+        sponsor.pending['one']!.complete(const [
+          SponsorSegment(
+            id: 'community-op',
+            category: 'intro',
+            start: Duration(seconds: 5),
+            end: Duration(seconds: 40),
+            videoDuration: Duration.zero,
+          ),
+          SponsorSegment(
+            id: 'community-ed',
+            category: 'outro',
+            start: Duration(seconds: 85),
+            end: Duration(seconds: 120),
+            videoDuration: Duration.zero,
+          ),
+          SponsorSegment(
+            id: 'ad',
+            category: 'sponsor',
+            start: Duration(seconds: 60),
+            end: Duration(seconds: 65),
+            videoDuration: Duration.zero,
+          ),
+        ]);
+        await _flush();
+        expect(session.sponsorSegments.map((s) => s.id), [
+          'official-op',
+          'official-ed',
+          'ad',
+        ]);
+        for (final pos in [6, 11, 60, 86, 95]) {
+          engine.emit(
+            engine.currentSnapshot.copyWith(position: Duration(seconds: pos)),
+          );
+          await _flush();
+        }
+        expect(engine.seekTargets, const [
+          Duration(seconds: 20),
+          Duration(seconds: 65),
+          Duration(seconds: 110),
+        ]);
+        await session.seek(const Duration(seconds: 12));
+        await _flush();
+        expect(engine.seekTargets.last, const Duration(seconds: 12));
+        expect(engine.seekTargets, hasLength(4));
+      },
+    );
+  }
+
+  test(
+    'PGC official intro leaves community outro as a category fallback',
+    () async {
+      final engine = _FakeEngine();
+      final sponsor = _FakeSponsor();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        contentRepository: _FakeContentRepository()
+          ..resolvedMedia = _media(
+            'pgc',
+            80,
+            const Duration(minutes: 2),
+            pgcSkipSegments: const [_officialIntro],
+          ),
+        sponsorRepository: sponsor,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      session.configureSettings(
+        AppSettings(sponsorBlockMode: SponsorBlockMode.automatic),
+      );
+      await session.open(
+        _detail('one'),
+        _part('one'),
+        target: const PgcPlaybackTarget('7'),
+      );
+      const outro = SponsorSegment(
+        id: 'community-ed',
+        category: 'outro',
+        start: Duration(seconds: 100),
+        end: Duration(seconds: 120),
+        videoDuration: Duration.zero,
+      );
+      sponsor.pending['one']!.complete([outro]);
+      await _flush();
+      engine.emit(
+        engine.currentSnapshot.copyWith(position: const Duration(seconds: 101)),
+      );
+      await _flush();
+      expect(session.sponsorSegments, [_officialIntro, outro]);
+      expect(engine.seekTargets, [const Duration(seconds: 120)]);
+    },
+  );
+
+  for (final mode in SponsorBlockMode.values) {
+    test('official auto skip works without community data ($mode)', () async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        contentRepository: _FakeContentRepository()
+          ..resolvedMedia = _media(
+            'pgc',
+            80,
+            const Duration(minutes: 2),
+            pgcSkipSegments: const [_officialIntro],
+          ),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      session.configureSettings(
+        AppSettings(
+          autoSkipPgcIntroOutro: true,
+          sponsorBlockMode: mode,
+          sponsorBlockCategories: [],
+        ),
+      );
+      await session.open(null, null, target: const PgcPlaybackTarget('7'));
+      engine.emit(
+        engine.currentSnapshot.copyWith(position: const Duration(seconds: 11)),
+      );
+      await _flush();
+      expect(engine.seekTargets, [const Duration(seconds: 20)]);
+    });
+  }
+
+  for (final guard in [
+    'paused',
+    'buffering',
+    'seeking',
+    'disable',
+    'account',
+    'epoch',
+    'source',
+  ]) {
+    test(
+      'official automatic skip rechecks $guard before deferred seek',
+      () async {
+        var scope = 'guest';
+        var epoch = 0;
+        final engine = _FakeEngine();
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _FakeRepository(autoResolve: true),
+          contentRepository: _FakeContentRepository()
+            ..resolvedMedia = _media(
+              'pgc',
+              80,
+              const Duration(minutes: 2),
+              pgcSkipSegments: const [_officialIntro],
+            ),
+          progress: _FakeProgress(),
+          accountScope: () => scope,
+          sessionEpoch: () => epoch,
+        );
+        addTearDown(session.close);
+        final settings = AppSettings(
+          autoSkipPgcIntroOutro: true,
+          sponsorBlockMode: SponsorBlockMode.disabled,
+        );
+        session.configureSettings(settings);
+        await session.open(null, null, target: const PgcPlaybackTarget('7'));
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            position: const Duration(seconds: 11),
+          ),
+        );
+        switch (guard) {
+          case 'paused':
+            await session.pause();
+          case 'buffering':
+            engine.emit(engine.currentSnapshot.copyWith(isBuffering: true));
+          case 'seeking':
+            engine.emit(engine.currentSnapshot.copyWith(isSeeking: true));
+          case 'disable':
+            session.configureSettings(
+              settings.copyWith(autoSkipPgcIntroOutro: false),
+            );
+          case 'account':
+            scope = 'other';
+          case 'epoch':
+            epoch++;
+          case 'source':
+            await session.open(
+              null,
+              null,
+              target: const PgcPlaybackTarget('8'),
+            );
+        }
+        await _flush();
+        expect(engine.seekTargets, isEmpty);
+      },
+    );
+  }
+
+  test(
+    'official skip setting applies immediately and keeps manual rewind',
+    () async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        contentRepository: _FakeContentRepository()
+          ..resolvedMedia = _media(
+            'pgc',
+            80,
+            const Duration(minutes: 2),
+            pgcSkipSegments: const [_officialIntro],
+          ),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      final settings = AppSettings(sponsorBlockMode: SponsorBlockMode.disabled);
+      session.configureSettings(settings);
+      await session.open(null, null, target: const PgcPlaybackTarget('7'));
+      engine.emit(
+        engine.currentSnapshot.copyWith(position: const Duration(seconds: 11)),
+      );
+      await _flush();
+      expect(session.currentSponsor, isNull);
+      session.configureSettings(settings.copyWith(autoSkipPgcIntroOutro: true));
+      await _flush();
+      expect(engine.seekTargets, [const Duration(seconds: 20)]);
+      session.configureSettings(settings);
+      await session.seek(const Duration(seconds: 11));
+      session.configureSettings(settings.copyWith(autoSkipPgcIntroOutro: true));
+      await _flush();
+      expect(engine.seekTargets, [
+        const Duration(seconds: 20),
+        const Duration(seconds: 11),
+      ]);
+    },
+  );
+
+  test(
+    'PGC community late response skips current segment and ignores old episode',
+    () async {
+      final engine = _FakeEngine();
+      final sponsor = _FakeSponsor();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        contentRepository: _FakeContentRepository(),
+        sponsorRepository: sponsor,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      session.configureSettings(
+        AppSettings(sponsorBlockMode: SponsorBlockMode.automatic),
+      );
+      await session.open(
+        _detail('one'),
+        _part('one'),
+        target: const PgcPlaybackTarget('7'),
+      );
+      await session.open(
+        _detail('two'),
+        _part('two'),
+        target: const PgcPlaybackTarget('8'),
+      );
+      engine.emit(
+        engine.currentSnapshot.copyWith(position: const Duration(seconds: 11)),
+      );
+      sponsor.pending['one']!.complete([_sponsorSegment]);
+      await _flush();
+      expect(engine.seekTargets, isEmpty);
+      sponsor.pending['two']!.complete([_sponsorSegment]);
+      await _flush();
+      expect(engine.seekTargets, [const Duration(seconds: 20)]);
+    },
+  );
+
+  test('official opening skips at zero while community lookup fails', () async {
+    final engine = _FakeEngine();
+    final sponsor = _FakeSponsor();
+    const intro = SponsorSegment(
+      id: 'official-zero',
+      category: 'intro',
+      start: Duration.zero,
+      end: Duration(seconds: 16),
+      videoDuration: Duration(minutes: 2),
+      isOfficial: true,
+    );
+    final session = PlaybackSession(
+      engine: engine,
+      repository: _FakeRepository(autoResolve: true),
+      contentRepository: _FakeContentRepository()
+        ..resolvedMedia = _media(
+          'pgc',
+          80,
+          const Duration(minutes: 2),
+          pgcSkipSegments: const [intro],
+        ),
+      sponsorRepository: sponsor,
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    session.configureSettings(
+      AppSettings(sponsorBlockMode: SponsorBlockMode.automatic),
+    );
+    await session.open(
+      _detail('one'),
+      _part('one'),
+      target: const PgcPlaybackTarget('7'),
+    );
+    await _flush();
+    expect(engine.seekTargets, [const Duration(seconds: 16)]);
+    sponsor.pending['one']!.completeError(StateError('offline'));
+    await _flush();
+    expect(session.sponsorSegments, [intro]);
+    expect(session.error, isNull);
+    expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+  });
+
+  for (final invalidOfficial in [false, true]) {
+    test(
+      'PGC respects excluded categories and validates official bounds: $invalidOfficial',
+      () async {
+        final engine = _FakeEngine();
+        final sponsor = _FakeSponsor();
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _FakeRepository(autoResolve: true),
+          contentRepository: _FakeContentRepository()
+            ..resolvedMedia = _media(
+              'pgc',
+              80,
+              const Duration(minutes: 2),
+              pgcSkipSegments: [
+                if (invalidOfficial)
+                  const SponsorSegment(
+                    id: 'invalid',
+                    category: 'intro',
+                    start: Duration(seconds: 10),
+                    end: Duration(seconds: 130),
+                    videoDuration: Duration.zero,
+                    isOfficial: true,
+                  )
+                else
+                  _officialIntro,
+              ],
+            ),
+          sponsorRepository: sponsor,
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+        );
+        addTearDown(session.close);
+        session.configureSettings(
+          AppSettings(
+            sponsorBlockMode: SponsorBlockMode.automatic,
+            sponsorBlockCategories: invalidOfficial ? ['intro'] : ['sponsor'],
+          ),
+        );
+        await session.open(
+          _detail('one'),
+          _part('one'),
+          target: const PgcPlaybackTarget('7'),
+        );
+        const intro = SponsorSegment(
+          id: 'community-op',
+          category: 'intro',
+          start: Duration(seconds: 10),
+          end: Duration(seconds: 30),
+          videoDuration: Duration.zero,
+        );
+        sponsor.pending['one']!.complete([intro]);
+        await _flush();
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            position: const Duration(seconds: 11),
+          ),
+        );
+        await _flush();
+        expect(
+          engine.seekTargets,
+          invalidOfficial ? [const Duration(seconds: 30)] : isEmpty,
+        );
+      },
+    );
+  }
+
   test('pause before deferred automatic skip prevents seek', () async {
     final engine = _FakeEngine();
     final sponsor = _FakeSponsor();
@@ -6930,7 +7382,9 @@ PlaybackMedia _media(
   int quality,
   Duration duration, {
   AudioLoudness? loudness,
+  List<SponsorSegment> pgcSkipSegments = const [],
 }) => PlaybackMedia(
+  pgcSkipSegments: pgcSkipSegments,
   loudness: loudness,
   video: PlaybackTrack(
     urls: [Uri.parse('https://cdn.example/$id-video.m4s')],
@@ -7494,6 +7948,23 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
   }
 }
 
+const _officialIntro = SponsorSegment(
+  id: 'official-op',
+  category: 'intro',
+  start: Duration(seconds: 10),
+  end: Duration(seconds: 20),
+  videoDuration: Duration(minutes: 2),
+  isOfficial: true,
+);
+const _officialOutro = SponsorSegment(
+  id: 'official-ed',
+  category: 'outro',
+  start: Duration(seconds: 90),
+  end: Duration(seconds: 110),
+  videoDuration: Duration(minutes: 2),
+  isOfficial: true,
+);
+
 const _sponsorSegment = SponsorSegment(
   id: 'skip',
   category: 'sponsor',
@@ -7503,6 +7974,7 @@ const _sponsorSegment = SponsorSegment(
 );
 
 final class _FakeSponsor implements SponsorRepository {
+  final requestedVideos = <String, VideoId>{};
   final pending = <String, Completer<List<SponsorSegment>>>{};
   final requestedCategories = <String, List<String>>{};
   @override
@@ -7514,6 +7986,7 @@ final class _FakeSponsor implements SponsorRepository {
   }) {
     final result = Completer<List<SponsorSegment>>();
     pending[cid] = result;
+    requestedVideos[cid] = video;
     requestedCategories[cid] = List.of(categories);
     return result.future;
   }

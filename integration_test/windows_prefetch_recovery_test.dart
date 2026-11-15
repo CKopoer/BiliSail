@@ -21,9 +21,13 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  for (final silentRead in [false, true]) {
+  for (final (silentRead, transient) in [
+    (false, false),
+    (true, false),
+    (false, true),
+  ]) {
     testWidgets(
-      'network restoration refills DASH before cache runs out; silent=$silentRead',
+      'network restoration refills DASH before cache runs out; silent=$silentRead transient=$transient',
       (tester) async {
         initializePlayerBackend();
         final directory = Platform.environment['BILI_TEST_BUFFER_DIR'];
@@ -103,8 +107,10 @@ void main() {
           video: track('/video.mp4'),
           audio: track('/audio.m4a'),
         );
+        final events = <PlayerDiagnosticEvent>[];
         final engine = MediaKitEngine(
           onDiagnostic: (event) {
+            events.add(event);
             if (event.nativeError case final error?) {
               debugPrint(
                 'prefetch native: ${error.cause}, positionMs=${event.snapshot.position.inMilliseconds}, bufferedMs=${event.snapshot.buffered.inMilliseconds}',
@@ -147,9 +153,54 @@ void main() {
               socket.destroy();
             }
             sockets.clear();
-            // Confirmed HTTP errors use the existing immediate, bounded retry
-            // policy. Only a silent read hang waits for origin probes.
-            await _until(tester, () => session.error != null);
+            if (transient) {
+              await _until(
+                tester,
+                () => events.any(
+                  (e) => const {
+                    NativeErrorCause.inputOutput,
+                    NativeErrorCause.connection,
+                    NativeErrorCause.http,
+                  }.contains(e.nativeError?.cause),
+                ),
+              );
+              await tester.pump(const Duration(seconds: 2));
+              expect(engine.currentSnapshot.generation, generation);
+              expect(engine.currentSnapshot.isBuffering, false);
+              expect(failures, isEmpty);
+              expect(session.isRecovering, false);
+              expect(session.auxiliaryMessage, isNull);
+              final oldEnd = engine.currentSnapshot.buffered;
+              offline = false;
+              await _until(
+                tester,
+                () =>
+                    engine.currentSnapshot.buffered >
+                    oldEnd + const Duration(seconds: 2),
+              );
+              expect(engine.currentSnapshot.generation, generation);
+              expect(
+                engine.currentSnapshot.position,
+                greaterThan(before + const Duration(seconds: 2)),
+              );
+              expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+              expect(engine.inspectDiagnostics().hasDecodedAudio, true);
+              expect(engine.inspectDiagnostics().hasDecodedVideo, true);
+              expect(failures, isEmpty);
+              expect(session.auxiliaryMessage, isNull);
+              debugPrint(
+                'SILENT_HTTP_RECOVERY generation=$generation failures=${failures.length} positionMs=${engine.currentSnapshot.position.inMilliseconds} bufferedMs=${engine.currentSnapshot.buffered.inMilliseconds}',
+              );
+              expect(tester.takeException(), isNull);
+              return;
+            }
+            // Persistent faults eventually reopen within the existing session
+            // budget, after allowing the native reader its silent retry window.
+            await _until(
+              tester,
+              () => session.error != null,
+              timeout: const Duration(seconds: 90),
+            );
             expect(failures, hasLength(3));
             expect(failures.every((ahead) => ahead > Duration.zero), true);
             await tester.pump(const Duration(seconds: 2));
@@ -197,12 +248,9 @@ void main() {
             () =>
                 engine.currentSnapshot.buffered >
                 oldEnd + const Duration(seconds: 10),
+            timeout: const Duration(seconds: 90),
           );
-          expect(
-            probes,
-            greaterThanOrEqualTo(2),
-            reason: 'Check both actual DASH origins',
-          );
+          expect(probes, 0, reason: 'No application reachability retry layer');
           expect(failures, hasLength(1));
           expect(failures.single, greaterThan(const Duration(seconds: 5)));
           expect(
@@ -236,8 +284,14 @@ void main() {
 
   for (final tlsError in [false, true]) {
     testWidgets(
-      'media read failure restores DASH before cache drains; tls=$tlsError',
+      'native cache growth retires a buffered read error silently; tls=$tlsError',
       (tester) => _runReadFailure(tester, tlsError: tlsError),
+    );
+  }
+  for (final decoder in ['audio', 'hardware', 'software', 'output', 'sdk']) {
+    testWidgets(
+      'buffered decoder grace preserves healthy playback then detects a missing track; $decoder',
+      (tester) => _runReadFailure(tester, tlsError: false, decoder: decoder),
     );
   }
 }
@@ -245,6 +299,7 @@ void main() {
 Future<void> _runReadFailure(
   WidgetTester tester, {
   required bool tlsError,
+  String? decoder,
 }) async {
   initializePlayerBackend();
   final directory = Platform.environment['BILI_TEST_BUFFER_DIR'];
@@ -335,7 +390,85 @@ Future<void> _runReadFailure(
         .player;
     final oldEnd = engine.currentSnapshot.buffered;
     await _frames(tester, engine.setRate(2));
-    if (tlsError) {
+    if (decoder != null) {
+      final (prefix, level, message) = switch (decoder) {
+        'audio' => ('ad', 'error', 'Error decoding audio.'),
+        'hardware' => (
+          'vd',
+          'warn',
+          'Error while decoding frame (hardware decoding)!',
+        ),
+        'software' => ('ffmpeg/video', 'error', 'Invalid NAL unit size'),
+        _ => ('vo/libmpv', 'error', 'Failed to map video frame'),
+      };
+      // A real healthy native pair receives the SDK failure signal first.
+      // Only afterwards disable one track to prove the grace is not masking it.
+      if (decoder == 'sdk') {
+        // This stream lacks the log's component, so do not guess a failing track.
+        // ignore: invalid_use_of_protected_member
+        player.native.errorController.add('Error while decoding frame!');
+      } else {
+        // ignore: invalid_use_of_protected_member
+        player.native.logController.add(
+          mk.PlayerLog(prefix: prefix, level: level, text: message),
+        );
+      }
+      final audioBefore = double.parse(
+        await player.getPropertyAsync('audio-pts'),
+      );
+      final videoBefore = double.parse(
+        await player.getPropertyAsync('time-pos'),
+      );
+      await tester.pump(const Duration(seconds: 3));
+      expect(
+        double.parse(await player.getPropertyAsync('audio-pts')),
+        greaterThan(audioBefore),
+      );
+      expect(
+        double.parse(await player.getPropertyAsync('time-pos')),
+        greaterThan(videoBefore),
+      );
+      expect(failures, isEmpty);
+      expect(engine.currentSnapshot.generation, generation);
+      expect(session.isRecovering, false);
+      expect(session.auxiliaryMessage, isNull);
+      await player.setPropertyAsync(decoder == 'audio' ? 'aid' : 'vid', 'no');
+      await _until(tester, () => failures.isNotEmpty);
+      expect(failures, hasLength(1));
+      expect(failures.single, greaterThan(const Duration(seconds: 5)));
+      if (decoder != 'sdk') {
+        expect(
+          events.any(
+            (event) =>
+                event.stallReason ==
+                (decoder == 'audio'
+                    ? PlaybackStallReason.audioDecodeError
+                    : PlaybackStallReason.videoDecodeError),
+          ),
+          true,
+        );
+      } else {
+        expect(
+          events.any(
+            (event) => event.nativeError?.cause == NativeErrorCause.decoder,
+          ),
+          true,
+        );
+      }
+      await _until(
+        tester,
+        () =>
+            engine.currentSnapshot.generation > generation &&
+            engine.currentSnapshot.phase == PlaybackPhase.playing &&
+            !session.isRecovering,
+      );
+      expect(engine.inspectDiagnostics().hasDecodedAudio, true);
+      expect(engine.inspectDiagnostics().hasDecodedVideo, true);
+      debugPrint(
+        'BUFFERED_DECODER_GRACE $decoder healthySeconds=3 failures=${failures.length} reopened=true',
+      );
+      return;
+    } else if (tlsError) {
       // Exercise the SDK error stream separately from its log stream.
       // ignore: invalid_use_of_protected_member
       player.native.errorController.add(
@@ -360,22 +493,20 @@ Future<void> _runReadFailure(
     await _until(
       tester,
       () =>
-          failures.isNotEmpty &&
-          engine.currentSnapshot.generation > generation &&
-          engine.currentSnapshot.phase == PlaybackPhase.playing &&
-          !session.isRecovering &&
           engine.currentSnapshot.position >
               before + const Duration(milliseconds: 300) &&
-          engine.currentSnapshot.buffered >
-              oldEnd + const Duration(seconds: 10),
+          engine.currentSnapshot.buffered > oldEnd + const Duration(seconds: 2),
     );
-    expect(failures, hasLength(1));
-    expect(failures.single, greaterThan(const Duration(seconds: 10)));
+    expect(failures, isEmpty);
+    expect(engine.currentSnapshot.generation, generation);
+    expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+    expect(session.isRecovering, false);
+    expect(session.auxiliaryMessage, isNull);
     expect(
       events.where(
         (e) => e.stallReason == PlaybackStallReason.prefetchReadError,
       ),
-      hasLength(1),
+      isEmpty,
     );
     expect(
       events.any(
@@ -400,8 +531,7 @@ Future<void> _runReadFailure(
     expect(session.error, isNull);
     expect(tester.takeException(), isNull);
     debugPrint(
-      'READ_FAILURE_RECOVERY tls=$tlsError '
-      'remainingMs=${failures.single.inMilliseconds} '
+      'SILENT_READ_RECOVERY tls=$tlsError failures=${failures.length} '
       'positionMs=${engine.currentSnapshot.position.inMilliseconds} '
       'bufferedMs=${engine.currentSnapshot.buffered.inMilliseconds}',
     );
@@ -507,9 +637,13 @@ Future<void> _frames(WidgetTester tester, Future<void> operation) async {
   await result;
 }
 
-Future<void> _until(WidgetTester tester, bool Function() condition) async {
+Future<void> _until(
+  WidgetTester tester,
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 15),
+}) async {
   final watch = Stopwatch()..start();
-  while (!condition() && watch.elapsed < const Duration(seconds: 15)) {
+  while (!condition() && watch.elapsed < timeout) {
     await tester.pump(const Duration(milliseconds: 100));
   }
   expect(condition(), true, reason: 'Prefetch did not recover in time');
