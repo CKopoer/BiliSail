@@ -14,12 +14,17 @@ final class MediaTrack {
     required this.requestPolicy,
     this.codec,
     this.bandwidth,
+    this.isHdr = false,
   });
 
   final Uri uri;
   final MediaRequestPolicy requestPolicy;
   final String? codec;
   final int? bandwidth;
+
+  /// Resolver hint available before decoding. HDR requires GPU tone mapping
+  /// when presented through an SDR Flutter texture rather than HDR passthrough.
+  final bool isHdr;
 }
 
 sealed class ResolvedMediaSource {

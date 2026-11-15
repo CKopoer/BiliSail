@@ -23,6 +23,24 @@ void main() {
   });
   tearDown(() => previews.close());
 
+  test(
+    'preview forwards HDR metadata before creating its muted source',
+    () async {
+      final base = cardPreviewMedia();
+      final media = PlaybackMedia(
+        video: base.video,
+        audio: base.audio,
+        quality: 125,
+        qualities: const [125],
+        duration: base.duration,
+        headers: base.headers,
+      );
+      await previews.start(media, RequestCancellation());
+      expect((engines.single.source as DashVideoSource).video.isHdr, isTrue);
+      expect(engines.single.options?.volume, 0);
+    },
+  );
+
   test('plays video DASH without fetching audio, muted from zero and releases on cancel', () async {
     final token = RequestCancellation();
     final session = await previews.start(cardPreviewMedia(), token);

@@ -1278,13 +1278,21 @@ class PlaybackSession extends ChangeNotifier {
                       )
                     : resolved.kind == PlaybackMediaKind.liveHls
                     ? ManifestSource(
-                        MediaTrack(uri: videoUri, requestPolicy: policy),
+                        MediaTrack(
+                          uri: videoUri,
+                          requestPolicy: policy,
+                          isHdr: resolved.isHdr,
+                        ),
                         isLive: true,
                       )
                     : resolved.kind == PlaybackMediaKind.liveFlv ||
                           resolved.kind == PlaybackMediaKind.progressive
                     ? ProgressiveSource(
-                        MediaTrack(uri: videoUri, requestPolicy: policy),
+                        MediaTrack(
+                          uri: videoUri,
+                          requestPolicy: policy,
+                          isHdr: resolved.isHdr,
+                        ),
                         isLive: isLive,
                       )
                     : DashPairSource(
@@ -1295,6 +1303,7 @@ class PlaybackSession extends ChangeNotifier {
                           requestPolicy: policy,
                           codec: resolved.video.codec,
                           bandwidth: resolved.video.bandwidth,
+                          isHdr: resolved.isHdr,
                         ),
                         audio: audio == null || audioUri == null
                             ? null

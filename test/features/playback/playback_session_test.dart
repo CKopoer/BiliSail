@@ -387,7 +387,47 @@ void main() {
   for (final target in <ContentPlaybackTarget?>[
     null,
     const PgcPlaybackTarget('12'),
+    const OfflinePlaybackTarget('hdr-download'),
   ]) {
+    test(
+      'selected HDR hint follows source changes without rewriting direct output target=$target',
+      () async {
+        final engine = _FakeEngine();
+        final repository = _FakeRepository(autoResolve: true)
+          ..mediaForQuality = _colorMedia;
+        final content = _FakeContentRepository()..mediaForQuality = _colorMedia;
+        final session = PlaybackSession(
+          engine: engine,
+          repository: repository,
+          contentRepository: content,
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+        );
+        addTearDown(session.close);
+        session.configureSettings(
+          const AppSettings.defaults().copyWith(
+            androidVideoOutput: AndroidVideoOutputPreference.directTexture,
+          ),
+        );
+        await session.open(_detail('one'), _part('one'), target: target);
+        for (final quality in [80, 125, 126, 129, 80]) {
+          await session.changeQuality(quality);
+          expect(session.error, isNull);
+          final source = engine.sources.last as DashPairSource;
+          expect(
+            source.video.isHdr,
+            quality == 125 || quality == 126 || quality == 129,
+          );
+          expect(source.audio?.isHdr, isFalse);
+          expect(
+            engine.openOptions.last.androidVideoOutput,
+            AndroidVideoOutputMode.directTexture,
+          );
+          expect(session.media?.quality, quality);
+        }
+      },
+    );
+    if (target is OfflinePlaybackTarget) continue;
     for (final playing in [false, true]) {
       test(
         'unsupported video color falls back once with transport retained target=$target playing=$playing',
@@ -449,6 +489,24 @@ void main() {
       );
     }
   }
+
+  test(
+    'HDR output hint uses the actual quality after a resolver fallback',
+    () async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true)
+          ..resolvedMedia = _colorMedia(80),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(_detail('one'), _part('one'), quality: 125);
+      expect(session.media?.quality, 80);
+      expect((engine.sources.single as DashPairSource).video.isHdr, isFalse);
+    },
+  );
 
   test(
     'a failed compatibility stream does not recurse or retry a CDN',

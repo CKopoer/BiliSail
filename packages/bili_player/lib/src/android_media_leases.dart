@@ -38,6 +38,7 @@ final class AndroidMediaLeases {
         requestPolicy: MediaRequestPolicy(),
         codec: track.codec,
         bandwidth: track.bandwidth,
+        isHdr: track.isHdr,
       );
     } finally {
       if (--_pending == 0) _drained?.complete();
