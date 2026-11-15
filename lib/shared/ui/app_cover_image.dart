@@ -47,6 +47,7 @@ final class AppCoverImage extends StatelessWidget {
               ? url
               : publicImageThumbnail(source, width: thumbnailWidth).toString(),
           cacheWidth: thumbnailWidth,
+          maxRetries: 3,
           fit: fit,
           errorBuilder: errorBuilder,
           frameBuilder: frameBuilder,

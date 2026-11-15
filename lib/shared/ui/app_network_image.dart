@@ -129,7 +129,8 @@ final class AppNetworkImage extends StatefulWidget {
     this.semanticLabel,
     this.cacheWidth,
     this.cacheHeight,
-  });
+    this.maxRetries = 0,
+  }) : assert(maxRetries >= 0);
   final String url;
   final double? width, height;
   final BoxFit? fit;
@@ -140,6 +141,11 @@ final class AppNetworkImage extends StatefulWidget {
   final bool excludeFromSemantics;
   final String? semanticLabel;
   final int? cacheWidth, cacheHeight;
+
+  /// Additional attempts for failed valid URLs, paused outside the viewport.
+  ///
+  /// The budget belongs to this widget's URL, decode size and cache scope.
+  final int maxRetries;
 
   @override
   State<AppNetworkImage> createState() => _AppNetworkImageState();
@@ -155,6 +161,9 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
   ImageLoadPriority _priority = ImageLoadPriority.prefetch;
   bool _visibilityChecked = false;
   bool _retryScheduled = false;
+  Timer? _loadRetryTimer;
+  ({Object error, StackTrace? stack})? _loadFailure;
+  int _loadRetries = 0;
   bool _hasFrame = false;
   ImageProvider<Object>? _provider;
   (AppImageCache?, int?, String, int?, int?)? _providerConfiguration;
@@ -182,6 +191,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
     if (!_active) {
       _visible = false;
       _stopWaiting();
+      _cancelLoadRetry();
       _source?.releaseDemand();
       _imageVisibilityChecks.pending.remove(this);
     } else if (!wasActive ||
@@ -202,6 +212,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
         oldWidget.cacheWidth != widget.cacheWidth ||
         oldWidget.cacheHeight != widget.cacheHeight) {
       _stopWaiting();
+      _resetLoadRetries();
       _hasFrame = false;
       _provider = null;
       _releaseSource();
@@ -211,6 +222,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
     if (oldWidget.width != widget.width || oldWidget.height != widget.height) {
       _scheduleVisibilityCheck();
     }
+    if (oldWidget.maxRetries != widget.maxRetries) _resetLoadRetries();
   }
 
   bool _syncScrollPositions() {
@@ -352,6 +364,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
     _priority = priority;
     _source?.setPriority(priority);
     if (!visible) {
+      _cancelLoadRetry();
       _source?.releaseDemand();
       if (!_hasFrame && _source?.hasCachedFrame != true) {
         _releaseSource();
@@ -375,6 +388,43 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
         });
       }
     }
+    if (visible) _scheduleLoadRetry();
+  }
+
+  void _cancelLoadRetry() {
+    _loadRetryTimer?.cancel();
+    _loadRetryTimer = null;
+  }
+
+  void _resetLoadRetries() {
+    _cancelLoadRetry();
+    _loadFailure = null;
+    _loadRetries = 0;
+  }
+
+  void _scheduleLoadRetry() {
+    if (_loadRetryTimer != null ||
+        _loadFailure == null ||
+        !_active ||
+        !_visible ||
+        _loadRetries >= widget.maxRetries) {
+      return;
+    }
+    // Keep transient CDN failures bounded without immediately replaying a burst
+    // of failed covers. Queue admission has its separate capacity listener.
+    final delay = Duration(milliseconds: 500 * (1 << _loadRetries));
+    _loadRetryTimer = Timer(delay, () {
+      _loadRetryTimer = null;
+      if (!mounted || !_active || !_visible || _loadFailure == null) return;
+      setState(() {
+        ++_loadRetries;
+        _loadFailure = null;
+        _hasFrame = false;
+        // A new Image state and lease must not reuse the failed completer.
+        _releaseSource();
+        ++_attempt;
+      });
+    });
   }
 
   void _stopWaiting() {
@@ -441,6 +491,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
       widget.cacheHeight,
     );
     if (_providerConfiguration == configuration) return _provider;
+    _resetLoadRetries();
     _providerConfiguration = configuration;
     final source = Uri.tryParse(widget.url);
     final normalized = source != null && source.scheme == 'http'
@@ -517,8 +568,22 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
     );
   }
 
-  Widget _buildImage(_RetainedImageProvider retained, AppImageCache? cache) =>
-      _image ??= _createImage(retained, cache);
+  Widget _buildImage(_RetainedImageProvider retained, AppImageCache? cache) {
+    if (_loadFailure case final failure?) {
+      return _buildLoadError(context, failure.error, failure.stack);
+    }
+    return _image ??= _createImage(retained, cache);
+  }
+
+  Widget _buildLoadError(
+    BuildContext context,
+    Object error,
+    StackTrace? stack,
+  ) {
+    final builder = widget.errorBuilder;
+    if (builder != null) return builder(context, error, stack);
+    Error.throwWithStackTrace(error, stack ?? StackTrace.current);
+  }
 
   Widget _createImage(_RetainedImageProvider retained, AppImageCache? cache) {
     final image = Image(
@@ -536,14 +601,20 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
           _waitForCapacity(cache);
           return _placeholder(context);
         }
-        final builder = widget.errorBuilder;
-        if (builder != null) return builder(context, error, stack);
-        Error.throwWithStackTrace(error, stack ?? StackTrace.current);
+        if (widget.maxRetries > 0 && identical(_source, retained)) {
+          _loadFailure = (error: error, stack: stack);
+          _scheduleLoadRetry();
+        }
+        return _buildLoadError(context, error, stack);
       },
       loadingBuilder: widget.loadingBuilder,
       frameBuilder: (context, child, frame, synchronous) {
         _hasFrame = frame != null;
-        if (_hasFrame) retained.releaseDemand();
+        if (_hasFrame) {
+          _loadFailure = null;
+          _cancelLoadRetry();
+          retained.releaseDemand();
+        }
         return widget.frameBuilder?.call(context, child, frame, synchronous) ??
             child;
       },
@@ -556,6 +627,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
 
   @override
   void deactivate() {
+    _cancelLoadRetry();
     _imageVisibilityChecks.pending.remove(this);
     for (final position in _positions) {
       _imageScrollObservers[position]?.remove(this);
@@ -576,6 +648,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
 
   @override
   void dispose() {
+    _cancelLoadRetry();
     _stopWaiting();
     _releaseSource();
     super.dispose();
